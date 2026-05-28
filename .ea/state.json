@@ -7148,7 +7148,12 @@
         "P28-I03-W50",
         "P28-I03-W51",
         "P28-I03-W52",
-        "P28-I03-W53"
+        "P28-I03-W53",
+        "P28-I03-W54",
+        "P28-I03-W55",
+        "P28-I03-W56",
+        "P28-I03-W57",
+        "P28-I03-W58"
       ]
     }
   },
@@ -7754,7 +7759,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T17:29:32.689825Z",
+  "updated_at": "2026-05-28T17:50:05.212732Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25314,7 +25319,9 @@
     },
     "P28-I03-W52": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P28-I03-W56"
+      ],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -25387,6 +25394,175 @@
         "5 stale v0.3 doc refs land v0.4;AGENTS.md release cadence reads per-phase (hyphen) matching schema;EAWF014 self-check clean on quickstart/troubleshooting/doctor/concepts;orphan src touchups bundled (stale_wave message + degraded-banner CSS + config.yaml reshape);pytest+mypy+pre-commit clean"
       ],
       "title": "fix: post-audit polish sweep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W54": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "P28 status-pane fix per operator review 2026-05-28. D-path (empty-state render) chosen over backfill or full telemetry wiring.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/status_pane.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/surfaces/tui/widgets/test_status_pane.py",
+        "tests/runtime/daemon/methods/test_state_actuals.py"
+      ],
+      "id": "P28-I03-W54",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T17:49:23.635146Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "status_pane renders EFFORT --/<planned> when consumed==0 AND every attention_eu/agent_runtime_eu is None;variance line suppressed in empty-state;state.py:498-503 stops conflating attention_eu->agent_runtime_eu (agent_runtime_eu stays None until separate source exists);tests cover both empty-state and populated-state branches"
+      ],
+      "title": "fix: honest empty-state for actuals/variance + state.py EU conflation",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W55": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Wave modal currently shows identical phase rollup for every wave (detail.py:383 substitutes it.phase_id). Operator picked richer fix over cheapest rows-group fallback.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/render/narrative.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "tests/surfaces/render/test_narrative.py",
+        "tests/surfaces/tui/screens/overlays/test_detail.py",
+        "tests/golden/narrative/"
+      ],
+      "id": "P28-I03-W55",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T17:49:29.085101Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "build_narrative branches on scope kind (phase/iter/wave);wave bundle: What=wave.intent.goal+outcome;Why=motivation/success_signal;Validation=wave.commit+attempts+ActualSummary;Risks=dispatch errors/blocked-attempt count;detail.py:289 routes wave cards through wave bundle (not phase substitution);snapshot tests open modal on 2 waves under same phase + assert d-tab body diverges"
+      ],
+      "title": "feat: wave-shaped NarrativeBundle (build_narrative kind branch)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W56": {
+      "agent_role": "planner",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W52"
+      ],
+      "description": "36 open backlog items avg 179 chars; 1 zero-desc. Operator picked triage wave first then IntentBrief attach (deferred until W52 schema migration lands).",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/runtime/daemon/methods/backlog.py",
+        "src/eawf/surfaces/cli/commands/backlog.py",
+        "tests/runtime/daemon/methods/test_backlog.py"
+      ],
+      "id": "P28-I03-W56",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T17:49:39.213213Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "obsolete items closed via audit verdict (B013 other-harness shipped",
+        "B019 audit DSL shipped",
+        "B022 integrity runner shipped",
+        "B042 self-eval landed via W11",
+        "B074 empty);surviving items either get IntentBrief attached or flagged for operator AUQ;backlog renders IntentBrief in detail surface;empty descriptions rejected at backlog add (min_length=1)"
+      ],
+      "title": "fix: backlog hygiene triage + IntentBrief attach",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W57": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Operator picked full Codex UX overhaul over partial. Token-cost structural fix still deferred to spawn seam (v0.4.1).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/models.py",
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "src/eawf/workflow/dispatch/renderer.py",
+        "src/eawf/workflow/verify/dispatch_close.py",
+        "tests/workflow/agents/specs/test_models.py",
+        "tests/runtime/daemon/test_dispatch_runner.py"
+      ],
+      "id": "P28-I03-W57",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T17:50:02.518447Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "SubagentSpec._render_workflow prepends step 0=eawf wave claim;commit_prefix uses full [P##-I##-W##] (drops bare phase-wave shape);dispatch_runner fails dispatch when no matching [P##-W##] commit landed AND no wave_close event fired;runtime-agnostic;Codex runtime added to DISPATCH_RUNTIMES"
+      ],
+      "title": "feat: Codex UX overhaul (claim step + iter prefix + verify gate)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W58": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Codex plugin install emits hooks dir but writes literal './hooks/' string in plugin.json; Codex reads as config file.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/codex/plugin_install.py",
+        "tests/runtime/runtimes/codex/test_plugin_install.py",
+        "tests/golden/codex_plugin/"
+      ],
+      "id": "P28-I03-W58",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T17:50:05.212561Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "plugin.json hooks field replaces './hooks/' directory-string with [{event_type",
+        "path}] list matching sidecar payload at :309-315;Codex TUI 'Is a directory (os error 21)' warning resolved;golden plugin.json updated;test asserts hooks field is list shape"
+      ],
+      "title": "fix: Codex plugin.json hooks field shape (list not dir string)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
