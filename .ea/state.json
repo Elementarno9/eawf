@@ -791,6 +791,18 @@
       "scope_id": "P28-I03-W51",
       "status": "done",
       "updated_at": "2026-05-28T12:27:35.932165Z"
+    },
+    "P28-I03-W53": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W53",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W53",
+      "scope_id": "P28-I03-W53",
+      "status": "done",
+      "updated_at": "2026-05-28T17:29:32.689559Z"
     }
   },
   "agent_sessions": {
@@ -6101,6 +6113,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P28-I03-W51",
       "updated_at": "2026-05-28T12:23:13.651296Z"
+    },
+    "P28-I03-W53": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W53-bucket-20260528T172304Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I03-W53",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I03-W53",
+      "updated_at": "2026-05-28T17:23:04.150689Z"
     }
   },
   "goals": {
@@ -7122,7 +7147,8 @@
         "P28-I03-W49",
         "P28-I03-W50",
         "P28-I03-W51",
-        "P28-I03-W52"
+        "P28-I03-W52",
+        "P28-I03-W53"
       ]
     }
   },
@@ -7728,7 +7754,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T17:20:32.046227Z",
+  "updated_at": "2026-05-28T17:29:32.689825Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25319,6 +25345,48 @@
         "priority_rationale};Wave/Iter/Phase/BacklogItem.intent stays Optional;narrative renderer consumes new shape;mypy+pytest clean;state.json migration writes back nothing (intent currently None on all entities)"
       ],
       "title": "fix: migrate IntentBrief to W24 audited field-set",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W53": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "inline-polisher",
+      "closed_at": "2026-05-28T17:29:32.689559Z",
+      "commit": null,
+      "deps": [],
+      "description": "Post-A42 polish sweep covering deep-audit follow-ups. Excludes W30 ActualSummary EU conflation (requires WaveSessionRollup model change; tracked as separate wave). Excludes B074 runner argv revalidate nit (tracked separately).",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "docs/architecture/installation.md",
+        "docs/architecture/profiles.md",
+        "docs/policy/fixed-decisions.md",
+        "docs/help/exit-codes.md",
+        "docs/help/migration.md",
+        "docs/tutorial/quickstart.md",
+        "docs/tutorial/troubleshooting.md",
+        "docs/reference/doctor.md",
+        "docs/concepts.md",
+        "AGENTS.md",
+        ".ea/config.yaml",
+        "src/eawf/runtime/daemon/stale_wave.py",
+        "src/eawf/surfaces/tui/theme.tcss",
+        "tests/daemon/test_stale_wave.py"
+      ],
+      "id": "P28-I03-W53",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T17:22:56.663129Z",
+      "outcome": "Post-audit polish sweep: 4 doc-freshness sites + AGENTS cadence + 96 wrap collapses + config.yaml reshape + orphan src touchups. Pre-commit + mypy clean.",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "5 stale v0.3 doc refs land v0.4;AGENTS.md release cadence reads per-phase (hyphen) matching schema;EAWF014 self-check clean on quickstart/troubleshooting/doctor/concepts;orphan src touchups bundled (stale_wave message + degraded-banner CSS + config.yaml reshape);pytest+mypy+pre-commit clean"
+      ],
+      "title": "fix: post-audit polish sweep",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
