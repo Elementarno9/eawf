@@ -13,6 +13,8 @@ from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
 from eawf.kernel.store.paths import store_path
+from eawf.observability.telemetry.models import TelemetrySession, TelemetryToolCall
+from eawf.observability.telemetry.store.base import AbstractMetricsStore
 
 
 @dataclass(frozen=True)
@@ -202,6 +204,56 @@ def per_wave_attempt_rollup(
     )
 
 
+def error_kind_by_attempt_from_store(
+    wave: Wave,
+    store: AbstractMetricsStore,
+) -> dict[int, tuple[str, ...]]:
+    """Return telemetry tool-call error kinds keyed by wave attempt."""
+    attempt_by_session_id = {
+        session.session_id: attempt_no
+        for attempt_no, session in wave.sessions.items()
+        if session.session_id
+    }
+    for row in store.fetch_all("telemetry_sessions", TelemetrySession):
+        session = row
+        if session.wave_id != wave.id:
+            continue
+        attempt_no = _parse_attempt_id(session.attempt_id)
+        if attempt_no is not None:
+            attempt_by_session_id[session.session_id] = attempt_no
+
+    kinds_by_attempt: dict[int, list[str]] = {}
+    if not attempt_by_session_id:
+        return {}
+    for row in store.fetch_all("telemetry_tool_calls", TelemetryToolCall):
+        call = row
+        if not call.is_error:
+            continue
+        attempt_no = attempt_by_session_id.get(call.session_id)
+        if attempt_no is None:
+            continue
+        kinds_by_attempt.setdefault(attempt_no, []).append(call.error_kind.value)
+    return {attempt: tuple(kinds) for attempt, kinds in kinds_by_attempt.items()}
+
+
+def _parse_attempt_id(value: str | None) -> int | None:
+    """Parse telemetry attempt id variants into an integer attempt number."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    if stripped.isdigit():
+        parsed = int(stripped)
+        return parsed if parsed >= 1 else None
+    for separator in ("-", "_", ":"):
+        tail = stripped.rsplit(separator, 1)[-1]
+        if tail.isdigit():
+            parsed = int(tail)
+            return parsed if parsed >= 1 else None
+    return None
+
+
 def _latest_report_by_attempt(
     wave_id: str,
     reports: Iterable[AgentReportRow],
@@ -308,6 +360,7 @@ __all__ = [
     "AgentReportRow",
     "PerWaveAttemptRollup",
     "WaveAttemptTimelineRow",
+    "error_kind_by_attempt_from_store",
     "find_agent_report",
     "iter_agent_reports",
     "operator_rollup",

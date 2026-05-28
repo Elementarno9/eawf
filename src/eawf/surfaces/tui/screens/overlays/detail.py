@@ -33,7 +33,9 @@ modal with a pre-built :class:`DetailCard` (the host screen builds it from
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import ComposeResult
@@ -43,6 +45,7 @@ from textual.markup import escape
 from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
+from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import linkify_text
 from eawf.surfaces.render.narrative import (
     NarrativeNotFoundError,
@@ -54,7 +57,13 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
 )
-from eawf.workflow.agent_report.rollup import PerWaveAttemptRollup, per_wave_attempt_rollup
+from eawf.workflow.agent_report.rollup import (
+    AgentReportRow,
+    PerWaveAttemptRollup,
+    error_kind_by_attempt_from_store,
+    iter_agent_reports,
+    per_wave_attempt_rollup,
+)
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State, Wave
@@ -209,7 +218,13 @@ def _completion_metrics(closed: int, total: int) -> tuple[tuple[str, str], ...]:
     )
 
 
-def _wave_card(state: State, wave_id: str) -> DetailCard | None:
+def _wave_card(
+    state: State,
+    wave_id: str,
+    *,
+    reports: Iterable[AgentReportRow] = (),
+    error_kind_by_attempt: Mapping[int, Iterable[str]] | None = None,
+) -> DetailCard | None:
     """Build a :class:`DetailCard` for the wave *wave_id*, or ``None``.
 
     Args:
@@ -245,7 +260,11 @@ def _wave_card(state: State, wave_id: str) -> DetailCard | None:
         rows.append(("files", f"\n{indented}"))
     for criterion in wave.success_criteria:
         rows.append(("criterion", criterion))
-    attempt_rollup = per_wave_attempt_rollup(wave)
+    attempt_rollup = per_wave_attempt_rollup(
+        wave,
+        reports=reports,
+        error_kind_by_attempt=error_kind_by_attempt,
+    )
     rows.extend(_attempt_rollup_rows(attempt_rollup))
 
     history: list[tuple[str, str]] = [
@@ -508,7 +527,14 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     return DetailCard(title=f"backlog {item.id}", rows=tuple(rows))
 
 
-def resolve_detail(state: State | None, selection_id: str) -> DetailCard:
+def resolve_detail(
+    state: State | None,
+    selection_id: str,
+    *,
+    reports: Iterable[AgentReportRow] = (),
+    error_kind_by_attempt: Mapping[int, Iterable[str]] | None = None,
+    state_path: Path | None = None,
+) -> DetailCard:
     """Resolve *selection_id* to a :class:`DetailCard` from *state*.
 
     Tries the wave table, then iters, then phases, then the backlog. An
@@ -525,8 +551,20 @@ def resolve_detail(state: State | None, selection_id: str) -> DetailCard:
         The resolved detail card, or a fallback card for an unknown id.
     """
     if state is not None:
+        if selection_id in state.waves and state_path is not None:
+            reports = _report_rows_for_wave(state_path, selection_id)
+            error_kind_by_attempt = _error_kind_by_attempt_for_wave(
+                state,
+                selection_id,
+                state_path,
+            )
         card = (
-            _wave_card(state, selection_id)
+            _wave_card(
+                state,
+                selection_id,
+                reports=reports,
+                error_kind_by_attempt=error_kind_by_attempt,
+            )
             or _iter_card(state, selection_id)
             or _phase_card(state, selection_id)
             or _backlog_card(state, selection_id)
@@ -537,6 +575,45 @@ def resolve_detail(state: State | None, selection_id: str) -> DetailCard:
         title=f"detail {selection_id}",
         rows=(("id", selection_id), ("note", "no detail available")),
     )
+
+
+def _report_rows_for_wave(state_path: Path, wave_id: str) -> tuple[AgentReportRow, ...]:
+    """Load report rows for *wave_id* from role report stores."""
+    rows = [
+        *iter_agent_reports(state_path, base_id=wave_id),
+        *iter_agent_reports(state_path, scope_id=wave_id),
+    ]
+    deduped: dict[tuple[str, str], AgentReportRow] = {}
+    for row in rows:
+        deduped[(row.store_kind, row.envelope.id)] = row
+    return tuple(
+        sorted(
+            deduped.values(),
+            key=lambda row: (row.envelope.created_at, row.envelope.id),
+        )
+    )
+
+
+def _error_kind_by_attempt_for_wave(
+    state: State,
+    wave_id: str,
+    state_path: Path,
+) -> dict[int, tuple[str, ...]]:
+    """Load telemetry error-kind rows for *wave_id* from local metrics DB."""
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return {}
+    db_path = metrics_db_path(state_path)
+    if not db_path.is_file():
+        return {}
+    store = open_store("sqlite", db_path)
+    try:
+        return error_kind_by_attempt_from_store(wave, store)
+    except Exception as exc:
+        logger.debug(f"_error_kind_by_attempt_for_wave fallback wave={wave_id!r} cause={exc!r}")
+        return {}
+    finally:
+        store.close()
 
 
 class DetailModal(ModalScreen[None]):
@@ -610,6 +687,22 @@ class DetailModal(ModalScreen[None]):
         self._state = state
         self._tab_ids = self._present_tabs(card)
 
+    def _enrich_from_app(self) -> None:
+        """Refresh wave cards with store-backed report/error rows when mounted."""
+        if self._state is None or not self._card.title.startswith("wave "):
+            return
+        try:
+            state_path = getattr(self.app, "_state_path", None)
+        except RuntimeError:
+            return
+        if not isinstance(state_path, Path):
+            return
+        wave_id = self._card.title.removeprefix("wave ").strip()
+        if not wave_id:
+            return
+        self._card = resolve_detail(self._state, wave_id, state_path=state_path)
+        self._tab_ids = self._present_tabs(self._card)
+
     @staticmethod
     def _present_tabs(card: DetailCard) -> tuple[str, ...]:
         """Return the ordered tab ids that have data for *card*.
@@ -662,6 +755,7 @@ class DetailModal(ModalScreen[None]):
         counter block). Wave ``d`` panes render the NarrativeBundle
         preview as Markdown.
         """
+        self._enrich_from_app()
         with VerticalScroll(id="detail-card"):
             yield Static(self._card.title, classes="detail-title")
             with TabbedContent(initial="detail-tab-d"):

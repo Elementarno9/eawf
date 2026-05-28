@@ -35,8 +35,10 @@ from eawf.surfaces.tui.screens.overlays.metrics import (
     CalibrationDrillModal,
     MetricsArgs,
     MetricsModal,
+    VarianceDrillModal,
     parse_metrics_args,
     render_projection_tile,
+    render_variance_drilldown,
     render_wave_elapsed_tile,
 )
 from eawf.workflow.estimation.buckets import BucketCalibration, CalibrationReport
@@ -228,6 +230,59 @@ def test_render_projection_tile_binds_all_six_metric_tiles() -> None:
     assert "1.5!" in bodies["tile-role-calibration"]
 
 
+def test_render_variance_drilldown_lists_buckets_and_waves() -> None:
+    projection = MetricsProjection(
+        scope="urn:eawf:v1:state:QR",
+        window="7d",
+        generated_at=datetime(2026, 5, 22, tzinfo=UTC),
+        variance=EstimateActualVarianceMetric(
+            sample_count=1,
+            planned_eu=1.0,
+            actual_eu=1.5,
+            variance_pct=50.0,
+        ),
+        variance_by_bucket=(
+            VarianceBucketProjection(
+                bucket="M",
+                sample_count=1,
+                planned_eu=1.0,
+                actual_eu=1.5,
+                delta_eu=0.5,
+                variance_pct=50.0,
+                inside_pessimistic_share=1.0,
+                waves=(
+                    VarianceWaveProjection(
+                        wave_id="P01-I01-W01",
+                        title="Wave 1",
+                        bucket="M",
+                        planned_eu=1.0,
+                        actual_eu=1.5,
+                        delta_eu=0.5,
+                        variance_pct=50.0,
+                        inside_pessimistic=True,
+                    ),
+                ),
+            ),
+        ),
+        weekly_burn=WeeklyBurnMetric(consumed_eu=1.5, target_eu=4.0, window_days=7),
+        wave_elapsed=WaveElapsedMetric(
+            sample_count=1,
+            mean_minutes=30.0,
+            median_minutes=30.0,
+            max_minutes=30.0,
+        ),
+        cache_health=(),
+        switchover_frequency=(),
+        per_runtime_tokens=(),
+        per_role_calibration=(),
+    )
+
+    body = render_variance_drilldown(projection)
+    assert "M" in body
+    assert "P01-I01-W01" in body
+    assert "Wave 1" in body
+
+
 # --------------------------------------------------------------------------
 # MetricsModal — mounting + the /metrics verb (Pilot)
 # --------------------------------------------------------------------------
@@ -308,6 +363,24 @@ def test_metrics_modal_enter_opens_role_calibration_drilldown() -> None:
             assert isinstance(app.screen, CalibrationDrillModal)
             assert app.modal_depth() == 2
             assert "Role calibration" in _text(app.screen.query_one(".calibration-title", Static))
+
+    asyncio.run(body())
+
+
+def test_metrics_modal_enter_opens_variance_drilldown() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(MetricsModal())
+            await pilot.pause()
+            assert isinstance(app.screen, MetricsModal)
+            app.screen.selected = 0
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, VarianceDrillModal)
+            assert app.modal_depth() == 2
+            assert "Variance by bucket" in _text(app.screen.query_one(".variance-title", Static))
 
     asyncio.run(body())
 

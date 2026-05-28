@@ -38,6 +38,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import socket
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar, Literal
@@ -80,6 +81,7 @@ from eawf.surfaces.tui.widgets.header import (
 logger = logging.getLogger(__name__)
 
 DEGRADED_BANNER_ID = "degraded-banner"
+DEGRADED_BANNER_HIDDEN_CLASS = "degraded-banner--hidden"
 
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
 #: mirror :class:`eawf.kernel.state.enums.ScopeKind`; ``user`` is the registry-
@@ -525,7 +527,36 @@ class EaApp(App[None]):
         """Return whether a daemon socket is present for RPC use."""
         if os.name == "nt":
             return False
-        return (runtime_dir() / "eawfd.sock").exists()
+        sock_path = runtime_dir() / "eawfd.sock"
+        logger.debug(
+            f"_daemon_socket_available probing path={sock_path!s}"
+            f" EAWF_RUNTIME_DIR={os.environ.get('EAWF_RUNTIME_DIR')!r}"
+            f" XDG_RUNTIME_DIR={os.environ.get('XDG_RUNTIME_DIR')!r}"
+        )
+        if not sock_path.exists():
+            logger.debug(f"_daemon_socket_available socket_missing path={sock_path!s}")
+            return False
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                probe.settimeout(0.25)
+                probe.connect(str(sock_path))
+            return True
+        except OSError as exc:
+            logger.debug(f"_daemon_socket_available probe failed path={sock_path!s} cause={exc!r}")
+            return False
+
+    def _degraded_banner_message(self) -> str:
+        """Render the transport-warning banner text with resolved diagnostics."""
+        sock_path = runtime_dir() / "eawfd.sock"
+        eawf_runtime_dir = os.environ.get("EAWF_RUNTIME_DIR")
+        xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+        return (
+            f"daemon socket unavailable; polling state.json | socket={sock_path!s} "
+            f"EAWF_RUNTIME_DIR={eawf_runtime_dir or '<unset>'} "
+            f"XDG_RUNTIME_DIR={xdg_runtime_dir or '<unset>'} "
+            "hint: ensure daemon and TUI share the same runtime environment "
+            "values for EAWF_RUNTIME_DIR / XDG_RUNTIME_DIR"
+        )
 
     def _maybe_open_init_wizard(self, state: State | None = None) -> None:
         """Auto-open the init wizard once for an empty user-scope registry."""
@@ -575,23 +606,29 @@ class EaApp(App[None]):
         self._sync_degraded_banner()
 
     def _sync_degraded_banner(self) -> None:
-        """Mount or remove the degraded-mode banner on the active screen."""
+        """Toggle banner visibility and text without remounting the widget."""
         if not self.screen_stack:
             return
-        existing = list(self.screen.query(f"#{DEGRADED_BANNER_ID}"))
-        if not self.degraded:
-            for widget in existing:
-                widget.remove()
+        matches = self.screen.query(f"#{DEGRADED_BANNER_ID}")
+        if not matches:
+            self.screen.mount(
+                Static(
+                    "",
+                    id=DEGRADED_BANNER_ID,
+                    classes=f"degraded-banner {DEGRADED_BANNER_HIDDEN_CLASS}",
+                )
+            )
+            matches = self.screen.query(f"#{DEGRADED_BANNER_ID}")
+        matched = list(matches)
+        if not matched:
             return
-        if existing:
-            return
-        self.screen.mount(
-            Static(
-                "daemon unreachable - polling state.json",
-                id=DEGRADED_BANNER_ID,
-                classes="degraded-banner",
-            ),
-        )
+        banner = matched[0]
+        if self.degraded:
+            banner.set_class(False, DEGRADED_BANNER_HIDDEN_CLASS)
+            banner.update(self._degraded_banner_message())
+        else:
+            banner.set_class(True, DEGRADED_BANNER_HIDDEN_CLASS)
+            banner.update("")
 
     def watch_render_mode(self, mode: RenderMode) -> None:
         """Propagate a bar-fill-mode flip to every mounted bar.
@@ -772,10 +809,13 @@ class EaApp(App[None]):
         ref: ReferenceTarget,
         *,
         record_history: bool,
+        replace_current: bool = False,
     ) -> bool:
         """Open *ref* in a reference modal and update nav state on success."""
         card = resolve_reference(self.state, ref.kind, ref.target)
         modal = ReferenceModal(card, state=self.state)
+        if replace_current and isinstance(self.screen, ReferenceModal):
+            self.pop_screen()
         if not self.push_modal(modal):
             return False
         if (
@@ -859,10 +899,11 @@ class EaApp(App[None]):
             self.notify("no reference back history", severity="information")
             return
         current = self._current_reference
-        previous = self._reference_back_stack.pop()
-        if current is not None:
-            self._reference_forward_stack.append(current)
-        self._navigate_reference(previous, record_history=False)
+        previous = self._reference_back_stack[-1]
+        if self._navigate_reference(previous, record_history=False, replace_current=True):
+            self._reference_back_stack.pop()
+            if current is not None:
+                self._reference_forward_stack.append(current)
 
     def action_reference_forward(self) -> None:
         """Navigate forward through clicked reference targets."""
@@ -870,10 +911,11 @@ class EaApp(App[None]):
             self.notify("no reference forward history", severity="information")
             return
         current = self._current_reference
-        nxt = self._reference_forward_stack.pop()
-        if current is not None:
-            self._reference_back_stack.append(current)
-        self._navigate_reference(nxt, record_history=False)
+        nxt = self._reference_forward_stack[-1]
+        if self._navigate_reference(nxt, record_history=False, replace_current=True):
+            self._reference_forward_stack.pop()
+            if current is not None:
+                self._reference_back_stack.append(current)
 
     def action_open_config(self) -> None:
         """Open the ``c`` registry-driven config window (cap-checked).

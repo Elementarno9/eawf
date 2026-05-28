@@ -119,6 +119,32 @@ def test_app_reference_nav_stack_back_and_forward() -> None:
     asyncio.run(body())
 
 
+def test_reference_back_replaces_modal_at_depth_cap() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.action_open_wave_ref(_WAVE_ID)
+            await pilot.pause()
+            app.action_open_phase_ref("P01")
+            await pilot.pause()
+            app.action_open_iter_ref("P01-I01")
+            await pilot.pause()
+            assert app.modal_depth() == app.MAX_MODAL_DEPTH
+            assert app._current_reference is not None
+            assert app._current_reference.kind == "iter"
+
+            app.action_reference_back()
+            await pilot.pause()
+            assert app.modal_depth() == app.MAX_MODAL_DEPTH
+            assert isinstance(app.screen, ReferenceModal)
+            assert app._current_reference is not None
+            assert app._current_reference.kind == "phase"
+            assert [ref.kind for ref in app._reference_forward_stack] == ["iter"]
+
+    asyncio.run(body())
+
+
 def test_goto_handler_opens_reference_modal() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)

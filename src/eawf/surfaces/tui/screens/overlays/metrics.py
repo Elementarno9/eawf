@@ -96,7 +96,7 @@ class TileSpec:
 #: right). The grid is ``grid-size: 3 2`` so the first three specs fill
 #: the top row and the last three the bottom row.
 TILE_SPECS: tuple[TileSpec, ...] = (
-    TileSpec("tile-variance", "Variance / bucket"),
+    TileSpec("tile-variance", "Variance / bucket", drill="variance"),
     TileSpec("tile-burn", "Weekly burn"),
     TileSpec("tile-elapsed", "Wave elapsed"),
     TileSpec("tile-cache", "Cache health"),
@@ -262,6 +262,30 @@ def _render_role_calibration_projection(projection: MetricsProjection) -> str:
     return render_role_calibration_tile(projection.per_role_calibration)
 
 
+def render_variance_drilldown(projection: MetricsProjection | None) -> str:
+    """Render bucket-level variance drilldown rows."""
+    if projection is None:
+        return _AWAITING
+    if not projection.variance_by_bucket:
+        return _NO_DATA
+    lines: list[str] = []
+    for bucket in projection.variance_by_bucket:
+        lines.append(
+            f"{bucket.bucket.value} {render_variance_markup(bucket.variance_pct)} "
+            f"n={bucket.sample_count} planned={_format_eu(bucket.planned_eu)} "
+            f"actual={_format_eu(bucket.actual_eu)}"
+        )
+        for wave in bucket.waves[:5]:
+            lines.append(
+                f"  {wave.wave_id} {render_variance_markup(wave.variance_pct)} "
+                f"planned={_format_eu(wave.planned_eu)} actual={_format_eu(wave.actual_eu)} "
+                f"{wave.title}"
+            )
+        if len(bucket.waves) > 5:
+            lines.append(f"  +{len(bucket.waves) - 5} more")
+    return "\n".join(lines)
+
+
 def parse_metrics_args(args: str) -> MetricsArgs:
     """Parse the raw ``/metrics`` arg string into a typed :class:`MetricsArgs`.
 
@@ -372,7 +396,7 @@ class MetricsModal(ModalScreen[None]):
         super().__init__()
         self._args = metrics_args or MetricsArgs(window=DEFAULT_WINDOW, scope_filter=None)
         self.selected = next(
-            (index for index, spec in enumerate(TILE_SPECS) if spec.drill is not None),
+            (index for index, spec in enumerate(TILE_SPECS) if spec.drill == "role-calibration"),
             0,
         )
 
@@ -504,13 +528,16 @@ class MetricsModal(ModalScreen[None]):
         if not (0 <= self.selected < len(TILE_SPECS)):
             return
         spec = TILE_SPECS[self.selected]
-        if spec.drill != "role-calibration":
+        if spec.drill not in {"role-calibration", "variance"}:
             return
         projection = self._current_projection()
-        modal = CalibrationDrillModal(
-            projection.per_role_calibration if projection is not None else (),
-            metrics_args=self._args,
-        )
+        if spec.drill == "variance":
+            modal: ModalScreen[None] = VarianceDrillModal(projection, metrics_args=self._args)
+        else:
+            modal = CalibrationDrillModal(
+                projection.per_role_calibration if projection is not None else (),
+                metrics_args=self._args,
+            )
         push_modal = getattr(self.app, "push_modal", None)
         if callable(push_modal):
             pushed = bool(push_modal(modal))
@@ -588,6 +615,70 @@ class CalibrationDrillModal(ModalScreen[None]):
         self.dismiss(None)
 
 
+class VarianceDrillModal(ModalScreen[None]):
+    """Bucket-level estimate/actual variance drilldown."""
+
+    DEFAULT_CSS: ClassVar[str] = """
+    VarianceDrillModal {
+        align: center middle;
+    }
+    VarianceDrillModal > #variance-card {
+        width: 84%;
+        max-width: 120;
+        height: 75%;
+        border: solid $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    VarianceDrillModal .variance-title {
+        text-style: bold;
+        color: $accent;
+        height: 1;
+    }
+    VarianceDrillModal .variance-body {
+        height: auto;
+    }
+    VarianceDrillModal .variance-hint {
+        color: $text-muted;
+        height: 1;
+        margin-top: 1;
+    }
+    """
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "close", "close", show=False),
+    ]
+
+    def __init__(
+        self,
+        projection: MetricsProjection | None,
+        *,
+        metrics_args: MetricsArgs,
+    ) -> None:
+        """Construct variance drilldown for precomputed projection rows."""
+        super().__init__()
+        self._projection = projection
+        self._args = metrics_args
+
+    def compose(self) -> ComposeResult:
+        """Yield title, variance rows, and close hint."""
+        scope_suffix = f" · {self._args.scope_filter}" if self._args.scope_filter else ""
+        with VerticalScroll(id="variance-card"):
+            yield Static(
+                f"Variance by bucket · window {self._args.window}{scope_suffix}",
+                classes="variance-title",
+            )
+            yield Static(
+                render_variance_drilldown(self._projection),
+                classes="variance-body",
+            )
+            yield Static("[ Esc close ]", classes="variance-hint")
+
+    def action_close(self) -> None:
+        """Dismiss the drilldown overlay."""
+        self.dismiss(None)
+
+
 def open_metrics(app: App[None], metrics_args: MetricsArgs | None = None) -> bool:
     """Push the metrics dashboard onto *app* (modal-cap-aware).
 
@@ -621,8 +712,10 @@ __all__ = [
     "MetricsArgs",
     "MetricsModal",
     "TileSpec",
+    "VarianceDrillModal",
     "open_metrics",
     "parse_metrics_args",
     "render_projection_tile",
+    "render_variance_drilldown",
     "render_wave_elapsed_tile",
 ]

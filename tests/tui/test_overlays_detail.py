@@ -15,8 +15,21 @@ from pathlib import Path
 import orjson
 from textual.widgets import Markdown, Static, TabbedContent
 
-from eawf.kernel.state.enums import DispatchNote, EffortBucket
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    Confidence,
+    DispatchNote,
+    EffortBucket,
+)
 from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import (
+    AgentReportHeader,
+    AgentReportPayload,
+    ExecutorReportBody,
+    store_kind_for_role,
+)
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
     _TAB_LABELS,
@@ -30,6 +43,7 @@ from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.workflow.agent_report.rollup import AgentReportRow
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -112,6 +126,45 @@ def _state_with_attempted_wave() -> tuple[State, str]:
     return state.model_copy(update={"waves": new_waves}), wave_id
 
 
+def _report(wave_id: str, *, attempt: int, verdict: AgentReportVerdict) -> AgentReportRow:
+    generated_at = datetime(2026, 5, 27, 12, attempt, tzinfo=UTC)
+    body = ExecutorReportBody(
+        role="executor",
+        verdict=verdict,
+        confidence=Confidence.HIGH,
+        summary="attempt completed",
+        wave_id=wave_id,
+        outcome="done",
+    )
+    report_id = f"AR-executor-{wave_id}-{attempt:02d}"
+    header = AgentReportHeader(
+        report_id=report_id,
+        role=AgentSessionRole.EXECUTOR,
+        session_id=f"SES-{attempt}",
+        scope_id=wave_id,
+        base_id=wave_id,
+        attempt=attempt,
+        runtime="codex",
+        generated_at=generated_at,
+        summary=body.summary,
+    )
+    payload = AgentReportPayload(header=header, body=body)
+    envelope = Envelope(
+        id=report_id,
+        kind=store_kind_for_role(AgentSessionRole.EXECUTOR),
+        scope_id=wave_id,
+        created_at=generated_at,
+        updated_at=None,
+        summary=body.summary,
+        payload=payload.model_dump(mode="json"),
+    )
+    return AgentReportRow(
+        envelope=envelope,
+        payload=payload,
+        store_kind=store_kind_for_role(AgentSessionRole.EXECUTOR).value,
+    )
+
+
 # --------------------------------------------------------------------------
 # resolve_detail — wave / backlog / fallback
 # --------------------------------------------------------------------------
@@ -185,6 +238,24 @@ def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:
     assert len(lines[2].split()) == 8
     assert "switch" in lines[2]
     assert "34" in lines[2]
+
+
+def test_resolve_detail_wave_attempt_rollup_uses_reports_and_errors() -> None:
+    state, wave_id = _state_with_attempted_wave()
+    card = resolve_detail(
+        state,
+        wave_id,
+        reports=(
+            _report(wave_id, attempt=1, verdict=AgentReportVerdict.PASS),
+            _report(wave_id, attempt=2, verdict=AgentReportVerdict.BLOCKED),
+        ),
+        error_kind_by_attempt={2: ("timeout", "network_error", "timeout")},
+    )
+    rows = dict(card.rows)
+
+    assert rows["attempts"] == "2 attempts, 1 retry, 1 blocked, 49 tokens"
+    assert rows["error kinds"] == "network_error=1, timeout=2"
+    assert "yes" in rows["attempt timeline"]
 
 
 # --------------------------------------------------------------------------
