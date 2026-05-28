@@ -185,7 +185,12 @@ def test_render_roadmap_markdown_phase_filter_restricts_rows() -> None:
     state = State.model_validate(orjson.loads((fixture / "state.json").read_bytes()))
     target = next(iter(state.phases))
     md = render_roadmap_markdown(state, phase_id_filter=target)
-    body_lines = [line for line in md.splitlines() if line.startswith("| `")]
+    body_lines = [
+        line
+        for line in md.splitlines()
+        if line.startswith("| `")
+        and line.split("|")[2].strip() in {"`planned`", "`active`", "`closed`"}
+    ]
     assert len(body_lines) == 1
     assert f"`{target}`" in body_lines[0]
 

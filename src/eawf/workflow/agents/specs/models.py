@@ -382,10 +382,9 @@ class SubagentSpec(_SpecModel):
             "   - `uv run pre-commit run --all-files`\n"
             "   - `uv run mypy src/`\n"
             "   - `uv run pytest tests/ -q`\n"
-            "4. Commit with prefix `"
-            + commit_prefix
-            + " <type>: <summary>` (3-6 bullet body) and the\n"
-            "   recognized Claude or Codex `Co-Authored-By` trailer.\n"
+            f"4. Commit with prefix `{commit_prefix} <type>: <summary>` "
+            "(3-6 bullet body) and the recognized Claude or Codex "
+            "`Co-Authored-By` trailer.\n"
             "5. Close the wave through the CLI with the final token tally:\n"
             "   - `uv run eawf wave close "
             + self.wave_id
@@ -416,7 +415,7 @@ class SubagentSpec(_SpecModel):
         if self.role_contract is None:
             return None
         contract = self.role_contract
-        body = self.role_contract.system_prompt.rstrip("\n")
+        body = _unwrap_markdown_soft_wraps(self.role_contract.system_prompt).rstrip("\n")
         allowed_tools = _display_list(contract.allowed_tools)
         denied_tools = _display_list(contract.denied_tools)
         model = _display_value(contract.model)
@@ -524,6 +523,67 @@ def _display_list(values: list[str]) -> str:
     if not values:
         return "none"
     return ", ".join(values)
+
+
+def _unwrap_markdown_soft_wraps(markdown: str) -> str:
+    """Collapse soft-wrapped Markdown lines while preserving block boundaries."""
+    rendered: list[str] = []
+    paragraph: str | None = None
+    in_fenced_block = False
+
+    def flush_paragraph() -> None:
+        nonlocal paragraph
+        if paragraph is not None:
+            rendered.append(paragraph.rstrip())
+            paragraph = None
+
+    for line in markdown.rstrip("\n").splitlines():
+        stripped = line.strip()
+        starts_fence = stripped.startswith("```") or stripped.startswith("~~~")
+
+        if in_fenced_block:
+            rendered.append(line.rstrip())
+            if starts_fence:
+                in_fenced_block = False
+            continue
+
+        if starts_fence:
+            flush_paragraph()
+            rendered.append(line.rstrip())
+            in_fenced_block = True
+            continue
+
+        if not stripped:
+            flush_paragraph()
+            rendered.append("")
+            continue
+
+        if paragraph is None:
+            paragraph = line.rstrip()
+            continue
+
+        if _starts_markdown_block(line):
+            flush_paragraph()
+            paragraph = line.rstrip()
+            continue
+
+        paragraph = f"{paragraph.rstrip()} {stripped}"
+
+    flush_paragraph()
+    return "\n".join(rendered)
+
+
+def _starts_markdown_block(line: str) -> bool:
+    """Return ``True`` when ``line`` starts a Markdown block."""
+    stripped = line.lstrip()
+    if line.startswith("    "):
+        return True
+    if stripped.startswith(("#", "> ", "- ", "* ", "+ ", "|")):
+        return True
+    if stripped in {"---", "***", "___"}:
+        return True
+    prefix, separator, _ = stripped.partition(". ")
+    return bool(separator) and prefix.isdecimal()
 
 
 __all__ = [

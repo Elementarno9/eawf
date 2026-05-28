@@ -226,10 +226,10 @@ class StateBinding:
         while True:
             if self._stopping:
                 return
-            await self._process_daemon_probe()
+            await asyncio.sleep(self._daemon_probe_interval)
             if self._stopping:
                 return
-            await asyncio.sleep(self._daemon_probe_interval)
+            await self._process_daemon_probe()
 
     async def _start_poll_fallback(self) -> None:
         """Mark degraded and start the mtime-poll loop once."""

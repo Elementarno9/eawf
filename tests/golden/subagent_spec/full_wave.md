@@ -71,20 +71,17 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
 
 ## Inputs you expect
 
-- A wave spec with success criteria, file list, test list, commit
-  prefix.
+- A wave spec with success criteria, file list, test list, commit prefix.
 - The parent feature branch name (cherry-pick back, do not merge).
 - Permission to use `Bash` for `uv run`, `git`, `gh`, etc.
 
 ## Method
 
 1. Read every file the spec names BEFORE editing.
-2. Implement edits in dependency order: schemas → logic → CLI →
-   tests.
+2. Implement edits in dependency order: schemas → logic → CLI → tests.
 3. Run the local gauntlet: pre-commit, mypy, pytest, ruff.
 4. Commit with the spec's commit prefix and a 3-6 bullet body.
-5. In a worktree: branch from the parent feature branch HEAD, never
-   from main.
+5. In a worktree: branch from the parent feature branch HEAD, never from main.
 
 ## Refuse-conditions
 
@@ -100,8 +97,7 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
    - `uv run pre-commit run --all-files`
    - `uv run mypy src/`
    - `uv run pytest tests/ -q`
-4. Commit with prefix `[P27-W14] <type>: <summary>` (3-6 bullet body) and the
-   recognized Claude or Codex `Co-Authored-By` trailer.
+4. Commit with prefix `[P27-W14] <type>: <summary>` (3-6 bullet body) and the recognized Claude or Codex `Co-Authored-By` trailer.
 5. Close the wave through the CLI with the final token tally:
    - `uv run eawf wave close P27-I03-W14 --outcome "<summary>" --tokens-consumed <tokens>`
 
