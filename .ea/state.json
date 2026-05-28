@@ -816,6 +816,18 @@
       "status": "done",
       "updated_at": "2026-05-28T18:09:53.046596Z"
     },
+    "P28-I03-W57": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 164969,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W57",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W57",
+      "scope_id": "P28-I03-W57",
+      "status": "done",
+      "updated_at": "2026-05-28T18:25:57.687274Z"
+    },
     "P28-I03-W58": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 77492,
@@ -6189,6 +6201,19 @@
       "scope_id": "P28-I03-W54",
       "updated_at": "2026-05-28T18:09:52.431070Z"
     },
+    "P28-I03-W57": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W57-bucket-20260528T182557Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W57",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W57",
+      "updated_at": "2026-05-28T18:25:57.084880Z"
+    },
     "P28-I03-W58": {
       "confidence": "low",
       "current_store_record_id": "EST-P28-I03-W58-bucket-20260528T180445Z",
@@ -7850,7 +7875,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T18:09:53.047003Z",
+  "updated_at": "2026-05-28T18:25:57.687646Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25595,8 +25620,8 @@
     "P28-I03-W57": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T18:25:57.687274Z",
       "commit": null,
       "deps": [],
       "description": "Operator picked full Codex UX overhaul over partial. Token-cost structural fix still deferred to spawn seam (v0.4.1).",
@@ -25614,16 +25639,16 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T17:50:02.518447Z",
-      "outcome": null,
+      "outcome": "verify_close_readiness gate wired into dispatch_runner; codex added to DISPATCH_RUNTIMES; _commit_prefix_for_wave fixes hardcoded prefix for I02+; 352 tests pass; followup tracked: pre-existing wheel-size ceiling failure on parent branch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "SubagentSpec._render_workflow prepends step 0=eawf wave claim;commit_prefix uses full [P##-I##-W##] (drops bare phase-wave shape);dispatch_runner fails dispatch when no matching [P##-W##] commit landed AND no wave_close event fired;runtime-agnostic;Codex runtime added to DISPATCH_RUNTIMES"
       ],
       "title": "feat: Codex UX overhaul (claim step + iter prefix + verify gate)",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 164969,
       "worktree_id": null
     },
     "P28-I03-W58": {
