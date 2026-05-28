@@ -3735,6 +3735,21 @@
       "status": "active",
       "superseded_by": null,
       "title": "IntentBrief field set ratified per W24 audit"
+    },
+    "D29": {
+      "alternatives": [
+        "Reactive wave inserting literal claim step 0 (rejected: duplicates executor system prompt; golden re-pair would also hit snapshot gate)."
+      ],
+      "consequences": [],
+      "created_at": "2026-05-28T20:49:58.644554Z",
+      "description": null,
+      "id": "D29",
+      "obsoleted_at": null,
+      "rationale": "Audit A42 follow-up flagged W57 success_criteria text 'SubagentSpec._render_workflow prepends step 0=eawf wave claim' as unmet. Operator 2026-05-28 AUQ confirmed the criterion was a labeling reference to the commit-prefix step (W57 renumbered it as step 4 of the 5-step body), not a literal directive. Subagent dispatch already wires claim via executor system prompt outside _render_workflow; a literal step 0 would duplicate. W57 criterion closed as honored.",
+      "scope_id": "P28",
+      "status": "active",
+      "superseded_by": null,
+      "title": "W57 criterion step-0 ratified as labeling reference"
     }
   },
   "estimates": {
@@ -8273,7 +8288,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T20:00:41.110892Z",
+  "updated_at": "2026-05-28T20:49:58.644554Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
