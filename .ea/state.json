@@ -816,6 +816,18 @@
       "status": "done",
       "updated_at": "2026-05-28T18:09:53.046596Z"
     },
+    "P28-I03-W55": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 144423,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W55",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W55",
+      "scope_id": "P28-I03-W55",
+      "status": "done",
+      "updated_at": "2026-05-28T19:49:43.695281Z"
+    },
     "P28-I03-W57": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 164969,
@@ -6253,6 +6265,19 @@
       "scope_id": "P28-I03-W54",
       "updated_at": "2026-05-28T18:09:52.431070Z"
     },
+    "P28-I03-W55": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W55-bucket-20260528T194943Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W55",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W55",
+      "updated_at": "2026-05-28T19:49:43.107436Z"
+    },
     "P28-I03-W57": {
       "confidence": "low",
       "current_store_record_id": "EST-P28-I03-W57-bucket-20260528T182557Z",
@@ -7967,7 +7992,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T19:12:33.082002Z",
+  "updated_at": "2026-05-28T19:49:43.695588Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25639,8 +25664,8 @@
     "P28-I03-W55": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T19:49:43.695281Z",
       "commit": null,
       "deps": [
         "P28-I03-W61"
@@ -25659,16 +25684,16 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T17:49:29.085101Z",
-      "outcome": null,
+      "outcome": "build_narrative dispatches by scope kind; wave bundle quotes intent.problem/desired_outcome + pinned commit + attempts + ActualSummary; sibling waves render distinct d-tab bodies pinned by tests/golden/narrative/{wave_first,wave_second}.md",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "build_narrative branches on scope kind (phase/iter/wave);wave bundle: What=wave.intent.goal+outcome;Why=motivation/success_signal;Validation=wave.commit+attempts+ActualSummary;Risks=dispatch errors/blocked-attempt count;detail.py:289 routes wave cards through wave bundle (not phase substitution);snapshot tests open modal on 2 waves under same phase + assert d-tab body diverges"
       ],
       "title": "feat: wave-shaped NarrativeBundle (build_narrative kind branch)",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 144423,
       "worktree_id": null
     },
     "P28-I03-W56": {
