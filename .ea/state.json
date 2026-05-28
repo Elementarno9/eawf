@@ -2734,7 +2734,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P28-I03-W49"
+    ],
     "iter_id": "P28-I03",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -5968,6 +5970,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P28-I03-W48",
       "updated_at": "2026-05-28T11:27:56.604910Z"
+    },
+    "P28-I03-W49": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W49-bucket-20260528T114841Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P28-I03-W49",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P28-I03-W49",
+      "updated_at": "2026-05-28T11:48:41.922885Z"
     }
   },
   "goals": {
@@ -6985,7 +7000,8 @@
         "P28-I03-W46",
         "P28-I03-W47",
         "P28-I03-W39",
-        "P28-I03-W48"
+        "P28-I03-W48",
+        "P28-I03-W49"
       ]
     }
   },
@@ -7591,7 +7607,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T11:28:59.109750Z",
+  "updated_at": "2026-05-28T11:48:41.923166Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -24983,7 +24999,9 @@
     },
     "P28-I03-W48": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P28-I03-W49"
+      ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
       "closed_at": "2026-05-28T11:28:59.109423Z",
       "commit": "3b88c8c73fea723b4c4654f54554ce7cd177c016",
@@ -25024,6 +25042,44 @@
         "targeted failing clusters pass"
       ],
       "title": "fix: green polish remediation suite",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P28-I03-W49": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "codex-p28-i03-w49",
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P28-I03-W48"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "pyproject.toml",
+        "src/eawf/surfaces/tui/state_binding.py",
+        "src/eawf/workflow/agents/specs/models.py",
+        "src/eawf/workflow/lifecycle/phase.py",
+        "tests/golden/plan_view/test_golden_plan_view.py",
+        "tests/golden/subagent_spec/full_wave.md"
+      ],
+      "id": "P28-I03-W49",
+      "intent": null,
+      "iter_id": "P28-I03",
+      "opened_at": "2026-05-28T11:48:28.930615Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "six remaining pytest failures pass",
+        "pre-commit passes",
+        "full pytest and mypy unblock"
+      ],
+      "title": "finish verification repairs",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
