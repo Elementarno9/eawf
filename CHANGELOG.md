@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-05-29
 
 ### BREAKING
 - **`IntentBrief` field set ratified per W24 audit.** The brief schema is now exactly seven fields: required `problem` + `desired_outcome` (each <=200 chars), optional `planned_steps` / `risks` / `priority_rationale`, and the carry-over `evidence_refs` / `source_brief_ids`. The legacy `goal` / `motivation` / `success_signal` fields are removed; any state document still carrying them fails `extra="forbid"` at load time. CLI surface follows: `eawf roadmap revise` and `eawf backlog edit` drop the `--intent-goal` / `--intent-motivation` / `--intent-success-signal` flags. Migration: replace `--intent-goal <X>` with `--intent-problem <Y> --intent-desired-outcome <Z>`; replace `--intent-motivation <X>` with `--intent-priority-rationale <X>`; replace `--intent-success-signal <X>` with `--intent-desired-outcome <X>` (the two fields name the same target state at the schema level). Self-only consumer scope; the staged W59-W60-W61 migration kept the call graph green throughout.
