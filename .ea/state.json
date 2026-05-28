@@ -755,6 +755,18 @@
       "scope_id": "P28-I03-W48",
       "status": "done",
       "updated_at": "2026-05-28T11:28:59.109423Z"
+    },
+    "P28-I03-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W49",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W49",
+      "scope_id": "P28-I03-W49",
+      "status": "done",
+      "updated_at": "2026-05-28T11:50:45.373947Z"
     }
   },
   "agent_sessions": {
@@ -2734,9 +2746,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P28-I03-W49"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P28-I03",
     "phase_id": "P28",
     "project_code": "EAWF",
@@ -7607,7 +7617,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T11:48:41.923166Z",
+  "updated_at": "2026-05-28T11:50:45.374266Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25050,8 +25060,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "codex-p28-i03-w49",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-05-28T11:50:45.373947Z",
+      "commit": "cc9044e6daa3b375153f5bfeaae30442e780ad86",
       "deps": [
         "P28-I03-W48"
       ],
@@ -25070,10 +25080,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T11:48:28.930615Z",
-      "outcome": null,
+      "outcome": "fixed final verification failures; targeted six-test bundle and pre-commit pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "six remaining pytest failures pass",
         "pre-commit passes",
