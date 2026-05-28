@@ -63,6 +63,30 @@ class IntentBrief(BaseModel):
             Lets the renderer surface "see brief X" alongside the
             intent so the reader can follow the chain. Default empty
             list.
+        problem: Optional one-line statement of the problem the entity
+            is solving — the W24-audited counterpart to ``goal`` that
+            names the gap, not the action. Bounded at 200 characters
+            so it fits the same single-row render slot as ``goal``;
+            ``None`` until a consumer (W60) populates it.
+        desired_outcome: Optional one-line description of the state of
+            the world after the intent is satisfied — the W24-audited
+            counterpart to ``success_signal`` that names the steady
+            state, not the observable. Bounded at 200 characters;
+            ``None`` until a consumer (W60) populates it.
+        planned_steps: Ordered list of the planner's intended steps
+            toward the desired outcome. Each step is bounded at 500
+            characters and the list itself is bounded at 10 entries so
+            a brief stays scannable in the dispatch / detail surfaces.
+            Default empty list; the EviBound gate is not applied here.
+        risks: Known risks or trade-offs the planner accepted. Each
+            risk is bounded at 500 characters and the list at 10
+            entries with the same scannability rationale as
+            ``planned_steps``. Default empty list.
+        priority_rationale: Optional long-form explanation of why this
+            intent earned its slot — the W24-audited counterpart to
+            ``motivation`` that names the prioritization trade-off
+            rather than the underlying *why*. Bounded at 1000
+            characters; ``None`` until a consumer (W60) populates it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -72,6 +96,15 @@ class IntentBrief(BaseModel):
     success_signal: Annotated[str, Field(max_length=500)] | None = None
     evidence_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     source_brief_ids: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    problem: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    desired_outcome: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    planned_steps: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
+        default_factory=list, max_length=10
+    )
+    risks: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
+        default_factory=list, max_length=10
+    )
+    priority_rationale: Annotated[str, Field(max_length=1000)] | None = None
 
 
 __all__ = [

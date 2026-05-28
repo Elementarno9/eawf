@@ -98,6 +98,152 @@ def test_intent_brief_rejects_empty_evidence_ref() -> None:
         IntentBrief(goal="ok", evidence_refs=[""])
 
 
+# ---- W24-audited additive fields (W59 stage 1 of 3) -------------------------
+#
+# W59 added five Optional fields alongside the legacy five so consumers can
+# migrate one wave at a time (W60). The legacy fields stay required-or-default
+# until W61 swaps the canonical set. The tests below pin the additive
+# invariant — old-only validates, new-only validates, both validate — plus the
+# per-field bounds the renderer + EviBound gate will rely on once W60 wires
+# the fields through.
+
+
+def test_intent_brief_old_fields_only_validates() -> None:
+    """Pre-W59 callers (goal + legacy companions only) still validate."""
+    brief = IntentBrief(
+        goal="ship the wave",
+        motivation="planner needs goal threaded to executor",
+        success_signal="every wave detail card surfaces a goal row",
+        evidence_refs=["src/eawf/kernel/spec/intent.py:1"],
+        source_brief_ids=[".ea/local/research/2026-05-26-v04-roadmap.md"],
+    )
+    assert brief.problem is None
+    assert brief.desired_outcome is None
+    assert brief.planned_steps == []
+    assert brief.risks == []
+    assert brief.priority_rationale is None
+
+
+def test_intent_brief_new_fields_only_validates() -> None:
+    """W24-audited fields alone (plus the still-required `goal`) validate."""
+    brief = IntentBrief(
+        goal="ship the wave",
+        problem="executors lack a structured intent surface",
+        desired_outcome="every entity carries a typed intent the renderer reads",
+        planned_steps=["wire the schema", "wire the renderer", "wire the consumers"],
+        risks=["consumers may drift if the migration spans multiple iters"],
+        priority_rationale="W24 audit ranked structured intent above the renderer polish backlog",
+    )
+    assert brief.problem == "executors lack a structured intent surface"
+    assert brief.desired_outcome == "every entity carries a typed intent the renderer reads"
+    assert brief.planned_steps == [
+        "wire the schema",
+        "wire the renderer",
+        "wire the consumers",
+    ]
+    assert brief.risks == [
+        "consumers may drift if the migration spans multiple iters",
+    ]
+    assert (
+        brief.priority_rationale
+        == "W24 audit ranked structured intent above the renderer polish backlog"
+    )
+    # Legacy fields stay at their defaults so the additive invariant holds.
+    assert brief.motivation is None
+    assert brief.success_signal is None
+    assert brief.evidence_refs == []
+    assert brief.source_brief_ids == []
+
+
+def test_intent_brief_both_field_sets_validate() -> None:
+    """Mixed briefs (legacy + W24 fields populated) validate cleanly."""
+    brief = IntentBrief(
+        goal="ship the wave",
+        motivation="planner needs goal threaded to executor",
+        success_signal="every wave detail card surfaces a goal row",
+        evidence_refs=["src/eawf/kernel/spec/intent.py:1"],
+        source_brief_ids=[".ea/local/research/2026-05-26-v04-roadmap.md"],
+        problem="executors lack a structured intent surface",
+        desired_outcome="every entity carries a typed intent the renderer reads",
+        planned_steps=["wire the schema", "wire the renderer"],
+        risks=["consumers may drift across iters"],
+        priority_rationale="W24 audit ranked structured intent above the polish backlog",
+    )
+    assert brief.goal == "ship the wave"
+    assert brief.problem == "executors lack a structured intent surface"
+    assert brief.evidence_refs == ["src/eawf/kernel/spec/intent.py:1"]
+    assert brief.planned_steps == ["wire the schema", "wire the renderer"]
+
+
+def test_intent_brief_rejects_empty_problem() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", problem="")
+
+
+def test_intent_brief_rejects_over_cap_problem() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", problem="p" * 201)
+
+
+def test_intent_brief_rejects_empty_desired_outcome() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", desired_outcome="")
+
+
+def test_intent_brief_rejects_over_cap_desired_outcome() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", desired_outcome="d" * 201)
+
+
+def test_intent_brief_rejects_empty_planned_step() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", planned_steps=[""])
+
+
+def test_intent_brief_rejects_over_cap_planned_step() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", planned_steps=["s" * 501])
+
+
+def test_intent_brief_rejects_over_len_planned_steps_list() -> None:
+    """>10 entries on planned_steps fails (max_length=10 on the list)."""
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", planned_steps=[f"step {i}" for i in range(11)])
+
+
+def test_intent_brief_accepts_planned_steps_at_cap() -> None:
+    """Exactly 10 entries on planned_steps validates (boundary case)."""
+    brief = IntentBrief(goal="ok", planned_steps=[f"step {i}" for i in range(10)])
+    assert len(brief.planned_steps) == 10
+
+
+def test_intent_brief_rejects_empty_risk() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", risks=[""])
+
+
+def test_intent_brief_rejects_over_cap_risk() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", risks=["r" * 501])
+
+
+def test_intent_brief_rejects_over_len_risks_list() -> None:
+    """>10 entries on risks fails (max_length=10 on the list)."""
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", risks=[f"risk {i}" for i in range(11)])
+
+
+def test_intent_brief_accepts_risks_at_cap() -> None:
+    """Exactly 10 entries on risks validates (boundary case)."""
+    brief = IntentBrief(goal="ok", risks=[f"risk {i}" for i in range(10)])
+    assert len(brief.risks) == 10
+
+
+def test_intent_brief_rejects_over_cap_priority_rationale() -> None:
+    with pytest.raises(ValidationError):
+        IntentBrief(goal="ok", priority_rationale="p" * 1001)
+
+
 # ---- Nullable attachment on entities ----------------------------------------
 
 
