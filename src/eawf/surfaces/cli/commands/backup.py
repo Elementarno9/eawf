@@ -10,7 +10,7 @@ repo tree and never collide across repos.
 Verbs:
 
 - ``eawf backup create [--note <str>]`` — snapshot ``state.json`` +
-  ``config.yaml`` + ``profile.yaml`` into a timestamped dir.
+  ``config.yaml`` and any legacy ``profile.yaml`` sidecar into a timestamped dir.
 - ``eawf backup list`` — list every snapshot, most-recent first.
 - ``eawf backup restore --ts <ISO>`` — restore the named snapshot (writes a
   pre-restore safety copy of the live ``state.json`` first).
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 backup_app = typer.Typer(
     name="backup",
-    help="Snapshot backups of state.json + config.yaml + profile.yaml.",
+    help="Snapshot backups of state.json + config.yaml, plus legacy profile.yaml when present.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -64,8 +64,9 @@ def backup_create(
 ) -> None:
     """Snapshot the repo's ``.ea/`` artifacts into a timestamped backup dir.
 
-    Copies ``state.json`` (mandatory) plus ``config.yaml`` / ``profile.yaml``
-    when present into ``~/.eawf/backups/<repo_sha>/<timestamp>/``. Exits
+    Copies ``state.json`` (mandatory), ``config.yaml`` when present, and any
+    legacy ``profile.yaml`` sidecar when present into
+    ``~/.eawf/backups/<repo_sha>/<timestamp>/``. Exits
     ``USER_ERROR`` when the repo has no ``state.json`` to snapshot.
     """
     flags: GlobalFlags = ctx.obj
@@ -123,7 +124,7 @@ def backup_restore(
         typer.Option("--ts", help="Snapshot timestamp to restore (see `eawf backup list`)."),
     ],
 ) -> None:
-    """Restore ``state.json`` + ``config.yaml`` + ``profile.yaml`` from *ts*.
+    """Restore ``state.json`` + ``config.yaml`` + optional legacy ``profile.yaml`` from *ts*.
 
     Writes a pre-restore safety copy of the live ``state.json`` first, then
     copies the snapshot's artifacts back byte-for-byte. Exits ``USER_ERROR``

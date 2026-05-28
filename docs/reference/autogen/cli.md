@@ -80,14 +80,14 @@ Manage backlog items (add / close).
 
 ### `eawf backup`
 
-Snapshot backups of state.json + config.yaml + profile.yaml.
+Snapshot backups of state.json + config.yaml, plus legacy profile.yaml when present.
 
 | Verb | Summary |
 |---|---|
 | `create` | Snapshot the repo's ``.ea/`` artifacts into a timestamped backup dir. |
 | `list` | List every snapshot for the current repo, most-recent first. |
 | `prune` | Keep the N most-recent snapshots; delete older ones. |
-| `restore` | Restore ``state.json`` + ``config.yaml`` + ``profile.yaml`` from *ts*. |
+| `restore` | Restore ``state.json`` + ``config.yaml`` + optional legacy ``profile.yaml`` from *ts*. |
 
 ### `eawf bench`
 

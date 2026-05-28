@@ -40,8 +40,8 @@ Initialization writes project state and generated runtime files. The important
 outputs are:
 
 - `.ea/state.json` — committed project ledger.
-- `.ea/profile.yaml` and related config — selected policy and profile
-  composition.
+- `.ea/config.yaml` — selected profiles, runtime adapters, acceptance gates,
+  and layered project configuration.
 - `AGENTS.md` — generated agent contract for the repository.
 - `CLAUDE.md` — shim that points Claude Code at `AGENTS.md` when that adapter
   is enabled.
