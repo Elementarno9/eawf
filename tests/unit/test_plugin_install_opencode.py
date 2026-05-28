@@ -18,6 +18,7 @@ import yaml
 from eawf.runtime.runtimes.opencode import doctor_plugin, install_plugin
 from eawf.runtime.runtimes.opencode.plugin_install import (
     IntegrityViolation,
+    expected_paths,
     expected_plugin_js_bytes,
 )
 
@@ -190,6 +191,26 @@ def test_install_refuses_hand_edited_sidecar(tmp_path: Path) -> None:
     body = json.loads(sidecar.read_text(encoding="utf-8"))
     body["commands"] = []
     sidecar.write_text(json.dumps(body, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(IntegrityViolation):
+        install_plugin(tmp_path)
+
+
+def test_install_refuses_hand_edited_agent_without_force(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    paths, _ = expected_paths(tmp_path)
+    first_agent_region = next(k for k in paths if k.startswith("plugin.opencode.agent."))
+    first_agent = paths[first_agent_region]
+    first_agent.write_text("tampered\n", encoding="utf-8")
+    with pytest.raises(IntegrityViolation):
+        install_plugin(tmp_path)
+
+
+def test_install_refuses_hand_edited_command_without_force(tmp_path: Path) -> None:
+    install_plugin(tmp_path)
+    paths, _ = expected_paths(tmp_path)
+    first_command_region = next(k for k in paths if k.startswith("plugin.opencode.command."))
+    first_command = paths[first_command_region]
+    first_command.write_text("tampered\n", encoding="utf-8")
     with pytest.raises(IntegrityViolation):
         install_plugin(tmp_path)
 

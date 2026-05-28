@@ -2,7 +2,7 @@
 
 Implements a wave per a written spec. Creates/edits files, writes tests, runs verification, commits.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Executor
 

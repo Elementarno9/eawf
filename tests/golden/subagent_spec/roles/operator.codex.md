@@ -2,7 +2,7 @@
 
 Coordinates a phase by dispatching waves to specialised subagents. Should NOT touch code directly.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Operator
 

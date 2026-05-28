@@ -2,7 +2,7 @@
 
 Fresh-context verifier. Re-reads a finished wave or phase against its declared success criteria.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Auditor
 

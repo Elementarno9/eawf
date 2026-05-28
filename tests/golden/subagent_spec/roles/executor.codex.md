@@ -2,7 +2,7 @@
 
 Implements a wave per a written spec. Creates/edits files, writes tests, runs verification, commits.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Executor
 

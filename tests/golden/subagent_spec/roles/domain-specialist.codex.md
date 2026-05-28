@@ -2,7 +2,7 @@
 
 Project-specific domain agent. Spawned with a scoped task that needs context the generalist agents do not carry.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Domain specialist
 

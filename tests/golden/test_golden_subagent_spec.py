@@ -96,6 +96,7 @@ def _full_spec() -> SubagentSpec:
             token_budget=32768,
             parallel_siblings=["P27-I03-W13", "P27-I03-W15"],
         ),
+        role_contract=build_role_contract(get_role_spec(AgentSessionRole.EXECUTOR)),
     )
 
 
@@ -149,7 +150,7 @@ def _dispatch_role_contract_body() -> str:
         role_contract=build_role_contract(role),
     )
     rendered = spec.render()
-    start = rendered.index("## Role contract\n\n") + len("## Role contract\n\n")
+    start = rendered.index("### System prompt\n\n") + len("### System prompt\n\n")
     end = rendered.index("\n\n## Workflow")
     return rendered[start:end]
 

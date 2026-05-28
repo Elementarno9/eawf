@@ -169,6 +169,37 @@ def _classify(path: Path, payload: bytes) -> str:
     return "updated"
 
 
+def _guard_managed_file(path: Path, payload: bytes, *, force: bool) -> None:
+    """Refuse to clobber a hand-edited managed file unless *force* is set.
+
+    Raises:
+        IntegrityViolation: when *path* exists, differs from *payload*, and
+            *force* is ``False``.
+    """
+    if path.exists() and not force and path.read_bytes() != payload:
+        raise IntegrityViolation(
+            f"managed file {path} differs from rendered body; rerun with --force to overwrite"
+        )
+
+
+def _write_managed_file(path: Path, payload: bytes, *, force: bool, dry_run: bool) -> FileDelta:
+    """Integrity-check, classify, and (unless *dry_run*) write one managed file.
+
+    Returns:
+        The :class:`FileDelta` describing the create/update/unchanged action.
+
+    Raises:
+        IntegrityViolation: when the on-disk file was hand-edited and *force*
+            is not set.
+    """
+    _guard_managed_file(path, payload, force=force)
+    action = _classify(path, payload)
+    if not dry_run:
+        _ensure_dir(path.parent)
+        atomic_write_text(path, payload.decode("utf-8"))
+    return FileDelta(path=path, action=action)
+
+
 def _user_config_root(
     *,
     home: Path | None = None,
@@ -657,16 +688,13 @@ def install_plugin(
         target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
     )
     plugin_js_payload = _render_plugin_js().encode("utf-8")
-    if plugin_js_path.exists() and not force and plugin_js_path.read_bytes() != plugin_js_payload:
-        raise IntegrityViolation(
-            f"managed file {plugin_js_path} differs from rendered body; "
-            f"rerun with --force to overwrite"
-        )
-    plugin_js_action = _classify(plugin_js_path, plugin_js_payload)
-    if not dry_run:
-        _ensure_dir(plugin_js_path.parent)
-        atomic_write_text(plugin_js_path, plugin_js_payload.decode("utf-8"))
-    plugin_js_delta = FileDelta(path=plugin_js_path, action=plugin_js_action)
+    plugin_js_delta = _write_managed_file(
+        plugin_js_path,
+        plugin_js_payload,
+        force=force,
+        dry_run=dry_run,
+    )
+    plugin_js_action = plugin_js_delta.action
 
     sidecar_path = _sidecar_target(
         target_dir, scope=scope, home=home, opencode_config_dir=opencode_config_dir
@@ -707,11 +735,9 @@ def install_plugin(
             opencode_config_dir=opencode_config_dir,
         )
         agent_payload = _render_opencode_agent_md(agent_spec).encode("utf-8")
-        agent_action = _classify(agent_path, agent_payload)
-        if not dry_run:
-            _ensure_dir(agent_path.parent)
-            atomic_write_text(agent_path, agent_payload.decode("utf-8"))
-        agent_deltas.append(FileDelta(path=agent_path, action=agent_action))
+        agent_deltas.append(
+            _write_managed_file(agent_path, agent_payload, force=force, dry_run=dry_run)
+        )
 
     command_deltas: list[FileDelta] = []
     for skill_spec in SKILL_REGISTRY:
@@ -725,11 +751,9 @@ def install_plugin(
             opencode_config_dir=opencode_config_dir,
         )
         command_payload = _render_opencode_command_md(skill_spec).encode("utf-8")
-        command_action = _classify(command_path, command_payload)
-        if not dry_run:
-            _ensure_dir(command_path.parent)
-            atomic_write_text(command_path, command_payload.decode("utf-8"))
-        command_deltas.append(FileDelta(path=command_path, action=command_action))
+        command_deltas.append(
+            _write_managed_file(command_path, command_payload, force=force, dry_run=dry_run)
+        )
 
     if not dry_run and persist_manifest:
         _persist_manifest(

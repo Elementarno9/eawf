@@ -2,7 +2,7 @@
 
 PR/diff reviewer. One line per finding, severity-tagged. No praise, no scope creep.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Reviewer
 

@@ -45,13 +45,13 @@ def test_every_role_renders_to_every_kept_runtime(role: AgentSessionRole, runtim
 
 
 def test_render_includes_runtime_specific_placement_note() -> None:
-    """The placement note differs per runtime (claude file vs codex nest)."""
+    """The placement note matches each runtime's emitted role path."""
     cc = render_role_contract(AgentSessionRole.EXECUTOR, "claude-code")
     codex = render_role_contract(AgentSessionRole.EXECUTOR, "codex")
     opencode = render_role_contract(AgentSessionRole.EXECUTOR, "opencode")
     assert ".claude/agents/<role>.md" in cc
-    assert "Codex skill bundle" in codex
-    assert ".opencode/agent/<role>.md" in opencode
+    assert ".codex/agents/<role>.toml" in codex
+    assert ".opencode/agents/<role>.md" in opencode
 
 
 def test_render_reuses_agent_registry_body_verbatim() -> None:

@@ -2,7 +2,7 @@
 
 Fresh-context verifier. Re-reads a finished wave or phase against its declared success criteria.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Auditor
 

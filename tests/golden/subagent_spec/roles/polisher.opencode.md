@@ -2,7 +2,7 @@
 
 Repo-wide consistency sweeper. Aligns naming, docstring style, log fields, error message phrasing.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Polisher
 

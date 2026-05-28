@@ -406,16 +406,36 @@ class SubagentSpec(_SpecModel):
     def _render_role_contract(self) -> str | None:
         """Return the ``## Role contract`` section, or ``None`` when absent.
 
-        Renders the role's ``system_prompt`` body verbatim under a
-        ``## Role contract`` heading when :attr:`role_contract` is set.
-        ``None`` (the default) omits the section, keeping the dispatch
-        prompt byte-equivalent to the pre-W12 renderer for callers that
-        have not yet plumbed the role registry through.
+        Renders the role's identity, model, tool grants, memory setting,
+        report schema reference, and ``system_prompt`` body when
+        :attr:`role_contract` is set. ``None`` (the default) omits the
+        section, keeping the dispatch prompt byte-equivalent to the
+        pre-W12 renderer for callers that have not yet plumbed the role
+        registry through.
         """
         if self.role_contract is None:
             return None
+        contract = self.role_contract
         body = self.role_contract.system_prompt.rstrip("\n")
-        return f"## Role contract\n\n{body}"
+        allowed_tools = _display_list(contract.allowed_tools)
+        denied_tools = _display_list(contract.denied_tools)
+        model = _display_value(contract.model)
+        memory = "true" if contract.memory else "false"
+        return (
+            "## Role contract\n"
+            "\n"
+            f"- role: {contract.role}\n"
+            f"- summary: {contract.summary}\n"
+            f"- model: {model}\n"
+            f"- memory: {memory}\n"
+            f"- report_schema_ref: {contract.report_schema_ref}\n"
+            f"- allowed_tools: {allowed_tools}\n"
+            f"- denied_tools: {denied_tools}\n"
+            "\n"
+            "### System prompt\n"
+            "\n"
+            f"{body}"
+        )
 
     def _render_stop_conditions(self) -> str | None:
         """Return the ``## Stop conditions`` section, or ``None`` when absent.
@@ -497,6 +517,13 @@ def _display_value(value: object | None) -> str:
     if value is None:
         return "unknown"
     return str(value)
+
+
+def _display_list(values: list[str]) -> str:
+    """Render an empty string list with the stable ``none`` sentinel."""
+    if not values:
+        return "none"
+    return ", ".join(values)
 
 
 __all__ = [

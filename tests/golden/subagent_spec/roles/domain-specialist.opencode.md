@@ -2,7 +2,7 @@
 
 Project-specific domain agent. Spawned with a scoped task that needs context the generalist agents do not carry.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Domain specialist
 

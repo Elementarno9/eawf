@@ -2,7 +2,7 @@
 
 Repo-wide consistency sweeper. Aligns naming, docstring style, log fields, error message phrasing.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Polisher
 

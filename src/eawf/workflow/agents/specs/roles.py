@@ -46,8 +46,8 @@ KEPT_RUNTIMES: tuple[RuntimeId, ...] = ("claude-code", "codex", "opencode")
 #: :class:`eawf.runtime.runtimes.manifest.PluginContributes.agents`.
 _RUNTIME_PLACEMENT: dict[RuntimeId, str] = {
     "claude-code": "Rendered as `.claude/agents/<role>.md`.",
-    "codex": "Nested inside the Codex skill bundle (no standalone agent file).",
-    "opencode": "Rendered as `.opencode/agent/<role>.md`.",
+    "codex": "Rendered as `.codex/agents/<role>.toml`.",
+    "opencode": "Rendered as `.opencode/agents/<role>.md`.",
 }
 
 

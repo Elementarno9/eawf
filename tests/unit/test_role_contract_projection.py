@@ -275,6 +275,22 @@ def test_render_wave_prompt_role_contract_section_carries_system_prompt() -> Non
     assert "You produce specs that an `executor` can implement" in prompt
 
 
+def test_render_wave_prompt_role_contract_section_carries_runtime_fields() -> None:
+    """The rendered ``## Role contract`` section carries tools/model/report fields."""
+    state = _empty_state()
+    _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
+    prompt = render_wave_prompt(state, "P01-I01-W01")
+    block = prompt.split("## Role contract", 1)[1].split("## Workflow", 1)[0]
+    assert "- role: executor" in block
+    assert "- model: opus" in block
+    assert "- memory: true" in block
+    assert "- report_schema_ref: executor_report" in block
+    assert "- allowed_tools: " in block
+    assert "Read" in block
+    assert "- denied_tools: none" in block
+    assert "### System prompt" in block
+
+
 def test_render_wave_prompt_no_role_omits_role_contract_section() -> None:
     """A wave without ``agent_role`` omits the ``## Role contract`` section.
 

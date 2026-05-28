@@ -2,7 +2,7 @@
 
 Read-only investigator. Surveys code, docs, git history, and external sources. Produces structured findings with citations.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Researcher
 

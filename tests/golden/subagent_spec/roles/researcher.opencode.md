@@ -2,7 +2,7 @@
 
 Read-only investigator. Surveys code, docs, git history, and external sources. Produces structured findings with citations.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Researcher
 

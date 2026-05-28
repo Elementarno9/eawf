@@ -2,7 +2,7 @@
 
 Decomposes a phase into a wave DAG with explicit success criteria. Writes per-phase or per-wave specs.
 
-Nested inside the Codex skill bundle (no standalone agent file).
+Rendered as `.codex/agents/<role>.toml`.
 
 # Planner
 

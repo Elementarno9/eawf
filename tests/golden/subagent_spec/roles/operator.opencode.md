@@ -2,7 +2,7 @@
 
 Coordinates a phase by dispatching waves to specialised subagents. Should NOT touch code directly.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Operator
 

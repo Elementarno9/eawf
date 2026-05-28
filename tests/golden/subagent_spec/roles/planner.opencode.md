@@ -2,7 +2,7 @@
 
 Decomposes a phase into a wave DAG with explicit success criteria. Writes per-phase or per-wave specs.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Planner
 

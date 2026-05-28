@@ -2,7 +2,7 @@
 
 PR/diff reviewer. One line per finding, severity-tagged. No praise, no scope creep.
 
-Rendered as `.opencode/agent/<role>.md`.
+Rendered as `.opencode/agents/<role>.md`.
 
 # Reviewer
 
