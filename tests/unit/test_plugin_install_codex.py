@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from eawf.runtime.runtimes.codex import doctor_plugin, expected_paths, install_plugin
+from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
 from eawf.runtime.runtimes.codex.plugin_install import IntegrityViolation
 from eawf.runtime.runtimes.codex.skills import render_codex_agent_toml
 from eawf.surfaces.render.agents import AGENT_REGISTRY
@@ -174,7 +175,20 @@ def test_install_codex_emits_manifest_toml(tmp_path: Path, fake_home: Path, scop
     assert body["version"] == "1.0"
     assert body["description"]
     assert body["skills"] == "./skills/"
-    assert body["hooks"] == "./hooks/"
+    # Codex requires `hooks` to be a list of {event_type, path} objects, not
+    # the directory-string `"./hooks/"` (Codex opens that as a config file
+    # and surfaces "Is a directory (os error 21)"). Shape mirrors the
+    # sidecar `hooks_payload` in `_build_sidecar_body`.
+    assert isinstance(body["hooks"], list)
+    assert len(body["hooks"]) == len(HOOK_REGISTRY)
+    expected_hooks = [
+        {
+            "event_type": spec.event_type.value,
+            "path": f"hooks/{codex_hook_name(spec.event_type)}.sh",
+        }
+        for spec in HOOK_REGISTRY
+    ]
+    assert body["hooks"] == expected_hooks
     assert "interface" in body
     iface = body["interface"]
     assert iface["displayName"] == "Eä Workflow"

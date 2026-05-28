@@ -267,18 +267,31 @@ def _render_manifest() -> bytes:
     no top-level ``agents`` key in ``plugin.json``. Custom agents are
     emitted as standalone scope config files under ``.codex/agents``.
 
+    ``hooks`` is an array of ``{event_type, path}`` objects (one per
+    registered hook), matching the sidecar payload shape in
+    :func:`_build_sidecar_body`. The prior shape emitted the literal
+    directory string ``"./hooks/"``, which Codex tried to open as a
+    config file and surfaced as ``Is a directory (os error 21)``.
+
     URL fields (``websiteURL``, ``privacyPolicyURL``,
     ``termsOfServiceURL``) and asset paths (``composerIcon``, ``logo``)
     are intentionally omitted: bundling per-developer URLs or assets
     that may not exist on disk would violate the PII / path-hygiene
     rule and could break the manifest schema for downstream installs.
     """
+    hooks_payload = [
+        {
+            "event_type": spec.event_type.value,
+            "path": f"hooks/{codex_hook_name(spec.event_type)}.sh",
+        }
+        for spec in HOOK_REGISTRY
+    ]
     manifest: dict[str, object] = {
         "name": _PLUGIN_NAME,
         "version": _PLUGIN_VERSION,
         "description": _PLUGIN_DESCRIPTION,
         "skills": "./skills/",
-        "hooks": "./hooks/",
+        "hooks": hooks_payload,
         "interface": {
             "displayName": "Eä Workflow",
             "shortDescription": (
