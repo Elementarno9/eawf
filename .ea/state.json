@@ -864,6 +864,18 @@
       "status": "done",
       "updated_at": "2026-05-28T18:35:12.762787Z"
     },
+    "P28-I03-W61": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 256318,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P28-I03-W61",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P28-I03-W61",
+      "scope_id": "P28-I03-W61",
+      "status": "done",
+      "updated_at": "2026-05-28T19:12:33.081685Z"
+    },
     "P28-I03-W62": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 58400,
@@ -3427,6 +3439,22 @@
       "status": "active",
       "superseded_by": null,
       "title": "Deprecate committed per-wave specs (.ea/specs P08-P25)"
+    },
+    "D28": {
+      "alternatives": [
+        "Keep both field sets indefinitely with renderer preference for the audited pair (rejected: extra-forbid no longer pinned the shape and the renderer fallback code paths invited drift).",
+        "Atomic single-wave swap without the staged migration (rejected: high blast radius across renderers / TUI / loggers / builders — staged migration kept the tree green)."
+      ],
+      "consequences": [],
+      "created_at": "2026-05-28T19:12:26.620038Z",
+      "description": null,
+      "id": "D28",
+      "obsoleted_at": null,
+      "rationale": "W24 audit ratified the structured intent shape (problem + desired_outcome required; planned_steps / risks / priority_rationale optional) over the prior goal / motivation / success_signal triad. Operator approved the migration via AUQ on 2026-05-28. The W52 wave was split into three sequential waves (W59 additive schema, W60 consumer migration with back-compat fallback, W61 atomic drop of the legacy fields + CLI flags) so the call graph stayed green through each stage. Post-W61 every consumer reads problem / desired_outcome directly; legacy fields have no remaining producer and would only invite re-introduction drift.",
+      "scope_id": "P28",
+      "status": "active",
+      "superseded_by": null,
+      "title": "IntentBrief field set ratified per W24 audit"
     }
   },
   "estimates": {
@@ -6277,6 +6305,19 @@
       "scope_id": "P28-I03-W60",
       "updated_at": "2026-05-28T18:35:12.174256Z"
     },
+    "P28-I03-W61": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P28-I03-W61-bucket-20260528T191232Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P28-I03-W61",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P28-I03-W61",
+      "updated_at": "2026-05-28T19:12:32.490166Z"
+    },
     "P28-I03-W62": {
       "confidence": "low",
       "current_store_record_id": "EST-P28-I03-W62-bucket-20260528T184103Z",
@@ -7926,7 +7967,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T18:41:04.426757Z",
+  "updated_at": "2026-05-28T19:12:33.082002Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25819,8 +25860,8 @@
         "P28-I03-W55",
         "P28-I03-W56"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "main-replay",
+      "closed_at": "2026-05-28T19:12:33.081685Z",
       "commit": null,
       "deps": [
         "P28-I03-W60"
@@ -25847,10 +25888,10 @@
       "intent": null,
       "iter_id": "P28-I03",
       "opened_at": "2026-05-28T18:03:54.231926Z",
-      "outcome": null,
+      "outcome": "IntentBrief atomic breaking swap: 7-field canonical shape (problem+desired_outcome required); legacy goal/motivation/success_signal + 3 CLI flags removed; W60 fallback paths gone; Decision D28 recorded; CHANGELOG entry under Unreleased; 5019 tests pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "IntentBrief fields = {problem",
         "desired_outcome",
@@ -25860,7 +25901,7 @@
       ],
       "title": "fix: drop legacy IntentBrief fields + CLI flags after consumer migration",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 256318,
       "worktree_id": null
     },
     "P28-I03-W62": {
