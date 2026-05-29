@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-05-29
+
+### Fixed
+- **`click` promoted to an explicit runtime dependency.** `eawf.surfaces.cli.commands.plan` imports `click` directly (it inspects `click.core.ParameterSource` to distinguish CLI-supplied flags from defaults). Pre-0.26 `typer` carried `click` as a hard transitive, so the direct import resolved on every install; `typer >= 0.26` migrated to `typer-slim` and made `click` optional, which broke fresh `uv tool install eawf==0.4.0` / `pip install eawf==0.4.0` with `ModuleNotFoundError: No module named 'click'` on the first CLI invocation. The runtime-deps table now lists `click >= 8.1` explicitly, and the `[tool.deptry.per_rule_ignores] DEP003` list drops the `click` entry that papered over the indirect import. No source changes — the fix is packaging-only.
+
 ## [0.4.0] - 2026-05-29
 
 ### BREAKING

@@ -9,6 +9,7 @@ authors = [
     { name = "Elementarno9", email = "edwardpro9@gmail.com" },
 ]
 dependencies = [
+    "click>=8.1",
     "jinja2>=3.1.0",
     "orjson>=3.11.9",
     "portalocker>=3.2.0",
@@ -89,11 +90,10 @@ DEP001 = ["duckdb"]
 # DEP002 (declared-but-unused): mkdocs + mkdocs-material are the ``[docs]``
 # extra's CLI doc-build tools — invoked as commands, never imported in src/.
 DEP002 = ["mkdocs", "mkdocs-material"]
-# DEP003 (transitive): ``click`` is typer's own hard dependency and a stable
-# re-export surface; the few direct ``click`` imports ride that coupling.
-# ``pydantic_core`` is pydantic's own compiled core, pulled in transitively
-# with pydantic; the direct ``ErrorDetails`` import rides that coupling.
-DEP003 = ["click", "pydantic_core"]
+# DEP003 (transitive): ``pydantic_core`` is pydantic's own compiled core,
+# pulled in transitively with pydantic; the direct ``ErrorDetails`` import
+# rides that coupling.
+DEP003 = ["pydantic_core"]
 
 [dependency-groups]
 dev = [
