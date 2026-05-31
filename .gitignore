@@ -49,6 +49,12 @@ CLAUDE.md
 .ea/indexes/
 .ea/instrument-probe.json
 
+# Render cache (memory-view) + machine-specific MCP / opencode runtime
+# configs written by `eawf plugin install`; regenerable, never committed.
+.ea/artifacts/rendered/
+.mcp.json
+opencode.json
+
 # Telemetry / SQLite databases — telemetry.db embeds absolute cwd +
 # session_log_path, so it must never be committed. The bare glob covers
 # any *.db written anywhere in the tree (telemetry, scratch probes).
