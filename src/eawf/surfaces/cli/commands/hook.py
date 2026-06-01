@@ -7,6 +7,12 @@ Surface contract:
   builds a typed :class:`~eawf.runtime.hooks.event.HookEvent`, dispatches it
   through a fresh :class:`~eawf.runtime.hooks.runner.HookRunner`, and emits an
   :class:`~eawf.surfaces.render.envelope.OutputEnvelope` to stdout.
+- ``eawf hook dispatch --event-type agent_end [--runtime ...] [--scope ...]
+  [--command ...]`` is the interim verdict seeder: it translates one
+  ``agent_end`` event (payload on stdin) into a single seeded verdict row via
+  :func:`eawf.workflow.dispatch.seed.seed_interim_verdict` so the self-eval +
+  jury surfaces read a primed cohort before the live verdict producer lands.
+  Only ``agent_end`` is accepted; other event types exit ``3``.
 - Exit ``0`` when no registered hook returns ``block=True``.
 - Exit ``9`` (``HOOK_BLOCKED``) when at least one hook reports a block.
 - Exit ``3`` (``INVALID_INPUT``) when the stdin payload is not valid JSON
@@ -277,6 +283,73 @@ def _runtime_default() -> HookRuntime:
     Pulled into a helper so tests can monkeypatch the default cleanly.
     """
     return "generic"
+
+
+def _seed_agent_end_verdict(
+    *,
+    event: HookEvent,
+    payload: dict[str, Any],
+    flags: GlobalFlags,
+    started_at: datetime,
+) -> None:
+    """Seed one interim verdict row from an ``agent_end`` event and emit the envelope.
+
+    Shared by ``eawf hook run agent_end`` and ``eawf hook dispatch
+    --event-type agent_end``: both translate the same ``agent_end`` payload
+    into a seeded verdict row through the library seeder
+    :func:`eawf.workflow.dispatch.seed.seed_interim_verdict` (CLI stays
+    dispatch-only; the library implements). All CLI-level failures surface as
+    the canonical error envelope and the function returns without raising.
+    """
+    from eawf.workflow.agent_report.store import (
+        AgentReportRoleMismatchError,
+        AgentReportScrubError,
+    )
+    from eawf.workflow.dispatch.seed import seed_interim_verdict
+
+    try:
+        agent_payload = AgentEndPayload.model_validate(payload)
+        state_path = resolve_state_path(flags.workspace)
+        state = _load_state(state_path)
+        result = seed_interim_verdict(
+            state=state,
+            state_path=state_path,
+            session_id=agent_payload.session_id,
+            base_id=agent_payload.base_id,
+            body=agent_payload.body,
+            runtime=event.runtime,
+            generated_at=started_at,
+            artifact_ids=agent_payload.artifact_ids,
+            blob_refs=agent_payload.blob_refs,
+        )
+    except ValidationError as err:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"agent_end payload rejected: {err.errors()[0]['msg']}", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+        return
+    except KeyError as err:
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
+        return
+    except (AgentReportRoleMismatchError, AgentReportScrubError) as err:
+        cli_errors.emit_error(cli_errors.ValidationError(str(err)), flags=flags)
+        return
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    finished_at = datetime.now(UTC)
+    envelope = _envelope_for_agent_report(
+        event=event,
+        report_id=result.envelope.id,
+        store_kind=result.store_kind,
+        attempt=result.attempt,
+        store_urn=result.urn,
+        started_at=started_at,
+        finished_at=finished_at,
+    )
+    _emit_envelope(envelope)
 
 
 # --- Diff-scoped lint gates (hooks 16-19 per C09 §5.3) ---------------------
@@ -603,12 +676,6 @@ def run(
     """Dispatch a hook event read from stdin and emit the result envelope."""
     from eawf.runtime.hooks.event import HookEventType
     from eawf.runtime.hooks.runner import HookRunner
-    from eawf.workflow.agent_report.store import (
-        AgentReportRoleMismatchError,
-        AgentReportScrubError,
-        append_agent_report,
-        parse_agent_report_body,
-    )
 
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
@@ -650,50 +717,7 @@ def run(
         return
 
     if event.event_type == HookEventType.AGENT_END:
-        try:
-            agent_payload = AgentEndPayload.model_validate(payload)
-            state_path = resolve_state_path(flags.workspace)
-            state = _load_state(state_path)
-            body = parse_agent_report_body(agent_payload.body)
-            result = append_agent_report(
-                state=state,
-                state_path=state_path,
-                session_id=agent_payload.session_id,
-                base_id=agent_payload.base_id,
-                body=body,
-                runtime=event.runtime,
-                generated_at=started_at,
-                artifact_ids=agent_payload.artifact_ids,
-                blob_refs=agent_payload.blob_refs,
-            )
-        except ValidationError as err:
-            cli_errors.emit_error(
-                cli_errors.UserError(
-                    f"agent_end payload rejected: {err.errors()[0]['msg']}", kind="InvalidInput"
-                ),
-                flags=flags,
-            )
-            return
-        except KeyError as err:
-            cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
-            return
-        except (AgentReportRoleMismatchError, AgentReportScrubError) as err:
-            cli_errors.emit_error(cli_errors.ValidationError(str(err)), flags=flags)
-            return
-        except cli_errors.CliError as err:
-            cli_errors.emit_error(err, flags=flags)
-            return
-        finished_at = datetime.now(UTC)
-        envelope = _envelope_for_agent_report(
-            event=event,
-            report_id=result.envelope.id,
-            store_kind=result.store_kind,
-            attempt=result.attempt,
-            store_urn=result.urn,
-            started_at=started_at,
-            finished_at=finished_at,
-        )
-        _emit_envelope(envelope)
+        _seed_agent_end_verdict(event=event, payload=payload, flags=flags, started_at=started_at)
         return
 
     runner = HookRunner()
@@ -712,6 +736,99 @@ def run(
     _emit_envelope(envelope)
     if any(r.block for r in results):
         raise typer.Exit(exit_codes.STATE_CONFLICT)
+
+
+@hook_app.command(name="dispatch")
+def dispatch(
+    ctx: typer.Context,
+    event_type: Annotated[
+        str,
+        typer.Option(
+            "--event-type",
+            help="Hook event to dispatch. Only 'agent_end' is supported on this "
+            "surface (the interim verdict seeder).",
+        ),
+    ],
+    runtime: Annotated[
+        str,
+        typer.Option(
+            "--runtime",
+            help="Runtime label recorded on the seeded report (claude/codex/opencode/generic).",
+            case_sensitive=False,
+        ),
+    ] = _runtime_default(),
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Eä scope ID (wave/iter/phase) the event was raised inside.",
+        ),
+    ] = "",
+    command: Annotated[
+        str,
+        typer.Option(
+            "--command",
+            help="Originating Eä CLI command string for the event record.",
+        ),
+    ] = "",
+) -> None:
+    """Seed an interim verdict cohort from an ``agent_end`` event read from stdin.
+
+    The interim / manual verdict producer: it translates one ``agent_end``
+    hook event (payload on stdin) into a single seeded verdict row, appended
+    through the canonical agent-report writer so the self-eval + jury surfaces
+    read a primed cohort before the live per-wave verdict producer lands. The
+    seeded row reuses the session named in the payload as authority and is
+    indistinguishable from a live-produced row. Append targets the per-role
+    store JSONL only — no ``state.json`` mutation.
+
+    Only ``--event-type agent_end`` is accepted; any other event type is
+    rejected with exit 1 (``InvalidInput``) because this surface is the
+    verdict seeder, not the general hook dispatcher (use ``eawf hook run``).
+    """
+    from eawf.runtime.hooks.event import HookEventType
+
+    flags: GlobalFlags = ctx.obj
+    started_at = datetime.now(UTC)
+
+    if runtime.lower() not in {"claude", "codex", "opencode", "generic"}:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"--runtime must be one of claude/codex/opencode/generic; got {runtime!r}",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+
+    try:
+        resolved_event_type = _parse_event_type(event_type)
+        stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
+        payload = _parse_payload(stdin_text)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    if resolved_event_type != HookEventType.AGENT_END:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"hook dispatch seeds verdicts from agent_end only; got "
+                f"{resolved_event_type.value!r} (use eawf hook run for other events)",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+
+    event = _build_event(
+        event_type=resolved_event_type,
+        payload=payload,
+        scope=scope,
+        command=command,
+        runtime=cast("HookRuntime", runtime.lower()),
+        occurred_at=started_at,
+    )
+    _seed_agent_end_verdict(event=event, payload=payload, flags=flags, started_at=started_at)
 
 
 _FilesArg = Annotated[

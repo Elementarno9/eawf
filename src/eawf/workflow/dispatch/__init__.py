@@ -50,6 +50,7 @@ from eawf.workflow.dispatch.routing import (
     RoutingDecision,
     resolve_routing,
 )
+from eawf.workflow.dispatch.seed import seed_interim_verdict
 
 __all__ = [
     "DEFAULT_MAX_ATTEMPTS",
@@ -66,4 +67,5 @@ __all__ = [
     "render_dispatch_envelope",
     "render_wave_prompt",
     "resolve_routing",
+    "seed_interim_verdict",
 ]
