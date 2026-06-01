@@ -1355,6 +1355,18 @@
       "scope_id": "P29-I02-W05",
       "status": "done",
       "updated_at": "2026-06-01T15:47:36.058983Z"
+    },
+    "P29-I02-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W06",
+      "scope_id": "P29-I02-W06",
+      "status": "done",
+      "updated_at": "2026-06-01T16:01:03.022784Z"
     }
   },
   "agent_sessions": {
@@ -7626,6 +7638,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W05",
       "updated_at": "2026-06-01T15:32:48.402474Z"
+    },
+    "P29-I02-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W06-bucket-20260601T154817Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W06",
+      "updated_at": "2026-06-01T15:48:17.820376Z"
     }
   },
   "goals": {
@@ -9599,7 +9624,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T15:47:36.059371Z",
+  "updated_at": "2026-06-01T16:01:03.023115Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28805,9 +28830,9 @@
     "P29-I02-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T16:01:03.022784Z",
+      "commit": "1564dd8f076d0b1b96fd7920933bedd89a5f90c1",
       "deps": [],
       "description": "[CLI-6 | scope T6/dec13 | SF] SHA re-pin hardening for cherry-picked/unpinned waves.",
       "dispatch_history": [],
@@ -28819,10 +28844,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.253051Z",
-      "outcome": null,
+      "outcome": "eawf wave verify-commits [--repair]: scan_commit_pins repair-superset (adds unpinned_derivable kind) over detect_git_state_drift; --repair re-pins Wave.commit via WAL-backed _run_mutation (idempotent, git=ground-truth for pinned_mismatch); read-only exits VALIDATION_ERROR on drift for CI; 138 tests green; live 44-drift untouched",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf wave verify-commits [--repair] re-pins Wave.commit SHAs; prefers pinned, falls back to git log --grep [P##-W##]"
       ],
