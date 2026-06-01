@@ -16,6 +16,8 @@ Public API:
   ``mcp_servers`` and ``allowed_tools`` allow-lists.
 - :class:`DispatchEnvelope` — frozen dataclass return type for the
   dispatch adapter.
+- :func:`resolve_routing` — pure ``(agent_role, effort_bucket) ->
+  (model, runtime)`` lookup, backed by :data:`DEFAULT_ROUTING_TABLE`.
 
 Both renderers are pure functions — no I/O, no logging side-effects
 beyond the module-level ``logger``. The CLI handlers in
@@ -32,12 +34,20 @@ from eawf.workflow.dispatch.renderer import (
     render_dispatch_envelope,
     render_wave_prompt,
 )
+from eawf.workflow.dispatch.routing import (
+    DEFAULT_ROUTING_TABLE,
+    RoutingDecision,
+    resolve_routing,
+)
 
 __all__ = [
+    "DEFAULT_ROUTING_TABLE",
     "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
+    "RoutingDecision",
     "build_role_contract",
     "build_subagent_spec",
     "render_dispatch_envelope",
     "render_wave_prompt",
+    "resolve_routing",
 ]

@@ -429,6 +429,17 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         default=86400,
         writable_layers=("global",),
     ),
+    LeafKey(
+        key="dispatch.routing",
+        domain="dispatch",
+        type="mapping",
+        default={},
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Per (agent_role, effort_bucket) model/runtime overrides; "
+            "empty map uses the built-in DEFAULT_ROUTING_TABLE."
+        ),
+    ),
     # --- language ----------------------------------------------------------
     LeafKey(
         key="language.runtime",
