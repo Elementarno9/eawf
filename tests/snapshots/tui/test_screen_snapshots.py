@@ -558,6 +558,46 @@ def test_config_modal_runtime_single_field_snapshot() -> None:
     asyncio.run(body())
 
 
+def test_config_modal_preferences_tab_snapshot() -> None:
+    """The ``preferences`` tab renders its three curated choice rows.
+
+    ``solution_bias`` / ``scope_size`` / ``auto_choose`` surface as choice
+    fields with their default values; field 0 carries the ``>`` cursor caret.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = _open_config(app)
+            await settle_screen(pilot)
+            modal.query_one("#config-tabs").active = modal._tab_pane_id("preferences")  # type: ignore[attr-defined]
+            modal.set_focus(None)
+            modal.field_index = 0
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_preferences.txt")
+
+    asyncio.run(body())
+
+
+def test_config_modal_research_tab_snapshot() -> None:
+    """The ``research`` tab renders its curated choice / int / bool row mix."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = _open_config(app)
+            await settle_screen(pilot)
+            modal.query_one("#config-tabs").active = modal._tab_pane_id("research")  # type: ignore[attr-defined]
+            modal.set_focus(None)
+            modal.field_index = 0
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_research.txt")
+
+    asyncio.run(body())
+
+
 def test_config_modal_dirty_layer_snapshot() -> None:
     """After an ``Enter`` toggle, the layer line shows the unsaved-count + marker."""
 

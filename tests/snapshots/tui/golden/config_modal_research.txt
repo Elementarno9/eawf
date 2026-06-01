@@ -1,0 +1,37 @@
+
+
+
+      ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+      │                                                                                                          │
+      │  Configuration                                                                                           │
+      │  save layer: repo  (L cycles: global local)                                                              │
+      │                                                                                                          │
+      │  it  daemon  estimation  planning  preferences  research  runtime  ship  telemetry  ui  vcs  worktrees   │
+      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+      │  >  research.agent_count     [int]          4                                                            │
+      │     research.auto_save       [bool]         false                                                        │
+      │     research.default_depth   [choice]       deep                                                         │
+      │     research.default_sources [choice]       both                                                         │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │  [ ↑/↓ field · ←/→ tab · Enter edit · s save · r reset · L layer · Esc close ]                           │
+      │                                                                                                          │
+      └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

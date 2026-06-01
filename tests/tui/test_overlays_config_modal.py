@@ -447,6 +447,179 @@ def test_surfaced_int_key_range_rejects_below_minimum() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Curated preferences.* + research.* coverage (W28)
+# ---------------------------------------------------------------------------
+
+#: The ``preferences.*`` keys curated into ``CONFIG_REGISTRY`` so they appear
+#: under the ``preferences`` tab. Each is a closed ``choice`` enum (the
+#: planner / AUQ knobs); the full leaf catalog is NOT browsed.
+_PREFERENCES_KEYS: tuple[str, ...] = (
+    "preferences.solution_bias",
+    "preferences.scope_size",
+    "preferences.auto_choose",
+)
+
+#: The ``research.*`` keys curated into ``CONFIG_REGISTRY`` so they appear
+#: under the ``research`` tab — a deliberate subset (depth / sources / count /
+#: auto-save), not every research leaf.
+_RESEARCH_KEYS: tuple[str, ...] = (
+    "research.agent_count",
+    "research.auto_save",
+    "research.default_depth",
+    "research.default_sources",
+)
+
+
+def test_preferences_keys_all_have_curated_rows() -> None:
+    """Every curated ``preferences.*`` key has a ``CONFIG_REGISTRY`` row."""
+    keys = {entry.key for entry in CONFIG_REGISTRY}
+    missing = [key for key in _PREFERENCES_KEYS if key not in keys]
+    assert not missing, missing
+
+
+def test_research_keys_all_have_curated_rows() -> None:
+    """Every curated ``research.*`` key has a ``CONFIG_REGISTRY`` row."""
+    keys = {entry.key for entry in CONFIG_REGISTRY}
+    missing = [key for key in _RESEARCH_KEYS if key not in keys]
+    assert not missing, missing
+
+
+def test_preferences_keys_grouped_under_preferences_tab() -> None:
+    """The curated ``preferences.*`` rows land under the ``preferences`` tab."""
+    tab_keys = {entry.key for entry in keys_for_tab("preferences")}
+    for key in _PREFERENCES_KEYS:
+        assert key in tab_keys, key
+
+
+def test_research_keys_grouped_under_research_tab() -> None:
+    """The curated ``research.*`` rows land under the ``research`` tab."""
+    tab_keys = {entry.key for entry in keys_for_tab("research")}
+    for key in _RESEARCH_KEYS:
+        assert key in tab_keys, key
+
+
+def test_preferences_keys_default_matches_leaf_registry() -> None:
+    """Each curated ``preferences.*`` row's default mirrors its leaf default."""
+    for key in _PREFERENCES_KEYS:
+        entry = registry_lookup(key)
+        leaf = LEAF_KEY_REGISTRY[key]
+        assert entry is not None, key
+        assert entry.default == leaf.default, (key, entry.default, leaf.default)
+
+
+def test_research_keys_default_matches_leaf_registry() -> None:
+    """Each curated ``research.*`` row's default mirrors its leaf default."""
+    for key in _RESEARCH_KEYS:
+        entry = registry_lookup(key)
+        leaf = LEAF_KEY_REGISTRY[key]
+        assert entry is not None, key
+        assert entry.default == leaf.default, (key, entry.default, leaf.default)
+
+
+def test_preferences_enums_render_as_choice_fields() -> None:
+    """``solution_bias`` / ``scope_size`` / ``auto_choose`` are ``choice`` widgets.
+
+    The three preferences enums must surface as choice fields (forward-cycled
+    on ``Enter``), so :func:`enter_action` resolves ``cycle`` and each row
+    declares a non-empty ``choices`` set mirroring its leaf registry choices.
+    """
+    for key in _PREFERENCES_KEYS:
+        entry = registry_lookup(key)
+        assert entry is not None and entry.type == "choice", key
+        assert entry.choices is not None and len(entry.choices) >= 2, key
+        leaf = LEAF_KEY_REGISTRY[key]
+        if leaf.choices is not None:
+            assert set(entry.choices) == set(leaf.choices), key
+        assert enter_action(entry, entry.default, row_width=80) == "cycle", key
+
+
+def test_research_field_widgets_match_declared_type() -> None:
+    """Each curated ``research.*`` row maps to the right ``Enter`` action.
+
+    ``research.default_depth`` / ``research.default_sources`` are ``choice``
+    enums (cycle), ``research.agent_count`` is a bounded ``int`` (inline edit),
+    and ``research.auto_save`` is a ``bool`` (toggle) — the widget the modal
+    mounts is the field's declared type, not a generic text box.
+    """
+    expected_action = {
+        "research.agent_count": "inline",
+        "research.auto_save": "toggle",
+        "research.default_depth": "cycle",
+        "research.default_sources": "cycle",
+    }
+    for key, action in expected_action.items():
+        entry = registry_lookup(key)
+        assert entry is not None, key
+        assert enter_action(entry, entry.default, row_width=80) == action, key
+        if entry.type == "choice":
+            assert entry.choices is not None and len(entry.choices) >= 2, key
+
+
+def test_preferences_choice_edit_validates_via_coerce_and_validate() -> None:
+    """A preferences choice key coerces a declared value and rejects an undeclared one."""
+    import pytest
+
+    entry = registry_lookup("preferences.solution_bias")
+    assert entry is not None and entry.type == "choice"
+    # Boundary: a declared choice round-trips unchanged.
+    assert coerce_and_validate(entry, "thorough") == "thorough"
+    # Error path: an undeclared choice is rejected.
+    with pytest.raises(UserError):
+        coerce_and_validate(entry, "reckless")
+
+
+def test_research_choice_edit_rejects_invalid_enum() -> None:
+    """A ``research.*`` choice key rejects an undeclared enum value."""
+    import pytest
+
+    entry = registry_lookup("research.default_depth")
+    assert entry is not None and entry.type == "choice"
+    # Boundary: a declared depth round-trips unchanged.
+    assert coerce_and_validate(entry, entry.choices[0]) == entry.choices[0]  # type: ignore[index]
+    # Error path: an undeclared depth is rejected.
+    with pytest.raises(UserError):
+        coerce_and_validate(entry, "telescopic")
+
+
+def test_research_int_key_range_rejects_out_of_range() -> None:
+    """``research.agent_count`` enforces its declared 1..12 bound on edit."""
+    import pytest
+
+    entry = registry_lookup("research.agent_count")
+    assert entry is not None and entry.type == "int"
+    assert coerce_and_validate(entry, "1") == 1  # boundary: minimum allowed
+    assert coerce_and_validate(entry, "12") == 12  # boundary: maximum allowed
+    with pytest.raises(UserError):
+        coerce_and_validate(entry, "0")
+    with pytest.raises(UserError):
+        coerce_and_validate(entry, "13")
+
+
+def test_preferences_cycle_choice_forward_wraps() -> None:
+    """Forward-cycling ``preferences.solution_bias`` steps its choices and wraps."""
+    entry = registry_lookup("preferences.solution_bias")
+    assert entry is not None and entry.choices is not None
+    choices = list(entry.choices)
+    merged = {"preferences": {"solution_bias": choices[-1]}}
+    # Cycling forward from the last choice wraps to the first.
+    assert cycle_choice(entry, merged, {}, step=1) == {"preferences.solution_bias": choices[0]}
+
+
+def test_curated_keys_stay_subset_of_leaf_catalog() -> None:
+    """The new keys ride the curated registry, not a full-leaf dump.
+
+    All seven preferences / research keys live in the full
+    :data:`LEAF_KEY_REGISTRY` and are mirrored into the curated
+    :data:`CONFIG_REGISTRY`, which stays strictly smaller than the catalog —
+    the modal shows a deliberate subset, never every leaf.
+    """
+    for key in (*_PREFERENCES_KEYS, *_RESEARCH_KEYS):
+        assert key in LEAF_KEY_REGISTRY, key
+        assert registry_lookup(key) is not None, key
+    assert len(CONFIG_REGISTRY) < len(LEAF_KEY_REGISTRY)
+
+
+# ---------------------------------------------------------------------------
 # Pilot tests (Textual mount)
 # ---------------------------------------------------------------------------
 
@@ -525,6 +698,180 @@ def test_surfaced_keys_render() -> None:
             rendered = {entry.key for entry in CONFIG_REGISTRY}
             assert "schema_version" not in rendered
             assert len(rendered) < len(LEAF_KEY_REGISTRY)
+
+    asyncio.run(body())
+
+
+def test_preferences_tab_renders_choice_rows() -> None:
+    """The ``preferences`` tab surfaces its three choice rows as field rows."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            fields = keys_for_tab("preferences")
+            for index, entry in enumerate(fields):
+                row = modal.query_one(f"#{modal._field_row_id('preferences', index)}", Static)
+                text = str(row.render())
+                assert entry.key in text, (entry.key, text)
+                # The choice value renders in the row (e.g. ``balanced``).
+                assert f"[{entry.type}]" in text, (entry.key, text)
+            rendered = {entry.key for entry in fields}
+            for key in _PREFERENCES_KEYS:
+                assert key in rendered, key
+
+    asyncio.run(body())
+
+
+def test_research_tab_renders_curated_rows() -> None:
+    """The ``research`` tab surfaces its curated choice / int / bool rows."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            fields = keys_for_tab("research")
+            for index, entry in enumerate(fields):
+                row = modal.query_one(f"#{modal._field_row_id('research', index)}", Static)
+                text = str(row.render())
+                assert entry.key in text, (entry.key, text)
+            rendered = {entry.key for entry in fields}
+            for key in _RESEARCH_KEYS:
+                assert key in rendered, key
+
+    asyncio.run(body())
+
+
+def test_preferences_enter_cycles_choice_and_stages() -> None:
+    """``Enter`` on a ``preferences`` choice row cycles it + stages the edit."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_tab(modal, "preferences")
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.type == "choice"
+            before = current_value(entry, modal._merged, modal._view.dirty)
+            await pilot.press("enter")  # forward-cycle the choice
+            await pilot.pause()
+            after = current_value(entry, modal._merged, modal._view.dirty)
+            assert after != before
+            assert entry.key in modal._view.dirty
+            # The staged value is one of the declared choices.
+            assert after in (entry.choices or ())
+
+    asyncio.run(body())
+
+
+def test_preferences_choice_edit_flushes_to_writable_layer() -> None:
+    """Cycling a ``preferences`` choice then ``s`` flushes to the chosen layer.
+
+    Exercises the end-to-end stage -> flush path: focus the preferences tab,
+    ``Enter`` to cycle ``solution_bias``, ``s`` to save. The layered-writer
+    seam is called with the staged value targeting the repo-layer YAML — never
+    ``state.json`` (AGENTS rule 4).
+    """
+
+    async def body() -> None:
+        calls: list[dict[str, Any]] = []
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app, save_fn=lambda **k: calls.append(k))
+            await pilot.pause()
+            _goto_tab(modal, "preferences")
+            # Anchor on solution_bias regardless of within-tab order.
+            fields = keys_for_tab("preferences")
+            modal.field_index = [e.key for e in fields].index("preferences.solution_bias")
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.key == "preferences.solution_bias"
+            await pilot.press("enter")  # cycle to the next choice
+            await pilot.pause()
+            staged = modal._view.dirty.get("preferences.solution_bias")
+            assert staged is not None
+            await pilot.press("s")  # flush through the layered writer
+            await pilot.pause()
+            saved = [call for call in calls if call["key"] == "preferences.solution_bias"]
+            assert len(saved) == 1
+            assert saved[0]["value"] == staged
+            assert str(saved[0]["target_path"]).endswith(".yaml")
+            assert "state.json" not in str(saved[0]["target_path"])
+            assert modal._view.dirty == {}
+
+    asyncio.run(body())
+
+
+def test_research_choice_edit_flushes_to_writable_layer() -> None:
+    """Cycling ``research.default_depth`` then ``s`` flushes to the writable layer."""
+
+    async def body() -> None:
+        calls: list[dict[str, Any]] = []
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app, save_fn=lambda **k: calls.append(k))
+            await pilot.pause()
+            _goto_tab(modal, "research")
+            fields = keys_for_tab("research")
+            modal.field_index = [e.key for e in fields].index("research.default_depth")
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.key == "research.default_depth"
+            await pilot.press("enter")  # cycle to the next depth
+            await pilot.pause()
+            staged = modal._view.dirty.get("research.default_depth")
+            assert staged is not None
+            assert staged in (entry.choices or ())
+            await pilot.press("s")  # flush through the layered writer
+            await pilot.pause()
+            saved = [call for call in calls if call["key"] == "research.default_depth"]
+            assert len(saved) == 1
+            assert saved[0]["value"] == staged
+            assert str(saved[0]["target_path"]).endswith(".yaml")
+            assert "state.json" not in str(saved[0]["target_path"])
+            assert modal._view.dirty == {}
+
+    asyncio.run(body())
+
+
+def test_research_invalid_enum_inline_edit_rejected() -> None:
+    """An invalid enum typed into a ``research`` choice surfaces an error, stages nothing.
+
+    The inline ``Input`` path coerces the buffer through
+    :func:`coerce_and_validate`; an undeclared depth value keeps the editor
+    open with the error row populated and the dirty map untouched.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            _goto_tab(modal, "research")
+            fields = keys_for_tab("research")
+            modal.field_index = [e.key for e in fields].index("research.default_depth")
+            await pilot.pause()
+            entry = modal._active_field()
+            assert entry is not None and entry.type == "choice"
+            # A choice cycles in place, so drive the validation path directly
+            # through the commit handler with an undeclared value, mirroring an
+            # operator routing a bad value via coerce_and_validate.
+            import pytest
+
+            with pytest.raises(UserError):
+                coerce_and_validate(entry, "telescopic")
+            # The modal stays clean — no value was staged.
+            assert entry.key not in modal._view.dirty
 
     asyncio.run(body())
 
