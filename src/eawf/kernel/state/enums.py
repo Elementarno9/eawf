@@ -174,6 +174,34 @@ class OpenQuestionStatus(StrEnum):
     DROPPED = "dropped"
 
 
+class Urgency(StrEnum):
+    """Shared time-pressure ladder for operator-facing pauses and questions.
+
+    One closed vocabulary feeds three surfaces that all ask "how soon does a
+    human need to look at this": the ``needs_user`` pause, a research-campaign
+    :class:`~eawf.kernel.state.models.OpenQuestion`, and the attention feed that
+    ranks open items for the operator. Defining the ladder once here (rather
+    than a per-surface copy) keeps the three rankings comparable — an attention
+    feed can sort a needs_user pause and a blocking research question on the
+    same scale.
+
+    Urgency is *time pressure to surface*, deliberately distinct from
+    :class:`BacklogPriority` (long-horizon backlog ranking, ``P0``-``P3``) and
+    :class:`IncidentSeverity` (blast radius of a fault). The ladder runs from
+    the most deferrable to the most immediate:
+
+    - :attr:`LOW` — advisory; can wait for the next operator sweep.
+    - :attr:`NORMAL` — default; surfaces in the ordinary attention feed.
+    - :attr:`HIGH` — should be looked at this session.
+    - :attr:`URGENT` — blocks progress; raise to the operator now.
+    """
+
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
 class BacklogPriority(StrEnum):
     P0 = "P0"
     P1 = "P1"

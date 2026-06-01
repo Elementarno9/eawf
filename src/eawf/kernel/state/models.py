@@ -49,6 +49,7 @@ from eawf.kernel.state.enums import (
     ProjectStatus,
     ScopeKind,
     SubprojectStatus,
+    Urgency,
     WaveStatus,
     WorktreeStatus,
 )
@@ -435,6 +436,12 @@ class OpenQuestion(_StrictModel):
         blocking: Whether an unanswered question gates further campaign work;
             a ``True`` value is what the balanced-autonomy interrupt raises to
             the operator. Defaults to ``False`` (advisory question).
+        urgency: Shared :class:`~eawf.kernel.state.enums.Urgency` ladder ranking
+            how soon the operator should look at the question. The same enum
+            ranks needs_user pauses and the attention feed, so an open question
+            sorts against pauses on one comparable scale. Defaults to
+            :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` so the field is
+            additive (pre-urgency states and in-code constructors stay valid).
         answered_by_claim_id: Optional :class:`Claim` id that resolved the
             question when :attr:`status` is
             :attr:`OpenQuestionStatus.ANSWERED`; ``None`` otherwise.
@@ -449,6 +456,7 @@ class OpenQuestion(_StrictModel):
     description: Annotated[str, Field(max_length=500)] | None = None
     status: OpenQuestionStatus
     blocking: bool = False
+    urgency: Urgency = Urgency.NORMAL
     answered_by_claim_id: str | None = None
     created_at: UtcDatetime
     resolved_at: UtcDatetime | None = None

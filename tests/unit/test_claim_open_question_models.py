@@ -22,7 +22,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state import models
-from eawf.kernel.state.enums import ClaimStatus, OpenQuestionStatus, StoreKind
+from eawf.kernel.state.enums import ClaimStatus, OpenQuestionStatus, StoreKind, Urgency
 from eawf.kernel.state.io import commit_mutation, fallback_wal_dir
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_path
@@ -412,3 +412,96 @@ def test_replay_wal_reconcile_preserves_claims_and_open_questions(tmp_path: Path
     assert report.state is not None
     assert report.state.claims is not None and "CLM-001" in report.state.claims
     assert report.state.open_questions is not None and "OQ-001" in report.state.open_questions
+
+
+# ---- P29-I01-W19: shared Urgency ladder -------------------------------------
+#
+# One closed ``Urgency`` StrEnum is the single definition shared by the
+# needs_user pause, a research-campaign OpenQuestion, and the attention feed.
+# These tests pin the ladder shape, the additive default on OpenQuestion, that
+# every value round-trips (model + persistence seam), and that an off-ladder
+# token is rejected at ingestion.
+
+
+def test_urgency_ladder_is_the_closed_four_value_set() -> None:
+    """The shared Urgency vocabulary is exactly low/normal/high/urgent."""
+    assert [u.value for u in Urgency] == ["low", "normal", "high", "urgent"]
+
+
+def test_open_question_urgency_defaults_to_normal() -> None:
+    """Urgency is additive: an omitted value defaults to NORMAL (no schema bump)."""
+    question = models.OpenQuestion.model_validate(
+        {
+            "id": "OQ-001",
+            "scope_id": "ABC",
+            "title": "minimal question",
+            "status": "open",
+            "created_at": _now().isoformat(),
+        }
+    )
+    assert question.urgency is Urgency.NORMAL
+
+
+def test_open_question_uses_the_shared_urgency_enum() -> None:
+    """OpenQuestion.urgency references the one shared Urgency type, not a copy."""
+    annotation = models.OpenQuestion.model_fields["urgency"].annotation
+    assert annotation is Urgency
+
+
+@pytest.mark.parametrize("value", [u.value for u in Urgency])
+def test_open_question_urgency_round_trips_each_value(value: str) -> None:
+    """Every urgency value survives a model_dump -> model_validate round-trip."""
+    question = models.OpenQuestion.model_validate(_open_question_payload(urgency=value))
+    assert question.urgency is Urgency(value)
+    restored = models.OpenQuestion.model_validate(question.model_dump(mode="json"))
+    assert restored.urgency is Urgency(value)
+    assert restored == question
+
+
+def test_open_question_rejects_unknown_urgency() -> None:
+    """An off-ladder urgency token is rejected at ingestion (closed StrEnum)."""
+    with pytest.raises(ValidationError):
+        models.OpenQuestion.model_validate(_open_question_payload(urgency="emergency"))
+
+
+def test_urgent_pause_question_round_trips_through_writer_seam(tmp_path: Path) -> None:
+    """An urgent, blocking question (the attention-feed/pause shape) persists intact.
+
+    Exercises the canonical-writer seam over a question carrying a non-default
+    urgency so the round-trip the wave criterion calls for ("urgency on a pause
+    round-trips") is pinned end to end: typed State -> commit_mutation -> strict
+    re-read, with the urgent value surviving byte for byte.
+    """
+    candidate = models.State.model_validate(
+        _state_payload(
+            with_research_entities=False,
+        )
+        | {
+            "open_questions": {
+                "OQ-001": _open_question_payload(
+                    status="blocked",
+                    blocking=True,
+                    urgency="urgent",
+                )
+            }
+        }
+    )
+    state_path = tmp_path / "state.json"
+    commit_mutation(
+        state_path,
+        candidate=candidate,
+        before_version="0" * 16,
+        command="urgent_pause_roundtrip",
+        args={},
+        scope_id="ABC",
+        summary="persist urgent blocking question probe",
+    )
+
+    report = validate_path(state_path)
+    assert report.ok, report.schema_errors + [v.message for v in report.violations]
+    assert report.state is not None
+    assert report.state.open_questions is not None
+    reloaded = report.state.open_questions["OQ-001"]
+    assert reloaded.urgency is Urgency.URGENT
+    assert reloaded.blocking is True
+    assert reloaded == candidate.open_questions["OQ-001"]
