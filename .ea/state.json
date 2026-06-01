@@ -2108,6 +2108,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-01-A45-P29-i02-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I02/ART-A45-P29-i02"
     },
+    "ART-A46-P29-i03": {
+      "created_at": "2026-06-01T23:18:10.614043Z",
+      "id": "ART-A46-P29-i03",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-02-A46-P29-i03-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I03/ART-A46-P29-i03"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -2896,6 +2906,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A45-P29-i02",
       "scope_id": "P29-I02",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A46-P29-i03": {
+      "check_results": [],
+      "created_at": "2026-06-01T23:18:11.118135Z",
+      "id": "A46-P29-i03",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A46-P29-i03",
+      "scope_id": "P29-I03",
       "status": "complete",
       "verdict": "minor"
     },
@@ -4038,6 +4059,32 @@
       "scope_id": "P29",
       "status": "open",
       "title": "Consolidate dup wave-budget projection onto wave_budget_minutes"
+    },
+    "B077": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-01T23:20:59.281961Z",
+      "description": "classify_egress denies a decimal-encoded metadata IP (e.g. 2852039166) via default-deny rather than the metadata-deny reason tag. Outcome is still blocked (safe); the proxy forwards only the normalized host so there is no resolver re-expansion gap. Cosmetic reason-tag precision; surfaced by the A46-P29-i03 audit.",
+      "id": "B077",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29-I03",
+      "status": "open",
+      "title": "Tag decimal/octal-IP metadata egress as metadata-deny not default-deny"
+    },
+    "B078": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-01T23:20:59.814951Z",
+      "description": "jail.py _build_linux_argv re-binds the codex own-cred read-only only at its resolved path; an operator who relocates CODEX_HOME under a tmpfs-masked cred dir would need an explicit re-bind. Default codex location is unmasked, so the common path is covered. An I04 live-codex-spawn concern; surfaced by the A46-P29-i03 audit.",
+      "id": "B078",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29-I03",
+      "status": "open",
+      "title": "Re-bind codex own-cred when CODEX_HOME sits under a masked jail dir"
     },
     "B70": {
       "closed_at": null,
@@ -10461,7 +10508,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T23:09:08.228762Z",
+  "updated_at": "2026-06-01T23:20:59.814951Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
