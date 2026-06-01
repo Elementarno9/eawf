@@ -9,8 +9,9 @@ wave-DAG preview), :class:`NeedsUserModal` (the ``status=needs_user``
 AskUserQuestion surface), :class:`AuditRunningModal` (live audit
 progress), :class:`AuditFailedModal` (the mutating repair menu),
 :class:`MetricsModal` (the ``/metrics`` 3x2 dashboard),
-:class:`PrListModal` (the ``/pr`` open-PRs list), and
-:class:`EventsModal` (the ``/events`` last-50 ring buffer), and
+:class:`PrListModal` (the ``/pr`` open-PRs list),
+:class:`CrossRepoPrModal` (the ``/prs`` advisory cross-repo open-PR view),
+and :class:`EventsModal` (the ``/events`` last-50 ring buffer), and
 :class:`ReferenceModal` (typed clickable refs + ``/goto``). The remaining
 config overlays land in later waves and register here as they arrive.
 """
@@ -35,6 +36,14 @@ from eawf.surfaces.tui.screens.overlays.config_modal import (
     open_config,
 )
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+from eawf.surfaces.tui.screens.overlays.cross_repo_pr import (
+    CrossRepoGroup,
+    CrossRepoPrModal,
+    gather_cross_repo_prs,
+    open_cross_repo_pr,
+    request_cross_repo_pr,
+    total_open_prs,
+)
 from eawf.surfaces.tui.screens.overlays.detail import (
     DetailCard,
     DetailModal,
@@ -85,6 +94,8 @@ __all__ = [
     "ConfigModal",
     "ConfigModalState",
     "ConfirmModal",
+    "CrossRepoGroup",
+    "CrossRepoPrModal",
     "DetailCard",
     "DetailModal",
     "EditFieldModal",
@@ -104,10 +115,12 @@ __all__ = [
     "ReferenceTarget",
     "build_plan_tree",
     "format_dispatch_line",
+    "gather_cross_repo_prs",
     "load_recent_events",
     "open_audit_failed",
     "open_audit_running",
     "open_config",
+    "open_cross_repo_pr",
     "open_edit_field",
     "open_events",
     "open_metrics",
@@ -117,6 +130,8 @@ __all__ = [
     "parse_metrics_args",
     "parse_pr_rows",
     "reference_preview",
+    "request_cross_repo_pr",
     "resolve_detail",
     "resolve_reference",
+    "total_open_prs",
 ]

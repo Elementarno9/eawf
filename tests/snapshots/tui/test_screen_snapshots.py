@@ -51,9 +51,11 @@ from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.doctor import DoctorHealth, DoctorModeScreen, HealthRow
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+from eawf.surfaces.tui.screens.overlays.cross_repo_pr import CrossRepoGroup, CrossRepoPrModal
 from eawf.surfaces.tui.screens.overlays.detail import DetailModal, resolve_detail
 from eawf.surfaces.tui.screens.overlays.edit_field import EditFieldModal
 from eawf.surfaces.tui.screens.overlays.events import EventRow, EventsModal, _row_from_envelope
+from eawf.surfaces.tui.screens.overlays.pr_list import PrFetchStatus, PrRow
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
 
 
@@ -716,6 +718,46 @@ def test_events_overlay_snapshot() -> None:
             app.push_modal(EventsModal(rows))
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "events_overlay.txt")
+
+    asyncio.run(body())
+
+
+def test_cross_repo_pr_overlay_snapshot() -> None:
+    """The advisory ``/prs`` cross-repo PR view: grouped repos + a degraded one.
+
+    The seeded groups are fixed (no live ``gh`` / registry read) so the
+    golden is deterministic + scrub-safe: two healthy repos (ABC / DEF)
+    with abstract PR rows over one repo whose fetch was UNAVAILABLE (GHI),
+    so the golden captures the per-repo headers, the open-PR rows, and the
+    honest ``(unavailable)`` degraded header in one frame. Repo codes +
+    PR titles are abstract placeholders, never real project / PR data.
+    """
+
+    async def body() -> None:
+        groups = (
+            CrossRepoGroup(
+                "ABC",
+                "ABC repo",
+                (
+                    PrRow(11, "tidy the docs", "alice", "OPEN", "https://example.test/11"),
+                    PrRow(12, "fix the parser", "bob", "OPEN", "https://example.test/12"),
+                ),
+                PrFetchStatus.OK,
+            ),
+            CrossRepoGroup(
+                "DEF",
+                "DEF repo",
+                (PrRow(20, "add the widget", "carol", "OPEN", "https://example.test/20"),),
+                PrFetchStatus.OK,
+            ),
+            CrossRepoGroup("GHI", "GHI repo", (), PrFetchStatus.UNAVAILABLE),
+        )
+        app = EaApp(scope="workspace", state_path=_WORKSPACE_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            app.push_modal(CrossRepoPrModal(groups))
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "cross_repo_pr_overlay.txt")
 
     asyncio.run(body())
 

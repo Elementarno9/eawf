@@ -273,6 +273,31 @@ def _handle_pr(app: App[None], args: str) -> None:
     request_pr_list(app)
 
 
+def _handle_cross_repo_pr(app: App[None], args: str) -> None:
+    """Open the advisory cross-repo open-PRs overlay (the ``/prs`` verb).
+
+    Gathers open PRs across every repo in the explicit
+    ``~/.eawf/registry.json`` registry off the event loop via
+    :func:`~eawf.surfaces.tui.screens.overlays.cross_repo_pr.request_cross_repo_pr`
+    (a per-repo read-only ``gh pr list`` sweep, each repo's fetch cached for
+    60 s) and opens
+    :class:`~eawf.surfaces.tui.screens.overlays.cross_repo_pr.CrossRepoPrModal`
+    from the worker once the sweep lands -- the keypress returns immediately
+    so a slow ``gh`` never freezes the UI. The view is ADVISORY + READ-ONLY:
+    it lists PRs but offers no PR action (no merge / close / comment) and no
+    cross-repo write. A repo whose fetch fails shows an honest
+    ``(unavailable)`` header rather than breaking the view; an empty
+    registry renders the honest-empty placeholder.
+
+    Args:
+        app: The running App.
+        args: The raw ``/prs`` arg string (unused).
+    """
+    from eawf.surfaces.tui.screens.overlays.cross_repo_pr import request_cross_repo_pr
+
+    request_cross_repo_pr(app)
+
+
 def _handle_config(app: App[None], args: str) -> None:
     """Open the registry-driven config window (the ``/config`` verb).
 
@@ -766,6 +791,12 @@ _STATIC_VERBS: tuple[PaletteVerb, ...] = (
         args_grammar="[--window 7d|30d|90d] [--scope <urn>]",
     ),
     PaletteVerb("/pr", "open PRs (gh shell-out, cached)", _handle_pr, SCOPES_ALL),
+    PaletteVerb(
+        "/prs",
+        "cross-repo open PRs (advisory, read-only)",
+        _handle_cross_repo_pr,
+        SCOPES_ALL,
+    ),
     PaletteVerb("/help", "verb help / keymap", _handle_help, SCOPES_ALL, args_grammar="[verb]"),
     PaletteVerb("/quit", "quit", _handle_quit, SCOPES_ALL),
     # --- skill-dispatch passthrough (CLI verb wrappers) -------------------
