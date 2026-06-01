@@ -145,12 +145,12 @@ def test_check_ignores_user_owned_entries(tmp_path: Path) -> None:
     assert result.status == "ok"
 
 
-def test_run_all_now_returns_six_checks(tmp_path: Path) -> None:
+def test_run_all_includes_mcp_drift(tmp_path: Path) -> None:
     _seed_state(tmp_path)
     results = run_all(workspace=tmp_path)
     names = [r.name for r in results]
     assert "mcp_drift" in names
-    assert len(results) == 6
+    assert len(results) == 7
 
 
 def test_check_warns_on_unreadable_settings(tmp_path: Path) -> None:

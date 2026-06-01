@@ -75,6 +75,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "config_resolves",
         "manifest_in_sync",
         "mcp_drift",
+        "state_scale_ceiling",
         "render_output_roundtrip",
         "project_record_present",
         "git_state_drift",
@@ -84,6 +85,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
     assert statuses["manifest_in_sync"] == "ok"
     assert statuses["render_output_roundtrip"] == "ok"
     assert statuses["mcp_drift"] == "ok"
+    assert statuses["state_scale_ceiling"] == "ok"
     assert statuses["project_record_present"] == "ok"
     assert statuses["git_state_drift"] == "ok"
     assert statuses["plugin_cross_scope_dup"] == "ok"

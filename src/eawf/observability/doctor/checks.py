@@ -53,6 +53,24 @@ logger = logging.getLogger(__name__)
 CheckStatus = Literal["ok", "warn", "fail"]
 
 
+# The single-file ``state.json`` model holds to roughly this many waves before
+# read/parse/serialise latency and the daemon's whole-file rewrite cost push an
+# operator toward sharding. The bound is advisory, not a hard limit: doctor
+# warns as the live wave count approaches it so the operator can plan a split
+# ahead of the cliff. See AGENTS rule 4 (daemon is the sole state mutator) and
+# the v0.5 roadmap's scale notes.
+STATE_WAVE_SCALE_CEILING = 5000
+
+# Warn once the live wave count reaches this fraction of the ceiling, leaving
+# head-room to plan a shard before the single-file model degrades.
+STATE_WAVE_WARN_FRACTION = 0.8
+
+# Materialised warn trigger: the lowest wave count that flips the advisory note
+# from ``ok`` to ``warn``. Derived from the ceiling and the warn fraction so the
+# two knobs stay the single source of truth.
+STATE_WAVE_WARN_THRESHOLD = int(STATE_WAVE_SCALE_CEILING * STATE_WAVE_WARN_FRACTION)
+
+
 class CheckResult(BaseModel):
     """Single doctor check outcome.
 
@@ -260,17 +278,23 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
     )
 
 
-def _load_mcp_drift_state(workspace: Path) -> tuple[State, Path] | CheckResult:
-    """Resolve + parse ``state.json`` for the mcp-drift check.
+def _load_state_for_check(workspace: Path, *, name: str) -> tuple[State, Path] | CheckResult:
+    """Resolve + parse ``state.json`` for a state-reading doctor check.
 
     Returns ``(state, state_path)``, or an early ``ok`` :class:`CheckResult`
-    when there is no resolvable / parseable state to compare against.
+    (carrying *name*) when there is no resolvable / parseable state. Schema
+    errors stay quiet here: :func:`check_state_present` already surfaces an
+    unresolvable / malformed state, so a second check that reads state must
+    not double-flip doctor's overall status for the same root cause.
+
+    Args:
+        workspace: Workspace anchor to resolve ``state.json`` against.
+        name: Check name stamped onto any early-return :class:`CheckResult`.
     """
     import json as _json
 
     from eawf.kernel.state.models import State
 
-    name = "mcp_drift"
     try:
         state_path, _reason = resolve_with_reason(workspace)
     except FileNotFoundError, ValueError:
@@ -281,9 +305,6 @@ def _load_mcp_drift_state(workspace: Path) -> tuple[State, Path] | CheckResult:
         raw = _json.loads(state_path.read_text(encoding="utf-8"))
         return State.model_validate(raw), state_path
     except _json.JSONDecodeError, ValidationError:
-        # state schema errors surface via ``state_present`` already — keep
-        # this check focused on mcp drift and stay quiet here so doctor's
-        # overall status is not double-flipped for the same root cause.
         return CheckResult(name=name, status="ok", detail="state.json unparseable")
 
 
@@ -371,7 +392,7 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
     name = "mcp_drift"
     if workspace is None:
         return CheckResult(name=name, status="ok", detail="no workspace anchor")
-    loaded = _load_mcp_drift_state(workspace)
+    loaded = _load_state_for_check(workspace, name=name)
     if isinstance(loaded, CheckResult):
         return loaded
     state, state_path = loaded
@@ -413,6 +434,52 @@ def check_mcp_drift(*, workspace: Path | None) -> CheckResult:
         name=name,
         status="ok",
         detail=f"{len(eawf_owned)} eawf-owned server(s) match runtime emit",
+    )
+
+
+def check_state_scale_ceiling(*, workspace: Path | None) -> CheckResult:
+    """Warn as the live wave count approaches the single-file scale ceiling.
+
+    The single-file ``state.json`` model holds to roughly
+    :data:`STATE_WAVE_SCALE_CEILING` waves before parse / serialise / whole-file
+    rewrite cost pushes the operator toward sharding. This check is purely
+    advisory: it returns ``warn`` once ``len(state.waves)`` reaches
+    :data:`STATE_WAVE_WARN_THRESHOLD` (``STATE_WAVE_WARN_FRACTION`` of the
+    ceiling) so the operator has head-room to plan a split, and ``ok``
+    otherwise. It NEVER returns ``fail`` — crossing the ceiling is a capacity
+    signal, not a broken install, and must not flip doctor's exit code to a
+    failure.
+
+    Like :func:`check_mcp_drift`, a missing / unresolvable / unparseable state
+    yields ``ok`` (the absent-state angle is :func:`check_state_present`'s job)
+    so this check never double-flips doctor's overall status.
+
+    Args:
+        workspace: Workspace anchor to resolve ``state.json`` against; ``None``
+            means no anchor and the check returns ``ok``.
+    """
+    name = "state_scale_ceiling"
+    if workspace is None:
+        return CheckResult(name=name, status="ok", detail="no workspace anchor")
+    loaded = _load_state_for_check(workspace, name=name)
+    if isinstance(loaded, CheckResult):
+        return loaded
+    state, _state_path = loaded
+    wave_count = len(state.waves)
+    if wave_count >= STATE_WAVE_WARN_THRESHOLD:
+        pct = round(100 * wave_count / STATE_WAVE_SCALE_CEILING)
+        return CheckResult(
+            name=name,
+            status="warn",
+            detail=(
+                f"wave count {wave_count} is {pct}% of the single-file ceiling "
+                f"(~{STATE_WAVE_SCALE_CEILING}); plan a state shard"
+            ),
+        )
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"{wave_count} wave(s); under ~{STATE_WAVE_SCALE_CEILING} ceiling",
     )
 
 
@@ -531,6 +598,7 @@ def run_all(
         check_config_resolves(workspace=workspace),
         check_manifest_in_sync(workspace=workspace),
         check_mcp_drift(workspace=workspace),
+        check_state_scale_ceiling(workspace=workspace),
         check_render_output_roundtrip(),
     ]
     return results

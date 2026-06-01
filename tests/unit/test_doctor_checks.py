@@ -112,8 +112,86 @@ def test_check_config_resolves_unknown_profile_warns(
     assert "bogus" in (result.detail or "")
 
 
+def _stub_state_with_wave_count(monkeypatch: pytest.MonkeyPatch, count: int) -> None:
+    """Force ``check_state_scale_ceiling`` to see a state of *count* waves.
+
+    The check only reads ``len(state.waves)``, so a :class:`SimpleNamespace`
+    with a sized ``waves`` mapping is a faithful stand-in — and far cheaper
+    than validating thousands of real :class:`Wave` rows near the ceiling.
+    """
+    from types import SimpleNamespace
+
+    stub_state = SimpleNamespace(waves=dict.fromkeys(range(count)))
+
+    def fake_load(workspace: Path, *, name: str) -> tuple[object, Path]:
+        return stub_state, workspace / ".ea" / "state.json"
+
+    monkeypatch.setattr("eawf.observability.doctor.checks._load_state_for_check", fake_load)
+
+
+def test_check_state_scale_ceiling_no_workspace_ok() -> None:
+    """A missing workspace anchor is informational, not a failure."""
+    result = checks.check_state_scale_ceiling(workspace=None)
+    assert result.status == "ok"
+    assert result.name == "state_scale_ceiling"
+
+
+def test_check_state_scale_ceiling_no_state_ok(tmp_path: Path) -> None:
+    """No resolvable ``state.json`` yields ``ok`` (state_present owns absence)."""
+    result = checks.check_state_scale_ceiling(workspace=tmp_path)
+    assert result.status == "ok"
+    assert result.name == "state_scale_ceiling"
+
+
+def test_check_state_scale_ceiling_zero_waves_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Boundary: an empty wave map is well under the ceiling."""
+    _stub_state_with_wave_count(monkeypatch, 0)
+    result = checks.check_state_scale_ceiling(workspace=tmp_path)
+    assert result.status == "ok"
+    assert "0 wave(s)" in (result.detail or "")
+
+
+def test_check_state_scale_ceiling_just_below_threshold_ok(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Boundary: one wave below the warn threshold stays ``ok``."""
+    _stub_state_with_wave_count(monkeypatch, checks.STATE_WAVE_WARN_THRESHOLD - 1)
+    result = checks.check_state_scale_ceiling(workspace=tmp_path)
+    assert result.status == "ok"
+
+
+def test_check_state_scale_ceiling_at_threshold_warns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Boundary: exactly at the warn threshold flips to the advisory warn."""
+    _stub_state_with_wave_count(monkeypatch, checks.STATE_WAVE_WARN_THRESHOLD)
+    result = checks.check_state_scale_ceiling(workspace=tmp_path)
+    assert result.status == "warn"
+    assert "shard" in (result.detail or "")
+
+
+def test_check_state_scale_ceiling_above_ceiling_warns_not_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Above the ceiling stays ``warn`` — never ``fail`` (advisory only)."""
+    _stub_state_with_wave_count(monkeypatch, checks.STATE_WAVE_SCALE_CEILING + 500)
+    result = checks.check_state_scale_ceiling(workspace=tmp_path)
+    assert result.status == "warn"
+    assert result.status != "fail"
+
+
+def test_state_wave_warn_threshold_derives_from_ceiling_and_fraction() -> None:
+    """The materialised threshold is the ceiling times the warn fraction."""
+    assert (
+        int(checks.STATE_WAVE_SCALE_CEILING * checks.STATE_WAVE_WARN_FRACTION)
+        == checks.STATE_WAVE_WARN_THRESHOLD
+    )
+
+
 def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """W08 extends ``run_all`` with manifest_in_sync + render_output_roundtrip."""
+    """``run_all`` includes the state-scale-ceiling advisory (P29-I01-W04)."""
     from eawf.platform.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(
@@ -122,12 +200,13 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     )
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 6
+    assert len(results) == 7
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
         "config_resolves",
         "manifest_in_sync",
         "mcp_drift",
+        "state_scale_ceiling",
         "render_output_roundtrip",
     }

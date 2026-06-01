@@ -55,7 +55,7 @@ def test_doctor_green_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 
 def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The JSON envelope lists every check ``run_all`` produces (W08: five)."""
+    """The JSON envelope lists every check the doctor surface emits."""
     monkeypatch.setattr("eawf.observability.doctor.checks.probe", _green_probe)
     monkeypatch.chdir(tmp_path)
     _seed_state(tmp_path)
@@ -71,6 +71,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "config_resolves",
         "manifest_in_sync",
         "mcp_drift",
+        "state_scale_ceiling",
         "render_output_roundtrip",
         "project_record_present",
         "plugin_cross_scope_dup",
