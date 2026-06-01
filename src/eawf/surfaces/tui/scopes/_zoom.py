@@ -124,29 +124,45 @@ class RepoZoomMixin(_Base):
         await self._exit_zoom()
 
     def _suspend_is_transient(self) -> bool:
-        """Return whether the current suspend is a modal push, not a switch-away.
+        """Return whether the current suspend is transient, not a switch-away.
 
-        Textual posts ``ScreenSuspend`` to this screen in two cases that
-        the event itself cannot tell apart:
+        Textual posts ``ScreenSuspend`` to this screen in three cases the
+        event itself cannot tell apart:
 
         * ``App.push_screen`` (a modal opens on top) suspends the active
-          screen while leaving it **on** ``app.screen_stack``.
+          screen while leaving it **on** its mode's stack.
+        * ``App.switch_mode`` (a digit-key mode switch) suspends this
+          screen but leaves it on **its own** mode's stack (only the
+          *current* mode pointer moves).
         * ``App.switch_screen`` (a scope switch) pops this screen **off**
-          the stack first, then suspends it.
+          its mode's stack first, then suspends it.
 
-        So stack membership at suspend time is the discriminator: a
-        transient (modal-push) suspend still finds ``self`` in the stack;
-        a real switch-away does not. The guard is the single place both
-        :meth:`on_screen_suspend` and :meth:`on_screen_resume` consult so
-        the transient-vs-real policy lives in one helper.
+        The first two are transient (the screen is coming back -- a modal
+        will dismiss, or the operator will switch the mode back), so zoom
+        is preserved + rebuilt; the third is a real switch-away, so zoom
+        resets. The discriminator is therefore membership across **all**
+        mode stacks, not just the current mode's: a modal-push and a
+        mode-switch both leave ``self`` in some mode's stack, while a
+        scope ``switch_screen`` removes it entirely. (Reading only the
+        current mode's ``app.screen_stack`` would misclassify a mode switch
+        as a switch-away, because by the time the suspend message is pumped
+        the current-mode pointer has already moved to the new mode.) The
+        guard is the single place both :meth:`on_screen_suspend` and
+        :meth:`on_screen_resume` consult so the transient-vs-real policy
+        lives in one helper.
 
         Returns:
-            ``True`` when a modal was pushed over this still-stacked
-            screen, ``False`` on a switch-away (or when the app has no
-            screen stack, e.g. a bare test harness).
+            ``True`` when a modal was pushed or the mode was switched while
+            this screen stays on some mode's stack, ``False`` on a real
+            scope switch-away (or when the app exposes no screen stacks,
+            e.g. a bare test harness).
         """
-        stack = getattr(self.app, "screen_stack", ())
-        return self in stack
+        stacks = getattr(self.app, "_screen_stacks", None)
+        if isinstance(stacks, dict):
+            return any(self in stack for stack in stacks.values())
+        # Bare harness without mode stacks: fall back to the single current
+        # stack so standalone screen tests still resolve transient vs real.
+        return self in getattr(self.app, "screen_stack", ())
 
     async def on_screen_suspend(self) -> None:
         """Tear the quadrant down on suspend; remember it for a modal rebuild.

@@ -60,6 +60,18 @@ Heartbeat.-degraded {
     height: 1fr;
 }
 
+/* --- honest-empty placeholder mode body (unbuilt pane waves) --- */
+.placeholder-body {
+    align: center middle;
+}
+
+.placeholder-notice {
+    width: auto;
+    height: auto;
+    color: $text-muted;
+    text-style: italic;
+}
+
 /* --- quadrant / strip rows + bordered panes (RepoScreen / WorkspaceScreen) --- */
 .row {
     height: 1fr;

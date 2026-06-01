@@ -54,6 +54,11 @@ from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.render.link_wrap import REFERENCE_KINDS
+from eawf.surfaces.tui.modes import (
+    DEFAULT_MODE,
+    build_modes,
+    mode_bindings,
+)
 from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.surfaces.tui.screens.overlays.reference import (
     ReferenceModal,
@@ -222,9 +227,12 @@ class EaApp(App[None]):
     #: Global key bindings shared across every scope screen. Scope switch
     #: is the raw ``w`` / ``r`` / ``u`` keys (workspace / repo / user); the
     #: ``ctrl+`` chords stay as hidden aliases for muscle-memory back-
-    #: compat. Arrow keys are primary navigation; vim ``hjkl`` are
-    #: registered as hidden aliases (``show=False``) so the footer
-    #: advertises arrows only, per the operator keymap convention.
+    #: compat. Digit keys ``1``..``6`` are the orthogonal mode axis
+    #: (Home / Trust / Doctor / ...), appended from the mode registry via
+    #: :func:`~eawf.surfaces.tui.modes.mode_bindings`. Arrow keys are primary
+    #: navigation; vim ``hjkl`` are registered as hidden aliases
+    #: (``show=False``) so the footer advertises arrows only, per the
+    #: operator keymap convention.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("w", "switch_scope('workspace')", "workspace", show=False),
         Binding("r", "switch_scope('repo')", "repo", show=False),
@@ -243,7 +251,22 @@ class EaApp(App[None]):
         Binding("l", "cursor_right", "right", show=False),
         Binding("alt+left", "reference_back", "ref back", show=False),
         Binding("alt+right", "reference_forward", "ref forward", show=False),
+        *mode_bindings(),
     ]
+
+    #: Native Textual mode map (mode name -> base-screen factory). Declared
+    #: class-side (empty) so the type is valid and ``DEFAULT_MODE`` resolves;
+    #: the instance replaces ``self._modes`` with app-bound factories in
+    #: ``__init__`` (so the Home mode can read the resolved ``_scope``). The
+    #: mode set lives in :mod:`eawf.surfaces.tui.modes.registry` -- the one
+    #: seam the per-pane waves extend.
+    MODES: ClassVar[dict[str, str | Callable[[], Screen[Any]]]] = {}
+
+    #: The launch mode -- the chassis boots into Home (the scope-bearing
+    #: mode). Overrides Textual's ``"_default"`` so ``on_mount`` -> run
+    #: auto-initialises the Home mode's screen stack with no explicit
+    #: ``push_screen``.
+    DEFAULT_MODE: ClassVar[str] = DEFAULT_MODE
 
     SCREENS: ClassVar[dict[str, Callable[[], Screen[Any]]]] = {
         "repo": RepoScreen,
@@ -296,6 +319,19 @@ class EaApp(App[None]):
         """
         super().__init__()
         self._scope: ScopeName = scope
+        # Replace Textual's working copy of the class-level (empty) MODES
+        # with app-bound factories from the mode registry. The factories
+        # close over ``self`` so the Home mode reads the resolved ``_scope``
+        # to pick its scope screen; ``_scope`` is set above, before this.
+        # ``DEFAULT_MODE`` ("home") was seeded into ``_current_mode`` +
+        # ``_screen_stacks`` by ``super().__init__()``, so the launch mode is
+        # already Home -- run() initialises its stack with no push_screen.
+        # The cast bridges the registry's ``() -> Screen | str`` factory type
+        # to Textual's ``str | (() -> Screen)`` MODES value type: both are
+        # valid MODES values that ``_init_mode`` resolves identically (it
+        # calls a callable then passes the Screen-or-name to ``_get_screen``),
+        # but mypy cannot unify the invariant dict value types.
+        self._modes = cast("dict[str, str | Callable[[], Screen[Any]]]", build_modes(self))
         self._state_path = state_path
         self._binding: StateBinding | None = None
         self._help_open = False
@@ -341,15 +377,18 @@ class EaApp(App[None]):
         self.apply_theme(_persisted_theme())
 
     async def on_mount(self) -> None:
-        """Bind state read-only, then push the resolved scope screen.
+        """Bind state read-only; the default (Home) mode auto-mounts.
 
-        First paint fires as the scope screen mounts; the initial state
-        load is a single synchronous file read inside
-        :meth:`StateBinding.connect`, and the poll loop's first probe is
-        deferred behind ``asyncio.sleep`` so it never blocks the paint.
-        Themes are registered + the persisted one applied in ``__init__``
-        (the App stylesheet that resolves the semantic ``$var``\\ s is
-        built before ``on_mount`` runs).
+        The chassis launches into the Home mode (``DEFAULT_MODE``); Textual
+        auto-initialises that mode's screen stack on run -- the Home
+        factory builds the resolved scope screen -- so there is no explicit
+        ``push_screen`` here. First paint fires as that scope screen
+        mounts; the initial state load is a single synchronous file read
+        inside :meth:`StateBinding.connect`, and the poll loop's first
+        probe is deferred behind ``asyncio.sleep`` so it never blocks the
+        paint. Themes are registered + the persisted one applied in
+        ``__init__`` (the App stylesheet that resolves the semantic
+        ``$var``\\ s is built before ``on_mount`` runs).
         """
         self._binding = StateBinding(
             state_path=self._state_path,
@@ -376,7 +415,6 @@ class EaApp(App[None]):
         self.render_mode = resolve_render_mode(
             self._glyphs_policy, braille_ok=probe_braille_coverage()
         )
-        self.push_screen(self._scope)
         self.call_after_refresh(self._sync_degraded_banner)
         self._maybe_open_init_wizard()
         # Follow a live system light/dark flip for /theme auto. The OSC 11
@@ -736,9 +774,28 @@ class EaApp(App[None]):
 
             self.state = load_state(self._state_path)
         self._scope = scope  # type: ignore[assignment]
+        self._ensure_switchable_base_screen()
         self.switch_screen(scope)
         self.call_after_refresh(self._sync_degraded_banner)
         self._maybe_open_init_wizard()
+
+    def _ensure_switchable_base_screen(self) -> None:
+        """Seed a result callback on a mode-initialised base screen.
+
+        ``switch_screen`` pops a result callback off the outgoing screen,
+        but a mode's base screen is mounted by Textual's ``_init_mode``
+        (the auto-init of the active mode's stack), which appends the
+        screen without the result-callback push a normal ``push_screen``
+        performs. So the first in-mode scope switch would underflow the
+        empty callback stack. Seeding a ``None`` callback here restores the
+        invariant ``switch_screen`` relies on; it re-pushes one onto the
+        incoming screen, so subsequent switches stay balanced. A no-op when
+        the base screen already carries a callback (a normally-pushed
+        screen, or a second switch).
+        """
+        screen = self.screen
+        if not screen._result_callbacks:
+            screen._push_result_callback(self, None)
 
     async def _poll_os_appearance(self) -> None:
         """Re-apply ``/theme auto`` when the OS light/dark appearance flips.

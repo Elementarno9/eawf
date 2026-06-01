@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
+ Eä  Home ❯ repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
 ┌──────────────────────────────────────────────────────────┐┌──────────────────────────────────────────────────────────┐
 │ ROADMAP                                                  ││ STATUS                                                   │
 │ ▼ ~ P01  Bootstrap                      ⠀⠀⠀⠀⠀      0/1   ││ LIFECYCLE                                                │

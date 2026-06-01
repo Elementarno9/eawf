@@ -580,6 +580,71 @@ def _handle_goto(app: App[None], args: str) -> None:
     app.push_screen(ReferenceModal(card))
 
 
+def _make_mode_handler(mode: str) -> VerbHandler:
+    """Build a palette handler that switches to *mode*.
+
+    The per-mode verbs (``/home`` / ``/trust`` / ``/doctor`` / ...) each
+    bind their own handler closing over the mode name, so the palette's
+    ``(app, args)`` call resolves the right mode without parsing the verb
+    token. Delegates to the App's native ``switch_mode`` -- a no-op when
+    already in the target mode. Takes no argument.
+
+    Args:
+        mode: The mode name to switch to.
+
+    Returns:
+        A :data:`VerbHandler` that switches *app* to *mode*.
+    """
+
+    def handler(app: App[None], _args: str) -> None:
+        switch = getattr(app, "switch_mode", None)
+        if not callable(switch):
+            app.notify("mode switch is not available", severity="warning")
+            return
+        switch(mode)
+
+    return handler
+
+
+def _mode_verbs(claimed: frozenset[str]) -> tuple[PaletteVerb, ...]:
+    """Build one ``/<mode>`` palette verb per registered mode.
+
+    Derived from the mode registry so a new pane wave that adds a mode
+    (the one-line registration recipe) gets its ``/<name>`` palette verb
+    for free -- no edit here. Imported lazily from
+    :mod:`eawf.surfaces.tui.modes.registry` (the screen-free spec module) so
+    the palette never pulls the scope-screen import graph.
+
+    A mode whose ``/<name>`` is already claimed by a non-mode verb (the
+    ``config`` mode collides with the existing ``/config`` config-window
+    verb) is **skipped**: the existing verb keeps its meaning and the mode
+    stays reachable via its digit key. This keeps the palette token map
+    unambiguous without special-casing a particular mode name here.
+
+    Args:
+        claimed: The verb names already taken by the static (non-mode)
+            registry, so a colliding ``/<mode>`` is dropped.
+
+    Returns:
+        One cross-scope :class:`PaletteVerb` per non-colliding mode, in
+        registry order.
+    """
+    from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
+
+    out: list[PaletteVerb] = []
+    for spec in MODE_REGISTRY:
+        name = f"/{spec.name}"
+        if name in claimed:
+            logger.debug(f"_mode_verbs skip_collision mode={spec.name!r} verb={name!r}")
+            continue
+        out.append(
+            PaletteVerb(
+                name, f"switch to {spec.title} mode", _make_mode_handler(spec.name), SCOPES_ALL
+            )
+        )
+    return tuple(out)
+
+
 def _handle_filter(app: App[None], args: str) -> None:
     """Apply a substring filter to the named pane (the ``/filter`` verb).
 
@@ -655,9 +720,10 @@ def _backlog_table(app: App[None]) -> BacklogTable | None:
     return None
 
 
-#: The static verb registry. Order is display order in the palette before
-#: fuzzy ranking.
-VERBS: tuple[PaletteVerb, ...] = (
+#: The non-mode verbs. Order is display order in the palette before fuzzy
+#: ranking. The per-mode ``/<name>`` switch verbs are appended below (any
+#: that would collide with a name here is skipped -- see :func:`_mode_verbs`).
+_STATIC_VERBS: tuple[PaletteVerb, ...] = (
     # --- cross-screen navigation + filter ---------------------------------
     PaletteVerb(
         "/find",
@@ -711,6 +777,14 @@ VERBS: tuple[PaletteVerb, ...] = (
         args_grammar="<sub-verb> ...",
     ),
     PaletteVerb("/audit", "audit the current scope", _handle_audit, SCOPES_ALL),
+)
+
+#: The full static verb registry: the non-mode verbs plus one ``/<mode>``
+#: switch verb per registered mode (collisions with a non-mode verb are
+#: dropped). Order is display order before fuzzy ranking.
+VERBS: tuple[PaletteVerb, ...] = (
+    *_STATIC_VERBS,
+    *_mode_verbs(frozenset(verb.name for verb in _STATIC_VERBS)),
 )
 
 

@@ -96,6 +96,23 @@ def global_key_rows() -> tuple[tuple[str, str], ...]:
     return _GLOBAL_KEYS
 
 
+def mode_key_rows() -> tuple[tuple[str, str], ...]:
+    """Return the mode digit-key rows (digit, action) for the help table.
+
+    Derived from the mode registry so the help reflects exactly the
+    digit-key mode axis the chassis binds (one ``<digit> switch to <Title>
+    mode`` row per mode). A new pane wave that adds a mode gets its help
+    row for free. Imported lazily to keep the help module's import graph
+    light.
+
+    Returns:
+        One ``(digit, action)`` row per registered mode, in digit order.
+    """
+    from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
+
+    return tuple((spec.digit, f"switch to {spec.title} mode") for spec in MODE_REGISTRY)
+
+
 def pane_nav_rows() -> tuple[tuple[str, str, str], ...]:
     """Return the pane-navigation rows (key, action, vim-alias)."""
     return _PANE_NAV
@@ -176,6 +193,9 @@ class HelpScreen(ModalScreen[None]):
             yield Static("Global keys", classes="help-section")
             for key, action in global_key_rows():
                 yield Static(f"  {key:<10} {action}", classes="help-row")
+            yield Static("Modes (digit keys)", classes="help-section")
+            for key, action in mode_key_rows():
+                yield Static(f"  {key:<10} {action}", classes="help-row")
             yield Static("Pane navigation (vim alias)", classes="help-section")
             for key, action, alias in pane_nav_rows():
                 yield Static(f"  {key:<10} {action}  ({alias})", classes="help-row")
@@ -243,6 +263,7 @@ __all__ = [
     "HelpScreen",
     "config_overlay_rows",
     "global_key_rows",
+    "mode_key_rows",
     "open_help",
     "pane_nav_rows",
     "scope_key_rows",

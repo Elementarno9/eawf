@@ -16,23 +16,23 @@
       │    F5         force refresh                                                                              │
       │    ?          open help                                                                                  │
       │    /          open palette                                                                               │
-      │    Tab        next pane                                                                                  │
+      │    Tab        next pane                                                                              ▄▄  │
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
-      │  Pane navigation (vim alias)                                                                         ▂▂  │
+      │  Modes (digit keys)                                                                                      │
+      │    1          switch to Home mode                                                                        │
+      │    2          switch to Trust mode                                                                       │
+      │    3          switch to Doctor mode                                                                      │
+      │    4          switch to Evidence mode                                                                    │
+      │    5          switch to Feed mode                                                                        │
+      │    6          switch to Config mode                                                                      │
+      │                                                                                                          │
+      │  Pane navigation (vim alias)                                                                             │
       │    ↑          line up  (k)                                                                               │
       │    ↓          line down  (j)                                                                             │
       │    ←          collapse row / scroll left  (h)                                                            │
       │    →          expand row / scroll right  (l)                                                             │
       │    PageUp     half-page up  (Ctrl-u)                                                                     │
       │    PageDown   half-page down  (Ctrl-d)                                                                   │
-      │    Home       top of pane  (gg)                                                                          │
-      │    End        bottom of pane  (G)                                                                        │
-      │    Enter      drill into row (modal)  (—)                                                                │
-      │                                                                                                          │
-      │  Repo screen keys                                                                                        │
-      │    (none)                                                                                                │
-      │                                                                                                          │
-      │  Config overlay (arrows nav, Enter edits)                                                                │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

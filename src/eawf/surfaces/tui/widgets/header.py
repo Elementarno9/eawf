@@ -59,34 +59,46 @@ CRUMB_SEP: str = " ❯ "  # noqa: RUF001
 RUNTIME_IDLE: str = "idle"
 
 
-def build_breadcrumb(state: State | None, scope: str | None = None) -> str:
-    """Build the ``scope > code > phase`` breadcrumb from typed state.
+def build_breadcrumb(
+    state: State | None,
+    scope: str | None = None,
+    mode: str | None = None,
+) -> str:
+    """Build the ``mode > scope > code > phase`` breadcrumb from typed state.
 
-    The leading scope segment comes from *scope* (the active **screen**
-    scope: ``repo`` / ``workspace`` / ``user``) when supplied, falling back
-    to ``state.scope_kind`` otherwise. The override matters for the user
-    scope, whose synthesized portfolio state carries
+    The optional leading *mode* segment is the active content mode
+    (Home / Trust / Doctor / ...); mode and scope are orthogonal axes, so
+    the mode leads the in-mode scope. The scope segment comes from *scope*
+    (the active **screen** scope: ``repo`` / ``workspace`` / ``user``) when
+    supplied, falling back to ``state.scope_kind`` otherwise. The override
+    matters for the user scope, whose synthesized portfolio state carries
     ``scope_kind=workspace`` — without it the user screen's breadcrumb
     would lead with ``workspace`` instead of ``user``.
 
     Falls back to :data:`DEFAULT_PROJECT_CODE` when no state is loaded so
-    the header stays informative during the daemon cold-spawn window.
+    the header stays informative during the daemon cold-spawn window; the
+    *mode* segment, when given, still leads the fallback so the active mode
+    is visible before first state load.
 
     Args:
         state: The currently bound state, or ``None`` before first load.
-        scope: The active screen scope name to use for the leading segment,
+        scope: The active screen scope name to use for the scope segment,
             or ``None`` to read it from ``state.scope_kind``.
+        mode: The active mode title to lead the breadcrumb with, or
+            ``None`` to omit the mode segment.
 
     Returns:
         The breadcrumb string (without the brand prefix).
     """
     if state is None:
-        return DEFAULT_PROJECT_CODE
+        return CRUMB_SEP.join([mode, DEFAULT_PROJECT_CODE]) if mode else DEFAULT_PROJECT_CODE
     code = state.project.code if state.project is not None else DEFAULT_PROJECT_CODE
     first = scope if scope is not None else state.scope_kind.value
     parts: list[str] = [first, code]
     if state.current.phase_id is not None:
         parts.append(state.current.phase_id)
+    if mode is not None:
+        parts.insert(0, mode)
     return CRUMB_SEP.join(parts)
 
 
@@ -115,7 +127,7 @@ def _clock_text() -> str:
     return f"{datetime.now(UTC):%H:%M} UTC"
 
 
-def render_header(state: State | None, scope: str | None = None) -> str:
+def render_header(state: State | None, scope: str | None = None, mode: str | None = None) -> str:
     """Render the full header content-markup line from *state*.
 
     Pure render source — unit-testable without mounting the widget. The
@@ -126,13 +138,14 @@ def render_header(state: State | None, scope: str | None = None) -> str:
     Args:
         state: The currently bound state, or ``None``.
         scope: The active screen scope name driving the breadcrumb's
-            leading segment, or ``None`` to read it from
-            ``state.scope_kind``.
+            scope segment, or ``None`` to read it from ``state.scope_kind``.
+        mode: The active mode title leading the breadcrumb, or ``None`` to
+            omit the mode segment.
 
     Returns:
         A Textual content-markup string for the header line.
     """
-    crumb = build_breadcrumb(state, scope)
+    crumb = build_breadcrumb(state, scope, mode)
     runtime = runtime_cell_text(state)
     return (
         f"[$accent][b]{BRAND}[/b][/]  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
@@ -167,13 +180,24 @@ class Header(Static):
 
         Standalone tests that assign :attr:`state` directly do not need
         the app watcher; the guard skips it when the host has no ``state``
-        attribute (e.g. mounted under a bare harness).
+        attribute (e.g. mounted under a bare harness). Also subscribes to
+        the app's mode-change signal so the breadcrumb's mode segment
+        repaints when ``switch_mode`` flips the active mode (the signal
+        fires after ``current_mode`` is updated, so a first-switch mount
+        that read the prior mode is corrected on the same flip).
         """
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        mode_signal = getattr(self.app, "mode_change_signal", None)
+        if mode_signal is not None:
+            mode_signal.subscribe(self, self._on_mode_change)
+        self._repaint()
+
+    def _on_mode_change(self, _mode: str) -> None:
+        """Repaint the header line when the active mode changes."""
         self._repaint()
 
     def _on_app_state(self, new_state: State | None) -> None:
@@ -185,16 +209,22 @@ class Header(Static):
         self._repaint()
 
     def _repaint(self) -> None:
-        """Re-render the header line from the current state + active scope.
+        """Re-render the header line from the current state + scope + mode.
 
         Reads the host app's active screen scope (``EaApp._scope``) so the
-        breadcrumb's leading segment tracks the screen the operator is on,
+        breadcrumb's scope segment tracks the screen the operator is on,
         not the bound state's ``scope_kind`` (which reads ``workspace`` for
-        the user scope's synthesized portfolio). A bare harness without the
-        attribute falls back to ``state.scope_kind``.
+        the user scope's synthesized portfolio), and the host's active mode
+        (``EaApp.current_mode``) for the leading mode segment. A bare
+        harness without either attribute falls back gracefully (no mode
+        segment, ``state.scope_kind`` for the scope).
         """
+        from eawf.surfaces.tui.modes import mode_title
+
         scope = getattr(self.app, "_scope", None)
-        self.update(render_header(self.state, scope))
+        mode_name = getattr(self.app, "current_mode", None)
+        mode = mode_title(mode_name) if isinstance(mode_name, str) else None
+        self.update(render_header(self.state, scope, mode))
 
 
 __all__ = [

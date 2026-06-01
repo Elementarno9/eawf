@@ -1,4 +1,4 @@
- Eä  user ❯ QR    runtime: idle    HH:MM UTC
+ Eä  Home ❯ user ❯ QR    runtime: idle    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ PORTFOLIO                                                                                                            │
 │  repo  phase  eu  git  age                                                                                           │
