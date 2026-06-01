@@ -61,6 +61,7 @@ from pathlib import Path
 from eawf.kernel.store.envelope import Envelope
 from eawf.observability.telemetry.aggregator import incident_from_envelope, roll_session
 from eawf.observability.telemetry.models import (
+    TelemetryDispatchCost,
     TelemetryFileMeta,
     TelemetryIncident,
     TelemetrySession,
@@ -72,6 +73,7 @@ logger = logging.getLogger(__name__)
 
 _SESSIONS_TABLE = "telemetry_sessions"
 _INCIDENTS_TABLE = "telemetry_incidents"
+_DISPATCH_COSTS_TABLE = "telemetry_dispatch_costs"
 _FILE_META_TABLE = "telemetry_file_meta"
 
 #: Source adapters whose files are line-independent: every line parses to a
@@ -83,7 +85,7 @@ _FILE_META_TABLE = "telemetry_file_meta"
 #: ``INSERT OR REPLACE`` the complete session row with a truncated one. The set
 #: is a positive allowlist so an unknown future adapter defaults to the safe
 #: (full re-read) path rather than risking row truncation.
-_LINE_INDEPENDENT_SOURCES: frozenset[str] = frozenset({"event_jsonl"})
+_LINE_INDEPENDENT_SOURCES: frozenset[str] = frozenset({"event_jsonl", "dispatch_cost"})
 
 
 def _is_line_independent(source: SessionSource[object]) -> bool:
@@ -133,6 +135,7 @@ class RebuildReport:
     Attributes:
         sessions: Number of session rows upserted.
         incidents: Number of incident rows upserted.
+        dispatch_costs: Number of ``dispatch_cost`` EU-forward rows upserted.
         files_scanned: Number of source files read (head + tail).
         files_skipped: Number of files skipped in incremental mode
             because their size was unchanged since the last scan.
@@ -142,6 +145,7 @@ class RebuildReport:
 
     sessions: int = 0
     incidents: int = 0
+    dispatch_costs: int = 0
     files_scanned: int = 0
     files_skipped: int = 0
     rows_skipped: int = 0
@@ -207,8 +211,9 @@ def rebuild(
     store.commit()
     logger.info(
         f"rebuild mode={mode.value} sessions={report.sessions} "
-        f"incidents={report.incidents} scanned={report.files_scanned} "
-        f"skipped={report.files_skipped} rows_skipped={report.rows_skipped}"
+        f"incidents={report.incidents} dispatch_costs={report.dispatch_costs} "
+        f"scanned={report.files_scanned} skipped={report.files_skipped} "
+        f"rows_skipped={report.rows_skipped}"
     )
     return report
 
@@ -410,6 +415,10 @@ def _upsert_row(
     if isinstance(row, TelemetryIncident):
         store.upsert(_INCIDENTS_TABLE, row)
         report.incidents += 1
+        return
+    if isinstance(row, TelemetryDispatchCost):
+        store.upsert(_DISPATCH_COSTS_TABLE, row)
+        report.dispatch_costs += 1
         return
     raise TypeError(f"unhandled source row type: {type(row).__name__!r}")
 

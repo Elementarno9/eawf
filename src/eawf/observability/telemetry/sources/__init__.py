@@ -23,12 +23,14 @@ from __future__ import annotations
 from eawf.observability.telemetry.sources.base import SessionSource
 from eawf.observability.telemetry.sources.claude_session import ClaudeSessionSource
 from eawf.observability.telemetry.sources.codex_session import CodexSessionSource
+from eawf.observability.telemetry.sources.dispatch_cost import DispatchCostSessionSource
 from eawf.observability.telemetry.sources.event_jsonl import EventJsonlSource
 from eawf.observability.telemetry.sources.opencode_session import OpenCodeSessionSource
 
 __all__ = [
     "ClaudeSessionSource",
     "CodexSessionSource",
+    "DispatchCostSessionSource",
     "EventJsonlSource",
     "OpenCodeSessionSource",
     "SessionSource",

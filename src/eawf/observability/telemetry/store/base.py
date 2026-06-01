@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from eawf.observability.telemetry.models import (
     TelemetryCompaction,
+    TelemetryDispatchCost,
     TelemetryFileMeta,
     TelemetryIncident,
     TelemetryProject,
@@ -116,6 +117,12 @@ TABLES: Final[tuple[TableSpec, ...]] = (
         name="telemetry_runtime_switches",
         model=TelemetryRuntimeSwitch,
         primary_key=("wave_id", "attempt_id_from", "attempt_id_to"),
+    ),
+    TableSpec(
+        name="telemetry_dispatch_costs",
+        model=TelemetryDispatchCost,
+        primary_key=("envelope_id",),
+        not_null=frozenset({"runtime", "model", "pricing_version"}),
     ),
     TableSpec(
         name="telemetry_incidents",

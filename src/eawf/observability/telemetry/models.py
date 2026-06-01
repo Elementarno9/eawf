@@ -40,6 +40,7 @@ __all__ = [
     "EndMarker",
     "RuntimeErrorClass",
     "TelemetryCompaction",
+    "TelemetryDispatchCost",
     "TelemetryFileMeta",
     "TelemetryIncident",
     "TelemetryProject",
@@ -204,6 +205,64 @@ class TelemetryRuntimeSwitch(BaseModel):
     runtime_to: RuntimeName
     cause: RuntimeErrorClass
     ts: datetime
+
+
+class TelemetryDispatchCost(BaseModel):
+    """One row per ``dispatch_cost`` event — the EU-forward capture source.
+
+    Projected from a ``dispatch_cost`` event envelope (the post-dispatch
+    token + cost accounting payload the daemon emits through the canonical
+    writer). The row carries the dispatch forward facts so a later metering
+    writer can fold per-session estimated-units into the unified
+    ``actual_eu`` accessor — the *disconnect-EU* path that records effort
+    forward at dispatch time independent of the per-runtime session join.
+
+    Keying note (the W02 spike finding): the
+    :class:`~eawf.kernel.store.kinds.events.dispatch_cost.DispatchCostPayload`
+    carries **no** ``session_id`` field. Its correlation keys are
+    ``wave_id`` plus ``attempt_id``, and the daemon mints that ``attempt_id``
+    as a per-dispatch UUID in
+    :func:`eawf.runtime.daemon.dispatch_runner.run_dispatch` that is **never**
+    written back into :attr:`eawf.kernel.state.models.SessionAttempt.session_id`.
+    So ``dispatch_cost`` rows do **not** map 1:1 onto
+    ``Wave.sessions[*].session_id``; this row keys on the
+    ``(envelope_id, wave_id, attempt_id)`` tuple the event actually
+    provides. ``envelope_id`` is the primary key because two attempts of a
+    wave (or an interactive session with ``wave_id``/``attempt_id`` both
+    ``None``) would otherwise collide.
+
+    Attributes:
+        envelope_id: Id of the source ``dispatch_cost`` event envelope
+            (the row's stable primary key).
+        wave_id: ``W<NN>`` wave the dispatch served, or ``None`` for an
+            interactive (non-wave) CLI session.
+        attempt_id: Per-dispatch attempt id minted by the runner, or
+            ``None`` for an interactive session with no attempt envelope.
+        runtime: Runtime that incurred the cost.
+        model: Model identifier the cost is priced against.
+        input_tokens: Non-cached input tokens billed.
+        output_tokens: Output tokens billed.
+        cache_creation_input_tokens: Tokens written to the prompt cache.
+        cache_read_input_tokens: Tokens served from the prompt cache.
+        cost_usd: Priced cost in USD (``Decimal`` for exact accounting).
+        pricing_version: ``PRICING`` snapshot version that priced the cost.
+        ts: When the cost was projected (post-dispatch).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    envelope_id: str
+    wave_id: str | None = None
+    attempt_id: str | None = None
+    runtime: RuntimeName
+    model: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cost_usd: Decimal = Field(default=Decimal("0"))
+    pricing_version: str
+    ts: datetime | None = None
 
 
 class TelemetryIncident(BaseModel):
