@@ -10,7 +10,7 @@
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  research.agent_count     [int]          4                                                            │
       │     research.auto_save       [bool]         false                                                        │
-      │     research.default_depth   [choice]       deep                                                         │
+      │     research.default_depth   [choice]       medium                                                       │
       │     research.default_sources [choice]       both                                                         │
       │                                                                                                          │
       │                                                                                                          │
