@@ -23,6 +23,7 @@ from eawf.kernel.spec.audit import AUDIT_CADENCE_VALUES
 from eawf.platform.profiles import FloorCheck, ProfileBody, VerifyBlock, list_profiles, load_profile
 from eawf.workflow.lifecycle.waivers import DEFAULT_WAIVER_MODE, resolve_waiver_mode
 from eawf.workflow.verify.compile import compile_floor_pack
+from eawf.workflow.verify.readiness import _merge_verify_blocks
 
 # ---- AuditCadence 5-value enum ---------------------------------------------
 
@@ -69,6 +70,32 @@ def test_verify_block_defaults() -> None:
     assert block.argv_allowlist == []
     assert block.timeout_class_seconds is None
     assert block.waiver_mode == "B"
+
+
+def test_verify_block_enforce_defaults_to_false() -> None:
+    """The advisory->gating flip defaults OFF: a fresh block stays advisory.
+
+    Every shipped profile inherits this default, so close readiness is
+    advisory-only until a profile explicitly opts into gating.
+    """
+    assert VerifyBlock().enforce is False
+
+
+def test_verify_block_enforce_round_trips_true() -> None:
+    """A profile leaf can opt into gating by setting ``enforce: true``."""
+    block = VerifyBlock.model_validate({"enforce": True})
+    assert block.enforce is True
+
+
+def test_verify_block_rejects_invalid_enforce() -> None:
+    """``enforce`` is a strict bool — a non-bool value raises.
+
+    Pydantic v2 will not coerce an arbitrary string into a bool, so a
+    typo in the profile YAML (``enforce: maybe``) fails the load
+    boundary instead of silently defaulting one way or the other.
+    """
+    with pytest.raises(ValidationError):
+        VerifyBlock.model_validate({"enforce": "not-a-bool"})
 
 
 def test_verify_block_rejects_unknown_field() -> None:
@@ -237,6 +264,73 @@ def test_builtin_gate_pack_profile_count_is_eight() -> None:
         profile_id for profile_id in list_profiles() if (load_profile(profile_id).verify or False)
     }
     assert actual == expected
+
+
+# ---- enforce OR-merge across active profiles -------------------------------
+
+
+def test_merge_verify_blocks_enforce_is_any_true() -> None:
+    """One enforcing profile in the active set flips the merged block to gating.
+
+    ``_merge_verify_blocks`` folds ``enforce`` with OR so a single
+    enforcing profile promotes the whole composed verify block, mirroring
+    how ``profiles.enabled`` stacks multiple domain profiles at once.
+    """
+    merged = _merge_verify_blocks([VerifyBlock(enforce=False), VerifyBlock(enforce=True)])
+    assert merged is not None
+    assert merged.enforce is True
+
+
+def test_merge_verify_blocks_enforce_stays_false_when_all_advisory() -> None:
+    """An all-advisory active set yields an advisory merged block (no gating)."""
+    merged = _merge_verify_blocks([VerifyBlock(), VerifyBlock(), VerifyBlock()])
+    assert merged is not None
+    assert merged.enforce is False
+
+
+def test_merge_verify_blocks_empty_returns_none() -> None:
+    """No active verify blocks yields ``None`` (nothing to gate on)."""
+    assert _merge_verify_blocks([]) is None
+
+
+# ---- 14-profile reconcile sweep --------------------------------------------
+
+
+def test_every_shipped_profile_loads_and_validates() -> None:
+    """Every bundled profile parses through the loader against the closed schema.
+
+    The reconcile sweep guards against verify-block shape drift landing
+    on any shipped profile: a malformed leaf would raise at the
+    ``ProfileBody`` ingestion boundary here. Profiles that carry a
+    ``verify:`` leaf must produce a strict :class:`VerifyBlock`; profiles
+    without one keep ``verify=None`` (advisory, no floor pack).
+    """
+    for profile_id in list_profiles():
+        body = load_profile(profile_id)
+        assert body.name, f"profile {profile_id!r} has an empty name"
+        if body.verify is not None:
+            assert isinstance(body.verify, VerifyBlock)
+            # enforce defaults False on every shipped profile; none flip
+            # to gating (gating is exercised via test fixtures only).
+            assert body.verify.enforce is False, (
+                f"shipped profile {profile_id!r} unexpectedly sets verify.enforce=true"
+            )
+
+
+def test_no_shipped_profile_enables_enforce() -> None:
+    """No bundled profile ships ``verify.enforce: true`` — gating stays dormant.
+
+    The advisory->gating flip is a mechanism, not a default any shipped
+    profile turns on. Operators opt a workspace profile into gating
+    deliberately; the bundled set stays advisory so existing repos keep
+    their non-blocking close behaviour after an upgrade.
+    """
+    enforcing = [
+        profile_id
+        for profile_id in list_profiles()
+        if (block := load_profile(profile_id).verify) is not None and block.enforce
+    ]
+    assert enforcing == []
 
 
 def test_robotics_floor_check_carries_hil_flags() -> None:

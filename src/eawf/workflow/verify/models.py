@@ -101,11 +101,13 @@ class CloseReadiness(_StrictModel):
 
     Attributes:
         ready: ``True`` iff every required criterion has a status in
-            ``{pass, waived}`` AND no blocking gate result fired. Note
-            the wave-level advisory contract (W06): a non-ready value
-            is **logged + counted** but never blocks the close path.
-            W19 (later wave) flips the gating behaviour behind
-            ``profile.verify.enforce``.
+            ``{pass, waived}`` AND no blocking gate result fired. By
+            default (W06 advisory contract) a non-ready value is
+            **logged + counted** but never blocks the close path. When
+            the active ``profile.verify.enforce`` is ``true`` the flip
+            to gating is live: a non-ready result raises
+            :class:`~eawf.workflow.lifecycle._errors.LifecycleError` so
+            the close seam rejects the mutation.
         criteria: One :class:`CriterionView` per criterion attached to
             the scope. Includes both typed-spec criteria and legacy
             string criteria when both exist (mixed-mode waves are

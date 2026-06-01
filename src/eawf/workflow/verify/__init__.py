@@ -28,10 +28,16 @@ This package owns the typed view models (:mod:`models`), the read-only
 ``compute`` function (:mod:`readiness`), the compile-gate seam
 (:mod:`compile`), and the dispatch-close gate (:mod:`dispatch_close`).
 The three wave-close seams (``_close_and_pin``,
-``_apply_wave_close``, ``wave_land``) attach ``compute`` as an
-**advisory** call: warnings surface in operator output + envelope
-extras, but no close path blocks on a non-ready readiness. W19 (later
-wave) flips the advisory to gating behind ``profile.verify.enforce``.
+``_compute_wave_close_readiness``, ``wave_land``) attach ``compute`` as
+an **advisory** call by default: warnings surface in operator output +
+envelope extras, but no close path blocks on a non-ready readiness. A
+profile that sets ``verify.enforce: true`` flips the advisory to
+gating: ``compute`` then raises
+:class:`~eawf.workflow.lifecycle._errors.LifecycleError` on a non-ready
+result via :func:`~eawf.workflow.verify.readiness._enforce_readiness`,
+and the close seams reject the mutation. No shipped profile enables
+``enforce`` — the bit defaults ``False`` so existing repos keep the
+advisory close behaviour until they opt in.
 """
 
 from __future__ import annotations
