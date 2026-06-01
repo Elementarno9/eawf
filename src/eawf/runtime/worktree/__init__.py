@@ -32,6 +32,11 @@ from pathlib import Path
 
 import eawf.runtime.worktree.git as git
 from eawf.kernel.state.models import State, WorktreeRecord
+from eawf.runtime.worktree.autoland import (
+    WaveAutolandResult,
+    WaveAutolandRow,
+    wave_autoland,
+)
 from eawf.runtime.worktree.cleanup import CleanupResult, cleanup_worktree
 from eawf.runtime.worktree.create import create_worktree
 from eawf.runtime.worktree.locks import worktree_registry_lock
@@ -115,6 +120,8 @@ __all__ = [
     "STRATEGY_REBASE_THEN_FF",
     "CleanupResult",
     "MergeBackResult",
+    "WaveAutolandResult",
+    "WaveAutolandRow",
     "WaveLandBatchResult",
     "WaveLandResult",
     "WorktreeError",
@@ -123,6 +130,7 @@ __all__ = [
     "create_worktree",
     "list_worktrees",
     "merge_back",
+    "wave_autoland",
     "wave_land",
     "wave_land_batch",
     "worktree_registry_lock",

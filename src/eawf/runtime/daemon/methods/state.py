@@ -282,6 +282,28 @@ class WaveLandBatchRpcResult(BaseModel):
     skipped: list[str]
 
 
+class WaveAutolandParams(BaseModel):
+    """Params for :func:`wave_autoland_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    repo_root: str
+    iter_id: str | None = None
+    keep_worktree: bool = False
+    dry_run: bool = False
+
+
+class WaveAutolandRpcResult(BaseModel):
+    """Result of :func:`wave_autoland_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    order: list[str]
+    landed: list[dict[str, Any]]
+    failed_wave: str | None
+    error: str | None
+    remaining: list[str]
+    dry_run: bool
+
+
 # ---- Idempotency cache ------------------------------------------------------
 
 
@@ -1251,6 +1273,28 @@ def _wave_land_batch_payload(result: Any) -> dict[str, Any]:
     ).model_dump(mode="json")
 
 
+def _wave_autoland_row_payload(row: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for one autoland row."""
+    return {
+        "wave": row.wave_id,
+        "commits": list(row.commits),
+        "merged_commit": row.merged_commit,
+        "worktree_cleaned": row.worktree_cleaned,
+    }
+
+
+def _wave_autoland_payload(result: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for a wave-autoland result."""
+    return WaveAutolandRpcResult(
+        order=list(result.order),
+        landed=[_wave_autoland_row_payload(row) for row in result.landed],
+        failed_wave=result.failed_wave,
+        error=result.error,
+        remaining=list(result.remaining),
+        dry_run=result.dry_run,
+    ).model_dump(mode="json")
+
+
 def _build_worktree_event_envelope(
     *,
     command: str,
@@ -1276,6 +1320,13 @@ def _build_worktree_event_envelope(
             "landed_count": len(result.get("landed", [])),
             "failed": result.get("failed_wave") is not None,
             "skipped_count": len(result.get("skipped", [])),
+        }
+    elif command == "state.wave_autoland":
+        extras = {
+            "landed_count": len(result.get("landed", [])),
+            "failed": result.get("failed_wave") is not None,
+            "remaining_count": len(result.get("remaining", [])),
+            "dry_run": bool(result.get("dry_run", False)),
         }
     payload = EventPayload(
         timestamp=now,
@@ -1747,6 +1798,33 @@ async def wave_land_batch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dic
         )
 
 
+@register("state.wave_autoland")
+async def wave_autoland_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Daemon-owned implementation of ``eawf wave autoland``."""
+    args = WaveAutolandParams.model_validate(params)
+    repo_root = Path(args.repo_root)
+
+    from eawf.runtime.worktree import wave_autoland, worktree_registry_lock
+
+    with worktree_registry_lock(repo_root, timeout=5.0):
+        return _commit_worktree_state(
+            ctx=ctx,
+            repo_root=repo_root,
+            params=params,
+            command="state.wave_autoland",
+            scope_id=args.iter_id,
+            apply_func=lambda state: _wave_autoland_payload(
+                wave_autoland(
+                    state,
+                    repo_root=repo_root,
+                    iter_id=args.iter_id,
+                    keep_worktree=args.keep_worktree,
+                    dry_run=args.dry_run,
+                )
+            ),
+        )
+
+
 def event_store_path_for(state_path: Path) -> Path:
     """Return the ``event.jsonl`` path that pairs with *state_path*.
 
@@ -1762,6 +1840,7 @@ __all__ = [
     "VALIDATION_FAILED",
     "_APPLY_REGISTRY",
     "event_store_path_for",
+    "wave_autoland_rpc",
     "wave_land_batch_rpc",
     "wave_land_rpc",
 ]

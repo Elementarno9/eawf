@@ -537,6 +537,7 @@ Wave lifecycle (plan, claim, close, fail, graph, next-ready).
 
 | Verb | Summary |
 |---|---|
+| `autoland` | Cherry-pick closed waves' worktree commits home in dependency order. |
 | `blocks-rebuild` | Rebuild ``Wave.blocks`` reverse-index from sister waves' ``deps``. |
 | `claim` | Claim a pending wave for *session*. Exactly-once across concurrent calls. |
 | `close` | Close a claimed/in-progress wave with an outcome string. |

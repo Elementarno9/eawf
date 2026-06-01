@@ -22,6 +22,11 @@ This module also wires the wave-centric automation verbs onto the
   never merge).
 - ``wave land-batch`` — apply ``wave land`` to every eligible wave in
   dep order; stop on the first failure.
+- ``wave autoland`` — the land back-half: cherry-pick *already-closed*
+  waves' worktree commits onto the parent branch in dep order, stopping
+  on the first conflict. Unlike ``wave land`` / ``wave land-batch`` it
+  never drives a close (the wave is closed already); it only replays
+  commits and tears the worktree down.
 
 Most mutating handlers run inside
 :func:`eawf.surfaces.cli._mutation.state_transaction` (state-side serialisation)
@@ -29,8 +34,9 @@ Most mutating handlers run inside
 registry serialisation). The two locks compose without re-entry: the
 state lock guards ``state.json`` and the registry lock guards
 ``.git/worktrees/<name>``; they target disjoint paths.
-``wave land`` and ``wave land-batch`` are daemon-owned exceptions:
-their state writes route through ``state.wave_land`` / ``state.wave_land_batch``
+``wave land``, ``wave land-batch``, and ``wave autoland`` are
+daemon-owned exceptions: their state writes route through
+``state.wave_land`` / ``state.wave_land_batch`` / ``state.wave_autoland``
 so the daemon remains the canonical state mutator.
 """
 
@@ -579,6 +585,28 @@ def _wave_land_batch_payload(result: Any) -> dict[str, Any]:
     }
 
 
+def _wave_autoland_row_payload(row: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for one autoland row."""
+    return {
+        "wave": row.wave_id,
+        "commits": list(row.commits),
+        "merged_commit": row.merged_commit,
+        "worktree_cleaned": row.worktree_cleaned,
+    }
+
+
+def _wave_autoland_payload(result: Any) -> dict[str, Any]:
+    """Return the JSON-mode result shape for one wave-autoland result."""
+    return {
+        "order": list(result.order),
+        "landed": [_wave_autoland_row_payload(row) for row in result.landed],
+        "failed_wave": result.failed_wave,
+        "error": result.error,
+        "remaining": list(result.remaining),
+        "dry_run": result.dry_run,
+    }
+
+
 def _call_worktree_daemonless(
     *,
     method: str,
@@ -586,7 +614,12 @@ def _call_worktree_daemonless(
     flags: GlobalFlags,
 ) -> dict[str, Any]:
     """Run the worktree mutator locally under the legacy daemonless carve-out."""
-    from eawf.runtime.worktree import wave_land, wave_land_batch, worktree_registry_lock
+    from eawf.runtime.worktree import (
+        wave_autoland,
+        wave_land,
+        wave_land_batch,
+        worktree_registry_lock,
+    )
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.transitions import LifecycleError
 
@@ -615,6 +648,16 @@ def _call_worktree_daemonless(
                         iter_id=params.get("iter_id"),
                         ready_only=bool(params.get("ready_only", False)),
                         keep_worktree=bool(params.get("keep_worktree", False)),
+                    )
+                )
+            if method == "state.wave_autoland":
+                return _wave_autoland_payload(
+                    wave_autoland(
+                        state,
+                        repo_root=repo_root,
+                        iter_id=params.get("iter_id"),
+                        keep_worktree=bool(params.get("keep_worktree", False)),
+                        dry_run=bool(params.get("dry_run", False)),
                     )
                 )
     except LifecycleError as exc:
@@ -785,6 +828,109 @@ def wave_land_batch_cmd(
     )
     emit_json_or_text(payload, text, flags=flags)
     raise typer.Exit(cli_errors.ValidationError.exit_code)
+
+
+@wave_app.command(name="autoland")
+def wave_autoland_cmd(
+    ctx: typer.Context,
+    iter_flag: Annotated[
+        str | None,
+        typer.Option(
+            "--iter",
+            help=("Scope the land to closed waves in this iter id; defaults to the current iter."),
+        ),
+    ] = None,
+    keep_worktree: Annotated[
+        bool,
+        typer.Option(
+            "--keep-worktree",
+            help="Skip the post-land worktree teardown for each landed wave.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Print the planned land order without cherry-picking anything.",
+        ),
+    ] = False,
+) -> None:
+    """Cherry-pick closed waves' worktree commits home in dependency order.
+
+    Lands every closed wave whose worktree branch still carries un-landed
+    commits, deps before dependents (ties by wave id). Stops on the first
+    cherry-pick conflict, leaving the repo conflicted for the operator and
+    exiting STATE_CONFLICT; exits 0 once every landable wave is home.
+    """
+    flags: GlobalFlags = ctx.obj
+    if iter_flag is not None and not is_iter_id(iter_flag):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid iter id: {iter_flag!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = _resolve_state_path(flags)
+        repo_root = _resolve_repo_root(state_path)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    try:
+        result = _call_worktree_daemon(
+            method="state.wave_autoland",
+            params={
+                "repo_root": str(repo_root),
+                "iter_id": iter_flag,
+                "keep_worktree": keep_worktree,
+                "dry_run": dry_run,
+            },
+            flags=flags,
+            verb="wave autoland",
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    payload: dict[str, Any] = {
+        "order": list(result["order"]),
+        "landed": [
+            {
+                "wave": r["wave"],
+                "commits": list(r["commits"]),
+                "merged_commit": r["merged_commit"],
+                "worktree_cleaned": r["worktree_cleaned"],
+            }
+            for r in result["landed"]
+        ],
+        "failed_wave": result["failed_wave"],
+        "error": result["error"],
+        "remaining": list(result["remaining"]),
+        "dry_run": result["dry_run"],
+    }
+
+    if result["dry_run"]:
+        text = f"wave autoland dry-run order={payload['order']}"
+        emit_json_or_text(payload, text, flags=flags)
+        return
+
+    landed_count = len(payload["landed"])
+    if result["failed_wave"] is None:
+        text = f"wave autoland landed={landed_count} order={payload['order']}"
+        emit_json_or_text(payload, text, flags=flags)
+        return
+
+    # Stopped land. merge_back left the cherry-pick mid-flight and marked
+    # the worktree record CONFLICTED; the landed prefix is already
+    # persisted. The envelope carries the failing wave and the un-landed
+    # remainder so the operator can resolve and re-run. STATE_CONFLICT (3)
+    # mirrors how the underlying cherry-pick conflict surfaces.
+    text = (
+        f"wave autoland landed={landed_count} failed_at={result['failed_wave']} "
+        f"remaining={payload['remaining']} error={result['error']!r}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+    raise typer.Exit(cli_errors.StateConflict.exit_code)
 
 
 __all__ = [

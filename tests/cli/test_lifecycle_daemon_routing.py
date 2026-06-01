@@ -190,6 +190,15 @@ class _CapturingWorktreeClient:
                 "error": None,
                 "skipped": [],
             }
+        if method == "state.wave_autoland":
+            return {
+                "order": [],
+                "landed": [],
+                "failed_wave": None,
+                "error": None,
+                "remaining": [],
+                "dry_run": False,
+            }
         return {
             "wave": params["wave_id"] if params else "P01-I01-W01",
             "commits": ["abc123"],
@@ -356,6 +365,34 @@ def test_wave_land_batch_proxies_to_daemon_owned_method(
         "iter_id": "P01-I01",
         "ready_only": True,
         "keep_worktree": False,
+    }
+    assert _state_path(workspace).read_bytes() == state_before
+
+
+def test_wave_autoland_proxies_to_daemon_owned_method(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``wave autoland`` routes the whole state write through daemon-owned RPC."""
+    from eawf.surfaces.cli.commands import worktree as worktree_cmd
+
+    _bootstrap_to_pending_wave(workspace)
+    monkeypatch.setattr(worktree_cmd, "_resolve_repo_root", lambda _state_path: workspace)
+    _enable_proxy(monkeypatch, client=_CapturingWorktreeClient)
+    _CapturingWorktreeClient.last_method = None
+    _CapturingWorktreeClient.last_params = None
+    _CapturingWorktreeClient.call_count = 0
+    state_before = _state_path(workspace).read_bytes()
+
+    res = runner.invoke(app, ["wave", "autoland", "--iter", "P01-I01", "--dry-run"])
+
+    assert res.exit_code == 0, res.stdout
+    assert _CapturingWorktreeClient.call_count == 1
+    assert _CapturingWorktreeClient.last_method == "state.wave_autoland"
+    assert _CapturingWorktreeClient.last_params == {
+        "repo_root": str(workspace),
+        "iter_id": "P01-I01",
+        "keep_worktree": False,
+        "dry_run": True,
     }
     assert _state_path(workspace).read_bytes() == state_before
 
