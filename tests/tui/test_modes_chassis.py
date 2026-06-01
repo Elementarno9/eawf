@@ -46,6 +46,7 @@ from eawf.surfaces.tui.modes.registry import (
     mode_for_name,
     mode_title,
 )
+from eawf.surfaces.tui.modes.trust import TrustModeScreen
 from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
@@ -129,9 +130,11 @@ def test_build_modes_maps_each_name_to_a_zero_arg_factory() -> None:
     modes = build_modes(app)
     assert sorted(modes) == sorted(spec.name for spec in MODE_REGISTRY)
     # Home resolves to the cached scope-screen NAME (so switch_screen reuses
-    # the same instance); a placeholder mode builds a PlaceholderModeScreen.
+    # the same instance); trust builds its real pane; an unbuilt mode
+    # (doctor) still builds a PlaceholderModeScreen.
     assert modes["home"]() == "repo"
-    assert isinstance(modes["trust"](), PlaceholderModeScreen)
+    assert isinstance(modes["trust"](), TrustModeScreen)
+    assert isinstance(modes["doctor"](), PlaceholderModeScreen)
 
 
 def test_build_modes_home_factory_tracks_resolved_scope() -> None:
@@ -254,7 +257,7 @@ def test_palette_verb_switches_mode() -> None:
             verb.handler(app, "")
             await settle_screen(pilot)
             assert app.current_mode == "trust"
-            assert isinstance(app.screen, PlaceholderModeScreen)
+            assert isinstance(app.screen, TrustModeScreen)
 
     asyncio.run(body())
 
@@ -390,27 +393,32 @@ def test_placeholder_mode_renders_honest_empty_coming_soon() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust (placeholder)
+            await pilot.press("3")  # -> doctor (still a placeholder)
             await settle_screen(pilot)
             assert isinstance(app.screen, PlaceholderModeScreen)
             frame = normalize_snapshot(capture_screen_text(app))
-            assert "Trust - coming soon" in frame
+            assert "Doctor - coming soon" in frame
             # The placeholder keeps the shared chassis: brand + breadcrumb.
             assert BRAND in frame.splitlines()[0]
 
     asyncio.run(body())
 
 
+#: Modes whose per-pane wave has landed (real screens, not placeholders).
+#: The remaining modes still boot the honest-empty placeholder.
+_REAL_MODES: frozenset[str] = frozenset({"home", "trust"})
+
+
 def test_every_placeholder_mode_boots_and_titles_itself() -> None:
-    """All five placeholder modes render their own coming-soon title."""
+    """Every still-unbuilt mode renders its own coming-soon title."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             for spec in MODE_REGISTRY:
-                if spec.name == "home":
-                    continue  # home is the real scope-bearing mode
+                if spec.name in _REAL_MODES:
+                    continue  # home + trust are real panes, not placeholders
                 await pilot.press(spec.digit)
                 await settle_screen(pilot)
                 assert isinstance(app.screen, PlaceholderModeScreen)

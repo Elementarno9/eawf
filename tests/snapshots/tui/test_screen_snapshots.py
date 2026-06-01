@@ -94,6 +94,9 @@ _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "states" / "valid
 _REPO_STATE = _FIXTURES / "03-phase-iter-wave-active.json"
 _WORKSPACE_STATE = _FIXTURES / "05-workspace-state.json"
 _PORTFOLIO_STATE = _FIXTURES / "07-decisions-and-backlog.json"
+#: A repo with no phases / iters / waves — the truly data-starved case the
+#: Trust pane renders as an honest-negative ("insufficient data") banner.
+_EMPTY_STATE = _FIXTURES / "01-empty-repo.json"
 
 # Fail loudly on a path mistake: the read-only binder returns ``None`` for
 # a missing file (degrading to an empty-scope placeholder), so a wrong
@@ -102,6 +105,7 @@ _PORTFOLIO_STATE = _FIXTURES / "07-decisions-and-backlog.json"
 assert _REPO_STATE.is_file(), f"missing snapshot fixture: {_REPO_STATE}"
 assert _WORKSPACE_STATE.is_file(), f"missing snapshot fixture: {_WORKSPACE_STATE}"
 assert _PORTFOLIO_STATE.is_file(), f"missing snapshot fixture: {_PORTFOLIO_STATE}"
+assert _EMPTY_STATE.is_file(), f"missing snapshot fixture: {_EMPTY_STATE}"
 
 _GOLDEN = Path(__file__).resolve().parent / "golden"
 
@@ -236,6 +240,90 @@ def test_roadmap_scrolled_long_iter_snapshot(tmp_path: Path) -> None:
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "roadmap_scrolled_long_iter.txt")
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Trust mode pane — populated vs honest-negative (data-starved)
+# --------------------------------------------------------------------------
+
+
+def _trust_populated_state(tmp_path: Path) -> Path:
+    """Write a repo state with one CLOSED wave plus a verified-evidence row.
+
+    The Trust pane computes its scorecard through
+    ``compute_trust_scorecard`` -> ``read_store_projection``, so a populated
+    golden needs both a closed wave (to label) and a deterministic-pass
+    evidence row under ``store/evidence.jsonl`` (to lift the label to the
+    ``verified`` tier). Built off the committed repo fixture so the chrome
+    matches the other goldens.
+    """
+    payload = orjson.loads(_REPO_STATE.read_bytes())
+    payload["waves"]["P01-I01-W01"]["status"] = "closed"
+    payload["waves"]["P01-I01-W01"]["closed_at"] = "2026-05-08T01:00:00Z"
+    payload["iters"]["P01-I01"]["status"] = "closed"
+    payload["iters"]["P01-I01"]["closed_at"] = "2026-05-08T01:00:00Z"
+    payload["phases"]["P01"]["status"] = "closed"
+    payload["phases"]["P01"]["closed_at"] = "2026-05-08T01:00:00Z"
+    payload["current"]["phase_id"] = None
+    payload["current"]["iter_id"] = None
+    payload["current"]["active_wave_ids"] = []
+    State.model_validate(payload)  # fail fast on a malformed mutation
+    ea_dir = tmp_path / ".ea"
+    ea_dir.mkdir(parents=True, exist_ok=True)
+    state_path = ea_dir / "state.json"
+    state_path.write_bytes(orjson.dumps(payload))
+    record = {
+        "id": "EV-aaaaaaaaaaaa",
+        "scope_id": "P01-I01-W01",
+        "produced_by": "tool",
+        "evidence_kind": "deterministic",
+        "status": "pass",
+        "summary": "pytest gate passed",
+        "created_at": "2026-05-08T01:00:00Z",
+    }
+    envelope = {
+        "schema_version": "1.0",
+        "id": "EV-aaaaaaaaaaaa",
+        "kind": "evidence",
+        "scope_id": "P01-I01-W01",
+        "created_at": "2026-05-08T01:00:00Z",
+        "updated_at": "2026-05-08T01:00:00Z",
+        "summary": "evidence P01-I01-W01",
+        "payload": record,
+    }
+    store_dir = ea_dir / "store"
+    store_dir.mkdir(parents=True, exist_ok=True)
+    (store_dir / "evidence.jsonl").write_bytes(orjson.dumps(envelope) + b"\n")
+    return state_path
+
+
+def test_trust_pane_populated_snapshot(tmp_path: Path) -> None:
+    """The Trust pane (digit 2) over a closed+verified repo renders its scorecard."""
+
+    async def body() -> None:
+        state_path = _trust_populated_state(tmp_path)
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("2")  # -> trust mode
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "trust_pane_populated.txt")
+
+    asyncio.run(body())
+
+
+def test_trust_pane_data_starved_snapshot() -> None:
+    """The Trust pane over an empty repo renders the honest-negative banner."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_EMPTY_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("2")  # -> trust mode
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "trust_pane_data_starved.txt")
 
     asyncio.run(body())
 

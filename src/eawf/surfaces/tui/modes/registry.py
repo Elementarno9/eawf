@@ -140,14 +140,36 @@ def _placeholder_factory(title: str) -> ModeFactory:
     return factory
 
 
+def _trust_factory(_app: EaApp) -> Screen[None]:
+    """Build the Trust mode's pane over ``compute_trust_scorecard``.
+
+    The Trust pane reads the host app's read-only state + the append-only
+    stores under the resolved ``state.json`` and renders the trust
+    scorecard honestly (residuals + sample sizes, an honest-negative
+    banner when data-starved). It ignores its app argument -- the screen
+    reads ``self.app`` directly once mounted -- so the factory takes the
+    standard :data:`ModeFactory` shape and discards the argument.
+
+    Args:
+        _app: The live app (unused; the screen reads ``self.app``).
+
+    Returns:
+        A fresh :class:`~eawf.surfaces.tui.modes.trust.TrustModeScreen`.
+    """
+    from eawf.surfaces.tui.modes.trust import TrustModeScreen
+
+    return TrustModeScreen()
+
+
 #: The default six-mode layout seeded on the chassis. Digit order is the
-#: switch order (``1``..``6``). ``home`` is real -- it renders the resolved
-#: scope screen -- and is the launch default (:data:`DEFAULT_MODE`); the
-#: other five ship as honest-empty placeholders that their per-pane waves
-#: replace via the one-line registration recipe (module docstring).
+#: switch order (``1``..``6``). ``home`` (the launch default,
+#: :data:`DEFAULT_MODE`) renders the resolved scope screen and ``trust``
+#: renders the estimation trust scorecard; the remaining modes ship as
+#: honest-empty placeholders that their per-pane waves replace via the
+#: one-line registration recipe (module docstring).
 MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("home", "1", "Home", _home_screen),
-    ModeSpec("trust", "2", "Trust", _placeholder_factory("Trust")),
+    ModeSpec("trust", "2", "Trust", _trust_factory),
     ModeSpec("doctor", "3", "Doctor", _placeholder_factory("Doctor")),
     ModeSpec("evidence", "4", "Evidence", _placeholder_factory("Evidence")),
     ModeSpec("feed", "5", "Feed", _placeholder_factory("Feed")),
