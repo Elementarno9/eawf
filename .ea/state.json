@@ -984,6 +984,18 @@
       "status": "done",
       "updated_at": "2026-06-01T03:27:24.142094Z"
     },
+    "P29-I01-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W05",
+      "scope_id": "P29-I01-W05",
+      "status": "done",
+      "updated_at": "2026-06-01T04:07:50.263930Z"
+    },
     "P29-I01-W06": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1007,6 +1019,42 @@
       "scope_id": "P29-I01-W07",
       "status": "done",
       "updated_at": "2026-06-01T03:37:59.872161Z"
+    },
+    "P29-I01-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W08",
+      "scope_id": "P29-I01-W08",
+      "status": "done",
+      "updated_at": "2026-06-01T04:13:08.419326Z"
+    },
+    "P29-I01-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W20",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W20",
+      "scope_id": "P29-I01-W20",
+      "status": "done",
+      "updated_at": "2026-06-01T04:18:26.221245Z"
+    },
+    "P29-I01-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W23",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W23",
+      "scope_id": "P29-I01-W23",
+      "status": "done",
+      "updated_at": "2026-06-01T04:23:44.128336Z"
     }
   },
   "agent_sessions": {
@@ -3328,9 +3376,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P29-I01-W20"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P29-I01",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -6856,6 +6902,19 @@
       "scope_id": "P29-I01-W04",
       "updated_at": "2026-06-01T02:57:57.571786Z"
     },
+    "P29-I01-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W05-bucket-20260601T034033Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W05",
+      "updated_at": "2026-06-01T03:40:33.987503Z"
+    },
     "P29-I01-W06": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I01-W06-bucket-20260601T025758Z",
@@ -6882,6 +6941,19 @@
       "scope_id": "P29-I01-W07",
       "updated_at": "2026-06-01T02:58:00.188694Z"
     },
+    "P29-I01-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W08-bucket-20260601T034035Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I01-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I01-W08",
+      "updated_at": "2026-06-01T03:40:35.306443Z"
+    },
     "P29-I01-W20": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I01-W20-bucket-20260601T025801Z",
@@ -6894,6 +6966,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I01-W20",
       "updated_at": "2026-06-01T02:58:01.483035Z"
+    },
+    "P29-I01-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W23-bucket-20260601T034036Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W23",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W23",
+      "updated_at": "2026-06-01T03:40:36.583784Z"
     }
   },
   "goals": {
@@ -8822,7 +8907,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T03:38:01.085220Z",
+  "updated_at": "2026-06-01T04:23:45.320752Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -27018,9 +27103,9 @@
     "P29-I01-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T04:07:50.263930Z",
+      "commit": "3eacccf26cee0bd28b04b31db9df0fc9c86fa6ac",
       "deps": [
         "P29-I01-W01"
       ],
@@ -27034,10 +27119,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.258641Z",
-      "outcome": null,
+      "outcome": "min-N-gated honest-negative self-eval (MIN_SELF_EVAL_N=5); refuses to score below N, pass_rate None on empty cohort; reuses AgentReportVerdict",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "self-eval renders an honest-negative surface gated on a hard minimum-N; refuses to score below N",
         "no Goodhartable fake number when the verdict cohort is empty"
@@ -27045,7 +27130,7 @@
       "title": "Ship min-N-gated self-eval as the honest-negative surface",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W05-1780285234"
     },
     "P29-I01-W06": {
       "agent_role": "executor",
@@ -27120,9 +27205,9 @@
         "P29-I01-W13",
         "P29-I07-W09"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T04:13:08.419326Z",
+      "commit": "7fd861c57329d6c046f3837ac3d79e99ce6cf076",
       "deps": [
         "P29-I01-W07"
       ],
@@ -27137,10 +27222,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.258956Z",
-      "outcome": null,
+      "outcome": "EviBound rung-1 (compile_gate->run_checks rc==0 certifies) wired into promotion via validate_markdown_artifact/promote_draft; un-idles IntentBrief.evidence_refs; minimal out-of-scope wiring in platform/artifacts/validation.py + surfaces/cli/draft.py (flagged); routes CriterionEvidenceKind; EvidenceRecord persistence + CLI brief-parse deferred",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "rung-1 reuses compile_gate -> _run_deterministic_gate -> run_checks (passed = returncode==0), certifies",
         "adds the absent promotion call-site in promote_draft/validate_markdown_artifact, un-idling IntentBrief.evidence_refs"
@@ -27148,7 +27233,7 @@
       "title": "Wire EviBound rung-1 deterministic gate into promotion",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W08-1780285236"
     },
     "P29-I01-W09": {
       "agent_role": "executor",
@@ -27538,23 +27623,23 @@
         "P29-I01-W22"
       ],
       "claim_session_id": "flow-p29-i01",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-01T04:18:26.221245Z",
+      "commit": "eb2f18821428ff307532ccb0cd328aa53fc8f889",
       "deps": [],
       "description": "[SP-1 | cost-calibration | SF] merges SPAWN-1 + FLOOR-1 + RO-14(pricing). Net-new pricing rows.",
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
-        "src/eawf/workflow/dispatch/**"
+        "src/eawf/observability/telemetry/pricing.py"
       ],
       "id": "P29-I01-W20",
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.250570Z",
-      "outcome": null,
+      "outcome": "pricing rows claude-opus-4-8 (mirrors 4-7 5/25) + codex (placeholder rate, operator-confirm flagged) + bare-alias keys; check_pricing_currency green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "pricing rows added for claude-opus-4-8 + codex; bare model aliases resolve to a priced row",
         "claude-opus-4-8 is net-new (absent on main AND the PoC)"
@@ -27645,24 +27730,25 @@
         "P29-I04-W05",
         "P29-I04-W06"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T04:23:44.128336Z",
+      "commit": "77dd154f1bc67964bdabfb45476728f0a83d8f81",
       "deps": [],
       "description": "[SP-4 | lifecycle | SF] merges SPAWN-4 + RO-14(routing). Prerequisite of live spawn (SPAWN-10).",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/workflow/dispatch/**"
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/kernel/config/**"
       ],
       "id": "P29-I01-W23",
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.250877Z",
-      "outcome": null,
+      "outcome": "dispatch.routing table + resolve_routing (agent_role x effort_bucket -> model/runtime) + dispatch.routing LeafKey; routing.py net-new; priceability test pins canonical id pending W20",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "dispatch.routing table + resolve_routing maps (role, effort) -> model/runtime; the dispatch.routing LeafKey added",
         "routing.py is absent on main -> build, not wire"
@@ -27670,7 +27756,7 @@
       "title": "Build dispatch.routing table and resolve_routing",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W23-1780285237"
     },
     "P29-I01-W24": {
       "agent_role": "executor",
@@ -32823,6 +32909,17 @@
       "status": "merged",
       "wave_id": "P29-I01-W04"
     },
+    "WT-P29-I01-W05-1780285234": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w05",
+      "created_at": "2026-06-01T03:40:34.848841Z",
+      "id": "WT-P29-I01-W05-1780285234",
+      "merged_commit": "3eacccf",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w05",
+      "status": "merged",
+      "wave_id": "P29-I01-W05"
+    },
     "WT-P29-I01-W06-1780282679": {
       "base_branch": "feature/eawf-v0.5-p29",
       "branch": "feature/eawf-v0.1-p29-w06",
@@ -32845,16 +32942,38 @@
       "status": "merged",
       "wave_id": "P29-I01-W07"
     },
+    "WT-P29-I01-W08-1780285236": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w08",
+      "created_at": "2026-06-01T03:40:36.112650Z",
+      "id": "WT-P29-I01-W08-1780285236",
+      "merged_commit": "7fd861c",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w08",
+      "status": "merged",
+      "wave_id": "P29-I01-W08"
+    },
     "WT-P29-I01-W20-1780282682": {
       "base_branch": "feature/eawf-v0.5-p29",
       "branch": "feature/eawf-v0.1-p29-w20",
       "created_at": "2026-06-01T02:58:02.298777Z",
       "id": "WT-P29-I01-W20-1780282682",
-      "merged_commit": null,
+      "merged_commit": "eb2f188",
       "owner_session_id": "flow-p29-i01",
       "path": ".ea/worktrees/p29-w20",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P29-I01-W20"
+    },
+    "WT-P29-I01-W23-1780285237": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w23",
+      "created_at": "2026-06-01T03:40:37.394442Z",
+      "id": "WT-P29-I01-W23-1780285237",
+      "merged_commit": "77dd154",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w23",
+      "status": "merged",
+      "wave_id": "P29-I01-W23"
     }
   }
 }
