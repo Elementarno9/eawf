@@ -3270,7 +3270,7 @@
     ],
     "active_wave_ids": [],
     "iter_id": null,
-    "phase_id": null,
+    "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -8601,7 +8601,7 @@
         "2026-05-31-p29-detailed-plan",
         "2026-05-31-p29-build-order"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "Build v0.5.0: spawn engine + safety floor + jury + trust + release"
     }
@@ -8639,7 +8639,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T00:49:01.149423Z",
+  "updated_at": "2026-06-01T01:20:48.721837Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
