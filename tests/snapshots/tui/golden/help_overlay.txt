@@ -15,7 +15,7 @@
       │    i          open needs_user inbox (by urgency)                                                         │
       │    F5         force refresh                                                                              │
       │    ?          open help                                                                                  │
-      │    /          open palette                                                                           ▄▄  │
+      │    /          open palette                                                                           ▅▅  │
       │    Tab        next pane                                                                                  │
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
