@@ -13,6 +13,12 @@ truth for verdict-bearing rules and is invoked at write time via
 
 from __future__ import annotations
 
+from eawf.workflow.evidence.evibound import (
+    BriefPromotionGate,
+    BriefRefOutcome,
+    check_brief_promotable,
+    run_rung1_gate,
+)
 from eawf.workflow.evidence.guards import require_complete_audit
 from eawf.workflow.evidence.resolve import (
     DeferredAspect,
@@ -23,10 +29,14 @@ from eawf.workflow.evidence.resolve import (
 )
 
 __all__ = [
+    "BriefPromotionGate",
+    "BriefRefOutcome",
     "DeferredAspect",
     "ResolveCheck",
     "ResolveResult",
     "ResolveStatus",
+    "check_brief_promotable",
     "require_complete_audit",
     "resolve",
+    "run_rung1_gate",
 ]

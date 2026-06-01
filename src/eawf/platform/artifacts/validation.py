@@ -6,6 +6,7 @@ import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from eawf.platform.artifacts.references import (
     Citation,
@@ -13,6 +14,9 @@ from eawf.platform.artifacts.references import (
     validate_dense_citation_refs,
 )
 from eawf.platform.scrub.scan import scan_text
+
+if TYPE_CHECKING:
+    from eawf.kernel.spec.intent import IntentBrief
 
 _SHA256_CHUNK_BYTES: int = 65536
 
@@ -170,8 +174,40 @@ def validate_markdown_artifact(
     *,
     references: list[Citation] | None = None,
     require_template_sentinel: bool = False,
+    intent: IntentBrief | None = None,
+    project_root: Path | None = None,
 ) -> ArtifactValidationReport:
-    """Validate chassis headings, scrub status, and dense references."""
+    """Validate chassis headings, scrub status, dense references, and EviBound.
+
+    When *intent* is supplied the EviBound rung-1 gate runs over the
+    brief's ``evidence_refs`` via
+    :func:`eawf.workflow.evidence.check_brief_promotable`: every ref
+    must resolve (rung-1) for the brief to validate. This is the
+    promotion-time enforcement the
+    :attr:`eawf.kernel.spec.intent.IntentBrief.evidence_refs` field's
+    docstring promised — the gate fails the brief here rather than at
+    ingestion time. *intent* is ``None`` for the chassis-only callers
+    (PR / release-notes / coauthor text surfaces) so their behaviour is
+    unchanged.
+
+    Args:
+        text: The artifact markdown body.
+        references: Optional explicit citation rows; when ``None`` they
+            are parsed out of the ``## References`` section.
+        require_template_sentinel: When ``True`` a missing
+            ``<!-- eawf-template: -->`` sentinel is an error (draft
+            validation).
+        intent: Optional typed brief whose ``evidence_refs`` are gated
+            through EviBound rung-1. ``None`` skips the EviBound check.
+        project_root: Absolute path the rung-1 disk-exists check
+            resolves repo-relative refs against. Defaults to
+            :func:`Path.cwd` when *intent* is supplied without an
+            explicit root.
+
+    Returns:
+        An :class:`ArtifactValidationReport`; ``ok`` is ``False`` when
+        any chassis, scrub, citation, or EviBound check fails.
+    """
     errors: list[str] = []
     body = _content_after_sentinel(text)
     sections = _sections(body)
@@ -195,4 +231,33 @@ def validate_markdown_artifact(
     if findings:
         errors.append("scrub findings present")
     errors.extend(_citation_errors_for_text(body, references))
+    if intent is not None:
+        errors.extend(_evibound_errors_for_intent(intent, project_root))
     return ArtifactValidationReport(ok=not errors, errors=errors)
+
+
+def _evibound_errors_for_intent(
+    intent: IntentBrief,
+    project_root: Path | None,
+) -> list[str]:
+    """Run the EviBound rung-1 gate over *intent* and return rejection lines.
+
+    Delegates to :func:`eawf.workflow.evidence.check_brief_promotable`
+    (imported lazily to keep the ``platform`` layer free of a
+    ``workflow`` import at module load). Returns the gate's ``reasons``
+    list verbatim — empty when the brief is promotable.
+
+    Args:
+        intent: The typed brief whose ``evidence_refs`` are gated.
+        project_root: Root the rung-1 disk-exists check resolves
+            against; ``None`` falls back to :func:`Path.cwd`.
+
+    Returns:
+        One rejection line per ref that failed rung-1; ``[]`` when the
+        brief is promotable.
+    """
+    from eawf.workflow.evidence import check_brief_promotable
+
+    root = project_root if project_root is not None else Path.cwd()
+    gate = check_brief_promotable(intent, project_root=root)
+    return list(gate.reasons)

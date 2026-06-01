@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -15,6 +15,9 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
+
+if TYPE_CHECKING:
+    from eawf.kernel.spec.intent import IntentBrief
 
 draft_app = typer.Typer(
     name="draft",
@@ -207,6 +210,7 @@ def promote_draft(
     scrub: bool,
     force: bool,
     legacy_chassis: bool = False,
+    intent: IntentBrief | None = None,
 ) -> None:
     """Promote one local draft into ``.ea/artifacts`` and state.
 
@@ -214,6 +218,16 @@ def promote_draft(
     checks are skipped — used for long-form research briefs ratified
     before the renderer-owned chassis convention landed. Scrub-status +
     PII-scan + sentinel-presence are still enforced.
+
+    When *intent* is supplied the EviBound rung-1 gate runs over the
+    brief's ``evidence_refs`` at promotion time (the brief is promotable
+    iff every ref resolves). This is the promotion call-site that
+    un-idles the
+    :attr:`eawf.kernel.spec.intent.IntentBrief.evidence_refs` contract —
+    before it, the gate was never invoked anywhere. ``intent`` is
+    ``None`` for the chassis-only promotion path so existing callers are
+    unaffected; the EviBound check is skipped under *legacy_chassis*
+    (long-form briefs predate the typed-intent surface).
     """
     from eawf.platform.artifacts.validation import validate_markdown_artifact
     from eawf.platform.scrub.scan import rewrite_text
@@ -238,7 +252,12 @@ def promote_draft(
             legacy_report = _validate_legacy_brief(text)
             report_ok, report_errors = legacy_report.ok, legacy_report.errors
         else:
-            chassis_report = validate_markdown_artifact(text, require_template_sentinel=True)
+            chassis_report = validate_markdown_artifact(
+                text,
+                require_template_sentinel=True,
+                intent=intent,
+                project_root=root,
+            )
             report_ok, report_errors = chassis_report.ok, chassis_report.errors
         if not report_ok:
             raise cli_errors.ValidationError("; ".join(report_errors))
