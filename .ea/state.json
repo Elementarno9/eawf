@@ -1679,6 +1679,30 @@
       "scope_id": "P29-I02-W32",
       "status": "done",
       "updated_at": "2026-06-01T21:49:07.759560Z"
+    },
+    "P29-I03-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I03-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I03-W01",
+      "scope_id": "P29-I03-W01",
+      "status": "done",
+      "updated_at": "2026-06-01T22:37:03.046467Z"
+    },
+    "P29-I03-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I03-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I03-W03",
+      "scope_id": "P29-I03-W03",
+      "status": "done",
+      "updated_at": "2026-06-01T22:37:03.635247Z"
     }
   },
   "agent_sessions": {
@@ -8348,6 +8372,32 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I02-W32",
       "updated_at": "2026-06-01T21:48:33.404744Z"
+    },
+    "P29-I03-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I03-W01-bucket-20260601T222639Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I03-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I03-W01",
+      "updated_at": "2026-06-01T22:26:39.948453Z"
+    },
+    "P29-I03-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I03-W03-bucket-20260601T222640Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I03-W03",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I03-W03",
+      "updated_at": "2026-06-01T22:26:40.466373Z"
     }
   },
   "goals": {
@@ -10336,7 +10386,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T22:24:07.995853Z",
+  "updated_at": "2026-06-01T22:37:03.635623Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -30991,10 +31041,10 @@
         "P29-I03-W02",
         "P29-I03-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i03",
+      "claimed_at": "2026-06-01T22:26:39.948447Z",
+      "closed_at": "2026-06-01T22:37:03.046467Z",
+      "commit": "34f7eaf180fc60a510639465754c953474f655ee",
       "deps": [
         "P29-I01-W21"
       ],
@@ -31008,10 +31058,10 @@
       "intent": null,
       "iter_id": "P29-I03",
       "opened_at": "2026-06-01T00:19:14.267883Z",
-      "outcome": null,
+      "outcome": "build_child_env allowlist (env -i floor + per-lane auth) in runtime/sandbox/env_scrub.py; env=build_child_env wired into ClaudeAdapter.spawn_session; threat-table C4 cred-exfil-via-env closed; allowlist fails-closed (starts empty, drops AWS_/GH_/SSH_/KUBECONFIG/EAWF_ + cross-lane + unknown by construction); pinned PATH; 147 sandbox/claude tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "env-scrub allowlist strips all but explicitly-allowed env vars from spawned children; ports to all OSes"
       ],
@@ -31060,9 +31110,9 @@
       "blocks": [
         "P29-I03-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
+      "claim_session_id": "flow-p29-i03",
+      "claimed_at": "2026-06-01T22:26:40.466368Z",
+      "closed_at": "2026-06-01T22:37:03.635247Z",
       "commit": null,
       "deps": [],
       "description": "[S-JAIL-0 | safety-floor | spike] gates FLOOR-4 jail backend choice.",
@@ -31075,10 +31125,10 @@
       "intent": null,
       "iter_id": "P29-I03",
       "opened_at": "2026-06-01T00:19:14.256121Z",
-      "outcome": null,
+      "outcome": "S-JAIL-0 verdict: DIRECT bubblewrap (Linux) / sandbox-exec seatbelt (macOS) under eawf control, NOT the srt Node CLI. pgid-reap holds both ways (macOS exec-in-place PROVEN clean; Linux needs --unshare-pid AND --die-with-parent together). W04 jail.py returns an argv PREFIX; daemon stays sole session-setter (no wrapper-level setsid/--new-session) so cancel_process_group reaps unchanged. Windows FS-jail feature-gated (egress-parity GAP). Brief: .ea/local/research/2026-06-02-s-jail-0-srt-double-fork.md",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "read-only spike: does srt survive the daemon double-fork; verdict picks srt vs bubblewrap/seatbelt-only for FLOOR-4"
       ],
