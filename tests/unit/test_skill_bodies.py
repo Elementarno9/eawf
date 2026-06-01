@@ -27,6 +27,8 @@ from eawf.workflow.skills.bodies import (
     FlowBody,
     InitBody,
     MemoryBody,
+    MockupBody,
+    MockupVariant,
     PolishBody,
     PrepBody,
     ResearchBody,
@@ -35,6 +37,7 @@ from eawf.workflow.skills.bodies import (
     SecurityReviewBody,
     ShipBody,
     UserQuestion,
+    UserQuestionOption,
     WaveSpecBody,
 )
 
@@ -408,6 +411,100 @@ def test_user_question_round_trip_2_options() -> None:
     }
     q = UserQuestion.model_validate(payload)
     assert q.model_dump(exclude_none=True) == payload
+
+
+# --- UserQuestionOption.preview (P29-I02-W13) ------------------------------
+
+
+def test_user_question_option_preview_round_trips() -> None:
+    """A ``preview`` payload survives ``model_validate`` round-trip."""
+    payload = {
+        "label": "compact",
+        "description": "single-column layout",
+        "preview": "+--------+\n| Title  |\n+--------+\n",
+    }
+    option = UserQuestionOption.model_validate(payload)
+    assert option.preview == "+--------+\n| Title  |\n+--------+\n"
+    assert option.model_dump(exclude_none=True) == payload
+
+
+def test_user_question_option_preview_defaults_none() -> None:
+    """``preview`` is optional and defaults to ``None``."""
+    option = UserQuestionOption(label="A")
+    assert option.preview is None
+
+
+def test_user_question_option_without_preview_still_validates() -> None:
+    """An old-shape option (no ``preview`` key) keeps validating."""
+    option = UserQuestionOption.model_validate({"label": "A", "description": "first"})
+    assert option.preview is None
+    assert option.label == "A"
+
+
+def test_user_question_option_rejects_extra_key() -> None:
+    """``extra='forbid'`` still rejects an unknown key alongside ``preview``."""
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        UserQuestionOption.model_validate({"label": "A", "unexpected": 1})
+
+
+def test_user_question_threads_preview_into_options() -> None:
+    """A :class:`UserQuestion` carries per-option ``preview`` boxes."""
+    q = UserQuestion(
+        question="Pick a layout",
+        options=[
+            UserQuestionOption(label="compact", preview="+--+\n|A |\n+--+\n"),
+            UserQuestionOption(label="wide", preview="+------+\n| B    |\n+------+\n"),
+        ],
+    )
+    rebuilt = UserQuestion.model_validate(q.model_dump())
+    assert rebuilt == q
+    assert [o.preview for o in rebuilt.options] == [
+        "+--+\n|A |\n+--+\n",
+        "+------+\n| B    |\n+------+\n",
+    ]
+
+
+# --- MockupBody (P29-I02-W13) ----------------------------------------------
+
+
+def test_mockup_body_minimal_construction_and_round_trip() -> None:
+    body = MockupBody()
+    _round_trip(body)
+    assert body.variants == []
+    assert body.user_question is None
+
+
+def test_mockup_body_two_variants_with_previews_round_trip() -> None:
+    """A 2-variant mockup whose options carry previews round-trips."""
+    body = MockupBody(
+        target_scope="urn:eawf:v1:state:QR/P00",
+        variants=[
+            MockupVariant(name="compact", layout="+--+\n|A |\n+--+\n", notes="dense"),
+            MockupVariant(name="wide", layout="+------+\n| B    |\n+------+\n"),
+        ],
+        user_question=UserQuestion(
+            question="Pick a layout",
+            options=[
+                UserQuestionOption(label="compact", preview="+--+\n|A |\n+--+\n"),
+                UserQuestionOption(label="wide", preview="+------+\n| B    |\n+------+\n"),
+            ],
+        ),
+    )
+    _round_trip(body)
+    assert body.user_question is not None
+    assert len(body.user_question.options) == 2
+    assert all(o.preview for o in body.user_question.options)
+
+
+def test_mockup_body_rejects_extra_field() -> None:
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        MockupBody.model_validate({"unexpected": 1})
+
+
+def test_mockup_variant_requires_non_empty_layout() -> None:
+    """A variant with an empty layout is rejected (min_length=1)."""
+    with pytest.raises(ValidationError):
+        MockupVariant(name="x", layout="")
 
 
 # --- C04b bodies (P26-W26) -------------------------------------------------

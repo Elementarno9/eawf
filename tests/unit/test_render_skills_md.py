@@ -31,6 +31,7 @@ _EXPECTED_SKILL_NAMES: set[str] = {
     "init",
     "roadmap",
     "differentiate",
+    "mockup",
     "flow",
     "blitz",
     "coauthor",

@@ -18,6 +18,7 @@ an Eä skill the runtime can install as a slash command.
 | `/graduate-research-code` | no | `—` | Model-only playbook for promoting spike/research code into a typed, tested, maintained module. |
 | `/init` | yes | `[--profile=<id>]` | Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree. |
 | `/memory` | yes | `save\|list\|forget [<name>] [--tier=working\|archival\|retrieval]` | Save, list, or forget curated durable memory entries. |
+| `/mockup` | yes | `<surface-slug>` | Author 2-4 UI mockups as ASCII layouts and surface them as side-by-side AskUserQuestion option previews to compare. |
 | `/polish` | yes | `[--scope=<dir\|file>]` | Repo-wide consistency sweep. Aligns naming, docstring style, log fields, error message phrasing, and removes dead code. |
 | `/prep` | yes | `<phase-id>` | Activate the next PLANNED phase: surface its DAG for operator approval, then run the activate_phase hard gate and dispatch subagents per wave. |
 | `/refactor-god-class` | no | `—` | Model-only playbook for splitting a multi-responsibility class into single-purpose collaborators. |

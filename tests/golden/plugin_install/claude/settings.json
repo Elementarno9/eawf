@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "43fd5db874f487a4",
+    "hash": "4426cae3c0c75592",
     "hooks": [
       {
         "event_type": "pre_commit",
@@ -141,6 +141,10 @@
       },
       {
         "name": "differentiate",
+        "version": "1.0"
+      },
+      {
+        "name": "mockup",
         "version": "1.0"
       },
       {

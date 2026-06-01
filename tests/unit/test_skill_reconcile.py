@@ -34,11 +34,12 @@ from eawf.workflow.skills.discovery import (
 
 # Read-only / investigative / advisory skills the model MAY auto-invoke.
 # These either make no persisted change (research, audit, review,
-# security-review, blitz, differentiate) or only resolve a value /
+# security-review, blitz, differentiate, mockup) or only resolve a value /
 # record a telemetry-or-intent event while routing the actual mutation to
 # the daemon (coauthor resolves a trailer; compress records a compression
 # directive) — none drives a lifecycle / state transition on its own, so
-# autonomous invocation is safe.
+# autonomous invocation is safe. ``mockup`` produces ASCII UI mockups as
+# AskUserQuestion previews and drives no state mutation.
 _READ_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
     {
         "research",
@@ -47,6 +48,7 @@ _READ_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
         "security-review",
         "blitz",
         "differentiate",
+        "mockup",
         "coauthor",
         "compress",
     }

@@ -20,12 +20,19 @@ class UserQuestionOption(BaseModel):
         label: Short label the runtime renders next to the option.
         description: Optional longer description shown when the runtime
             has space.
+        preview: Optional multi-line markdown/ASCII content the runtime
+            renders in a side-by-side monospace box when the operator
+            compares options. Mirrors the harness ``AskUserQuestion``
+            ``preview`` semantics (multi-line markdown, single-select
+            only); a skill that surfaces UI mockups populates this with
+            the rendered mockup variant for the option.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     label: str = Field(min_length=1)
     description: str | None = None
+    preview: str | None = None
 
 
 class UserQuestion(BaseModel):

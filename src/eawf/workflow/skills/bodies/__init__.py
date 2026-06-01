@@ -21,6 +21,10 @@ Four meta bodies (W03 fills implementations):
 - :class:`~eawf.workflow.skills.bodies.differentiate.DifferentiateBody`
 - :class:`~eawf.workflow.skills.bodies.flow.FlowBody`
 
+Advisory body (no engine implementation; registry-only skill):
+
+- :class:`~eawf.workflow.skills.bodies.mockup.MockupBody`
+
 ``/blitz`` and the six skill-surface bodies:
 
 - :class:`~eawf.workflow.skills.bodies.blitz.BlitzBody`
@@ -46,6 +50,7 @@ from eawf.workflow.skills.bodies.differentiate import DifferentiateBody
 from eawf.workflow.skills.bodies.flow import FlowBody
 from eawf.workflow.skills.bodies.init import InitBody
 from eawf.workflow.skills.bodies.memory import MemoryBody
+from eawf.workflow.skills.bodies.mockup import MockupBody, MockupVariant
 from eawf.workflow.skills.bodies.polish import PolishBody
 from eawf.workflow.skills.bodies.prep import PrepBody
 from eawf.workflow.skills.bodies.research import ResearchBody
@@ -66,6 +71,8 @@ __all__ = [
     "FlowBody",
     "InitBody",
     "MemoryBody",
+    "MockupBody",
+    "MockupVariant",
     "PolishBody",
     "PrepBody",
     "ResearchBody",
