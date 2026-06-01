@@ -1394,6 +1394,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-05-27-p28-i01-verify-spine-closeout.md",
       "urn": "urn:eawf:v1:artifact:P28-I01/A41-P28-i01-verify-spine-report"
     },
+    "A44-P29-i01-report": {
+      "created_at": "2026-06-01T09:11:45.551531Z",
+      "id": "A44-P29-i01-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "4644555c9e478ff0fda2c266f5efcfe2c738061e21b070a62e467da96c928663",
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-01-A44-P29-i01-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I01/A44-P29-i01-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -2412,6 +2422,17 @@
       "scope_id": "P28",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A44-P29-i01": {
+      "check_results": [],
+      "created_at": "2026-06-01T09:08:58.501372Z",
+      "id": "A44-P29-i01",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A44-P29-i01-report",
+      "scope_id": "P29-I01",
+      "status": "complete",
+      "verdict": "minor"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -9412,7 +9433,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T09:05:14.354147Z",
+  "updated_at": "2026-06-01T09:23:20.826050Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
