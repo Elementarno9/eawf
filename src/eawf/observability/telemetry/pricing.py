@@ -76,6 +76,15 @@ CACHE_WRITE_1H_MULTIPLIER = Decimal("2")
 
 PRICING: dict[str, ModelPricing] = {
     # Opus 4.x — $5 / $25 per MTok (2026-05-17 rates).
+    "claude-opus-4-8": ModelPricing(
+        input_per_token=Decimal("5e-6"),
+        output_per_token=Decimal("25e-6"),
+        cache_read_per_token=Decimal("0.5e-6"),
+        cache_write_5m_per_token=Decimal("6.25e-6"),
+        cache_write_1h_per_token=Decimal("10e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
     "claude-opus-4-7": ModelPricing(
         input_per_token=Decimal("5e-6"),
         output_per_token=Decimal("25e-6"),
@@ -147,6 +156,84 @@ PRICING: dict[str, ModelPricing] = {
         cache_read_per_token=Decimal("0.1e-6"),
         cache_write_5m_per_token=Decimal("1.25e-6"),
         cache_write_1h_per_token=Decimal("2e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # Bare family aliases. The longest-prefix resolver only matches a key
+    # that is a prefix of the queried id, so a bare token like "opus" (used
+    # on the dispatch / role-spec surface and by short-form runtime logs)
+    # cannot reach a dated "claude-opus-4-*" row — it must be its own key.
+    # Each alias prices to the current 4.x family rate so a short id resolves
+    # to a priced row instead of falling through unpriced. These keys never
+    # shadow a dated row: the resolver prefers the longest matching prefix,
+    # so "claude-opus-4-8-20260101" still binds to "claude-opus-4-8".
+    "opus": ModelPricing(
+        input_per_token=Decimal("5e-6"),
+        output_per_token=Decimal("25e-6"),
+        cache_read_per_token=Decimal("0.5e-6"),
+        cache_write_5m_per_token=Decimal("6.25e-6"),
+        cache_write_1h_per_token=Decimal("10e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "claude-opus": ModelPricing(
+        input_per_token=Decimal("5e-6"),
+        output_per_token=Decimal("25e-6"),
+        cache_read_per_token=Decimal("0.5e-6"),
+        cache_write_5m_per_token=Decimal("6.25e-6"),
+        cache_write_1h_per_token=Decimal("10e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "sonnet": ModelPricing(
+        input_per_token=Decimal("3e-6"),
+        output_per_token=Decimal("15e-6"),
+        cache_read_per_token=Decimal("0.3e-6"),
+        cache_write_5m_per_token=Decimal("3.75e-6"),
+        cache_write_1h_per_token=Decimal("6e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "claude-sonnet": ModelPricing(
+        input_per_token=Decimal("3e-6"),
+        output_per_token=Decimal("15e-6"),
+        cache_read_per_token=Decimal("0.3e-6"),
+        cache_write_5m_per_token=Decimal("3.75e-6"),
+        cache_write_1h_per_token=Decimal("6e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "haiku": ModelPricing(
+        input_per_token=Decimal("1e-6"),
+        output_per_token=Decimal("5e-6"),
+        cache_read_per_token=Decimal("0.1e-6"),
+        cache_write_5m_per_token=Decimal("1.25e-6"),
+        cache_write_1h_per_token=Decimal("2e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "claude-haiku": ModelPricing(
+        input_per_token=Decimal("1e-6"),
+        output_per_token=Decimal("5e-6"),
+        cache_read_per_token=Decimal("0.1e-6"),
+        cache_write_5m_per_token=Decimal("1.25e-6"),
+        cache_write_1h_per_token=Decimal("2e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # Codex (OpenAI) — PLACEHOLDER RATE. No published OpenAI/codex rate is
+    # embedded in this Anthropic-sourced snapshot; this row uses the Opus 4.x
+    # input/output rate as the closest reasonable stand-in so codex sessions
+    # price to a non-zero, currency-consistent figure instead of $0. The
+    # exact codex rate needs operator confirmation before this is treated as
+    # authoritative. Cache rates are the standard 0.1x / 1.25x / 2x of input
+    # so check_pricing_currency stays green.
+    "codex": ModelPricing(
+        input_per_token=Decimal("5e-6"),
+        output_per_token=Decimal("25e-6"),
+        cache_read_per_token=Decimal("0.5e-6"),
+        cache_write_5m_per_token=Decimal("6.25e-6"),
+        cache_write_1h_per_token=Decimal("10e-6"),
         pricing_version=PRICING_VERSION,
         fetched_at=PRICING_FETCHED_AT,
     ),

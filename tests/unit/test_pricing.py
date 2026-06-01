@@ -139,6 +139,109 @@ def test_lookup_pricing_empty_string_returns_none() -> None:
 
 
 # --------------------------------------------------------------------------
+# claude-opus-4-8 row + bare-alias resolution + codex row (P29-I01-W20).
+# --------------------------------------------------------------------------
+
+
+def test_opus_4_8_row_present_and_priced() -> None:
+    row = PRICING["claude-opus-4-8"]
+    assert row.input_per_token == Decimal("5e-6")
+    assert row.output_per_token == Decimal("25e-6")
+    assert row.cache_read_per_token == Decimal("0.5e-6")
+    assert row.cache_write_5m_per_token == Decimal("6.25e-6")
+    assert row.cache_write_1h_per_token == Decimal("10e-6")
+
+
+def test_opus_4_8_row_mirrors_opus_4_7() -> None:
+    new = PRICING["claude-opus-4-8"]
+    prior = PRICING["claude-opus-4-7"]
+    for field in (
+        "input_per_token",
+        "output_per_token",
+        "cache_read_per_token",
+        "cache_write_5m_per_token",
+        "cache_write_1h_per_token",
+    ):
+        assert getattr(new, field) == getattr(prior, field), field
+
+
+def test_lookup_pricing_opus_4_8_dated_variant_resolves() -> None:
+    # A dated/bracketed runtime id falls back to the longest matching prefix.
+    result = lookup_pricing("claude-opus-4-8-20260101")
+    assert result is PRICING["claude-opus-4-8"]
+
+
+def test_lookup_pricing_opus_4_8_bracket_variant_resolves() -> None:
+    # The live runtime id form (e.g. "claude-opus-4-8[1m]") prefix-matches.
+    result = lookup_pricing("claude-opus-4-8[1m]")
+    assert result is PRICING["claude-opus-4-8"]
+
+
+@pytest.mark.parametrize(
+    ("alias", "expected_input"),
+    [
+        ("opus", Decimal("5e-6")),
+        ("claude-opus", Decimal("5e-6")),
+        ("sonnet", Decimal("3e-6")),
+        ("claude-sonnet", Decimal("3e-6")),
+        ("haiku", Decimal("1e-6")),
+        ("claude-haiku", Decimal("1e-6")),
+        ("codex", Decimal("5e-6")),
+    ],
+)
+def test_lookup_pricing_bare_alias_resolves_to_priced_row(
+    alias: str, expected_input: Decimal
+) -> None:
+    # Bare aliases used on the dispatch / role-spec surface (and short-form
+    # runtime logs) must price to a real row, not fall through unpriced.
+    row = lookup_pricing(alias)
+    assert row is not None, alias
+    assert row.input_per_token == expected_input
+
+
+def test_lookup_pricing_bare_alias_does_not_shadow_dated_row() -> None:
+    # The "claude-opus" alias is a prefix of "claude-opus-4-8"; the resolver
+    # must still bind the longer, more specific dated row.
+    assert lookup_pricing("claude-opus-4-8") is PRICING["claude-opus-4-8"]
+    assert lookup_pricing("claude-opus-4-7-20260514") is PRICING["claude-opus-4-7"]
+
+
+def test_codex_row_present_and_priced() -> None:
+    # Codex is net-new (placeholder rate pending operator confirmation); it
+    # must exist and price non-zero so codex sessions are not silently $0.
+    row = PRICING["codex"]
+    assert row.input_per_token > Decimal("0")
+    assert row.output_per_token > Decimal("0")
+
+
+def test_codex_row_currency_invariant_holds() -> None:
+    row = PRICING["codex"]
+    assert row.cache_read_per_token == row.input_per_token * CACHE_READ_MULTIPLIER
+    assert row.cache_write_5m_per_token == row.input_per_token * CACHE_WRITE_5M_MULTIPLIER
+    assert row.cache_write_1h_per_token == row.input_per_token * CACHE_WRITE_1H_MULTIPLIER
+
+
+def test_lookup_pricing_codex_dated_variant_resolves() -> None:
+    # A model-specific codex id (e.g. "codex-mini-latest") prefix-matches the
+    # placeholder codex row rather than returning None.
+    result = lookup_pricing("codex-mini-latest")
+    assert result is PRICING["codex"]
+
+
+def test_lookup_pricing_opencode_still_unpriced() -> None:
+    # No new alias is a prefix of "opencode"; it stays unpriced (None) as
+    # before, confirming the new keys did not widen the match set wrongly.
+    assert lookup_pricing("opencode") is None
+
+
+def test_new_rows_keep_currency_check_green() -> None:
+    # The W20 additions must not introduce drift in the snapshot.
+    report = check_pricing_currency()
+    assert report.is_current is True
+    assert report.findings == []
+
+
+# --------------------------------------------------------------------------
 # extra="forbid" on the models.
 # --------------------------------------------------------------------------
 
