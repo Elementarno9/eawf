@@ -462,6 +462,65 @@ def test_project_schema_version_pin_unchanged() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Wave.claimed_at — work-start anchor (P29-I02-W29)
+# ---------------------------------------------------------------------------
+
+
+def _wave_payload(**overrides: object) -> dict[str, object]:
+    """Return a minimal valid Wave payload dict, mergeable with overrides."""
+    base: dict[str, object] = {
+        "id": "P01-I01-W01",
+        "iter_id": "P01-I01",
+        "title": "w",
+        "status": WaveStatus.PENDING.value,
+        "opened_at": datetime.now(UTC).isoformat(),
+    }
+    base.update(overrides)
+    return base
+
+
+def test_wave_claimed_at_defaults_to_none() -> None:
+    """``claimed_at`` is optional and defaults to None at plan/creation time."""
+    from eawf.kernel.state.models import Wave
+
+    wave = Wave.model_validate(_wave_payload())
+    assert wave.claimed_at is None
+
+
+def test_wave_claimed_at_round_trips_when_set() -> None:
+    """A set ``claimed_at`` survives a model_validate / model_dump round-trip."""
+    from eawf.kernel.state.models import Wave
+
+    stamped = datetime(2026, 6, 1, 9, 30, tzinfo=UTC)
+    wave = Wave.model_validate(_wave_payload(claimed_at=stamped.isoformat()))
+    assert wave.claimed_at == stamped
+    reloaded = Wave.model_validate(wave.model_dump(mode="json"))
+    assert reloaded.claimed_at == stamped
+
+
+def test_wave_without_claimed_at_key_loads() -> None:
+    """An old wave dict that predates the field loads with claimed_at None.
+
+    The field is additive + optional, so on-disk state written before the
+    v1.3 bump re-validates unchanged (no migration required to load).
+    """
+    from eawf.kernel.state.models import Wave
+
+    payload = _wave_payload()
+    assert "claimed_at" not in payload
+    wave = Wave.model_validate(payload)
+    assert wave.claimed_at is None
+
+
+def test_state_accepts_schema_version_1_3() -> None:
+    """The State model accepts the v1.3 ``schema_version`` literal."""
+    payload = _empty_state().model_dump(mode="json")
+    payload["schema_version"] = "1.3"
+    state = State.model_validate(payload)
+    assert state.schema_version == "1.3"
+
+
+# ---------------------------------------------------------------------------
 # Principal (C01-IMPL W02 placeholder — c01-foundations §5.3.19 + Q3 2026-05-18)
 # ---------------------------------------------------------------------------
 

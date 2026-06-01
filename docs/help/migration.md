@@ -29,6 +29,15 @@ eawf migrate            # auto-detect from + to; run the chain
 eawf migrate status     # show current schema_version + chain
 ```
 
+### v0.5.0: `schema_version` 1.2 -> 1.3
+
+v0.5.0 also bumped `state.json` `schema_version` from `1.2` to `1.3`. The 1.2 -> 1.3 step adds the additive `Wave.claimed_at` work-start timestamp and backfills each wave's value from its `wave_claimed` event in the sibling event store (the latest claim event per wave wins). Before this bump the elapsed-clock consumers (the TUI roadmap time-burn bar and the daemon wave-elapsed publisher) anchored on `opened_at`, which is plan/creation time, so a wave planned hours before it was claimed inflated its elapsed clock; both now anchor on `claimed_at` and render no clock at all while it is unset. A wave with no `wave_claimed` event (never claimed, or its events were pruned) keeps `claimed_at` unset. The backfill is an idempotent `setdefault` that never overwrites an existing value, and a state written before the bump re-loads unchanged because the field is optional. Migrate explicitly with:
+
+```text
+eawf migrate            # auto-detect from + to; run the chain
+eawf migrate status     # show current schema_version + chain
+```
+
 ## Exit-code surface (v0.3, BREAKING)
 
 The CLI exit-code surface compressed from the legacy 0..9 codes to 0..5.

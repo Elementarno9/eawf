@@ -347,7 +347,10 @@ def test_state_digest_publishes_wave_elapsed_update_once_per_minute(tmp_path: Pa
     payload = _build_state_payload()
     wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
     wave["effort_bucket"] = "M"  # type: ignore[index]
-    wave["opened_at"] = (datetime.now(UTC) - timedelta(minutes=45, seconds=5)).isoformat()  # type: ignore[index]
+    # The elapsed publisher anchors on claimed_at (work-start), not
+    # opened_at (plan/creation), so a wave planned long before it is
+    # claimed never inflates its elapsed clock.
+    wave["claimed_at"] = (datetime.now(UTC) - timedelta(minutes=45, seconds=5)).isoformat()  # type: ignore[index]
     ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
     bus = ctx.bus
     assert isinstance(bus, EventBus)
@@ -367,6 +370,30 @@ def test_state_digest_publishes_wave_elapsed_update_once_per_minute(tmp_path: Pa
         assert payload["extras"]["elapsed_minute"] >= 45
         assert payload["extras"]["elapsed_band"] == "err"
         assert len(sub.queue) == 1
+
+    _run(body)
+
+
+def test_state_digest_publishes_no_wave_elapsed_update_when_claimed_at_unset(
+    tmp_path: Path,
+) -> None:
+    """A wave with a stale opened_at but no claimed_at emits no elapsed update.
+
+    The publisher anchors on claimed_at (work-start), so a wave that was
+    planned long ago but has not been claimed must not inflate an elapsed
+    clock from its opened_at.
+    """
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    wave["effort_bucket"] = "M"  # type: ignore[index]
+    wave["opened_at"] = (datetime.now(UTC) - timedelta(minutes=45, seconds=5)).isoformat()  # type: ignore[index]
+    wave.pop("claimed_at", None)  # type: ignore[union-attr]
+    ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+
+    async def body() -> None:
+        await digest(ctx, {})
+        await digest(ctx, {})
+        assert not event_path.exists() or event_path.read_text().strip() == ""
 
     _run(body)
 

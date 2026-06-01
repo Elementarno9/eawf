@@ -333,6 +333,12 @@ def claim_wave(
     (idempotent). Re-claiming with a *different* session is rejected so the
     sibling-lock + status check delivers exactly-once semantics.
 
+    On the first claim the wave's ``claimed_at`` work-start fact is
+    stamped (``datetime.now(UTC)``). ``claimed_at`` is the anchor the
+    elapsed-clock consumers use instead of ``opened_at`` (plan/creation
+    time), so a wave planned hours before it is claimed does not inflate
+    its elapsed clock. An existing ``claimed_at`` is preserved on re-entry.
+
     P19-W02 dep + monotonic gates:
 
     - Reject the claim when any wave in ``wave.deps`` is not in
@@ -395,6 +401,13 @@ def claim_wave(
             )
     wave.status = WaveStatus.CLAIMED
     wave.claim_session_id = session_id
+    # Stamp the work-start fact on the first claim only. opened_at is
+    # plan/creation time; claimed_at is when work actually begins, so the
+    # elapsed-clock consumers can anchor on it instead of inflating from
+    # creation under plan-all-then-execute. Preserve an existing value so
+    # a re-entry never re-bases the clock to a later wall-clock.
+    if wave.claimed_at is None:
+        wave.claimed_at = datetime.now(UTC)
     if wave_id not in state.current.active_wave_ids:
         state.current.active_wave_ids.append(wave_id)
     # Lifecycle guard: a wave must never run under a PLANNED iter, so the

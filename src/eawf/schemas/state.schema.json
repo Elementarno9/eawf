@@ -1730,7 +1730,7 @@
       "type": "object"
     },
     "MemoryTier": {
-      "description": "Tiered-memory placement for ``MemorySummary.tier``.\n\nMirrors the Letta/Mem0 working/archival/retrieval split:\n\n- :attr:`WORKING` — hot tier; included in every render-context envelope.\n- :attr:`ARCHIVAL` — cold tier; excluded from the default context window\n  but kept queryable for explicit recall (``memory list --tier``).\n- :attr:`RETRIEVAL` — promoted artifacts surfaced on demand (e.g. via\n  ``memory render-context --tier``).",
+      "description": "Tiered-memory placement for ``MemorySummary.tier``.\n\nMirrors the Letta/Mem0 working/archival/retrieval split:\n\n- :attr:`WORKING` — hot tier; included in every render-context envelope.\n- :attr:`ARCHIVAL` — cold tier; excluded from the default context window\n  but kept queryable via ``memory list`` / ``memory view``.\n- :attr:`RETRIEVAL` — promoted artifacts surfaced on demand by\n  ``memory render-context``.\n\nPlacement is changed with the ``memory tier`` verb (``--tier``); the\nread verbs do not filter by tier.",
       "enum": [
         "working",
         "archival",
@@ -2507,7 +2507,7 @@
     },
     "Wave": {
       "additionalProperties": false,
-      "description": "Atomic execution unit under an iter.",
+      "description": "Atomic execution unit under an iter.\n\n``opened_at`` records *plan/creation* time (stamped when the wave row\nis inserted), while ``claimed_at`` records *work-start* time (stamped\non the first claim). The two diverge under plan-all-then-execute,\nwhere creation can precede the claim by hours, so elapsed-clock\nconsumers anchor on ``claimed_at`` (not ``opened_at``) and render no\nclock at all while ``claimed_at`` is ``None`` -- a wave that has not\nbeen claimed has no work-start fact to elapse from. The field is\nadditive + optional so on-disk state written before the v1.3 schema\nbump re-validates unchanged.",
       "properties": {
         "agent_role": {
           "anyOf": [
@@ -2539,6 +2539,19 @@
           ],
           "default": null,
           "title": "Claim Session Id"
+        },
+        "claimed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claimed At"
         },
         "closed_at": {
           "anyOf": [
@@ -2910,7 +2923,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Top-level eawf state document.\n\n``schema_version`` accepts ``\"1.0\"``, ``\"1.1\"``, and ``\"1.2\"`` so an\non-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in\nplace, but a read of an un-migrated state must never reject. The\naccepted set drives the migrate guard's model-supported max, so the\nliterals move in lockstep with the migration steps (``v1_0_to_v1_1``,\n``v1_1_to_v1_2``).",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts ``\"1.0\"``, ``\"1.1\"``, ``\"1.2\"``, and\n``\"1.3\"`` so an on-disk state written before any bump still\nre-validates after the model advances — the migrate chain rewrites\nthe version string in place, but a read of an un-migrated state must\nnever reject. The accepted set drives the migrate guard's\nmodel-supported max, so the literals move in lockstep with the\nmigration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,\n``v1_2_to_v1_3``).",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -3197,7 +3210,8 @@
       "enum": [
         "1.0",
         "1.1",
-        "1.2"
+        "1.2",
+        "1.3"
       ],
       "title": "Schema Version",
       "type": "string"

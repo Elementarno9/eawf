@@ -5,10 +5,12 @@ to ``max_length=72`` (copying the full over-cap title into the new
 ``description`` first) and renames ``Decision.summary`` /
 ``Hypothesis.text`` to ``title``. The second edge (v1.1 -> v1.2) adds
 ``Iter.trigger`` and backfills every historical iter to ``"none"`` so it
-drops out of the corrected planned-vs-reactive denominator. The live
-:class:`eawf.kernel.state.models.State` model accepts ``"1.0"``,
-``"1.1"``, and ``"1.2"``, so a migrated state re-loads under the live
-model. The suite exercises:
+drops out of the corrected planned-vs-reactive denominator. The third
+edge (v1.2 -> v1.3) adds ``Wave.claimed_at`` and backfills each wave's
+work-start timestamp from its ``wave_claimed`` event in the sibling event
+store. The live :class:`eawf.kernel.state.models.State` model accepts
+``"1.0"``, ``"1.1"``, ``"1.2"``, and ``"1.3"``, so a migrated state
+re-loads under the live model. The suite exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
 * a full v1.0 state migrating to a re-loadable v1.1 state;
@@ -61,8 +63,10 @@ from eawf.kernel.migrations.v1_0_to_v1_1 import (
     _truncate_title,
 )
 from eawf.kernel.migrations.v1_1_to_v1_2 import MigrationV11ToV12
-from eawf.kernel.state.enums import IterTrigger
+from eawf.kernel.migrations.v1_2_to_v1_3 import MigrationV12ToV13, read_claim_anchors
+from eawf.kernel.state.enums import IterTrigger, StoreKind
 from eawf.kernel.state.models import State
+from eawf.kernel.store.paths import store_path
 
 
 @pytest.fixture
@@ -722,7 +726,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.2"
+    assert model_supported_max_version() == "1.3"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -740,9 +744,14 @@ def test_guard_target_supported_permits_v1_2_now_model_advanced() -> None:
     guard_target_supported("1.2")
 
 
+def test_guard_target_supported_permits_v1_3_now_model_advanced() -> None:
+    """The guard permits 1.3 now the live model accepts it (the claimed_at bump)."""
+    guard_target_supported("1.3")
+
+
 def test_guard_target_supported_rejects_target_above_max() -> None:
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        guard_target_supported("1.3")
+        guard_target_supported("1.4")
 
 
 def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> None:
@@ -753,11 +762,11 @@ def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> N
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.3")
+        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.4")
 
     # The on-disk state is byte-for-byte unchanged and no backup was taken.
     assert state_path.read_bytes() == before
-    backup = backup_path_for(state_path, from_version="1.0", to_version="1.3")
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.4")
     assert not backup.exists()
 
 
@@ -798,7 +807,7 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
-    result = CliRunner().invoke(app, ["migrate", "--to", "1.3"])
+    result = CliRunner().invoke(app, ["migrate", "--to", "1.4"])
 
     assert result.exit_code != 0
     assert "exceeds model-supported max" in result.stdout
@@ -806,14 +815,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_2(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_3(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.2) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.3) walks the full chain + re-loads.
 
-    The default target advanced to 1.2 with the ``Iter.trigger`` bump, so a
-    bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 and lands a
-    re-loadable v1.2 state.
+    The default target advanced to 1.3 with the ``Wave.claimed_at`` bump, so a
+    bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 and lands a
+    re-loadable v1.3 state.
     """
     from typer.testing import CliRunner
 
@@ -828,7 +837,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_2(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.2"
+    assert reloaded.schema_version == "1.3"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -1458,3 +1467,274 @@ def test_run_chain_full_v1_0_to_v1_2_reloads(tmp_path: Path) -> None:
     on_disk = json.loads(state_path.read_text(encoding="utf-8"))
     reloaded = State.model_validate(on_disk)
     assert reloaded.schema_version == "1.2"
+
+
+# --- v1.2 -> v1.3: Wave.claimed_at backfill --------------------------------
+#
+# The v1.3 edge adds ``Wave.claimed_at`` and backfills each wave's
+# work-start timestamp from its ``wave_claimed`` event in the sibling event
+# store. A wave with no claim event keeps ``claimed_at`` unset, and the
+# backfill is idempotent (never overwrites an existing value). The fixtures
+# below build a v1.2 state with two waves -- one with a claim event, one
+# without -- and write a real event-store envelope so the end-to-end run
+# exercises the event-anchored read path.
+
+
+_CLAIM_TS = "2026-05-20T08:15:00+00:00"
+
+
+def _minimal_state_v1_2() -> dict[str, Any]:
+    """Return a full v1.2 state payload that re-loads under the live model."""
+    payload = _minimal_state_v1_0()
+    payload["schema_version"] = "1.2"
+    return payload
+
+
+def _state_v1_2_with_waves() -> dict[str, Any]:
+    """Return a full v1.2 state carrying two waves for the claimed_at backfill.
+
+    ``P00-I01-W01`` has a matching ``wave_claimed`` event (backfilled);
+    ``P00-I01-W02`` has none (stays unset). Neither row carries the
+    pre-v1.3 ``claimed_at`` key. The phase / iter chain is referentially
+    complete so the migrated state re-loads under the live model.
+    """
+    ts = "2026-05-08T00:00:00Z"
+    payload = _minimal_state_v1_2()
+    payload["phases"] = {
+        "P00": {
+            "id": "P00",
+            "scope_id": "QR",
+            "subproject_id": None,
+            "title": "Phase zero",
+            "status": "active",
+            "iter_ids": ["P00-I01"],
+            "outcome_ids": [],
+            "depends_on": [],
+            "source_brief_ids": [],
+            "opened_at": ts,
+            "closed_at": None,
+            "audit_id": None,
+        }
+    }
+    payload["iters"] = {
+        "P00-I01": {
+            "id": "P00-I01",
+            "phase_id": "P00",
+            "title": "Iter one",
+            "status": "active",
+            "trigger": "none",
+            "wave_ids": ["P00-I01-W01", "P00-I01-W02"],
+            "estimate_id": None,
+            "audit_id": None,
+            "opened_at": ts,
+            "closed_at": None,
+        }
+    }
+    payload["waves"] = {
+        "P00-I01-W01": {
+            "id": "P00-I01-W01",
+            "iter_id": "P00-I01",
+            "title": "Wave one",
+            "status": "claimed",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": [],
+            "success_criteria": [],
+            "opened_at": ts,
+            "closed_at": None,
+        },
+        "P00-I01-W02": {
+            "id": "P00-I01-W02",
+            "iter_id": "P00-I01",
+            "title": "Wave two",
+            "status": "pending",
+            "deps": [],
+            "blocks": [],
+            "file_scopes": [],
+            "success_criteria": [],
+            "opened_at": ts,
+            "closed_at": None,
+        },
+    }
+    return payload
+
+
+def _write_wave_claimed_event(events_path: Path, *, wave_id: str, timestamp: str) -> None:
+    """Append a valid ``wave_claimed`` envelope JSONL row to *events_path*."""
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.event import EventPayload
+
+    payload = EventPayload(
+        timestamp=timestamp,  # type: ignore[arg-type]
+        event_type="state.mutate.wave_claim",
+        event_kind="wave_claimed",
+        actor="daemon",
+        command="state.mutate",
+        args_hash="deadbeef",
+        status="ok",
+        message="claimed",
+    )
+    envelope = Envelope(
+        id=f"evt-{wave_id}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=timestamp,  # type: ignore[arg-type]
+        summary="wave claimed",
+        payload=payload.model_dump(mode="json"),
+    )
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    with events_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(envelope.model_dump(mode="json")) + "\n")
+
+
+def test_build_migration_chain_v1_2_to_v1_3_single_step() -> None:
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.2", to_version="1.3")
+    assert len(chain) == 1
+    assert chain[0].from_version == "1.2"
+    assert chain[0].to_version == "1.3"
+
+
+def test_v1_2_to_v1_3_apply_bumps_version() -> None:
+    step = MigrationV12ToV13()
+    out = step.apply(_minimal_state_v1_2())
+    assert out["schema_version"] == "1.3"
+
+
+def test_v1_2_to_v1_3_apply_does_not_mutate_input() -> None:
+    step = MigrationV12ToV13()
+    src = _minimal_state_v1_2()
+    step.apply(src)
+    assert src["schema_version"] == "1.2"
+
+
+def test_v1_2_to_v1_3_apply_without_events_leaves_claimed_at_unset() -> None:
+    """With no bound event store, every wave keeps ``claimed_at`` unset."""
+    step = MigrationV12ToV13()  # no bind_events_path call
+    out = step.apply(_state_v1_2_with_waves())
+    assert "claimed_at" not in out["waves"]["P00-I01-W01"]
+    assert "claimed_at" not in out["waves"]["P00-I01-W02"]
+
+
+def test_v1_2_to_v1_3_apply_backfills_claimed_at_from_event(tmp_path: Path) -> None:
+    """A wave with a ``wave_claimed`` event gets its ``claimed_at`` backfilled."""
+    events_path = tmp_path / "store" / "event.jsonl"
+    _write_wave_claimed_event(events_path, wave_id="P00-I01-W01", timestamp=_CLAIM_TS)
+    step = MigrationV12ToV13()
+    step.bind_events_path(events_path)
+
+    out = step.apply(_state_v1_2_with_waves())
+
+    assert out["waves"]["P00-I01-W01"]["claimed_at"] == _CLAIM_TS
+
+
+def test_v1_2_to_v1_3_apply_wave_without_event_stays_unset(tmp_path: Path) -> None:
+    """A wave with no claim event keeps ``claimed_at`` unset after backfill."""
+    events_path = tmp_path / "store" / "event.jsonl"
+    _write_wave_claimed_event(events_path, wave_id="P00-I01-W01", timestamp=_CLAIM_TS)
+    step = MigrationV12ToV13()
+    step.bind_events_path(events_path)
+
+    out = step.apply(_state_v1_2_with_waves())
+
+    assert "claimed_at" not in out["waves"]["P00-I01-W02"]
+
+
+def test_v1_2_to_v1_3_apply_is_idempotent_on_preexisting_claimed_at(tmp_path: Path) -> None:
+    """An existing ``claimed_at`` is never overwritten by the backfill."""
+    events_path = tmp_path / "store" / "event.jsonl"
+    _write_wave_claimed_event(events_path, wave_id="P00-I01-W01", timestamp=_CLAIM_TS)
+    step = MigrationV12ToV13()
+    step.bind_events_path(events_path)
+
+    src = _state_v1_2_with_waves()
+    preset = "2026-01-01T00:00:00+00:00"
+    src["waves"]["P00-I01-W01"]["claimed_at"] = preset
+
+    out = step.apply(src)
+
+    # setdefault leaves the operator-set value intact (not the event ts).
+    assert out["waves"]["P00-I01-W01"]["claimed_at"] == preset
+
+
+def test_v1_2_to_v1_3_check_pre_rejects_wrong_version() -> None:
+    step = MigrationV12ToV13()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_pre({"schema_version": "1.1"})
+
+
+def test_v1_2_to_v1_3_check_post_rejects_unbumped_version() -> None:
+    step = MigrationV12ToV13()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_post({"schema_version": "1.2"})
+
+
+def test_read_claim_anchors_absent_file_is_empty(tmp_path: Path) -> None:
+    """A missing event store yields no anchors (the backfill then no-ops)."""
+    assert read_claim_anchors(tmp_path / "store" / "event.jsonl") == {}
+
+
+def test_read_claim_anchors_latest_timestamp_wins(tmp_path: Path) -> None:
+    """Two claim events for one wave keep the latest timestamp (last write)."""
+    events_path = tmp_path / "store" / "event.jsonl"
+    _write_wave_claimed_event(events_path, wave_id="P00-I01-W01", timestamp=_CLAIM_TS)
+    later = "2026-05-21T09:00:00+00:00"
+    _write_wave_claimed_event(events_path, wave_id="P00-I01-W01", timestamp=later)
+
+    anchors = read_claim_anchors(events_path)
+
+    assert anchors["P00-I01-W01"].isoformat() == later
+
+
+def test_run_chain_v1_2_to_v1_3_reloads_with_backfilled_claimed_at(tmp_path: Path) -> None:
+    """End-to-end: a v1.2 state migrates to a re-loadable v1.3 state.
+
+    The wave with a ``wave_claimed`` event in the sibling store carries
+    the backfilled ``claimed_at`` after the full canonical-writer
+    round-trip; the wave with no claim event stays unset (None).
+    ``run_chain`` resolves the sibling event store from the state path
+    (no explicit ``events_path`` override needed).
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_state_v1_2_with_waves(), indent=2), encoding="utf-8")
+    events_path = store_path(state_path, StoreKind.EVENT)
+    _write_wave_claimed_event(events_path, wave_id="P00-I01-W01", timestamp=_CLAIM_TS)
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.2", to_version="1.3")
+    run_chain(state_path, chain=chain, from_version="1.2", to_version="1.3")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.3"
+    assert reloaded.waves["P00-I01-W01"].claimed_at is not None
+    assert reloaded.waves["P00-I01-W01"].claimed_at.isoformat() == _CLAIM_TS
+    assert reloaded.waves["P00-I01-W02"].claimed_at is None
+
+
+def test_run_chain_v1_2_to_v1_3_old_state_without_claimed_at_loads(tmp_path: Path) -> None:
+    """A v1.2 state lacking ``claimed_at`` keys migrates + re-loads at v1.3.
+
+    No event store is present, so every wave stays unset; the migrated
+    state still re-loads under the live model (additive field).
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_state_v1_2_with_waves(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.2", to_version="1.3")
+    run_chain(state_path, chain=chain, from_version="1.2", to_version="1.3")
+
+    reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    assert reloaded.schema_version == "1.3"
+    assert reloaded.waves["P00-I01-W01"].claimed_at is None
+    assert reloaded.waves["P00-I01-W02"].claimed_at is None
+
+
+def test_run_chain_full_v1_0_to_v1_3_reloads(tmp_path: Path) -> None:
+    """A v1.0 state walks the full 1.0 -> 1.3 chain to a re-loadable v1.3."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_minimal_state_v1_0(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.3")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.3")
+
+    reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    assert reloaded.schema_version == "1.3"

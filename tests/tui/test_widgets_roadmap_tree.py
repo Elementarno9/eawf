@@ -10,6 +10,7 @@ empty/None-state clear path, and the Enter-on-wave →
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import orjson
@@ -73,6 +74,7 @@ def _make_wave(
     token_budget: int | None = None,
     tokens_consumed: int = 0,
     effort_bucket: str | None = None,
+    claimed_at: str | None = None,
 ) -> dict[str, object]:
     """Build a minimal wave payload dict for fixture composition."""
     return {
@@ -88,6 +90,7 @@ def _make_wave(
         "tokens_consumed": tokens_consumed,
         "effort_bucket": effort_bucket,
         "opened_at": "2026-05-08T00:00:00Z",
+        "claimed_at": claimed_at,
         "closed_at": None,
     }
 
@@ -411,6 +414,67 @@ def test_tree_wave_row_has_no_completion_count() -> None:
             assert wave_labels  # waves are present
             for lbl in wave_labels:
                 assert "/" not in lbl  # no `closed/total` completion-count suffix
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Wave time-burn bar — claimed_at anchor (P29-I02-W29)
+# --------------------------------------------------------------------------
+
+
+def _state_one_active_wave(*, claimed_at: str | None) -> State:
+    """Return a fixture with one in_progress, sized wave + given claimed_at.
+
+    The single ``P01-I01-W01`` wave is ``in_progress`` with an ``effort_bucket``
+    so it carries a time budget. ``claimed_at`` is the work-start anchor the
+    time-burn bar reads; ``None`` models a wave with no work-start fact.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["iters"]["P01-I01"]["wave_ids"] = ["P01-I01-W01"]
+    payload["waves"] = {
+        "P01-I01-W01": _make_wave(
+            "P01-I01-W01",
+            "P01-I01",
+            "in_progress",
+            effort_bucket="M",
+            claimed_at=claimed_at,
+        ),
+    }
+    return State.model_validate(payload)
+
+
+def test_wave_time_burn_bar_renders_when_claimed_at_set() -> None:
+    """A claimed_at work-start anchor yields a ``T`` time-burn bar."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            state = _state_one_active_wave(
+                claimed_at=(datetime.now(UTC) - timedelta(minutes=10)).isoformat()
+            )
+            wave = state.waves["P01-I01-W01"]
+            bar = tree._wave_time_burn_bar(state, wave)
+            assert bar is not None
+            assert "T" in bar
+
+    asyncio.run(body())
+
+
+def test_wave_time_burn_bar_renders_no_bar_when_claimed_at_none() -> None:
+    """A wave with no claimed_at work-start fact renders no time bar."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            state = _state_one_active_wave(claimed_at=None)
+            wave = state.waves["P01-I01-W01"]
+            assert wave.claimed_at is None
+            assert tree._wave_time_burn_bar(state, wave) is None
 
     asyncio.run(body())
 
@@ -1163,8 +1227,9 @@ def _state_wave_hybrid_metric() -> State:
 
     W01 carries an ``effort_bucket`` (``L``) but no ``token_budget`` — the
     size-bar default. W02 carries a positive ``token_budget`` (with a
-    bucket too) — the burn bar wins. W03 carries neither — the empty-state
-    sentinel.
+    bucket too) plus a ``claimed_at`` work-start anchor far in the past —
+    so both the elapsed-time burn bar (in the error band) and the token
+    burn bar render. W03 carries neither — the empty-state sentinel.
     """
     payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
     payload["iters"]["P01-I01"]["wave_ids"] = [
@@ -1181,6 +1246,7 @@ def _state_wave_hybrid_metric() -> State:
             token_budget=1000,
             tokens_consumed=500,
             effort_bucket="L",
+            claimed_at="2026-05-08T00:00:00Z",
         ),
         "P01-I01-W03": _make_wave("P01-I01-W03", "P01-I01", "pending"),
     }

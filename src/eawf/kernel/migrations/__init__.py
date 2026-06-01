@@ -23,8 +23,10 @@ from __future__ import annotations
 # import time, so importing the package wires the full chain.
 from eawf.kernel.migrations import v1_0_to_v1_1 as _v1_0_to_v1_1  # noqa: F401
 from eawf.kernel.migrations import v1_1_to_v1_2 as _v1_1_to_v1_2  # noqa: F401
+from eawf.kernel.migrations import v1_2_to_v1_3 as _v1_2_to_v1_3  # noqa: F401
 from eawf.kernel.migrations._base import (
     DEFAULT_REGISTRY,
+    EventAnchoredMigration,
     Migration,
     MigrationError,
     MigrationStepError,
@@ -38,6 +40,7 @@ from eawf.kernel.migrations._base import (
 
 __all__ = [
     "DEFAULT_REGISTRY",
+    "EventAnchoredMigration",
     "Migration",
     "MigrationError",
     "MigrationStepError",

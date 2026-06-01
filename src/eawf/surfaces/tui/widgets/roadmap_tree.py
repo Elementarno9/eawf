@@ -698,15 +698,21 @@ class RoadmapTree(Tree[str]):
         return EMPTY_STATE
 
     def _wave_time_burn_bar(self, state: State, wave: Wave) -> str | None:
-        """Return the active wave's elapsed-time burn bar, when computable."""
+        """Return the active wave's elapsed-time burn bar, when computable.
+
+        Anchors on ``claimed_at`` (work-start), not ``opened_at``
+        (plan/creation), so a wave planned long before it is claimed does
+        not render an inflated clock. A wave without a ``claimed_at`` has
+        no work-start fact to elapse from, so no time bar is rendered.
+        """
         if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
             return None
-        if wave.opened_at is None:
+        if wave.claimed_at is None:
             return None
         budget_minutes = _wave_time_budget_minutes(state, wave)
         if budget_minutes is None:
             return None
-        elapsed_seconds = (datetime.now(UTC) - wave.opened_at).total_seconds()
+        elapsed_seconds = (datetime.now(UTC) - wave.claimed_at).total_seconds()
         if elapsed_seconds < 0:
             return None
         return _burn_bar_with_band(

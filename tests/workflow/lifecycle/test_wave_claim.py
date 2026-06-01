@@ -107,3 +107,45 @@ def test_claim_wave_succeeds_when_effort_bucket_set() -> None:
     assert w.claim_session_id == "SES-1"
     assert w.effort_bucket == EffortBucket.XS
     assert "P01-I01-W01" in state.current.active_wave_ids
+
+
+def test_claim_wave_stamps_claimed_at_on_first_claim() -> None:
+    """The first claim stamps the wave's ``claimed_at`` work-start fact.
+
+    ``claimed_at`` is unset at plan time (only ``opened_at`` is stamped) and
+    becomes a UTC timestamp on the claim transition, so the elapsed-clock
+    consumers anchor on work-start instead of plan/creation time.
+    """
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+    )
+    assert state.waves["P01-I01-W01"].claimed_at is None
+    before = datetime.now(UTC)
+    w = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    after = datetime.now(UTC)
+    assert w.claimed_at is not None
+    assert before <= w.claimed_at <= after
+
+
+def test_claim_wave_preserves_claimed_at_on_idempotent_reclaim() -> None:
+    """A same-session re-claim is a no-op and never re-bases ``claimed_at``."""
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket=EffortBucket.M,
+    )
+    first = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    original = first.claimed_at
+    assert original is not None
+    again = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    assert again.claimed_at == original

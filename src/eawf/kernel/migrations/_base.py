@@ -59,7 +59,9 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol, get_args, runtime_checkable
 
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.paths import store_path
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
@@ -71,7 +73,7 @@ logger = logging.getLogger(__name__)
 #: default ahead of the model's accepted set during a multi-wave bump, and
 #: the guard (:func:`guard_target_supported`) is the boundary that refuses
 #: a default running past what the model can re-load.
-_DEFAULT_TARGET_VERSION = "1.2"
+_DEFAULT_TARGET_VERSION = "1.3"
 
 
 class MigrationError(Exception):
@@ -136,6 +138,34 @@ class Migration(Protocol):
         Raises:
             Exception: When the output is not loadable against the
                 to-version Pydantic model.
+        """
+        ...
+
+
+@runtime_checkable
+class EventAnchoredMigration(Protocol):
+    """A :class:`Migration` that backfills a field from the event store.
+
+    The :class:`Migration` ``apply(state_dict)`` contract is pure-dict: it
+    sees only the raw state payload, never the sibling event store. A step
+    whose transform sources data from events (e.g. backfilling a wave's
+    ``claimed_at`` work-start fact from the ``wave_claimed`` events) opts
+    in to this protocol; :func:`run_chain` resolves the sibling event
+    store path and binds it via :meth:`bind_events_path` before calling
+    ``apply``, so the step can read its own anchors. A step that does not
+    implement this protocol is left untouched, so the two pure-dict title
+    / trigger steps keep their original arity. ``run_chain`` re-binds on
+    every run, so the shared registered singleton never carries a stale
+    path between migrations.
+    """
+
+    def bind_events_path(self, events_path: Path | None) -> None:
+        """Supply the sibling event-store path for the next apply.
+
+        Args:
+            events_path: Absolute path to the JSONL event store, or
+                ``None`` when no store is available (the transform then
+                leaves the backfilled field unset on every row).
         """
         ...
 
@@ -325,6 +355,22 @@ def _run_step(step: Migration, state_dict: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _bind_event_anchored_steps(chain: list[Migration], events_path: Path) -> None:
+    """Bind *events_path* onto every :class:`EventAnchoredMigration` in *chain*.
+
+    A pure-dict step (the title / trigger migrations) is left untouched.
+    Re-binds on every :func:`run_chain` call so the shared registered
+    singleton never carries a stale path between migrations.
+    """
+    for step in chain:
+        if isinstance(step, EventAnchoredMigration):
+            step.bind_events_path(events_path)
+            logger.info(
+                f"_bind_event_anchored_steps step={step.from_version}->{step.to_version} "
+                f"events_path={events_path!r}"
+            )
+
+
 def run_chain(
     state_path: Path,
     *,
@@ -333,6 +379,7 @@ def run_chain(
     to_version: str,
     dry_run: bool = False,
     backup: bool = True,
+    events_path: Path | None = None,
 ) -> dict[str, Any]:
     """Apply *chain* to ``state.json`` with per-step invariants + backup.
 
@@ -369,6 +416,11 @@ def run_chain(
         to_version: The requested target (for the backup name).
         dry_run: When True, compute the result but write nothing.
         backup: When True (and not ``dry_run``), snapshot before writing.
+        events_path: Optional override for the sibling JSONL event store
+            an :class:`EventAnchoredMigration` step reads its anchors
+            from. Defaults to :func:`store_path` of *state_path* for
+            :attr:`StoreKind.EVENT`. A non-existent path leaves the
+            backfilled field unset on every row.
 
     Returns:
         The migrated state dict (whether or not it was persisted).
@@ -387,6 +439,11 @@ def run_chain(
         raise FileNotFoundError(f"state file not found: {state_path!r}")
     raw = state_path.read_bytes()
     state_dict: dict[str, Any] = json.loads(raw)
+
+    resolved_events_path = (
+        events_path if events_path is not None else store_path(state_path, StoreKind.EVENT)
+    )
+    _bind_event_anchored_steps(chain, resolved_events_path)
 
     backup_target: Path | None = None
     if backup and not dry_run:
@@ -496,6 +553,7 @@ def _register(step: Migration) -> Migration:
 
 __all__ = [
     "DEFAULT_REGISTRY",
+    "EventAnchoredMigration",
     "Migration",
     "MigrationError",
     "MigrationStepError",

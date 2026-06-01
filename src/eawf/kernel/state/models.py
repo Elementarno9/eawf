@@ -332,7 +332,18 @@ class DispatchAnnotation(_StrictModel):
 
 
 class Wave(_StrictModel):
-    """Atomic execution unit under an iter."""
+    """Atomic execution unit under an iter.
+
+    ``opened_at`` records *plan/creation* time (stamped when the wave row
+    is inserted), while ``claimed_at`` records *work-start* time (stamped
+    on the first claim). The two diverge under plan-all-then-execute,
+    where creation can precede the claim by hours, so elapsed-clock
+    consumers anchor on ``claimed_at`` (not ``opened_at``) and render no
+    clock at all while ``claimed_at`` is ``None`` -- a wave that has not
+    been claimed has no work-start fact to elapse from. The field is
+    additive + optional so on-disk state written before the v1.3 schema
+    bump re-validates unchanged.
+    """
 
     id: WaveIdStr
     iter_id: IterIdStr
@@ -352,6 +363,7 @@ class Wave(_StrictModel):
     outcome: str | None = None
     commit: ShaStr | None = None
     opened_at: UtcDatetime
+    claimed_at: UtcDatetime | None = None
     closed_at: UtcDatetime | None = None
     sessions: dict[int, SessionAttempt] = Field(default_factory=dict)
     runtime_preference: list[str] | None = None
@@ -801,16 +813,17 @@ class Principal(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts ``"1.0"``, ``"1.1"``, and ``"1.2"`` so an
-    on-disk state written before any bump still re-validates after the
-    model advances — the migrate chain rewrites the version string in
-    place, but a read of an un-migrated state must never reject. The
-    accepted set drives the migrate guard's model-supported max, so the
-    literals move in lockstep with the migration steps (``v1_0_to_v1_1``,
-    ``v1_1_to_v1_2``).
+    ``schema_version`` accepts ``"1.0"``, ``"1.1"``, ``"1.2"``, and
+    ``"1.3"`` so an on-disk state written before any bump still
+    re-validates after the model advances — the migrate chain rewrites
+    the version string in place, but a read of an un-migrated state must
+    never reject. The accepted set drives the migrate guard's
+    model-supported max, so the literals move in lockstep with the
+    migration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,
+    ``v1_2_to_v1_3``).
     """
 
-    schema_version: Literal["1.0", "1.1", "1.2"]
+    schema_version: Literal["1.0", "1.1", "1.2", "1.3"]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime

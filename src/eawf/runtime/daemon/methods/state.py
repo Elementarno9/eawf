@@ -1128,12 +1128,18 @@ def _publish_wave_elapsed_updates(
     version: str,
     now: datetime,
 ) -> None:
-    """Append + publish at most one elapsed update per active wave minute."""
+    """Append + publish at most one elapsed update per active wave minute.
+
+    Anchors on ``claimed_at`` (work-start), not ``opened_at``
+    (plan/creation): a wave planned long before it is claimed must not
+    publish an inflated elapsed clock. A wave without a ``claimed_at``
+    (no work-start fact) is skipped, so no elapsed update fires for it.
+    """
     cache = _wave_elapsed_cache(ctx)
     for wave in state.waves.values():
-        if wave.status not in _WAVE_ELAPSED_ACTIVE_STATUSES or wave.opened_at is None:
+        if wave.status not in _WAVE_ELAPSED_ACTIVE_STATUSES or wave.claimed_at is None:
             continue
-        elapsed_seconds = (now - wave.opened_at).total_seconds()
+        elapsed_seconds = (now - wave.claimed_at).total_seconds()
         if elapsed_seconds < 60.0:
             continue
         elapsed_minute = int(elapsed_seconds // 60)
