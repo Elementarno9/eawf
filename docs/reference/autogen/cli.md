@@ -532,6 +532,16 @@ Telemetry / observability subsystem — pricing currency, projection.
 |---|---|
 | `pricing-currency-check` | Validate the embedded pricing snapshot and emit a drift report. |
 
+### `eawf wal`
+
+Inspect the daemon write-ahead log (read-only: status, list, show).
+
+| Verb | Summary |
+|---|---|
+| `list` | List WAL records (id, status, envelope kind + summary, timestamp). |
+| `show` | Dump one WAL record's decoded envelope by record id. |
+| `status` | Summarise the WAL: per-status counts, newest/oldest, total size. |
+
 ### `eawf wave`
 
 Wave lifecycle (plan, claim, close, fail, graph, next-ready).

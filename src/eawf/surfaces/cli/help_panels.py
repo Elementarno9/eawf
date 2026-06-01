@@ -131,6 +131,7 @@ COMMAND_PANELS: dict[str, str] = {
     "repo": "vcs",
     "state": "vcs",
     "store": "vcs",
+    "wal": "vcs",
     "workspace": "vcs",
     # worktrees: per-wave worktree dispatch and the flow skill that drives
     # the parallel-wave loop.

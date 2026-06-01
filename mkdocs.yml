@@ -54,6 +54,7 @@ nav:
       - Lockfile semantics: reference/lockfile-semantics.md
       - URN namespace: reference/urn-namespace.md
       - Coverage gates: reference/coverage-gates.md
+      - Snapshot-pairing gate: reference/snapshot-gate.md
       - Mutation testing: reference/mutation-testing.md
       - Auto-generated:
           - Index: reference/autogen/index.md

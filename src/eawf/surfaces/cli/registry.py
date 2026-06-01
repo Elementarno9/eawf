@@ -121,6 +121,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     ),
     GroupRow("state", "eawf.surfaces.cli.commands.state", "state_app"),
     GroupRow("store", "eawf.surfaces.cli.commands.store", "store_app"),
+    # Read-only daemon WAL inspection.
+    GroupRow("wal", "eawf.surfaces.cli.commands.wal", "wal_app"),
     # Layered config.
     GroupRow("config", "eawf.surfaces.cli.commands.config", "config_app"),
     # Co-author trailers.

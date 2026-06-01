@@ -1730,7 +1730,7 @@
       "type": "object"
     },
     "MemoryTier": {
-      "description": "Tiered-memory placement for ``MemorySummary.tier``.\n\nMirrors the Letta/Mem0 working/archival/retrieval split:\n\n- :attr:`WORKING` — hot tier; included in every render-context envelope.\n- :attr:`ARCHIVAL` — cold tier; excluded from the default context window\n  but kept queryable for explicit recall (``memory list --tier``).\n- :attr:`RETRIEVAL` — promoted artifacts surfaced on demand (e.g. via\n  ``memory render-context --tier``).",
+      "description": "Tiered-memory placement for ``MemorySummary.tier``.\n\nMirrors the Letta/Mem0 working/archival/retrieval split:\n\n- :attr:`WORKING` — hot tier; included in every render-context envelope.\n- :attr:`ARCHIVAL` — cold tier; excluded from the default context window\n  but kept queryable via ``memory list`` / ``memory view``.\n- :attr:`RETRIEVAL` — promoted artifacts surfaced on demand by\n  ``memory render-context``.\n\nPlacement is changed with the ``memory tier`` verb (``--tier``); the\nread verbs do not filter by tier.",
       "enum": [
         "working",
         "archival",
