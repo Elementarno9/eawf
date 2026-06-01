@@ -7790,6 +7790,201 @@
         "P28-I03-W64",
         "P28-I03-W65"
       ]
+    },
+    "P29-I01": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": "Spawn-free engine half of v0.5: reactive metric fix, telemetry capture-forward, the EviBound scorer + Claim/OpenQuestion ledger (Keystone B), the research-orchestrator core, and the rebuilt-from-spec spawn primitives (pricing, claude spawn, metering, routing, schema, cancel). Deterministic / plan-only; no live child agent.",
+      "estimate_id": null,
+      "id": "P29-I01",
+      "intent": null,
+      "opened_at": "2026-06-01T00:19:14.247566Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Engine: spawn-free foundation (metrics, evidence, research, spawn)",
+      "wave_ids": [
+        "P29-I01-W01",
+        "P29-I01-W02",
+        "P29-I01-W04",
+        "P29-I01-W06",
+        "P29-I01-W07",
+        "P29-I01-W11",
+        "P29-I01-W19",
+        "P29-I01-W20",
+        "P29-I01-W23",
+        "P29-I01-W26",
+        "P29-I01-W03",
+        "P29-I01-W05",
+        "P29-I01-W08",
+        "P29-I01-W09",
+        "P29-I01-W12",
+        "P29-I01-W21",
+        "P29-I01-W10",
+        "P29-I01-W13",
+        "P29-I01-W14",
+        "P29-I01-W17",
+        "P29-I01-W22",
+        "P29-I01-W24",
+        "P29-I01-W25",
+        "P29-I01-W15",
+        "P29-I01-W16",
+        "P29-I01-W18"
+      ]
+    },
+    "P29-I02": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": "Spawn-free surfaces + process half: roadmap/wave CLI flex, preferences, memory/profile hygiene, the autoland + verify-commits back-half, and the Textual MODES TUI chassis with its spawn-free panes (Home/Trust/Doctor/Evidence/multi-repo). No live child agent.",
+      "estimate_id": null,
+      "id": "P29-I02",
+      "intent": null,
+      "opened_at": "2026-06-01T00:19:14.247633Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Surfaces and process: CLI flex, preferences, TUI MODES chassis",
+      "wave_ids": [
+        "P29-I02-W01",
+        "P29-I02-W02",
+        "P29-I02-W03",
+        "P29-I02-W04",
+        "P29-I02-W05",
+        "P29-I02-W06",
+        "P29-I02-W07",
+        "P29-I02-W08",
+        "P29-I02-W09",
+        "P29-I02-W10",
+        "P29-I02-W11",
+        "P29-I02-W12",
+        "P29-I02-W13",
+        "P29-I02-W14",
+        "P29-I02-W15",
+        "P29-I02-W16",
+        "P29-I02-W18",
+        "P29-I02-W17",
+        "P29-I02-W19",
+        "P29-I02-W20",
+        "P29-I02-W21",
+        "P29-I02-W22",
+        "P29-I02-W23",
+        "P29-I02-W24",
+        "P29-I02-W26",
+        "P29-I02-W27",
+        "P29-I02-W28",
+        "P29-I02-W25"
+      ]
+    },
+    "P29-I03": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": "The spawn-gated safety floor that gates all live spawn. env-scrub allowlist + default-deny egress proxy + per-OS FS jail, plus the HALT interlock. Atomic floor audit: env-scrub + egress + jail + pgid-kill (SP-6) + HALT must all be green together before any I04 wave claims.",
+      "estimate_id": null,
+      "id": "P29-I03",
+      "intent": null,
+      "opened_at": "2026-06-01T00:19:14.247682Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Safety floor: env-scrub, egress proxy, FS jail",
+      "wave_ids": [
+        "P29-I03-W03",
+        "P29-I03-W01",
+        "P29-I03-W02",
+        "P29-I03-W05",
+        "P29-I03-W04"
+      ]
+    },
+    "P29-I04": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": "Spawn-gated: live wave-executor spawn, the per-wave verdict producer (Keystone A), cross-vendor CodexAdapter + opencode legs, the disjoint-family jury, live EviBound rung-3 + research rounds, and the live TUI agent-watch / autopilot / research_board modes. Gated on the I03 floor being green.",
+      "estimate_id": null,
+      "id": "P29-I04",
+      "intent": null,
+      "opened_at": "2026-06-01T00:19:14.247720Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Live spawn, cross-vendor jury, research orchestrator rounds",
+      "wave_ids": [
+        "P29-I04-W04",
+        "P29-I04-W13",
+        "P29-I04-W01",
+        "P29-I04-W05",
+        "P29-I04-W06",
+        "P29-I04-W02",
+        "P29-I04-W03",
+        "P29-I04-W07",
+        "P29-I04-W09",
+        "P29-I04-W11",
+        "P29-I04-W12",
+        "P29-I04-W08",
+        "P29-I04-W10"
+      ]
+    },
+    "P29-I05": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": "Late iter, data-gated: the reputation engine (Brier + EB-Beta shrink + Wilson LB), the C->B->A trust-tier ladder, jury reliability weighting, and the verdict-agreement cost A/B. Gated on a verdict cohort accruing in I04 (binding constraint is data N, not design).",
+      "estimate_id": null,
+      "id": "P29-I05",
+      "intent": null,
+      "opened_at": "2026-06-01T00:19:14.247760Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Trust and measure: reputation engine, tier ladder, cost A/B",
+      "wave_ids": [
+        "P29-I05-W01",
+        "P29-I05-W05",
+        "P29-I05-W02",
+        "P29-I05-W03",
+        "P29-I05-W04"
+      ]
+    },
+    "P29-I06": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": "Spawn-free release iter: register the new skills, plugin doctor orphan-walk, version sync across both runtimes, self-hosted marketplace catalog, plugin-release CI on the v-tag, and the v0.5.0 plugin CHANGELOG. v0.5 MUST release the Claude + Codex plugins.",
+      "estimate_id": null,
+      "id": "P29-I06",
+      "intent": null,
+      "opened_at": "2026-06-01T00:19:14.247796Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Release: plugin packaging, marketplace, CI publish, version-sync",
+      "wave_ids": [
+        "P29-I06-W03",
+        "P29-I06-W04",
+        "P29-I06-W08",
+        "P29-I06-W09",
+        "P29-I06-W01",
+        "P29-I06-W02",
+        "P29-I06-W05",
+        "P29-I06-W06",
+        "P29-I06-W07"
+      ]
+    },
+    "P29-I07": {
+      "audit_id": null,
+      "closed_at": null,
+      "description": "Spawn-free cross-cut folded into P29 (operator decision 2026-05-31, not a separate P30). Reuses the EviBound gate built in I01. Clarity-contract profile, EAWF016-019 lints, Vale wrapper + chokepoint, AGENTS.md split, entity-title backfill (all 5 kinds), and the math doc-type.",
+      "estimate_id": null,
+      "id": "P29-I07",
+      "intent": null,
+      "opened_at": "2026-06-01T00:19:14.247834Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Doc-clarity and math doc-type cross-cut (spawn-free)",
+      "wave_ids": [
+        "P29-I07-W01",
+        "P29-I07-W02",
+        "P29-I07-W03",
+        "P29-I07-W06",
+        "P29-I07-W04",
+        "P29-I07-W05",
+        "P29-I07-W07",
+        "P29-I07-W08",
+        "P29-I07-W09",
+        "P29-I07-W10",
+        "P29-I07-W11"
+      ]
     }
   },
   "mcp_grants": null,
@@ -8382,6 +8577,33 @@
       "status": "closed",
       "subproject_id": null,
       "title": "Build v0.4 verify spine + lifecycle + clarity + plugins + trust + eval"
+    },
+    "P29": {
+      "audit_id": null,
+      "closed_at": null,
+      "depends_on": [],
+      "description": "All-in v0.5.0 mega-phase: spawn-free foundation (engine + surfaces), safety floor, live cross-vendor spawn, research orchestrator, cross-vendor jury, trust/reputation engine, plugin release, and the doc-clarity + math doc-type cross-cut. Keystone A = per-wave verdict producer (I04); Keystone B = Claim + EviBound scorer (I01). schema_version 1.1->1.2 (Iter.trigger + UserQuestion.urgency).",
+      "id": "P29",
+      "intent": null,
+      "iter_ids": [
+        "P29-I01",
+        "P29-I02",
+        "P29-I03",
+        "P29-I04",
+        "P29-I05",
+        "P29-I06",
+        "P29-I07"
+      ],
+      "opened_at": "2026-06-01T00:19:14.247409Z",
+      "outcome_ids": [],
+      "scope_id": "EAWF",
+      "source_brief_ids": [
+        "2026-05-31-p29-detailed-plan",
+        "2026-05-31-p29-build-order"
+      ],
+      "status": "planned",
+      "subproject_id": null,
+      "title": "Build v0.5.0: spawn engine + safety floor + jury + trust + release"
     }
   },
   "plugins": {},
@@ -8417,7 +8639,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-05-28T23:30:51.888883Z",
+  "updated_at": "2026-06-01T00:49:01.149423Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -26477,6 +26699,3223 @@
         "CEILING_COLD_IMPORT_MS bumped 500 to 750;CEILING_FIRST_PAINT_MS bumped 600 to 850;structural FORBIDDEN_MODULES + render-regression guards stay intact;CI matrix passes on retry"
       ],
       "title": "fix: bump perf-budget ceilings for shared-runner jitter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W05",
+        "P29-I05-W01"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[MET-1 | scope T2/dec4 | SF] reactive-metric correction; owns the Iter.trigger field reused by TRUST-1. Prior 54% was a definitional artifact, annotate in release notes.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/state/enums.py",
+        "src/eawf/kernel/migrations/**"
+      ],
+      "id": "P29-I01-W01",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.248331Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Iter.trigger StrEnum (reactive|proactive|none) added; reactive-wave metric recomputed excluding None-trigger iters",
+        "schema_version 1.1->1.2 with a migration note; historical iters backfilled or left None (excluded from denominator)"
+      ],
+      "title": "Add Iter.trigger enum and re-derive the reactive-wave metric",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W03"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[TEL-1 | telemetry T10/T11 | spike] disconnect-EU capture; feeds the metering writer (SP-3) and actual_eu accessor (TEL-2).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/**"
+      ],
+      "id": "P29-I01-W02",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.248674Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "DispatchCostSessionSource captures per-session EU forward into the telemetry store",
+        "pre-claim spike confirms dispatch_cost.session_id maps 1:1 onto Wave.sessions[*].session_id"
+      ],
+      "title": "Add DispatchCostSessionSource to capture EU forward",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W02"
+      ],
+      "description": "[TEL-2 | telemetry T9 | SF] one EU accessor; gates TUI status/velocity panes.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/**",
+        "src/eawf/workflow/estimation/**"
+      ],
+      "id": "P29-I01-W03",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.258306Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Single actual_eu accessor returns realized EU per wave/iter/phase; BUCKET_EU reconciled to the code-canonical table",
+        "TUI EU panes read this accessor (sequence before status panes or they render empty)"
+      ],
+      "title": "Add unified actual_eu accessor and reconcile BUCKET_EU",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[TEL-3 | telemetry scale | SF] advisory only; single-file model holds to ~5k waves (514 today).",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/observability/doctor/**"
+      ],
+      "id": "P29-I01-W04",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.248992Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "doctor emits an advisory note as state.json wave count approaches the single-file scale ceiling (~5k waves)"
+      ],
+      "title": "Add advisory state.json scale-ceiling doctor note",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W01"
+      ],
+      "description": "[TRUST-2 | self-eval | SF] store substrate is empty; ship the honest-negative dashboard first, light scoring later as a cohort accrues.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/eval/**"
+      ],
+      "id": "P29-I01-W05",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.258641Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "self-eval renders an honest-negative surface gated on a hard minimum-N; refuses to score below N",
+        "no Goodhartable fake number when the verdict cohort is empty"
+      ],
+      "title": "Ship min-N-gated self-eval as the honest-negative surface",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[TRUST-3 | jury | SF] pure reducer over fixtures; the live convening is TRUST-7 (I04).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/eval/**"
+      ],
+      "id": "P29-I01-W06",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.249310Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "aggregate_jury reduces N juror ballots by minority-veto (binary) or mean (graded); split -> needs_user",
+        "validated against fixture ballots (no live spawn); consumed by TRUST-7"
+      ],
+      "title": "Build aggregate_jury reducer against fixture ballots",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W08",
+        "P29-I01-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[EVI-1 | evibound | SF] Keystone B root; routes on CriterionEvidenceKind, NOT EvidenceKind (the landmine). Composes live citation seams.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/evidence/**",
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W07",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.249627Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "resolve(ref) dispatches portability (Citation._ref_must_be_portable) + dense-[N] + disk-exists + URN-grammar checks",
+        "URN->record dereference and file:line anchor-existence deferred (OQ-R) and flagged, not silently passed"
+      ],
+      "title": "Add resolve(ref) dispatcher reusing Citation and disk-exists",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W10",
+        "P29-I01-W13",
+        "P29-I07-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W07"
+      ],
+      "description": "[EVI-2 | evibound | SF] rung-1 LIVE + the missing promotion wiring; un-idles the IntentBrief.evidence_refs contract (currently vaporware).",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/evidence/**",
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W08",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.258956Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "rung-1 reuses compile_gate -> _run_deterministic_gate -> run_checks (passed = returncode==0), certifies",
+        "adds the absent promotion call-site in promote_draft/validate_markdown_artifact, un-idling IntentBrief.evidence_refs"
+      ],
+      "title": "Wire EviBound rung-1 deterministic gate into promotion",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W07"
+      ],
+      "description": "[EVI-3 | evibound | spike(NLI)] starred escalation probe (~50 hand-labeled triples); run early. Out-of-distribution -> jury becomes the floor for text claims.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/evidence/**",
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W09",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.259278Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "rung-2 in-process NLI (AlignScore/DeBERTa-MNLI class), no spawn/jail/egress, batchable, refute-first",
+        "numeric claims forced to rung-1; ESCALATION: if the NLI-in-distribution spike scores <~0.7 on terse corpus, this rung moves behind the floor (I03)"
+      ],
+      "title": "Add EviBound rung-2 in-process NLI scorer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W08"
+      ],
+      "description": "[EVI-4 | evibound | SF] verdict vocabulary + attested rung. Rung-3 (spawned jury) is RO-15 in I04.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/evidence/**",
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W10",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.262199Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "rung-4 attested (render-only, lowest assurance) added; closed verdict StrEnum certified|supported|refuted|unresolved|attested"
+      ],
+      "title": "Add rung-4 attested render and refute-first verdict vocab",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[RO-1 | control-plane | SF] depth-vocab single source of truth; medium config-default.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**",
+        "src/eawf/kernel/config/**"
+      ],
+      "id": "P29-I01-W11",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.249943Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "depth vocabulary reconciled to one ladder (shallow|medium|deep|exhaustive); research.default_depth wired with medium default",
+        "resolves the 3-way depth drift across skill/config/runner"
+      ],
+      "title": "Reconcile depth vocabulary and wire research.default_depth",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W13",
+        "P29-I01-W14",
+        "P29-I01-W17",
+        "P29-I01-W18"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W11"
+      ],
+      "description": "[RO-4 | control-plane | SF] the Claim ledger; prerequisite of pruning + SaturationReport. EviBound scorer comes first (Keystone B ordering).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W12",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.259603Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "typed Claim + separate OpenQuestion entities added (D-1: OpenQuestion is its own entity, not a Claim fold)",
+        "daemon reconcile path persists them through the single-writer seam"
+      ],
+      "title": "Add Claim and OpenQuestion models with daemon reconcile",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W16",
+        "P29-I01-W18"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W12",
+        "P29-I01-W08"
+      ],
+      "description": "[RO-7 | control-plane | SF] saturation gate over the Claim ledger; consumes EviBound rung-1.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W13",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.262554Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "SaturationReport reduces the claim ledger over four gates (no open question / novelty decay / no contradiction / integration closed)",
+        "drives loop-until-dry"
+      ],
+      "title": "Add SaturationReport reducer with four gates",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W14": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W15",
+        "P29-I04-W13"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W12"
+      ],
+      "description": "[RO-8 | cockpit | SF] campaign store + plan-only runner; live rounds are RO-15 (I04). TUI research_board shell (TUI-17) reads this store.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**",
+        "src/eawf/kernel/store/kinds/**"
+      ],
+      "id": "P29-I01-W14",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.262901Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ResearchCampaign StoreKind added; a plan-only Level-1 runner stages a campaign without live spawn",
+        "per-domain config via a typed research: profile block"
+      ],
+      "title": "Add ResearchCampaign store and plan-only Level-1 runner",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W13",
+        "P29-I04-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W14",
+        "P29-I01-W19"
+      ],
+      "description": "[RO-9 | control-plane | SF] hub-and-spoke operator-input channel; balanced autonomy.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**",
+        "src/eawf/kernel/store/kinds/**"
+      ],
+      "id": "P29-I01-W15",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.270607Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "OperatorInput channel accepts override/notice-broadcast/add_question/steer mid-run (D-2 blocking-only interrupt; D-3 override persists-locked)",
+        "CampaignProgressState projects round/per-domain progress"
+      ],
+      "title": "Add OperatorInput channel and CampaignProgressState",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W13",
+        "P29-I01-W19"
+      ],
+      "description": "[RO-11 | control-plane | SF] the round engine; live rounds wire in at RO-15.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W16",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.270956Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "bounded round loop with checkpoint_policy tiers; halts on saturation or round budget",
+        "checkpoint tiers gate operator review cadence"
+      ],
+      "title": "Add bounded round loop with checkpoint_policy tiers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W17": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W12",
+        "P29-I01-W19"
+      ],
+      "description": "[RO-12 | control-plane | SF] reconnects clarify to the needs_user pause schema.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W17",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.263242Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "clarify proposals bridge into needs_user pauses carrying urgency; resolves the clarify->needs_user disconnect"
+      ],
+      "title": "Bridge clarify proposals into needs_user pauses",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W18": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W12",
+        "P29-I01-W13"
+      ],
+      "description": "[RO-13 | context-pruning | SF] orchestrator-context pruning; vector/graph retrieval deferred.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W18",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.271289Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "L1-L5 context-pruning reducers over the claim ledger; keyword-recall first (no vector/graph index until a proven recall failure)"
+      ],
+      "title": "Add context-pruning L1-L5 reducers over the claim ledger",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W19": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I02-W18",
+        "P29-I01-W17",
+        "P29-I02-W19",
+        "P29-I01-W15",
+        "P29-I01-W16"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[URG | control-plane/tui | SF] one urgency field; consumed by RO-9/11/12 and TUI-4/5.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I01-W19",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.250257Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "urgency field added to UserQuestion + the pause schema; shared by needs_user, research, and the attention feed"
+      ],
+      "title": "Add urgency field to UserQuestion and pause schema",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W20": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W21",
+        "P29-I01-W22"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[SP-1 | cost-calibration | SF] merges SPAWN-1 + FLOOR-1 + RO-14(pricing). Net-new pricing rows.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**"
+      ],
+      "id": "P29-I01-W20",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.250570Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "pricing rows added for claude-opus-4-8 + codex; bare model aliases resolve to a priced row",
+        "claude-opus-4-8 is net-new (absent on main AND the PoC)"
+      ],
+      "title": "Add claude-opus-4-8 and codex pricing rows; fix bare aliases",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W21": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W22",
+        "P29-I01-W24",
+        "P29-I01-W25",
+        "P29-I03-W01"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W20"
+      ],
+      "description": "[SP-2 | lifecycle | SF (read-only spawn)] REBUILD-CLEAN; absent on main. May crib argv/parse shapes via git show poc/llm-assist.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I01-W21",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.259929Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "spawn_session forks claude -p and parses the SessionResult; built fresh from spec (PoC poc/llm-assist is read-only reference)",
+        "no abandoned-branch provenance enters P29 history; re-verify every brief anchor at claim time"
+      ],
+      "title": "Build live claude spawn_session and result parse from spec",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W22": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I05-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W20",
+        "P29-I01-W21"
+      ],
+      "description": "[SP-3 | lifecycle | SF] merges SPAWN-3 + RO-14(metering) + TEL-1 feed. Inert metering writer on the PoC is rebuilt live.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I01-W22",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.263593Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "metering writer persists per-session cost; emits dispatch_cost so billing is no longer $0",
+        "feeds verdict-hold-rate and the cost A/B"
+      ],
+      "title": "Build metering writer and emit dispatch_cost",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W23": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W01",
+        "P29-I04-W05",
+        "P29-I04-W06"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[SP-4 | lifecycle | SF] merges SPAWN-4 + RO-14(routing). Prerequisite of live spawn (SPAWN-10).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**"
+      ],
+      "id": "P29-I01-W23",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.250877Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "dispatch.routing table + resolve_routing maps (role, effort) -> model/runtime; the dispatch.routing LeafKey added",
+        "routing.py is absent on main -> build, not wire"
+      ],
+      "title": "Build dispatch.routing table and resolve_routing",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W21"
+      ],
+      "description": "[SP-5 | lifecycle | SF] structured-output contract for spawned agents; rebuilt from spec.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I01-W24",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.263936Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "schema-forced LLMAssistResult store + a bounded re-ask loop on schema-mismatch",
+        "LLMAssistResult store is absent on main"
+      ],
+      "title": "Build schema-forced LLMAssistResult and re-ask loop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W25": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I03-W05",
+        "P29-I04-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W21"
+      ],
+      "description": "[SP-6 | lifecycle | SF] merges SPAWN-6 + FLOOR-5. pgid-kill primitive; part of the floor audit set.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I01-W25",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.264263Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "soft + hard cancel via cancel_process_group (pgid kill); terminate_with_grace already on main",
+        "the pgid-kill primitive the floor HALT (FLOOR-6) wires to"
+      ],
+      "title": "Build soft and hard cancel via cancel_process_group",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I01-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[SP-7 | verdict-producer | SF] interim path; primes the store so TRUST-2/4 have data before TRUST-6 lands.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I01-W26",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T00:19:14.251191Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf hook dispatch --event-type agent_end seeds a first verdict cohort manually before the live producer exists"
+      ],
+      "title": "Seed interim verdicts via eawf hook dispatch agent_end",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-1 | scope 7-topic#4 | SF] fixes the revise --add-wave I01-hardcode landmine that forced this propose through --from-plan.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W01",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.251512Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "roadmap revise accepts --iter so add-wave is no longer hardcoded to I01; edit_phase_plan + a wave release verb added"
+      ],
+      "title": "Add roadmap-CLI flex (--iter, wave release, edit_phase_plan)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-2 | scope render-cleanup | SF] phase=release banding in the roadmap view.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W02",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.251817Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Phase.release field added; roadmap render bands phases by release version"
+      ],
+      "title": "Add Phase.release field and release-banded roadmap render",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-3 | scope 7-topic#6 | SF] operator-preference knobs feeding planner + AUQ defaults.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W03",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.252140Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "preferences.* config keys added (solution_bias / scope_size / auto_choose) with strict validation"
+      ],
+      "title": "Add preferences solution_bias scope_size and auto_choose",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-4 | scope 7-topic#3 | SF] model-invocable read-only flows.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W04",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.252443Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "read-only skills flip to model-invocable; the skill registry reconciles against the disk tree"
+      ],
+      "title": "Flip read-only skills model-invocable and reconcile registry",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-5 | scope T8 | spike(join)] retro digest over the wave<->report join.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W05",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.252748Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "memory SKILL/CLI surfaces reconciled; eawf phase retro emits a closure digest joining waves to reports",
+        "pre-claim spike confirms the wave_id <-> report base_id join key and failed-wave detection"
+      ],
+      "title": "Reconcile memory SKILL/CLI and add eawf phase retro digest",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-6 | scope T6/dec13 | SF] SHA re-pin hardening for cherry-picked/unpinned waves.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W06",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.253051Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf wave verify-commits [--repair] re-pins Wave.commit SHAs; prefers pinned, falls back to git log --grep [P##-W##]"
+      ],
+      "title": "Add eawf wave verify-commits with repair SHA re-pin",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-7 | scope T3/dec12 | SF] autoland back-half over wave land/land-batch.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W07",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.253350Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf wave autoland completes the land back-half (cherry-pick in dep order, stop on failure)"
+      ],
+      "title": "Add eawf wave autoland back-half",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-8 | scope dec14 | SF] why-explainer coverage extension.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W08",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.253653Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf why extends to the superset of explainable kinds (decision/hypothesis/audit/wave/...)"
+      ],
+      "title": "Extend eawf why to the superset kinds",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I07-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-9 | scope T14/dec5 | SF] backlog-scoped title backfill; extended by DOC-6 (I07).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W09",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.253986Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "backlog full sweep run; a backlog title-backfill tool added (backlog-only here; DOC-6 generalizes to 5 kinds)"
+      ],
+      "title": "Run backlog full sweep and add the title-backfill tool",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-10 | scope T15/dec6 | spike(enforce)] enforce-flip mechanism.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W10",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.254290Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "profiles reconciled; verify.enforce advisory->gating flip mechanism added",
+        "pre-claim spike confirms no shipped profile sets enforce:true (advisory today)"
+      ],
+      "title": "Reconcile profiles and add verify.enforce gating mechanism",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-11 | scope I01 | SF] ship-process doc + housekeeping.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W11",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.254594Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ship-process documented in AGENTS.md; drift-doc housekeeping pass"
+      ],
+      "title": "Add ship-process AGENTS.md doc and drift-doc housekeeping",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-12 | scope I01 | SF] wal admin + snapshot-pairing gate; the latter fires on the phase PR.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I02-W12",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.254897Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "wal.* admin command (B070) wired; snapshot-pairing CI gate (B073) wired"
+      ],
+      "title": "Wire B070 wal admin and B073 snapshot-pairing gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I06-W01"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[CLI-13 | scope 7-topic#2 | SF] /mockup skill; PLUG-1 registers it as a SkillSpec row.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**",
+        "src/eawf/workflow/skills/**",
+        "src/eawf/kernel/state/models.py"
+      ],
+      "id": "P29-I02-W13",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.255198Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/mockup skill authored; UserQuestionOption gains a preview field for side-by-side AUQ mockups"
+      ],
+      "title": "Author /mockup skill and add preview on UserQuestionOption",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W14": {
+      "agent_role": "researcher",
+      "blocks": [
+        "P29-I02-W16"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[TUI-19 | tui-chassis | spike] pre-claim probe for the chassis approach; gates TUI-1.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W14",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.255516Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "read-only spike: Textual MODES (switch_mode in place) vs a screen-stack; verdict gates TUI-1"
+      ],
+      "title": "Spike MODES chassis migration vs Textual screen-stack",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W15": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I02-W16"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[TUI-3 | tui-chassis T13 | spike(suspend)] teardown guard; gates TUI-1.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W15",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.255820Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "zoom-teardown on ScreenSuspend fixed via a shared guard; prefer resume-rebuild",
+        "pre-claim spike checks ScreenSuspend delivery timing vs modal append"
+      ],
+      "title": "Fix zoom-teardown on screen suspend with a shared guard",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W16": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I02-W17",
+        "P29-I02-W20",
+        "P29-I02-W21",
+        "P29-I02-W22",
+        "P29-I02-W23",
+        "P29-I02-W24",
+        "P29-I02-W26",
+        "P29-I02-W27",
+        "P29-I02-W28",
+        "P29-I04-W13",
+        "P29-I04-W11",
+        "P29-I04-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W14",
+        "P29-I02-W15"
+      ],
+      "description": "[TUI-1 | tui-chassis | SF] the chassis all panes hang off; conventions are canonical (see project memory).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W16",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.260257Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Textual MODES chassis adopted; digit-key mode switch + command-palette verbs; arrows primary per keymap conventions",
+        "brand 'Ea' outside-left of the scope breadcrumb"
+      ],
+      "title": "Adopt Textual MODES chassis with digits and palette verbs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W17": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-2 | tui-chassis | SF] navigation state machine.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W17",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.264608Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "bounded SCOPE x MODE navigation state + breadcrumb; illegal combinations rejected at the boundary"
+      ],
+      "title": "Add bound SCOPE x MODE navigation state and breadcrumb",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W18": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I02-W19"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W19"
+      ],
+      "description": "[TUI-4 | tui-chassis T12 | SF] attention surfacing; consumes URG.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W18",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.260583Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "needs_user Footer badge + a global inbox screen surfacing pauses by urgency"
+      ],
+      "title": "Add needs_user Footer badge and global inbox screen",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W19": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W19",
+        "P29-I02-W18"
+      ],
+      "description": "[TUI-5 | tui-chassis | SF] Home pane over the attention feed.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W19",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.264928Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "attention-feed reducer + a Home-mode pane ranking what needs the operator by urgency"
+      ],
+      "title": "Build attention-feed reducer and Home-mode pane",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W20": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-6 | tui-chassis/scope T7 | SF] Trust pane; renders honest-negative until a cohort accrues.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W20",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.265262Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Trust mode pane renders compute_trust_scorecard honestly (residuals, no Goodhartable fake) even when data-starved"
+      ],
+      "title": "Add Trust mode pane over compute_trust_scorecard",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W21": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-7 | tui-chassis | SF] Doctor pane.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W21",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.265586Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Doctor mode pane folds events + drift checks into one health view"
+      ],
+      "title": "Add Doctor mode pane folding events and drift checks",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W22": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-8 | tui-chassis | SF (empty)] Evidence as a distinct 6th mode (chassis-brief default).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W22",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.265906Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Evidence mode pane over the agent-report rollup (default 6-mode layout; renders empty honestly until reports exist)"
+      ],
+      "title": "Add Evidence mode pane over the agent-report rollup",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W23": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-9 | tui-chassis | SF] visual enrichment; conventions per project_p27_i04_tui_design.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W23",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.266235Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "textual-enrichment visual layer: braille bars, status-tint, wave-size bars per the I04 design"
+      ],
+      "title": "Add textual-enrichment visual layer (braille/tint/bars)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W24": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I02-W25"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-10 | tui-chassis/dec16 | SF] read-only multi-repo view; cross-repo write deferred to v0.6 (B011 split).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W24",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.266559Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "multi-repo read-only dashboard + registry pane; registry grows only via explicit init/add-repo (no scan/walk)"
+      ],
+      "title": "Build multi-repo read-only dashboard and registry pane",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W24"
+      ],
+      "description": "[TUI-11 | tui-chassis | SF] advisory PR view; no cross-repo write.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W25",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.271626Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "advisory read-only cross-repo PR view"
+      ],
+      "title": "Add advisory cross-repo PR view (read-only)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-12 | tui-chassis | SF] QoL fixes.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W26",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.266881Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Enter routing fixed; modal-stack dedup; backlog filter QoL"
+      ],
+      "title": "Fix Enter routing, modal-stack dedup, backlog filter",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W27": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-13 | tui-chassis | spike(subscribe)] live feed; Pilot tests must drain workers (project memory).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W27",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.267216Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "event.subscribe live feed wired into panes without blocking the UI thread",
+        "pre-claim spike confirms worker delivery without blocking"
+      ],
+      "title": "Wire event.subscribe live feed into TUI panes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16"
+      ],
+      "description": "[TUI-14 | tui-chassis | SF] expand-curated config editing.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W28",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T00:19:14.267546Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "ConfigModal coverage expanded (curated) for the new preferences.* + research.* keys"
+      ],
+      "title": "Add expand-curated ConfigModal coverage for new keys",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I03-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I03-W02",
+        "P29-I03-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W21"
+      ],
+      "description": "[FLOOR-2 | safety-floor | SG] merges SPAWN-7(scrub half) + FLOOR-2. The live spawn (SP-2) currently skips this.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/**"
+      ],
+      "id": "P29-I03-W01",
+      "intent": null,
+      "iter_id": "P29-I03",
+      "opened_at": "2026-06-01T00:19:14.267883Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "env-scrub allowlist strips all but explicitly-allowed env vars from spawned children; ports to all OSes"
+      ],
+      "title": "Build env-scrub allowlist for spawned children",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I03-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I03-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I03-W01"
+      ],
+      "description": "[FLOOR-3 | safety-floor | SG] merges SPAWN-7(egress half) + FLOOR-3. The #1 unblocker.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/**"
+      ],
+      "id": "P29-I03-W02",
+      "intent": null,
+      "iter_id": "P29-I03",
+      "opened_at": "2026-06-01T00:19:14.271963Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "default-deny egress proxy over a Unix socket; allowlist by host",
+        "Windows egress is an honest decision-ready gap (offline-default OR require WSL2); state it, do not block"
+      ],
+      "title": "Build default-deny egress proxy over a Unix socket",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I03-W03": {
+      "agent_role": "researcher",
+      "blocks": [
+        "P29-I03-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[S-JAIL-0 | safety-floor | spike] gates FLOOR-4 jail backend choice.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/**"
+      ],
+      "id": "P29-I03-W03",
+      "intent": null,
+      "iter_id": "P29-I03",
+      "opened_at": "2026-06-01T00:19:14.256121Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "read-only spike: does srt survive the daemon double-fork; verdict picks srt vs bubblewrap/seatbelt-only for FLOOR-4"
+      ],
+      "title": "Spike does srt survive the daemon double-fork",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I03-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W01",
+        "P29-I04-W05",
+        "P29-I04-W06",
+        "P29-I04-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I03-W01",
+        "P29-I03-W02",
+        "P29-I03-W03"
+      ],
+      "description": "[FLOOR-4 | safety-floor | SG] merges SPAWN-9 + FLOOR-4. The heaviest floor wave; gates every I04 spawn.",
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/**"
+      ],
+      "id": "P29-I03-W04",
+      "intent": null,
+      "iter_id": "P29-I03",
+      "opened_at": "2026-06-01T00:19:14.273321Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "runtime/sandbox/jail.py FS container, per-OS, confines spawned children to the worktree",
+        "jail.py is ABSENT on main -> build, not wire; this IS the floor gate"
+      ],
+      "title": "Build runtime/sandbox/jail.py FS container per-OS",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I03-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W03"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W25"
+      ],
+      "description": "[FLOOR-6 | scope dec15 | SG] merges SPAWN-12 + FLOOR-6. Per-wave token cap only (no monthly/global wallet).",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/**",
+        "src/eawf/runtime/daemon/**"
+      ],
+      "id": "P29-I03-W05",
+      "intent": null,
+      "iter_id": "P29-I03",
+      "opened_at": "2026-06-01T00:19:14.272296Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "classify_enforcement HALT verdict wired to terminate_with_grace via the per-wave token cap (budget HALT interlock)"
+      ],
+      "title": "Wire classify_enforcement HALT to terminate_with_grace",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W02",
+        "P29-I04-W03",
+        "P29-I04-W07",
+        "P29-I04-W11",
+        "P29-I04-W12"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W23",
+        "P29-I03-W04"
+      ],
+      "description": "[SPAWN-10 | lifecycle W7 | SG] first live dispatch; prerequisite of the verdict producer + live TUI modes.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W01",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.274717Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the daemon spawns the wave executor for real behind the floor and registers an AgentSession",
+        "passes the session_id that agent.dispatch never passed, un-idling the dispatch_runner emit"
+      ],
+      "title": "Spawn the wave executor for real and register AgentSession",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I04-W01"
+      ],
+      "description": "[SPAWN-11 | lifecycle W4 | SG] argv-policy enforcement on the live spawn.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W02",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.275823Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "resolve_denied_tools threads the sandbox deny-list into the spawn argv per the wave policy"
+      ],
+      "title": "Thread resolve_denied_tools into spawn argv",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I04-W01",
+        "P29-I03-W05"
+      ],
+      "description": "[SPAWN-13 | failure-handling | SG] retry/notice over spawn failures.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W03",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.276190Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "bounded retry loop + a tiered failure notice over the agent-CLI failure taxonomy"
+      ],
+      "title": "Build bounded retry loop and tiered failure notice",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[XV-3 | cross-vendor | SG] the neutral seam; build-own-engine verdict (not compile-to-Workflows).",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/codex/**",
+        "src/eawf/runtime/runtimes/opencode/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W04",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.256423Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the vendor-neutral RuntimeAdapter.spawn_session contract is affirmed/typed so codex+opencode legs conform"
+      ],
+      "title": "Affirm vendor-neutral RuntimeAdapter.spawn_session contract",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W09",
+        "P29-I04-W08",
+        "P29-I05-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I03-W04",
+        "P29-I01-W23"
+      ],
+      "description": "[XV-1 | cross-vendor G1 | spike(effort)] merges SPAWN-16 + XV-1. Acceptance = metered priced sandboxed SessionResult on codex.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/codex/**",
+        "src/eawf/runtime/runtimes/opencode/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W05",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.275080Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "CodexAdapter.spawn_session forks codex exec + _parse_codex_result; the codex juror lane (G1)",
+        "pre-claim spike confirms the model_reasoning_effort exact -c key via a live codex exec probe"
+      ],
+      "title": "Build CodexAdapter.spawn_session and codex result parse",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I03-W04",
+        "P29-I01-W23"
+      ],
+      "description": "[XV-2 | cross-vendor | SG] opencode leg; the 3rd juror family. Currently a uuid STUB on main.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/codex/**",
+        "src/eawf/runtime/runtimes/opencode/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W06",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.275452Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "opencode adapter spawn_session; the 3rd disjoint-family juror lane",
+        "acceptance = metered priced sandboxed SessionResult on opencode"
+      ],
+      "title": "Build opencode adapter spawn_session (3rd juror lane)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W08",
+        "P29-I05-W01",
+        "P29-I05-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I04-W01"
+      ],
+      "description": "[TRUST-6 | verdict-producer | SG] KEYSTONE A. Build the missing CALLER, not new machinery; un-idles the jury, trust engine, self-eval, and cost A/B.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W07",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.276557Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "at wave close on _compute_wave_close_readiness: register a fresh-context auditor AgentSession, dispatch /audit-style with diff-base + success_criteria only (memory=False)",
+        "on completion write an AuditorReportBody via append_agent_report at base_id=wave_id; verdict author must be fresh-context (executor self-report rejected); append-only retry",
+        "risk-weighted: always-verdict for security/L-XL/judgment-risk, sampled/batched for mechanical; close-blocks only the sampled subset"
+      ],
+      "title": "Wire per-wave verdict producer as close-gate caller (Keystone A)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I05-W03",
+        "P29-I05-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I04-W07",
+        "P29-I01-W06",
+        "P29-I04-W05",
+        "P29-I04-W06"
+      ],
+      "description": "[TRUST-7 | jury | SG] merges TRUST-7 + the RO-15 rung-3 juror spawn (build once, two consumers). Reliability-weighting deferred to TRUST-9.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/observability/eval/**"
+      ],
+      "id": "P29-I04-W08",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.278036Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "convene 3 disjoint-family jurors (claude+codex+opencode) at the close gate; independence-by-construction (pure rollup, no peer channel)",
+        "aggregate by TRUST-3's reducer (minority-veto binary / mean graded); split -> needs_user"
+      ],
+      "title": "Convene cross-vendor disjoint-family jury at close gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I04-W10"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I03-W04",
+        "P29-I01-W09",
+        "P29-I01-W16",
+        "P29-I01-W15",
+        "P29-I04-W05"
+      ],
+      "description": "[RO-15 | evibound/control-plane | SG] rung-3 + live rounds; shares the juror spawn with TRUST-7.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I04-W09",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.276924Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "EviBound rung-3 reuses the TRUST-7 juror spawn for ambiguous claim-entailment; live research rounds (cockpit Level 3+) wired over RO-11"
+      ],
+      "title": "Wire EviBound rung-3 jury and live research rounds",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I04-W09"
+      ],
+      "description": "[RO-16 | control-plane #5 | SG] AUQ bridge + frontier drain.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**"
+      ],
+      "id": "P29-I04-W10",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.278397Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "cross-runtime AUQ bridge maps needs_user to each runtime's native confirm UI; drains the multi-wave frontier"
+      ],
+      "title": "Bridge cross-runtime AUQ and drain the multi-wave frontier",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16",
+        "P29-I04-W01",
+        "P29-I01-W25"
+      ],
+      "description": "[TUI-15 | tui-agent-watch | SG] live session watch; needs live spawn + cancel.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I04-W11",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.277297Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "live agent-watch zoom streams a dispatched session; cancel via SP-6"
+      ],
+      "title": "Build live agent-watch zoom over dispatched sessions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16",
+        "P29-I04-W01"
+      ],
+      "description": "[TUI-16 | tui-chassis/agent-watch | SG] autopilot dispatch controls.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I04-W12",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.277671Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "autopilot mode with frontier view + dispatch controls (claim/dispatch ready waves)"
+      ],
+      "title": "Add autopilot mode with frontier and dispatch controls",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W16",
+        "P29-I01-W14",
+        "P29-I01-W15"
+      ],
+      "description": "[TUI-17 | tui-chassis | SG(live)/SF(plan)] research_board shell; plan-only renders pre-floor.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I04-W13",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-01T00:19:14.273665Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "research_board mode shell over the ResearchCampaign store; TUI owns the shell, research owns store/reducers"
+      ],
+      "title": "Add research_board mode shell over the campaign store",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I05-W02"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W01",
+        "P29-I04-W07"
+      ],
+      "description": "[TRUST-1 | reputation | SF (data from I04)] the outcome substrate the scorer reads.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/eval/**"
+      ],
+      "id": "P29-I05-W01",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-01T00:19:14.278765Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "VerdictOutcome projection + the outcome loop that closes verdict -> realized outcome; reuses Iter.trigger"
+      ],
+      "title": "Build VerdictOutcome projection and outcome loop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I05-W03"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I05-W01"
+      ],
+      "description": "[TRUST-4 | reputation | SF (data-gated)] small-N-honest scorer; ECE/EWMA deferred (biased at small N).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/observability/eval/**"
+      ],
+      "id": "P29-I05-W02",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-01T00:19:14.279502Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Brier scorer with EB-Beta shrink + Wilson lower bound; hard min-N honesty gate",
+        "pre-claim probe: does executor actuals carry pass/fail variance (likely empty -> ship honest-negative only)"
+      ],
+      "title": "Build Brier scorer with EB-Beta shrink and Wilson LB",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I05-W04"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I05-W02",
+        "P29-I04-W08"
+      ],
+      "description": "[TRUST-8 | reputation | SF] tier ladder over the Wilson LB.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/eval/**"
+      ],
+      "id": "P29-I05-W03",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-01T00:19:14.279854Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "reliability lower bound maps to a C->B->A trust-tier ladder"
+      ],
+      "title": "Map reliability lower bound to C->B->A trust-tier ladder",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I04-W08",
+        "P29-I05-W03"
+      ],
+      "description": "[TRUST-9 | jury/reputation | SF] reliability weighting; Optimal-Weight/ISP deferred until data exists.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/observability/eval/**"
+      ],
+      "id": "P29-I05-W04",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-01T00:19:14.280210Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "jury reliability weighting fed from the reputation engine (after per-juror data exists); minority-veto/mean shipped first"
+      ],
+      "title": "Feed jury reliability weighting from the reputation engine",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W22",
+        "P29-I04-W07",
+        "P29-I04-W05"
+      ],
+      "description": "[SPAWN-17 | cost-calibration | SG] cost vs verdict-agreement across tiers; consumes live metering.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I05-W05",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-01T00:19:14.279130Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "verdict-agreement cost A/B across model tiers using metered cost (SP-3) + the verdict producer + codex leg"
+      ],
+      "title": "Run verdict-agreement cost A/B across model tiers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I06-W02",
+        "P29-I06-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W13"
+      ],
+      "description": "[PLUG-1 | plugin-packaging T1 | SF] skill registration; /mockup comes from CLI-13.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/install/**",
+        "src/eawf/surfaces/render/skills/**"
+      ],
+      "id": "P29-I06-W01",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.260895Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/design + /spike + /mockup registered as SkillSpec rows in the registry"
+      ],
+      "title": "Register /design /spike /mockup as SkillSpec rows",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I06-W01"
+      ],
+      "description": "[PLUG-2 | plugin-packaging T2 | SF] orphan detection; explicit-registry-only invariant holds.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/install/**",
+        "src/eawf/surfaces/render/skills/**"
+      ],
+      "id": "P29-I06-W02",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.268219Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "plugin doctor gains a disk-to-registry orphan walk flagging unregistered skills (explicit growth only, no auto-import)"
+      ],
+      "title": "Add disk-to-registry orphan walk to plugin doctor",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I06-W05"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[PLUG-3 | plugin-packaging T3 | SF] version-source single truth.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/platform/install/**",
+        "src/eawf/surfaces/render/skills/**"
+      ],
+      "id": "P29-I06-W03",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.256744Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "plugin manifest versions synced to __version__ across the claude + codex runtimes"
+      ],
+      "title": "Sync plugin version to __version__ across both runtimes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[PLUG-4 | plugin-packaging T2 | SF] gitignore hygiene; .claude/ already local-only.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".gitignore"
+      ],
+      "id": "P29-I06-W04",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.257057Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        ".codex + .mcp.json + opencode.json added to gitignore (machine-local configs never committed)"
+      ],
+      "title": "Add codex mcp.json and opencode.json to gitignore",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I06-W06",
+        "P29-I06-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I06-W01",
+        "P29-I06-W03"
+      ],
+      "description": "[PLUG-5 | plugin-packaging T3 | SF] marketplace catalog.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/install/**",
+        "src/eawf/surfaces/render/skills/**"
+      ],
+      "id": "P29-I06-W05",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.268552Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "self-hosted marketplace catalog pointers published",
+        "pre-claim spike confirms the codex remote plugin source shape (git+ref+path vs tree-in-repo)"
+      ],
+      "title": "Publish self-hosted marketplace catalog pointers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I06-W07"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I06-W05"
+      ],
+      "description": "[PLUG-6 | plugin-packaging T3 | SF] release CI; phase=release per project policy.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        ".github/workflows/**"
+      ],
+      "id": "P29-I06-W06",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.272645Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "plugin-release CI workflow fires on the v-tag and publishes both plugins"
+      ],
+      "title": "Wire plugin-release CI workflow on the v-tag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I06-W05",
+        "P29-I06-W06"
+      ],
+      "description": "[PLUG-7 | plugin-packaging | SF] release notes + install docs (release-process gate).",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "CHANGELOG.md",
+        "docs/**"
+      ],
+      "id": "P29-I06-W07",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.274008Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "v0.5.0 plugin CHANGELOG section + install docs added"
+      ],
+      "title": "Add v0.5.0 plugin CHANGELOG and install docs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[REF-1 | code-quality self-audit | SF] un-idle dead lints.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/platform/lint/**",
+        ".pre-commit-config.yaml"
+      ],
+      "id": "P29-I06-W08",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.257358Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "idle EAWF lints wired into the pre-commit dispatchers so they actually run"
+      ],
+      "title": "Wire idle EAWF lints into pre-commit dispatchers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[REF-2 | iter-candidate-tags | SF] parked candidate-tag proposal.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/**",
+        "src/eawf/workflow/lifecycle/**"
+      ],
+      "id": "P29-I06-W09",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-01T00:19:14.257672Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf iter candidate-tag command added (optional/parked exemplar)"
+      ],
+      "title": "Add iter candidate-tag command (optional/parked)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I07-W02",
+        "P29-I07-W03",
+        "P29-I07-W06",
+        "P29-I07-W07",
+        "P29-I07-W09"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "[DOC-0 | doc-clarity L0 | SF] the root of the doc-clarity cluster.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/platform/profiles/**",
+        "src/eawf/kernel/config/**"
+      ],
+      "id": "P29-I07-W01",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.257983Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "clarity-contract profile block + glossary defined; config authority is local-can-only-tighten"
+      ],
+      "title": "Define the clarity-contract profile block and glossary",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I07-W07",
+        "P29-I07-W08"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W01"
+      ],
+      "description": "[DOC-1 | doc-clarity L1 | SF] EAWF016=title (per 2026-05-31 decision).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/lint/**",
+        "src/eawf/surfaces/render/**"
+      ],
+      "id": "P29-I07-W02",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.261217Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "EAWF016 title-clarity + description-floor lints added (greenfield); flags over-cap and trailing-period titles"
+      ],
+      "title": "Add EAWF016 title-clarity and description-floor lints",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I07-W04",
+        "P29-I07-W05",
+        "P29-I07-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W01"
+      ],
+      "description": "[DOC-2 | doc-clarity L2 / vale-poc | SF] Vale-wrapped-in-eawf-hook; runnable PoC exists.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/lint/**",
+        "src/eawf/runtime/hooks/**"
+      ],
+      "id": "P29-I07-W03",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.261538Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Vale wrapped in eawf hook vale-prose; EAWF017 lint surfaces prose findings (Google style)"
+      ],
+      "title": "Wrap Vale in eawf hook vale-prose with EAWF017 lint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W03"
+      ],
+      "description": "[DOC-3 | doc-clarity L2 | SF] the enforcement chokepoint.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/lint/**",
+        "src/eawf/surfaces/render/**"
+      ],
+      "id": "P29-I07-W04",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.268889Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "validate_prose chokepoint added; strict CI gate at generation-time + CI"
+      ],
+      "title": "Add validate_prose chokepoint and strict CI gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W03"
+      ],
+      "description": "[DOC-4 | doc-clarity | spike(calib)] advisory structure-smell nudge.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/lint/**",
+        "src/eawf/surfaces/render/**"
+      ],
+      "id": "P29-I07-W05",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.269221Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "EAWF018 structure-smell advisory lint added",
+        "pre-claim spike calibrates the threshold over one corpus pass (useful vs noisy nudge rate)"
+      ],
+      "title": "Add EAWF018 structure-smell advisory lint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W01"
+      ],
+      "description": "[DOC-5 | doc-clarity L4 | spike(wrap)] carries the EAWF014-vs-renderer citation-fix landmine; re-locate the wrap site first.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/render/**",
+        "AGENTS.md"
+      ],
+      "id": "P29-I07-W06",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.261864Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "tier0 blocks tagged; always-on AGENTS.md split to trim the always-loaded surface",
+        "pre-claim spike re-locates the AGENTS.md hard-wrap call-site (memory cites _wrap_block at compose.py:228, unconfirmed)"
+      ],
+      "title": "Tag tier0 blocks and split always-on AGENTS.md",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W01",
+        "P29-I07-W02",
+        "P29-I02-W09"
+      ],
+      "description": "[DOC-6 | doc-clarity entity-rewrite | SF] extends CLI-9; P29 ships all-5-kinds (the digest's P30 split is folded in).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/lint/tools/**",
+        "src/eawf/surfaces/cli/**"
+      ],
+      "id": "P29-I07-W07",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.269576Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the title-backfill tool generalizes from backlog-only (CLI-9) to all five entity kinds"
+      ],
+      "title": "Generalize the title backfill tool to all five kinds",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W02"
+      ],
+      "description": "[DOC-7 | doc-clarity L3 | SF (live rung SG)] contract ships spawn-free; live rung waits on the floor.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/platform/lint/**",
+        "src/eawf/workflow/dispatch/**"
+      ],
+      "id": "P29-I07-W08",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.269923Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the LLM clarity-judge contract ships spawn-free; only its live multi-judge rung needs the floor (deferred)"
+      ],
+      "title": "Ship the LLM clarity-judge spawn-free contract",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I07-W10",
+        "P29-I07-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W08",
+        "P29-I07-W01"
+      ],
+      "description": "[MATH-2 | math-explainer | SF] consumes the I01 EviBound gate; grounded in the sibling kappa repo.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**",
+        "src/eawf/platform/lint/**"
+      ],
+      "id": "P29-I07-W09",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.270259Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "typed MathClaim (from GateSpec + EvidenceRef) + MathExplainer doc-type with a URN route; per-claim 4-facet verification contract"
+      ],
+      "title": "Add typed MathClaim and MathExplainer with URN route",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I07-W11"
+      ],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W09"
+      ],
+      "description": "[MATH-3 | math-explainer | SF] EAWF019=math (per 2026-05-31 decision).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/**",
+        "src/eawf/platform/lint/**"
+      ],
+      "id": "P29-I07-W10",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.272980Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "EAWF019 lint checks per-claim facet-presence + citation-resolution"
+      ],
+      "title": "Add EAWF019 facet-presence and citation-resolution lint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I07-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I07-W09",
+        "P29-I07-W10",
+        "P29-I07-W03"
+      ],
+      "description": "[MATH-4 | math-explainer | SF] the authoring surface over MathClaim/MathExplainer.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/skills/**",
+        "src/eawf/surfaces/render/skills/**"
+      ],
+      "id": "P29-I07-W11",
+      "intent": null,
+      "iter_id": "P29-I07",
+      "opened_at": "2026-06-01T00:19:14.274350Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "/math-explainer authoring skill added"
+      ],
+      "title": "Add the /math-explainer authoring skill",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
