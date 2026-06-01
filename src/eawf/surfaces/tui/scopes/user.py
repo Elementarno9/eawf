@@ -43,7 +43,7 @@ from eawf.kernel.state.models import (
 )
 from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
-from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
@@ -197,8 +197,9 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _USER_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the portfolio table body + an (initially empty) zoom mount."""
+        """Yield the Home attention band, the portfolio table, + zoom mount."""
         with Vertical(id="body"):
+            yield from attention_band()
             with Vertical(classes="pane", id="pane-portfolio"):
                 yield Static("PORTFOLIO", classes="pane-title")
                 yield PortfolioTable(id="portfolio-table")

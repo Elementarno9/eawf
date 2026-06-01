@@ -33,7 +33,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Container, Vertical
 from textual.widgets import Static
 
-from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
@@ -78,8 +78,9 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _WORKSPACE_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the table-browse body + an (initially empty) zoom mount."""
+        """Yield the Home attention band, the table-browse body, + zoom mount."""
         with Vertical(id="body"):
+            yield from attention_band()
             with Vertical(classes="pane", id="pane-repos"):
                 yield Static("WORKSPACE", classes="pane-title")
                 yield WorkspaceTable(id="workspace-table")

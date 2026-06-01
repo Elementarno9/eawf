@@ -1,8 +1,11 @@
 """``RepoScreen`` — repo-scope 2x2 quadrant screen.
 
-The repo screen composes the widget catalog into a two-row, two-column
-quadrant body inside the :class:`~eawf.surfaces.tui.scopes.ScopeScreen` shared
-chassis (Header + Footer + Heartbeat reused verbatim):
+The repo screen leads its body with the Home attention band (the
+orthogonal Home-overview strip; see
+:func:`~eawf.surfaces.tui.scopes.attention_band`) then composes the widget
+catalog into a two-row, two-column quadrant body inside the
+:class:`~eawf.surfaces.tui.scopes.ScopeScreen` shared chassis (Header + Footer +
+Heartbeat reused verbatim):
 
 * top-left  — :class:`~eawf.surfaces.tui.widgets.roadmap_tree.RoadmapTree`
 * top-right — :class:`~eawf.surfaces.tui.widgets.status_pane.StatusPane`
@@ -32,7 +35,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
-from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.git_pane import GitPane
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
@@ -70,8 +73,9 @@ class RepoScreen(ScopeScreen):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _REPO_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the 2x2 quadrant body (two rows of two bordered panes)."""
+        """Yield the Home attention band, then the 2x2 quadrant body."""
         with Vertical(id="body"):
+            yield from attention_band()
             with Horizontal(classes="row"):
                 with Vertical(classes="pane", id="pane-roadmap"):
                     yield Static("ROADMAP", classes="pane-title")

@@ -105,6 +105,18 @@ def _home_screen(app: EaApp) -> str:
     stack (the orthogonal scope axis), so a mode flip away and back
     preserves the active scope.
 
+    The Home pane (the attention-feed overview band ranking what needs the
+    operator) is delivered as the band each scope screen **leads its body
+    with** (:func:`~eawf.surfaces.tui.scopes.attention_band`), NOT a separate
+    ``home``-only screen. That is the deliberate design choice for the Home
+    mode: returning a dedicated ``HomeModeScreen`` here would break the
+    orthogonal scope axis (the first ``w`` / ``r`` / ``u`` would
+    ``switch_screen`` to a scope screen and never return to a feed screen),
+    so the feed lives as a sibling band **above** the scope body that every
+    scope switch keeps intact. Home therefore stays the scope-screen name,
+    and the scope screens carry the band -- the seam is honoured by what the
+    Home factory resolves into.
+
     Args:
         app: The live app, read for its resolved ``_scope``.
 

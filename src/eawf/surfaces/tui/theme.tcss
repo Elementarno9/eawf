@@ -114,6 +114,14 @@ Heartbeat.-degraded {
     text-style: bold;
 }
 
+/* Home attention band: a compact overview strip above the scope body --
+   override the .pane 1fr flex so it sizes to its content (title + feed)
+   instead of claiming an equal vertical share with the scope quadrant. */
+#pane-attention-band {
+    height: auto;
+    max-height: 8;
+}
+
 /* --- UserScreen weighted sections (attention 3 : effort 2 : portfolio 5) --- */
 .section {
     width: 1fr;

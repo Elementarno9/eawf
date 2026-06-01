@@ -35,15 +35,41 @@ from typing import ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
+from textual.containers import Vertical
 from textual.screen import Screen
+from textual.widgets import Static
 
 from eawf.surfaces.tui.palette.command_palette import open_palette
 from eawf.surfaces.tui.screens.help import open_help
 from eawf.surfaces.tui.screens.overlays.detail import DetailModal, resolve_detail
+from eawf.surfaces.tui.widgets.attention_feed import AttentionFeed
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.footer import DEFAULT_HINTS, Footer
 from eawf.surfaces.tui.widgets.header import Header
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+
+#: Pane id of the Home attention band so a host (or zoom mixin) can address
+#: it without touching the scope-body panes. The band is the orthogonal
+#: Home-overview strip -- zoom hides only its own browse pane, never this.
+ATTENTION_BAND_PANE: str = "attention-band"
+
+
+def attention_band() -> ComposeResult:
+    """Yield the Home overview band (an :class:`AttentionFeed` in a titled pane).
+
+    The single source of the Home attention strip every scope screen leads
+    its body with, so the band's title + id live in one place (DRY). The
+    band renders the ranked attention feed above the scope body and stays
+    reachable across the orthogonal scope axis (``w`` / ``r`` / ``u``): it is
+    a sibling of the scope panes, not part of them, so a scope switch swaps
+    the panes beneath an always-present band.
+
+    Returns:
+        The composed band widgets (a pane wrapper + the feed).
+    """
+    with Vertical(classes="pane", id=f"pane-{ATTENTION_BAND_PANE}"):
+        yield Static("ATTENTION", classes="pane-title")
+        yield AttentionFeed(id=ATTENTION_BAND_PANE)
 
 
 class ScopeScreen(Screen[None]):
@@ -181,14 +207,33 @@ class ScopeScreen(Screen[None]):
         """
         self._open_detail(message.wave_id)
 
+    def on_attention_feed_pause_selected(self, message: AttentionFeed.PauseSelected) -> None:
+        """Route an attention-band pause activation to its needs_user modal.
+
+        The Home overview band posts this when the operator activates a
+        needs_user row; route it through the App's shared
+        ``open_needs_user_pause`` so the modal opens on the same cap-checked
+        + resume path the auto-open and the global inbox use. A no-op under a
+        bare harness that lacks the hook.
+
+        Args:
+            message: The :class:`AttentionFeed.PauseSelected` carrying the
+                pause urn + question to open.
+        """
+        open_pause = getattr(self.app, "open_needs_user_pause", None)
+        if callable(open_pause):
+            open_pause(message.pause_urn, message.question)
+
 
 from eawf.surfaces.tui.scopes.repo import RepoScreen  # noqa: E402  (after base def)
 from eawf.surfaces.tui.scopes.user import UserScreen  # noqa: E402
 from eawf.surfaces.tui.scopes.workspace import WorkspaceScreen  # noqa: E402
 
 __all__ = [
+    "ATTENTION_BAND_PANE",
     "RepoScreen",
     "ScopeScreen",
     "UserScreen",
     "WorkspaceScreen",
+    "attention_band",
 ]

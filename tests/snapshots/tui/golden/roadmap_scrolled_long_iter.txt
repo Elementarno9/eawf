@@ -1,4 +1,12 @@
  Eä  Home ❯ repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ ATTENTION                                                                                                            │
+│ > normal  P01-I01-W01 wave 1 title  ready to claim                                                                   │
+│ > normal  P01-I01-W02 wave 2 title  ready to claim                                                                   │
+│ > normal  P01-I01-W03 wave 3 title  ready to claim                                                                   │
+│ > normal  P01-I01-W04 wave 4 title  ready to claim                                                                   │
+│ > normal  P01-I01-W05 wave 5 title  ready to claim                                                                   │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────┐┌──────────────────────────────────────────────────────────┐
 │ ROADMAP                                                  ││ STATUS                                                   │
 │ ▼ ~ P01  Bootstrap                      ⠀⠀⠀⠀⠀     0/39   ││ LIFECYCLE                                                │
@@ -6,26 +14,18 @@
 │   ├ - P01-I01-W01  wave 1 title            — no data     ││ phase:     P01                                           │
 │   ├ - P01-I01-W02  wave 2 title            — no data     ││ iter:      P01-I01                                       │
 │   ├ - P01-I01-W03  wave 3 title            — no data     ││ waves:     0 active · 39 pending                         │
-│   ├ - P01-I01-W04  wave 4 title            — no data  ▄▄ ││ progress:  ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀     0/39                           │
+│   ├ - P01-I01-W04  wave 4 title            — no data     ││ progress:  ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀     0/39                           │
 │   ├ - P01-I01-W05  wave 5 title            — no data     ││ audits:    0 running · 0 total                           │
 │   ├ - P01-I01-W06  wave 6 title            — no data     ││ worktrees: 0 active                                      │
 │   ├ - P01-I01-W07  wave 7 title            — no data     ││                                                          │
 │   ├ - P01-I01-W08  wave 8 title            — no data     ││ EFFORT                                                   │
 │   ├ - P01-I01-W09  wave 9 title            — no data     ││ effort:    — no data                                     │
-│   ├ - P01-I01-W10  wave 10 title           — no data     ││ variance:  — no data                                     │
-│   ├ - P01-I01-W11  wave 11 title           — no data     ││ velocity:  — no data                                     │
-│   ├ - P01-I01-W12  wave 12 title           — no data     ││ eta:       —                                             │
-│   ├ - P01-I01-W13  wave 13 title           — no data     ││                                                          │
 └──────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────┐┌──────────────────────────────────────────────────────────┐
 │ GIT                                                      ││ BACKLOG                                                  │
 │ branch:   —                                              ││  id  priority  status  title                             │
 │ status:   —                                              ││                                                          │
 │ upstream: —                                              ││                                                          │
-│                                                          ││                                                          │
-│                                                          ││                                                          │
-│                                                          ││                                                          │
-│                                                          ││                                                          │
 │                                                          ││                                                          │
 │                                                          ││                                                          │
 │                                                          ││                                                          │
