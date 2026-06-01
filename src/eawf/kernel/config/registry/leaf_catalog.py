@@ -589,6 +589,34 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         default=False,
         writable_layers=_WRITABLE_GWR,
     ),
+    # --- preferences -------------------------------------------------------
+    LeafKey(
+        key="preferences.solution_bias",
+        domain="preferences",
+        type="literal",
+        default="balanced",
+        writable_layers=_WRITABLE_GWR,
+        description="Planner bias toward solution complexity.",
+        choices=("simple", "balanced", "thorough"),
+    ),
+    LeafKey(
+        key="preferences.scope_size",
+        domain="preferences",
+        type="literal",
+        default="M",
+        writable_layers=_WRITABLE_GWR,
+        description="Preferred default effort bucket for planned waves.",
+        choices=("XS", "S", "M", "L", "XL"),
+    ),
+    LeafKey(
+        key="preferences.auto_choose",
+        domain="preferences",
+        type="literal",
+        default="off",
+        writable_layers=_WRITABLE_GWR,
+        description="Whether AskUserQuestion auto-picks the recommended option.",
+        choices=("off", "recommended", "always"),
+    ),
     # --- estimation --------------------------------------------------------
     LeafKey(
         key="estimation.enabled",

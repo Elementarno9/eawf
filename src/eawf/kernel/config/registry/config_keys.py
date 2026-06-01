@@ -251,6 +251,36 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         default=True,
     ),
     ConfigKey(
+        tab="preferences",
+        key="preferences.auto_choose",
+        label="AskUserQuestion auto-pick policy",
+        type="choice",
+        default="off",
+        description=(
+            "off = always surface the question (default); recommended = "
+            "auto-pick only a recommended option; always = auto-pick when one exists."
+        ),
+        choices=("off", "recommended", "always"),
+    ),
+    ConfigKey(
+        tab="preferences",
+        key="preferences.scope_size",
+        label="Preferred default effort bucket",
+        type="choice",
+        default="M",
+        description="Default effort bucket the planner reaches for when sizing a wave.",
+        choices=("XS", "S", "M", "L", "XL"),
+    ),
+    ConfigKey(
+        tab="preferences",
+        key="preferences.solution_bias",
+        label="Planner solution-complexity bias",
+        type="choice",
+        default="balanced",
+        description="simple = fewer/smaller waves; balanced (default); thorough = broader.",
+        choices=("simple", "balanced", "thorough"),
+    ),
+    ConfigKey(
         tab="research",
         key="research.agent_count",
         label="Default subagent count for /research",

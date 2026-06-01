@@ -204,6 +204,14 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # invocation) to skip the proposal and dispatch the plan inline.
         "auto_plan": False,
     },
+    # Operator planner + AskUserQuestion defaults. Each value is a closed
+    # enum (see :mod:`eawf.kernel.config.schema`); the planner / AUQ
+    # consumers read these in a later wave.
+    "preferences": {
+        "solution_bias": "balanced",
+        "scope_size": "M",
+        "auto_choose": "off",
+    },
     "estimation": {
         "enabled": True,
         "eu_minutes": 30,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -11,6 +12,38 @@ from eawf.kernel.state.enums import EffortBucket
 CommitSubjectStyle = Literal["bracket", "trailer"]
 ReleaseCadence = Literal["manual", "per-phase"]
 AgentDrivenReleasePolicy = Literal["manual", "per-phase"]
+
+
+class SolutionBias(StrEnum):
+    """Planner bias toward solution complexity under ``preferences``.
+
+    The planner consults this preference when sizing a wave DAG: a
+    ``SIMPLE`` bias favours fewer, smaller waves (lean toward YAGNI),
+    ``THOROUGH`` favours broader coverage, and ``BALANCED`` is the
+    neutral default.
+    """
+
+    SIMPLE = "simple"
+    BALANCED = "balanced"
+    THOROUGH = "thorough"
+
+
+class AutoChoose(StrEnum):
+    """Whether an ``AskUserQuestion`` auto-picks its recommended option.
+
+    Mirrors the closed ``ask | auto | never``-style ladders used by the
+    other operator-gate preferences (e.g. ``vcs.auto_commit``):
+
+    - :attr:`OFF` — never auto-pick; always surface the question (default).
+    - :attr:`RECOMMENDED` — auto-pick only when the surface marks one
+      option as recommended; otherwise surface the question.
+    - :attr:`ALWAYS` — auto-pick the recommended option whenever one
+      exists, surfacing nothing.
+    """
+
+    OFF = "off"
+    RECOMMENDED = "recommended"
+    ALWAYS = "always"
 
 
 class VcsReleaseConventionsConfig(BaseModel):
@@ -88,14 +121,33 @@ class EstimationConfig(BaseModel):
     buckets: BucketFitConfig = Field(default_factory=BucketFitConfig)
 
 
+class PreferencesConfig(BaseModel):
+    """Strict typed model for the ``preferences`` config section.
+
+    Operator-tunable planner + AskUserQuestion defaults. Every field is a
+    closed enum so an unknown value fails validation at the loader
+    boundary. These keys ADD the validated preference surface; the
+    planner / AUQ consumers read them in a later wave.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    solution_bias: SolutionBias = SolutionBias.BALANCED
+    scope_size: EffortBucket = EffortBucket.M
+    auto_choose: AutoChoose = AutoChoose.OFF
+
+
 __all__ = [
     "AgentDrivenReleasePolicy",
+    "AutoChoose",
     "BucketEstimateOverride",
     "BucketFitConfig",
     "CommitSubjectStyle",
     "EstimationConfig",
     "EstimationDisplayConfig",
+    "PreferencesConfig",
     "ReleaseCadence",
+    "SolutionBias",
     "VcsConventionsConfig",
     "VcsReleaseConventionsConfig",
 ]
