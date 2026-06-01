@@ -140,6 +140,11 @@ class _ConfigSchema(BaseModel):
     telemetry: dict[str, Any] = Field(default_factory=dict)
     dispatch: dict[str, Any] = Field(default_factory=dict)
     language: dict[str, Any] = Field(default_factory=dict)
+    # ``preferences`` carries the operator-preference knobs (solution_bias,
+    # scope_size, auto_choose). Value-shape validation lives in the leaf
+    # catalog + PreferencesConfig; the composed schema only needs to accept
+    # the section so a default-bearing merge does not trip extra="forbid".
+    preferences: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Sub-app construction ---------------------------------------------------
