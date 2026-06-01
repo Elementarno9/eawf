@@ -1391,6 +1391,18 @@
       "scope_id": "P29-I02-W08",
       "status": "done",
       "updated_at": "2026-06-01T16:30:07.292658Z"
+    },
+    "P29-I02-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W09",
+      "scope_id": "P29-I02-W09",
+      "status": "done",
+      "updated_at": "2026-06-01T16:43:58.855019Z"
     }
   },
   "agent_sessions": {
@@ -7701,6 +7713,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I02-W08",
       "updated_at": "2026-06-01T16:19:48.398439Z"
+    },
+    "P29-I02-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W09-bucket-20260601T163308Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W09",
+      "updated_at": "2026-06-01T16:33:08.796866Z"
     }
   },
   "goals": {
@@ -9674,7 +9699,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T16:30:07.292962Z",
+  "updated_at": "2026-06-01T16:43:58.855347Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28969,9 +28994,9 @@
       "blocks": [
         "P29-I07-W07"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T16:43:58.855019Z",
+      "commit": "e50435df03b59818f858818bca080857f7c9dc6c",
       "deps": [],
       "description": "[CLI-9 | scope T14/dec5 | SF] backlog-scoped title backfill; extended by DOC-6 (I07).",
       "dispatch_history": [],
@@ -28983,10 +29008,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.253986Z",
-      "outcome": null,
+      "outcome": "eawf backlog backfill-titles: pure normalize_entity_title helper (strip trailing period, word-boundary trim <=72, derive-from-description for placeholders) + typed report; single-verb design (--dry-run = read-only sweep, --apply via existing edit mutation); live sweep 71 items/0 violations; 117 backlog tests green. Backlog-only (DOC-6 5-kind generalization deferred)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "backlog full sweep run; a backlog title-backfill tool added (backlog-only here; DOC-6 generalizes to 5 kinds)"
       ],
