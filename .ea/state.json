@@ -1403,6 +1403,18 @@
       "scope_id": "P29-I02-W09",
       "status": "done",
       "updated_at": "2026-06-01T16:43:58.855019Z"
+    },
+    "P29-I02-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W10",
+      "scope_id": "P29-I02-W10",
+      "status": "done",
+      "updated_at": "2026-06-01T16:52:40.483350Z"
     }
   },
   "agent_sessions": {
@@ -7726,6 +7738,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W09",
       "updated_at": "2026-06-01T16:33:08.796866Z"
+    },
+    "P29-I02-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W10-bucket-20260601T164439Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W10",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W10",
+      "updated_at": "2026-06-01T16:44:39.240496Z"
     }
   },
   "goals": {
@@ -9699,7 +9724,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T16:43:58.855347Z",
+  "updated_at": "2026-06-01T16:52:40.483683Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29023,9 +29048,9 @@
     "P29-I02-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T16:52:40.483350Z",
+      "commit": "b2453e398e4e017aa1883340fae7db90bd0b7cae",
       "deps": [],
       "description": "[CLI-10 | scope T15/dec6 | spike(enforce)] enforce-flip mechanism.",
       "dispatch_history": [],
@@ -29037,10 +29062,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.254290Z",
-      "outcome": null,
+      "outcome": "verify.enforce advisory->gating flip confirmed already built+wired (model/merge/enforcement/3 close seams); W10 pins it (7 tests: default false/invalid/OR-merge/14-profile sweep/no-shipped-enforce guard) + reconciles 14 profiles (no drift) + corrects 2 stale W19-forward-ref docstrings (flip ships today); 57 tests green; no shipped profile flipped to true",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "profiles reconciled; verify.enforce advisory->gating flip mechanism added",
         "pre-claim spike confirms no shipped profile sets enforce:true (advisory today)"
