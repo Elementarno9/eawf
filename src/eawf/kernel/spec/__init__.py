@@ -12,6 +12,8 @@ Public surface:
 - :class:`~eawf.kernel.spec.wave.WaveSpec` — wave deliverable
 - :class:`~eawf.kernel.spec.intent.IntentBrief` — typed intent doc
   carried by lifecycle entities
+- :class:`~eawf.kernel.spec.research.ResearchDepth` — canonical
+  ``/research`` survey-depth ladder
 - :class:`~eawf.kernel.spec.audit.AuditSpec` — declarative audit doc
   consumed by the audit-DSL runner
 - :class:`~eawf.kernel.spec.common.VerdictCitation` — citation tying a spec
@@ -46,6 +48,8 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ARGV_BEARING_GATE_KINDS": ("promotion", "ARGV_BEARING_GATE_KINDS"),
     "AUDIT_CADENCE_VALUES": ("audit", "AUDIT_CADENCE_VALUES"),
     "DEFAULT_GATE_ARGV_ALLOWLIST": ("promotion", "DEFAULT_GATE_ARGV_ALLOWLIST"),
+    "DEFAULT_RESEARCH_DEPTH": ("research", "DEFAULT_RESEARCH_DEPTH"),
+    "RESEARCH_DEPTH_VALUES": ("research", "RESEARCH_DEPTH_VALUES"),
     "UI_SCOPE_PREFIXES": ("heuristics", "UI_SCOPE_PREFIXES"),
     "AuditCadence": ("audit", "AuditCadence"),
     "AuditSpec": ("audit", "AuditSpec"),
@@ -66,6 +70,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "PhaseKPI": ("phase", "PhaseKPI"),
     "PhaseShipCriterion": ("phase", "PhaseShipCriterion"),
     "PhaseSpec": ("phase", "PhaseSpec"),
+    "ResearchDepth": ("research", "ResearchDepth"),
     "SpecPromoteValidationError": ("promotion", "SpecPromoteValidationError"),
     "SpecValidationError": ("validators", "SpecValidationError"),
     "TestRef": ("common", "TestRef"),
@@ -74,9 +79,12 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "WaveBehavior": ("wave", "WaveBehavior"),
     "WaveMockup": ("wave", "WaveMockup"),
     "WaveSpec": ("wave", "WaveSpec"),
+    "coerce_research_depth": ("research", "coerce_research_depth"),
     "is_ui_scope": ("heuristics", "is_ui_scope"),
     "missing_test_paths": ("heuristics", "missing_test_paths"),
     "requires_mockup_reference": ("heuristics", "requires_mockup_reference"),
+    "research_depth_emits_fanout": ("research", "research_depth_emits_fanout"),
+    "research_depth_question_slots": ("research", "research_depth_question_slots"),
     "validate_argv_gates": ("promotion", "validate_argv_gates"),
     "validate_phase_spec_at_load": ("validators", "validate_phase_spec_at_load"),
     "validate_phase_spec_has_kpis": ("validators", "validate_phase_spec_has_kpis"),

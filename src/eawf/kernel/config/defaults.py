@@ -15,6 +15,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH
+
 # The literal name "built-in" is the canonical layer label everywhere — keep
 # it in lockstep with :mod:`eawf.kernel.config.layered` and ``cli/commands/config.py``.
 BUILT_IN_LAYER: str = "built-in"
@@ -188,7 +190,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "research": {
         "folder": ".ea/artifacts/rendered/research",
         "auto_save": False,
-        "default_depth": "normal",
+        "default_depth": DEFAULT_RESEARCH_DEPTH.value,
         "default_sources": "both",
         "agent_count": 4,
     },

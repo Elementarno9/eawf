@@ -31,6 +31,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
+from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH, RESEARCH_DEPTH_VALUES
+
 # Narrow Literal of value shapes the registry handles. ``str`` covers all
 # free-text scalars (paths included — the menu does not validate path
 # existence). ``choice`` and ``multichoice`` require ``choices`` to be set.
@@ -269,8 +271,8 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         key="research.default_depth",
         label="Default research depth",
         type="choice",
-        default="normal",
-        choices=("shallow", "normal", "deep"),
+        default=DEFAULT_RESEARCH_DEPTH.value,
+        choices=RESEARCH_DEPTH_VALUES,
     ),
     ConfigKey(
         tab="research",

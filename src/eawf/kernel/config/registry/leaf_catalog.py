@@ -35,6 +35,7 @@ from eawf.kernel.config.registry.leaf_keys import (
     _WRITABLE_RUNTIME_PREFERENCE,
     LeafKey,
 )
+from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH, RESEARCH_DEPTH_VALUES
 
 # Catalog data table — declaration-ordered by domain section for review.
 _LEAF_KEYS: tuple[LeafKey, ...] = (
@@ -539,9 +540,9 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         key="research.default_depth",
         domain="research",
         type="literal",
-        default="normal",
+        default=DEFAULT_RESEARCH_DEPTH.value,
         writable_layers=_WRITABLE_GWR,
-        choices=("shallow", "normal", "deep"),
+        choices=RESEARCH_DEPTH_VALUES,
     ),
     LeafKey(
         key="research.default_sources",
