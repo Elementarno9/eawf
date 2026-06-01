@@ -1116,6 +1116,30 @@
       "status": "done",
       "updated_at": "2026-06-01T07:05:15.089177Z"
     },
+    "P29-I01-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W15",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W15",
+      "scope_id": "P29-I01-W15",
+      "status": "done",
+      "updated_at": "2026-06-01T07:38:44.683612Z"
+    },
+    "P29-I01-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W16",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W16",
+      "scope_id": "P29-I01-W16",
+      "status": "done",
+      "updated_at": "2026-06-01T07:35:24.799424Z"
+    },
     "P29-I01-W17": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1127,6 +1151,18 @@
       "scope_id": "P29-I01-W17",
       "status": "done",
       "updated_at": "2026-06-01T06:54:36.420855Z"
+    },
+    "P29-I01-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W18",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W18",
+      "scope_id": "P29-I01-W18",
+      "status": "done",
+      "updated_at": "2026-06-01T07:36:57.539093Z"
     },
     "P29-I01-W19": {
       "actual_cost_usd": 0.0,
@@ -1211,6 +1247,18 @@
       "scope_id": "P29-I01-W25",
       "status": "done",
       "updated_at": "2026-06-01T06:59:54.722227Z"
+    },
+    "P29-I01-W26": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W26",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W26",
+      "scope_id": "P29-I01-W26",
+      "status": "done",
+      "updated_at": "2026-06-01T07:30:05.819443Z"
     }
   },
   "agent_sessions": {
@@ -7202,6 +7250,32 @@
       "scope_id": "P29-I01-W14",
       "updated_at": "2026-06-01T06:24:58.695094Z"
     },
+    "P29-I01-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W15-bucket-20260601T070642Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W15",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W15",
+      "updated_at": "2026-06-01T07:06:42.256770Z"
+    },
+    "P29-I01-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W16-bucket-20260601T070643Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W16",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W16",
+      "updated_at": "2026-06-01T07:06:43.609323Z"
+    },
     "P29-I01-W17": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I01-W17-bucket-20260601T062459Z",
@@ -7214,6 +7288,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I01-W17",
       "updated_at": "2026-06-01T06:24:59.987431Z"
+    },
+    "P29-I01-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W18-bucket-20260601T070644Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W18",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W18",
+      "updated_at": "2026-06-01T07:06:44.880845Z"
     },
     "P29-I01-W19": {
       "confidence": "low",
@@ -7305,6 +7392,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I01-W25",
       "updated_at": "2026-06-01T06:25:01.305361Z"
+    },
+    "P29-I01-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W26-bucket-20260601T070646Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I01-W26",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I01-W26",
+      "updated_at": "2026-06-01T07:06:46.217567Z"
     }
   },
   "goals": {
@@ -9234,7 +9334,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T07:05:16.200716Z",
+  "updated_at": "2026-06-01T07:38:45.799462Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -27778,9 +27878,9 @@
         "P29-I04-W13",
         "P29-I04-W09"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T07:38:44.683612Z",
+      "commit": "0e240bab1976882a20242788b6a8196ad789f88d",
       "deps": [
         "P29-I01-W14",
         "P29-I01-W19"
@@ -27796,10 +27896,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.270607Z",
-      "outcome": null,
+      "outcome": "OperatorInput channel (override/notice-broadcast/add_question/steer; D-2 blocking-only; D-3 override-persists-locked) + CampaignProgressState projection; __init__ conflict resolved (union+sort)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "OperatorInput channel accepts override/notice-broadcast/add_question/steer mid-run (D-2 blocking-only interrupt; D-3 override persists-locked)",
         "CampaignProgressState projects round/per-domain progress"
@@ -27807,16 +27907,16 @@
       "title": "Add OperatorInput channel and CampaignProgressState",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W15-1780297603"
     },
     "P29-I01-W16": {
       "agent_role": "executor",
       "blocks": [
         "P29-I04-W09"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T07:35:24.799424Z",
+      "commit": "816509f214dacd7e53338a0ee80cd9b528995a29",
       "deps": [
         "P29-I01-W13",
         "P29-I01-W19"
@@ -27831,10 +27931,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.270956Z",
-      "outcome": null,
+      "outcome": "bounded round loop + checkpoint_policy tiers (every_round/every_n/on_halt/never); halts on saturation OR round budget; pure round_runner injected",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "bounded round loop with checkpoint_policy tiers; halts on saturation or round budget",
         "checkpoint tiers gate operator review cadence"
@@ -27842,7 +27942,7 @@
       "title": "Add bounded round loop with checkpoint_policy tiers",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W16-1780297604"
     },
     "P29-I01-W17": {
       "agent_role": "executor",
@@ -27880,9 +27980,9 @@
     "P29-I01-W18": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T07:36:57.539093Z",
+      "commit": "a70d1dd26dbc14293b0278479f5e123f2f7e28fc",
       "deps": [
         "P29-I01-W12",
         "P29-I01-W13"
@@ -27897,17 +27997,17 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.271289Z",
-      "outcome": null,
+      "outcome": "L1-L5 context-pruning reducers over claim ledger; keyword-recall first (no vector/graph, YAGNI); __init__ conflict resolved (kept all sorted)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "L1-L5 context-pruning reducers over the claim ledger; keyword-recall first (no vector/graph index until a proven recall failure)"
       ],
       "title": "Add context-pruning L1-L5 reducers over the claim ledger",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W18-1780297605"
     },
     "P29-I01-W19": {
       "agent_role": "executor",
@@ -28159,9 +28259,9 @@
     "P29-I01-W26": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T07:30:05.819443Z",
+      "commit": "80381456542ca089426c99186505d2eea88d14e8",
       "deps": [],
       "description": "[SP-7 | verdict-producer | SF] interim path; primes the store so TRUST-2/4 have data before TRUST-6 lands.",
       "dispatch_history": [],
@@ -28174,17 +28274,17 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.251191Z",
-      "outcome": null,
+      "outcome": "seed_interim_verdict via eawf hook dispatch agent_end; primes verdict store for self-eval/jury (cohort 0->1 proven); lib workflow/dispatch/seed.py + minimal hook.py CLI; cli.md golden stale",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf hook dispatch --event-type agent_end seeds a first verdict cohort manually before the live producer exists"
       ],
       "title": "Seed interim verdicts via eawf hook dispatch agent_end",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W26-1780297607"
     },
     "P29-I02-W01": {
       "agent_role": "executor",
@@ -33359,6 +33459,28 @@
       "status": "abandoned",
       "wave_id": "P29-I01-W14"
     },
+    "WT-P29-I01-W15-1780297603": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w15",
+      "created_at": "2026-06-01T07:06:43.145018Z",
+      "id": "WT-P29-I01-W15-1780297603",
+      "merged_commit": null,
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w15",
+      "status": "abandoned",
+      "wave_id": "P29-I01-W15"
+    },
+    "WT-P29-I01-W16-1780297604": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w16",
+      "created_at": "2026-06-01T07:06:44.414127Z",
+      "id": "WT-P29-I01-W16-1780297604",
+      "merged_commit": "816509f",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w16",
+      "status": "merged",
+      "wave_id": "P29-I01-W16"
+    },
     "WT-P29-I01-W17-1780295100": {
       "base_branch": "feature/eawf-v0.5-p29",
       "branch": "feature/eawf-v0.1-p29-w17",
@@ -33369,6 +33491,17 @@
       "path": ".ea/worktrees/p29-w17",
       "status": "merged",
       "wave_id": "P29-I01-W17"
+    },
+    "WT-P29-I01-W18-1780297605": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w18",
+      "created_at": "2026-06-01T07:06:45.723816Z",
+      "id": "WT-P29-I01-W18-1780297605",
+      "merged_commit": null,
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w18",
+      "status": "abandoned",
+      "wave_id": "P29-I01-W18"
     },
     "WT-P29-I01-W19-1780292889": {
       "base_branch": "feature/eawf-v0.5-p29",
@@ -33446,6 +33579,17 @@
       "path": ".ea/worktrees/p29-w25",
       "status": "merged",
       "wave_id": "P29-I01-W25"
+    },
+    "WT-P29-I01-W26-1780297607": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w26",
+      "created_at": "2026-06-01T07:06:47.039731Z",
+      "id": "WT-P29-I01-W26-1780297607",
+      "merged_commit": "8038145",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w26",
+      "status": "merged",
+      "wave_id": "P29-I01-W26"
     }
   }
 }
