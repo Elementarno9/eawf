@@ -947,6 +947,18 @@
       "scope_id": "P28-I03-W65",
       "status": "done",
       "updated_at": "2026-05-28T23:16:51.203062Z"
+    },
+    "P29-I01-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W01",
+      "scope_id": "P29-I01-W01",
+      "status": "done",
+      "updated_at": "2026-06-01T02:53:29.209391Z"
     }
   },
   "agent_sessions": {
@@ -3269,7 +3281,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I01",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6754,6 +6766,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P28-I03-W65",
       "updated_at": "2026-05-28T23:16:20.255638Z"
+    },
+    "P29-I01-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W01-bucket-20260601T012249Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W01",
+      "updated_at": "2026-06-01T01:22:49.283932Z"
     }
   },
   "goals": {
@@ -6784,6 +6809,7 @@
       "phase_id": "P08",
       "status": "closed",
       "title": "orchestration waves",
+      "trigger": "none",
       "wave_ids": [
         "P08-I01-W02",
         "P08-I01-W03",
@@ -6804,6 +6830,7 @@
       "phase_id": "P09",
       "status": "closed",
       "title": "P09 backlog sweep",
+      "trigger": "none",
       "wave_ids": [
         "P09-I01-W01",
         "P09-I01-W02",
@@ -6822,6 +6849,7 @@
       "phase_id": "P10",
       "status": "closed",
       "title": "Multi-runtime: skill registry + MCP grants + SDK dispatch",
+      "trigger": "none",
       "wave_ids": [
         "P10-I01-W01",
         "P10-I01-W02",
@@ -6840,6 +6868,7 @@
       "phase_id": "P11",
       "status": "closed",
       "title": "plan-mode prep + interactive gates + auto-accept config",
+      "trigger": "none",
       "wave_ids": [
         "P11-I01-W01",
         "P11-I01-W02",
@@ -6857,6 +6886,7 @@
       "phase_id": "P12",
       "status": "closed",
       "title": "backlog cluster waves",
+      "trigger": "none",
       "wave_ids": [
         "P12-I01-W01",
         "P12-I01-W02",
@@ -6878,6 +6908,7 @@
       "phase_id": "P13",
       "status": "closed",
       "title": "P13 iter 1",
+      "trigger": "none",
       "wave_ids": [
         "P13-I01-W01",
         "P13-I01-W02",
@@ -6899,6 +6930,7 @@
       "phase_id": "P14",
       "status": "closed",
       "title": "P14 main iter",
+      "trigger": "none",
       "wave_ids": [
         "P14-I01-W01",
         "P14-I01-W02",
@@ -6924,6 +6956,7 @@
       "phase_id": "P14",
       "status": "closed",
       "title": "plugin install native layout + user scope",
+      "trigger": "none",
       "wave_ids": [
         "P14-I02-W01"
       ]
@@ -6939,6 +6972,7 @@
       "phase_id": "P14",
       "status": "closed",
       "title": "Codex/OpenCode plugin parity hotfix (B1+B3+B4)",
+      "trigger": "none",
       "wave_ids": [
         "P14-I03-W01"
       ]
@@ -6954,6 +6988,7 @@
       "phase_id": "P14",
       "status": "closed",
       "title": "Codex plugin schema compliance (drop agents, skill dir, interface block)",
+      "trigger": "none",
       "wave_ids": [
         "P14-I04-W01",
         "P14-I04-W03",
@@ -6972,6 +7007,7 @@
       "phase_id": "P15",
       "status": "closed",
       "title": "Skills execution seam",
+      "trigger": "none",
       "wave_ids": [
         "P15-I01-W01",
         "P15-I01-W03",
@@ -6990,6 +7026,7 @@
       "phase_id": "P17",
       "status": "closed",
       "title": "P17 roadmap waves",
+      "trigger": "none",
       "wave_ids": [
         "P17-I01-W01",
         "P17-I01-W02",
@@ -7013,6 +7050,7 @@
       "phase_id": "P18",
       "status": "closed",
       "title": "Typed agent report implementation",
+      "trigger": "none",
       "wave_ids": [
         "P18-I01-W01",
         "P18-I01-W02",
@@ -7040,6 +7078,7 @@
       "phase_id": "P19",
       "status": "closed",
       "title": "Planning system + commit hygiene",
+      "trigger": "none",
       "wave_ids": [
         "P19-I01-W01",
         "P19-I01-W05",
@@ -7064,6 +7103,7 @@
       "phase_id": "P19",
       "status": "closed",
       "title": "drift fix + commit hygiene + backlog audit",
+      "trigger": "none",
       "wave_ids": [
         "P19-I02-W11",
         "P19-I02-W12",
@@ -7089,6 +7129,7 @@
       "phase_id": "P20",
       "status": "closed",
       "title": "TUI + metrics",
+      "trigger": "none",
       "wave_ids": [
         "P20-I01-W01",
         "P20-I01-W02",
@@ -7118,6 +7159,7 @@
       "phase_id": "P20",
       "status": "closed",
       "title": "audit-followups",
+      "trigger": "none",
       "wave_ids": [
         "P20-I02-W01"
       ]
@@ -7133,6 +7175,7 @@
       "phase_id": "P20",
       "status": "closed",
       "title": "TUI usability hotfix",
+      "trigger": "none",
       "wave_ids": [
         "P20-I03-W01"
       ]
@@ -7148,6 +7191,7 @@
       "phase_id": "P21",
       "status": "abandoned",
       "title": "Profiles + MCP/sandbox + domain bodies",
+      "trigger": "none",
       "wave_ids": [
         "P21-I01-W01",
         "P21-I01-W02",
@@ -7178,6 +7222,7 @@
       "phase_id": "P22",
       "status": "closed",
       "title": "stage-0 closure waves",
+      "trigger": "none",
       "wave_ids": [
         "P22-I01-W01",
         "P22-I01-W02",
@@ -7199,6 +7244,7 @@
       "phase_id": "P23",
       "status": "closed",
       "title": "C01-IMPL kernel waves",
+      "trigger": "none",
       "wave_ids": [
         "P23-I01-W01",
         "P23-I01-W02",
@@ -7216,6 +7262,7 @@
       "phase_id": "P23",
       "status": "closed",
       "title": "criterion drift detector (F1..F4 cleanup mechanism)",
+      "trigger": "none",
       "wave_ids": [
         "P23-I02-W01"
       ]
@@ -7231,6 +7278,7 @@
       "phase_id": "P24",
       "status": "closed",
       "title": "C02-IMPL daemon waves",
+      "trigger": "none",
       "wave_ids": [
         "P24-I01-W01",
         "P24-I01-W02",
@@ -7255,6 +7303,7 @@
       "phase_id": "P24",
       "status": "closed",
       "title": "replay_wal + session_ttl wiring (reactive followup)",
+      "trigger": "none",
       "wave_ids": [
         "P24-I02-W01"
       ]
@@ -7270,6 +7319,7 @@
       "phase_id": "P25",
       "status": "closed",
       "title": "contracts waves (4-way parallel)",
+      "trigger": "none",
       "wave_ids": [
         "P25-I01-W01",
         "P25-I01-W02",
@@ -7303,6 +7353,7 @@
       "phase_id": "P26",
       "status": "closed",
       "title": "surfaces waves",
+      "trigger": "none",
       "wave_ids": [
         "P26-I01-W01",
         "P26-I01-W02",
@@ -7361,6 +7412,7 @@
       "phase_id": "P26",
       "status": "closed",
       "title": "TUI QoL + deferred pull-in",
+      "trigger": "none",
       "wave_ids": [
         "P26-I02-W01",
         "P26-I02-W02",
@@ -7398,6 +7450,7 @@
       "phase_id": "P27",
       "status": "closed",
       "title": "observ + ops waves",
+      "trigger": "none",
       "wave_ids": [
         "P27-I01-W01",
         "P27-I01-W02",
@@ -7440,6 +7493,7 @@
       "phase_id": "P27",
       "status": "closed",
       "title": "correctness, safety, architecture foundation",
+      "trigger": "none",
       "wave_ids": [
         "P27-I02-W01",
         "P27-I02-W02",
@@ -7494,6 +7548,7 @@
       "phase_id": "P27",
       "status": "closed",
       "title": "build-out, rules/skills, hardening, release",
+      "trigger": "none",
       "wave_ids": [
         "P27-I03-W01",
         "P27-I03-W02",
@@ -7536,6 +7591,7 @@
       "phase_id": "P27",
       "status": "closed",
       "title": "TUI richer views (braille bars, status pane, repo tables)",
+      "trigger": "none",
       "wave_ids": [
         "P27-I04-W01",
         "P27-I04-W02",
@@ -7581,6 +7637,7 @@
       "phase_id": "P27",
       "status": "closed",
       "title": "package hygiene + backlog rollout + layered regroup",
+      "trigger": "none",
       "wave_ids": [
         "P27-I05-W01",
         "P27-I05-W02",
@@ -7635,6 +7692,7 @@
       "phase_id": "P27",
       "status": "closed",
       "title": "Post-v0.3 cleanup",
+      "trigger": "none",
       "wave_ids": [
         "P27-I06-W41"
       ]
@@ -7650,6 +7708,7 @@
       "phase_id": "P28",
       "status": "closed",
       "title": "verify spine + foundations",
+      "trigger": "none",
       "wave_ids": [
         "P28-I01-W01",
         "P28-I01-W02",
@@ -7679,6 +7738,7 @@
       "phase_id": "P28",
       "status": "closed",
       "title": "lifecycle / EU / memory / IDs / observability",
+      "trigger": "none",
       "wave_ids": [
         "P28-I02-W01",
         "P28-I02-W02",
@@ -7723,6 +7783,7 @@
       "phase_id": "P28",
       "status": "closed",
       "title": "clarity / TUI / plugins / trust / eval / docs / release",
+      "trigger": "none",
       "wave_ids": [
         "P28-I03-W01",
         "P28-I03-W02",
@@ -7800,8 +7861,9 @@
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247566Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "Engine: spawn-free foundation (metrics, evidence, research, spawn)",
+      "trigger": "none",
       "wave_ids": [
         "P29-I01-W01",
         "P29-I01-W02",
@@ -7842,6 +7904,7 @@
       "phase_id": "P29",
       "status": "planned",
       "title": "Surfaces and process: CLI flex, preferences, TUI MODES chassis",
+      "trigger": "none",
       "wave_ids": [
         "P29-I02-W01",
         "P29-I02-W02",
@@ -7884,6 +7947,7 @@
       "phase_id": "P29",
       "status": "planned",
       "title": "Safety floor: env-scrub, egress proxy, FS jail",
+      "trigger": "none",
       "wave_ids": [
         "P29-I03-W03",
         "P29-I03-W01",
@@ -7903,6 +7967,7 @@
       "phase_id": "P29",
       "status": "planned",
       "title": "Live spawn, cross-vendor jury, research orchestrator rounds",
+      "trigger": "none",
       "wave_ids": [
         "P29-I04-W04",
         "P29-I04-W13",
@@ -7930,6 +7995,7 @@
       "phase_id": "P29",
       "status": "planned",
       "title": "Trust and measure: reputation engine, tier ladder, cost A/B",
+      "trigger": "none",
       "wave_ids": [
         "P29-I05-W01",
         "P29-I05-W05",
@@ -7949,6 +8015,7 @@
       "phase_id": "P29",
       "status": "planned",
       "title": "Release: plugin packaging, marketplace, CI publish, version-sync",
+      "trigger": "none",
       "wave_ids": [
         "P29-I06-W03",
         "P29-I06-W04",
@@ -7972,6 +8039,7 @@
       "phase_id": "P29",
       "status": "planned",
       "title": "Doc-clarity and math doc-type cross-cut (spawn-free)",
+      "trigger": "none",
       "wave_ids": [
         "P29-I07-W01",
         "P29-I07-W02",
@@ -8639,7 +8707,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T01:20:48.721837Z",
+  "updated_at": "2026-06-01T02:53:49.527294Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -26709,9 +26777,9 @@
         "P29-I01-W05",
         "P29-I05-W01"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T02:53:29.209391Z",
+      "commit": "55b8e58b5eb6bb63b64da995585f8d705ed3ce5c",
       "deps": [],
       "description": "[MET-1 | scope T2/dec4 | SF] reactive-metric correction; owns the Iter.trigger field reused by TRUST-1. Prior 54% was a definitional artifact, annotate in release notes.",
       "dispatch_history": [],
@@ -26725,10 +26793,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.248331Z",
-      "outcome": null,
+      "outcome": "Iter.trigger StrEnum + reactive-metric denominator excludes none-trigger iters; idempotent 1.1->1.2 migration backfills historical iters to none; worktree gauntlet green (pre-commit, mypy 539f, pytest 7268 passed)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Iter.trigger StrEnum (reactive|proactive|none) added; reactive-wave metric recomputed excluding None-trigger iters",
         "schema_version 1.1->1.2 with a migration note; historical iters backfilled or left None (excluded from denominator)"
@@ -26736,7 +26804,7 @@
       "title": "Add Iter.trigger enum and re-derive the reactive-wave metric",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W01-1780276977"
     },
     "P29-I01-W02": {
       "agent_role": "executor",
@@ -32606,6 +32674,17 @@
       "path": ".ea/worktrees/p28-w37",
       "status": "merged",
       "wave_id": "P28-I03-W37"
+    },
+    "WT-P29-I01-W01-1780276977": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w01",
+      "created_at": "2026-06-01T01:22:57.183500Z",
+      "id": "WT-P29-I01-W01-1780276977",
+      "merged_commit": "55b8e58",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w01",
+      "status": "merged",
+      "wave_id": "P29-I01-W01"
     }
   }
 }
