@@ -29,6 +29,7 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
+from eawf.runtime.sandbox.env_scrub import build_child_env
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
@@ -256,7 +257,13 @@ class ClaudeAdapter:
         the token classes + pid + exit + the optional self-reported cost).
         The child is started in its own session / process group
         (``start_new_session=True``) so a later cancel can signal the whole
-        group by pgid without this wave building the cancel path.
+        group by pgid without this wave building the cancel path. The child
+        environment is SCRUBBED via
+        :func:`~eawf.runtime.sandbox.env_scrub.build_child_env` -- it
+        receives an allowlist floor (pinned ``PATH`` + ``HOME`` / locale /
+        ``TERM``) plus the claude lane's own auth, never the full parent
+        env (which would carry ``AWS_*`` / ``GH_*`` / ``SSH_*`` creds into
+        the child).
 
         This wave builds the spawn mechanism + the parse only. Metering,
         cancellation, and the schema-forced re-ask loop are separate waves
@@ -306,6 +313,7 @@ class ClaudeAdapter:
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
             cwd=cwd,
+            env=build_child_env(self.id),
         )
         pid = proc.pid
         logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")
