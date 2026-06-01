@@ -2,7 +2,7 @@
 
 Covers the final EviBound rung and the closed verdict vocabulary:
 
-* :class:`CriterionVerdict` — the closed StrEnum with exactly the five
+* :class:`EviBoundVerdict` — the closed StrEnum with exactly the five
   values ``certified | supported | refuted | unresolved | attested`` and
   no others.
 * :func:`render_attested_verdict` — the rung-4 attested render. Asserts
@@ -29,7 +29,7 @@ import pytest
 from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.workflow.evidence.rung4 import (
-    CriterionVerdict,
+    EviBoundVerdict,
     dominant_verdict,
     render_attested_verdict,
     verdict_to_status,
@@ -61,13 +61,13 @@ def _criterion(evidence_kind: str, criterion_id: str = "CR-1") -> CriterionSpec:
 
 
 # --------------------------------------------------------------------------- #
-# CriterionVerdict — the closed vocabulary (exactly five values).
+# EviBoundVerdict — the closed vocabulary (exactly five values).
 # --------------------------------------------------------------------------- #
 
 
 def test_criterion_verdict_has_exactly_five_members() -> None:
     """The closed verdict StrEnum carries exactly the five named values."""
-    assert [member.value for member in CriterionVerdict] == [
+    assert [member.value for member in EviBoundVerdict] == [
         "certified",
         "supported",
         "refuted",
@@ -79,14 +79,14 @@ def test_criterion_verdict_has_exactly_five_members() -> None:
 @pytest.mark.parametrize(
     ("member", "value"),
     [
-        (CriterionVerdict.CERTIFIED, "certified"),
-        (CriterionVerdict.SUPPORTED, "supported"),
-        (CriterionVerdict.REFUTED, "refuted"),
-        (CriterionVerdict.UNRESOLVED, "unresolved"),
-        (CriterionVerdict.ATTESTED, "attested"),
+        (EviBoundVerdict.CERTIFIED, "certified"),
+        (EviBoundVerdict.SUPPORTED, "supported"),
+        (EviBoundVerdict.REFUTED, "refuted"),
+        (EviBoundVerdict.UNRESOLVED, "unresolved"),
+        (EviBoundVerdict.ATTESTED, "attested"),
     ],
 )
-def test_criterion_verdict_value_strings(member: CriterionVerdict, value: str) -> None:
+def test_criterion_verdict_value_strings(member: EviBoundVerdict, value: str) -> None:
     """Each member's wire value is the exact lowercase verdict string."""
     assert member.value == value
     assert member == value  # StrEnum compares equal to its string value.
@@ -100,21 +100,21 @@ def test_criterion_verdict_value_strings(member: CriterionVerdict, value: str) -
 @pytest.mark.parametrize(
     ("verdict", "status"),
     [
-        (CriterionVerdict.CERTIFIED, "pass"),
-        (CriterionVerdict.SUPPORTED, "pass"),
-        (CriterionVerdict.REFUTED, "fail"),
-        (CriterionVerdict.UNRESOLVED, "blocked"),
-        (CriterionVerdict.ATTESTED, "pass"),
+        (EviBoundVerdict.CERTIFIED, "pass"),
+        (EviBoundVerdict.SUPPORTED, "pass"),
+        (EviBoundVerdict.REFUTED, "fail"),
+        (EviBoundVerdict.UNRESOLVED, "blocked"),
+        (EviBoundVerdict.ATTESTED, "pass"),
     ],
 )
-def test_verdict_to_status(verdict: CriterionVerdict, status: str) -> None:
+def test_verdict_to_status(verdict: EviBoundVerdict, status: str) -> None:
     """Each verdict collapses to the documented binary EvidenceStatus."""
     assert verdict_to_status(verdict) == status
 
 
 def test_verdict_to_status_covers_every_verdict() -> None:
     """The status map is total over the closed verdict vocabulary."""
-    for verdict in CriterionVerdict:
+    for verdict in EviBoundVerdict:
         assert verdict_to_status(verdict) in ("pass", "fail", "blocked", "waived")
 
 
@@ -125,38 +125,38 @@ def test_verdict_to_status_covers_every_verdict() -> None:
 
 def test_dominant_verdict_single() -> None:
     """A single-element reduction returns that element."""
-    assert dominant_verdict([CriterionVerdict.CERTIFIED]) is CriterionVerdict.CERTIFIED
+    assert dominant_verdict([EviBoundVerdict.CERTIFIED]) is EviBoundVerdict.CERTIFIED
 
 
 def test_dominant_verdict_refuted_dominates_certified() -> None:
     """A confident REFUTED wins over a co-resident CERTIFIED (refute-first)."""
     assert (
-        dominant_verdict([CriterionVerdict.CERTIFIED, CriterionVerdict.REFUTED])
-        is CriterionVerdict.REFUTED
+        dominant_verdict([EviBoundVerdict.CERTIFIED, EviBoundVerdict.REFUTED])
+        is EviBoundVerdict.REFUTED
     )
 
 
 def test_dominant_verdict_unresolved_dominates_certified() -> None:
     """An UNRESOLVED criterion is NOT certified on a co-resident pass."""
     assert (
-        dominant_verdict([CriterionVerdict.CERTIFIED, CriterionVerdict.UNRESOLVED])
-        is CriterionVerdict.UNRESOLVED
+        dominant_verdict([EviBoundVerdict.CERTIFIED, EviBoundVerdict.UNRESOLVED])
+        is EviBoundVerdict.UNRESOLVED
     )
 
 
 def test_dominant_verdict_unresolved_dominates_attested() -> None:
     """UNRESOLVED dominates the lowest-assurance ATTESTED verdict."""
     assert (
-        dominant_verdict([CriterionVerdict.ATTESTED, CriterionVerdict.UNRESOLVED])
-        is CriterionVerdict.UNRESOLVED
+        dominant_verdict([EviBoundVerdict.ATTESTED, EviBoundVerdict.UNRESOLVED])
+        is EviBoundVerdict.UNRESOLVED
     )
 
 
 def test_dominant_verdict_refuted_beats_unresolved() -> None:
     """A confident contradiction outranks the merely-uncertain verdict."""
     assert (
-        dominant_verdict([CriterionVerdict.UNRESOLVED, CriterionVerdict.REFUTED])
-        is CriterionVerdict.REFUTED
+        dominant_verdict([EviBoundVerdict.UNRESOLVED, EviBoundVerdict.REFUTED])
+        is EviBoundVerdict.REFUTED
     )
 
 
@@ -165,34 +165,34 @@ def test_dominant_verdict_certified_beats_supported_and_attested() -> None:
     assert (
         dominant_verdict(
             [
-                CriterionVerdict.ATTESTED,
-                CriterionVerdict.SUPPORTED,
-                CriterionVerdict.CERTIFIED,
+                EviBoundVerdict.ATTESTED,
+                EviBoundVerdict.SUPPORTED,
+                EviBoundVerdict.CERTIFIED,
             ]
         )
-        is CriterionVerdict.CERTIFIED
+        is EviBoundVerdict.CERTIFIED
     )
 
 
 def test_dominant_verdict_supported_beats_attested() -> None:
     """SUPPORTED (entailment) outranks the attested floor."""
     assert (
-        dominant_verdict([CriterionVerdict.ATTESTED, CriterionVerdict.SUPPORTED])
-        is CriterionVerdict.SUPPORTED
+        dominant_verdict([EviBoundVerdict.ATTESTED, EviBoundVerdict.SUPPORTED])
+        is EviBoundVerdict.SUPPORTED
     )
 
 
 def test_dominant_verdict_is_order_independent() -> None:
     """The reduction does not depend on input ordering."""
     bag = [
-        CriterionVerdict.ATTESTED,
-        CriterionVerdict.CERTIFIED,
-        CriterionVerdict.REFUTED,
-        CriterionVerdict.SUPPORTED,
-        CriterionVerdict.UNRESOLVED,
+        EviBoundVerdict.ATTESTED,
+        EviBoundVerdict.CERTIFIED,
+        EviBoundVerdict.REFUTED,
+        EviBoundVerdict.SUPPORTED,
+        EviBoundVerdict.UNRESOLVED,
     ]
-    assert dominant_verdict(bag) is CriterionVerdict.REFUTED
-    assert dominant_verdict(list(reversed(bag))) is CriterionVerdict.REFUTED
+    assert dominant_verdict(bag) is EviBoundVerdict.REFUTED
+    assert dominant_verdict(list(reversed(bag))) is EviBoundVerdict.REFUTED
 
 
 def test_dominant_verdict_empty_raises() -> None:
@@ -226,8 +226,8 @@ def test_render_attested_verdict_is_lowest_assurance() -> None:
     assurance lives in the verdict, not in a richer status.
     """
     record = render_attested_verdict(_attested_criterion(), scope_id=_SCOPE)
-    assert record.status == verdict_to_status(CriterionVerdict.ATTESTED)
-    assert CriterionVerdict.ATTESTED.value in record.summary
+    assert record.status == verdict_to_status(EviBoundVerdict.ATTESTED)
+    assert EviBoundVerdict.ATTESTED.value in record.summary
 
 
 def test_render_attested_verdict_summary_marks_render_only() -> None:

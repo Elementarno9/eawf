@@ -15,12 +15,12 @@ The four EviBound rungs form an assurance ladder. Rung-1 is the highest
 assurance (an automated bit nobody can fudge); rung-4 is the LOWEST (a
 sign-off with no automated check behind it):
 
-* rung-1 deterministic gate  -> :attr:`CriterionVerdict.CERTIFIED`
-* rung-2 / rung-3 entailment  -> :attr:`CriterionVerdict.SUPPORTED`
-  (passing) or :attr:`CriterionVerdict.REFUTED` (confident contradiction)
-  or :attr:`CriterionVerdict.UNRESOLVED` (the uncertain band that never
+* rung-1 deterministic gate  -> :attr:`EviBoundVerdict.CERTIFIED`
+* rung-2 / rung-3 entailment  -> :attr:`EviBoundVerdict.SUPPORTED`
+  (passing) or :attr:`EviBoundVerdict.REFUTED` (confident contradiction)
+  or :attr:`EviBoundVerdict.UNRESOLVED` (the uncertain band that never
   silently certifies)
-* rung-4 attested             -> :attr:`CriterionVerdict.ATTESTED`
+* rung-4 attested             -> :attr:`EviBoundVerdict.ATTESTED`
 
 Rung-4 is RENDER-ONLY — the landmine
 ------------------------------------
@@ -41,7 +41,7 @@ render.
 
 The closed verdict vocabulary + refute-first ordering
 ------------------------------------------------------
-:class:`CriterionVerdict` is the closed StrEnum every EviBound rung
+:class:`EviBoundVerdict` is the closed StrEnum every EviBound rung
 reports a criterion against. The members are declared high-to-low by
 assurance, but the load-bearing semantic is the *refute-first* combine
 ordering used when one criterion accrues evidence from several rungs (or
@@ -71,7 +71,7 @@ from eawf.kernel.store.kinds.evidence import (
 logger = logging.getLogger(__name__)
 
 
-class CriterionVerdict(StrEnum):
+class EviBoundVerdict(StrEnum):
     """The closed verdict an EviBound rung reports a criterion against.
 
     Exactly five members, declared high-to-low by assurance. The string
@@ -123,12 +123,12 @@ class CriterionVerdict(StrEnum):
 #: verdict pre-empts them all.
 #:
 #:   REFUTED (0) < UNRESOLVED (1) < CERTIFIED (2) < SUPPORTED (3) < ATTESTED (4)
-_REFUTE_FIRST_PRECEDENCE: Final[dict[CriterionVerdict, int]] = {
-    CriterionVerdict.REFUTED: 0,
-    CriterionVerdict.UNRESOLVED: 1,
-    CriterionVerdict.CERTIFIED: 2,
-    CriterionVerdict.SUPPORTED: 3,
-    CriterionVerdict.ATTESTED: 4,
+_REFUTE_FIRST_PRECEDENCE: Final[dict[EviBoundVerdict, int]] = {
+    EviBoundVerdict.REFUTED: 0,
+    EviBoundVerdict.UNRESOLVED: 1,
+    EviBoundVerdict.CERTIFIED: 2,
+    EviBoundVerdict.SUPPORTED: 3,
+    EviBoundVerdict.ATTESTED: 4,
 }
 
 #: Map each closed verdict onto the persisted binary
@@ -138,17 +138,17 @@ _REFUTE_FIRST_PRECEDENCE: Final[dict[CriterionVerdict, int]] = {
 #: ``ATTESTED`` persists as ``"pass"`` because a recorded sign-off is the
 #: attested floor's affirmative outcome (its low assurance lives in the
 #: verdict + ``evidence_kind``, not in the binary status).
-_VERDICT_STATUS: Final[dict[CriterionVerdict, EvidenceStatus]] = {
-    CriterionVerdict.CERTIFIED: "pass",
-    CriterionVerdict.SUPPORTED: "pass",
-    CriterionVerdict.REFUTED: "fail",
-    CriterionVerdict.UNRESOLVED: "blocked",
-    CriterionVerdict.ATTESTED: "pass",
+_VERDICT_STATUS: Final[dict[EviBoundVerdict, EvidenceStatus]] = {
+    EviBoundVerdict.CERTIFIED: "pass",
+    EviBoundVerdict.SUPPORTED: "pass",
+    EviBoundVerdict.REFUTED: "fail",
+    EviBoundVerdict.UNRESOLVED: "blocked",
+    EviBoundVerdict.ATTESTED: "pass",
 }
 
 
-def verdict_to_status(verdict: CriterionVerdict) -> EvidenceStatus:
-    """Map a closed :class:`CriterionVerdict` onto the persisted binary status.
+def verdict_to_status(verdict: EviBoundVerdict) -> EvidenceStatus:
+    """Map a closed :class:`EviBoundVerdict` onto the persisted binary status.
 
     The verdict vocabulary is richer than the binary
     :class:`~eawf.kernel.store.kinds.evidence.EvidenceStatus` the store
@@ -167,7 +167,7 @@ def verdict_to_status(verdict: CriterionVerdict) -> EvidenceStatus:
     return _VERDICT_STATUS[verdict]
 
 
-def dominant_verdict(verdicts: list[CriterionVerdict]) -> CriterionVerdict:
+def dominant_verdict(verdicts: list[EviBoundVerdict]) -> EviBoundVerdict:
     """Return the refute-first dominant verdict among *verdicts*.
 
     When a criterion accrues several verdicts — from several EviBound
@@ -213,7 +213,7 @@ def render_attested_verdict(
     this function runs NO gate — no subprocess, no diff-base, no reference
     resolution, no NLI score. It RENDERS the attestation into an
     :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` whose
-    verdict is :attr:`CriterionVerdict.ATTESTED` and whose ``status`` is
+    verdict is :attr:`EviBoundVerdict.ATTESTED` and whose ``status`` is
     ``"pass"`` (the attested floor's affirmative outcome; its low
     assurance lives in the verdict + ``evidence_kind``, not the status).
 
@@ -270,20 +270,20 @@ def render_attested_verdict(
         scope_id=scope_id,
         produced_by=attested_by,
         evidence_kind="attested",
-        status=verdict_to_status(CriterionVerdict.ATTESTED),
+        status=verdict_to_status(EviBoundVerdict.ATTESTED),
         summary=summary[:500],
         refs=[criterion.id],
         created_at=datetime.now(UTC),
     )
     logger.debug(
         f"render_attested_verdict criterion={criterion.id!r} by={attested_by!r} "
-        f"verdict={CriterionVerdict.ATTESTED.value}"
+        f"verdict={EviBoundVerdict.ATTESTED.value}"
     )
     return record
 
 
 __all__ = [
-    "CriterionVerdict",
+    "EviBoundVerdict",
     "dominant_verdict",
     "render_attested_verdict",
     "verdict_to_status",
