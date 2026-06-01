@@ -1415,6 +1415,18 @@
       "scope_id": "P29-I02-W10",
       "status": "done",
       "updated_at": "2026-06-01T16:52:40.483350Z"
+    },
+    "P29-I02-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W11",
+      "scope_id": "P29-I02-W11",
+      "status": "done",
+      "updated_at": "2026-06-01T17:11:58.875597Z"
     }
   },
   "agent_sessions": {
@@ -7751,6 +7763,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W10",
       "updated_at": "2026-06-01T16:44:39.240496Z"
+    },
+    "P29-I02-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W11-bucket-20260601T165940Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I02-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I02-W11",
+      "updated_at": "2026-06-01T16:59:40.948632Z"
     }
   },
   "goals": {
@@ -9724,7 +9749,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T16:52:40.483683Z",
+  "updated_at": "2026-06-01T17:11:58.876037Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29078,9 +29103,9 @@
     "P29-I02-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T17:11:58.875597Z",
+      "commit": "458ae78b0f28f29e32f77fab249388ee95579d61",
       "deps": [],
       "description": "[CLI-11 | scope I01 | SF] ship-process doc + housekeeping.",
       "dispatch_history": [],
@@ -29092,10 +29117,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.254594Z",
-      "outcome": null,
+      "outcome": "ship-process AGENTS.md doc (new rule 30 block via core.yaml + eawf sync; composer doesn't hard-wrap so eawf014+budget green, no fallback needed); EAWF010 exclude for roadmap.py+plan_view.py (test_eawf_loc_cap green); v0.5.0 migration note (1.1->1.2); MemoryTier docstring drift fixed; golden agents_md regen; mypy src/ clean (560 files), pre-commit clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "ship-process documented in AGENTS.md; drift-doc housekeeping pass"
       ],
