@@ -478,6 +478,7 @@ class StoreKind(StrEnum):
     CONFIG_UPDATED = "config_updated"
     REGISTRY_UPDATED = "registry_updated"
     SPEC_UPDATED = "spec_updated"
+    RESEARCH_CAMPAIGN = "research_campaign"
 
 
 class ArtifactKind(StrEnum):

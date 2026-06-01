@@ -35,6 +35,7 @@ from eawf.kernel.store.kinds.flow import FlowPayload
 from eawf.kernel.store.kinds.incident import IncidentPayload
 from eawf.kernel.store.kinds.memory import MemoryPayload
 from eawf.kernel.store.kinds.research import ResearchPayload
+from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 
 
 def _make_envelope(kind: StoreKind, payload: dict[str, object]) -> Envelope:
@@ -512,6 +513,65 @@ def test_agent_report_store_kind_helpers() -> None:
     )
     with pytest.raises(ValueError, match="not an agent report kind"):
         role_for_store_kind(StoreKind.EVENT)
+
+
+# ---------------------------------------------------------------------------
+# ResearchCampaignPayload
+# ---------------------------------------------------------------------------
+
+
+def _campaign_raw(domains: dict[str, object]) -> dict[str, object]:
+    return {
+        "campaign_id": "RC-001",
+        "config": {"default_depth": "medium", "domains": domains},
+        "campaign": {
+            "topic": "market structure",
+            "spawned": False,
+            "dispatches": [
+                {
+                    "domain": domain,
+                    "agent_role": "researcher",
+                    "depth": "medium",
+                    "prompt": "market structure",
+                    "read_only": True,
+                }
+                for domain in sorted(domains)
+            ],
+        },
+    }
+
+
+def test_research_campaign_valid_round_trip() -> None:
+    raw = _campaign_raw({"a": {}, "b": {"depth": "deep"}})
+    env = _make_envelope(StoreKind.RESEARCH_CAMPAIGN, raw)
+    loaded = Envelope.model_validate_json(env.model_dump_json())
+    payload = PAYLOAD_MODELS[StoreKind.RESEARCH_CAMPAIGN].model_validate(loaded.payload)
+    assert isinstance(payload, ResearchCampaignPayload)
+    assert payload.campaign.spawned is False
+    assert payload.campaign_id == "RC-001"
+    assert {d.domain for d in payload.campaign.dispatches} == {"a", "b"}
+
+
+def test_research_campaign_invalid_missing_campaign_id() -> None:
+    raw = _campaign_raw({"a": {}})
+    del raw["campaign_id"]
+    with pytest.raises(ValidationError):
+        ResearchCampaignPayload.model_validate(raw)
+
+
+def test_research_campaign_rejects_spawned_true() -> None:
+    raw = _campaign_raw({"a": {}})
+    raw["campaign"]["spawned"] = True  # type: ignore[index]
+    with pytest.raises(ValidationError):
+        ResearchCampaignPayload.model_validate(raw)
+
+
+def test_research_campaign_rejects_over_max_dispatches() -> None:
+    from eawf.kernel.spec.research_campaign import MAX_STAGED_DISPATCHES
+
+    too_many = {f"d{i:03d}": {} for i in range(MAX_STAGED_DISPATCHES + 1)}
+    with pytest.raises(ValidationError, match="exceeds max"):
+        ResearchCampaignPayload.model_validate(_campaign_raw(too_many))
 
 
 # ---------------------------------------------------------------------------

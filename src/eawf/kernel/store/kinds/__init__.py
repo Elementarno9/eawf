@@ -18,6 +18,7 @@ from eawf.kernel.store.kinds.incident import IncidentPayload
 from eawf.kernel.store.kinds.memory import MemoryPayload
 from eawf.kernel.store.kinds.registry_updated import RegistryUpdatedPayload
 from eawf.kernel.store.kinds.research import ResearchPayload
+from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.kinds.spec_updated import SpecUpdatedPayload
 from eawf.kernel.store.kinds.subscription_lag import SubscriptionLagPayload
 
@@ -44,4 +45,5 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.CONFIG_UPDATED: ConfigUpdatedPayload,
     StoreKind.REGISTRY_UPDATED: RegistryUpdatedPayload,
     StoreKind.SPEC_UPDATED: SpecUpdatedPayload,
+    StoreKind.RESEARCH_CAMPAIGN: ResearchCampaignPayload,
 }
