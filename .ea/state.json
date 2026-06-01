@@ -1367,6 +1367,18 @@
       "scope_id": "P29-I02-W06",
       "status": "done",
       "updated_at": "2026-06-01T16:01:03.022784Z"
+    },
+    "P29-I02-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W07",
+      "scope_id": "P29-I02-W07",
+      "status": "done",
+      "updated_at": "2026-06-01T16:19:09.272699Z"
     }
   },
   "agent_sessions": {
@@ -7651,6 +7663,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W06",
       "updated_at": "2026-06-01T15:48:17.820376Z"
+    },
+    "P29-I02-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W07-bucket-20260601T160154Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W07",
+      "updated_at": "2026-06-01T16:01:54.485728Z"
     }
   },
   "goals": {
@@ -9624,7 +9649,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T16:01:03.023115Z",
+  "updated_at": "2026-06-01T16:19:09.273026Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28859,9 +28884,9 @@
     "P29-I02-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T16:19:09.272699Z",
+      "commit": "abc44a7da91d6e3d9b3594bdbc8123bc2845aab8",
       "deps": [],
       "description": "[CLI-7 | scope T3/dec12 | SF] autoland back-half over wave land/land-batch.",
       "dispatch_history": [],
@@ -28873,10 +28898,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.253350Z",
-      "outcome": null,
+      "outcome": "eawf wave autoland back-half: autoland.py orchestrator + daemon state.wave_autoland RPC + CLI verb; landable=CLOSED+worktree-stamped+un-landed, Kahn dep-order (ties by wave id), stop-on-conflict exits STATE_CONFLICT reporting failed+remaining, reuses merge_back/cleanup; --dry-run/--iter/--keep-worktree; 185 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf wave autoland completes the land back-half (cherry-pick in dep order, stop on failure)"
       ],
