@@ -16,6 +16,11 @@ Public surface:
   ``/research`` survey-depth ladder
 - :class:`~eawf.kernel.spec.audit.AuditSpec` — declarative audit doc
   consumed by the audit-DSL runner
+- :class:`~eawf.kernel.spec.operator_input.OperatorInput` — one append-only
+  mid-run operator input; :class:`~eawf.kernel.spec.operator_input.OperatorInputChannel`
+  folds the log (D-2 blocking-only pause / D-3 override persists-locked)
+- :class:`~eawf.kernel.spec.operator_input.CampaignProgressState` — pure
+  projection of a campaign's round + per-domain progress
 - :class:`~eawf.kernel.spec.common.VerdictCitation` — citation tying a spec
   to the verdict (V/D/R/H) it implements
 - :class:`~eawf.kernel.spec.common.EvidenceRef` — one row of a hypothesis
@@ -47,6 +52,7 @@ from typing import Any
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ARGV_BEARING_GATE_KINDS": ("promotion", "ARGV_BEARING_GATE_KINDS"),
     "AUDIT_CADENCE_VALUES": ("audit", "AUDIT_CADENCE_VALUES"),
+    "BLOCKING_URGENCY": ("operator_input", "BLOCKING_URGENCY"),
     "DEFAULT_CAMPAIGN_ROLE": ("research_campaign", "DEFAULT_CAMPAIGN_ROLE"),
     "DEFAULT_CHECKPOINT_INTERVAL": ("round_loop", "DEFAULT_CHECKPOINT_INTERVAL"),
     "DEFAULT_GATE_ARGV_ALLOWLIST": ("promotion", "DEFAULT_GATE_ARGV_ALLOWLIST"),
@@ -59,17 +65,24 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MAX_STAGED_DISPATCHES": ("research_campaign", "MAX_STAGED_DISPATCHES"),
     "RESEARCH_DEPTH_VALUES": ("research", "RESEARCH_DEPTH_VALUES"),
     "UI_SCOPE_PREFIXES": ("heuristics", "UI_SCOPE_PREFIXES"),
+    "AddQuestionPayload": ("operator_input", "AddQuestionPayload"),
     "AuditCadence": ("audit", "AuditCadence"),
     "AuditSpec": ("audit", "AuditSpec"),
     "BriefPathStr": ("common", "BriefPathStr"),
+    "CampaignProgressKind": ("operator_input", "CampaignProgressKind"),
+    "CampaignProgressState": ("operator_input", "CampaignProgressState"),
+    "ChannelFold": ("operator_input", "ChannelFold"),
     "Checkpoint": ("round_loop", "Checkpoint"),
     "CheckpointPolicy": ("round_loop", "CheckpointPolicy"),
     "CheckpointTier": ("round_loop", "CheckpointTier"),
     "CriterionAcceptanceStyle": ("common", "CriterionAcceptanceStyle"),
     "CriterionEvidenceKind": ("common", "CriterionEvidenceKind"),
     "CriterionSpec": ("common", "CriterionSpec"),
+    "DomainProgress": ("operator_input", "DomainProgress"),
+    "DomainProgressStatus": ("operator_input", "DomainProgressStatus"),
     "DropReason": ("pruning", "DropReason"),
     "DroppedClaim": ("pruning", "DroppedClaim"),
+    "EffectiveOverride": ("operator_input", "EffectiveOverride"),
     "EvidenceRef": ("common", "EvidenceRef"),
     "FileScopeRef": ("common", "FileScopeRef"),
     "GateCadence": ("common", "GateCadence"),
@@ -79,6 +92,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "IterAuditCadence": ("iter", "IterAuditCadence"),
     "IterSpec": ("iter", "IterSpec"),
     "IterWaveGroup": ("iter", "IterWaveGroup"),
+    "OperatorInput": ("operator_input", "OperatorInput"),
+    "OperatorInputChannel": ("operator_input", "OperatorInputChannel"),
+    "OperatorInputKind": ("operator_input", "OperatorInputKind"),
+    "OverridePayload": ("operator_input", "OverridePayload"),
     "PhaseEUEnvelope": ("phase", "PhaseEUEnvelope"),
     "PhaseKPI": ("phase", "PhaseKPI"),
     "PhaseShipCriterion": ("phase", "PhaseShipCriterion"),
@@ -98,6 +115,8 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "SpecValidationError": ("validators", "SpecValidationError"),
     "StagedCampaign": ("research_campaign", "StagedCampaign"),
     "StagedDispatch": ("research_campaign", "StagedDispatch"),
+    "SteerAction": ("operator_input", "SteerAction"),
+    "SteerPayload": ("operator_input", "SteerPayload"),
     "TestRef": ("common", "TestRef"),
     "VerdictCitation": ("common", "VerdictCitation"),
     "VerdictIdStr": ("common", "VerdictIdStr"),
