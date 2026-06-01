@@ -191,7 +191,7 @@ def _trust_factory(_app: EaApp) -> Screen[None]:
     return TrustModeScreen()
 
 
-def _feed_screen() -> Screen[None]:
+def _feed_factory(_app: EaApp) -> Screen[None]:
     """Build the live-feed pane for the Feed mode (digit 5).
 
     Lazy-imports :class:`~eawf.surfaces.tui.modes.feed.FeedModeScreen` (which
@@ -199,6 +199,9 @@ def _feed_screen() -> Screen[None]:
     same deferral :func:`_placeholder_factory` uses. The pane subscribes to
     the App's live-event seam on mount, so it needs no per-instance launch
     state and ignores the app argument.
+
+    Args:
+        _app: The live app (unused; the screen subscribes on mount).
 
     Returns:
         A fresh :class:`FeedModeScreen` for the Feed mode's screen stack.
@@ -242,7 +245,7 @@ MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("trust", "2", "Trust", _trust_factory),
     ModeSpec("doctor", "3", "Doctor", _doctor_factory),
     ModeSpec("evidence", "4", "Evidence", _evidence_factory),
-    ModeSpec("feed", "5", "Feed", lambda _app: _feed_screen()),
+    ModeSpec("feed", "5", "Feed", _feed_factory),
     ModeSpec("config", "6", "Config", _placeholder_factory("Config")),
 )
 
