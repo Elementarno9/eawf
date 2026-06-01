@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 
 import orjson
 
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind, Urgency
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -70,6 +70,11 @@ _SCOPE_ID_KEY = "scope_id"
 #: ``extras`` key holding the chosen option label on a resume row.
 _CHOICE_KEY = "choice"
 
+#: ``extras`` key holding the :class:`~eawf.kernel.state.enums.Urgency` value on
+#: a pause row. Older rows predate the key; the scanner defaults them to
+#: :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` so the field is additive.
+_URGENCY_KEY = "urgency"
+
 
 class PauseError(ValueError):
     """Raised when a pause cannot be resolved.
@@ -91,9 +96,15 @@ class OpenPause:
         session: Originating session URN (``""`` when the pause row
             omitted it).
         question: The decoded :class:`UserQuestion` the operator answers.
+        urgency: Shared :class:`~eawf.kernel.state.enums.Urgency` ranking how
+            soon the operator should look at the pause. The same ladder ranks a
+            research-campaign :class:`~eawf.kernel.state.models.OpenQuestion` and
+            the attention feed, so a pause sorts against open questions on one
+            comparable scale. Legacy rows that predate the field decode as
+            :attr:`~eawf.kernel.state.enums.Urgency.NORMAL`.
     """
 
-    __slots__ = ("pause_urn", "question", "scope_id", "session")
+    __slots__ = ("pause_urn", "question", "scope_id", "session", "urgency")
 
     def __init__(
         self,
@@ -102,11 +113,13 @@ class OpenPause:
         scope_id: str,
         session: str,
         question: UserQuestion,
+        urgency: Urgency = Urgency.NORMAL,
     ) -> None:
         self.pause_urn = pause_urn
         self.scope_id = scope_id
         self.session = session
         self.question = question
+        self.urgency = urgency
 
 
 def build_pause_urn(scope_id: str) -> str:
@@ -127,6 +140,7 @@ def _pause_envelope(
     scope_id: str,
     session: str,
     question: UserQuestion,
+    urgency: Urgency,
 ) -> Envelope:
     """Build the EVENT envelope that records a pause."""
     now = datetime.now(UTC)
@@ -143,6 +157,7 @@ def _pause_envelope(
             _SCOPE_ID_KEY: scope_id,
             _SESSION_KEY: session,
             _QUESTION_KEY: question.model_dump_json(),
+            _URGENCY_KEY: urgency.value,
         },
     )
     return Envelope(
@@ -186,6 +201,7 @@ def record_pause(
     scope_id: str,
     session: str,
     question: UserQuestion,
+    urgency: Urgency = Urgency.NORMAL,
     publish: Callable[[Envelope], None] | None = None,
 ) -> str:
     """Persist a needs_user pause and return its ``pause-urn``.
@@ -200,6 +216,10 @@ def record_pause(
         scope_id: Scope the pause belongs to.
         session: Originating session URN.
         question: The validated :class:`UserQuestion` to persist.
+        urgency: Shared :class:`~eawf.kernel.state.enums.Urgency` ranking how
+            soon the operator should look at the pause. Defaults to
+            :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` so the field is
+            additive for callers that do not rank a pause.
         publish: Optional daemon bus publisher invoked after the durable
             append succeeds.
 
@@ -212,11 +232,12 @@ def record_pause(
         scope_id=scope_id,
         session=session,
         question=question,
+        urgency=urgency,
     )
     append_envelope(store_path(state_path, StoreKind.EVENT), envelope)
     if publish is not None:
         publish(envelope)
-    logger.info(f"record_pause scope={scope_id!r} pause_urn={pause_urn!r}")
+    logger.info(f"record_pause scope={scope_id!r} pause_urn={pause_urn!r} urgency={urgency.value}")
     return pause_urn
 
 
@@ -262,6 +283,26 @@ def _payload_scope_id(env_scope: str | None, extras: dict[str, Any]) -> str:
     if isinstance(legacy_scope, str):
         return legacy_scope
     return ""
+
+
+def _decode_urgency(raw_urgency: object) -> Urgency:
+    """Decode the urgency from a pause row, defaulting legacy rows to NORMAL.
+
+    Args:
+        raw_urgency: The ``extras`` urgency token (a string on current rows,
+            absent on legacy rows that predate the field).
+
+    Returns:
+        The matching :class:`~eawf.kernel.state.enums.Urgency`, or
+        :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` when the token is
+        missing or out of ladder.
+    """
+    if isinstance(raw_urgency, str):
+        try:
+            return Urgency(raw_urgency)
+        except ValueError:
+            logger.debug(f"_decode_urgency skip out-of-ladder token={raw_urgency!r}")
+    return Urgency.NORMAL
 
 
 def _decode_question(raw_question: object) -> UserQuestion | None:
@@ -318,6 +359,7 @@ def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[O
                 scope_id=row_scope_id,
                 session=session if isinstance(session, str) else "",
                 question=question,
+                urgency=_decode_urgency(payload.extras.get(_URGENCY_KEY)),
             )
         )
     return [p for p in pending if p.pause_urn not in resolved]

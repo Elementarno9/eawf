@@ -8,12 +8,19 @@ choice).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from eawf.kernel.state.enums import StoreKind, Urgency
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.paths import store_path
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import (
+    PAUSE_EVENT_TYPE,
     OpenPause,
     PauseError,
     build_pause_urn,
@@ -121,3 +128,97 @@ def test_validate_choice_rejects_unknown_label() -> None:
     pause = OpenPause(pause_urn="x", scope_id=_SCOPE, session=_SESSION, question=_QUESTION)
     with pytest.raises(PauseError, match="invalid choice 'nope'"):
         validate_choice(pause, "nope")
+
+
+def test_open_pause_defaults_urgency_to_normal() -> None:
+    pause = OpenPause(pause_urn="x", scope_id=_SCOPE, session=_SESSION, question=_QUESTION)
+    assert pause.urgency is Urgency.NORMAL
+
+
+def test_record_pause_round_trips_urgency(state_path: Path) -> None:
+    record_pause(
+        state_path,
+        scope_id=_SCOPE,
+        session=_SESSION,
+        question=_QUESTION,
+        urgency=Urgency.URGENT,
+    )
+    pause = list_open_pauses(state_path, scope_id=_SCOPE)[0]
+    assert pause.urgency is Urgency.URGENT
+
+
+def test_record_pause_defaults_urgency_to_normal(state_path: Path) -> None:
+    record_pause(state_path, scope_id=_SCOPE, session=_SESSION, question=_QUESTION)
+    pause = list_open_pauses(state_path, scope_id=_SCOPE)[0]
+    assert pause.urgency is Urgency.NORMAL
+
+
+def test_list_open_pauses_legacy_row_without_urgency_decodes_normal(state_path: Path) -> None:
+    """A pre-urgency pause row (no urgency key in extras) decodes as NORMAL."""
+    now = datetime(2026, 5, 27, 12, 0, 0, tzinfo=UTC)
+    pause_urn = "urn:eawf:v1:event:QR/needs-user-legacy"
+    payload = EventPayload(
+        timestamp=now,
+        event_type=PAUSE_EVENT_TYPE,
+        actor="skill",
+        command="skill pause",
+        args_hash="",
+        status="needs_user",
+        message=_QUESTION.question,
+        extras={
+            "pause_urn": pause_urn,
+            "scope_id": _SCOPE,
+            "session": _SESSION,
+            "user_question": _QUESTION.model_dump_json(),
+        },
+    )
+    append_envelope(
+        store_path(state_path, StoreKind.EVENT),
+        Envelope(
+            id="EV-legacy",
+            kind=StoreKind.EVENT,
+            scope_id=_SCOPE,
+            created_at=now,
+            updated_at=None,
+            summary="legacy needs_user pause",
+            payload=payload.model_dump(mode="json"),
+        ),
+    )
+    pause = find_open_pause(state_path, pause_urn)
+    assert pause.urgency is Urgency.NORMAL
+
+
+def test_list_open_pauses_out_of_ladder_urgency_decodes_normal(state_path: Path) -> None:
+    """A pause row with a corrupt urgency token decodes as NORMAL, not a crash."""
+    now = datetime(2026, 5, 27, 12, 0, 0, tzinfo=UTC)
+    pause_urn = "urn:eawf:v1:event:QR/needs-user-corrupt"
+    payload = EventPayload(
+        timestamp=now,
+        event_type=PAUSE_EVENT_TYPE,
+        actor="skill",
+        command="skill pause",
+        args_hash="",
+        status="needs_user",
+        message=_QUESTION.question,
+        extras={
+            "pause_urn": pause_urn,
+            "scope_id": _SCOPE,
+            "session": _SESSION,
+            "user_question": _QUESTION.model_dump_json(),
+            "urgency": "yesterday",
+        },
+    )
+    append_envelope(
+        store_path(state_path, StoreKind.EVENT),
+        Envelope(
+            id="EV-corrupt",
+            kind=StoreKind.EVENT,
+            scope_id=_SCOPE,
+            created_at=now,
+            updated_at=None,
+            summary="corrupt-urgency needs_user pause",
+            payload=payload.model_dump(mode="json"),
+        ),
+    )
+    pause = find_open_pause(state_path, pause_urn)
+    assert pause.urgency is Urgency.NORMAL
