@@ -1451,6 +1451,18 @@
       "scope_id": "P29-I02-W13",
       "status": "done",
       "updated_at": "2026-06-01T17:45:33.104354Z"
+    },
+    "P29-I02-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W14",
+      "scope_id": "P29-I02-W14",
+      "status": "done",
+      "updated_at": "2026-06-01T17:53:05.529182Z"
     }
   },
   "agent_sessions": {
@@ -3794,7 +3806,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P29-I02-W15",
+      "P29-I02-W18"
+    ],
     "iter_id": "P29-I02",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -7826,6 +7841,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W13",
       "updated_at": "2026-06-01T17:24:27.245096Z"
+    },
+    "P29-I02-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W14-bucket-20260601T174809Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I02-W14",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I02-W14",
+      "updated_at": "2026-06-01T17:48:09.555859Z"
+    },
+    "P29-I02-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W15-bucket-20260601T174840Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I02-W15",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I02-W15",
+      "updated_at": "2026-06-01T17:48:40.680469Z"
+    },
+    "P29-I02-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W18-bucket-20260601T174841Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W18",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W18",
+      "updated_at": "2026-06-01T17:48:41.263441Z"
     }
   },
   "goals": {
@@ -9799,7 +9853,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T17:45:33.104766Z",
+  "updated_at": "2026-06-01T17:53:05.529586Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29246,8 +29300,8 @@
       "blocks": [
         "P29-I02-W16"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T17:53:05.529182Z",
       "commit": null,
       "deps": [],
       "description": "[TUI-19 | tui-chassis | spike] pre-claim probe for the chassis approach; gates TUI-1.",
@@ -29260,10 +29314,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.255516Z",
-      "outcome": null,
+      "outcome": "SPIKE verdict (high conf): W16 builds on Textual native App.MODES + switch_mode (not manual screen-stack); Textual 8.2.7 has full MODES API, per-mode stacks free, mode-orthogonal-to-scope. CRITICAL: W16 co-depends on W15 (switch_mode + modal-push both post ScreenSuspend -> zoom-teardown _zoom.py:109; W15 guard must land first/with). Brief: .ea/local/research/2026-06-01-w14-modes-chassis-verdict.md",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "read-only spike: Textual MODES (switch_mode in place) vs a screen-stack; verdict gates TUI-1"
       ],
@@ -29277,7 +29331,7 @@
       "blocks": [
         "P29-I02-W16"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -29294,7 +29348,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "zoom-teardown on ScreenSuspend fixed via a shared guard; prefer resume-rebuild",
         "pre-claim spike checks ScreenSuspend delivery timing vs modal append"
@@ -29386,7 +29440,7 @@
       "blocks": [
         "P29-I02-W19"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -29405,7 +29459,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "needs_user Footer badge + a global inbox screen surfacing pauses by urgency"
       ],
