@@ -404,9 +404,12 @@ def test_placeholder_mode_renders_honest_empty_coming_soon() -> None:
     asyncio.run(body())
 
 
-#: Modes whose per-pane wave has landed (real screens, not placeholders).
-#: The remaining modes still boot the honest-empty placeholder.
-_REAL_MODES: frozenset[str] = frozenset({"home", "trust"})
+#: Modes whose real pane wave has landed -- excluded from the placeholder
+#: coming-soon loop. ``home`` is the scope-bearing mode; ``trust`` is the
+#: trust-scorecard pane; ``evidence`` is the agent-report rollup pane. The
+#: remaining modes still ship as placeholders until their per-pane waves
+#: replace the registry factory.
+_REAL_PANE_MODES: frozenset[str] = frozenset({"home", "trust", "evidence"})
 
 
 def test_every_placeholder_mode_boots_and_titles_itself() -> None:
@@ -417,8 +420,8 @@ def test_every_placeholder_mode_boots_and_titles_itself() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             for spec in MODE_REGISTRY:
-                if spec.name in _REAL_MODES:
-                    continue  # home + trust are real panes, not placeholders
+                if spec.name in _REAL_PANE_MODES:
+                    continue  # real pane modes are not placeholders
                 await pilot.press(spec.digit)
                 await settle_screen(pilot)
                 assert isinstance(app.screen, PlaceholderModeScreen)

@@ -15,6 +15,7 @@ screen.
 
 from __future__ import annotations
 
+from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
 from eawf.surfaces.tui.modes.placeholder import PlaceholderModeScreen
 from eawf.surfaces.tui.modes.registry import (
     DEFAULT_MODE,
@@ -29,6 +30,7 @@ from eawf.surfaces.tui.modes.registry import (
 __all__ = [
     "DEFAULT_MODE",
     "MODE_REGISTRY",
+    "EvidenceModeScreen",
     "ModeSpec",
     "PlaceholderModeScreen",
     "build_modes",

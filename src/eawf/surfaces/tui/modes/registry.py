@@ -117,6 +117,24 @@ def _home_screen(app: EaApp) -> str:
     return "repo"
 
 
+def _evidence_factory(_app: EaApp) -> Screen[None]:
+    """Build the Evidence mode's base screen (the agent-report rollup pane).
+
+    The :class:`~eawf.surfaces.tui.modes.evidence.EvidenceModeScreen` self-
+    binds to ``app.state`` + ``app._state_path`` on mount, so the factory
+    discards the app argument here and lets the screen resolve the rollup.
+
+    Args:
+        _app: The live app (unused -- the screen reads ``app`` on mount).
+
+    Returns:
+        A fresh Evidence mode screen.
+    """
+    from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
+
+    return EvidenceModeScreen()
+
+
 def _placeholder_factory(title: str) -> ModeFactory:
     """Return a factory that builds a titled :class:`PlaceholderModeScreen`.
 
@@ -163,15 +181,16 @@ def _trust_factory(_app: EaApp) -> Screen[None]:
 
 #: The default six-mode layout seeded on the chassis. Digit order is the
 #: switch order (``1``..``6``). ``home`` (the launch default,
-#: :data:`DEFAULT_MODE`) renders the resolved scope screen and ``trust``
-#: renders the estimation trust scorecard; the remaining modes ship as
+#: :data:`DEFAULT_MODE`) renders the resolved scope screen; ``trust`` renders
+#: the estimation trust scorecard; ``evidence`` renders the agent-report
+#: rollup (honest-empty until reports exist). The remaining modes ship as
 #: honest-empty placeholders that their per-pane waves replace via the
 #: one-line registration recipe (module docstring).
 MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("home", "1", "Home", _home_screen),
     ModeSpec("trust", "2", "Trust", _trust_factory),
     ModeSpec("doctor", "3", "Doctor", _placeholder_factory("Doctor")),
-    ModeSpec("evidence", "4", "Evidence", _placeholder_factory("Evidence")),
+    ModeSpec("evidence", "4", "Evidence", _evidence_factory),
     ModeSpec("feed", "5", "Feed", _placeholder_factory("Feed")),
     ModeSpec("config", "6", "Config", _placeholder_factory("Config")),
 )
