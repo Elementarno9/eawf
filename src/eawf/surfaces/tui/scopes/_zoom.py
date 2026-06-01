@@ -16,10 +16,19 @@ that zoom lifecycle so neither host duplicates it:
   unmount before re-mounting, so a tight Esc-then-Enter (or any re-zoom)
   never inserts a second ``id="zoom-quadrant"`` before the first is
   pruned (which would raise ``DuplicateIds``).
-* :meth:`on_screen_suspend` resets the zoom when the screen is suspended
-  on a scope switch, so a cached scope screen (Textual reuses named
-  ``SCREENS`` instances) never carries a stale quadrant back when the
-  operator returns to it.
+* :meth:`on_screen_suspend` tears the quadrant down whenever the screen
+  is suspended, but distinguishes two suspends via the shared
+  :meth:`_suspend_is_transient` guard. A **real switch-away** (the screen
+  has been popped off ``app.screen_stack``) clears the zoom outright, so
+  a cached scope screen (Textual reuses named ``SCREENS`` instances)
+  never carries a stale quadrant back when the operator returns to it. A
+  **transient suspend** (a modal pushed on top — the screen stays on the
+  stack) tears the quadrant down too (so no hidden git probe keeps
+  running and the cached-screen invariant still holds) **but remembers
+  the focused repo**, and :meth:`on_screen_resume` rebuilds the quadrant
+  to that repo when the modal dismisses. Without the guard, opening the
+  ``c`` config window (or ``?`` help, ``/`` palette) over a zoomed scope
+  destroyed the zoom irrecoverably.
 
 The host parameterises only its browse-pane selector via
 :attr:`ZOOM_BROWSE_PANE` (workspace ``#pane-repos``; user
@@ -77,6 +86,12 @@ class RepoZoomMixin(_Base):
     #: A class attribute so neither host needs an ``__init__`` to seed it.
     _zoomed_code: str | None = None
 
+    #: The repo code to rebuild the quadrant against on the next
+    #: ``ScreenResume`` after a transient (modal-push) suspend, or ``None``
+    #: when there is no pending rebuild. Class attribute so neither host
+    #: needs an ``__init__`` to seed it.
+    _resume_code: str | None = None
+
     @property
     def zoomed(self) -> bool:
         """``True`` while a focused-repo quadrant is mounted."""
@@ -101,22 +116,77 @@ class RepoZoomMixin(_Base):
         restores the table. When not zoomed this falls through to the
         chassis quit so ``Esc`` still exits the app from table-browse.
         """
+        # An explicit leave cancels any pending modal-resume rebuild.
+        self._resume_code = None
         if not self.zoomed:
             await self.app.action_quit()
             return
         await self._exit_zoom()
 
+    def _suspend_is_transient(self) -> bool:
+        """Return whether the current suspend is a modal push, not a switch-away.
+
+        Textual posts ``ScreenSuspend`` to this screen in two cases that
+        the event itself cannot tell apart:
+
+        * ``App.push_screen`` (a modal opens on top) suspends the active
+          screen while leaving it **on** ``app.screen_stack``.
+        * ``App.switch_screen`` (a scope switch) pops this screen **off**
+          the stack first, then suspends it.
+
+        So stack membership at suspend time is the discriminator: a
+        transient (modal-push) suspend still finds ``self`` in the stack;
+        a real switch-away does not. The guard is the single place both
+        :meth:`on_screen_suspend` and :meth:`on_screen_resume` consult so
+        the transient-vs-real policy lives in one helper.
+
+        Returns:
+            ``True`` when a modal was pushed over this still-stacked
+            screen, ``False`` on a switch-away (or when the app has no
+            screen stack, e.g. a bare test harness).
+        """
+        stack = getattr(self.app, "screen_stack", ())
+        return self in stack
+
     async def on_screen_suspend(self) -> None:
-        """Reset the zoom when this screen is suspended on a scope switch.
+        """Tear the quadrant down on suspend; remember it for a modal rebuild.
 
         Textual reuses named ``SCREENS`` instances (a scope switch
         suspends the current screen rather than destroying it), so without
-        this a screen zoomed before the switch would carry its stale
+        a teardown a screen zoomed before the switch would carry its stale
         quadrant — and a hidden browse pane — back when the operator
-        returns. Exiting on suspend keeps a cached screen in table-browse.
+        returns. The quadrant is therefore unmounted on every suspend.
+
+        A **transient** suspend (a modal pushed on top, per
+        :meth:`_suspend_is_transient`) stashes the focused repo code into
+        :attr:`_resume_code` first, so :meth:`on_screen_resume` can rebuild
+        the same quadrant when the modal dismisses. A real switch-away
+        leaves :attr:`_resume_code` ``None`` so the cached screen returns
+        in table-browse. A no-op when not zoomed.
         """
-        if self.zoomed:
-            await self._exit_zoom()
+        if not self.zoomed:
+            return
+        if self._suspend_is_transient():
+            self._resume_code = self._zoomed_code
+        await self._exit_zoom()
+
+    async def on_screen_resume(self) -> None:
+        """Rebuild the quadrant after a transient (modal-push) suspend.
+
+        When :meth:`on_screen_suspend` stashed a :attr:`_resume_code` (a
+        modal had been pushed over a zoomed screen), the dismissing modal
+        resumes this screen — rebuild the quadrant to that repo so the
+        zoom survives the modal round-trip. The pending code is cleared
+        first so a later switch-away does not spuriously re-zoom, and the
+        rebuild routes through :meth:`_enter_zoom`, whose await-the-unmount
+        path keeps the rebuild idempotent (never two ``#zoom-quadrant``).
+        A no-op when there is no pending rebuild (a switch-back, or a
+        modal dismissed over a non-zoomed screen).
+        """
+        code = self._resume_code
+        self._resume_code = None
+        if code is not None and not self.zoomed:
+            await self._enter_zoom(code)
 
     async def _enter_zoom(self, repo_code: str) -> None:
         """Mount a fresh quadrant scoped to *repo_code*.
@@ -131,6 +201,8 @@ class RepoZoomMixin(_Base):
         Args:
             repo_code: The repo code to scope the quadrant to.
         """
+        # A fresh explicit zoom supersedes any pending modal-resume rebuild.
+        self._resume_code = None
         await self._clear_zoom_mount()
         ref = self._repo_ref(repo_code)
         if ref is None:

@@ -16,6 +16,24 @@ Two in-session reports against the P27-I04 zoom path:
   :func:`test_zoom_does_not_leak_across_scope_switch` zooms the user scope,
   switches to repo and back, and pins the returned screen un-zoomed.
 
+A third report against the same path (P29-I02-W15):
+
+* **Modal push destroyed the zoom.** Textual posts ``ScreenSuspend`` to
+  the active scope screen when a modal is pushed on top (``c`` config,
+  ``?`` help, ``/`` palette), exactly as it does on a switch-away — the
+  event cannot tell the two apart. The old ``on_screen_suspend`` tore the
+  quadrant down on every suspend, so opening a modal over a zoomed scope
+  destroyed the zoom irrecoverably; on dismiss the operator was dumped
+  back to table-browse. The fix adds the shared
+  :meth:`~eawf.surfaces.tui.scopes._zoom.RepoZoomMixin._suspend_is_transient`
+  guard (a modal push leaves the screen **on** ``app.screen_stack``; a
+  switch-away has popped it **off**), tears down on both but remembers the
+  focused repo on a transient suspend, and rebuilds the quadrant on the
+  following ``ScreenResume``. The ``_modal_*`` tests below drive
+  zoom→push-modal→dismiss and assert the zoom is rebuilt to the same repo
+  with exactly one quadrant, while a switch-away still tears down with no
+  rebuild and the guard stays idempotent under a tight round-trip.
+
 Determinism: each test awaits ``app.workers.wait_for_complete()`` after a
 zoom (per the project Pilot-worker rule — ``pilot.pause()`` is
 CPU-idle-based, not worker-aware) so a git probe's deferred repaint lands
@@ -31,7 +49,10 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Static
 
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import UserScreen, WorkspaceScreen
@@ -43,6 +64,20 @@ _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 #: The single repo code seeded in the workspace fixture's repo index.
 _FIXTURE_REPO = "QR"
+
+
+class _ProbeModal(ModalScreen[None]):
+    """A minimal modal for exercising the transient-suspend lifecycle.
+
+    Pushing any :class:`~textual.screen.ModalScreen` posts ``ScreenSuspend``
+    to the scope screen underneath and ``ScreenResume`` when it dismisses,
+    which is the exact Textual path the zoom guard must survive. This stub
+    stands in for the real config / help / palette overlays so the test
+    isolates the zoom-rebuild behaviour from any overlay's own internals.
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Static("probe-modal")
 
 
 @pytest.fixture(autouse=True)
@@ -167,5 +202,212 @@ def test_zoom_does_not_leak_across_scope_switch() -> None:
             assert not back.zoomed
             assert len(back.query("#zoom-quadrant")) == 0
             assert back.query_one("#pane-portfolio", Vertical).display is True
+
+    asyncio.run(body())
+
+
+def test_suspend_is_transient_distinguishes_modal_from_switch_away() -> None:
+    """The shared guard reads stack membership: modal-on-top vs popped-off.
+
+    A pushed modal leaves the scope screen **on** ``app.screen_stack`` so
+    the guard reports a transient suspend; popping back to the bare screen
+    leaves it the top of the stack (still a member), and the guard only
+    reports a real switch-away once the screen has been popped off — which
+    :func:`test_zoom_torn_down_on_real_switch_away` exercises end to end.
+    Here the unit check pins the membership predicate directly.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            # Top of the stack -> a member -> transient (no switch-away).
+            assert screen._suspend_is_transient() is True
+            app.push_screen(_ProbeModal())
+            await pilot.pause()
+            # A modal sits on top, the scope screen is still stacked beneath.
+            assert screen._suspend_is_transient() is True
+            app.pop_screen()
+            await pilot.pause()
+            assert screen._suspend_is_transient() is True
+
+    asyncio.run(body())
+
+
+def test_zoom_survives_modal_push_dismiss_resume_rebuild() -> None:
+    """Zoom -> push modal (transient suspend) -> dismiss -> zoom rebuilt.
+
+    Reproduces the W15 report: pushing a modal over a zoomed scope posts
+    ``ScreenSuspend`` to the scope screen exactly as a switch-away does, so
+    the old unconditional teardown destroyed the zoom and the dismiss
+    dumped the operator to table-browse. The guard tears the quadrant down
+    on the transient suspend (no hidden git probe survives) but remembers
+    the focused repo, and ``on_screen_resume`` rebuilds it on dismiss.
+    Asserts the rebuilt quadrant is scoped to the same repo, the browse
+    pane is hidden again, and exactly one ``#zoom-quadrant`` exists.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            await screen.on_workspace_table_row_zoomed(WorkspaceTable.RowZoomed(_FIXTURE_REPO))
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.zoomed
+            assert screen._zoomed_code == _FIXTURE_REPO
+            assert len(screen.query("#zoom-quadrant")) == 1
+            # Push a modal: the scope screen is suspended while it stays on
+            # the stack. The quadrant is torn down but the repo remembered.
+            app.push_screen(_ProbeModal())
+            await pilot.pause()
+            assert app.screen.__class__.__name__ == "_ProbeModal"
+            assert not screen.zoomed
+            assert len(screen.query("#zoom-quadrant")) == 0
+            assert screen._resume_code == _FIXTURE_REPO
+            # Dismiss the modal: ScreenResume rebuilds the quadrant.
+            app.pop_screen()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert app.screen is screen
+            assert screen.zoomed
+            assert screen._zoomed_code == _FIXTURE_REPO
+            assert screen._resume_code is None
+            assert len(screen.query("#zoom-quadrant")) == 1
+            assert screen.query_one("#pane-repos", Vertical).display is False
+
+    asyncio.run(body())
+
+
+def test_zoom_modal_keypath_config_window_round_trip() -> None:
+    """The real ``c`` config window over a zoom is a transient suspend.
+
+    Drives the operator key path end to end: zoom the focused repo, press
+    ``c`` to open the registry-driven config modal (a real
+    :class:`~textual.screen.ModalScreen` pushed via the app's modal-cap
+    helper), then ``Esc`` to dismiss it. The zoom must come back rebuilt to
+    the same repo with a single quadrant — proving the guard handles the
+    production modal, not only the test stub.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.zoomed
+            await pilot.press("c")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert app.screen.__class__.__name__ == "ConfigModal"
+            assert not screen.zoomed
+            assert screen._resume_code == _FIXTURE_REPO
+            await pilot.press("escape")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            back = app.screen
+            assert isinstance(back, WorkspaceScreen)
+            assert back is screen
+            assert back.zoomed
+            assert back._zoomed_code == _FIXTURE_REPO
+            assert back._resume_code is None
+            assert len(back.query("#zoom-quadrant")) == 1
+
+    asyncio.run(body())
+
+
+def test_zoom_torn_down_on_real_switch_away_no_rebuild() -> None:
+    """A real switch-away tears the zoom down and arms no resume rebuild.
+
+    The companion to the modal-push case: when the scope screen is
+    suspended because it was switched away from (popped off the stack, not
+    overlaid), the guard reports a non-transient suspend, so the quadrant is
+    torn down and ``_resume_code`` stays ``None``. Switching back must
+    therefore return the cached screen in table-browse, never auto-re-zoom.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            ws_screen = app.screen
+            assert isinstance(ws_screen, WorkspaceScreen)
+            await ws_screen.on_workspace_table_row_zoomed(WorkspaceTable.RowZoomed(_FIXTURE_REPO))
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert ws_screen.zoomed
+            # Switch away to the repo scope: a real suspend (screen popped).
+            await pilot.press("r")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert not ws_screen.zoomed
+            assert ws_screen._resume_code is None
+            assert len(ws_screen.query("#zoom-quadrant")) == 0
+            # Switch back: the cached workspace screen returns un-zoomed.
+            await pilot.press("w")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            back = app.screen
+            assert isinstance(back, WorkspaceScreen)
+            assert back is ws_screen
+            assert not back.zoomed
+            assert len(back.query("#zoom-quadrant")) == 0
+            assert back.query_one("#pane-repos", Vertical).display is True
+
+    asyncio.run(body())
+
+
+def test_modal_resume_rebuild_is_idempotent_single_quadrant() -> None:
+    """Tight zoom -> modal -> dismiss -> re-zoom never double-mounts.
+
+    Stresses the rebuild path's idempotency: after a modal round-trip
+    rebuilds the quadrant, an immediate explicit re-zoom (Enter) must still
+    leave exactly one ``#zoom-quadrant`` — the ``_enter_zoom`` await-the-
+    unmount invariant holds through the resume-driven rebuild, and the
+    explicit re-zoom clears any lingering ``_resume_code`` so no stale
+    rebuild can fire a second mount.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.zoomed
+            # Modal round-trip rebuilds the quadrant.
+            app.push_screen(_ProbeModal())
+            await pilot.pause()
+            app.pop_screen()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.zoomed
+            assert len(screen.query("#zoom-quadrant")) == 1
+            # Immediate explicit re-zoom on the rebuilt quadrant.
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.zoomed
+            assert screen._resume_code is None
+            assert len(screen.query("#zoom-quadrant")) == 1
 
     asyncio.run(body())
