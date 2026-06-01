@@ -17,6 +17,8 @@ from eawf.kernel.state.enums import (
     AuditVerdict,
     Confidence,
     DecisionStatus,
+    HypothesisStatus,
+    HypothesisVerdict,
     IterStatus,
     PhaseStatus,
     ProjectStatus,
@@ -30,6 +32,7 @@ from eawf.kernel.state.models import (
     CurrentPointers,
     Decision,
     EstimateSummary,
+    Hypothesis,
     Iter,
     Phase,
     Project,
@@ -170,6 +173,19 @@ def _state_with_entities() -> State:
             status=AuditStatus.COMPLETE,
             verdict=AuditVerdict.PASS,
             created_at=_T0,
+        )
+    }
+    state.hypotheses = {
+        "H03-12": Hypothesis(
+            id="H03-12",
+            scope_id="P01",
+            title="Trust labels improve scan time",
+            metric="time-to-locate",
+            confirm="under 5s",
+            reject="over 30s",
+            status=HypothesisStatus.CONFIRMED,
+            verdict=HypothesisVerdict.CONFIRMED,
+            audit_id="AUD-01",
         )
     }
     return state
@@ -350,6 +366,17 @@ def _seed_stores(state_path: Path) -> None:
             ),
         ),
     )
+    _append(
+        store_path(state_path, StoreKind.EVIDENCE),
+        _envelope(
+            record_id="EV-H03-12",
+            kind=StoreKind.EVIDENCE,
+            scope_id="H03-12",
+            payload=_evidence("EV-H03-12", "H03-12", evidence_kind="attested").model_dump(
+                mode="json"
+            ),
+        ),
+    )
 
 
 def test_scorecard_reads_append_only_stores_and_labels_tiers(tmp_path: Path) -> None:
@@ -369,7 +396,7 @@ def test_scorecard_reads_append_only_stores_and_labels_tiers(tmp_path: Path) -> 
         "estimate": 1,
         "actual": 1,
         "audit": 1,
-        "evidence": 5,
+        "evidence": 6,
     }
     labels = {label.scope_id: label.tier for label in scorecard.output_labels}
     assert labels["P01-I01-W01"] == "verified"
@@ -396,7 +423,7 @@ def test_scorecard_supports_30d_and_n_wave_windows(tmp_path: Path) -> None:
     )
 
     assert recent.window == "30d"
-    assert recent.store_record_counts["evidence"] == 4
+    assert recent.store_record_counts["evidence"] == 5
     assert [label.scope_id for label in recent.output_labels] == [
         "P01-I01-W01",
         "P01-I01-W02",
@@ -430,11 +457,12 @@ def test_scorecard_treats_state_actual_as_closed_outcome() -> None:
         ("urn:eawf:v1:phase:TR/P01", "phase", "deferred_outcome"),
         ("urn:eawf:v1:iter:TR/P01-I01", "iter", "deferred_outcome"),
         ("urn:eawf:v1:wave:TR/P01-I01-W01", "wave", "verified"),
+        ("urn:eawf:v1:hypothesis:TR/H03-12", "hypothesis", "attested"),
         ("urn:eawf:v1:decision:TR/D-01", "decision", "attested"),
         ("urn:eawf:v1:audit:TR/AUD-01", "audit", "verified"),
     ],
 )
-def test_assemble_why_supports_five_urn_kinds(
+def test_assemble_why_supports_superset_urn_kinds(
     tmp_path: Path,
     urn: str,
     kind: str,
@@ -450,6 +478,94 @@ def test_assemble_why_supports_five_urn_kinds(
     assert result.kind == kind
     assert result.tier == tier
     assert result.refs
+
+
+def test_assemble_why_hypothesis_surfaces_verdict_and_audit(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    projection = read_store_projection(state_path)
+
+    result = assemble_why(
+        state,
+        "urn:eawf:v1:hypothesis:TR/H03-12",
+        store_projection=projection,
+    )
+
+    assert result.kind == "hypothesis"
+    assert result.id == "H03-12"
+    assert result.title == "Trust labels improve scan time"
+    assert "confirmed" in result.summary
+    assert any(ref.kind == "audit" and "AUD-01" in ref.urn for ref in result.refs)
+
+
+@pytest.mark.parametrize(
+    ("bare_id", "kind"),
+    [
+        ("P01", "phase"),
+        ("P01-I01", "iter"),
+        ("P01-I01-W01", "wave"),
+        ("H03-12", "hypothesis"),
+    ],
+)
+def test_assemble_why_routes_bare_id_by_shape(
+    tmp_path: Path,
+    bare_id: str,
+    kind: str,
+) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    projection = read_store_projection(state_path)
+
+    result = assemble_why(state, bare_id, store_projection=projection)
+
+    assert result.kind == kind
+    assert result.id == bare_id
+    assert result.urn == f"urn:eawf:v1:{kind}:TR/{bare_id}"
+
+
+def test_assemble_why_unknown_hypothesis_id_raises_key_error(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    projection = read_store_projection(state_path)
+
+    with pytest.raises(KeyError, match="why target not found"):
+        assemble_why(state, "H99-99", store_projection=projection)
+
+
+def test_assemble_why_unknown_urn_target_raises_key_error(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    projection = read_store_projection(state_path)
+
+    with pytest.raises(KeyError, match="why target not found"):
+        assemble_why(state, "urn:eawf:v1:wave:TR/P99-I99-W99", store_projection=projection)
+
+
+def test_assemble_why_malformed_urn_raises_value_error() -> None:
+    state = _state_with_entities()
+
+    with pytest.raises(ValueError, match="not a urn:eawf URN"):
+        assemble_why(state, "urn:eawf:bogus", store_projection=None)
+
+
+def test_assemble_why_unrecognised_bare_target_raises_value_error() -> None:
+    state = _state_with_entities()
+
+    with pytest.raises(ValueError, match="unrecognised why target"):
+        assemble_why(state, "not-an-id", store_projection=None)
+
+
+def test_assemble_why_unsupported_urn_kind_raises_value_error() -> None:
+    state = _state_with_entities()
+
+    # ``artifact`` is a valid URN kind but carries no trust-tier story, so the
+    # why surface rejects it (distinct from an unknown-kind parse failure).
+    with pytest.raises(ValueError, match="unsupported why URN kind"):
+        assemble_why(state, "urn:eawf:v1:artifact:TR/ART-01", store_projection=None)
 
 
 def test_why_cli_emits_json_payload(tmp_path: Path) -> None:
@@ -468,3 +584,58 @@ def test_why_cli_emits_json_payload(tmp_path: Path) -> None:
     assert payload["kind"] == "wave"
     assert payload["tier"] == "verified"
     assert {ref["kind"] for ref in payload["refs"]} >= {"evidence", "actual", "estimate"}
+
+
+def test_why_cli_explains_hypothesis_urn(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "-w",
+            str(state_path.parent.parent),
+            "why",
+            "urn:eawf:v1:hypothesis:TR/H03-12",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = orjson.loads(result.stdout)
+    assert payload["kind"] == "hypothesis"
+    assert payload["id"] == "H03-12"
+
+
+def test_why_cli_routes_bare_id(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["--json", "-w", str(state_path.parent.parent), "why", "H03-12"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = orjson.loads(result.stdout)
+    assert payload["kind"] == "hypothesis"
+    assert payload["urn"] == "urn:eawf:v1:hypothesis:TR/H03-12"
+
+
+def test_why_cli_rejects_unknown_target(tmp_path: Path) -> None:
+    state = _state_with_entities()
+    state_path = _write_repo(tmp_path, state)
+    _seed_stores(state_path)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["-w", str(state_path.parent.parent), "why", "not-an-id"],
+    )
+
+    assert result.exit_code != 0
+    assert "unrecognised why target" in result.output

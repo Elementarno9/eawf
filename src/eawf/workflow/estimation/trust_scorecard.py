@@ -11,7 +11,14 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import StoreKind, WaveStatus
-from eawf.kernel.state.models import Audit, Decision, Iter, Phase, State, Wave
+from eawf.kernel.state.ids import (
+    RE_HYPOTHESIS,
+    RE_HYPOTHESIS_SCOPED,
+    RE_ITER,
+    RE_PHASE,
+    RE_WAVE,
+)
+from eawf.kernel.state.models import Audit, Decision, Hypothesis, Iter, Phase, State, Wave
 from eawf.kernel.state.urn import Urn
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.urn import parse as parse_urn
@@ -28,8 +35,10 @@ SCORECARD_SCHEMA_VERSION: Literal[1] = 1
 TrustTier = Literal["verified", "attested", "deferred_outcome", "unavailable"]
 WindowKind = Literal["all", "30d", "waves"]
 ReliabilityStatus = Literal["computed", "deferred_v0.4.1"]
-WhyUrnKind = Literal["phase", "iter", "wave", "decision", "audit"]
-_WHY_URN_KINDS: frozenset[str] = frozenset({"phase", "iter", "wave", "decision", "audit"})
+WhyUrnKind = Literal["phase", "iter", "wave", "hypothesis", "decision", "audit"]
+_WHY_URN_KINDS: frozenset[str] = frozenset(
+    {"phase", "iter", "wave", "hypothesis", "decision", "audit"}
+)
 _STORE_KINDS: tuple[StoreKind, ...] = (
     StoreKind.ESTIMATE,
     StoreKind.ACTUAL,
@@ -681,6 +690,92 @@ def _audit_result(state: State, audit: Audit, urn: str, projection: StoreProject
     )
 
 
+def _hypothesis_result(
+    state: State,
+    hypothesis: Hypothesis,
+    urn: str,
+    projection: StoreProjection,
+) -> WhyResult:
+    refs = _record_refs_for_scope(state, hypothesis.id, projection)
+    if hypothesis.audit_id and (state.audits or {}).get(hypothesis.audit_id) is not None:
+        audit = (state.audits or {})[hypothesis.audit_id]
+        verdict = audit.verdict.value if audit.verdict else "none"
+        refs.append(
+            WhyReference(
+                urn=_entity_urn(state, "audit", audit.id),
+                kind="audit",
+                tier=_label_for_scope(state, audit.id, projection),
+                summary=f"{audit.kind.value} {audit.status.value} verdict={verdict}",
+            )
+        )
+    if hypothesis.source_artifact_id:
+        artifact = state.artifacts.get(hypothesis.source_artifact_id)
+        artifact_urn = (
+            artifact.urn
+            if artifact is not None
+            else _entity_urn(state, "artifact", hypothesis.source_artifact_id)
+        )
+        refs.append(
+            WhyReference(
+                urn=artifact_urn,
+                kind="artifact",
+                tier="attested",
+                summary=artifact.uri if artifact is not None else hypothesis.source_artifact_id,
+            )
+        )
+    verdict = hypothesis.verdict.value if hypothesis.verdict else "none"
+    return WhyResult(
+        urn=urn,
+        kind="hypothesis",
+        id=hypothesis.id,
+        title=hypothesis.title,
+        tier=_label_for_scope(state, hypothesis.id, projection),
+        summary=f"hypothesis {hypothesis.status.value} verdict={verdict}",
+        refs=refs,
+    )
+
+
+def _kind_from_bare_id(entity_id: str) -> str | None:
+    """Map a bare entity id to its why URN kind by id-shape, or ``None``.
+
+    The id grammars are mutually exclusive (a wave id never matches the
+    hypothesis pattern), so the first match is unambiguous. Returns ``None``
+    when the id matches no recognised shape, letting the caller raise a
+    malformed-input error.
+    """
+    if RE_WAVE.fullmatch(entity_id):
+        return "wave"
+    if RE_ITER.fullmatch(entity_id):
+        return "iter"
+    if RE_PHASE.fullmatch(entity_id):
+        return "phase"
+    if RE_HYPOTHESIS.fullmatch(entity_id) or RE_HYPOTHESIS_SCOPED.fullmatch(entity_id):
+        return "hypothesis"
+    return None
+
+
+def _resolve_why_target(state: State, raw: str) -> tuple[str, str, str]:
+    """Resolve ``raw`` into a ``(kind, entity_id, urn)`` triple.
+
+    A full ``urn:eawf:v1:*`` string keeps its parsed kind; a bare id is
+    routed by id-shape (``H<NN>-<NN>`` -> hypothesis, ``P##-I##-W##`` ->
+    wave, and so on) and the canonical URN is rebuilt for the response.
+
+    Raises:
+        ValueError: ``raw`` is neither a parseable URN of a supported why
+            kind nor a bare id of a recognised lifecycle / hypothesis shape.
+    """
+    if raw.startswith("urn:"):
+        parsed = parse_urn(raw)
+        if parsed.kind not in _WHY_URN_KINDS:
+            raise ValueError(f"unsupported why URN kind: {parsed.kind!r}")
+        return parsed.kind, _target_id(parsed), raw
+    kind = _kind_from_bare_id(raw)
+    if kind is None:
+        raise ValueError(f"unrecognised why target: {raw!r}")
+    return kind, raw, _entity_urn(state, kind, raw)
+
+
 def assemble_why(
     state: State,
     urn: str,
@@ -688,27 +783,37 @@ def assemble_why(
     store_projection: StoreProjection | None = None,
     state_path: Path | None = None,
 ) -> WhyResult:
-    """Assemble a provenance explanation for supported eawf URN kinds."""
-    parsed = parse_urn(urn)
-    if parsed.kind not in _WHY_URN_KINDS:
-        raise ValueError(f"unsupported why URN kind: {parsed.kind!r}")
+    """Assemble a provenance explanation for a supported eawf URN or bare id.
+
+    Accepts either a full ``urn:eawf:v1:<kind>:<owner>/<id>`` string or a
+    bare lifecycle / hypothesis id (``P01``, ``P01-I01``, ``P01-I01-W01``,
+    ``H03-12``); the bare id is routed to its kind by id-shape.
+
+    Raises:
+        ValueError: The input is malformed or names an unsupported why kind.
+        KeyError: The resolved kind + id has no matching state record.
+    """
+    kind, entity_id, resolved_urn = _resolve_why_target(state, urn)
     projection = store_projection
     if projection is None and state_path is not None:
         projection = read_store_projection(state_path)
     if projection is None:
         projection = StoreProjection()
-    entity_id = _target_id(parsed)
-    if parsed.kind == "phase" and entity_id in state.phases:
-        return _phase_result(state, state.phases[entity_id], urn, projection)
-    if parsed.kind == "iter" and entity_id in state.iters:
-        return _iter_result(state, state.iters[entity_id], urn, projection)
-    if parsed.kind == "wave" and entity_id in state.waves:
-        return _wave_result(state, state.waves[entity_id], urn, projection)
-    if parsed.kind == "decision" and entity_id in state.decisions:
-        return _decision_result(state, state.decisions[entity_id], urn, projection)
-    if parsed.kind == "audit" and entity_id in (state.audits or {}):
-        return _audit_result(state, (state.audits or {})[entity_id], urn, projection)
-    raise KeyError(f"URN target not found: {urn!r}")
+    if kind == "phase" and entity_id in state.phases:
+        return _phase_result(state, state.phases[entity_id], resolved_urn, projection)
+    if kind == "iter" and entity_id in state.iters:
+        return _iter_result(state, state.iters[entity_id], resolved_urn, projection)
+    if kind == "wave" and entity_id in state.waves:
+        return _wave_result(state, state.waves[entity_id], resolved_urn, projection)
+    if kind == "hypothesis" and entity_id in (state.hypotheses or {}):
+        return _hypothesis_result(
+            state, (state.hypotheses or {})[entity_id], resolved_urn, projection
+        )
+    if kind == "decision" and entity_id in state.decisions:
+        return _decision_result(state, state.decisions[entity_id], resolved_urn, projection)
+    if kind == "audit" and entity_id in (state.audits or {}):
+        return _audit_result(state, (state.audits or {})[entity_id], resolved_urn, projection)
+    raise KeyError(f"why target not found: {resolved_urn!r}")
 
 
 __all__ = [

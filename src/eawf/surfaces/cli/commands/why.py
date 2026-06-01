@@ -16,7 +16,9 @@ def why_cmd(
     ctx: typer.Context,
     urn: Annotated[
         str,
-        typer.Argument(help="Supported URN: phase, iter, wave, decision, or audit."),
+        typer.Argument(
+            help=("Supported URN or bare id: phase, iter, wave, hypothesis, decision, or audit.")
+        ),
     ],
 ) -> None:
     """Explain why an EAWF entity has its current trust tier."""
