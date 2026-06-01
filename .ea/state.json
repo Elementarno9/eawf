@@ -1463,6 +1463,18 @@
       "scope_id": "P29-I02-W14",
       "status": "done",
       "updated_at": "2026-06-01T17:53:05.529182Z"
+    },
+    "P29-I02-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W15",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W15",
+      "scope_id": "P29-I02-W15",
+      "status": "done",
+      "updated_at": "2026-06-01T18:01:56.046158Z"
     }
   },
   "agent_sessions": {
@@ -3807,7 +3819,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P29-I02-W15",
       "P29-I02-W18"
     ],
     "iter_id": "P29-I02",
@@ -9853,7 +9864,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T17:53:05.529586Z",
+  "updated_at": "2026-06-01T18:01:56.046598Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29332,8 +29343,8 @@
         "P29-I02-W16"
       ],
       "claim_session_id": "op-p29i02",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-01T18:01:56.046158Z",
+      "commit": "05e149b1d69ab601c3fb06f509c816f58241ecae",
       "deps": [],
       "description": "[TUI-3 | tui-chassis T13 | spike(suspend)] teardown guard; gates TUI-1.",
       "dispatch_history": [],
@@ -29345,10 +29356,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.255820Z",
-      "outcome": null,
+      "outcome": "zoom-teardown-on-suspend guard: discriminator = self in app.screen_stack (transient modal-suspend preserved+rebuilt-on-resume; real switch-away resets); shared _suspend_is_transient() on RepoZoomMixin (workspace+user inherit); 315 tests green incl 5 new. Cherry-picked f8da2f1 -> 05e149b clean. Spike: ScreenSuspend fires on both modal-push + switch-away (event type indistinguishable; stack membership is the discriminator)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "zoom-teardown on ScreenSuspend fixed via a shared guard; prefer resume-rebuild",
         "pre-claim spike checks ScreenSuspend delivery timing vs modal append"
