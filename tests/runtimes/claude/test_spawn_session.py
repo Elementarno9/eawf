@@ -114,6 +114,12 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
 
     Returns a list that captures the argv of each spawn call so a test can
     assert the constructed command line without a live subprocess.
+
+    The OS-jail seam (``_maybe_jail_argv``) is neutralised to a passthrough
+    so these inner-argv assertions stay deterministic across hosts (a box
+    with ``bwrap`` / ``sandbox-exec`` on PATH would otherwise prepend the
+    jail wrapper). The jail seam has its own coverage in
+    ``tests/runtime/sandbox/test_jail.py``.
     """
     calls: list[list[str]] = []
 
@@ -122,6 +128,7 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
         return proc
 
     monkeypatch.setattr(claude_adapter.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
     return calls
 
 

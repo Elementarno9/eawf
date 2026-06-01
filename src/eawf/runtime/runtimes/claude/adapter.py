@@ -13,10 +13,13 @@ import asyncio
 import json
 import logging
 import re
+import shutil
+import sys
 import uuid
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eawf.kernel.state.models import SessionAttempt, Wave
@@ -29,12 +32,110 @@ from eawf.runtime.runtimes.adapter import (
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
+from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.env_scrub import build_child_env
+from eawf.runtime.sandbox.jail import jail_command, jail_supported
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
+
+#: The OS-jail wrapper binary per platform. The spawn seam jails the child
+#: only when the platform supports it AND the wrapper resolves on PATH.
+_JAIL_WRAPPER_BINARY: dict[str, str] = {
+    "darwin": "sandbox-exec",
+    "linux": "bwrap",
+}
+
+
+def _jail_wrapper_binary(platform: str) -> str | None:
+    """Return the jail wrapper binary for *platform*, or ``None``.
+
+    Args:
+        platform: The platform string (``sys.platform``).
+
+    Returns:
+        ``"sandbox-exec"`` on macOS, ``"bwrap"`` on Linux, ``None`` on a
+        platform with no FS-jail wrapper (e.g. Windows).
+    """
+    if platform.startswith("linux"):
+        return _JAIL_WRAPPER_BINARY["linux"]
+    return _JAIL_WRAPPER_BINARY.get(platform)
+
+
+def _maybe_jail_argv(argv: list[str], *, runtime: str, cwd: str | None) -> list[str]:
+    """Prefix *argv* with the OS jail when the host supports it.
+
+    The jail is applied only when (a) the platform has an FS-jail wrapper
+    (:func:`~eawf.runtime.sandbox.jail.jail_supported`) AND (b) that wrapper
+    binary resolves on PATH. When the wrapper is absent (e.g. CI without
+    bubblewrap) the child runs UNJAILED with a loud warning -- this keeps
+    the read-only clarify spawn working on hosts without the tool and keeps
+    CI green. Refusing a mutating spawn when the jail is unavailable is an
+    I04 concern; this seam only gates on the predicate I04 will key off.
+
+    The daemon stays the sole session-setter: only the argv gains the
+    prefix here; ``start_new_session`` / ``env`` / ``cwd`` on the spawn are
+    untouched, so the wrapper inherits the daemon-set process group and the
+    kill ladder reaps the whole tree unchanged.
+
+    Args:
+        argv: The child's own argv (``["claude", "-p", ...]``).
+        runtime: The runtime adapter id selecting the own-cred carve-out.
+        cwd: The spawn cwd. ``None`` defaults the jail confinement to the
+            repo root containing the process cwd; when the process cwd is
+            not inside a discoverable root the spawn runs unjailed with a
+            warning rather than confining to a bogus path.
+
+    Returns:
+        Either ``jail_command(argv, ...)`` (jailed) or *argv* unchanged
+        (unjailed fallback).
+    """
+    if not jail_supported():
+        logger.warning(
+            f"spawn_session jail=unavailable platform={sys.platform!r} runtime={runtime!r}"
+        )
+        return argv
+
+    wrapper = _jail_wrapper_binary(sys.platform)
+    if wrapper is None or shutil.which(wrapper) is None:
+        logger.warning(
+            f"spawn_session jail=unavailable wrapper={wrapper!r} runtime={runtime!r} "
+            "reason=binary-not-on-path"
+        )
+        return argv
+
+    cwd_path = Path(cwd) if cwd is not None else Path.cwd()
+    root = _repo_root_for(cwd_path)
+    if root is None or not cwd_path.exists() or not is_path_inside(cwd_path, root=root):
+        logger.warning(
+            f"spawn_session jail=unavailable runtime={runtime!r} cwd={cwd_path!s} "
+            "reason=cwd-outside-repo-root"
+        )
+        return argv
+
+    jailed = jail_command(argv, runtime=runtime, cwd=cwd_path, root=root)
+    logger.info(f"spawn_session jail=on wrapper={wrapper!r} runtime={runtime!r} cwd={cwd_path!s}")
+    return jailed
+
+
+def _repo_root_for(path: Path) -> Path | None:
+    """Return the git repo root containing *path*, or ``None``.
+
+    Resolved via ``git rev-parse --show-toplevel`` so the jail confines the
+    child to its actual repo root. A path outside any git working tree
+    yields ``None`` (the spawn then runs unjailed with a warning rather
+    than confining to a bogus root).
+    """
+    from eawf.runtime.worktree.git import repo_root
+
+    try:
+        return repo_root(path)
+    except Exception as exc:
+        logger.warning(f"_repo_root_for path={path!s} reason={exc!r}")
+        return None
+
 
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate_limit_error|rate[_ -]?limit)\b", re.IGNORECASE)
 _AUTH_RE = re.compile(
@@ -263,7 +364,12 @@ class ClaudeAdapter:
         receives an allowlist floor (pinned ``PATH`` + ``HOME`` / locale /
         ``TERM``) plus the claude lane's own auth, never the full parent
         env (which would carry ``AWS_*`` / ``GH_*`` / ``SSH_*`` creds into
-        the child).
+        the child). The argv is additionally prefixed with the OS
+        filesystem jail (bubblewrap / seatbelt via
+        :func:`~eawf.runtime.sandbox.jail.jail_command`) when the host
+        supports it; the jail wrapper inherits the daemon-set session so
+        the pgid-reap is preserved, and a host without the wrapper binary
+        runs unjailed with a warning rather than failing.
 
         This wave builds the spawn mechanism + the parse only. Metering,
         cancellation, and the schema-forced re-ask loop are separate waves
@@ -306,6 +412,13 @@ class ClaudeAdapter:
             model,
             *extra_args,
         ]
+        # Prefix the OS filesystem jail (bubblewrap / seatbelt) when the
+        # host supports it. The daemon stays the sole session-setter:
+        # ``start_new_session=True`` lands on the jail wrapper, which is the
+        # group leader, so ``cancel_process_group(os.getpgid(pid))`` reaps
+        # the whole tree unchanged. When the wrapper binary is absent the
+        # child runs unjailed with a warning (CI / hosts without the tool).
+        argv = _maybe_jail_argv(argv, runtime=self.id, cwd=cwd)
         started_at = datetime.now(UTC)
         proc = await asyncio.create_subprocess_exec(
             *argv,
