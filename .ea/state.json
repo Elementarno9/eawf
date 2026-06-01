@@ -1692,6 +1692,18 @@
       "status": "done",
       "updated_at": "2026-06-01T22:37:03.046467Z"
     },
+    "P29-I03-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I03-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I03-W02",
+      "scope_id": "P29-I03-W02",
+      "status": "done",
+      "updated_at": "2026-06-01T22:46:21.503491Z"
+    },
     "P29-I03-W03": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8386,6 +8398,19 @@
       "scope_id": "P29-I03-W01",
       "updated_at": "2026-06-01T22:26:39.948453Z"
     },
+    "P29-I03-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I03-W02-bucket-20260601T223754Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I03-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I03-W02",
+      "updated_at": "2026-06-01T22:37:54.550427Z"
+    },
     "P29-I03-W03": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I03-W03-bucket-20260601T222640Z",
@@ -10386,7 +10411,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T22:37:03.635623Z",
+  "updated_at": "2026-06-01T22:46:21.503988Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -31075,10 +31100,10 @@
       "blocks": [
         "P29-I03-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i03",
+      "claimed_at": "2026-06-01T22:37:54.550423Z",
+      "closed_at": "2026-06-01T22:46:21.503491Z",
+      "commit": "9447061ce920f410a32728ce87f9dd1723759fa1",
       "deps": [
         "P29-I03-W01"
       ],
@@ -31092,10 +31117,10 @@
       "intent": null,
       "iter_id": "P29-I03",
       "opened_at": "2026-06-01T00:19:14.271963Z",
-      "outcome": null,
+      "outcome": "default-deny UDS egress: pure classify_egress policy (sandbox/egress.py) + POSIX asyncio UDS proxy (sandbox/egress_proxy.py). Decision order canonicalization-guard-FIRST (rejects null-byte/non-DNS-char, defeats Penligent SOCKS5 bypass) -> metadata-deny precedence (169.254.169.254/.170.2/metadata.google.internal, survives gate_phase) -> exact-hostname lane allowlist (api.anthropic.com | chatgpt.com+api.openai.com) -> default-deny; gate/push set + git-remote via extra_allow only under gate_phase. Windows honest gap (egress_proxy_supported() predicate + typed EgressUnavailableOnWindowsError, no block). 189 sandbox tests green. Threat-scenario b (egress-exfil) closed at policy layer",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "default-deny egress proxy over a Unix socket; allowlist by host",
         "Windows egress is an honest decision-ready gap (offline-default OR require WSL2); state it, do not block"
