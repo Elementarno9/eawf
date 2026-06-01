@@ -332,6 +332,24 @@ def _handle_events(app: App[None], args: str) -> None:
     open_events(app, load_recent_events(event_path))
 
 
+def _handle_inbox(app: App[None], args: str) -> None:
+    """Open the global needs_user inbox (the ``/inbox`` verb).
+
+    Delegates to the App's ``action_open_inbox`` so the ``i`` keypress and
+    this verb share the same cap-checked path that lists every open
+    needs_user pause across scopes ranked by urgency. Takes no argument.
+
+    Args:
+        app: The running App.
+        args: Unused — ``/inbox`` opens the full inbox with no argument.
+    """
+    action = getattr(app, "action_open_inbox", None)
+    if callable(action):
+        action()
+        return
+    app.notify("/inbox is not wired yet", severity="information")
+
+
 def _handle_theme(app: App[None], args: str) -> None:
     """Swap the active theme + persist the choice (the ``/theme`` verb).
 
@@ -672,6 +690,7 @@ VERBS: tuple[PaletteVerb, ...] = (
     ),
     PaletteVerb("/config", "config window (registry-driven)", _handle_config, SCOPES_ALL),
     PaletteVerb("/init", "init wizard", _handle_init, SCOPES_ALL),
+    PaletteVerb("/inbox", "needs_user pause inbox (by urgency)", _handle_inbox, SCOPES_ALL),
     PaletteVerb("/events", "last 50 events overlay", _handle_events, SCOPES_ALL),
     PaletteVerb(
         "/metrics",

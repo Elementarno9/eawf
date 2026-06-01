@@ -232,6 +232,7 @@ class EaApp(App[None]):
         Binding("ctrl+w", "switch_scope('workspace')", "workspace", show=False),
         Binding("ctrl+r", "switch_scope('repo')", "repo", show=False),
         Binding("ctrl+u", "switch_scope('user')", "user", show=False),
+        Binding("i", "open_inbox", "inbox", show=False),
         Binding("q", "quit", "quit"),
         Binding("escape", "quit", "quit", show=False),
         # Vim-key aliases for navigation — secondary to the arrows the
@@ -259,6 +260,13 @@ class EaApp(App[None]):
     #: yet wired / daemon unreachable). The header surfaces a degraded
     #: banner off this flag.
     degraded: reactive[bool] = reactive(False, init=False)
+
+    #: Count of open needs_user pauses across **all** scopes (not just the
+    #: active one). The footer needs_user badge watches this to flip
+    #: attention-coloured when > 0. Recomputed on every state refresh off
+    #: the same pause source the auto-open path reads. ``init=False`` so the
+    #: watcher only fires on a real change.
+    pending_pauses: reactive[int] = reactive(0, init=False)
 
     #: Active bar fill mode (Braille dot-matrix vs ASCII ``#``/``-``).
     #: Seeded ``braille`` per the operator pick; flipped to ``ascii`` in
@@ -400,6 +408,7 @@ class EaApp(App[None]):
         self.state = new_state
         self._last_state = new_state
         self._last_open_pause_count = open_pause_count
+        self.pending_pauses = len(self._all_open_pauses())
         self._maybe_open_needs_user(new_state, pauses=pauses)
         self._maybe_open_init_wizard(new_state)
 
@@ -422,6 +431,24 @@ class EaApp(App[None]):
             return list(list_open_pauses(self._state_path, scope_id=state.urn))
         except OSError as exc:
             logger.debug(f"_open_pauses_for_state list failed cause={exc!r}")
+            return []
+
+    def _all_open_pauses(self) -> list[Any]:
+        """Return every open pause across all scopes; empty on read errors.
+
+        The cross-scope counterpart to :meth:`_open_pauses_for_state` (which
+        filters to the active scope for the auto-open). Feeds both the
+        footer :attr:`pending_pauses` badge count and the global inbox
+        overlay, so the badge and the inbox always agree on the same set.
+        """
+        if self._state_path is None:
+            return []
+        from eawf.workflow.skills.needs_user import list_open_pauses
+
+        try:
+            return list(list_open_pauses(self._state_path, scope_id=None))
+        except OSError as exc:
+            logger.debug(f"_all_open_pauses list failed cause={exc!r}")
             return []
 
     def _maybe_open_needs_user(
@@ -457,25 +484,52 @@ class EaApp(App[None]):
         self._needs_user_open = True
         self.call_after_refresh(self._open_needs_user_pause, pause.pause_urn, pause.question)
 
+    def open_needs_user_pause(self, pause_urn: str, question: object) -> bool:
+        """Push the needs_user modal for *pause_urn* with the pick handler.
+
+        The single push path shared by the auto-open (via
+        :meth:`_open_needs_user_pause`) and the global inbox overlay, so a
+        pick from either surface routes through the same
+        :meth:`_on_needs_user_picked` resume + single-instance guard. Sets
+        the guard before the push and clears it when the modal-stack cap
+        rejects the push so a later open can retry.
+
+        Args:
+            pause_urn: The pause the modal answers.
+            question: The :class:`~eawf.workflow.skills.bodies.user_question.UserQuestion`
+                to render (typed loosely to avoid an import cycle).
+
+        Returns:
+            ``True`` when the modal was pushed, ``False`` when the cap
+            rejected it.
+        """
+        from eawf.surfaces.tui.screens.overlays.needs_user import NeedsUserModal
+
+        self._needs_user_open = True
+        modal = NeedsUserModal(question)  # type: ignore[arg-type]
+        pushed = self.push_modal(
+            modal,
+            callback=lambda label: self._on_needs_user_picked(pause_urn, label),
+        )
+        if not pushed:
+            self._needs_user_open = False
+        return pushed
+
     def _open_needs_user_pause(self, pause_urn: str, question: object) -> None:
-        """Push the needs_user modal for *pause_urn* with a pick handler.
+        """Push the auto-open needs_user modal for *pause_urn*.
+
+        Thin ``call_after_refresh`` target for the auto-open path; delegates
+        to the shared :meth:`open_needs_user_pause`. The guard is already
+        set eagerly at schedule time in :meth:`_maybe_open_needs_user`;
+        :meth:`open_needs_user_pause` re-sets it idempotently and clears it
+        when the cap rejected the push so a later refresh can retry.
 
         Args:
             pause_urn: The pause the modal answers.
             question: The :class:`~eawf.workflow.skills.bodies.user_question.UserQuestion`
                 to render (typed loosely to avoid an import cycle).
         """
-        from eawf.surfaces.tui.screens.overlays.needs_user import NeedsUserModal
-
-        modal = NeedsUserModal(question)  # type: ignore[arg-type]
-        pushed = self.push_modal(
-            modal,
-            callback=lambda label: self._on_needs_user_picked(pause_urn, label),
-        )
-        # The guard was set eagerly at schedule time; clear it when the cap
-        # rejected the push so a later refresh can retry.
-        if not pushed:
-            self._needs_user_open = False
+        self.open_needs_user_pause(pause_urn, question)
 
     def _on_needs_user_picked(self, pause_urn: str, label: str | None) -> None:
         """Resolve *pause_urn* with the picked *label*, or clear on defer.
@@ -932,6 +986,24 @@ class EaApp(App[None]):
     def action_open_init_wizard(self) -> None:
         """Open the TUI init wizard (cap-checked, single-instance)."""
         self._open_init_wizard()
+
+    def action_open_inbox(self) -> None:
+        """Open the ``i`` global needs_user inbox overlay (cap-checked).
+
+        Lists every open needs_user pause across all scopes ranked by
+        urgency (most-immediate first); selecting a row opens that pause's
+        :class:`~eawf.surfaces.tui.screens.overlays.needs_user.NeedsUserModal`
+        through the shared :meth:`open_needs_user_pause`. Reads the same
+        pause source the footer badge counts, so the two never disagree.
+        Renders honest-empty when no pause is open.
+        """
+        from eawf.surfaces.tui.screens.overlays.needs_user_inbox import (
+            open_needs_user_inbox,
+            rank_pauses_by_urgency,
+        )
+
+        ranked = rank_pauses_by_urgency(tuple(self._all_open_pauses()))
+        open_needs_user_inbox(self, ranked)
 
     def action_open_help(self) -> None:
         """Open the ``?`` help overlay (cap-checked, single-instance).

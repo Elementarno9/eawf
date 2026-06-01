@@ -46,6 +46,7 @@ _GLOBAL_KEYS: tuple[tuple[str, str], ...] = (
     ("u", "switch to user scope"),
     ("Ctrl-W / Ctrl-R / Ctrl-U", "scope switch (aliases)"),
     ("c", "open config (any scope)"),
+    ("i", "open needs_user inbox (by urgency)"),
     ("F5", "force refresh"),
     ("?", "open help"),
     ("/", "open palette"),

@@ -12,15 +12,16 @@
       │    u          switch to user scope                                                                       │
       │    Ctrl-W / Ctrl-R / Ctrl-U scope switch (aliases)                                                       │
       │    c          open config (any scope)                                                                    │
+      │    i          open needs_user inbox (by urgency)                                                         │
       │    F5         force refresh                                                                              │
       │    ?          open help                                                                                  │
       │    /          open palette                                                                               │
       │    Tab        next pane                                                                                  │
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
-      │  Pane navigation (vim alias)                                                                             │
+      │  Pane navigation (vim alias)                                                                         ▂▂  │
       │    ↑          line up  (k)                                                                               │
-      │    ↓          line down  (j)                                                                         ▅▅  │
+      │    ↓          line down  (j)                                                                             │
       │    ←          collapse row / scroll left  (h)                                                            │
       │    →          expand row / scroll right  (l)                                                             │
       │    PageUp     half-page up  (Ctrl-u)                                                                     │
@@ -33,6 +34,5 @@
       │    (none)                                                                                                │
       │                                                                                                          │
       │  Config overlay (arrows nav, Enter edits)                                                                │
-      │    ↑ / ↓      move field cursor (vim: k / j)                                                             │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

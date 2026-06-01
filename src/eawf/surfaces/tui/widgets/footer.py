@@ -73,6 +73,37 @@ WEEKLY_BURN_EMPTY: str = EMPTY_STATE
 #: empty-state forms.
 WEEKLY_BURN_LABEL: str = "weekly burn:"
 
+#: Label prefixing the active needs_user badge cell. Kept compact so the
+#: second footer row still fits the burn cell + heartbeat dot at 80 cols;
+#: it renders in the ``$warn`` attention colour when pauses are pending.
+#: ASCII-only per the source-glyph convention.
+NEEDS_USER_BADGE_LABEL: str = "needs_user"
+
+
+def format_needs_user_badge(count: int) -> str:
+    """Render the footer needs_user badge text for *count* pending pauses.
+
+    Pure render source — unit-testable without mounting the widget. The
+    badge is **quiet** (the empty string, taking no footer space) when
+    *count* is ``0`` so an idle surface carries no attention noise (the
+    brand-badges-quiet-when-idle convention), and shows
+    ``needs_user <count>`` when at least one pause is open. A negative
+    count is clamped to ``0`` so a stray decrement never renders a
+    nonsensical figure.
+
+    Args:
+        count: The number of open needs_user pauses across all scopes.
+
+    Returns:
+        The empty string when *count* <= ``0``, else
+        ``needs_user <count> `` (a trailing space separates it from the
+        heartbeat dot that follows on the same row).
+    """
+    safe = max(0, count)
+    if safe == 0:
+        return ""
+    return f"{NEEDS_USER_BADGE_LABEL} {safe} "
+
 
 def format_hints(hints: tuple[str, ...]) -> str:
     """Join key hints into the footer strip with a separating bullet.
@@ -152,6 +183,15 @@ class Footer(Static):
         height: 1;
         color: $text-muted;
     }
+    Footer .footer-needs-user {
+        width: auto;
+        height: 1;
+        color: $text-muted;
+    }
+    Footer .footer-needs-user.-attention {
+        color: $warn;
+        text-style: bold;
+    }
     """
 
     #: Active key hints, watched so a host override repaints the strip.
@@ -161,30 +201,63 @@ class Footer(Static):
     #: cell. ``None`` until the first read-only load completes.
     state: reactive[State | None] = reactive(None)
 
+    #: Count of open needs_user pauses across all scopes. Watched so a
+    #: change repaints the badge cell + flips its attention colour. The
+    #: host App (:class:`~eawf.surfaces.tui.app.EaApp`) pushes the count off
+    #: the same pause source the auto-open path reads; standalone tests
+    #: assign it directly. Quiet (no count) at ``0``.
+    pending_pauses: reactive[int] = reactive(0)
+
     def compose(self) -> ComposeResult:
-        """Lay out the hint strip (row 1) above the burn cell + heartbeat (row 2)."""
+        """Lay out the hint strip (row 1) above the status row (row 2).
+
+        Row 2 carries the weekly-burn cell, the needs_user attention
+        badge, and the heartbeat dot.
+        """
         yield Static(format_hints(self.hints), classes="footer-hints")
         with Horizontal(classes="footer-status"):
             yield Static(build_weekly_burn_line(self.state), classes="footer-burn")
+            # The initial attention class is set here (not only in the
+            # post-mount watcher) so a count seeded before mount paints
+            # attention-coloured on first render rather than waiting for a
+            # later change to fire the watcher.
+            badge_classes = "footer-needs-user"
+            if self.pending_pauses > 0:
+                badge_classes += " -attention"
+            yield Static(
+                format_needs_user_badge(self.pending_pauses),
+                classes=badge_classes,
+            )
             yield Heartbeat(id="heartbeat")
 
     def on_mount(self) -> None:
-        """Seed the burn line from the app's reactive state and watch it.
+        """Seed the burn line + pause badge from the app and watch them.
 
-        Standalone tests that assign :attr:`state` directly do not need
-        the app watcher; the guard skips it when the host has no ``state``
-        attribute (e.g. mounted under a bare harness).
+        Standalone tests that assign :attr:`state` / :attr:`pending_pauses`
+        directly do not need the app watchers; the guards skip them when
+        the host exposes no matching attribute (e.g. mounted under a bare
+        harness).
         """
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        app_pauses = getattr(self.app, "pending_pauses", None)
+        if isinstance(app_pauses, int):
+            self.pending_pauses = app_pauses
+        if hasattr(self.app, "pending_pauses"):
+            self.watch(self.app, "pending_pauses", self._on_app_pending_pauses)
         self._repaint_burn()
+        self._repaint_needs_user()
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this widget's reactive."""
         self.state = new_state
+
+    def _on_app_pending_pauses(self, count: int) -> None:
+        """Mirror an app-level pending-pause count onto this widget's reactive."""
+        self.pending_pauses = count
 
     def set_hints(self, hints: tuple[str, ...]) -> None:
         """Replace the footer key hints (scope-specific override).
@@ -209,6 +282,10 @@ class Footer(Static):
         """Repaint the weekly-burn line when the bound state changes."""
         self._repaint_burn()
 
+    def watch_pending_pauses(self) -> None:
+        """Repaint the needs_user badge when the pending-pause count changes."""
+        self._repaint_needs_user()
+
     def _repaint_burn(self) -> None:
         """Re-render the weekly-burn line from the current state.
 
@@ -220,15 +297,35 @@ class Footer(Static):
             return
         self.query_one(".footer-burn", Static).update(build_weekly_burn_line(self.state))
 
+    def _repaint_needs_user(self) -> None:
+        """Re-render the needs_user badge + flip its attention colour.
+
+        The ``-attention`` class is toggled on whenever at least one pause
+        is pending, so the badge draws the eye via the ``$warn`` colour
+        when it matters and stays quiet (``$text-muted``, no count) when
+        idle. Queries the child defensively: it only exists after
+        :meth:`compose`, so a pre-compose reactive write (or a write during
+        ``on_mount`` before the widget reports mounted) is a safe no-op —
+        the child's compose-time value / ``on_mount`` repaint covers it.
+        """
+        cells = self.query(".footer-needs-user")
+        if not cells:
+            return
+        cell = cells.first(Static)
+        cell.update(format_needs_user_badge(self.pending_pauses))
+        cell.set_class(self.pending_pauses > 0, "-attention")
+
 
 __all__ = [
     "DEFAULT_HINTS",
     "HEARTBEAT_GLYPH",
     "HEARTBEAT_INTERVAL_S",
+    "NEEDS_USER_BADGE_LABEL",
     "WEEKLY_BURN_EMPTY",
     "WEEKLY_BURN_LABEL",
     "Footer",
     "Heartbeat",
     "build_weekly_burn_line",
     "format_hints",
+    "format_needs_user_badge",
 ]
