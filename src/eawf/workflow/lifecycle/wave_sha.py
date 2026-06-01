@@ -375,3 +375,229 @@ def _shas_match(a: str, b: str) -> bool:
     if a == b:
         return True
     return a.startswith(b) or b.startswith(a)
+
+
+# ---- Commit-pin verify + repair --------------------------------------------
+#
+# ``detect_git_state_drift`` is the *hard-drift* detector that ``doctor`` and
+# ``status`` consume: it only surfaces a closed wave when its recorded pointer
+# is provably wrong (or indeterminate). The verify/repair scan below is a
+# superset built for ``eawf wave verify-commits``: in addition to the four
+# hard-drift kinds it also flags the *soft* ``unpinned_derivable`` case -- a
+# closed wave with no ``Wave.commit`` whose SHA is still derivable from the
+# bracketed commit subject. That case is silently fine for ``wave show``
+# (the derive fallback covers it), but ``--repair`` can harden the derivable
+# SHA into an explicit pin so future reads do not re-query git.
+
+CommitPinKind = Literal[
+    "pinned_but_missing",
+    "pinned_mismatch",
+    "closed_no_pin",
+    "closed_unfindable",
+    "unpinned_derivable",
+]
+
+
+@dataclass(frozen=True)
+class CommitPinIssue:
+    """One commit-pin issue surfaced by :func:`scan_commit_pins`.
+
+    Attributes:
+        wave_id: The closed wave whose ``Wave.commit`` pin needs
+            attention.
+        kind: Which issue shape (see :data:`CommitPinKind`). The first
+            four kinds mirror :class:`DriftKind`; ``unpinned_derivable``
+            is the soft, harden-able extra that :func:`scan_commit_pins`
+            adds on top of :func:`detect_git_state_drift`.
+        state_commit: The SHA currently recorded in ``Wave.commit``
+            (``None`` for the unpinned kinds).
+        git_commit: The SHA ``git log --grep`` derived (``None`` for the
+            kinds where git produced nothing).
+        repairable: ``True`` when ``--repair`` can re-pin a derivable
+            SHA (``pinned_mismatch`` and ``unpinned_derivable``); ``False``
+            for the kinds with no derivable SHA to pin
+            (``pinned_but_missing`` / ``closed_no_pin`` /
+            ``closed_unfindable``).
+    """
+
+    wave_id: str
+    kind: CommitPinKind
+    state_commit: str | None = None
+    git_commit: str | None = None
+    repairable: bool = False
+
+
+def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[CommitPinIssue]:
+    """Scan every CLOSED wave's commit pin for drift OR a harden-able gap.
+
+    A superset of :func:`detect_git_state_drift`: the four hard-drift
+    kinds are reported identically, and one extra soft kind --
+    ``unpinned_derivable`` -- is added for a closed wave that has no
+    ``Wave.commit`` but whose SHA is still derivable from the bracketed
+    commit subject. ``detect_git_state_drift`` treats that case as clean
+    (the ``wave show`` derive fallback covers it); this scan surfaces it
+    so ``eawf wave verify-commits --repair`` can pin the derivable SHA.
+
+    Repair policy encoded on each row's ``repairable`` flag:
+
+    - ``pinned_mismatch`` -> repairable; re-pin to the git-derived SHA
+      (git history is ground truth for what actually landed).
+    - ``unpinned_derivable`` -> repairable; pin the derivable SHA.
+    - ``pinned_but_missing`` / ``closed_no_pin`` / ``closed_unfindable``
+      -> NOT repairable; there is no derivable SHA to pin, so the
+      operator must reconcile by hand (recover the commit, re-run with
+      git on PATH, or re-close the wave).
+
+    Args:
+        state: The validated :class:`State` to walk.
+        repo_root: Repository working directory; defaults to the process
+            cwd via the subprocess machinery in :func:`derive_wave_sha`.
+
+    Returns:
+        List of :class:`CommitPinIssue` rows ordered by ``wave_id`` so
+        render output stays stable. Empty list when every closed wave
+        carries an in-sync pin.
+    """
+    from eawf.kernel.state.enums import WaveStatus
+
+    git_available = shutil.which("git") is not None
+
+    issues: list[CommitPinIssue] = []
+    for wave_id in sorted(state.waves):
+        wave = state.waves[wave_id]
+        if wave.status != WaveStatus.CLOSED:
+            continue
+        derived = derive_wave_sha(wave_id, repo_root=repo_root) if git_available else None
+        pinned = wave.commit
+        if pinned is not None:
+            if derived is None:
+                issues.append(
+                    CommitPinIssue(
+                        wave_id=wave_id,
+                        kind="pinned_but_missing",
+                        state_commit=pinned,
+                        git_commit=None,
+                        repairable=False,
+                    )
+                )
+            elif not _shas_match(pinned, derived):
+                issues.append(
+                    CommitPinIssue(
+                        wave_id=wave_id,
+                        kind="pinned_mismatch",
+                        state_commit=pinned,
+                        git_commit=derived,
+                        repairable=True,
+                    )
+                )
+            continue
+        # pinned is None
+        if not git_available:
+            issues.append(
+                CommitPinIssue(
+                    wave_id=wave_id,
+                    kind="closed_unfindable",
+                    state_commit=None,
+                    git_commit=None,
+                    repairable=False,
+                )
+            )
+            continue
+        if derived is None:
+            issues.append(
+                CommitPinIssue(
+                    wave_id=wave_id,
+                    kind="closed_no_pin",
+                    state_commit=None,
+                    git_commit=None,
+                    repairable=False,
+                )
+            )
+        else:
+            issues.append(
+                CommitPinIssue(
+                    wave_id=wave_id,
+                    kind="unpinned_derivable",
+                    state_commit=None,
+                    git_commit=derived,
+                    repairable=True,
+                )
+            )
+    logger.info(
+        f"scan_commit_pins waves={len(state.waves)} issues={len(issues)} "
+        f"git_available={git_available}"
+    )
+    return issues
+
+
+@dataclass(frozen=True)
+class RepairAction:
+    """One re-pin applied by :func:`repair_commit_pins`.
+
+    Attributes:
+        wave_id: The wave whose ``Wave.commit`` was re-pinned.
+        kind: The :data:`CommitPinKind` that motivated the re-pin.
+        old_commit: The prior ``Wave.commit`` value (``None`` when the
+            wave was unpinned before the repair).
+        new_commit: The git-derived 40-hex SHA now pinned.
+    """
+
+    wave_id: str
+    kind: CommitPinKind
+    old_commit: str | None
+    new_commit: str
+
+
+def repair_commit_pins(
+    state: State, issues: list[CommitPinIssue]
+) -> tuple[list[RepairAction], list[CommitPinIssue]]:
+    """Re-pin every repairable issue in *issues* against *state* in place.
+
+    Mutates ``state.waves[wave_id].commit`` for each repairable row
+    (``pinned_mismatch`` / ``unpinned_derivable``) to its git-derived
+    SHA. Non-repairable rows are returned untouched so the caller can
+    report them as skipped.
+
+    The function is a pure in-process mutator: it never reads git (the
+    derived SHA was already resolved by :func:`scan_commit_pins` and
+    carried on :attr:`CommitPinIssue.git_commit`) and never touches
+    disk -- the caller persists ``state`` through the canonical writer.
+
+    Args:
+        state: Loaded :class:`State`; mutated in place.
+        issues: Rows from :func:`scan_commit_pins` for *state*.
+
+    Returns:
+        A ``(repaired, skipped)`` pair: ``repaired`` lists one
+        :class:`RepairAction` per re-pinned wave; ``skipped`` lists the
+        non-repairable :class:`CommitPinIssue` rows verbatim.
+    """
+    repaired: list[RepairAction] = []
+    skipped: list[CommitPinIssue] = []
+    for issue in issues:
+        if not issue.repairable or issue.git_commit is None:
+            skipped.append(issue)
+            continue
+        wave = state.waves.get(issue.wave_id)
+        if wave is None:
+            # Defensive: the scan was taken from this same state, so a
+            # missing wave here means the caller passed a stale issue
+            # list. Skip rather than raise so a partial repair still
+            # records the rows it could apply.
+            skipped.append(issue)
+            continue
+        old_commit = wave.commit
+        wave.commit = issue.git_commit
+        repaired.append(
+            RepairAction(
+                wave_id=issue.wave_id,
+                kind=issue.kind,
+                old_commit=old_commit,
+                new_commit=issue.git_commit,
+            )
+        )
+        logger.info(
+            f"repair_commit_pins wave={issue.wave_id} kind={issue.kind} "
+            f"old={old_commit!r} new={issue.git_commit}"
+        )
+    return repaired, skipped

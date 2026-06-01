@@ -47,6 +47,7 @@ EXPECTED_WAVE_VERBS = {
     "blocks-rebuild",
     "dispatch",
     "dispatch-batch",
+    "verify-commits",
 }
 EXPECTED_WAVE_BUDGET_VERBS = {"set", "consume", "show"}
 

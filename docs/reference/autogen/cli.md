@@ -554,6 +554,7 @@ Wave lifecycle (plan, claim, close, fail, graph, next-ready).
 | `review` | Attach review findings to a wave, or render a reviewer prompt. |
 | `show` | Inspect a wave. ``--commit`` prints SHA; ``--dispatch-prompt`` prints prompt. |
 | `update` | Mutate a PENDING/CLAIMED wave's ``file_scopes``. |
+| `verify-commits` | Verify (and optionally repair) every CLOSED wave's commit SHA pin. |
 
 ### `eawf wiki`
 

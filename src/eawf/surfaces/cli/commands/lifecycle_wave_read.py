@@ -25,11 +25,13 @@ from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import is_wave_id, natural_key
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.commands.lifecycle import (
     _atomic_write_text,
     _load_state_readonly,
     _read_state_payload,
     _resolve_iter_for_query,
+    _resolve_repo_root_for_drift,
     _run_mutation,
     _write_state_unlocked,
     wave_app,
@@ -498,6 +500,192 @@ def wave_dispatch_batch_cmd(
     payload: dict[str, Any] = {"iter": target_iter, "prompts": prompts}
     text = "\n".join(text_chunks) if text_chunks else f"iter {target_iter}: no waves to dispatch"
     emit_json_or_text(payload, text, flags=flags)
+
+
+# ---- Wave commit-pin verify / repair (P29-I02-W06) -------------------------
+
+
+def _commit_pin_issue_payload(issue: Any) -> dict[str, Any]:
+    """Project one :class:`CommitPinIssue` onto its JSON envelope row."""
+    return {
+        "wave": issue.wave_id,
+        "kind": issue.kind,
+        "state_commit": issue.state_commit,
+        "git_commit": issue.git_commit,
+        "repairable": issue.repairable,
+    }
+
+
+def _render_verify_commits_markdown(issues: list[Any]) -> str:
+    """Render the verify-commits scan as a markdown table.
+
+    One row per drifting wave with its kind, the pinned SHA, the
+    git-derived SHA, and whether ``--repair`` can fix it. Renders an
+    honest "no drift" line when *issues* is empty.
+    """
+    if not issues:
+        return "All closed waves carry an in-sync commit pin."
+    lines = [
+        "| wave | kind | pinned | derived | repairable |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for issue in issues:
+        pinned = issue.state_commit or "-"
+        derived = issue.git_commit or "-"
+        repairable = "yes" if issue.repairable else "no"
+        lines.append(f"| {issue.wave_id} | {issue.kind} | {pinned} | {derived} | {repairable} |")
+    return "\n".join(lines)
+
+
+def _verify_commits_text(issues: list[Any]) -> str:
+    """Render the verify-commits scan as a compact multi-line summary."""
+    if not issues:
+        return "wave verify-commits: all closed waves reconcile (0 drift)"
+    lines = [f"wave verify-commits: {len(issues)} drift(s)"]
+    for issue in issues:
+        pinned = issue.state_commit or "-"
+        derived = issue.git_commit or "-"
+        suffix = "" if issue.repairable else " (unrepairable)"
+        lines.append(f"  {issue.wave_id} {issue.kind} pinned={pinned} derived={derived}{suffix}")
+    return "\n".join(lines)
+
+
+@wave_app.command("verify-commits")
+def wave_verify_commits_cmd(
+    ctx: typer.Context,
+    repair: Annotated[
+        bool,
+        typer.Option(
+            "--repair",
+            help=(
+                "Re-pin each repairable wave's Wave.commit to its git-derived "
+                "SHA (pinned_mismatch + unpinned_derivable). Without --repair "
+                "the verb is read-only and exits VALIDATION_ERROR when any "
+                "drift is found, so CI can gate on it."
+            ),
+        ),
+    ] = False,
+    md: Annotated[
+        bool,
+        typer.Option("--md", help="Render the drift report as a markdown table."),
+    ] = False,
+) -> None:
+    """Verify (and optionally repair) every CLOSED wave's commit SHA pin.
+
+    Walks each closed wave and compares ``Wave.commit`` against the SHA
+    derived from the bracketed commit subject
+    (:func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`). Surfaces
+    five issue kinds:
+
+    - ``pinned_mismatch`` -- pin and git disagree (repairable).
+    - ``unpinned_derivable`` -- no pin but git can derive one (repairable).
+    - ``pinned_but_missing`` -- pinned SHA not reachable from any ref.
+    - ``closed_no_pin`` -- no pin and nothing derivable.
+    - ``closed_unfindable`` -- git unavailable on PATH; indeterminate.
+
+    Without ``--repair`` the verb is read-only: it prints the per-wave
+    report and exits ``VALIDATION_ERROR`` (2) when any drift is found so
+    it can gate CI; exit 0 when clean.
+
+    With ``--repair`` it re-pins the two repairable kinds to their
+    git-derived SHA through the canonical writer (the same locked,
+    WAL-backed state-mutation path ``wave close --commit`` uses), prints
+    a per-wave repaired/skipped summary, and exits 0. The repair is
+    idempotent: a second run finds the just-pinned waves clean.
+
+    ``--md`` emits a markdown table; ``--json`` (top-level flag) emits
+    the JSON payload.
+    """
+    from eawf.workflow.lifecycle.wave_sha import (
+        repair_commit_pins,
+        scan_commit_pins,
+    )
+
+    flags: GlobalFlags = ctx.obj
+    if md and flags.json_output:
+        cli_errors.emit_error(
+            cli_errors.UserError("--md and --json are contradictory", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
+
+    if not repair:
+        loaded = _load_state_readonly(ctx)
+        if loaded is None:
+            return
+        state, flags = loaded
+        issues = scan_commit_pins(state, repo_root=repo_root)
+        payload: dict[str, Any] = {
+            "repair": False,
+            "drift_count": len(issues),
+            "drifts": [_commit_pin_issue_payload(i) for i in issues],
+        }
+        text = _render_verify_commits_markdown(issues) if md else _verify_commits_text(issues)
+        emit_json_or_text(payload, text, flags=flags)
+        if issues:
+            # Exit non-zero AFTER emitting the full report so CI gates can
+            # both read the drift detail and branch on the exit code.
+            raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
+        return
+
+    # --repair: re-scan + re-pin under the canonical writer's lock so the
+    # repair is atomic against a concurrent mutator. The scan runs inside
+    # the mutator against the freshly-loaded state (not the read-only
+    # snapshot above) so a wave that changed since process start is not
+    # re-pinned from stale data.
+    result: dict[str, Any] = {}
+
+    def _mutator(state: State) -> None:
+        issues = scan_commit_pins(state, repo_root=repo_root)
+        repaired, skipped = repair_commit_pins(state, issues)
+        result["repaired"] = repaired
+        result["skipped"] = skipped
+
+    _run_mutation(
+        ctx,
+        command="wave verify-commits",
+        args={"repair": True},
+        scope_id="waves",
+        text_factory=lambda: _verify_commits_repair_text(
+            result.get("repaired", []), result.get("skipped", [])
+        ),
+        envelope_factory=lambda: _verify_commits_repair_envelope(
+            result.get("repaired", []), result.get("skipped", [])
+        ),
+        mutate=_mutator,
+    )
+
+
+def _verify_commits_repair_envelope(repaired: list[Any], skipped: list[Any]) -> dict[str, Any]:
+    """Build the ``--repair`` JSON envelope from repaired + skipped rows."""
+    return {
+        "repair": True,
+        "repaired_count": len(repaired),
+        "skipped_count": len(skipped),
+        "repaired": [
+            {
+                "wave": action.wave_id,
+                "kind": action.kind,
+                "old_commit": action.old_commit,
+                "new_commit": action.new_commit,
+            }
+            for action in repaired
+        ],
+        "skipped": [_commit_pin_issue_payload(i) for i in skipped],
+    }
+
+
+def _verify_commits_repair_text(repaired: list[Any], skipped: list[Any]) -> str:
+    """Render the ``--repair`` per-wave summary as a compact multi-line block."""
+    lines = [f"wave verify-commits --repair: {len(repaired)} re-pinned, {len(skipped)} skipped"]
+    for action in repaired:
+        old = action.old_commit or "-"
+        lines.append(f"  repaired {action.wave_id} {action.kind} {old} -> {action.new_commit}")
+    for issue in skipped:
+        lines.append(f"  skipped {issue.wave_id} {issue.kind} (unrepairable)")
+    return "\n".join(lines)
 
 
 # ---- Wave budget handlers --------------------------------------------------
