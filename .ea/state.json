@@ -3581,7 +3581,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P29-I01-W27"
+    ],
     "iter_id": "P29-I01",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -7405,6 +7407,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I01-W26",
       "updated_at": "2026-06-01T07:06:46.217567Z"
+    },
+    "P29-I01-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W27-bucket-20260601T074228Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W27",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W27",
+      "updated_at": "2026-06-01T07:42:28.415573Z"
     }
   },
   "goals": {
@@ -8516,7 +8531,9 @@
         "P29-I01-W25",
         "P29-I01-W15",
         "P29-I01-W16",
-        "P29-I01-W18"
+        "P29-I01-W18",
+        "P29-I01-W27",
+        "P29-I01-W28"
       ]
     },
     "P29-I02": {
@@ -9334,7 +9351,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T07:38:45.799462Z",
+  "updated_at": "2026-06-01T07:42:29.360249Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -27732,7 +27749,8 @@
     "P29-I01-W11": {
       "agent_role": "executor",
       "blocks": [
-        "P29-I01-W12"
+        "P29-I01-W12",
+        "P29-I01-W27"
       ],
       "claim_session_id": "flow-p29-i01",
       "closed_at": "2026-06-01T04:56:09.202626Z",
@@ -27840,7 +27858,8 @@
       "agent_role": "executor",
       "blocks": [
         "P29-I01-W15",
-        "P29-I04-W13"
+        "P29-I04-W13",
+        "P29-I01-W27"
       ],
       "claim_session_id": "flow-p29-i01",
       "closed_at": "2026-06-01T07:05:15.089177Z",
@@ -28285,6 +28304,75 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P29-I01-W26-1780297607"
+    },
+    "P29-I01-W27": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I01-W28"
+      ],
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W11",
+        "P29-I01-W14"
+      ],
+      "description": "Reactive follow-up: complete W11 SC2 (runner+skill-body still on quick|normal|deep) and W14 SC2 (research: profile block defined but not mounted on ProfileBody).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/skills/**",
+        "src/eawf/platform/profiles/**"
+      ],
+      "id": "P29-I01-W27",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T07:41:25.835356Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "workflow/skills runner+body use ResearchDepth so W11 depth 3-way drift is fully resolved",
+        "ProfileBody mounts ResearchProfileBlock so W14 per-domain research config is wired"
+      ],
+      "title": "Re-point workflow/skills depth + mount research profile block",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P29-I01-W27-1780299749"
+    },
+    "P29-I01-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W27"
+      ],
+      "description": "Reactive follow-up: reconcile committed goldens stale from the I01 model/StoreKind/enum/CLI additions (W01/W12/W14/W19/W15/W26). Pure regeneration, no hand edits.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/schemas/**",
+        "docs/reference/autogen/**"
+      ],
+      "id": "P29-I01-W28",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T07:41:26.311952Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "state.schema.json + docs/reference/autogen tree + cli.md regenerated via canonical generators",
+        "schema/autogen/kinds/enums drift tests all green"
+      ],
+      "title": "Regenerate schema and autogen goldens for I01 model changes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     },
     "P29-I02-W01": {
       "agent_role": "executor",
@@ -33590,6 +33678,17 @@
       "path": ".ea/worktrees/p29-w26",
       "status": "merged",
       "wave_id": "P29-I01-W26"
+    },
+    "WT-P29-I01-W27-1780299749": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w27",
+      "created_at": "2026-06-01T07:42:29.360249Z",
+      "id": "WT-P29-I01-W27-1780299749",
+      "merged_commit": null,
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w27",
+      "status": "active",
+      "wave_id": "P29-I01-W27"
     }
   }
 }
