@@ -22,6 +22,7 @@ from eawf.kernel.state.enums import (
     AuditVerdict,
     BacklogPriority,
     BacklogStatus,
+    ClaimStatus,
     Confidence,
     DecisionStatus,
     DispatchNote,
@@ -40,6 +41,7 @@ from eawf.kernel.state.enums import (
     McpStatus,
     MemoryStatus,
     MemoryTier,
+    OpenQuestionStatus,
     OutcomeDirection,
     OutcomeStatus,
     PhaseStatus,
@@ -352,6 +354,104 @@ class Hypothesis(_StrictModel):
     verdict: HypothesisVerdict | None = None
     audit_id: str | None = None
     source_artifact_id: str | None = None
+
+
+class Claim(_StrictModel):
+    """A single typed claim in a research-campaign ledger.
+
+    The Claim ledger is the prerequisite of the pruning pass and the
+    SaturationReport: a campaign accumulates claims as it surveys sources,
+    and the ledger lets a downstream pass detect saturation (no new claims
+    arriving) and prune subsumed rows. Each claim names a single assertion
+    (``title``) with optional long-form context (``description``) and carries
+    the ``evidence_refs`` that ratify it — repo-relative paths, Eawf URNs, or
+    external URLs — so the EviBound scorer can score "every claim resolves"
+    over the ledger.
+
+    The field shape mirrors the sibling research entity
+    :class:`Hypothesis`: a bounded imperative ``title`` (no trailing period),
+    a 500-char optional ``description``, a ``scope_id`` binding the claim to
+    its campaign scope, and a closed :class:`ClaimStatus` lifecycle.
+    ``answers_question_id`` back-links a claim to the separate
+    :class:`OpenQuestion` entity it resolves; it defaults to ``None`` for a
+    free-standing claim.
+
+    Attributes:
+        id: Stable claim id (``IdStr`` — non-empty, no whitespace).
+        scope_id: Campaign / research scope the claim belongs to.
+        title: Imperative noun-phrase stating the claim, bounded at 72
+            characters with no trailing period (entity-title convention).
+        description: Optional long-form statement bounded at 500 characters.
+        status: Closed :class:`ClaimStatus` lifecycle position.
+        evidence_refs: Repo-relative / URN / external-URL strings that
+            ratify the claim. Default empty so a freshly logged claim whose
+            evidence is not yet attached still validates (the EviBound gate
+            scores resolution downstream, not at ingestion).
+        source_artifact_id: Optional id of the artifact (notebook, brief,
+            dataset) the claim was distilled from.
+        answers_question_id: Optional :class:`OpenQuestion` id this claim
+            answers; ``None`` for a claim not tied to a tracked question.
+        created_at: When the claim was logged into the ledger.
+        superseded_by: Id of the later claim that subsumes this one when
+            :attr:`status` is :attr:`ClaimStatus.SUPERSEDED`; ``None``
+            otherwise.
+    """
+
+    id: IdStr
+    scope_id: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
+    status: ClaimStatus
+    evidence_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    source_artifact_id: str | None = None
+    answers_question_id: str | None = None
+    created_at: UtcDatetime
+    superseded_by: str | None = None
+
+
+class OpenQuestion(_StrictModel):
+    """An unresolved research question tracked as its own first-class entity.
+
+    An open question is NOT folded into :class:`Claim`: a question is a gap to
+    close, a claim is an assertion that closes it, and conflating the two
+    loses the distinction the research-campaign control plane needs (a
+    question can outlive many candidate claims, and an operator can add a
+    question mid-run through the input channel). The ``BLOCKED`` status feeds
+    the balanced-autonomy interrupt: a blocking question is the only kind that
+    raises to the operator.
+
+    The field shape mirrors the sibling research entities (:class:`Claim` /
+    :class:`Hypothesis`): a bounded imperative ``title`` with no trailing
+    period, a 500-char optional ``description``, a ``scope_id`` binding the
+    question to its campaign, and a closed :class:`OpenQuestionStatus`.
+
+    Attributes:
+        id: Stable question id (``IdStr`` — non-empty, no whitespace).
+        scope_id: Campaign / research scope the question belongs to.
+        title: Imperative noun-phrase stating the question, bounded at 72
+            characters with no trailing period (entity-title convention).
+        description: Optional long-form framing bounded at 500 characters.
+        status: Closed :class:`OpenQuestionStatus` lifecycle position.
+        blocking: Whether an unanswered question gates further campaign work;
+            a ``True`` value is what the balanced-autonomy interrupt raises to
+            the operator. Defaults to ``False`` (advisory question).
+        answered_by_claim_id: Optional :class:`Claim` id that resolved the
+            question when :attr:`status` is
+            :attr:`OpenQuestionStatus.ANSWERED`; ``None`` otherwise.
+        created_at: When the question was opened.
+        resolved_at: When the question reached a terminal state
+            (``ANSWERED`` / ``DROPPED``); ``None`` while still open.
+    """
+
+    id: IdStr
+    scope_id: str
+    title: Annotated[str, Field(min_length=1, max_length=72)]
+    description: Annotated[str, Field(max_length=500)] | None = None
+    status: OpenQuestionStatus
+    blocking: bool = False
+    answered_by_claim_id: str | None = None
+    created_at: UtcDatetime
+    resolved_at: UtcDatetime | None = None
 
 
 class Audit(_StrictModel):
@@ -701,6 +801,8 @@ class State(_StrictModel):
     estimates: dict[str, EstimateSummary] | None = None
     actuals: dict[str, ActualSummary] | None = None
     hypotheses: dict[str, Hypothesis] | None = None
+    claims: dict[str, Claim] | None = None
+    open_questions: dict[str, OpenQuestion] | None = None
     audits: dict[str, Audit] | None = None
     incidents: dict[str, Incident] | None = None
     artifacts: dict[str, Artifact]

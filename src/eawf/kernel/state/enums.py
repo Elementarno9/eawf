@@ -140,6 +140,40 @@ class DecisionStatus(StrEnum):
     OBSOLETE = "obsolete"
 
 
+class ClaimStatus(StrEnum):
+    """Lifecycle of a research-campaign :class:`~eawf.kernel.state.models.Claim`.
+
+    A claim enters the ledger ``OPEN`` and moves toward an evidence-backed
+    terminal state as the campaign accrues references. ``SUPERSEDED`` is the
+    prune target the pruning pass + SaturationReport key on: a later claim
+    subsumes an earlier one, so the earlier row stays in the ledger for
+    traceability but no longer counts toward live coverage.
+    """
+
+    OPEN = "open"
+    SUPPORTED = "supported"
+    REFUTED = "refuted"
+    SUPERSEDED = "superseded"
+
+
+class OpenQuestionStatus(StrEnum):
+    """Lifecycle of a research-campaign :class:`~eawf.kernel.state.models.OpenQuestion`.
+
+    An open question is its own first-class entity, not a claim variant: a
+    question is a gap to close, a claim is the assertion that closes it. It
+    enters ``OPEN``, reaches ``ANSWERED`` once a claim or artifact resolves
+    it, or ``DROPPED`` when the campaign decides it is out of scope.
+    ``BLOCKED`` marks a question whose answer gates further work — the only
+    status the balanced-autonomy interrupt surface raises to the operator, so
+    an advisory question never interrupts while a blocking one always does.
+    """
+
+    OPEN = "open"
+    ANSWERED = "answered"
+    BLOCKED = "blocked"
+    DROPPED = "dropped"
+
+
 class BacklogPriority(StrEnum):
     P0 = "P0"
     P1 = "P1"
