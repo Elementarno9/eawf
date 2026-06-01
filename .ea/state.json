@@ -4086,6 +4086,19 @@
       "status": "open",
       "title": "Re-bind codex own-cred when CODEX_HOME sits under a masked jail dir"
     },
+    "B079": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-01T23:42:52.407571Z",
+      "description": "test_repo_pyproject_excludes_keep_tree_green fails: app.py is 1482 LOC over the 1400 EAWF010 cap and absent from the pyproject exclude list. Pre-existing at the P29-I03 base 40cb293a; untouched by I03. Exclude or refactor before the I07 phase PR (full suite + coverage gate). Note: the live-zsh completion test is a separate environmental flake (A45-documented).",
+      "id": "B079",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P29",
+      "status": "open",
+      "title": "Exclude or refactor oversized surfaces/tui/app.py for EAWF010"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -4177,7 +4190,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I03",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -9685,15 +9698,15 @@
       ]
     },
     "P29-I03": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A46-P29-i03",
+      "closed_at": "2026-06-01T23:43:09.036375Z",
       "description": "The spawn-gated safety floor that gates all live spawn. env-scrub allowlist + default-deny egress proxy + per-OS FS jail, plus the HALT interlock. Atomic floor audit: env-scrub + egress + jail + pgid-kill (SP-6) + HALT must all be green together before any I04 wave claims.",
       "estimate_id": null,
       "id": "P29-I03",
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247682Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Safety floor: env-scrub, egress proxy, FS jail",
       "trigger": "none",
       "wave_ids": [
@@ -9848,6 +9861,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I02-close-A45-P29-i02",
       "summary": "iter P29-I02 closed with audit A45-P29-i02; waves closed=32; outcomes P29-I02-W01: roadmap revise --iter un-hardcodes I01; edit_phase_plan lifecycle fn + CLI retitle-phase path... | P29-I02-W02: Phase.release validated field (vMAJOR.MINOR.PATCH); edit_phase_plan + roadmap revise --releas... | P29-I02-W03: preferences.* config keys (solution_bias=simple|balanced|thorough, scope_size=EffortBucket, a...",
+      "tier": "working"
+    },
+    "MEM-P29-I03-close-A46-P29-i03": {
+      "confidence": "high",
+      "id": "MEM-P29-I03-close-A46-P29-i03",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-01T23:43:09.036375Z",
+      "scope_id": "P29-I03",
+      "status": "active",
+      "store_record_id": "MEM-P29-I03-close-A46-P29-i03",
+      "summary": "iter P29-I03 closed with audit A46-P29-i03; waves closed=5; outcomes P29-I03-W01: build_child_env allowlist (env -i floor + per-lane auth) in runtime/sandbox/env_scrub.py; env... | P29-I03-W02: default-deny UDS egress: pure classify_egress policy (sandbox/egress.py) + POSIX asyncio UDS ... | P29-I03-W03: S-JAIL-0 verdict: DIRECT bubblewrap (Linux) / sandbox-exec seatbelt (macOS) under eawf contro...",
       "tier": "working"
     }
   },
@@ -10508,7 +10532,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T23:20:59.814951Z",
+  "updated_at": "2026-06-01T23:43:09.036806Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
