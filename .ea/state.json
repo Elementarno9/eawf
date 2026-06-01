@@ -1488,6 +1488,18 @@
       "status": "done",
       "updated_at": "2026-06-01T18:44:51.366835Z"
     },
+    "P29-I02-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W17",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W17",
+      "scope_id": "P29-I02-W17",
+      "status": "done",
+      "updated_at": "2026-06-01T19:52:48.207249Z"
+    },
     "P29-I02-W18": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1547,6 +1559,30 @@
       "scope_id": "P29-I02-W22",
       "status": "done",
       "updated_at": "2026-06-01T19:12:58.317708Z"
+    },
+    "P29-I02-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W23",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W23",
+      "scope_id": "P29-I02-W23",
+      "status": "done",
+      "updated_at": "2026-06-01T19:54:17.405079Z"
+    },
+    "P29-I02-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W24",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W24",
+      "scope_id": "P29-I02-W24",
+      "status": "done",
+      "updated_at": "2026-06-01T19:49:07.617111Z"
     },
     "P29-I02-W27": {
       "actual_cost_usd": 0.0,
@@ -3915,9 +3951,9 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P29-I02-W17",
-      "P29-I02-W23",
-      "P29-I02-W24"
+      "P29-I02-W25",
+      "P29-I02-W26",
+      "P29-I02-W29"
     ],
     "iter_id": "P29-I02",
     "phase_id": "P29",
@@ -8094,6 +8130,32 @@
       "scope_id": "P29-I02-W24",
       "updated_at": "2026-06-01T19:33:48.606022Z"
     },
+    "P29-I02-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W25-bucket-20260601T194908Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W25",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W25",
+      "updated_at": "2026-06-01T19:49:08.179757Z"
+    },
+    "P29-I02-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W26-bucket-20260601T195248Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I02-W26",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I02-W26",
+      "updated_at": "2026-06-01T19:52:48.743769Z"
+    },
     "P29-I02-W27": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I02-W27-bucket-20260601T184905Z",
@@ -8119,6 +8181,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I02-W28",
       "updated_at": "2026-06-01T19:33:49.086161Z"
+    },
+    "P29-I02-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W29-bucket-20260601T195417Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I02-W29",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I02-W29",
+      "updated_at": "2026-06-01T19:54:17.937283Z"
     }
   },
   "goals": {
@@ -10094,7 +10169,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T19:42:50.716246Z",
+  "updated_at": "2026-06-01T19:54:17.937515Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29649,8 +29724,8 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-01T19:52:48.207249Z",
+      "commit": "433163f64dbf251792aa62972bb22d66efe8b0f7",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29664,10 +29739,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.264608Z",
-      "outcome": null,
+      "outcome": "bound SCOPE x MODE nav state machine (pure nav.py: NavState/NavPosition/NavTransition + is_legal_position); legal matrix derived from panes (illegal corner = user x {trust,evidence,feed} - single-scope panes vs portfolio aggregate); EaApp.switch_mode override + action_switch_scope guard reject illegal combos at boundary (toast+no-op+log, no crash); breadcrumb renders bound nav_position. 1084 TUI tests, no golden drift. Cherry-picked c459af20 clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "bounded SCOPE x MODE navigation state + breadcrumb; illegal combinations rejected at the boundary"
       ],
@@ -29840,8 +29915,8 @@
         "P29-I02-W29"
       ],
       "claim_session_id": "op-p29i02",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-01T19:54:17.405079Z",
+      "commit": "ddb9e61b84f394937a57a76ad0c9b335ac8710b4",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29855,10 +29930,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.266235Z",
-      "outcome": null,
+      "outcome": "textual-enrichment visual layer: braille/tint/wave-size bars already existed (P27-I04); W23 delivers the DRY extraction - new shared widgets/status_tint.py (STATUS_COLOURS + BAND_HEX from one canonical Wong palette), theme WONG_VARIABLES promoted public, roadmap_tree + eu_bar re-pointed to the shared source; byte-preserving (no golden drift). 1079 TUI tests. Cherry-picked a48d449b clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "textual-enrichment visual layer: braille bars, status-tint, wave-size bars per the I04 design"
       ],
@@ -29873,8 +29948,8 @@
         "P29-I02-W25"
       ],
       "claim_session_id": "op-p29i02",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-01T19:49:07.617111Z",
+      "commit": "a7cabbbfe2b6cba81920c4e1bcbf9260ec77bfad",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29888,10 +29963,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.266559Z",
-      "outcome": null,
+      "outcome": "multi-repo read-only dashboard (WorkspaceTable) + new RegistryPane in workspace scope; reads ONLY read_registry() boundary (no os.walk/scandir/glob - no-scan invariant pinned with trip-wire test), honest-empty at 0/1 repos, no cross-repo writes (v0.6). 138 tests. Cherry-picked ed89175d clean. Followup: pre-existing fresh_repo/agents.golden.json drift (W11 AGENTS.md collateral)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "multi-repo read-only dashboard + registry pane; registry grows only via explicit init/add-repo (no scan/walk)"
       ],
@@ -29903,7 +29978,7 @@
     "P29-I02-W25": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -29922,7 +29997,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "advisory read-only cross-repo PR view"
       ],
@@ -29934,7 +30009,7 @@
     "P29-I02-W26": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -29953,7 +30028,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Enter routing fixed; modal-stack dedup; backlog filter QoL"
       ],
@@ -30030,7 +30105,7 @@
       "blocks": [
         "P29-I02-W30"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -30055,7 +30130,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "Wave gains claimed_at typed field stamped in claim_wave",
         "schema_version bumped with migration backfilling claimed_at from wave_claimed event anchors",
