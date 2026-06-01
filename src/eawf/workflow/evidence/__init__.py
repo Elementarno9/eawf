@@ -44,10 +44,24 @@ from eawf.workflow.evidence.rung2 import (
     verdict_to_status,
 )
 
+# Rung-4 exposes its own ``CriterionVerdict``-to-status mapper that shares
+# the bare name ``verdict_to_status`` with the rung-2 ``Rung2Verdict``
+# mapper above. Re-export the rung-4 one under an unambiguous alias so the
+# package namespace carries both without one shadowing the other.
+from eawf.workflow.evidence.rung4 import (
+    CriterionVerdict,
+    dominant_verdict,
+    render_attested_verdict,
+)
+from eawf.workflow.evidence.rung4 import (
+    verdict_to_status as criterion_verdict_to_status,
+)
+
 __all__ = [
     "BriefPromotionGate",
     "BriefRefOutcome",
     "ClaimRung",
+    "CriterionVerdict",
     "DeferredAspect",
     "EntailmentScorer",
     "LexicalEntailmentScorer",
@@ -59,8 +73,11 @@ __all__ = [
     "Rung2Verdict",
     "check_brief_promotable",
     "classify_probability",
+    "criterion_verdict_to_status",
+    "dominant_verdict",
     "load_default_scorer",
     "looks_numeric",
+    "render_attested_verdict",
     "require_complete_audit",
     "resolve",
     "route_claim_to_rung",
