@@ -1,10 +1,18 @@
-"""Tests for the C06 modal-stack depth cap (P26-W19).
+"""Tests for the C06 modal-stack depth cap (P26-W19) + singleton dedup (P29-W26).
 
-The App enforces a single modal-stack cap (``MAX_MODAL_DEPTH == 3`` per
+The App enforces a single modal-stack gate (``MAX_MODAL_DEPTH == 3`` per
 C06 §5.7 / failure mode F6): every overlay-opening path routes through
 :meth:`EaApp.push_modal`, which rejects the fourth push and toasts rather
 than mutating the stack. These tests drive the cap directly and through
 the palette + detail-drill paths.
+
+The W26 dedup adds a top-only singleton guard to the same gate: a modal
+whose class sets ``dedupe_singleton = True`` (the palette / config / help /
+inbox / init-wizard overlays) is rejected when the current top-of-stack
+overlay is the same class, so a re-fired open key / palette verb cannot
+stack a second identical overlay. Non-singleton drill-ins (DetailModal /
+ConfirmModal) still stack freely, and a singleton over a *different*
+singleton still stacks. The dedup tests below pin all three behaviours.
 """
 
 from __future__ import annotations
@@ -12,7 +20,11 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from textual.screen import ModalScreen
+
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.palette.command_palette import CommandPalette
+from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.screens.overlays.detail import DetailCard, DetailModal
 
@@ -107,5 +119,85 @@ def test_palette_then_two_more_then_cap() -> None:
             assert app.push_modal(DetailModal(_CARD)) is False
             await pilot.pause()
             assert app.modal_depth() == 3
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Singleton dedup (P29-W26) — a duplicate of the top overlay is rejected
+# --------------------------------------------------------------------------
+
+
+def test_duplicate_singleton_modal_is_deduped_to_one() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # A singleton overlay (ConfigModal) pushed twice keeps ONE on
+            # the stack: the second push duplicates the top, so it no-ops.
+            assert app.push_modal(ConfigModal()) is True
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            assert app.push_modal(ConfigModal()) is False
+            await pilot.pause()
+            assert app.modal_depth() == 1
+
+    asyncio.run(body())
+
+
+def test_distinct_singleton_modals_still_stack() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # Two *different* singletons coexist: the dedup is top-only by
+            # class, so config then palette stacks to depth 2.
+            assert app.push_modal(ConfigModal()) is True
+            await pilot.pause()
+            assert app.push_modal(CommandPalette()) is True
+            await pilot.pause()
+            assert app.modal_depth() == 2
+            # The palette is now the top, so a second palette is deduped.
+            assert app.push_modal(CommandPalette()) is False
+            await pilot.pause()
+            assert app.modal_depth() == 2
+
+    asyncio.run(body())
+
+
+def test_non_singleton_modal_stacks_duplicates() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # DetailModal does not opt into dedup, so legitimate repeat
+            # drills (the same card from different contexts) still stack.
+            results = [app.push_modal(DetailModal(_CARD)) for _ in range(3)]
+            await pilot.pause()
+            assert results == [True, True, True]
+            assert app.modal_depth() == 3
+
+    asyncio.run(body())
+
+
+def test_open_config_action_twice_keeps_one_modal() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # The end-to-end vector the W26 dedup targets: re-firing the
+            # App-level config action (e.g. a double palette-verb dispatch)
+            # must not stack a second identical ConfigModal.
+            app.action_open_config()
+            await pilot.pause()
+            app.action_open_config()
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            modal_names = [
+                type(screen).__name__
+                for screen in app.screen_stack
+                if isinstance(screen, ModalScreen)
+            ]
+            assert modal_names == ["ConfigModal"]
 
     asyncio.run(body())

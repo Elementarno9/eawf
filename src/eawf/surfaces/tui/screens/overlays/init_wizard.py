@@ -253,6 +253,12 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
     ``None``.
     """
 
+    #: One wizard at a time -- a re-fired open over an already-open wizard is
+    #: a no-op (deduped by :meth:`~eawf.surfaces.tui.app.EaApp.push_modal`, in
+    #: addition to the App-level ``_init_wizard_open`` guard) rather than
+    #: stacking a duplicate.
+    dedupe_singleton: ClassVar[bool] = True
+
     DEFAULT_CSS: ClassVar[str] = """
     InitWizardModal {
         align: center middle;

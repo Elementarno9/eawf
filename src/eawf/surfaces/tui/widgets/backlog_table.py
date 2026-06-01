@@ -275,12 +275,15 @@ class BacklogTable(DataTable[str]):
     * :meth:`cycle_sort` — advance the sort key (bind to a key).
     * :meth:`apply_filter` — set the substring filter (the ``/filter
       backlog`` palette verb calls this).
+    * :meth:`clear_filter` — reset the filter to empty (the ``x`` key
+      calls this via :meth:`action_clear_filter`).
     * :class:`RowActivated` — posted on Enter; carries the item id for the
       detail modal (modal screen lands in a later wave).
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("c", "toggle_show_closed", "Show closed", show=False),
+        Binding("x", "clear_filter", "Clear filter", show=False),
     ]
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -365,6 +368,22 @@ class BacklogTable(DataTable[str]):
     def action_toggle_show_closed(self) -> None:
         """Flip the :attr:`show_closed` toggle (bound to the ``c`` key)."""
         self.show_closed = not self.show_closed
+
+    def action_clear_filter(self) -> None:
+        """Clear the active substring filter (bound to the ``x`` key).
+
+        The ``/filter backlog`` palette verb is the only way to *set* the
+        filter, so without this an operator who filtered the pane had to
+        reopen the palette and submit an empty needle just to see all rows
+        again. The ``x`` key restores the full list in one keystroke; a
+        no-op (no rebuild) when no filter is active.
+        """
+        if self.filter_text:
+            self.clear_filter()
+
+    def clear_filter(self) -> None:
+        """Reset the substring filter to empty (restores all rows)."""
+        self.filter_text = ""
 
     def on_resize(self, event: Resize) -> None:
         """Re-truncate titles when the pane width changes.

@@ -191,6 +191,65 @@ def test_table_apply_filter_narrows_rows() -> None:
     asyncio.run(body())
 
 
+def test_clear_filter_key_restores_all_rows() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(_items())
+            await pilot.pause()
+            # Filter down to the in-progress row, then ``x`` clears it.
+            table.apply_filter("wire")
+            await pilot.pause()
+            assert table.row_count == 1
+            assert table.filter_text == "wire"
+            table.focus()
+            await pilot.press("x")
+            await pilot.pause()
+            # CLOSED rows stay hidden (show_closed still False), so the two
+            # non-closed rows return.
+            assert table.filter_text == ""
+            assert table.row_count == 2
+
+    asyncio.run(body())
+
+
+def test_clear_filter_key_is_noop_without_active_filter() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(_items())
+            await pilot.pause()
+            before = table.row_count
+            table.focus()
+            await pilot.press("x")
+            await pilot.pause()
+            assert table.filter_text == ""
+            assert table.row_count == before
+
+    asyncio.run(body())
+
+
+def test_clear_filter_method_resets_filter_text() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(_items())
+            await pilot.pause()
+            table.apply_filter("metrics")
+            await pilot.pause()
+            table.clear_filter()
+            await pilot.pause()
+            assert table.filter_text == ""
+
+    asyncio.run(body())
+
+
 def test_table_cycle_sort_changes_order() -> None:
     async def body() -> None:
         app = _Harness()

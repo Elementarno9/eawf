@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 #: ``Ctrl-`` chords are listed as muscle-memory aliases.
 _GLOBAL_KEYS: tuple[tuple[str, str], ...] = (
     ("q", "quit"),
-    ("Esc", "close overlay / clear filter / drop palette"),
+    ("Esc", "close overlay / drop palette / leave zoom"),
     ("w", "switch to workspace scope"),
     ("r", "switch to repo scope"),
     ("u", "switch to user scope"),
@@ -76,6 +76,16 @@ _SCOPE_KEYS: dict[ScopeName, tuple[tuple[str, str], ...]] = {
     "workspace": (("z", "zoom focused repo to repo screen"),),
     "user": (),
 }
+
+#: Backlog-pane keys (key, action) — the "Backlog pane" table. These ride
+#: the focused :class:`~eawf.surfaces.tui.widgets.backlog_table.BacklogTable`;
+#: the substring filter is *set* via the ``/filter backlog`` palette verb
+#: and *cleared* in-pane with ``x``.
+_BACKLOG_KEYS: tuple[tuple[str, str], ...] = (
+    ("Enter", "drill into row (detail modal)"),
+    ("c", "toggle closed rows"),
+    ("x", "clear active filter"),
+)
 
 #: Config-overlay keys (key, action) — the "Config overlay" table. Arrows
 #: navigate (``↑`` / ``↓`` fields, ``←`` / ``→`` tabs) and ``Enter`` is
@@ -118,6 +128,11 @@ def pane_nav_rows() -> tuple[tuple[str, str, str], ...]:
     return _PANE_NAV
 
 
+def backlog_key_rows() -> tuple[tuple[str, str], ...]:
+    """Return the backlog-pane key rows (key, action) for the help table."""
+    return _BACKLOG_KEYS
+
+
 def config_overlay_rows() -> tuple[tuple[str, str], ...]:
     """Return the config-overlay key rows (key, action) for the help table."""
     return _CONFIG_OVERLAY_KEYS
@@ -142,6 +157,12 @@ class HelpScreen(ModalScreen[None]):
     active scope's extras, and the palette verb table. Built thin over the
     pure row helpers so the content is testable without Textual.
     """
+
+    #: One help overlay at a time -- a re-fired ``?`` / ``/help`` over an
+    #: already-open help screen is a no-op (deduped by
+    #: :meth:`~eawf.surfaces.tui.app.EaApp.push_modal`, in addition to the
+    #: App-level ``_help_open`` guard) rather than stacking a duplicate.
+    dedupe_singleton: ClassVar[bool] = True
 
     DEFAULT_CSS: ClassVar[str] = """
     HelpScreen {
@@ -206,6 +227,9 @@ class HelpScreen(ModalScreen[None]):
                     yield Static(f"  {key:<10} {action}", classes="help-row")
             else:
                 yield Static("  (none)", classes="help-row")
+            yield Static("Backlog pane (set filter via /filter)", classes="help-section")
+            for key, action in backlog_key_rows():
+                yield Static(f"  {key:<10} {action}", classes="help-row")
             yield Static("Config overlay (arrows nav, Enter edits)", classes="help-section")
             for key, action in config_overlay_rows():
                 yield Static(f"  {key:<10} {action}", classes="help-row")
@@ -261,6 +285,7 @@ def open_help(app: object) -> None:
 
 __all__ = [
     "HelpScreen",
+    "backlog_key_rows",
     "config_overlay_rows",
     "global_key_rows",
     "mode_key_rows",

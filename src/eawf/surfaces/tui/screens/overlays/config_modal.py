@@ -119,6 +119,12 @@ class ConfigModal(ModalScreen[None]):
     when there are staged edits).
     """
 
+    #: One config window at a time -- a re-fired ``c`` / ``/config`` over an
+    #: already-open ConfigModal is a no-op (deduped by
+    #: :meth:`~eawf.surfaces.tui.app.EaApp.push_modal`) rather than stacking
+    #: a second identical window.
+    dedupe_singleton: ClassVar[bool] = True
+
     DEFAULT_CSS: ClassVar[str] = """
     ConfigModal {
         align: center middle;

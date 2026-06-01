@@ -6,7 +6,7 @@
       │                                                                                                          │
       │  Global keys                                                                                             │
       │    q          quit                                                                                       │
-      │    Esc        close overlay / clear filter / drop palette                                                │
+      │    Esc        close overlay / drop palette / leave zoom                                                  │
       │    w          switch to workspace scope                                                                  │
       │    r          switch to repo scope                                                                       │
       │    u          switch to user scope                                                                       │
@@ -15,8 +15,8 @@
       │    i          open needs_user inbox (by urgency)                                                         │
       │    F5         force refresh                                                                              │
       │    ?          open help                                                                                  │
-      │    /          open palette                                                                               │
-      │    Tab        next pane                                                                              ▄▄  │
+      │    /          open palette                                                                           ▄▄  │
+      │    Tab        next pane                                                                                  │
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
       │  Modes (digit keys)                                                                                      │

@@ -34,6 +34,18 @@ A third report against the same path (P29-I02-W15):
   with exactly one quadrant, while a switch-away still tears down with no
   rebuild and the guard stays idempotent under a tight round-trip.
 
+A fourth report against the same path (P29-I02-W26):
+
+* **Zoom dropped keyboard focus.** Zooming hides the browse
+  ``WorkspaceTable`` (``display = False``), which blurs the table that held
+  focus and left focus unset -- so Enter and the arrow keys landed nowhere
+  in the zoomed quadrant. Exiting zoom (or a real switch-away) symmetrically
+  left the restored browse table unfocused. The fix moves focus onto the
+  quadrant's ``#zoom-roadmap`` tree on zoom (its primary drill target,
+  mirroring the repo scope's Enter target) and back onto the browse
+  ``WorkspaceTable`` on exit. The ``_focus_*`` tests below pin both
+  transitions.
+
 Determinism: each test awaits ``app.workers.wait_for_complete()`` after a
 zoom (per the project Pilot-worker rule — ``pilot.pause()`` is
 CPU-idle-based, not worker-aware) so a git probe's deferred repaint lands
@@ -58,6 +70,7 @@ from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import UserScreen, WorkspaceScreen
 from eawf.surfaces.tui.scopes.user import PortfolioTable
 from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -409,5 +422,71 @@ def test_modal_resume_rebuild_is_idempotent_single_quadrant() -> None:
             assert screen.zoomed
             assert screen._resume_code is None
             assert len(screen.query("#zoom-quadrant")) == 1
+
+    asyncio.run(body())
+
+
+def test_zoom_focuses_quadrant_roadmap_so_enter_lands() -> None:
+    """Zooming moves focus onto the quadrant's roadmap tree.
+
+    Reproduces the W26 report: hiding the browse table on zoom blurs the
+    focused ``WorkspaceTable`` and leaves focus unset, so Enter / arrows hit
+    nothing in the zoomed quadrant. The fix focuses ``#zoom-roadmap`` after
+    the quadrant mounts; this pins the focused widget is the zoom roadmap
+    (and is the right instance -- the mounted quadrant tree, not the hidden
+    browse table).
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert screen.zoomed
+            focused = app.focused
+            assert focused is not None
+            assert focused.id == "zoom-roadmap"
+            assert isinstance(focused, RoadmapTree)
+
+    asyncio.run(body())
+
+
+def test_exit_zoom_restores_focus_to_browse_table() -> None:
+    """Leaving zoom moves focus back onto the visible browse table.
+
+    The symmetric half of the W26 focus fix: unmounting the quadrant blurs
+    whatever quadrant widget held focus, so without the restore the operator
+    returns to table-browse with nothing focused and the arrow keys / Enter
+    dead. ``_exit_zoom`` focuses the ``WorkspaceTable``; this drives
+    zoom→Esc and pins the focused widget is the browse table again.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert screen.zoomed
+            await pilot.press("escape")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert not screen.zoomed
+            focused = app.focused
+            assert focused is not None
+            assert isinstance(focused, WorkspaceTable)
 
     asyncio.run(body())

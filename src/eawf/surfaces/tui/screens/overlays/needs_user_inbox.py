@@ -151,6 +151,12 @@ class NeedsUserInbox(ModalScreen[None]):
     row set renders the :data:`EMPTY_INBOX_TEXT` honest-empty note.
     """
 
+    #: One inbox overlay at a time -- a re-fired ``i`` over an already-open
+    #: inbox is a no-op (deduped by
+    #: :meth:`~eawf.surfaces.tui.app.EaApp.push_modal`) rather than stacking a
+    #: second identical inbox.
+    dedupe_singleton: ClassVar[bool] = True
+
     DEFAULT_CSS: ClassVar[str] = """
     NeedsUserInbox {
         align: center middle;

@@ -14,6 +14,7 @@ from pathlib import Path
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.help import (
     HelpScreen,
+    backlog_key_rows,
     config_overlay_rows,
     global_key_rows,
     pane_nav_rows,
@@ -87,6 +88,23 @@ def test_scope_key_rows_repo_is_empty() -> None:
 
 def test_scope_key_rows_user_is_empty() -> None:
     assert scope_key_rows("user") == ()
+
+
+def test_backlog_key_rows_document_clear_filter() -> None:
+    # W26: the backlog filter is *set* via /filter and *cleared* in-pane
+    # with ``x``; the help must surface that key (and the closed toggle).
+    rows = dict(backlog_key_rows())
+    assert "x" in rows
+    assert "clear" in rows["x"].lower()
+    assert "c" in rows
+    assert "closed" in rows["c"].lower()
+
+
+def test_global_esc_row_no_longer_claims_clear_filter() -> None:
+    # W26: clearing the filter moved to the dedicated ``x`` key, so the
+    # global Esc row must not claim an (unbacked) Esc-clears-filter path.
+    rows = dict(global_key_rows())
+    assert "clear filter" not in rows["Esc"]
 
 
 def test_config_overlay_rows_describe_arrows_and_enter() -> None:

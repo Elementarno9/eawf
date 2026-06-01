@@ -86,6 +86,12 @@ class CommandPalette(ModalScreen[None]):
     on ``Enter``.
     """
 
+    #: One palette at a time -- a re-fired ``/`` / ``open_palette`` over an
+    #: already-open palette is a no-op (deduped by
+    #: :meth:`~eawf.surfaces.tui.app.EaApp.push_modal`) rather than stacking a
+    #: second identical palette.
+    dedupe_singleton: ClassVar[bool] = True
+
     DEFAULT_CSS: ClassVar[str] = """
     CommandPalette {
         align: center top;

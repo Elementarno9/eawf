@@ -252,7 +252,12 @@ class RepoZoomMixin(_Base):
         # Feed the focused repo's own state into the quadrant widgets after
         # they mount: their seed-on-mount reads the app's workspace state,
         # not the focused repo's, so override it once the widgets exist.
+        # Hiding the browse table above blurs the WorkspaceTable that had
+        # focus, leaving focus unset; the same deferred pass moves focus onto
+        # the quadrant's roadmap tree (its primary drill target) so Enter and
+        # the arrow keys land in the zoomed view instead of nowhere.
         self.call_after_refresh(self._seed_quadrant, repo_state)
+        self.call_after_refresh(self._focus_zoom_quadrant)
 
     def _seed_quadrant(self, repo_state: State | None) -> None:
         """Assign the focused repo's state into the mounted quadrant widgets.
@@ -265,12 +270,34 @@ class RepoZoomMixin(_Base):
             for widget in self.query(f"#zoom-quadrant {widget_type.__name__}"):
                 widget.state = repo_state  # type: ignore[attr-defined]
 
+    def _focus_zoom_quadrant(self) -> None:
+        """Move focus onto the zoomed quadrant's roadmap tree.
+
+        Run after the quadrant mounts (the browse table that held focus is
+        hidden on zoom, blurring it). The roadmap tree is the top-left drill
+        target, mirroring the repo scope's natural Enter target, so the
+        operator can navigate + drill the zoomed view immediately. A no-op
+        when the tree is not (yet) mounted.
+        """
+        trees = list(self.query("#zoom-roadmap"))
+        if trees:
+            trees[0].focus()
+
     async def _exit_zoom(self) -> None:
-        """Unmount the quadrant and restore the table-browse view."""
+        """Unmount the quadrant and restore the table-browse view.
+
+        Unmounting the quadrant blurs whatever quadrant widget held focus,
+        so focus is moved back onto the now-visible browse table -- otherwise
+        the operator returns to the table with nothing focused and the arrow
+        keys / Enter dead until a manual re-focus.
+        """
         await self._clear_zoom_mount()
         self.query_one(self.ZOOM_BROWSE_PANE, Vertical).display = True
         self._zoomed_code = None
         cast(Any, self.app)._active_repo_path = None
+        tables = list(self.query(WorkspaceTable))
+        if tables:
+            tables[0].focus()
 
     async def _clear_zoom_mount(self) -> None:
         """Remove any mounted quadrant, awaiting the prune to completion.

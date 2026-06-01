@@ -1027,19 +1027,50 @@ class EaApp(App[None]):
         """
         return sum(1 for screen in self.screen_stack if isinstance(screen, ModalScreen))
 
+    def _top_modal(self) -> ModalScreen[Any] | None:
+        """Return the top-most :class:`ModalScreen` overlay, or ``None``.
+
+        Scans from the top of the screen stack down to the first modal so a
+        non-modal screen on top (none in practice -- overlays always sit
+        above the scope screen) does not mask the open overlay. ``None`` when
+        no modal is open.
+
+        Returns:
+            The top-most open modal overlay, or ``None``.
+        """
+        for screen in reversed(self.screen_stack):
+            if isinstance(screen, ModalScreen):
+                return screen
+        return None
+
     def push_modal(
         self,
         modal: ModalScreen[Any],
         *,
         callback: Callable[[Any], None] | None = None,
     ) -> bool:
-        """Push *modal* unless the stack is already at :attr:`MAX_MODAL_DEPTH`.
+        """Push *modal* unless the cap is hit or it duplicates the top overlay.
 
-        The single modal-stack-cap gate: every overlay-opening path (the
-        ``/`` palette, the ``?`` help, the row-drill DetailModal, the
-        destructive ConfirmModal, the needs_user picker, and the later-wave
-        overlays) routes through here so the depth limit is enforced in
-        exactly one place. A rejected push toasts and mutates nothing.
+        The single modal-stack gate: every overlay-opening path (the ``/``
+        palette, the ``?`` help, the row-drill DetailModal, the destructive
+        ConfirmModal, the needs_user picker, and the later-wave overlays)
+        routes through here so both the depth limit and the singleton dedup
+        are enforced in exactly one place.
+
+        Two rejections, both leaving the stack unmutated:
+
+        * **Depth cap** -- a push beyond :attr:`MAX_MODAL_DEPTH` toasts and
+          returns ``False``.
+        * **Singleton dedup** -- a modal whose class sets
+          ``dedupe_singleton = True`` is rejected when the current
+          top-of-stack overlay is the same class, so a re-fired open key /
+          palette verb (``c`` config, ``/`` palette, ``?`` help, the inbox,
+          the init wizard) cannot stack a second identical overlay. The
+          dedup is **top-only**: a singleton over a *different* singleton
+          still stacks, and non-singleton drill-ins (DetailModal /
+          ConfirmModal) stack freely. A dedup rejection is a benign no-op
+          (logged, no toast) -- the overlay the operator wanted is already
+          open.
 
         Args:
             modal: The overlay screen to push.
@@ -1047,8 +1078,8 @@ class EaApp(App[None]):
                 value when it closes (e.g. the needs_user picked label).
 
         Returns:
-            ``True`` when the modal was pushed, ``False`` when the cap
-            rejected it.
+            ``True`` when the modal was pushed, ``False`` when the cap or the
+            singleton dedup rejected it.
         """
         if self.modal_depth() >= self.MAX_MODAL_DEPTH:
             logger.info(
@@ -1059,6 +1090,11 @@ class EaApp(App[None]):
                 severity="warning",
             )
             return False
+        if getattr(modal, "dedupe_singleton", False):
+            top = self._top_modal()
+            if top is not None and type(top) is type(modal):
+                logger.info(f"push_modal dedup_skipped modal={type(modal).__name__!r}")
+                return False
         if callback is not None:
             self.push_screen(modal, callback=callback)
         else:
