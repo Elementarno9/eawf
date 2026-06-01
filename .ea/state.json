@@ -1044,6 +1044,18 @@
       "status": "done",
       "updated_at": "2026-06-01T04:13:08.419326Z"
     },
+    "P29-I01-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W09",
+      "scope_id": "P29-I01-W09",
+      "status": "done",
+      "updated_at": "2026-06-01T05:36:27.583389Z"
+    },
     "P29-I01-W11": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1055,6 +1067,18 @@
       "scope_id": "P29-I01-W11",
       "status": "done",
       "updated_at": "2026-06-01T04:56:09.202626Z"
+    },
+    "P29-I01-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W12",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W12",
+      "scope_id": "P29-I01-W12",
+      "status": "done",
+      "updated_at": "2026-06-01T05:47:42.727887Z"
     },
     "P29-I01-W20": {
       "actual_cost_usd": 0.0,
@@ -1079,6 +1103,18 @@
       "scope_id": "P29-I01-W21",
       "status": "done",
       "updated_at": "2026-06-01T05:01:27.108339Z"
+    },
+    "P29-I01-W22": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W22",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W22",
+      "scope_id": "P29-I01-W22",
+      "status": "done",
+      "updated_at": "2026-06-01T05:41:45.098527Z"
     },
     "P29-I01-W23": {
       "actual_cost_usd": 0.0,
@@ -3408,6 +3444,7 @@
       "title": "Profile-drive the snapshot-pairing gate (agent-driven vs managed)"
     }
   },
+  "claims": null,
   "current": {
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
@@ -7003,6 +7040,19 @@
       "scope_id": "P29-I01-W08",
       "updated_at": "2026-06-01T03:40:35.306443Z"
     },
+    "P29-I01-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W09-bucket-20260601T050447Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W09",
+      "updated_at": "2026-06-01T05:04:47.986339Z"
+    },
     "P29-I01-W11": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I01-W11-bucket-20260601T042456Z",
@@ -7015,6 +7065,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I01-W11",
       "updated_at": "2026-06-01T04:24:56.755700Z"
+    },
+    "P29-I01-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W12-bucket-20260601T050449Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W12",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W12",
+      "updated_at": "2026-06-01T05:04:49.306469Z"
     },
     "P29-I01-W20": {
       "confidence": "low",
@@ -7041,6 +7104,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P29-I01-W21",
       "updated_at": "2026-06-01T04:24:58.033676Z"
+    },
+    "P29-I01-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W22-bucket-20260601T050450Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W22",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W22",
+      "updated_at": "2026-06-01T05:04:50.676031Z"
     },
     "P29-I01-W23": {
       "confidence": "low",
@@ -8356,6 +8432,7 @@
       "tier": "working"
     }
   },
+  "open_questions": null,
   "outcomes": null,
   "phases": {
     "P00": {
@@ -8982,7 +9059,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T05:01:28.310788Z",
+  "updated_at": "2026-06-01T05:47:43.927549Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -27315,9 +27392,9 @@
       "blocks": [
         "P29-I04-W09"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T05:36:27.583389Z",
+      "commit": "e5daac999faeeeb80c9869bceca5afba33398d83",
       "deps": [
         "P29-I01-W07"
       ],
@@ -27332,10 +27409,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.259278Z",
-      "outcome": null,
+      "outcome": "EviBound rung-2 in-process NLI scorer (LexicalEntailmentScorer default + pluggable EntailmentScorer Protocol + lazy optional-model seam, NO torch dep); refute-first; numeric->rung-1; escalation 0.7 -> jury floor I03 documented",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "rung-2 in-process NLI (AlignScore/DeBERTa-MNLI class), no spawn/jail/egress, batchable, refute-first",
         "numeric claims forced to rung-1; ESCALATION: if the NLI-in-distribution spike scores <~0.7 on terse corpus, this rung moves behind the floor (I03)"
@@ -27343,7 +27420,7 @@
       "title": "Add EviBound rung-2 in-process NLI scorer",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W09-1780290288"
     },
     "P29-I01-W10": {
       "agent_role": "executor",
@@ -27418,9 +27495,9 @@
         "P29-I01-W17",
         "P29-I01-W18"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T05:47:42.727887Z",
+      "commit": "6d780fdddd3e94a801118f85b9782eda0a91c431",
       "deps": [
         "P29-I01-W11"
       ],
@@ -27428,16 +27505,17 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/kernel/spec/**"
+        "src/eawf/kernel/spec/**",
+        "src/eawf/kernel/state/**"
       ],
       "id": "P29-I01-W12",
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.259603Z",
-      "outcome": null,
+      "outcome": "Claim + OpenQuestion state entities (extra=forbid, bounded title, OpenQuestion separate per D-1); generic daemon reconcile (round-trip proven); recovered from mid-run API drop; stale goldens pending regen wave",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "typed Claim + separate OpenQuestion entities added (D-1: OpenQuestion is its own entity, not a Claim fold)",
         "daemon reconcile path persists them through the single-writer seam"
@@ -27445,7 +27523,7 @@
       "title": "Add Claim and OpenQuestion models with daemon reconcile",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W12-1780290290"
     },
     "P29-I01-W13": {
       "agent_role": "executor",
@@ -27767,9 +27845,9 @@
       "blocks": [
         "P29-I05-W05"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T05:41:45.098527Z",
+      "commit": "eeedf4ae5bae808d8bde0bce40718e76e2c24b32",
       "deps": [
         "P29-I01-W20",
         "P29-I01-W21"
@@ -27785,10 +27863,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.263593Z",
-      "outcome": null,
+      "outcome": "metering writer price_spawn_result (SpawnResult x lookup_pricing -> MeteredCost) + meter_and_emit; honors W02 session_id gap (wave_id+attempt_id keying); FOLLOWUP daemon emit-wiring not done (billing-$0 fix not live until wired)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "metering writer persists per-session cost; emits dispatch_cost so billing is no longer $0",
         "feeds verdict-hold-rate and the cost A/B"
@@ -27796,7 +27874,7 @@
       "title": "Build metering writer and emit dispatch_cost",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W22-1780290291"
     },
     "P29-I01-W23": {
       "agent_role": "executor",
@@ -33039,6 +33117,17 @@
       "status": "merged",
       "wave_id": "P29-I01-W08"
     },
+    "WT-P29-I01-W09-1780290288": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w09",
+      "created_at": "2026-06-01T05:04:48.825896Z",
+      "id": "WT-P29-I01-W09-1780290288",
+      "merged_commit": "e5daac9",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w09",
+      "status": "merged",
+      "wave_id": "P29-I01-W09"
+    },
     "WT-P29-I01-W11-1780287897": {
       "base_branch": "feature/eawf-v0.5-p29",
       "branch": "feature/eawf-v0.1-p29-w11",
@@ -33049,6 +33138,17 @@
       "path": ".ea/worktrees/p29-w11",
       "status": "merged",
       "wave_id": "P29-I01-W11"
+    },
+    "WT-P29-I01-W12-1780290290": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w12",
+      "created_at": "2026-06-01T05:04:50.145323Z",
+      "id": "WT-P29-I01-W12-1780290290",
+      "merged_commit": "6d780fd",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w12",
+      "status": "merged",
+      "wave_id": "P29-I01-W12"
     },
     "WT-P29-I01-W20-1780282682": {
       "base_branch": "feature/eawf-v0.5-p29",
@@ -33071,6 +33171,17 @@
       "path": ".ea/worktrees/p29-w21",
       "status": "merged",
       "wave_id": "P29-I01-W21"
+    },
+    "WT-P29-I01-W22-1780290291": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w22",
+      "created_at": "2026-06-01T05:04:51.578235Z",
+      "id": "WT-P29-I01-W22-1780290291",
+      "merged_commit": "eeedf4a",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w22",
+      "status": "merged",
+      "wave_id": "P29-I01-W22"
     },
     "WT-P29-I01-W23-1780285237": {
       "base_branch": "feature/eawf-v0.5-p29",
