@@ -1559,6 +1559,18 @@
       "scope_id": "P29-I02-W27",
       "status": "done",
       "updated_at": "2026-06-01T19:18:15.775975Z"
+    },
+    "P29-I02-W28": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W28",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W28",
+      "scope_id": "P29-I02-W28",
+      "status": "done",
+      "updated_at": "2026-06-01T19:42:50.715919Z"
     }
   },
   "agent_sessions": {
@@ -3902,7 +3914,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P29-I02-W17",
+      "P29-I02-W23",
+      "P29-I02-W24"
+    ],
     "iter_id": "P29-I02",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -7974,6 +7990,19 @@
       "scope_id": "P29-I02-W16",
       "updated_at": "2026-06-01T18:14:29.862392Z"
     },
+    "P29-I02-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W17-bucket-20260601T193347Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W17",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W17",
+      "updated_at": "2026-06-01T19:33:47.645052Z"
+    },
     "P29-I02-W18": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I02-W18-bucket-20260601T174841Z",
@@ -8039,6 +8068,32 @@
       "scope_id": "P29-I02-W22",
       "updated_at": "2026-06-01T18:49:04.707019Z"
     },
+    "P29-I02-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W23-bucket-20260601T193348Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W23",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W23",
+      "updated_at": "2026-06-01T19:33:48.128494Z"
+    },
+    "P29-I02-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W24-bucket-20260601T193348Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I02-W24",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I02-W24",
+      "updated_at": "2026-06-01T19:33:48.606022Z"
+    },
     "P29-I02-W27": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I02-W27-bucket-20260601T184905Z",
@@ -8051,6 +8106,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W27",
       "updated_at": "2026-06-01T18:49:05.182470Z"
+    },
+    "P29-I02-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W28-bucket-20260601T193349Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I02-W28",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I02-W28",
+      "updated_at": "2026-06-01T19:33:49.086161Z"
     }
   },
   "goals": {
@@ -10026,7 +10094,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T19:27:12.050216Z",
+  "updated_at": "2026-06-01T19:42:50.716246Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29580,7 +29648,7 @@
     "P29-I02-W17": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -29599,7 +29667,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "bounded SCOPE x MODE navigation state + breadcrumb; illegal combinations rejected at the boundary"
       ],
@@ -29771,7 +29839,7 @@
       "blocks": [
         "P29-I02-W29"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -29790,7 +29858,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "textual-enrichment visual layer: braille bars, status-tint, wave-size bars per the I04 design"
       ],
@@ -29804,7 +29872,7 @@
       "blocks": [
         "P29-I02-W25"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "op-p29i02",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -29823,7 +29891,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         "multi-repo read-only dashboard + registry pane; registry grows only via explicit init/add-repo (no scan/walk)"
       ],
@@ -29929,9 +29997,9 @@
     "P29-I02-W28": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T19:42:50.715919Z",
+      "commit": "60e8d2abe181f6189b2cf4bb476b52fb912eea9f",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29945,10 +30013,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.267546Z",
-      "outcome": null,
+      "outcome": "ConfigModal curated coverage for preferences.* (solution_bias/scope_size/auto_choose) + research.* keys locked in via unit + 7 Pilot tests + 2 new tab snapshot goldens (config_modal_preferences/research); CONFIG_REGISTRY curation already correct from W03 (verified, no src change - registry-driven modal surfaces all 7 with choice/int/bool widgets, stage->flush to writable layer). 551 tests. Cherry-picked 69252bb clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "ConfigModal coverage expanded (curated) for the new preferences.* + research.* keys"
       ],
