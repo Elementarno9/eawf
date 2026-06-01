@@ -4044,7 +4044,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I02",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -9440,15 +9440,15 @@
       ]
     },
     "P29-I02": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A45-P29-i02",
+      "closed_at": "2026-06-01T21:49:36.957824Z",
       "description": "Spawn-free surfaces + process half: roadmap/wave CLI flex, preferences, memory/profile hygiene, the autoland + verify-commits back-half, and the Textual MODES TUI chassis with its spawn-free panes (Home/Trust/Doctor/Evidence/multi-repo). No live child agent.",
       "estimate_id": null,
       "id": "P29-I02",
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247633Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Surfaces and process: CLI flex, preferences, TUI MODES chassis",
       "trigger": "none",
       "wave_ids": [
@@ -9639,6 +9639,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I01-close-A44-P29-i01",
       "summary": "iter P29-I01 closed with audit A44-P29-i01; waves closed=29; outcomes P29-I01-W01: Iter.trigger StrEnum + reactive-metric denominator excludes none-trigger iters; idempotent 1.... | P29-I01-W02: DispatchCostSessionSource + TelemetryDispatchCost row capture EU-forward into telemetry store... | P29-I01-W03: unified actual_eu accessor (resolve_wave_actual; per wave/iter/phase) + BUCKET_EU pinned cano...",
+      "tier": "working"
+    },
+    "MEM-P29-I02-close-A45-P29-i02": {
+      "confidence": "high",
+      "id": "MEM-P29-I02-close-A45-P29-i02",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-01T21:49:36.957824Z",
+      "scope_id": "P29-I02",
+      "status": "active",
+      "store_record_id": "MEM-P29-I02-close-A45-P29-i02",
+      "summary": "iter P29-I02 closed with audit A45-P29-i02; waves closed=32; outcomes P29-I02-W01: roadmap revise --iter un-hardcodes I01; edit_phase_plan lifecycle fn + CLI retitle-phase path... | P29-I02-W02: Phase.release validated field (vMAJOR.MINOR.PATCH); edit_phase_plan + roadmap revise --releas... | P29-I02-W03: preferences.* config keys (solution_bias=simple|balanced|thorough, scope_size=EffortBucket, a...",
       "tier": "working"
     }
   },
@@ -10299,7 +10310,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T21:49:07.759859Z",
+  "updated_at": "2026-06-01T21:49:36.958355Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
