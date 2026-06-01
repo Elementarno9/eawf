@@ -1271,6 +1271,18 @@
       "scope_id": "P29-I01-W27",
       "status": "done",
       "updated_at": "2026-06-01T08:05:01.806532Z"
+    },
+    "P29-I01-W28": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W28",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W28",
+      "scope_id": "P29-I01-W28",
+      "status": "done",
+      "updated_at": "2026-06-01T08:17:55.954840Z"
     }
   },
   "agent_sessions": {
@@ -7430,6 +7442,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I01-W27",
       "updated_at": "2026-06-01T07:42:28.415573Z"
+    },
+    "P29-I01-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W28-bucket-20260601T080507Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I01-W28",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I01-W28",
+      "updated_at": "2026-06-01T08:05:07.638114Z"
     }
   },
   "goals": {
@@ -9361,7 +9386,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T08:05:03.125485Z",
+  "updated_at": "2026-06-01T08:17:57.176074Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28354,9 +28379,9 @@
     "P29-I01-W28": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T08:17:55.954840Z",
+      "commit": "e915f824964e0360ff25f4d7e2e8bf4b8b8c767f",
       "deps": [
         "P29-I01-W27"
       ],
@@ -28371,10 +28396,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T07:41:26.311952Z",
-      "outcome": null,
+      "outcome": "regenerate state.schema.json + docs/reference/autogen/{state.schema.json,enums.md,cli.md,schema.md} via dump_bundled_schemas + eawf schema dump; 4 drift tests green; +1 test_enums.py StoreKind exact-set fix (W14 mirror)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "state.schema.json + docs/reference/autogen tree + cli.md regenerated via canonical generators",
         "schema/autogen/kinds/enums drift tests all green"
@@ -28382,7 +28407,7 @@
       "title": "Regenerate schema and autogen goldens for I01 model changes",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W28-1780301108"
     },
     "P29-I02-W01": {
       "agent_role": "executor",
@@ -33699,6 +33724,17 @@
       "path": ".ea/worktrees/p29-w27",
       "status": "merged",
       "wave_id": "P29-I01-W27"
+    },
+    "WT-P29-I01-W28-1780301108": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w28",
+      "created_at": "2026-06-01T08:05:08.561139Z",
+      "id": "WT-P29-I01-W28-1780301108",
+      "merged_commit": "e915f82",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w28",
+      "status": "merged",
+      "wave_id": "P29-I01-W28"
     }
   }
 }
