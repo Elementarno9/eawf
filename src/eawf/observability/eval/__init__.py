@@ -36,10 +36,18 @@ from eawf.observability.eval.score import (
     score_recorded_wave_corpus,
     score_rule_adherence,
 )
+from eawf.observability.eval.self_eval import (
+    MIN_SELF_EVAL_N,
+    SelfEvalStatus,
+    SelfEvalSurface,
+    compute_self_eval,
+    summarize_self_eval,
+)
 
 __all__ = [
     "CONSENSUS_SPREAD",
     "FAIL_SCORE_THRESHOLD",
+    "MIN_SELF_EVAL_N",
     "PASS_SCORE_THRESHOLD",
     "RULE_IDS",
     "EvalScore",
@@ -49,9 +57,13 @@ __all__ = [
     "RecordedWaveCase",
     "RuleAdherenceBaseline",
     "RuleAdherenceReport",
+    "SelfEvalStatus",
+    "SelfEvalSurface",
     "aggregate_jury",
+    "compute_self_eval",
     "load_recorded_wave_cases",
     "score_envelope",
     "score_recorded_wave_corpus",
     "score_rule_adherence",
+    "summarize_self_eval",
 ]
