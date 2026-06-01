@@ -66,8 +66,11 @@ _LIGHT_LUMINANCE_THRESHOLD: Final[float] = 127.5
 #: Wong 2011 deuteranopia-safe semantic vars — the exact hex values that
 #: shipped at global scope in ``theme.tcss`` before the per-theme
 #: migration. Hosted here so selecting ``dark`` reproduces the original
-#: look byte-for-byte (no visual regression).
-_WONG_VARIABLES: Final[dict[str, str]] = {
+#: look byte-for-byte (no visual regression). Public because the shared
+#: :mod:`eawf.surfaces.tui.widgets.status_tint` helper derives the Rich-context
+#: fallback tints (tree-label / DataTable-cell hexes) from this single
+#: palette rather than re-typing the hexes.
+WONG_VARIABLES: Final[dict[str, str]] = {
     "accent": "#56b6c2",
     "primary": "#56b6c2",
     "ok": "#009e73",
@@ -125,7 +128,7 @@ EA_DARK: Final[Theme] = Theme(
     warning="#e69f00",
     error="#d55e00",
     dark=True,
-    variables=dict(_WONG_VARIABLES),
+    variables=dict(WONG_VARIABLES),
 )
 
 #: The IBM colour-blind-safe dark theme — the ``cb`` logical name.
@@ -536,6 +539,7 @@ __all__ = [
     "OSC11_QUERY",
     "THEME_CHOICES",
     "THEME_POLL_INTERVAL_S",
+    "WONG_VARIABLES",
     "classify_linux_appearance",
     "classify_macos_appearance",
     "classify_windows_appearance",

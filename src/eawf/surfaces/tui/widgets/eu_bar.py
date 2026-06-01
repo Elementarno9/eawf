@@ -31,6 +31,8 @@ from typing import ClassVar, Literal
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
+
 #: Bar render mode: ``"braille"`` uses the Braille-Patterns dot-matrix
 #: fill (2x horizontal sub-resolution per cell); ``"ascii"`` is the
 #: ``#``/``-`` fallback for fonts lacking Braille coverage or
@@ -438,12 +440,11 @@ def render_bar_markup(
 
 #: Fallback EU-burn band colours (Wong dark palette), used when the active
 #: theme cannot be resolved — e.g. an unmounted test harness. The live tint
-#: comes from the active Theme's ``variables`` map at render time.
-DEFAULT_BAND_PALETTE: dict[str, str] = {
-    "ok": "#009e73",
-    "warn": "#e69f00",
-    "err": "#d55e00",
-}
+#: comes from the active Theme's ``variables`` map at render time. Sourced
+#: from the shared :data:`~eawf.surfaces.tui.widgets.status_tint.BAND_HEX` so the
+#: ok/warn/err fallback hexes live in one home alongside the lifecycle
+#: status-tint map (DRY: a palette retune lands in a single place).
+DEFAULT_BAND_PALETTE: dict[str, str] = dict(BAND_HEX)
 
 
 def render_bar_rich(

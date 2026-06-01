@@ -37,7 +37,8 @@ legible without relying on hue. Colour is *additive* on top of the glyph
 from the Wong deuteranopia-safe palette. Tree node labels are parsed by
 Rich (not Textual content markup) and cannot resolve the ``$`` palette
 vars, so the glyph tint is applied as a concrete-colour Rich span sourced
-from :data:`STATUS_COLOURS` — the same hex set ``theme.tcss`` carries as
+from the shared :data:`eawf.surfaces.tui.widgets.status_tint.STATUS_COLOURS` map
+(re-exported here) — the same hex set ``theme.tcss`` carries as
 ``$status-*`` vars (Rich-label colours mirror the CSS vars, as the inline
 completion bar's plain renderer already does).
 """
@@ -67,6 +68,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_size_bar,
 )
+from eawf.surfaces.tui.widgets.status_tint import STATUS_COLOURS, status_colour
 
 if TYPE_CHECKING:
     from textual.events import Resize
@@ -170,41 +172,12 @@ ITER_GLYPHS: dict[IterStatus, str] = {
 #: tree stays total even if the enums grow.
 UNKNOWN_GLYPH: str = "?"
 
-#: Lifecycle-status → concrete glyph colour (Wong deuteranopia-safe set).
-#: Mirrors the ``$status-*`` palette vars in ``theme.tcss``: Tree node
-#: labels are Rich-parsed and cannot resolve the ``$`` vars, so the tint
-#: is applied as a concrete-colour Rich span here (same approach the
-#: inline EU bar's plain renderer takes). Colour is additive on top of the
-#: glyph — the glyph stays the primary signal. Keyed by the string status
-#: ``.value`` so the three enums (phase / iter / wave) share one map.
-STATUS_COLOURS: dict[str, str] = {
-    "pending": "#6c6c6c",
-    "planned": "#6c6c6c",
-    "claimed": "#56b6c2",
-    "in_progress": "#e69f00",
-    "active": "#e69f00",
-    "closed": "#009e73",
-    "abandoned": "#6c6c6c",
-    "archived": "#6c6c6c",
-    "failed": "#d55e00",
-}
-
-
-def _status_colour(status: object) -> str | None:
-    """Return the glyph tint for *status*, or ``None`` when unmapped.
-
-    Args:
-        status: A lifecycle status enum member (its ``.value`` keys the
-            shared :data:`STATUS_COLOURS` map).
-
-    Returns:
-        A concrete hex colour string, or ``None`` so an unmapped status
-        falls back to the default (uncoloured) glyph.
-    """
-    value = getattr(status, "value", None)
-    if not isinstance(value, str):
-        return None
-    return STATUS_COLOURS.get(value)
+#: Internal alias kept so the tree's own call sites read locally; the
+#: status-tint map + lookup live in the shared
+#: :mod:`eawf.surfaces.tui.widgets.status_tint` helper (one home for the Wong
+#: fallback hexes, re-exported here for back-compat). ``STATUS_COLOURS`` is
+#: imported above and re-exported in ``__all__``.
+_status_colour = status_colour
 
 
 def _glyph_for(status: object, table: dict[Any, str]) -> str:

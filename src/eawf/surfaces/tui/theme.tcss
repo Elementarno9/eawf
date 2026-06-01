@@ -8,10 +8,11 @@
  * them to one palette and make the runtime /theme swap recolour nothing,
  * so this file carries layout only and leaves every $var to the theme.
  *
- * The $status-* tints are mirrored as hardcoded hex in
- * roadmap_tree.STATUS_COLOURS because tree node labels are Rich-parsed
- * and cannot resolve these vars; the per-theme `variables` map is the
- * canonical palette home for every surface that CAN resolve them.
+ * The $status-* tints are mirrored as concrete hex in the shared
+ * widgets/status_tint.py helper (STATUS_COLOURS / BAND_HEX, derived from
+ * the canonical Wong palette) because tree node labels and DataTable cells
+ * are Rich-parsed and cannot resolve these vars; the per-theme `variables`
+ * map is the canonical palette home for every surface that CAN resolve them.
  */
 
 Screen {
