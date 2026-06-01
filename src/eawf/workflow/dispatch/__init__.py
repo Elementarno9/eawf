@@ -18,6 +18,10 @@ Public API:
   dispatch adapter.
 - :func:`resolve_routing` — pure ``(agent_role, effort_bucket) ->
   (model, runtime)`` lookup, backed by :data:`DEFAULT_ROUTING_TABLE`.
+- :func:`assist_with_schema` — the bounded re-ask loop that validates a
+  spawn's answer text against the forced ``agent_end`` schema into a typed
+  :class:`LLMAssistResult`, or raises :class:`LLMAssistError` once the retry
+  ceiling is exhausted.
 
 Both renderers are pure functions — no I/O, no logging side-effects
 beyond the module-level ``logger``. The CLI handlers in
@@ -26,6 +30,13 @@ beyond the module-level ``logger``. The CLI handlers in
 
 from __future__ import annotations
 
+from eawf.workflow.dispatch.llm_assist import (
+    DEFAULT_MAX_ATTEMPTS,
+    LLMAssistError,
+    LLMAssistResult,
+    SchemaAttemptFailure,
+    assist_with_schema,
+)
 from eawf.workflow.dispatch.renderer import (
     DISPATCH_RUNTIMES,
     DispatchEnvelope,
@@ -41,10 +52,15 @@ from eawf.workflow.dispatch.routing import (
 )
 
 __all__ = [
+    "DEFAULT_MAX_ATTEMPTS",
     "DEFAULT_ROUTING_TABLE",
     "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
+    "LLMAssistError",
+    "LLMAssistResult",
     "RoutingDecision",
+    "SchemaAttemptFailure",
+    "assist_with_schema",
     "build_role_contract",
     "build_subagent_spec",
     "render_dispatch_envelope",
