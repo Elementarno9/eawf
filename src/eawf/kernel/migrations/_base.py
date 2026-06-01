@@ -59,9 +59,7 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol, get_args, runtime_checkable
 
-from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.kernel.store.paths import store_path
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
@@ -439,6 +437,13 @@ def run_chain(
         raise FileNotFoundError(f"state file not found: {state_path!r}")
     raw = state_path.read_bytes()
     state_dict: dict[str, Any] = json.loads(raw)
+
+    # Imported in-body (not module-level) so importing the migration chain --
+    # which the `eawf migrate` CLI command pulls -- does not load the heavy
+    # eawf.kernel.store package (the store.kinds graph) into the CLI tree-build
+    # path (import-budget gate).
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.store.paths import store_path
 
     resolved_events_path = (
         events_path if events_path is not None else store_path(state_path, StoreKind.EVENT)

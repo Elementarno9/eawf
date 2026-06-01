@@ -51,9 +51,6 @@ import orjson
 from pydantic import BaseModel, ConfigDict
 
 from eawf.kernel.migrations._base import _register
-from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.event import EventPayload
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +97,13 @@ def read_claim_anchors(events_path: Path) -> dict[str, datetime]:
         ``wave_id -> claim-event timestamp`` map. Empty when *events_path*
         is absent or carries no ``wave_claimed`` row.
     """
+    # Imported in-body (not module-level) so importing the migration chain --
+    # which the `eawf migrate` CLI command pulls -- does not load the heavy
+    # store.kinds graph into the CLI tree-build path (import-budget gate).
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.event import EventPayload
+
     anchors: dict[str, datetime] = {}
     if not events_path.is_file():
         return anchors
