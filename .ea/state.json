@@ -3639,7 +3639,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I02",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -8627,7 +8627,7 @@
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247633Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "Surfaces and process: CLI flex, preferences, TUI MODES chassis",
       "trigger": "none",
       "wave_ids": [
@@ -9444,7 +9444,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T14:10:38.912993Z",
+  "updated_at": "2026-06-01T14:32:19.474870Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
