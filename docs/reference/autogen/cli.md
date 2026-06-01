@@ -75,6 +75,7 @@ Manage backlog items (add / close).
 | Verb | Summary |
 |---|---|
 | `add` | Add a new backlog item. |
+| `backfill-titles` | Sweep + normalize backlog titles to the entity-title rule. |
 | `close` | Close a backlog item; requires --audit of a complete audit. |
 | `edit` | Edit an open backlog item's title, description, and/or intent. |
 | `set-priority` | Update the priority of an open backlog item. |

@@ -566,6 +566,81 @@ def backlog_edit(
     )
 
 
+@backlog_app.command("backfill-titles")
+def backlog_backfill_titles(
+    ctx: typer.Context,
+    apply: Annotated[
+        bool,
+        typer.Option(
+            "--apply/--dry-run",
+            help=(
+                "Persist normalized titles through the daemon-backed state "
+                "transaction. Default --dry-run reports proposed changes and "
+                "the title style-lint sweep without mutating state."
+            ),
+        ),
+    ] = False,
+) -> None:
+    """Sweep + normalize backlog titles to the entity-title rule.
+
+    The default ``--dry-run`` mode IS the read-only sweep: it walks every
+    backlog item, runs the title style-lint, and reports the title each item
+    *would* get (strip a trailing period, trim an over-cap title to a word
+    boundary, derive a candidate from the description when the title is an empty
+    placeholder) without touching state. ``--apply`` persists the normalized
+    titles through the same state transaction the ``edit`` verb uses.
+    """
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.evidence import backlog as backlog_evi
+    from eawf.workflow.evidence._io import append_jsonl, load_state, store_paths
+
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        if apply:
+            with state_transaction(state_path) as state:
+                report, event = backlog_evi.backfill_titles(state, apply=True)
+                if event is not None:
+                    append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
+        else:
+            state = _run_read(flags, load_state, state_path)
+            if state is None:
+                return
+            report, _ = backlog_evi.backfill_titles(state, apply=False)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    payload = {
+        "applied": report.applied,
+        "total": report.total,
+        "changed": report.changed,
+        "violations": report.violations,
+        "rows": [
+            {
+                "item_id": row.item_id,
+                "before": row.before,
+                "after": row.after,
+                "changed": row.changed,
+                "violations": row.violations,
+            }
+            for row in report.rows
+        ],
+    }
+    changed_lines = [
+        f"  {row.item_id}: {row.before!r} -> {row.after!r}" for row in report.rows if row.changed
+    ]
+    violation_lines = [f"  {row.item_id}: {v}" for row in report.rows for v in row.violations]
+    mode = "applied" if report.applied else "dry-run"
+    headline = (
+        f"backlog backfill-titles {mode}: {report.total} items, "
+        f"{report.changed} title change(s), {report.violations} lint violation(s)"
+    )
+    body = "\n".join([headline, *changed_lines, *violation_lines])
+    _emit(payload, body, flags)
+
+
 @backlog_app.command("set-priority")
 def backlog_set_priority(
     ctx: typer.Context,

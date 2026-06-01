@@ -43,7 +43,7 @@ EXPECTED_AUDIT_VERBS = {
 EXPECTED_INCIDENT_VERBS = {"open", "close", "view", "promote"}
 EXPECTED_DECISION_VERBS = {"add", "supersede", "list", "graph", "promote"}
 EXPECTED_ARTIFACT_VERBS = {"add", "update", "show", "validate", "verify"}
-EXPECTED_BACKLOG_VERBS = {"add", "edit", "set-priority", "close"}
+EXPECTED_BACKLOG_VERBS = {"add", "edit", "backfill-titles", "set-priority", "close"}
 
 
 def _verb_names(app: typer.Typer) -> set[str]:

@@ -13,17 +13,53 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.models import BacklogItem, State
 from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.render.agents_md import lint_entity_title, normalize_entity_title
 from eawf.workflow.evidence import _io
 from eawf.workflow.evidence.guards import require_complete_audit
 
 logger = logging.getLogger(__name__)
+
+
+class BacklogTitleRow(BaseModel):
+    """Per-item row in a backlog title-backfill / sweep report.
+
+    Captures one :class:`BacklogItem`'s title before and after the
+    entity-title normalization, the style-lint violations the *current*
+    title trips (the read-only "sweep" signal), and whether the normalized
+    title would change the stored value.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    before: str
+    after: str
+    changed: bool
+    violations: list[str]
+
+
+class BacklogTitleReport(BaseModel):
+    """Aggregate report for a backlog title sweep / backfill run.
+
+    ``rows`` carries every backlog item in id-sorted order; ``applied`` is
+    ``True`` only when the run mutated state. The summary counters let the CLI
+    render a one-line headline without re-walking ``rows``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    applied: bool
+    total: int
+    changed: int
+    violations: int
+    rows: list[BacklogTitleRow]
 
 
 def add_backlog(
@@ -162,6 +198,111 @@ def edit_backlog(
         },
         summary=f"backlog {item_id} edited fields={','.join(sorted(changes))}",
     )
+
+
+def backfill_titles(
+    state: State,
+    *,
+    apply: bool = False,
+) -> tuple[BacklogTitleReport, Envelope | None]:
+    """Sweep every backlog item's title and (optionally) normalize it.
+
+    Walks :attr:`State.backlog` in id-sorted order, normalizing each title to
+    the entity-title rule via
+    :func:`eawf.surfaces.render.agents_md.normalize_entity_title` (strip a
+    trailing period, trim over-cap titles to a word boundary, and derive a
+    candidate from the item ``description`` when the title is an empty
+    placeholder). The current title's style violations are recorded via
+    :func:`eawf.surfaces.render.agents_md.lint_entity_title` so a pure
+    ``apply=False`` call doubles as the read-only sweep.
+
+    When ``apply`` is ``True``, each changed item is re-validated through
+    :class:`BacklogItem` (the same boundary :func:`edit_backlog` uses, so the
+    model stays the single owner of the title bound) and written back in place;
+    a single ``backlog.backfill_titles`` event summarising the changed-item
+    count is returned. A run that changes nothing (or any ``apply=False`` run)
+    returns ``None`` for the envelope so the caller appends no event.
+
+    Closed items are swept for reporting but never mutated: a frozen
+    :class:`BacklogStatus.CLOSED` item keeps its historical title even under
+    ``apply``. An item whose normalization collapses to an empty string (a
+    placeholder title with no usable description) is left unchanged and still
+    reported, because the model rejects an empty ``title`` at ingestion.
+
+    Args:
+        state: The loaded :class:`State` to sweep / mutate in place.
+        apply: When ``True`` persist the normalized titles; when ``False``
+            (the default) report only and leave ``state`` untouched.
+
+    Returns:
+        A ``(report, envelope)`` pair. ``report`` always describes every item;
+        ``envelope`` is the single ``backlog.backfill_titles`` event when
+        ``apply`` mutated at least one item, else ``None``.
+    """
+    backlog: dict[str, BacklogItem] = dict(state.backlog or {})
+    rows: list[BacklogTitleRow] = []
+    changed_ids: list[str] = []
+
+    for item_id in sorted(backlog):
+        item = backlog[item_id]
+        before = item.title
+        normalized = normalize_entity_title(before, item.description)
+        mutable = item.status != BacklogStatus.CLOSED
+        # An empty normalization (placeholder title, no usable description)
+        # cannot be persisted: the model forbids an empty title. Treat it as a
+        # no-op so the sweep still flags the item without proposing an invalid
+        # write.
+        would_change = mutable and normalized != "" and normalized != before
+        rows.append(
+            BacklogTitleRow(
+                item_id=item_id,
+                before=before,
+                after=normalized if would_change else before,
+                changed=would_change,
+                violations=lint_entity_title(before),
+            )
+        )
+        if apply and would_change:
+            updated = item.model_copy(update={"title": normalized})
+            backlog[item_id] = updated
+            changed_ids.append(item_id)
+
+    report = BacklogTitleReport(
+        applied=apply and bool(changed_ids),
+        total=len(rows),
+        changed=sum(1 for row in rows if row.changed),
+        violations=sum(len(row.violations) for row in rows),
+        rows=rows,
+    )
+
+    if not (apply and changed_ids):
+        logger.info(
+            f"backfill_titles apply={apply} total={report.total} "
+            f"changed={report.changed} violations={report.violations}"
+        )
+        return report, None
+
+    now = datetime.now(UTC)
+    state.backlog = backlog
+    state.updated_at = now
+    scope_id = backlog[changed_ids[0]].scope_id
+    logger.info(
+        f"backfill_titles apply=True total={report.total} "
+        f"changed={len(changed_ids)} violations={report.violations}"
+    )
+    event = _io.event_envelope(
+        event_id=f"EVT-backlog-backfill-titles-{int(now.timestamp() * 1000)}",
+        scope_id=scope_id,
+        event_type="backlog.backfill_titles",
+        actor="cli",
+        command="backlog backfill-titles",
+        args={
+            "item_ids": changed_ids,
+            "changed": len(changed_ids),
+        },
+        summary=f"backlog backfill-titles changed={len(changed_ids)} items",
+    )
+    return report, event
 
 
 def set_priority(

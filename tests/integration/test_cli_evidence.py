@@ -1011,6 +1011,57 @@ def test_backlog_set_priority_unknown_exits_not_found(state_path: Path) -> None:
     assert payload["data"]["kind"] == "NotFound"
 
 
+def test_backlog_backfill_titles_dry_run_reports_no_mutation(state_path: Path) -> None:
+    """Default --dry-run sweep reports the proposed change but leaves state intact."""
+    runner.invoke(
+        app,
+        ["backlog", "add", "B023", "--title", "Trailing period title.", "--priority", "P2"],
+    )
+    result = runner.invoke(app, ["--json", "backlog", "backfill-titles"])
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["applied"] is False
+    assert payload["changed"] == 1
+    assert payload["violations"] == 1
+    row = next(r for r in payload["rows"] if r["item_id"] == "B023")
+    assert row["before"] == "Trailing period title."
+    assert row["after"] == "Trailing period title"
+    # Dry-run mutated nothing on disk.
+    body = json.loads(state_path.read_text())
+    assert body["backlog"]["B023"]["title"] == "Trailing period title."
+
+
+def test_backlog_backfill_titles_apply_persists(state_path: Path) -> None:
+    """--apply normalizes the title on disk and appends one event."""
+    runner.invoke(
+        app,
+        ["backlog", "add", "B023", "--title", "Trailing period title.", "--priority", "P2"],
+    )
+    result = runner.invoke(app, ["--json", "backlog", "backfill-titles", "--apply"])
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["applied"] is True
+    assert payload["changed"] == 1
+    body = json.loads(state_path.read_text())
+    assert body["backlog"]["B023"]["title"] == "Trailing period title"
+    events = (state_path.parent / "store" / "event.jsonl").read_text().splitlines()
+    assert any("backlog.backfill_titles" in line for line in events)
+
+
+def test_backlog_backfill_titles_clean_backlog_zero_violations(state_path: Path) -> None:
+    """A compliant backlog reports zero changes and zero violations."""
+    runner.invoke(
+        app,
+        ["backlog", "add", "B023", "--title", "Compliant title", "--priority", "P2"],
+    )
+    result = runner.invoke(app, ["--json", "backlog", "backfill-titles"])
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["total"] == 1
+    assert payload["changed"] == 0
+    assert payload["violations"] == 0
+
+
 # ---- cross-cutting ---------------------------------------------------------
 
 

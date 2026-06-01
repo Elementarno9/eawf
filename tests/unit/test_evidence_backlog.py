@@ -23,6 +23,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import Artifact, State
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._mutation import state_transaction
+from eawf.surfaces.render.agents_md import ENTITY_TITLE_MAX, normalize_entity_title
 from eawf.workflow.evidence import _io, audit, backlog
 
 FIXTURE = (
@@ -505,3 +506,267 @@ def test_edit_backlog_empty_description_raises(tmp_path: Path) -> None:
     )
     with pytest.raises(cli_errors.UserError, match="invalid backlog edit"):
         backlog.edit_backlog(state, item_id="B023", description="")
+
+
+# ---- normalize_entity_title (pure helper) ----------------------------------
+
+
+def test_normalize_entity_title_strips_trailing_period() -> None:
+    """A trailing period is removed; titles are labels, not prose."""
+    assert normalize_entity_title("Add a bounded title.") == "Add a bounded title"
+
+
+def test_normalize_entity_title_strips_repeated_trailing_periods() -> None:
+    """An ellipsis-style trailing run collapses to a period-free title."""
+    assert normalize_entity_title("Do the thing...") == "Do the thing"
+
+
+def test_normalize_entity_title_truncates_over_cap_on_word_boundary() -> None:
+    """An over-72 title is cut to the last whole word that fits the cap."""
+    title = "Split the workflow state module into layered submodules for clarity now"
+    # 70 chars already; extend past the cap with a final word.
+    over = title + " indeed-extra-trailing-token"
+    result = normalize_entity_title(over)
+    assert len(result) <= ENTITY_TITLE_MAX
+    assert not result.endswith(" ")
+    # The break lands on a word boundary, so the result is a prefix of the input
+    # ending at a whole word (no partial token).
+    assert over.startswith(result)
+    assert result.split() == [w for w in over.split() if over.index(w) < len(result)]
+
+
+def test_normalize_entity_title_hard_slices_when_no_word_boundary() -> None:
+    """A single over-cap word with no space is hard-sliced to the cap."""
+    result = normalize_entity_title("x" * 90)
+    assert result == "x" * ENTITY_TITLE_MAX
+
+
+def test_normalize_entity_title_derives_from_description_when_placeholder() -> None:
+    """An empty-placeholder title derives a candidate from the description."""
+    result = normalize_entity_title("tbd", "Make the sweep idempotent. Second clause ignored.")
+    assert result == "Make the sweep idempotent"
+
+
+def test_normalize_entity_title_placeholder_without_description_unchanged() -> None:
+    """A placeholder title with no description is returned unchanged (caller flags)."""
+    assert normalize_entity_title("tbd", None) == "tbd"
+
+
+def test_normalize_entity_title_leaves_compliant_title_unchanged() -> None:
+    """A title already satisfying the rule is returned byte-for-byte."""
+    assert normalize_entity_title("Enforce sandbox deny-list at dispatch") == (
+        "Enforce sandbox deny-list at dispatch"
+    )
+
+
+def test_normalize_entity_title_is_idempotent() -> None:
+    """Re-normalizing a normalized title is a no-op."""
+    once = normalize_entity_title("Add a bounded title to every entity.")
+    assert normalize_entity_title(once) == once
+
+
+# ---- backfill_titles (library sweep + apply) -------------------------------
+
+
+def _seed_backlog_item(
+    state: State,
+    item_id: str,
+    title: str,
+    *,
+    description: str | None = None,
+) -> None:
+    """Insert a raw :class:`BacklogItem` bypassing the title bound.
+
+    ``add_backlog`` would reject an over-cap title at ingestion, so a
+    deliberately-violating fixture is built with ``model_construct`` to seed the
+    sweep / backfill paths with non-compliant data.
+    """
+    from eawf.kernel.state.models import BacklogItem
+
+    backlog_map = dict(state.backlog or {})
+    backlog_map[item_id] = BacklogItem.model_construct(
+        id=item_id,
+        scope_id="QR",
+        title=title,
+        description=description,
+        priority=BacklogPriority.P2,
+        status=BacklogStatus.OPEN,
+        created_at=datetime.now(UTC),
+        closed_at=None,
+        resolution=None,
+        commit=None,
+        intent=None,
+    )
+    state.backlog = backlog_map
+
+
+def test_backfill_titles_dry_run_reports_without_mutating(tmp_path: Path) -> None:
+    """Boundary: --dry-run flags a trailing-period title but mutates nothing."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B001", title="Clean title", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    _seed_backlog_item(state, "B002", "Has a trailing period.")
+    report, event = backlog.backfill_titles(state, apply=False)
+    assert event is None
+    assert report.applied is False
+    assert report.total == 2
+    assert report.changed == 1
+    # The trailing-period title trips the style lint.
+    assert report.violations == 1
+    row = next(r for r in report.rows if r.item_id == "B002")
+    assert row.before == "Has a trailing period."
+    assert row.after == "Has a trailing period"
+    assert row.changed is True
+    # State is untouched.
+    assert state.backlog["B002"].title == "Has a trailing period."
+
+
+def test_backfill_titles_dry_run_clean_backlog_zero_violations(tmp_path: Path) -> None:
+    """Boundary: a fully-compliant backlog reports zero changes and zero violations."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state,
+        item_id="B001",
+        title="Compliant title one",
+        priority=BacklogPriority.P1,
+        scope_id="QR",
+    )
+    backlog.add_backlog(
+        state,
+        item_id="B002",
+        title="Compliant title two",
+        priority=BacklogPriority.P2,
+        scope_id="QR",
+    )
+    report, event = backlog.backfill_titles(state, apply=False)
+    assert event is None
+    assert report.total == 2
+    assert report.changed == 0
+    assert report.violations == 0
+    assert all(r.changed is False for r in report.rows)
+
+
+def test_backfill_titles_apply_persists_normalized_title(tmp_path: Path) -> None:
+    """Happy: --apply strips a trailing period and persists through state_transaction."""
+    state_path = _state_path(tmp_path)
+    paths = _io.store_paths(state_path)
+    with state_transaction(state_path) as state:
+        event = backlog.add_backlog(
+            state, item_id="B001", title="t", priority=BacklogPriority.P1, scope_id="QR"
+        )
+        _io.append_jsonl(paths[StoreKind.EVENT], event)
+    # Seed a violating title directly on disk via a second transaction.
+    with state_transaction(state_path) as state:
+        _seed_backlog_item(state, "B002", "Trailing period title.")
+    with state_transaction(state_path) as state:
+        report, event = backlog.backfill_titles(state, apply=True)
+        assert event is not None
+        _io.append_jsonl(paths[StoreKind.EVENT], event)
+    assert report.applied is True
+    assert report.changed == 1
+    body = json.loads(state_path.read_text())
+    assert body["backlog"]["B002"]["title"] == "Trailing period title"
+    assert event.payload["event_type"] == "backlog.backfill_titles"
+
+
+def test_backfill_titles_apply_no_changes_returns_no_event(tmp_path: Path) -> None:
+    """Boundary: --apply over a clean backlog mutates nothing and emits no event."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B001", title="Already compliant", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    report, event = backlog.backfill_titles(state, apply=True)
+    assert event is None
+    assert report.applied is False
+    assert report.changed == 0
+
+
+def test_backfill_titles_truncates_over_cap_title_on_apply(tmp_path: Path) -> None:
+    """Apply trims an over-72 title to a word boundary within the cap."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    over = "Split the workflow state module into layered submodules for long-term clarity"
+    _seed_backlog_item(state, "B001", over)
+    report, event = backlog.backfill_titles(state, apply=True)
+    assert event is not None
+    new_title = state.backlog["B001"].title
+    assert len(new_title) <= 72
+    assert over.startswith(new_title)
+    row = next(r for r in report.rows if r.item_id == "B001")
+    assert row.changed is True
+
+
+def test_backfill_titles_derives_from_description_when_placeholder(tmp_path: Path) -> None:
+    """Apply derives a title from the description when the title is a placeholder."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    _seed_backlog_item(
+        state,
+        "B001",
+        "tbd",
+        description="Backfill the backlog titles. Extra detail not in the title.",
+    )
+    report, event = backlog.backfill_titles(state, apply=True)
+    assert event is not None
+    assert state.backlog["B001"].title == "Backfill the backlog titles"
+    row = next(r for r in report.rows if r.item_id == "B001")
+    assert row.changed is True
+
+
+def test_backfill_titles_placeholder_without_description_unchanged(tmp_path: Path) -> None:
+    """A placeholder title with no description is left unchanged (model forbids empty)."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    _seed_backlog_item(state, "B001", "tbd", description=None)
+    report, event = backlog.backfill_titles(state, apply=True)
+    assert event is None
+    assert state.backlog["B001"].title == "tbd"
+    row = next(r for r in report.rows if r.item_id == "B001")
+    assert row.changed is False
+
+
+def test_backfill_titles_leaves_closed_item_unchanged(tmp_path: Path) -> None:
+    """Closed items are swept for reporting but never mutated under --apply."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    backlog.add_backlog(
+        state, item_id="B001", title="t", priority=BacklogPriority.P2, scope_id="QR"
+    )
+    _seed_artifact(state)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+        report_artifact_id="ART-001",
+        verdict=AuditVerdict.PASS,
+    )
+    backlog.close_backlog(
+        state, item_id="B001", resolution="done", commit="abc", audit_id="AUD-001"
+    )
+    # Force a violating title onto the now-closed item via model_construct.
+    _seed_backlog_item(state, "B001", "Closed with trailing period.")
+    state.backlog["B001"] = state.backlog["B001"].model_copy(
+        update={"status": BacklogStatus.CLOSED}
+    )
+    report, event = backlog.backfill_titles(state, apply=True)
+    assert event is None
+    # Title preserved; the row still records the style violation for the sweep.
+    assert state.backlog["B001"].title == "Closed with trailing period."
+    row = next(r for r in report.rows if r.item_id == "B001")
+    assert row.changed is False
+    assert row.violations  # trailing-period lint still fires
+
+
+def test_backfill_titles_empty_backlog(tmp_path: Path) -> None:
+    """Boundary: an empty backlog returns a zero-row report and no event."""
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    report, event = backlog.backfill_titles(state, apply=True)
+    assert event is None
+    assert report.total == 0
+    assert report.rows == []

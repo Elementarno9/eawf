@@ -319,6 +319,89 @@ def lint_entity_title(title: str) -> list[str]:
     return violations
 
 
+#: Placeholder stems treated as "no real title" by
+#: :func:`normalize_entity_title` so a description-derived candidate wins. The
+#: model forbids an empty ``title`` (``min_length=1``), so a literally-empty
+#: string never reaches this path through the state boundary; the set captures
+#: the human placeholders an author leaves behind ("tbd", "todo", "...") that
+#: are technically valid but carry no signal.
+_TITLE_PLACEHOLDERS: frozenset[str] = frozenset({"", "tbd", "todo", "...", "title", "wip", "n/a"})
+
+
+def _trim_title_to_cap(title: str) -> str:
+    """Return *title* trimmed to :data:`ENTITY_TITLE_MAX` on a word boundary.
+
+    A title already within the cap is returned unchanged. An over-cap title is
+    cut to the last whole word that fits; when even the first word overflows the
+    cap (no interior space to break on) the title is hard-sliced to the cap so
+    the result always satisfies the bound.
+    """
+    if len(title) <= ENTITY_TITLE_MAX:
+        return title
+    window = title[:ENTITY_TITLE_MAX]
+    cut = window.rfind(" ")
+    if cut <= 0:
+        return window.rstrip()
+    return window[:cut].rstrip()
+
+
+def _derive_title_from_description(description: str) -> str:
+    """Return a candidate title built from *description*'s first clause.
+
+    The first clause is the text up to the first sentence terminator
+    (``"."``, ``"!"``, ``"?"``) or the whole string when none is present; the
+    result is stripped of any trailing period and trimmed to the cap on a word
+    boundary. An empty / whitespace-only description yields ``""`` so the caller
+    can fall back.
+    """
+    head = description.strip()
+    for terminator in (".", "!", "?"):
+        idx = head.find(terminator)
+        if idx != -1:
+            head = head[:idx]
+            break
+    return _trim_title_to_cap(head.strip().rstrip("."))
+
+
+def normalize_entity_title(title: str, description: str | None = None) -> str:
+    """Return *title* normalized to the entity-title naming rule.
+
+    Applies the three transforms the title-backfill tool needs, in order:
+
+    1. **Derive from description** — when *title* is empty or a known
+       placeholder (:data:`_TITLE_PLACEHOLDERS`, case-insensitive) and
+       *description* carries prose, build a candidate from the description's
+       first clause via :func:`_derive_title_from_description`.
+    2. **Strip a trailing period** — titles are labels, not prose, so a
+       trailing ``"."`` (after right-stripping whitespace) is removed.
+    3. **Trim to the cap on a word boundary** — an over-:data:`ENTITY_TITLE_MAX`
+       title is cut to the last whole word that fits.
+
+    The function is pure and idempotent: a title already satisfying the rule is
+    returned unchanged, and re-normalizing a normalized title is a no-op.
+
+    Args:
+        title: The current entity title.
+        description: The entity's optional long-form description, used only as a
+            fallback source when *title* is empty / a placeholder.
+
+    Returns:
+        The normalized title. May be empty only when both *title* is a
+        placeholder and *description* yields no usable clause; the caller
+        decides whether an empty result is actionable (the model rejects it at
+        ingestion, so backfill leaves such an item unchanged and flags it).
+    """
+    candidate = title.strip()
+    if candidate.casefold() in _TITLE_PLACEHOLDERS and description:
+        derived = _derive_title_from_description(description)
+        if derived:
+            candidate = derived
+    candidate = candidate.rstrip()
+    while candidate.endswith("."):
+        candidate = candidate[:-1].rstrip()
+    return _trim_title_to_cap(candidate)
+
+
 def _has_unmanaged_content(text: str) -> bool:
     """Return ``True`` when *text* has bytes outside any managed region.
 
