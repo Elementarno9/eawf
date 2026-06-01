@@ -79,7 +79,9 @@ from eawf.kernel.store.kinds.events import (
 )
 from eawf.kernel.store.kinds.events.base import RuntimeTriple, TracedEventPayload
 from eawf.observability.telemetry.models import RuntimeErrorClass
+from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER
 from eawf.runtime.budget.service import record_consumption
+from eawf.runtime.daemon.budget_interlock import enforce_token_cap
 from eawf.runtime.lock import portalock
 from eawf.workflow.agent_report.store import append_agent_report
 from eawf.workflow.evidence._io import load_state
@@ -419,6 +421,17 @@ def accrue_tokens_consumed(
     subscribers on the bus (the daemon-push STATE_REVISION feed) so both
     revision feeds advance.
 
+    After the accrual persists, the safety-floor token-cap interlock
+    (:func:`eawf.runtime.daemon.budget_interlock.enforce_token_cap`) classifies
+    the post-increment burn against the wave's budget and, under ``hard``
+    enforce at the cap, reaps the wave's spawned process group via the kill
+    ladder. The enforce mode + multiplier default to the documented config
+    defaults (``soft`` / ``1.5``); ``soft`` never reaches HALT so the
+    interlock is a no-op on the hot path under the default mode. The pgid is
+    ``None`` today (the mutating dispatch spawn is dark -- no live pid
+    registry yet, C6); a hard-cap breach is computed and logged but not
+    signalled until I04-W03 threads the real pgid through.
+
     The accrual is opt-in and tolerant: it is skipped (returning
     ``False``) when ``ctx.state_path`` is unset (stateless unit-test
     contexts). The total delta is the sum of every billed token field
@@ -452,12 +465,30 @@ def accrue_tokens_consumed(
         after_version = state_version(new_payload)
         atomic_write_json_locked(state_path, new_payload)
         tokens_consumed = wave.tokens_consumed
+        token_budget = wave.token_budget
     _publish_state_revision(
         ctx,
         wave_id=wave_id,
         before_version=before_version,
         after_version=after_version,
         tokens_consumed=tokens_consumed,
+    )
+    # Safety-floor token-cap interlock: classify the post-increment burn
+    # against the wave's budget and, on a hard-enforce HALT, reap the wave's
+    # spawned process group. Run outside the state portalock so the kill
+    # ladder never signals while holding the state lock. The enforce mode +
+    # multiplier are the documented real defaults (soft never reaches HALT,
+    # so this stays a no-op on the hot path under the default mode);
+    # config-resolved enforce mode lands with the live-dispatch pgid feed
+    # (I04-W03). pgid is None today because the mutating dispatch spawn is
+    # dark (no live pid registry yet -- C6): a hard-cap breach is computed
+    # and loudly logged but not signalled until I04-W03 threads the pgid.
+    enforce_token_cap(
+        consumed=tokens_consumed,
+        base_budget=token_budget,
+        enforce=DEFAULT_ENFORCE,
+        multiplier=DEFAULT_MULTIPLIER,
+        pgid=None,
     )
     logger.info(f"accrue_tokens_consumed wave={wave_id} delta={delta} consumed={tokens_consumed}")
     return True
