@@ -3639,7 +3639,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I01",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -8575,15 +8575,15 @@
       ]
     },
     "P29-I01": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A44-P29-i01",
+      "closed_at": "2026-06-01T14:10:38.912328Z",
       "description": "Spawn-free engine half of v0.5: reactive metric fix, telemetry capture-forward, the EviBound scorer + Claim/OpenQuestion ledger (Keystone B), the research-orchestrator core, and the rebuilt-from-spec spawn primitives (pricing, claude spawn, metering, routing, schema, cancel). Deterministic / plan-only; no live child agent.",
       "estimate_id": null,
       "id": "P29-I01",
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247566Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Engine: spawn-free foundation (metrics, evidence, research, spawn)",
       "trigger": "none",
       "wave_ids": [
@@ -8803,6 +8803,17 @@
       "status": "active",
       "store_record_id": "MEM-P28-I03-close-A42-P28-i03-deep",
       "summary": "iter P28-I03 closed with audit A42-P28-i03-deep; waves closed=64, failed=1; outcomes P28-I03-W01: narrative bundle renderers landed | P28-I03-W02: VCS convention config and subject-style SHA recovery shipped with focused tests | P28-I03-W03: render block tiers and AGENTS budget gate landed",
+      "tier": "working"
+    },
+    "MEM-P29-I01-close-A44-P29-i01": {
+      "confidence": "high",
+      "id": "MEM-P29-I01-close-A44-P29-i01",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-01T14:10:38.912328Z",
+      "scope_id": "P29-I01",
+      "status": "active",
+      "store_record_id": "MEM-P29-I01-close-A44-P29-i01",
+      "summary": "iter P29-I01 closed with audit A44-P29-i01; waves closed=29; outcomes P29-I01-W01: Iter.trigger StrEnum + reactive-metric denominator excludes none-trigger iters; idempotent 1.... | P29-I01-W02: DispatchCostSessionSource + TelemetryDispatchCost row capture EU-forward into telemetry store... | P29-I01-W03: unified actual_eu accessor (resolve_wave_actual; per wave/iter/phase) + BUCKET_EU pinned cano...",
       "tier": "working"
     }
   },
@@ -9433,7 +9444,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T09:23:20.826050Z",
+  "updated_at": "2026-06-01T14:10:38.912993Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
