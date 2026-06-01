@@ -25,11 +25,14 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.models import Incident, OpenQuestion, State, Wave
+from eawf.platform.registry.models import RegistryRepoEntry
 from eawf.surfaces.tui.attention import (
     EMPTY_FEED_TEXT,
     AttentionItem,
     AttentionKind,
     build_attention_feed,
+    build_portfolio_attention_feed,
+    format_time_ago,
 )
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import OpenPause
@@ -69,14 +72,22 @@ def _pause(*, urgency: Urgency, question: str, pause_urn: str) -> OpenPause:
     )
 
 
-def _wave(*, wave_id: str, status: WaveStatus, deps: list[str] | None = None) -> Wave:
+def _wave(
+    *,
+    wave_id: str,
+    status: WaveStatus,
+    deps: list[str] | None = None,
+    iter_id: str = "P01-I01",
+    claimed_at: datetime | None = None,
+) -> Wave:
     return Wave(
         id=wave_id,
-        iter_id="P01-I01",
+        iter_id=iter_id,
         title=f"Wave {wave_id}",
         status=status,
         deps=deps or [],
         opened_at=_NOW,
+        claimed_at=claimed_at,
     )
 
 
@@ -282,3 +293,262 @@ def test_attention_item_actionable_only_for_pause_rows() -> None:
     )
     assert pause_item.actionable
     assert not wave_item.actionable
+
+
+# --------------------------------------------------------------------------
+# D2 -- wave signals scoped to the active phase + iter
+# --------------------------------------------------------------------------
+
+
+def _state_with_nonactive_iter() -> State:
+    """Return the empty fixture extended with a second, non-active iter.
+
+    The fixture's active iter is ``P01-I01`` under phase ``P01``. This
+    splices in a closed-phase iter ``P00-I01`` (under ``P00``) so a wave
+    placed there is *out of active scope* -- the case the obsolete-drop
+    must filter.
+    """
+    base = _empty_state()
+    iters = dict(base.iters)
+    iters["P00-I01"] = base.iters["P01-I01"].model_copy(
+        update={"id": "P00-I01", "phase_id": "P00", "title": "Old iter", "wave_ids": []}
+    )
+    return base.model_copy(update={"iters": iters})
+
+
+def test_build_attention_feed_failed_wave_under_nonactive_iter_is_dropped() -> None:
+    # A FAILED wave under the closed-phase iter is historical -- it must not
+    # surface; an active-iter FAILED wave still does (the obsolete-drop).
+    state = _state_with_nonactive_iter().model_copy(
+        update={
+            "waves": {
+                "P00-I01-W01": _wave(
+                    wave_id="P00-I01-W01", status=WaveStatus.FAILED, iter_id="P00-I01"
+                ),
+                "P01-I01-W09": _wave(wave_id="P01-I01-W09", status=WaveStatus.FAILED),
+            }
+        }
+    )
+    feed = build_attention_feed(state, ())
+    failed = [i for i in feed if i.kind is AttentionKind.FAILED_WAVE]
+    assert len(failed) == 1
+    assert "P01-I01-W09" in failed[0].title
+
+
+def test_build_attention_feed_ready_wave_under_nonactive_iter_is_dropped() -> None:
+    # A ready-to-claim PENDING wave under a non-active iter is not the
+    # operator's current next move, so it must not surface.
+    state = _state_with_nonactive_iter().model_copy(
+        update={
+            "waves": {
+                "P00-I01-W02": _wave(
+                    wave_id="P00-I01-W02", status=WaveStatus.PENDING, iter_id="P00-I01"
+                ),
+                "P01-I01-W02": _wave(wave_id="P01-I01-W02", status=WaveStatus.PENDING),
+            }
+        }
+    )
+    feed = build_attention_feed(state, ())
+    ready = [i for i in feed if i.kind is AttentionKind.READY_WAVE]
+    assert len(ready) == 1
+    assert "P01-I01-W02" in ready[0].title
+
+
+def test_build_attention_feed_no_active_iter_drops_all_wave_signals() -> None:
+    # With no active iter pointer, no wave is "needs you now" -- the
+    # wave-derived signals are fully scoped out (incidents stay point-in-time).
+    base = _empty_state()
+    state = base.model_copy(
+        update={
+            "current": base.current.model_copy(update={"iter_id": None, "phase_id": None}),
+            "waves": {"P01-I01-W09": _wave(wave_id="P01-I01-W09", status=WaveStatus.FAILED)},
+        }
+    )
+    assert build_attention_feed(state, ()) == ()
+
+
+# --------------------------------------------------------------------------
+# D3 -- relative time-ago formatter + per-kind occurred_at sourcing
+# --------------------------------------------------------------------------
+
+
+def test_format_time_ago_sub_minute_is_now() -> None:
+    assert format_time_ago(_NOW, _NOW) == "now"
+    assert format_time_ago(datetime(2026, 1, 1, 0, 0, 30, tzinfo=UTC), _NOW.replace(minute=1)) != ""
+
+
+def test_format_time_ago_minutes_hours_days_boundaries() -> None:
+    base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    assert format_time_ago(base, base.replace(minute=15)) == "15m ago"
+    # 1h12m -> one-decimal hours.
+    assert format_time_ago(base, base.replace(hour=13, minute=12)) == "1.2h ago"
+    assert format_time_ago(base, base.replace(day=4)) == "3d ago"
+
+
+def test_format_time_ago_none_is_empty() -> None:
+    assert format_time_ago(None, _NOW) == ""
+
+
+def test_build_attention_feed_sources_occurred_at_per_kind() -> None:
+    claimed = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+    state = _empty_state().model_copy(
+        update={
+            "waves": {
+                "P01-I01-W09": _wave(
+                    wave_id="P01-I01-W09", status=WaveStatus.FAILED, claimed_at=claimed
+                )
+            },
+            "incidents": {"INC-1": _incident(severity=IncidentSeverity.CRITICAL)},
+            "open_questions": {"OQ-1": _open_question(status=OpenQuestionStatus.BLOCKED)},
+        }
+    )
+    by_kind = {item.kind: item for item in build_attention_feed(state, ())}
+    # Failed wave -> claim time; incident -> opened_at; question -> created_at.
+    assert by_kind[AttentionKind.FAILED_WAVE].occurred_at == claimed
+    assert by_kind[AttentionKind.INCIDENT].occurred_at == _NOW
+    assert by_kind[AttentionKind.OPEN_QUESTION].occurred_at == _NOW
+
+
+def test_build_attention_feed_pause_occurred_at_flows_through() -> None:
+    raised = datetime(2026, 1, 1, 8, 30, tzinfo=UTC)
+    pause = _pause(urgency=Urgency.NORMAL, question="q", pause_urn="urn:eawf:v1:event:QR/p")
+    pause.occurred_at = raised
+    feed = build_attention_feed(_empty_state(), (pause,))
+    assert feed[0].occurred_at == raised
+
+
+# --------------------------------------------------------------------------
+# D4 -- live auto-clear + session-level explicit dismiss
+# --------------------------------------------------------------------------
+
+
+def test_build_attention_feed_item_auto_clears_when_source_resolves() -> None:
+    # An open incident surfaces a row; closing the incident (resolving the
+    # source) removes the row on the next reduce -- the live-reducer contract.
+    open_state = _empty_state().model_copy(
+        update={"incidents": {"INC-1": _incident(severity=IncidentSeverity.HIGH)}}
+    )
+    assert len(build_attention_feed(open_state, ())) == 1
+    resolved_state = _empty_state().model_copy(
+        update={
+            "incidents": {
+                "INC-1": _incident(severity=IncidentSeverity.HIGH, status=IncidentStatus.RESOLVED)
+            }
+        }
+    )
+    assert build_attention_feed(resolved_state, ()) == ()
+
+
+def test_build_attention_feed_dismissed_key_filters_that_row() -> None:
+    # A still-live row whose dismiss_key is in the dismissed set drops out,
+    # while a sibling live row stays.
+    state = _empty_state().model_copy(
+        update={
+            "incidents": {
+                "INC-1": _incident(severity=IncidentSeverity.HIGH),
+                "INC-2": _incident(severity=IncidentSeverity.LOW),
+            }
+        }
+    )
+    full = build_attention_feed(state, ())
+    assert len(full) == 2
+    target = next(i for i in full if i.title.startswith("INC-high"))
+    survivor = next(i for i in full if i.title.startswith("INC-low"))
+    filtered = build_attention_feed(state, (), dismissed=frozenset({target.dismiss_key}))
+    assert [i.title for i in filtered] == [survivor.title]
+
+
+def test_attention_item_dismiss_key_is_stable_and_repo_namespaced() -> None:
+    a = AttentionItem(
+        urgency=Urgency.URGENT, kind=AttentionKind.FAILED_WAVE, title="P01-I01-W09 x", detail="d"
+    )
+    a_again = AttentionItem(
+        urgency=Urgency.URGENT, kind=AttentionKind.FAILED_WAVE, title="P01-I01-W09 x", detail="d2"
+    )
+    # Same logical row -> same key regardless of the (volatile) detail.
+    assert a.dismiss_key == a_again.dismiss_key
+    # A pause keys on its stable urn, not its (mutable) question title.
+    pause_item = AttentionItem(
+        urgency=Urgency.NORMAL,
+        kind=AttentionKind.NEEDS_USER,
+        title="some question text",
+        detail="d",
+        pause_urn="urn:eawf:v1:event:QR/p",
+    )
+    assert pause_item.dismiss_key == ":needs_user:urn:eawf:v1:event:QR/p"
+    # The repo tag namespaces the key so the same wave id under two repos
+    # dismisses independently.
+    tagged = AttentionItem(
+        urgency=Urgency.URGENT,
+        kind=AttentionKind.FAILED_WAVE,
+        title="P01-I01-W09 x",
+        detail="d",
+        repo_tag="ABC",
+    )
+    assert tagged.dismiss_key != a.dismiss_key
+    assert tagged.dismiss_key.startswith("ABC:")
+
+
+# --------------------------------------------------------------------------
+# D1 -- portfolio (cross-repo) aggregation through the registry boundary
+# --------------------------------------------------------------------------
+
+
+def _repo_entry(code: str) -> RegistryRepoEntry:
+    return RegistryRepoEntry(code=code, path=f"/nowhere/{code}", title=code)
+
+
+def _repo_state_with_failed_wave() -> State:
+    """A single-repo state whose active iter carries one FAILED wave."""
+    return _empty_state().model_copy(
+        update={"waves": {"P01-I01-W09": _wave(wave_id="P01-I01-W09", status=WaveStatus.FAILED)}}
+    )
+
+
+def test_build_portfolio_attention_feed_aggregates_and_tags_per_repo() -> None:
+    repos = [_repo_entry("ABC"), _repo_entry("DEF")]
+    states = {
+        Path("/nowhere/ABC"): _repo_state_with_failed_wave(),
+        Path("/nowhere/DEF"): _empty_state().model_copy(
+            update={"incidents": {"INC-1": _incident(severity=IncidentSeverity.CRITICAL)}}
+        ),
+    }
+    feed = build_portfolio_attention_feed(repos, load_state=lambda p: states.get(p))
+    # One row per repo, each tagged with its owning repo code.
+    tags = {item.repo_tag for item in feed}
+    assert tags == {"ABC", "DEF"}
+    # URGENT (critical incident, DEF) ranks ahead of URGENT failed wave (ABC)
+    # only via the kind tiebreak -- both are URGENT, failed-wave sorts first.
+    assert feed[0].repo_tag == "ABC"
+    assert feed[0].kind is AttentionKind.FAILED_WAVE
+
+
+def test_build_portfolio_attention_feed_skips_unreadable_repo() -> None:
+    repos = [_repo_entry("ABC"), _repo_entry("DEF")]
+
+    def _loader(path: Path) -> State | None:
+        if path == Path("/nowhere/DEF"):
+            return None  # unreadable repo -> skipped, not fatal
+        return _repo_state_with_failed_wave()
+
+    feed = build_portfolio_attention_feed(repos, load_state=_loader)
+    assert {item.repo_tag for item in feed} == {"ABC"}
+
+
+def test_build_portfolio_attention_feed_honest_empty_across_clean_portfolio() -> None:
+    repos = [_repo_entry("ABC"), _repo_entry("DEF")]
+    feed = build_portfolio_attention_feed(repos, load_state=lambda _p: _empty_state())
+    assert feed == ()
+
+
+def test_build_portfolio_attention_feed_dismiss_is_repo_namespaced() -> None:
+    repos = [_repo_entry("ABC")]
+    state = _repo_state_with_failed_wave()
+    feed = build_portfolio_attention_feed(repos, load_state=lambda _p: state)
+    assert len(feed) == 1
+    key = feed[0].dismiss_key
+    assert key.startswith("ABC:")
+    filtered = build_portfolio_attention_feed(
+        repos, load_state=lambda _p: state, dismissed=frozenset({key})
+    )
+    assert filtered == ()

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
 from textual.widgets import Static
@@ -30,6 +31,9 @@ from eawf.surfaces.tui.screens.overlays.needs_user_inbox import (
 )
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import OpenPause, list_open_pauses, record_pause
+
+#: Fixed reference instant so a pause row's relative ``time-ago`` is stable.
+_FIXED_NOW = datetime(2099, 1, 1, tzinfo=UTC)
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -257,5 +261,112 @@ def test_inbox_action_lists_pauses_across_scopes(tmp_path: Path) -> None:
             assert isinstance(app.screen, NeedsUserInbox)
             # The inbox lists BOTH scopes' pauses (cross-scope scan).
             assert len(app.screen.query(".inbox-row")) == 2
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# D3 -- each inbox row renders its relative time-ago (deterministic now)
+# --------------------------------------------------------------------------
+
+
+def test_inbox_row_renders_time_ago() -> None:
+    async def body() -> None:
+        pause = _pause(urgency=Urgency.URGENT, question="q", pause_urn="urn:eawf:v1:event:QR/p")
+        pause.occurred_at = datetime(2098, 6, 1, tzinfo=UTC)  # before _FIXED_NOW
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            open_needs_user_inbox(app, (pause,), now=_FIXED_NOW)
+            await pilot.pause()
+            rows = app.screen.query(".inbox-row")
+            assert rows
+            assert "ago" in str(rows.first(Static).render())
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# D4 -- dismiss hides the selected pause + records it on the app set
+# --------------------------------------------------------------------------
+
+
+def test_inbox_dismiss_hides_selected_pause(tmp_path: Path) -> None:
+    async def body() -> None:
+        state_path = _temp_state(tmp_path)
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the urgent one"),
+            urgency=Urgency.URGENT,
+        )
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the low one"),
+            urgency=Urgency.LOW,
+        )
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            while any(isinstance(s, NeedsUserModal) for s in app.screen_stack):
+                await pilot.press("escape")
+                await pilot.pause()
+            app.action_open_inbox()
+            await pilot.pause()
+            inbox = app.screen
+            assert isinstance(inbox, NeedsUserInbox)
+            assert len(inbox.query(".inbox-row")) == 2
+            # Dismiss the highlighted (urgent, index 0) pause.
+            await pilot.press("d")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            # The dismissed row is gone from the inbox; the survivor remains.
+            assert len(inbox.query(".inbox-row")) == 1
+            assert len(app.attention_dismissed()) == 1
+            assert "the low one" in str(inbox.query(".inbox-row").first(Static).render())
+
+    asyncio.run(body())
+
+
+def test_inbox_excludes_already_dismissed_pause(tmp_path: Path) -> None:
+    async def body() -> None:
+        state_path = _temp_state(tmp_path)
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("dismiss me"),
+            urgency=Urgency.URGENT,
+        )
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("keep me"),
+            urgency=Urgency.LOW,
+        )
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            while any(isinstance(s, NeedsUserModal) for s in app.screen_stack):
+                await pilot.press("escape")
+                await pilot.pause()
+            # Pre-dismiss the urgent pause via the app set, then open the inbox.
+            urgent = next(p for p in app._all_open_pauses() if "dismiss me" in p.question.question)
+            from eawf.surfaces.tui.screens.overlays.needs_user_inbox import _pause_dismiss_key
+
+            app.dismiss_attention(_pause_dismiss_key(urgent))
+            await pilot.pause()
+            app.action_open_inbox()
+            await pilot.pause()
+            inbox = app.screen
+            assert isinstance(inbox, NeedsUserInbox)
+            # Only the non-dismissed pause is listed.
+            rows = inbox.query(".inbox-row")
+            assert len(rows) == 1
+            assert "keep me" in str(rows.first(Static).render())
 
     asyncio.run(body())

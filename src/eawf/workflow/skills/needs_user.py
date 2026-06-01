@@ -102,9 +102,15 @@ class OpenPause:
             the attention feed, so a pause sorts against open questions on one
             comparable scale. Legacy rows that predate the field decode as
             :attr:`~eawf.kernel.state.enums.Urgency.NORMAL`.
+        occurred_at: When the pause was raised -- the pause-raise event's
+            ``timestamp`` from the event store. ``OpenPause`` itself has no
+            on-row timestamp, so :func:`list_open_pauses` reads it off the
+            ``needs_user_pause`` :class:`~eawf.kernel.store.kinds.event.EventPayload`.
+            ``None`` for an in-memory pause constructed without one (a test
+            stub) so the field stays additive.
     """
 
-    __slots__ = ("pause_urn", "question", "scope_id", "session", "urgency")
+    __slots__ = ("occurred_at", "pause_urn", "question", "scope_id", "session", "urgency")
 
     def __init__(
         self,
@@ -114,12 +120,14 @@ class OpenPause:
         session: str,
         question: UserQuestion,
         urgency: Urgency = Urgency.NORMAL,
+        occurred_at: datetime | None = None,
     ) -> None:
         self.pause_urn = pause_urn
         self.scope_id = scope_id
         self.session = session
         self.question = question
         self.urgency = urgency
+        self.occurred_at = occurred_at
 
 
 def build_pause_urn(scope_id: str) -> str:
@@ -360,6 +368,7 @@ def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[O
                 session=session if isinstance(session, str) else "",
                 question=question,
                 urgency=_decode_urgency(payload.extras.get(_URGENCY_KEY)),
+                occurred_at=payload.timestamp,
             )
         )
     return [p for p in pending if p.pause_urn not in resolved]

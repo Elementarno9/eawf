@@ -42,6 +42,7 @@ import socket
 from collections import deque
 from collections.abc import Callable
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
@@ -376,6 +377,12 @@ class EaApp(App[None]):
         self._feed_listeners: list[FeedModeScreen] = []
         self._last_state: State | None = None
         self._last_open_pause_count = 0
+        # Session-level dismissed attention rows: the explicit acknowledge
+        # set the live attention reducer is filtered against (the band +
+        # inbox add a row's ``dismiss_key`` here on ``d``). Session-scoped on
+        # purpose -- a dismiss clears on restart (persisted dismiss is YAGNI);
+        # the live reducer already auto-clears a row when its source resolves.
+        self._attention_dismissed: set[str] = set()
         self._reference_back_stack: list[ReferenceTarget] = []
         self._reference_forward_stack: list[ReferenceTarget] = []
         self._current_reference: ReferenceTarget | None = None
@@ -591,6 +598,76 @@ class EaApp(App[None]):
         except OSError as exc:
             logger.debug(f"_all_open_pauses list failed cause={exc!r}")
             return []
+
+    def _attention_now(self) -> datetime:
+        """Return the reference instant for attention-row time-ago labels.
+
+        A single seam so the band + inbox measure relative time off one
+        clock; a deterministic harness overrides it for stable goldens.
+        """
+        return datetime.now(UTC)
+
+    def attention_dismissed(self) -> frozenset[str]:
+        """Return the session-dismissed attention keys (read accessor)."""
+        return frozenset(self._attention_dismissed)
+
+    def dismiss_attention(self, dismiss_key: str) -> None:
+        """Acknowledge an attention row this session so the reducer drops it.
+
+        Adds *dismiss_key* (an :attr:`~eawf.surfaces.tui.attention.AttentionItem.dismiss_key`)
+        to the session set, then rebuilds every mounted attention band so the
+        row disappears immediately. Session-scoped -- the set clears on
+        restart -- because the live reducer already auto-clears a row when
+        its source resolves; an explicit dismiss only hides a still-live row.
+
+        Args:
+            dismiss_key: The stable per-row key to suppress this session.
+        """
+        if dismiss_key in self._attention_dismissed:
+            return
+        self._attention_dismissed.add(dismiss_key)
+        logger.info(f"dismiss_attention key={dismiss_key!r} total={len(self._attention_dismissed)}")
+        from eawf.surfaces.tui.widgets.attention_feed import AttentionFeed
+
+        for band in self.query(AttentionFeed):
+            band.rebuild()
+
+    def _portfolio_attention_feed(self, dismissed: frozenset[str]) -> tuple[Any, ...]:
+        """Aggregate open attentions across the registered repos, ranked.
+
+        The user / portfolio scope has no single bound ``state.json``, so its
+        band spans the explicitly registered repos: resolve them through the
+        W24 registry boundary (:func:`~eawf.platform.registry.read_registry` --
+        never a filesystem scan), load each repo's ``state.json`` read-only
+        (degrading per-repo on an unreadable state), and merge the per-repo
+        attention reductions into one ranked feed tagged by repo. A missing or
+        corrupt registry yields an empty feed (honest-empty band).
+
+        Args:
+            dismissed: The session-dismissed keys to filter the merged feed
+                against.
+
+        Returns:
+            The ranked cross-repo attention items, most-urgent first.
+        """
+        from eawf.platform.registry import RegistryReadError, read_registry
+        from eawf.surfaces.tui.attention import build_portfolio_attention_feed
+        from eawf.surfaces.tui.state_binding import load_state
+
+        try:
+            registry = read_registry()
+        except RegistryReadError as exc:
+            logger.debug(f"_portfolio_attention_feed registry unavailable cause={exc!r}")
+            return ()
+
+        def _repo_state(repo_root: Path) -> State | None:
+            return load_state(repo_root / ".ea" / "state.json")
+
+        return build_portfolio_attention_feed(
+            registry.repos.values(),
+            load_state=_repo_state,
+            dismissed=dismissed,
+        )
 
     def _maybe_open_needs_user(
         self,
@@ -1249,15 +1326,23 @@ class EaApp(App[None]):
         :class:`~eawf.surfaces.tui.screens.overlays.needs_user.NeedsUserModal`
         through the shared :meth:`open_needs_user_pause`. Reads the same
         pause source the footer badge counts, so the two never disagree.
-        Renders honest-empty when no pause is open.
+        Pauses the operator has dismissed this session are excluded (parity
+        with the Home attention band). Renders honest-empty when no pause is
+        open.
         """
         from eawf.surfaces.tui.screens.overlays.needs_user_inbox import (
+            _pause_dismiss_key,
             open_needs_user_inbox,
             rank_pauses_by_urgency,
         )
 
-        ranked = rank_pauses_by_urgency(tuple(self._all_open_pauses()))
-        open_needs_user_inbox(self, ranked)
+        live = [
+            pause
+            for pause in self._all_open_pauses()
+            if _pause_dismiss_key(pause) not in self._attention_dismissed
+        ]
+        ranked = rank_pauses_by_urgency(tuple(live))
+        open_needs_user_inbox(self, ranked, now=self._attention_now())
 
     def action_open_help(self) -> None:
         """Open the ``?`` help overlay (cap-checked, single-instance).

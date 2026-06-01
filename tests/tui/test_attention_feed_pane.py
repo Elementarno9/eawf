@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
+import orjson
 import pytest
 from textual.widgets import Static
 
@@ -37,6 +39,11 @@ from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.widgets.attention_feed import AttentionFeed
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import record_pause
+
+#: A fixed, far-future reference instant so a seeded row's relative
+#: ``time-ago`` is deterministic (always "<N>d ago") regardless of when the
+#: source row was actually stamped during the test run.
+_FIXED_NOW = datetime(2099, 1, 1, tzinfo=UTC)
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -256,5 +263,194 @@ def test_attention_band_survives_zoom_on_workspace() -> None:
             await settle_screen(pilot)
             assert screen.zoomed
             assert screen.query_one(AttentionFeed)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# D3 -- each band row renders its relative time-ago (deterministic now)
+# --------------------------------------------------------------------------
+
+
+def test_attention_band_row_renders_time_ago(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def body() -> None:
+        # Pin the time-ago reference instant so the seeded pause row renders a
+        # deterministic "<N>d ago" regardless of the record_pause wall clock.
+        monkeypatch.setattr(EaApp, "_attention_now", lambda self: _FIXED_NOW)
+        state_path = _temp_state(tmp_path)
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("answer me"),
+            urgency=Urgency.URGENT,
+        )
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await _dismiss_autoopen(pilot)
+            feed = app.screen.query_one(AttentionFeed)
+            assert feed.items()  # the seeded pause is present
+            rows = feed.query(".attention-row")
+            assert rows
+            rendered = str(rows.first(Static).render())
+            assert "ago" in rendered
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# D4 -- explicit session dismiss hides the selected row (and stays hidden)
+# --------------------------------------------------------------------------
+
+
+def test_attention_band_dismiss_hides_selected_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def body() -> None:
+        monkeypatch.setattr(EaApp, "_attention_now", lambda self: _FIXED_NOW)
+        state_path = _temp_state(tmp_path)
+        # Two pauses so a survivor remains after one dismiss.
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the urgent pause"),
+            urgency=Urgency.URGENT,
+        )
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the low pause"),
+            urgency=Urgency.LOW,
+        )
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await _dismiss_autoopen(pilot)
+            feed = app.screen.query_one(AttentionFeed)
+            assert len(feed.items()) == 2
+            target_key = feed.items()[0].dismiss_key  # the urgent pause (index 0)
+            feed.focus()
+            feed.selected = 0
+            await settle_screen(pilot)
+            feed.action_dismiss()
+            await settle_screen(pilot)
+            remaining = feed.items()
+            # The dismissed row is gone; the still-live survivor stays.
+            assert len(remaining) == 1
+            assert all(item.dismiss_key != target_key for item in remaining)
+            assert "the low pause" in remaining[0].title
+            # It does not reappear on a fresh reduce this session.
+            feed.rebuild()
+            await settle_screen(pilot)
+            assert all(item.dismiss_key != target_key for item in feed.items())
+
+    asyncio.run(body())
+
+
+def test_attention_band_dismiss_is_noop_when_empty(tmp_path: Path) -> None:
+    async def body() -> None:
+        # The base fixture is honest-empty; dismiss is a safe no-op.
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            feed = app.screen.query_one(AttentionFeed)
+            assert feed.items() == ()
+            feed.action_dismiss()  # no crash, nothing recorded
+            await settle_screen(pilot)
+            assert app.attention_dismissed() == frozenset()
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# D1 -- the user / portfolio scope band aggregates across registered repos
+# --------------------------------------------------------------------------
+
+
+def _write_portfolio_registry(home: Path, repo_codes: dict[str, bool]) -> None:
+    """Write a registry + per-repo state.json tree under *home*'s ``.eawf``.
+
+    Each ``code -> failed`` entry creates a repo dir with a state.json copied
+    from the active-wave fixture; when ``failed`` is ``True`` the repo's wave
+    is flipped to FAILED so its active iter contributes one attention row.
+    """
+    eawf = home / ".eawf"
+    eawf.mkdir(parents=True, exist_ok=True)
+    repos: dict[str, dict[str, object]] = {}
+    fixture = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    for code, failed in repo_codes.items():
+        repo_root = home / "repos" / code
+        (repo_root / ".ea").mkdir(parents=True, exist_ok=True)
+        doc = orjson.loads(orjson.dumps(fixture))
+        if failed:
+            doc["waves"]["P01-I01-W01"]["status"] = "failed"
+        (repo_root / ".ea" / "state.json").write_bytes(orjson.dumps(doc))
+        repos[code] = {"code": code, "path": str(repo_root), "title": code}
+    registry = {"version": "1", "active_code": next(iter(repo_codes)), "repos": repos}
+    (eawf / "registry.json").write_bytes(orjson.dumps(registry))
+
+
+def test_user_scope_band_aggregates_across_registered_repos(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def body() -> None:
+        monkeypatch.setattr(EaApp, "_attention_now", lambda self: _FIXED_NOW)
+        # Two registered repos, both with a FAILED wave in their active iter.
+        _write_portfolio_registry(tmp_path, {"ABC": True, "DEF": True})
+        app = EaApp(scope="user", state_path=None)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await _dismiss_autoopen(pilot)
+            assert isinstance(app.screen, UserScreen)
+            feed = app.screen.query_one(AttentionFeed)
+            items = feed.items()
+            # One row per repo, each tagged with its owning repo code.
+            tags = {item.repo_tag for item in items}
+            assert tags == {"ABC", "DEF"}
+            assert all(item.kind is AttentionKind.FAILED_WAVE for item in items)
+
+    asyncio.run(body())
+
+
+def test_user_scope_band_honest_empty_across_clean_portfolio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def body() -> None:
+        # A registered repo with no failing wave -> nothing needs the operator.
+        _write_portfolio_registry(tmp_path, {"ABC": False})
+        app = EaApp(scope="user", state_path=None)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await _dismiss_autoopen(pilot)
+            feed = app.screen.query_one(AttentionFeed)
+            assert feed.items() == ()
+            empties = feed.query(".attention-empty")
+            assert empties
+            assert EMPTY_FEED_TEXT in str(empties.first(Static).render())
+
+    asyncio.run(body())
+
+
+def test_user_scope_band_skips_unreadable_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def body() -> None:
+        monkeypatch.setattr(EaApp, "_attention_now", lambda self: _FIXED_NOW)
+        # Register two repos but corrupt one repo's state.json so it is
+        # unreadable; the portfolio feed degrades per-repo (skips it).
+        _write_portfolio_registry(tmp_path, {"ABC": True, "DEF": True})
+        (tmp_path / "repos" / "DEF" / ".ea" / "state.json").write_bytes(b"{ not json")
+        app = EaApp(scope="user", state_path=None)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await _dismiss_autoopen(pilot)
+            feed = app.screen.query_one(AttentionFeed)
+            tags = {item.repo_tag for item in feed.items()}
+            assert tags == {"ABC"}
 
     asyncio.run(body())

@@ -28,6 +28,7 @@ ranked tuple and owns the row highlight + the select seam.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.binding import Binding, BindingType
@@ -41,6 +42,7 @@ from eawf.surfaces.tui.attention import (
     AttentionItem,
     AttentionKind,
     build_attention_feed,
+    format_time_ago,
 )
 
 if TYPE_CHECKING:
@@ -65,17 +67,20 @@ _KIND_GLYPH: dict[AttentionKind, str] = {
 _ATTENTION_URGENCIES: frozenset[str] = frozenset({"high", "urgent"})
 
 
-def _render_row(item: AttentionItem) -> str:
+def _render_row(item: AttentionItem, *, now: datetime) -> str:
     """Render one attention item as a single content-markup line.
 
     The urgency token is tinted to draw the eye to the more-immediate rows
     (``HIGH`` / ``URGENT`` in the ``$warn`` colour, the calmer tiers in
-    ``$text-muted``); the kind glyph leads and the muted detail trails. The
-    colours resolve against the active theme at render time via Textual
-    content markup.
+    ``$text-muted``); the kind glyph leads, the muted detail follows, and a
+    muted relative ``time-ago`` trails right-aligned (blank when the row has
+    no source clock). A portfolio (cross-repo) row prefixes its repo code so
+    the operator sees which repo needs them. The colours resolve against the
+    active theme at render time via Textual content markup.
 
     Args:
         item: The attention item to render.
+        now: The reference instant the row's ``time-ago`` is measured from.
 
     Returns:
         A content-markup string for one :class:`~textual.widgets.Static`.
@@ -83,7 +88,10 @@ def _render_row(item: AttentionItem) -> str:
     glyph = _KIND_GLYPH.get(item.kind, "-")
     cell = f"{item.urgency.value:<7}"
     tier = f"[$warn]{cell}[/]" if item.urgency.value in _ATTENTION_URGENCIES else cell
-    return f"{glyph} {tier} {item.title}  [$text-muted]{item.detail}[/]"
+    repo = f"[$accent]{item.repo_tag}[/] " if item.repo_tag else ""
+    ago = format_time_ago(item.occurred_at, now)
+    ago_cell = f"  [$text-muted]{ago:>8}[/]" if ago else ""
+    return f"{glyph} {tier} {repo}{item.title}  [$text-muted]{item.detail}[/]{ago_cell}"
 
 
 class AttentionFeed(VerticalScroll):
@@ -121,7 +129,8 @@ class AttentionFeed(VerticalScroll):
     }
     """
 
-    #: ``Up`` / ``Down`` move the highlight, ``Enter`` activates. Vim
+    #: ``Up`` / ``Down`` move the highlight, ``Enter`` activates, ``d``
+    #: dismisses (acknowledges) the highlighted row for the session. Vim
     #: ``j`` / ``k`` ride the arrows per the operator keymap convention.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "move(-1)", "up", show=False),
@@ -129,6 +138,7 @@ class AttentionFeed(VerticalScroll):
         Binding("k", "move(-1)", "up", show=False),
         Binding("j", "move(1)", "down", show=False),
         Binding("enter", "activate", "open", show=False),
+        Binding("d", "dismiss", "dismiss", show=False),
     ]
 
     class PauseSelected(Message):
@@ -162,6 +172,10 @@ class AttentionFeed(VerticalScroll):
         """
         super().__init__(**kwargs)
         self._items: tuple[AttentionItem, ...] = ()
+        # Reference instant for the row time-ago labels, captured in the
+        # synchronous fold so the deferred async DOM build renders every row
+        # against one clock (no skew from a mid-rebuild wall-clock advance).
+        self._now_at: datetime = datetime.now(UTC)
         # Re-entrancy coalescing for the async DOM rebuild: ``_rebuilding``
         # is held while a rebuild's await-the-remove path runs, and
         # ``_rebuild_pending`` records a request that arrived mid-rebuild so
@@ -203,6 +217,42 @@ class AttentionFeed(VerticalScroll):
             return tuple(resolver())
         return ()
 
+    def _dismissed(self) -> frozenset[str]:
+        """Resolve the session-dismissed attention keys from the host app.
+
+        Reads the App's ``attention_dismissed`` set so the band filters the
+        same acknowledged rows the ``d`` keypress recorded. A bare harness
+        (no such hook) yields the empty set, leaving every live row visible.
+
+        Returns:
+            The dismissed-key set, or an empty set under a bare harness.
+        """
+        resolver = getattr(self.app, "attention_dismissed", None)
+        if callable(resolver):
+            return frozenset(resolver())
+        return frozenset()
+
+    def _now(self) -> datetime:
+        """Resolve the time-ago reference instant from the host app.
+
+        Reads the App's ``_attention_now`` seam so the band's relative
+        timestamps measure off one clock a deterministic harness can pin;
+        falls back to the wall clock under a bare harness.
+
+        Returns:
+            The reference instant for this rebuild's ``time-ago`` labels.
+        """
+        resolver = getattr(self.app, "_attention_now", None)
+        if callable(resolver):
+            now = resolver()
+            if isinstance(now, datetime):
+                return now
+        return datetime.now(UTC)
+
+    def _is_portfolio_scope(self) -> bool:
+        """Return whether the host app is on the user / portfolio scope."""
+        return getattr(self.app, "_scope", None) == "user"
+
     def items(self) -> tuple[AttentionItem, ...]:
         """Return the current ranked attention items (read accessor).
 
@@ -214,6 +264,14 @@ class AttentionFeed(VerticalScroll):
         """
         return self._items
 
+    def rebuild(self) -> None:
+        """Recompute + repaint the feed (public; e.g. after a dismiss).
+
+        The App calls this on every mounted band when the session
+        dismissed-set changes so an acknowledged row disappears immediately.
+        """
+        self._rebuild()
+
     def _rebuild(self) -> None:
         """Recompute the ranked items, then schedule the async DOM rebuild.
 
@@ -223,8 +281,19 @@ class AttentionFeed(VerticalScroll):
         ``remove_children`` resolves asynchronously and a back-to-back rebuild
         (mount + on_mount seed both fire) would otherwise race a mount ahead
         of the pending removal (``DuplicateIds``).
+
+        On the user / portfolio scope the feed aggregates across the
+        registered repos (the App's ``_portfolio_attention_feed`` hook, which
+        resolves the explicit registry -- never a scan); every other scope
+        folds the bound single-repo state plus the cross-scope pauses.
         """
-        self._items = build_attention_feed(self.state, self._open_pauses())
+        dismissed = self._dismissed()
+        self._now_at = self._now()
+        portfolio = getattr(self.app, "_portfolio_attention_feed", None)
+        if self._is_portfolio_scope() and callable(portfolio):
+            self._items = tuple(portfolio(dismissed))
+        else:
+            self._items = build_attention_feed(self.state, self._open_pauses(), dismissed=dismissed)
         if not 0 <= self.selected < len(self._items):
             self.selected = 0 if self._items else -1
         self._request_rebuild_dom()
@@ -259,7 +328,7 @@ class AttentionFeed(VerticalScroll):
                     await self.mount_all(
                         [
                             Static(
-                                _render_row(item),
+                                _render_row(item, now=self._now_at),
                                 classes="attention-row",
                                 id=f"attention-row-{index}",
                             )
@@ -310,6 +379,25 @@ class AttentionFeed(VerticalScroll):
             self.post_message(self.PauseSelected(item.pause_urn, item.question))
             return
         logger.info(f"attention_feed activate kind={item.kind.value!r} outcome=informational")
+
+    def action_dismiss(self) -> None:
+        """Acknowledge (hide) the highlighted row for this session.
+
+        Records the highlighted row's
+        :attr:`~eawf.surfaces.tui.attention.AttentionItem.dismiss_key` on the
+        App's session dismissed-set (via ``dismiss_attention``), which
+        rebuilds every mounted band so the row disappears at once and does
+        not reappear that session. The general-kind analog of the inbox's
+        ``defer`` (which is pause-specific). A no-op when the feed is empty or
+        the host lacks the hook (a bare harness).
+        """
+        if not self._items or not 0 <= self.selected < len(self._items):
+            return
+        item = self._items[self.selected]
+        dismiss = getattr(self.app, "dismiss_attention", None)
+        if callable(dismiss):
+            logger.info(f"attention_feed dismiss key={item.dismiss_key!r}")
+            dismiss(item.dismiss_key)
 
 
 __all__ = ["AttentionFeed"]
