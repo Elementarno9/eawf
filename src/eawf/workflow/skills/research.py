@@ -8,8 +8,8 @@ Implements the ``/research`` algorithm per ``docs/architecture/workflow.md``:
 3. Detect continuation: open brief on the same scope → load and extend.
 4. Define questions: facts to verify, options to compare, risks to audit,
    decision needed.
-5. Dispatch parallel read-only agents (deep depth emits a typed
-   ResearchPlan for the caller to dispatch).
+5. Dispatch parallel read-only agents (the fan-out depths ``deep`` /
+   ``exhaustive`` emit a typed ResearchPlan for the caller to dispatch).
 6. Synthesize options: 2-4 solutions with tradeoffs/complexity/etc.
 7. Review findings: cross-check citations.
 8. Recommend one path with confidence and fallback.
@@ -22,9 +22,12 @@ Each algorithm step writes one row to ``store/event.jsonl`` via
 
 Honoured flags (per the W02 acceptance contract):
 
-- ``--depth quick|normal|deep`` — passed via ``ctx.args["depth"]``;
-  controls the number of synthesised question slots and the body's
-  ``recommendation.confidence`` default.
+- ``--depth shallow|medium|deep|exhaustive`` — passed via
+  ``ctx.args["depth"]`` and resolved against the canonical
+  :class:`~eawf.kernel.spec.research.ResearchDepth` ladder (default
+  ``medium``); controls the number of synthesised question slots and the
+  body's ``recommendation.confidence`` default. Unknown tokens fall back
+  to the default depth rather than aborting the run.
 """
 
 from __future__ import annotations
@@ -35,6 +38,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from eawf.kernel.spec.research import (
+    DEFAULT_RESEARCH_DEPTH,
+    ResearchDepth,
+    coerce_research_depth,
+    research_depth_emits_fanout,
+    research_depth_question_slots,
+)
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -57,10 +67,6 @@ from eawf.workflow.skills.registry import register
 logger = logging.getLogger(__name__)
 
 
-_VALID_DEPTHS: tuple[str, ...] = ("quick", "normal", "deep")
-_DEFAULT_DEPTH: str = "normal"
-
-
 def _bool_arg(args: dict[str, Any], *names: str, default: bool = False) -> bool:
     """Return a bool-ish skill arg from the first present key."""
     for name in names:
@@ -73,20 +79,6 @@ def _bool_arg(args: dict[str, Any], *names: str, default: bool = False) -> bool:
             return raw.strip().lower() in {"1", "true", "yes", "on"}
         return bool(raw)
     return default
-
-
-def _depth_to_question_slots(depth: str) -> int:
-    """Map ``--depth`` to a synthetic question slot count.
-
-    The skill's v0.1 implementation cannot dispatch the parallel reviewer
-    fanout described in §14 step 5, so it pre-allocates question slots
-    sized by depth: more depth → more slots → richer body.
-    """
-    if depth == "quick":
-        return 1
-    if depth == "deep":
-        return 3
-    return 2  # normal
 
 
 def _research_brief_urn(brief_id: str) -> str:
@@ -131,14 +123,16 @@ class _ResearchInputs:
     """Resolved ``/research`` inputs gathered before any algorithm step runs.
 
     Attributes:
-        depth: The validated depth (``quick`` / ``normal`` / ``deep``).
+        depth: The resolved canonical depth on the
+            :class:`~eawf.kernel.spec.research.ResearchDepth` ladder
+            (``shallow`` / ``medium`` / ``deep`` / ``exhaustive``).
         topic: The resolved research topic.
         brief_id: The freshly minted brief id (``BR-...``).
         final_requested: Whether the brief should be persisted.
         blitz_enabled: Whether the blitz auto-chain may fire.
     """
 
-    depth: str
+    depth: ResearchDepth
     topic: str
     brief_id: str
     final_requested: bool
@@ -173,8 +167,8 @@ class ResearchSkill(SkillAction):
     name: SkillName = "/research"
 
     def _gather(self, run: ActionRun) -> _ResearchInputs:
-        raw_depth = str(run.args.get("depth", _DEFAULT_DEPTH))
-        depth = raw_depth if raw_depth in _VALID_DEPTHS else _DEFAULT_DEPTH
+        raw_depth = run.args.get("depth")
+        depth = coerce_research_depth(str(raw_depth) if raw_depth is not None else None)
         topic = str(run.args.get("topic") or run.args.get("message") or run.scope_id)
         return _ResearchInputs(
             depth=depth,
@@ -206,9 +200,9 @@ class ResearchSkill(SkillAction):
         )
         # Step 4 — define questions. v0.1 emits placeholder slots scaled by depth.
         questions = self._build_questions(run, inputs.depth)
-        # Step 5 — dispatch parallel agents. Deep depth emits the typed plan
-        # the runtime can fan out, while quick/normal keep the v0.1 placeholder
-        # synthesis path.
+        # Step 5 — dispatch parallel agents. Fan-out depths (deep / exhaustive)
+        # emit the typed plan the runtime can fan out, while the shallow / medium
+        # rungs keep the v0.1 placeholder synthesis path.
         research_plan = self._build_research_plan(run, inputs, questions)
         if research_plan is not None:
             return _ResearchWork(
@@ -244,8 +238,8 @@ class ResearchSkill(SkillAction):
             return blitz_result
         return work
 
-    def _build_questions(self, run: ActionRun, depth: str) -> list[ResearchQuestion]:
-        question_count = _depth_to_question_slots(depth)
+    def _build_questions(self, run: ActionRun, depth: ResearchDepth) -> list[ResearchQuestion]:
+        question_count = research_depth_question_slots(depth)
         questions = [
             ResearchQuestion(
                 q=f"Open question #{i + 1} for scope {run.scope_id}",
@@ -283,11 +277,11 @@ class ResearchSkill(SkillAction):
         return options
 
     def _build_recommendation(
-        self, run: ActionRun, depth: str, options: list[ResearchOption]
+        self, run: ActionRun, depth: ResearchDepth, options: list[ResearchOption]
     ) -> ResearchRecommendation:
         recommendation = ResearchRecommendation(
             choice=options[0].name,
-            confidence="medium" if depth == "normal" else "low",
+            confidence="medium" if depth == DEFAULT_RESEARCH_DEPTH else "low",
             fallback=options[1].name,
         )
         self._trace(
@@ -316,7 +310,7 @@ class ResearchSkill(SkillAction):
     def _build_research_plan(
         self, run: ActionRun, inputs: _ResearchInputs, questions: list[ResearchQuestion]
     ) -> ResearchPlan | None:
-        if inputs.depth != "deep":
+        if not research_depth_emits_fanout(inputs.depth):
             return None
         fanout_envelopes = [
             ResearchFanoutEnvelope(
@@ -332,13 +326,14 @@ class ResearchSkill(SkillAction):
             for i, question in enumerate(questions)
         ]
         plan = ResearchPlan(
+            depth=inputs.depth,
             topic=inputs.topic,
             fanout_envelopes=fanout_envelopes,
         )
         self._trace(
             run,
             "research.fanout_plan",
-            f"research: emitted deep fanout plan with {len(fanout_envelopes)} envelope(s)",
+            f"research: emitted {inputs.depth} fanout plan ({len(fanout_envelopes)} envelope(s))",
             {"depth": inputs.depth, "fanout_envelopes": len(fanout_envelopes)},
         )
         return plan
@@ -359,7 +354,7 @@ class ResearchSkill(SkillAction):
                 "residual_unknowns": residual_unknowns,
                 "followup_research_args": {
                     "topic": inputs.topic,
-                    "depth": "quick",
+                    "depth": ResearchDepth.SHALLOW.value,
                     "blitz": False,
                 },
             },

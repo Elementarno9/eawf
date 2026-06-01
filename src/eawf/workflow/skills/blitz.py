@@ -28,6 +28,7 @@ import logging
 import os
 from typing import Any, Final
 
+from eawf.kernel.spec.research import ResearchDepth
 from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import probe_skill_instruments
 from eawf.workflow.skills.bodies.blitz import BlitzBody
@@ -126,7 +127,7 @@ class BlitzSkill(Skill):
         followup_research_args = (
             dict(followup_args_raw) if isinstance(followup_args_raw, dict) else {}
         )
-        followup_research_args.setdefault("depth", "quick")
+        followup_research_args.setdefault("depth", ResearchDepth.SHALLOW.value)
         followup_research_args.setdefault("blitz", False)
 
         try:

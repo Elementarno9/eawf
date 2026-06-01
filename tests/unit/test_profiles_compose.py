@@ -54,7 +54,8 @@ def test_compose_empty_returns_empty() -> None:
     assert composed.hooks_referenced == []
     # Provenance for every populated-or-default top-level field is present
     # even when empty so callers don't get KeyErrors when introspecting.
-    # v2 (P25-W15) adds ``dispatch_session_policy`` to the provenance map.
+    # v2 (P25-W15) adds ``dispatch_session_policy``; P29-I01-W27 adds
+    # ``research`` (last-non-None-wins) to the provenance map.
     assert set(composed.provenance.keys()) == {
         "state_extensions",
         "instrument_requirements",
@@ -62,6 +63,7 @@ def test_compose_empty_returns_empty() -> None:
         "skills_referenced",
         "hooks_referenced",
         "dispatch_session_policy",
+        "research",
     }
     assert all(v == [] for v in composed.provenance.values())
     # v2 audit maps default to empty for compositions with no conflicts.
@@ -275,3 +277,45 @@ def test_compose_strictest_keys_constant_documented() -> None:
     from eawf.platform.profiles import STRICTEST_KEYS
 
     assert "instrument_requirements[].kind" in STRICTEST_KEYS
+
+
+# --- research block composition (P29-I01-W27) ------------------------------
+
+
+def test_compose_research_block_last_non_none_wins() -> None:
+    """A downstream ``research:`` block replaces the upstream block wholesale."""
+    from eawf.kernel.spec.research import ResearchDepth
+    from eawf.kernel.spec.research_campaign import ResearchProfileBlock
+
+    a = _profile("a").model_copy(
+        update={"research": ResearchProfileBlock(default_depth=ResearchDepth.SHALLOW)}
+    )
+    b = _profile("b").model_copy(
+        update={"research": ResearchProfileBlock(default_depth=ResearchDepth.EXHAUSTIVE)}
+    )
+    composed = compose([a, b])
+    assert composed.research is not None
+    assert composed.research.default_depth == ResearchDepth.EXHAUSTIVE
+    assert composed.provenance["research"] == ["a", "b"]
+
+
+def test_compose_research_block_none_does_not_clobber_upstream() -> None:
+    """A profile that omits ``research:`` never resets an upstream block."""
+    from eawf.kernel.spec.research import ResearchDepth
+    from eawf.kernel.spec.research_campaign import ResearchProfileBlock
+
+    a = _profile("a").model_copy(
+        update={"research": ResearchProfileBlock(default_depth=ResearchDepth.DEEP)}
+    )
+    b = _profile("b")  # no research block
+    composed = compose([a, b])
+    assert composed.research is not None
+    assert composed.research.default_depth == ResearchDepth.DEEP
+    assert composed.provenance["research"] == ["a"]
+
+
+def test_compose_research_block_absent_everywhere_is_none() -> None:
+    """No profile declaring ``research:`` yields a ``None`` composed block."""
+    composed = compose([_profile("a"), _profile("b")])
+    assert composed.research is None
+    assert composed.provenance["research"] == []

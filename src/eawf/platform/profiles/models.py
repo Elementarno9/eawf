@@ -46,6 +46,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.audit import AuditCadence
+from eawf.kernel.spec.research_campaign import ResearchProfileBlock
 from eawf.platform.render_block import DEFAULT_RENDER_BLOCK_TIER, RenderBlockTier
 
 
@@ -286,6 +287,14 @@ class ProfileBody(BaseModel):
     - ``dispatch_session_policy`` — closed enum consumed by the dispatch
       layer. ``None`` defers to the skill / global default; non-``None``
       values participate in last-non-None-wins composition.
+
+    ``research`` (P29-I01-W14 + W27) mounts the typed
+    :class:`~eawf.kernel.spec.research_campaign.ResearchProfileBlock` —
+    the per-domain research-campaign config a profile contributes. ``None``
+    means the profile declares no campaign config; non-``None`` values
+    participate in last-non-``None``-wins composition, mirroring
+    ``dispatch_session_policy`` (a downstream profile that sets the block
+    wins).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -304,6 +313,7 @@ class ProfileBody(BaseModel):
     overrides: list[str] = []
     dispatch_session_policy: Literal["fresh", "continue", "hybrid"] | None = None
     verify: VerifyBlock | None = None
+    research: ResearchProfileBlock | None = None
 
 
 class ComposedProfile(BaseModel):
@@ -341,6 +351,7 @@ class ComposedProfile(BaseModel):
     hooks_referenced: list[str] = []
     dispatch_session_policy: Literal["fresh", "continue", "hybrid"] | None = None
     verify: VerifyBlock | None = None
+    research: ResearchProfileBlock | None = None
     provenance: dict[str, list[str]] = {}
     override_audit: dict[str, list[str]] = {}
     conflict_warnings: list[str] = []

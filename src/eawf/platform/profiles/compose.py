@@ -17,6 +17,11 @@ Per ``docs/architecture/profiles.md`` + the P25-W15 ProfileBody v2 brief:
   ``{fresh, continue, hybrid, None}`` carries no strictest ordering; a
   downstream profile that explicitly sets the field wins. ``None`` is the
   default (skill / global fallback).
+- ``research`` (P29-I01-W27): last-non-``None``-wins. The ``research:`` block
+  is a whole typed :class:`~eawf.kernel.spec.research_campaign.ResearchProfileBlock`,
+  not a mergeable map, so a downstream profile that declares it replaces an
+  upstream block wholesale (same rule as ``dispatch_session_policy``).
+  ``None`` is the default (the profile contributes no campaign config).
 
 Conflict + override resolution (v2 — P25-W15):
 
@@ -60,6 +65,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from typing import Final, Literal
 
+from eawf.kernel.spec.research_campaign import ResearchProfileBlock
 from eawf.platform.profiles.models import (
     ComposedProfile,
     InstrumentReq,
@@ -267,6 +273,32 @@ def _merge_dispatch_session_policy(
         if body.dispatch_session_policy is None:
             continue
         chosen = body.dispatch_session_policy
+        contributors.append(body.name)
+    return chosen, contributors
+
+
+def _merge_research(
+    profiles: Sequence[ProfileBody],
+) -> tuple[ResearchProfileBlock | None, list[str]]:
+    """Last-non-``None``-wins on :attr:`ProfileBody.research`.
+
+    The ``research:`` block is a whole typed config object, not a mergeable
+    map, so composition uses the same last-non-``None``-wins rule as
+    :func:`_merge_dispatch_session_policy`: a downstream profile that
+    declares the block replaces an upstream one wholesale. ``None`` bodies
+    are skipped so a profile that omits the block never clobbers an
+    upstream block.
+
+    Returns ``(block, contributors)``. ``contributors`` lists profile names
+    in caller order that supplied a non-``None`` block (the last entry is
+    the winning contributor).
+    """
+    chosen: ResearchProfileBlock | None = None
+    contributors: list[str] = []
+    for body in profiles:
+        if body.research is None:
+            continue
+        chosen = body.research.model_copy(deep=True)
         contributors.append(body.name)
     return chosen, contributors
 
@@ -481,6 +513,7 @@ def compose(
     skills, prov_skills = _merge_string_list(profile_list, "skills_referenced")
     hooks, prov_hooks = _merge_string_list(profile_list, "hooks_referenced")
     policy, prov_policy = _merge_dispatch_session_policy(profile_list)
+    research, prov_research = _merge_research(profile_list)
 
     # Non-fatal warning: render_block id declared by multiple profiles
     # where the override graph did NOT cover the overlap. The merge still
@@ -519,6 +552,7 @@ def compose(
         "skills_referenced": prov_skills,
         "hooks_referenced": prov_hooks,
         "dispatch_session_policy": prov_policy,
+        "research": prov_research,
     }
 
     return ComposedProfile(
@@ -531,6 +565,7 @@ def compose(
         skills_referenced=skills,
         hooks_referenced=hooks,
         dispatch_session_policy=policy,
+        research=research,
         provenance=provenance,
         override_audit=override_audit,
         conflict_warnings=conflict_warnings,

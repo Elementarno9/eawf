@@ -6,8 +6,9 @@ Pin the Phase 4 W02 acceptance contract for ``/research``:
   populated :class:`ResearchBody`.
 - Probe-blocked path → ``status=blocked`` with non-empty
   ``footer.repair_commands``.
-- ``--depth quick|normal|deep`` flag honoured: question-slot count
-  scales with depth and ``deep`` emits a typed fan-out plan.
+- ``--depth shallow|medium|deep|exhaustive`` flag honoured: question-slot
+  count scales with depth and the fan-out depths (``deep`` / ``exhaustive``)
+  emit a typed fan-out plan.
 - Body schema fields (``brief_id``, ``questions``, ``options``,
   ``recommendation``) populated.
 - Each algorithm step writes one ``EVENT`` row to ``store/event.jsonl``.
@@ -63,16 +64,16 @@ def test_research_body_populated(state_dir: Path) -> None:
     body = ResearchBody.model_validate(env.body)
     assert body.brief_id.startswith("BR-")
     assert len(body.brief_id) > 3
-    assert len(body.questions) == 2  # default depth=normal → 2 slots
+    assert len(body.questions) == 2  # default depth=medium -> 2 slots
     assert len(body.options) == 2
     assert body.recommendation is not None
     assert body.recommendation.choice == body.options[0].name
 
 
-def test_research_quick_depth_scales_questions(state_dir: Path) -> None:
+def test_research_shallow_depth_scales_questions(state_dir: Path) -> None:
     skill = ResearchSkill()
     ctx = _ctx()
-    ctx.args = {"depth": "quick"}
+    ctx.args = {"depth": "shallow"}
     env = run_skill(skill, ctx)
     assert env.header.status == "ok"
     body = ResearchBody.model_validate(cast(dict, env.body))
@@ -89,17 +90,32 @@ def test_research_deep_depth_returns_research_plan(state_dir: Path) -> None:
     assert body.user_question is None
     assert body.research_plan is not None
     assert body.research_plan.section_heading == "## ResearchPlan"
+    assert body.research_plan.depth == "deep"
+    assert len(body.questions) == 3  # deep -> 3 slots
     assert len(body.research_plan.fanout_envelopes) == len(body.questions)
 
 
-def test_research_invalid_depth_falls_back_to_normal(state_dir: Path) -> None:
+def test_research_exhaustive_depth_returns_research_plan(state_dir: Path) -> None:
+    skill = ResearchSkill()
+    ctx = _ctx()
+    ctx.args = {"depth": "exhaustive"}
+    env = run_skill(skill, ctx)
+    assert env.header.status == "ok"
+    body = ResearchBody.model_validate(cast(dict, env.body))
+    assert body.research_plan is not None
+    assert body.research_plan.depth == "exhaustive"
+    assert len(body.questions) == 4  # exhaustive -> 4 slots
+    assert len(body.research_plan.fanout_envelopes) == len(body.questions)
+
+
+def test_research_invalid_depth_falls_back_to_medium(state_dir: Path) -> None:
     skill = ResearchSkill()
     ctx = _ctx()
     ctx.args = {"depth": "wat"}
     env = run_skill(skill, ctx)
     assert env.header.status == "ok"
     body = ResearchBody.model_validate(cast(dict, env.body))
-    assert len(body.questions) == 2  # normal
+    assert len(body.questions) == 2  # falls back to default depth=medium
 
 
 def test_research_emits_one_event_per_step(state_dir: Path) -> None:

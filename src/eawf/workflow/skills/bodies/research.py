@@ -16,6 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.spec.research import ResearchDepth
 from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 
@@ -76,12 +77,19 @@ class ResearchFanoutEnvelope(BaseModel):
 
 
 class ResearchPlan(BaseModel):
-    """Typed deep-research fan-out plan."""
+    """Typed deep-research fan-out plan.
+
+    ``depth`` carries the resolved :class:`~eawf.kernel.spec.research.ResearchDepth`
+    that triggered the fan-out. Only the fan-out rungs of the ladder
+    (``deep`` / ``exhaustive``) ever produce a plan, so the field defaults
+    to :attr:`~eawf.kernel.spec.research.ResearchDepth.DEEP`; the runner
+    stamps the actual resolved depth when it builds the plan.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     section_heading: Literal["## ResearchPlan"] = "## ResearchPlan"
-    depth: Literal["deep"] = "deep"
+    depth: ResearchDepth = ResearchDepth.DEEP
     topic: str
     fanout_envelopes: list[ResearchFanoutEnvelope] = Field(default_factory=list)
 

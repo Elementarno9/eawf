@@ -53,7 +53,7 @@ def test_skill_research_full_run_persists_events_and_envelope(
     result = runner.invoke(
         app,
         ["--json", "skill", "run", "/research"],
-        input='{"depth": "normal"}',
+        input='{"depth": "medium"}',
     )
     assert result.exit_code == 0, result.stdout
 
@@ -67,7 +67,7 @@ def test_skill_research_full_run_persists_events_and_envelope(
     assert isinstance(env.body, dict)
     body = ResearchBody.model_validate(env.body)
     assert body.brief_id.startswith("BR-")
-    assert len(body.questions) == 2  # depth=normal → 2 slots
+    assert len(body.questions) == 2  # depth=medium -> 2 slots
     assert len(body.options) == 2
     assert body.recommendation is not None
     assert body.recommendation.choice == "option-1"
