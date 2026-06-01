@@ -1476,6 +1476,18 @@
       "status": "done",
       "updated_at": "2026-06-01T18:01:56.046158Z"
     },
+    "P29-I02-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W16",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W16",
+      "scope_id": "P29-I02-W16",
+      "status": "done",
+      "updated_at": "2026-06-01T18:44:51.366835Z"
+    },
     "P29-I02-W18": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -7889,6 +7901,19 @@
       "scope_id": "P29-I02-W15",
       "updated_at": "2026-06-01T17:48:40.680469Z"
     },
+    "P29-I02-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W16-bucket-20260601T181429Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I02-W16",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I02-W16",
+      "updated_at": "2026-06-01T18:14:29.862392Z"
+    },
     "P29-I02-W18": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I02-W18-bucket-20260601T174841Z",
@@ -9058,7 +9083,8 @@
         "P29-I02-W26",
         "P29-I02-W27",
         "P29-I02-W28",
-        "P29-I02-W25"
+        "P29-I02-W25",
+        "P29-I02-W29"
       ]
     },
     "P29-I03": {
@@ -9874,7 +9900,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T18:13:47.846341Z",
+  "updated_at": "2026-06-01T18:44:51.367201Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29395,9 +29421,9 @@
         "P29-I04-W11",
         "P29-I04-W12"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T18:44:51.366835Z",
+      "commit": "459b6891fc9693bcd0357733583efc87f8b3beec",
       "deps": [
         "P29-I02-W14",
         "P29-I02-W15"
@@ -29412,10 +29438,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.260257Z",
-      "outcome": null,
+      "outcome": "Textual native MODES chassis on a ModeSpec registry seam (modes/registry.py): 6 modes (home real/scope-bearing + trust/doctor/evidence/feed/config placeholders), digit 1-6 switch + /<mode> palette verbs + Ea brand outside-left of a mode-led breadcrumb; scope kept orthogonal to mode; W15 zoom guard extended to all mode stacks (switch_mode suspend no longer tears down zoom). One-line pane registration recipe documented. 553 tests + 19 new chassis tests green, mypy clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Textual MODES chassis adopted; digit-key mode switch + command-palette verbs; arrows primary per keymap conventions",
         "brand 'Ea' outside-left of the scope breadcrumb"
@@ -29616,7 +29642,9 @@
     },
     "P29-I02-W23": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P29-I02-W29"
+      ],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -29799,6 +29827,48 @@
         "ConfigModal coverage expanded (curated) for the new preferences.* + research.* keys"
       ],
       "title": "Add expand-curated ConfigModal coverage for new keys",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W23"
+      ],
+      "description": "opened_at is stamped at plan_wave (creation) but three consumers read it as work-start: the TUI roadmap time-burn gauge and the daemon wave_elapsed_update event both anchor on opened_at (wrong); only the stale detector reads the wave_claimed event (right). In plan-all-then-execute creation precedes claim by hours so the two wrong consumers inflate ~60x. Add a typed claimed_at work-start fact stamped at claim and repoint all consumers to it.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/migrations/**",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/daemon/stale_wave.py",
+        "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
+        "tests/**"
+      ],
+      "id": "P29-I02-W29",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T18:26:42.440130Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Wave gains claimed_at typed field stamped in claim_wave",
+        "schema_version bumped with migration backfilling claimed_at from wave_claimed event anchors",
+        "roadmap_tree _wave_time_burn_bar anchors on claimed_at and renders no time bar when None",
+        "daemon _publish_wave_elapsed_updates anchors on claimed_at not opened_at",
+        "stale_wave detector prefers Wave.claimed_at with event-anchor fallback for pre-migration rows",
+        "boundary and error tests cover claim stamping migration backfill and None-anchor empty-state"
+      ],
+      "title": "Anchor wave elapsed clocks on claimed_at not opened_at",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
