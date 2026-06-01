@@ -32,6 +32,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
+from eawf.workflow.estimation.thresholds import OK_BAND_CEILING, OVER_BUDGET_CEILING
 
 #: Bar render mode: ``"braille"`` uses the Braille-Patterns dot-matrix
 #: fill (2x horizontal sub-resolution per cell); ``"ascii"`` is the
@@ -82,11 +83,15 @@ BRAILLE_RIGHT_COL: int = 0xB8
 BRAILLE_SUBCOLS: int = 2
 
 #: Consumed-fraction upper bound (inclusive) for the ``ok`` colour band.
-OK_THRESHOLD: float = 0.80
+#: Aliases the canonical :data:`~eawf.workflow.estimation.thresholds.OK_BAND_CEILING`
+#: so the gauge band and the daemon stale-wave advisory read one constant
+#: -- the gauge hue and the over-budget modal can never drift apart.
+OK_THRESHOLD: float = OK_BAND_CEILING
 
 #: Consumed-fraction upper bound (inclusive) for the ``warn`` colour band;
-#: anything above is ``err`` (over budget).
-WARN_THRESHOLD: float = 1.00
+#: anything above is ``err`` (over budget). Aliases the canonical
+#: :data:`~eawf.workflow.estimation.thresholds.OVER_BUDGET_CEILING`.
+WARN_THRESHOLD: float = OVER_BUDGET_CEILING
 
 #: Rendered when a bar has no data to show (e.g. an unpopulated EU / token
 #: row, a zero-total ratio, or an unknown effort bucket). Surfacing the

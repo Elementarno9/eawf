@@ -43,7 +43,7 @@ from eawf.runtime.daemon.server import process_frame_bytes, serve_unix
 from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS, run_sweep_loop
 from eawf.runtime.daemon.singleton import DaemonAlreadyRunningError, acquire_daemon_singleton
 from eawf.runtime.daemon.stale_wave import (
-    DEFAULT_STALE_WINDOW_SECONDS,
+    DEFAULT_ABSOLUTE_BACKSTOP_SECONDS,
 )
 from eawf.runtime.daemon.stale_wave import (
     run_sweep_loop as run_stale_wave_loop,
@@ -104,23 +104,26 @@ def _resolve_session_ttl_seconds() -> int:
 
 
 def _resolve_stale_wave_seconds() -> int:
-    """Return the stale-wave threshold in seconds.
+    """Return the over-budget absolute-backstop window in seconds.
 
+    The size-relative 0.8x / 1.0x bands are derived per wave from its
+    pessimistic budget; this resolver only tunes the generous absolute
+    backstop that catches an abandoned wave with no projectable budget.
     The env var ``EAWF_DAEMON_STALE_WAVE_SECONDS`` exists for tests and
     operator tuning while the layered-config daemon reader is still
-    landing. Invalid values fall back to the 15-minute default.
+    landing. Invalid values fall back to the default backstop window.
     """
     raw = os.environ.get("EAWF_DAEMON_STALE_WAVE_SECONDS")
     if not raw:
-        return DEFAULT_STALE_WINDOW_SECONDS
+        return DEFAULT_ABSOLUTE_BACKSTOP_SECONDS
     try:
         value = int(raw)
     except ValueError:
         logger.warning(f"_resolve_stale_wave_seconds unparseable raw={raw!r}; using default")
-        return DEFAULT_STALE_WINDOW_SECONDS
+        return DEFAULT_ABSOLUTE_BACKSTOP_SECONDS
     if value <= 0:
         logger.warning(f"_resolve_stale_wave_seconds non-positive raw={raw!r}; using default")
-        return DEFAULT_STALE_WINDOW_SECONDS
+        return DEFAULT_ABSOLUTE_BACKSTOP_SECONDS
     return value
 
 
@@ -191,7 +194,7 @@ def _schedule_stale_wave_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
     """Schedule the stale-wave detector loop on the running loop."""
     if ctx.state_path is None:
         return None
-    stale_window_seconds = _resolve_stale_wave_seconds()
+    absolute_backstop_seconds = _resolve_stale_wave_seconds()
 
     def _publish(envelope: Envelope) -> None:
         if ctx.bus is not None and hasattr(ctx.bus, "publish"):
@@ -203,7 +206,7 @@ def _schedule_stale_wave_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
         run_stale_wave_loop(
             state_path=ctx.state_path,
             event_path=Path(ctx.event_path) if ctx.event_path is not None else None,
-            stale_window_seconds=stale_window_seconds,
+            absolute_backstop_seconds=absolute_backstop_seconds,
             publish=_publish,
             stop_event=ctx.shutdown_event,
         )

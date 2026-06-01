@@ -38,7 +38,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.session import reset_registry
 from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS
-from eawf.runtime.daemon.stale_wave import DEFAULT_STALE_WINDOW_SECONDS
+from eawf.runtime.daemon.stale_wave import DEFAULT_ABSOLUTE_BACKSTOP_SECONDS
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, write_pending
 
 pytestmark = pytest.mark.unit
@@ -154,8 +154,13 @@ def _build_state_with_expired_session(*, wave_id: str) -> dict[str, object]:
 
 
 def _build_state_with_stale_wave(*, wave_id: str) -> dict[str, object]:
-    """Build a minimal state payload with one active stale wave."""
-    opened = _now() - timedelta(seconds=DEFAULT_STALE_WINDOW_SECONDS + 10)
+    """Build a minimal state payload with one over-budget active wave.
+
+    The wave is an XS bucket (a ~7.5-minute pessimistic budget) claimed
+    well past the absolute backstop, so it reliably crosses the 1.0x
+    over-budget band regardless of the exact band boundary.
+    """
+    claimed = _now() - timedelta(seconds=DEFAULT_ABSOLUTE_BACKSTOP_SECONDS + 600)
     wave = Wave.model_validate(
         {
             "id": wave_id,
@@ -163,7 +168,9 @@ def _build_state_with_stale_wave(*, wave_id: str) -> dict[str, object]:
             "title": "stale-wave-test",
             "status": "claimed",
             "claim_session_id": "SES-test",
-            "opened_at": opened.isoformat(),
+            "effort_bucket": "XS",
+            "opened_at": claimed.isoformat(),
+            "claimed_at": claimed.isoformat(),
             "sessions": {},
         }
     )
