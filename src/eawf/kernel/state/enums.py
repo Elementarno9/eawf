@@ -396,9 +396,12 @@ class MemoryTier(StrEnum):
 
     - :attr:`WORKING` — hot tier; included in every render-context envelope.
     - :attr:`ARCHIVAL` — cold tier; excluded from the default context window
-      but kept queryable for explicit recall (``memory list --tier``).
-    - :attr:`RETRIEVAL` — promoted artifacts surfaced on demand (e.g. via
-      ``memory render-context --tier``).
+      but kept queryable via ``memory list`` / ``memory view``.
+    - :attr:`RETRIEVAL` — promoted artifacts surfaced on demand by
+      ``memory render-context``.
+
+    Placement is changed with the ``memory tier`` verb (``--tier``); the
+    read verbs do not filter by tier.
     """
 
     WORKING = "working"

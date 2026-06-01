@@ -20,6 +20,15 @@ If a migration validator rejects the state (`2 VALIDATION_ERROR`), the
 violation list names the offending fields — fix them through the owning
 domain verb, never by hand-editing `state.json`.
 
+### v0.5.0: `schema_version` 1.1 -> 1.2
+
+v0.5.0 bumped `state.json` `schema_version` from `1.1` to `1.2`. The 1.1 -> 1.2 step backfills the additive `Iter.trigger` field (an idempotent `setdefault("trigger", "none")` on each iter row) so the planned-vs-reactive metric classifies waves by intent instead of the `I##` id suffix. Backfilled historical iters carry `trigger="none"` and drop out of the reactive-share denominator. The step is a lossless round-trip and re-running it is a no-op. Migrate explicitly with:
+
+```text
+eawf migrate            # auto-detect from + to; run the chain
+eawf migrate status     # show current schema_version + chain
+```
+
 ## Exit-code surface (v0.3, BREAKING)
 
 The CLI exit-code surface compressed from the legacy 0..9 codes to 0..5.

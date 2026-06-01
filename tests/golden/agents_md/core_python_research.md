@@ -1,4 +1,4 @@
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.9 hash=2fd32d7a78c0da7f -->
+<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.10 hash=d432a006920ce839 -->
 ## Non-negotiable rules (core)
 
 The rules below apply to every eawf-managed project. Each rule with a
@@ -61,6 +61,7 @@ non-trivial body has an expansion block immediately following.
 28. **Rendered markdown is not manually line-wrapped.** See
     ``markdown-no-manual-wrap``.
 29. **Release process.** See ``release-process``.
+30. **Ship process.** See ``ship-process``.
 
 <!-- END EAWF:managed id=non-negotiable-rules -->
 <!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=7c8769d23177628b -->
@@ -681,6 +682,18 @@ synthesized from the phase PR body. Repos that opt out via
 ``cadence: manual`` skip the gate and the workflow.
 
 <!-- END EAWF:managed id=release-process -->
+<!-- BEGIN EAWF:managed id=ship-process version=1.0 hash=b49fd8ac72a1a6b2 -->
+### Ship process
+
+Ship is the phase's terminal pass, and it rides the phase-co-closing iter (the final iter of the phase) rather than a fresh iter. The ordered steps from green waves to a merged, tagged phase:
+
+1. **Open the phase PR.** One PR per phase, body per the ``pr-template`` (``## Summary`` + ``## Test plan`` + ``## Phase deliverables``). The PR head is the long-running ``feature/<symbol>-v<X.Y>`` branch with every worktree wave already cherry-picked in.
+2. **Pass CI gates.** Beyond the per-commit lint + test gauntlet, two gates fire only on the phase PR and so are easy to miss locally: the per-package **coverage gate** (CI parses ``coverage.xml`` against the ``[tool.eawf.coverage]`` thresholds) and the **snapshot-pairing gate** (``tools/snapshot_pairing_gate.py`` over the PR base..head range, which rejects a managed golden-surface mutation that lacks a wave-form ``test:`` subject). Run both locally before pushing the PR so they do not surface late.
+3. **Pass the review.** ``/ship`` runs the PR review pass. Address feedback by **appending waves to the same co-closing iter** via ``eawf roadmap revise --add-wave`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and lands the new waves PENDING). Do NOT open a second iter for routine review follow-ups -- see ``iter-phase-close-timing``.
+4. **Close + merge.** Once CI is green AND the review-passed branch is on the remote, the phase-close mutation rides the single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close (see ``iter-phase-close-timing``). Merge with rebase (never squash) so the per-wave ``[P<NN>-W<NN>]`` / ``[P<NN>-CORE]`` history survives; the merge ends the phase.
+5. **Tag the release.** Per the ``per_phase`` cadence the post-merge ``.github/workflows/phase-release.yaml`` reads the ``(release=v<X.Y.Z>)`` annotation off the phase-close commit, tags the merge commit, and publishes notes from the PR body -- see ``release-process`` for the pre-flight gate that ``eawf phase close`` enforces.
+
+<!-- END EAWF:managed id=ship-process -->
 <!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=4af66a5ed7687989 -->
 ### Agent report contract
 
