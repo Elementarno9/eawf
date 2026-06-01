@@ -1,0 +1,40 @@
+ Eä  Doctor ❯ repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
+
+  Health: degraded
+
+  OK   tools_available             3 probes ok
+  OK   state_present               state.json found
+  OK   config_resolves             2 profile(s) enabled
+  WARN manifest_in_sync            drift: AGENTS.md::core=hand-edited
+  WARN git_state_drift             2 drift(s); kinds: closed_no_pin, pinned_mismatch
+  OK   recent_events               12 recent event(s); 1 error(s) in window
+
+  drift:  2 wave(s)
+  kinds:  closed_no_pin, pinned_mismatch
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 1-6 mode  ·  w/r/u scope  ·  / palette  ·  ? help  ·  q quit
+ weekly burn: — no data                                                                                               •

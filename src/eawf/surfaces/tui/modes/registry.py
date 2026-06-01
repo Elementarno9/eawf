@@ -196,17 +196,39 @@ def _feed_screen() -> Screen[None]:
     return FeedModeScreen()
 
 
+def _doctor_factory(app: EaApp) -> Screen[None]:
+    """Build the Doctor-mode health screen (lazy import to avoid a cycle).
+
+    The Doctor pane imports :class:`~eawf.surfaces.tui.scopes.ScopeScreen`,
+    which pulls the scope-screen graph; importing it at module top would
+    cycle with ``app.py`` (which imports this registry early). Defer the
+    import into the factory body -- the same shape the placeholder factory
+    uses -- so the registry stays screen-free at import time.
+
+    Args:
+        app: The live app (forwarded to the pane factory, which ignores it
+            -- the Doctor view is scope-independent).
+
+    Returns:
+        A fresh :class:`~eawf.surfaces.tui.modes.doctor.DoctorModeScreen`.
+    """
+    from eawf.surfaces.tui.modes.doctor import doctor_mode_factory
+
+    return doctor_mode_factory(app)
+
+
 #: The default six-mode layout seeded on the chassis. Digit order is the
 #: switch order (``1``..``6``). ``home`` (the launch default,
 #: :data:`DEFAULT_MODE`) renders the resolved scope screen; ``trust`` renders
-#: the estimation trust scorecard; ``evidence`` renders the agent-report
-#: rollup (honest-empty until reports exist). The remaining modes ship as
-#: honest-empty placeholders that their per-pane waves replace via the
-#: one-line registration recipe (module docstring).
+#: the estimation trust scorecard; ``doctor`` folds the install / state /
+#: drift health view; ``evidence`` renders the agent-report rollup
+#: (honest-empty until reports exist); ``feed`` renders the live event feed.
+#: The remaining modes ship as honest-empty placeholders that their per-pane
+#: waves replace via the one-line registration recipe (module docstring).
 MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("home", "1", "Home", _home_screen),
     ModeSpec("trust", "2", "Trust", _trust_factory),
-    ModeSpec("doctor", "3", "Doctor", _placeholder_factory("Doctor")),
+    ModeSpec("doctor", "3", "Doctor", _doctor_factory),
     ModeSpec("evidence", "4", "Evidence", _evidence_factory),
     ModeSpec("feed", "5", "Feed", lambda _app: _feed_screen()),
     ModeSpec("config", "6", "Config", _placeholder_factory("Config")),

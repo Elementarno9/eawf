@@ -78,13 +78,17 @@ _EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
 
 @pytest.fixture(autouse=True)
 def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Point registry resolution at an empty ``tmp_path`` home.
+    """Isolate registry + probe-cache writes into ``tmp_path``.
 
     The ``u`` scope switch reads ``~/.eawf/registry.json``; redirecting
     ``Path.home`` keeps the switch deterministic and reads no real
-    registry.
+    registry. The Doctor mode (digit ``3``) runs the instrument probe on
+    mount, which writes a cache to ``<workspace>/.ea/instrument-probe.json``
+    -- the workspace resolves to the fixture tree, so redirect the cache
+    into ``tmp_path`` to keep a stray probe file out of ``tests/fixtures/``.
     """
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(tmp_path / "instrument-probe.json"))
 
 
 @pytest.fixture(autouse=True)
@@ -131,10 +135,10 @@ def test_build_modes_maps_each_name_to_a_zero_arg_factory() -> None:
     assert sorted(modes) == sorted(spec.name for spec in MODE_REGISTRY)
     # Home resolves to the cached scope-screen NAME (so switch_screen reuses
     # the same instance); trust builds its real pane; an unbuilt mode
-    # (doctor) still builds a PlaceholderModeScreen.
+    # (config) still builds a PlaceholderModeScreen.
     assert modes["home"]() == "repo"
     assert isinstance(modes["trust"](), TrustModeScreen)
-    assert isinstance(modes["doctor"](), PlaceholderModeScreen)
+    assert isinstance(modes["config"](), PlaceholderModeScreen)
 
 
 def test_build_modes_home_factory_tracks_resolved_scope() -> None:
@@ -331,7 +335,7 @@ def test_scope_survives_a_mode_round_trip() -> None:
             await settle_screen(pilot)
             home_screen = app.screen
             assert isinstance(home_screen, WorkspaceScreen)
-            await pilot.press("3")  # -> doctor (placeholder)
+            await pilot.press("3")  # -> doctor (a real pane, orthogonal to scope)
             await settle_screen(pilot)
             assert app.current_mode == "doctor"
             await pilot.press("1")  # back to Home
@@ -393,35 +397,38 @@ def test_placeholder_mode_renders_honest_empty_coming_soon() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("3")  # -> doctor (still a placeholder)
+            await pilot.press("6")  # -> config (still a placeholder)
             await settle_screen(pilot)
             assert isinstance(app.screen, PlaceholderModeScreen)
             frame = normalize_snapshot(capture_screen_text(app))
-            assert "Doctor - coming soon" in frame
+            assert "Config - coming soon" in frame
             # The placeholder keeps the shared chassis: brand + breadcrumb.
             assert BRAND in frame.splitlines()[0]
 
     asyncio.run(body())
 
 
-#: Modes whose real pane wave has landed -- excluded from the placeholder
-#: coming-soon loop. ``home`` is the scope-bearing mode; ``trust`` is the
-#: trust-scorecard pane; ``evidence`` is the agent-report rollup pane;
-#: ``feed`` is the live event-feed pane. The remaining modes still ship as
-#: placeholders until their per-pane waves replace the registry factory.
-_REAL_PANE_MODES: frozenset[str] = frozenset({"home", "trust", "evidence", "feed"})
-
-
 def test_every_placeholder_mode_boots_and_titles_itself() -> None:
-    """Every still-unbuilt mode renders its own coming-soon title."""
+    """Each still-unbuilt placeholder mode renders its own coming-soon title.
+
+    Drives only the modes whose factory still produces a
+    :class:`PlaceholderModeScreen`, derived from the registry so a pane
+    wave that fills a mode (Home, Doctor, ...) drops out of the set
+    automatically rather than failing this assertion.
+    """
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            for spec in MODE_REGISTRY:
-                if spec.name in _REAL_PANE_MODES:
-                    continue  # real pane modes are not placeholders
+            placeholder_specs = [
+                spec
+                for spec in MODE_REGISTRY
+                if isinstance(spec.factory(app), PlaceholderModeScreen)
+            ]
+            # At least one mode is still an unbuilt placeholder this band.
+            assert placeholder_specs
+            for spec in placeholder_specs:
                 await pilot.press(spec.digit)
                 await settle_screen(pilot)
                 assert isinstance(app.screen, PlaceholderModeScreen)

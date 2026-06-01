@@ -48,6 +48,7 @@ from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.modes.doctor import DoctorHealth, DoctorModeScreen, HealthRow
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.screens.overlays.detail import DetailModal, resolve_detail
@@ -85,6 +86,11 @@ def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_tc, "TEXTUAL_ANIMATIONS", "none")
     monkeypatch.setattr("eawf.surfaces.tui.widgets.git_pane._git_run", lambda *a, **k: None)
     monkeypatch.chdir(tmp_path)
+    # The Doctor-mode mount runs the instrument probe, which writes a cache
+    # to ``<workspace>/.ea/instrument-probe.json`` -- the workspace resolves
+    # to the fixture tree, so redirect the cache into tmp_path to keep a
+    # stray probe file out of ``tests/fixtures/``.
+    monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(tmp_path / "instrument-probe.json"))
 
 
 #: Fixed terminal geometry for every snapshot — wide enough for the 2x2
@@ -665,5 +671,50 @@ def test_events_overlay_snapshot() -> None:
             app.push_modal(EventsModal(rows))
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "events_overlay.txt")
+
+    asyncio.run(body())
+
+
+def test_doctor_mode_snapshot() -> None:
+    """The Doctor-mode health pane: mixed check statuses + a DRIFT block.
+
+    The mode's live mount gathers env-dependent doctor checks (probe
+    results, config merge, manifest sync), so to keep the golden
+    deterministic + scrub-safe the screen is painted with a **fixed**
+    :class:`DoctorHealth` -- the same fixed-input stance the events golden
+    uses. The fixture covers the mixed-status render (OK / WARN / FAIL
+    glyphs), the rolled-up degraded title, and the DRIFT count + kinds
+    block so a layout regression on any of those is caught.
+    """
+
+    health = DoctorHealth(
+        rows=[
+            HealthRow("tools_available", "ok", "3 probes ok"),
+            HealthRow("state_present", "ok", "state.json found"),
+            HealthRow("config_resolves", "ok", "2 profile(s) enabled"),
+            HealthRow("manifest_in_sync", "warn", "drift: AGENTS.md::core=hand-edited"),
+            HealthRow(
+                "git_state_drift", "warn", "2 drift(s); kinds: closed_no_pin, pinned_mismatch"
+            ),
+            HealthRow("recent_events", "ok", "12 recent event(s); 1 error(s) in window"),
+        ],
+        overall="warn",
+        drift_count=2,
+        drift_kinds=["closed_no_pin", "pinned_mismatch"],
+        event_error_count=1,
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")  # -> doctor
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, DoctorModeScreen)
+            # Repaint with the fixed health so the golden is deterministic.
+            screen._paint_health(health)  # type: ignore[attr-defined]
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "doctor_mode.txt")
 
     asyncio.run(body())
