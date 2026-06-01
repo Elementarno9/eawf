@@ -1,0 +1,11 @@
+{
+  "case_id": "graded-consensus-pass",
+  "description": "High graded scores, tight spread -> mean clears the pass threshold.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "graded", "score": 0.9},
+    {"juror_id": "juror-b", "acceptance_style": "graded", "score": 0.85},
+    {"juror_id": "juror-c", "acceptance_style": "graded", "score": 0.8}
+  ],
+  "expected_outcome": "pass",
+  "expected_veto_count": 0
+}

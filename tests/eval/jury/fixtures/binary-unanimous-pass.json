@@ -1,0 +1,11 @@
+{
+  "case_id": "binary-unanimous-pass",
+  "description": "Three binary jurors all pass; no veto -> aggregate pass.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "pass"},
+    {"juror_id": "juror-b", "acceptance_style": "binary", "verdict": "pass"},
+    {"juror_id": "juror-c", "acceptance_style": "binary", "verdict": "pass"}
+  ],
+  "expected_outcome": "pass",
+  "expected_veto_count": 0
+}

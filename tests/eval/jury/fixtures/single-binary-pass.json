@@ -1,0 +1,9 @@
+{
+  "case_id": "single-binary-pass",
+  "description": "A jury of one binary pass ballot resolves to pass (boundary: single ballot).",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "pass"}
+  ],
+  "expected_outcome": "pass",
+  "expected_veto_count": 0
+}

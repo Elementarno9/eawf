@@ -14,6 +14,15 @@ check parameterised over the same six skill cases.
 
 from __future__ import annotations
 
+from eawf.observability.eval.jury import (
+    CONSENSUS_SPREAD,
+    FAIL_SCORE_THRESHOLD,
+    PASS_SCORE_THRESHOLD,
+    JurorBallot,
+    JuryAggregate,
+    JuryAggregateOutcome,
+    aggregate_jury,
+)
 from eawf.observability.eval.models import EvalScore
 from eawf.observability.eval.rule_adherence import (
     RULE_IDS,
@@ -29,11 +38,18 @@ from eawf.observability.eval.score import (
 )
 
 __all__ = [
+    "CONSENSUS_SPREAD",
+    "FAIL_SCORE_THRESHOLD",
+    "PASS_SCORE_THRESHOLD",
     "RULE_IDS",
     "EvalScore",
+    "JurorBallot",
+    "JuryAggregate",
+    "JuryAggregateOutcome",
     "RecordedWaveCase",
     "RuleAdherenceBaseline",
     "RuleAdherenceReport",
+    "aggregate_jury",
     "load_recorded_wave_cases",
     "score_envelope",
     "score_recorded_wave_corpus",

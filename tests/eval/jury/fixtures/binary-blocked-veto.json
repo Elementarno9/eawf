@@ -1,0 +1,10 @@
+{
+  "case_id": "binary-blocked-veto",
+  "description": "A single blocked ballot is a veto; the aggregate fails.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "pass"},
+    {"juror_id": "juror-b", "acceptance_style": "binary", "verdict": "blocked"}
+  ],
+  "expected_outcome": "fail",
+  "expected_veto_count": 1
+}

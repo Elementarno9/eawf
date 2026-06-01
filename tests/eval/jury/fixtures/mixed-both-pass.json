@@ -1,0 +1,11 @@
+{
+  "case_id": "mixed-both-pass",
+  "description": "Mixed binary+graded ballots; binary side is a clean pass and the graded mean clears, so the aggregate passes.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "pass"},
+    {"juror_id": "juror-b", "acceptance_style": "graded", "score": 0.9},
+    {"juror_id": "juror-c", "acceptance_style": "graded", "score": 0.85}
+  ],
+  "expected_outcome": "pass",
+  "expected_veto_count": 0
+}

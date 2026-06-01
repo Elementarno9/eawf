@@ -1,0 +1,11 @@
+{
+  "case_id": "graded-consensus-fail",
+  "description": "Low graded scores, tight spread -> mean at or below the fail threshold.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "graded", "score": 0.3},
+    {"juror_id": "juror-b", "acceptance_style": "graded", "score": 0.35},
+    {"juror_id": "juror-c", "acceptance_style": "graded", "score": 0.25}
+  ],
+  "expected_outcome": "fail",
+  "expected_veto_count": 0
+}

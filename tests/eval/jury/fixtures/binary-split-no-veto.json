@@ -1,0 +1,10 @@
+{
+  "case_id": "binary-split-no-veto",
+  "description": "Split between pass and pass-with-followups; no hard veto and no clean consensus -> needs_user.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "pass"},
+    {"juror_id": "juror-b", "acceptance_style": "binary", "verdict": "pass-with-followups"}
+  ],
+  "expected_outcome": "needs_user",
+  "expected_veto_count": 0
+}

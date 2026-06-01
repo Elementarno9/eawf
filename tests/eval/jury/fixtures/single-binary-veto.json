@@ -1,0 +1,9 @@
+{
+  "case_id": "single-binary-veto",
+  "description": "A jury of one veto ballot fails (boundary: single ballot, the veto is also the whole jury).",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "fail"}
+  ],
+  "expected_outcome": "fail",
+  "expected_veto_count": 1
+}

@@ -1,0 +1,11 @@
+{
+  "case_id": "graded-midband-split",
+  "description": "Graded mean lands in the indeterminate band with a tight spread -> no consensus -> needs_user.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "graded", "score": 0.55},
+    {"juror_id": "juror-b", "acceptance_style": "graded", "score": 0.6},
+    {"juror_id": "juror-c", "acceptance_style": "graded", "score": 0.5}
+  ],
+  "expected_outcome": "needs_user",
+  "expected_veto_count": 0
+}

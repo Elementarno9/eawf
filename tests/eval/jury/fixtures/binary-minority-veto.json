@@ -1,0 +1,11 @@
+{
+  "case_id": "binary-minority-veto",
+  "description": "Two jurors pass, one fails; minority-veto sinks the vote to fail.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "pass"},
+    {"juror_id": "juror-b", "acceptance_style": "binary", "verdict": "pass"},
+    {"juror_id": "juror-c", "acceptance_style": "binary", "verdict": "fail"}
+  ],
+  "expected_outcome": "fail",
+  "expected_veto_count": 1
+}

@@ -1,0 +1,11 @@
+{
+  "case_id": "graded-high-variance",
+  "description": "Mean would clear, but the spread exceeds the consensus bound -> high variance signals no consensus -> needs_user.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "graded", "score": 1.0},
+    {"juror_id": "juror-b", "acceptance_style": "graded", "score": 0.95},
+    {"juror_id": "juror-c", "acceptance_style": "graded", "score": 0.3}
+  ],
+  "expected_outcome": "needs_user",
+  "expected_veto_count": 0
+}

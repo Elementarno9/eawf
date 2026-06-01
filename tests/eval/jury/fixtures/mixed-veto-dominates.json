@@ -1,0 +1,11 @@
+{
+  "case_id": "mixed-veto-dominates",
+  "description": "Mixed binary+graded ballots; a binary veto sinks the aggregate even though the graded mean is high.",
+  "ballots": [
+    {"juror_id": "juror-a", "acceptance_style": "binary", "verdict": "fail"},
+    {"juror_id": "juror-b", "acceptance_style": "graded", "score": 0.95},
+    {"juror_id": "juror-c", "acceptance_style": "graded", "score": 0.9}
+  ],
+  "expected_outcome": "fail",
+  "expected_veto_count": 1
+}
