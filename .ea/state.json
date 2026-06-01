@@ -1295,6 +1295,18 @@
       "scope_id": "P29-I01-W29",
       "status": "done",
       "updated_at": "2026-06-01T09:05:13.217412Z"
+    },
+    "P29-I02-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W01",
+      "scope_id": "P29-I02-W01",
+      "status": "done",
+      "updated_at": "2026-06-01T14:50:59.771779Z"
     }
   },
   "agent_sessions": {
@@ -7501,6 +7513,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I01-W29",
       "updated_at": "2026-06-01T08:55:15.417949Z"
+    },
+    "P29-I02-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W01-bucket-20260601T143541Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W01",
+      "updated_at": "2026-06-01T14:35:41.955656Z"
     }
   },
   "goals": {
@@ -9444,7 +9469,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T14:32:19.474870Z",
+  "updated_at": "2026-06-01T14:50:59.772239Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28504,9 +28529,9 @@
     "P29-I02-W01": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T14:50:59.771779Z",
+      "commit": "90612d01b1b3e706d454d65de5ed663a10260942",
       "deps": [],
       "description": "[CLI-1 | scope 7-topic#4 | SF] fixes the revise --add-wave I01-hardcode landmine that forced this propose through --from-plan.",
       "dispatch_history": [],
@@ -28518,10 +28543,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.251512Z",
-      "outcome": null,
+      "outcome": "roadmap revise --iter un-hardcodes I01; edit_phase_plan lifecycle fn + CLI retitle-phase path; wave release verb (CLI over existing release_wave infra); 140 tests green, pre-commit + mypy clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "roadmap revise accepts --iter so add-wave is no longer hardcoded to I01; edit_phase_plan + a wave release verb added"
       ],
