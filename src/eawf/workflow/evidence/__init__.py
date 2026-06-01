@@ -14,5 +14,19 @@ truth for verdict-bearing rules and is invoked at write time via
 from __future__ import annotations
 
 from eawf.workflow.evidence.guards import require_complete_audit
+from eawf.workflow.evidence.resolve import (
+    DeferredAspect,
+    ResolveCheck,
+    ResolveResult,
+    ResolveStatus,
+    resolve,
+)
 
-__all__ = ["require_complete_audit"]
+__all__ = [
+    "DeferredAspect",
+    "ResolveCheck",
+    "ResolveResult",
+    "ResolveStatus",
+    "require_complete_audit",
+    "resolve",
+]
