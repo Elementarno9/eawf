@@ -1259,6 +1259,18 @@
       "scope_id": "P29-I01-W26",
       "status": "done",
       "updated_at": "2026-06-01T07:30:05.819443Z"
+    },
+    "P29-I01-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W27",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W27",
+      "scope_id": "P29-I01-W27",
+      "status": "done",
+      "updated_at": "2026-06-01T08:05:01.806532Z"
     }
   },
   "agent_sessions": {
@@ -3581,9 +3593,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P29-I01-W27"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P29-I01",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -9351,7 +9361,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T07:42:29.360249Z",
+  "updated_at": "2026-06-01T08:05:03.125485Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28311,8 +28321,8 @@
         "P29-I01-W28"
       ],
       "claim_session_id": "flow-p29-i01",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-01T08:05:01.806532Z",
+      "commit": "c1afd4fa28a04165235f4bf6f980b79761285bbb",
       "deps": [
         "P29-I01-W11",
         "P29-I01-W14"
@@ -28328,10 +28338,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T07:41:25.835356Z",
-      "outcome": null,
+      "outcome": "re-point /research depth (runner+body+blitz) to ResearchDepth = W11 drift resolved; mount ProfileBody.research=ResearchProfileBlock + compose merge = W14 wired; tests updated; autogen drift pre-existing (W28 reconciles)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "workflow/skills runner+body use ResearchDepth so W11 depth 3-way drift is fully resolved",
         "ProfileBody mounts ResearchProfileBlock so W14 per-domain research config is wired"
@@ -33684,10 +33694,10 @@
       "branch": "feature/eawf-v0.1-p29-w27",
       "created_at": "2026-06-01T07:42:29.360249Z",
       "id": "WT-P29-I01-W27-1780299749",
-      "merged_commit": null,
+      "merged_commit": "c1afd4f",
       "owner_session_id": "flow-p29-i01",
       "path": ".ea/worktrees/p29-w27",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P29-I01-W27"
     }
   }
