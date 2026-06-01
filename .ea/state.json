@@ -1343,6 +1343,18 @@
       "scope_id": "P29-I02-W04",
       "status": "done",
       "updated_at": "2026-06-01T15:31:58.546459Z"
+    },
+    "P29-I02-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W05",
+      "scope_id": "P29-I02-W05",
+      "status": "done",
+      "updated_at": "2026-06-01T15:47:36.058983Z"
     }
   },
   "agent_sessions": {
@@ -7601,6 +7613,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I02-W04",
       "updated_at": "2026-06-01T15:21:33.877107Z"
+    },
+    "P29-I02-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W05-bucket-20260601T153248Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W05",
+      "updated_at": "2026-06-01T15:32:48.402474Z"
     }
   },
   "goals": {
@@ -9574,7 +9599,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T15:31:58.546764Z",
+  "updated_at": "2026-06-01T15:47:36.059371Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28750,9 +28775,9 @@
     "P29-I02-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T15:47:36.058983Z",
+      "commit": "8a82f2adaaa1e757630e5f47bba29c6c6dfa43f8",
       "deps": [],
       "description": "[CLI-5 | scope T8 | spike(join)] retro digest over the wave<->report join.",
       "dispatch_history": [],
@@ -28764,10 +28789,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.252748Z",
-      "outcome": null,
+      "outcome": "eawf phase retro closure digest (library join in rollup.py wave_id==base_id, CLI dispatch-only, --json/--md, honest-empty no-reports verified on live P29); memory skill next_valid_actions hints corrected to real CLI flag shapes + drift test; spike confirmed join key + failed-wave detection (status FAILED union verdict fail/blocked); 167 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "memory SKILL/CLI surfaces reconciled; eawf phase retro emits a closure digest joining waves to reports",
         "pre-claim spike confirms the wave_id <-> report base_id join key and failed-wave detection"
