@@ -59,6 +59,7 @@ from eawf.surfaces.cli.scope import resolve_state_path
 if TYPE_CHECKING:
     from eawf.surfaces.render.envelope import EnvelopeStatus, OutputEnvelope, SkillName
     from eawf.surfaces.render.skills import SkillSpec
+    from eawf.workflow.skills.discovery import SkillFlags, SkillReconcileReport
     from eawf.workflow.skills.engine import Skill, SkillContext
 
 logger = logging.getLogger(__name__)
@@ -755,8 +756,124 @@ def run_cmd(
         raise typer.Exit(code)
 
 
+def _default_skills_root(workspace: Path | None) -> Path:
+    """Return the default rendered skill-tree root for ``skill reconcile``.
+
+    Anchors at the explicit ``--workspace`` root when set, else the
+    process working tree, and appends the Claude plugin skill subpath
+    (``.claude/skills``) where ``eawf plugin install claude`` renders one
+    ``<name>/SKILL.md`` per registry skill.
+    """
+    base = workspace if workspace is not None else Path.cwd()
+    return base / ".claude" / "skills"
+
+
+def _reconcile_payload(report: SkillReconcileReport) -> dict[str, Any]:
+    """Build the JSON shape for ``skill reconcile --json``."""
+    return {
+        "skills_root": str(report.skills_root),
+        "has_drift": report.has_drift,
+        "missing_on_disk": list(report.missing_on_disk),
+        "extra_on_disk": list(report.extra_on_disk),
+        "flag_mismatches": [
+            {
+                "name": m.name,
+                "registry": {
+                    "user_invocable": m.registry_flags.user_invocable,
+                    "disable_model_invocation": m.registry_flags.disable_model_invocation,
+                },
+                "disk": {
+                    "user_invocable": m.disk_flags.user_invocable,
+                    "disable_model_invocation": m.disk_flags.disable_model_invocation,
+                },
+            }
+            for m in report.flag_mismatches
+        ],
+    }
+
+
+def _fmt_flags(flags: SkillFlags) -> str:
+    """Render one flag pair as ``user_invocable=..,disable_model_invocation=..``."""
+    return (
+        f"user_invocable={flags.user_invocable},"
+        f"disable_model_invocation={flags.disable_model_invocation}"
+    )
+
+
+def _reconcile_text(report: SkillReconcileReport) -> str:
+    """Render the human-readable ``skill reconcile`` report."""
+    lines = [f"# skill reconcile (root={report.skills_root})"]
+    if not report.has_drift:
+        lines.append("  no drift: registry and disk tree agree.")
+        return "\n".join(lines)
+    if report.missing_on_disk:
+        lines.append("  missing on disk (in registry, no SKILL.md):")
+        lines.extend(f"    - /{name}" for name in report.missing_on_disk)
+    if report.extra_on_disk:
+        lines.append("  extra on disk (SKILL.md, not in registry):")
+        lines.extend(f"    - /{name}" for name in report.extra_on_disk)
+    if report.flag_mismatches:
+        lines.append("  flag mismatches (registry != disk):")
+        for m in report.flag_mismatches:
+            reg = _fmt_flags(m.registry_flags)
+            disk = _fmt_flags(m.disk_flags)
+            lines.append(f"    - /{m.name}: registry[{reg}] disk[{disk}]")
+    return "\n".join(lines)
+
+
+@skill_app.command(name="reconcile")
+def reconcile_cmd(
+    ctx: typer.Context,
+    skills_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--skills-root",
+            help=(
+                "Rendered skill-tree root to reconcile against the registry; "
+                "defaults to '<workspace>/.claude/skills'."
+            ),
+        ),
+    ] = None,
+    check: Annotated[
+        bool,
+        typer.Option(
+            "--check",
+            help="Exit non-zero (VALIDATION_ERROR) when any drift is found.",
+        ),
+    ] = False,
+) -> None:
+    """Reconcile the built-in skill registry against the disk skill tree.
+
+    Report-only: the registry is the frozen source of truth, so this
+    surfaces drift (skills on disk missing from the registry, registry
+    skills missing on disk, and frontmatter flag mismatches) without
+    rewriting either side. Re-run ``eawf plugin install`` / ``eawf plugin
+    sync`` to repair a drifted rendered tree.
+
+    With ``--check`` the command exits ``VALIDATION_ERROR`` (2) when any
+    drift is present so CI can gate on a clean registry-vs-disk diff.
+    """
+    from eawf.workflow.skills.discovery import reconcile_skills
+
+    flags: GlobalFlags = ctx.obj
+    root = skills_root if skills_root is not None else _default_skills_root(flags.workspace)
+    report = reconcile_skills(root)
+
+    if flags.json_output:
+        raw = orjson.dumps(
+            _reconcile_payload(report), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS
+        )
+        typer.echo(raw.decode("utf-8"))
+    else:
+        typer.echo(_reconcile_text(report))
+
+    if check and report.has_drift:
+        raise typer.Exit(exit_codes.VALIDATION_ERROR)
+
+
 __all__ = [
     "list_cmd",
+    "reconcile_cmd",
     "render_cmd",
     "resume_cmd",
     "run_cmd",

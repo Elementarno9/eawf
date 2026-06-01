@@ -33,6 +33,19 @@ Public API:
     parse_user_skill(path)           -> DiscoveredSkill
     user_skills_dir()                -> Path
     workspace_skills_dir(workspace)  -> Path
+    reconcile_skills(skills_root)    -> SkillReconcileReport
+
+The reconcile path compares the frozen built-in
+:data:`~eawf.surfaces.render.skills.SKILL_REGISTRY` against the rendered
+plugin skill tree on disk (``<root>/<name>/SKILL.md``). It reports three
+drift classes: skills in the registry with no SKILL.md on disk
+(``missing_on_disk``), SKILL.md dirs on disk with no registry row
+(``extra_on_disk``), and on-disk frontmatter flags that disagree with
+the registry (``flag_mismatches``). The rendered tree uses hyphenated
+frontmatter keys (``user-invocable`` / ``disable-model-invocation``),
+distinct from the underscore frontmatter the user/workspace overlay
+catalogue uses, so the reconcile parser reads the hyphenated keys
+directly rather than reusing :func:`parse_user_skill`.
 """
 
 from __future__ import annotations
@@ -224,11 +237,190 @@ def discover_skills(
     return rows
 
 
+# ---------------------------------------------------------------------------
+# Registry-vs-disk reconcile. Compares the frozen built-in registry against
+# the rendered plugin skill tree (``<root>/<name>/SKILL.md``) so an operator
+# can spot a plugin tree that drifted from the canonical skill set after an
+# out-of-band edit or a stale ``plugin install``.
+# ---------------------------------------------------------------------------
+
+
+_RENDERED_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
+_RENDERED_FLAG_RE = re.compile(r"^(user-invocable|disable-model-invocation):\s*(\S+)\s*$")
+
+
+@dataclass(frozen=True)
+class SkillFlags:
+    """The two invocation flags carried in a SKILL.md frontmatter block."""
+
+    user_invocable: bool
+    disable_model_invocation: bool
+
+
+@dataclass(frozen=True)
+class SkillFlagMismatch:
+    """One skill whose on-disk flags disagree with the registry."""
+
+    name: str
+    registry_flags: SkillFlags
+    disk_flags: SkillFlags
+
+
+@dataclass(frozen=True)
+class SkillReconcileReport:
+    """Drift report comparing the built-in registry against the disk tree.
+
+    Attributes:
+        skills_root: The rendered-skill-tree root the report scanned.
+        missing_on_disk: Bare registry skill names with no SKILL.md on
+            disk under *skills_root*, sorted.
+        extra_on_disk: Bare skill names present on disk under
+            *skills_root* with no matching registry row, sorted.
+        flag_mismatches: Per-skill flag disagreements (registry vs disk),
+            sorted by name.
+    """
+
+    skills_root: Path
+    missing_on_disk: tuple[str, ...]
+    extra_on_disk: tuple[str, ...]
+    flag_mismatches: tuple[SkillFlagMismatch, ...]
+
+    @property
+    def has_drift(self) -> bool:
+        """Return whether any drift class is non-empty."""
+        return bool(self.missing_on_disk or self.extra_on_disk or self.flag_mismatches)
+
+
+def _coerce_flag(path: Path, key: str, raw: str) -> bool:
+    """Coerce a rendered ``true``/``false`` flag token into a bool.
+
+    Raises:
+        SkillFrontmatterError: When *raw* is not the lowercase ``true`` or
+            ``false`` the renderer emits.
+    """
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    raise SkillFrontmatterError(f"{path}: {key!r} must be 'true' or 'false', got {raw!r}")
+
+
+def _parse_rendered_flags(path: Path) -> SkillFlags:
+    """Read the two invocation flags from a rendered SKILL.md frontmatter.
+
+    The rendered plugin tree uses hyphenated keys (``user-invocable`` /
+    ``disable-model-invocation``) rendered as plain ``key: true|false``
+    lines. The block is line-scanned rather than YAML-parsed because the
+    sibling ``description`` value renders unquoted and may carry an
+    embedded ``": "`` that a YAML mapping load would misread. Absent flag
+    lines fall back to the registry defaults (``user_invocable=True`` /
+    ``disable_model_invocation=False``).
+
+    Raises:
+        SkillFrontmatterError: When *path* has no ``---`` frontmatter
+            block, or a flag line holds a non-boolean token.
+    """
+    text = path.read_text(encoding="utf-8")
+    match = _RENDERED_FRONTMATTER_RE.match(text)
+    if match is None:
+        raise SkillFrontmatterError(
+            f"{path}: missing or malformed frontmatter block (expected '---' delimiters)"
+        )
+    user_invocable = True
+    disable_model_invocation = False
+    for line in match.group(1).splitlines():
+        flag_match = _RENDERED_FLAG_RE.match(line.strip())
+        if flag_match is None:
+            continue
+        key, raw = flag_match.group(1), flag_match.group(2)
+        value = _coerce_flag(path, key, raw)
+        if key == "user-invocable":
+            user_invocable = value
+        else:
+            disable_model_invocation = value
+    return SkillFlags(
+        user_invocable=user_invocable,
+        disable_model_invocation=disable_model_invocation,
+    )
+
+
+def reconcile_skills(skills_root: Path | str) -> SkillReconcileReport:
+    """Diff the built-in skill registry against a rendered skill tree.
+
+    Walks ``<skills_root>/<name>/SKILL.md`` and compares the discovered
+    names + frontmatter flags against
+    :data:`~eawf.surfaces.render.skills.SKILL_REGISTRY` (the frozen,
+    canonical skill set). The registry is the source of truth; disk
+    entries that disagree are reported as drift rather than silently
+    reconciled.
+
+    Args:
+        skills_root: Root of the rendered plugin skill tree (e.g.
+            ``<workspace>/.claude/skills``). A non-existent root yields a
+            report whose every registry skill is ``missing_on_disk`` and
+            whose other drift classes are empty.
+
+    Returns:
+        A :class:`SkillReconcileReport`. ``report.has_drift`` is ``False``
+        iff the tree exactly mirrors the registry (same names, same flags).
+    """
+    root = Path(skills_root)
+    registry_flags: dict[str, SkillFlags] = {
+        spec.skill_name: SkillFlags(
+            user_invocable=spec.user_invocable,
+            disable_model_invocation=spec.disable_model_invocation,
+        )
+        for spec in SKILL_REGISTRY
+    }
+
+    disk_flags: dict[str, SkillFlags] = {}
+    if root.is_dir():
+        for entry in sorted(root.iterdir()):
+            if not entry.is_dir():
+                continue
+            skill_md = entry / "SKILL.md"
+            if not skill_md.is_file():
+                continue
+            try:
+                disk_flags[entry.name] = _parse_rendered_flags(skill_md)
+            except SkillFrontmatterError as exc:
+                logger.warning(f"reconcile_skills name={entry.name!r} skipped={exc}")
+                continue
+
+    registry_names = set(registry_flags)
+    disk_names = set(disk_flags)
+    missing_on_disk = tuple(sorted(registry_names - disk_names))
+    extra_on_disk = tuple(sorted(disk_names - registry_names))
+    mismatches = tuple(
+        SkillFlagMismatch(
+            name=name,
+            registry_flags=registry_flags[name],
+            disk_flags=disk_flags[name],
+        )
+        for name in sorted(registry_names & disk_names)
+        if registry_flags[name] != disk_flags[name]
+    )
+    logger.info(
+        f"reconcile_skills root={str(root)!r} missing={len(missing_on_disk)} "
+        f"extra={len(extra_on_disk)} mismatched={len(mismatches)}"
+    )
+    return SkillReconcileReport(
+        skills_root=root,
+        missing_on_disk=missing_on_disk,
+        extra_on_disk=extra_on_disk,
+        flag_mismatches=mismatches,
+    )
+
+
 __all__ = [
     "DiscoveredSkill",
+    "SkillFlagMismatch",
+    "SkillFlags",
     "SkillFrontmatterError",
+    "SkillReconcileReport",
     "discover_skills",
     "parse_user_skill",
+    "reconcile_skills",
     "user_skills_dir",
     "workspace_skills_dir",
 ]

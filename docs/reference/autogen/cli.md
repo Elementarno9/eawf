@@ -470,6 +470,7 @@ List, render, and run Eä workflow skills.
 | Verb | Summary |
 |---|---|
 | `list` | List every skill resolvable across builtin / user / workspace layers. |
+| `reconcile` | Reconcile the built-in skill registry against the disk skill tree. |
 | `render` | Render a registered skill's metadata or SKILL.md body to stdout. |
 | `resume` | Resume a paused needs_user question with the chosen option label. |
 | `run` | Run a registered skill headlessly and emit its envelope. |
