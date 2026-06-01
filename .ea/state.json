@@ -2014,6 +2014,16 @@
       "uri": "repo:.ea/store/audit.jsonl#A43-P28-ship-gate",
       "urn": "urn:eawf:v1:artifact:P28/ART-A43-P28-ship-gate"
     },
+    "ART-A45-P29-i02": {
+      "created_at": "2026-06-01T21:12:41.412035Z",
+      "id": "ART-A45-P29-i02",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "6602477e132834efc16e999499a537d8cc52084210ed676b8277ab84c8a0cec8",
+      "size_bytes": 5040,
+      "uri": "repo:.ea/artifacts/audits/2026-06-01-A45-P29-i02-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I02/ART-A45-P29-i02"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -2791,6 +2801,17 @@
       "kind": "evaluation",
       "report_artifact_id": "A44-P29-i01-report",
       "scope_id": "P29-I01",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A45-P29-i02": {
+      "check_results": [],
+      "created_at": "2026-06-01T21:12:41.960692Z",
+      "id": "A45-P29-i02",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A45-P29-i02",
+      "scope_id": "P29-I02",
       "status": "complete",
       "verdict": "minor"
     },
@@ -3998,7 +4019,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P29-I02-W31"
+    ],
     "iter_id": "P29-I02",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -8251,6 +8274,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W30",
       "updated_at": "2026-06-01T20:20:55.764582Z"
+    },
+    "P29-I02-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W31-bucket-20260601T210648Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I02-W31",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I02-W31",
+      "updated_at": "2026-06-01T21:06:48.712601Z"
     }
   },
   "goals": {
@@ -9410,7 +9446,8 @@
         "P29-I02-W28",
         "P29-I02-W25",
         "P29-I02-W29",
-        "P29-I02-W30"
+        "P29-I02-W30",
+        "P29-I02-W31"
       ]
     },
     "P29-I03": {
@@ -10226,7 +10263,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T20:32:19.694168Z",
+  "updated_at": "2026-06-01T21:12:42.515854Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -30811,6 +30848,36 @@
         "boundary and error tests cover each band threshold the backstop and the escalation dedup"
       ],
       "title": "Replace flat stale alarm with size-relative over-budget bands",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W31": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T21:06:48.712593Z",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**"
+      ],
+      "id": "P29-I02-W31",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T21:05:22.257394Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "user/portfolio scope attention feed aggregates open attentions across the registered repos (not the empty synthesized state);wave-derived attention scoped to the active phase+iter so obsolete historical failed/ready waves drop out;AttentionItem gains occurred_at and the Home band + needs_user inbox render relative time-ago (1m ago / 15m ago / 1.2h ago)"
+      ],
+      "title": "Refine attention feed: portfolio aggregate + phase-scope + time-ago",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
