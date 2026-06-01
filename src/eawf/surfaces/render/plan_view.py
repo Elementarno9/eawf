@@ -40,6 +40,7 @@ Design notes:
 from __future__ import annotations
 
 import logging
+import re
 from collections import deque
 from collections.abc import Mapping
 from enum import StrEnum
@@ -910,6 +911,7 @@ class RoadmapRow(_StrictModel):
     wave_count: int
     iter_ids: list[str]
     source_brief_ids: list[str]
+    release: str | None = None
 
 
 EuRollupField = Literal["work_sum", "critical_path", "queue", "realistic"]
@@ -974,6 +976,7 @@ def build_roadmap_rows(state: State, *, phase_id_filter: str | None = None) -> l
                 wave_count=wave_count,
                 iter_ids=iter_ids,
                 source_brief_ids=list(phase.source_brief_ids),
+                release=phase.release,
             )
         )
     return rows
@@ -1189,13 +1192,99 @@ def _render_eu_rollup_markdown(
     return lines
 
 
+#: Band header for phases that carry no ``release`` version.
+_UNRELEASED_BAND = "Unreleased"
+
+_ROADMAP_TABLE_HEADER: tuple[str, str] = (
+    "| Phase | Status | Waves | Depends on | Title |",
+    "|---|---|---|---|---|",
+)
+
+
+#: Rank of each PEP-440 pre-release marker, lowest first. A final release
+#: (no marker) outranks every pre-release of the same semver core, so under
+#: newest-first ordering ``v0.5.0`` sorts above ``v0.5.0rc1``.
+_PRERELEASE_RANK: dict[str, int] = {"a": 0, "b": 1, "rc": 2, "": 3}
+
+
+def _release_sort_key(release: str) -> tuple[int, int, int, int, int, str]:
+    """Return a totally-ordered sort key for a ``vMAJOR.MINOR.PATCH`` label.
+
+    The key is ``(major, minor, patch, prerelease_rank, prerelease_num,
+    raw)``. The semver core orders first; a final release (rank 3) outranks
+    its pre-releases (``a`` < ``b`` < ``rc``) of the same core so newest-first
+    ordering places ``v0.5.0`` above ``v0.5.0rc1``; the raw string is the
+    final tiebreaker so the order is deterministic. A non-conforming label
+    (which the model pattern rejects on the write path, but a hand-edited
+    state could still carry) yields ``-1`` cores so it sorts last under
+    newest-first and stays visible.
+    """
+    match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?", release)
+    if match is None:
+        return (-1, -1, -1, -1, -1, release)
+    major, minor, patch = int(match[1]), int(match[2]), int(match[3])
+    marker = match[4] or ""
+    pre_num = int(match[5]) if match[5] is not None else 0
+    return (major, minor, patch, _PRERELEASE_RANK[marker], pre_num, release)
+
+
+def _band_release_labels(rows: list[RoadmapRow]) -> list[str]:
+    """Return the ordered band labels: release versions then ``Unreleased``.
+
+    Release versions sort newest-first by semver core; the ``Unreleased``
+    band (phases with ``release is None``) is always last so in-flight,
+    un-banded work reads at the bottom. The ``Unreleased`` band is only
+    included when at least one row lacks a release.
+    """
+    releases = {row.release for row in rows if row.release is not None}
+    ordered = sorted(releases, key=_release_sort_key, reverse=True)
+    if any(row.release is None for row in rows):
+        ordered.append(_UNRELEASED_BAND)
+    return ordered
+
+
+def _render_phase_table_body(rows: list[RoadmapRow]) -> list[str]:
+    """Render the per-phase markdown body rows (no header) for *rows*."""
+    body: list[str] = []
+    for row in rows:
+        deps = ", ".join(row.depends_on) or "—"
+        body.append(f"| `{row.id}` | `{row.status}` | {row.wave_count} | {deps} | {row.title} |")
+    return body
+
+
+def _render_banded_phase_tables(rows: list[RoadmapRow]) -> list[str]:
+    """Render release-banded phase tables, one ``### <band>`` block per version.
+
+    Each band carries an H3 header (the release version, or ``### Unreleased``
+    for phases without one) above the existing phase table. Used only when at
+    least one phase carries a ``release``; the no-release case renders a single
+    unbanded table so legacy output stays byte-stable.
+    """
+    out: list[str] = []
+    for label in _band_release_labels(rows):
+        if label == _UNRELEASED_BAND:
+            band_rows = [row for row in rows if row.release is None]
+        else:
+            band_rows = [row for row in rows if row.release == label]
+        out.append(f"### {label}")
+        out.append("")
+        out.append(_ROADMAP_TABLE_HEADER[0])
+        out.append(_ROADMAP_TABLE_HEADER[1])
+        out.extend(_render_phase_table_body(band_rows))
+        out.append("")
+    # Drop the trailing blank so the EU-rollup block joins cleanly.
+    if out and out[-1] == "":
+        out.pop()
+    return out
+
+
 def render_roadmap_markdown(
     state: State,
     *,
     phase_id_filter: str | None = None,
     config: Mapping[str, Any] | None = None,
 ) -> str:
-    """Render the roadmap-show markdown table from *state*.
+    """Render the roadmap-show markdown table from *state*, banded by release.
 
     Canonical markdown surface for ``eawf roadmap show --md`` after the
     P28-W18 unification: the CLI's ``_render_show_md`` thin-wraps this
@@ -1203,6 +1292,12 @@ def render_roadmap_markdown(
     :func:`render_markdown`. Output is byte-stable: empty-state literal
     when *state* has no phases (or none match the filter), otherwise a
     pipe-delimited table with one row per phase.
+
+    When at least one phase carries a :attr:`~eawf.kernel.state.models.Phase.release`
+    version the table is split into ``### <version>`` bands (newest first)
+    with an ``### Unreleased`` band trailing for phases without one. When no
+    phase carries a release the output is a single unbanded table, identical
+    to the pre-banding layout.
 
     Args:
         state: The validated state document.
@@ -1218,10 +1313,11 @@ def render_roadmap_markdown(
     rows = build_roadmap_rows(state, phase_id_filter=phase_id_filter)
     if not rows:
         return "_(no phases in state)_"
-    out = ["| Phase | Status | Waves | Depends on | Title |", "|---|---|---|---|---|"]
-    for row in rows:
-        deps = ", ".join(row.depends_on) or "—"
-        out.append(f"| `{row.id}` | `{row.status}` | {row.wave_count} | {deps} | {row.title} |")
+    if any(row.release is not None for row in rows):
+        out = _render_banded_phase_tables(rows)
+    else:
+        out = [_ROADMAP_TABLE_HEADER[0], _ROADMAP_TABLE_HEADER[1]]
+        out.extend(_render_phase_table_body(rows))
     out.extend(_render_eu_rollup_markdown(state, rows, config=config))
     return "\n".join(out)
 

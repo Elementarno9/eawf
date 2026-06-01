@@ -872,6 +872,43 @@ def test_roadmap_show_md_branch_unchanged(workspace: Path) -> None:
     assert "P21" in res.output
 
 
+def test_roadmap_revise_sets_phase_release(workspace: Path) -> None:
+    """``revise --retitle P## --release vX.Y.Z`` persists the release band."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "P21", "--release", "v0.5.0"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["release"] == "v0.5.0"
+
+
+def test_roadmap_revise_rejects_invalid_release(workspace: Path) -> None:
+    """An invalid release string is surfaced as a clean InvalidInput error."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Test"])
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "P21", "--release", "0.5.0"],
+    )
+    assert res.exit_code != 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"].get("release") is None
+
+
+def test_roadmap_show_md_bands_by_release(workspace: Path) -> None:
+    """``roadmap show --md`` bands phases once a release is set."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Banded"])
+    runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "P21", "--release", "v0.5.0"],
+    )
+    res = runner.invoke(app, ["roadmap", "show", "--md"])
+    assert res.exit_code == 0, res.output
+    assert "### v0.5.0" in res.output
+    assert "`P21`" in res.output
+
+
 def test_phase_activate_planned_phase(workspace: Path) -> None:
     """P19-W07: ``eawf phase activate`` flips PLANNED -> ACTIVE."""
     runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])

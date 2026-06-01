@@ -1928,7 +1928,7 @@
     },
     "Phase": {
       "additionalProperties": false,
-      "description": "Lifecycle phase.",
+      "description": "Lifecycle phase.\n\nThe ``release`` field bands the phase under a ``vMAJOR.MINOR.PATCH``\nrelease version in the rendered roadmap. It is strictly optional\n(default ``None``) so adding it is additive -- a phase without a\nrelease loads unchanged and renders under the \"Unreleased\" band,\nand an old ``state.json`` that predates the field stays valid under\n``extra=\"forbid\"`` because the missing key takes the default.",
       "properties": {
         "audit_id": {
           "anyOf": [
@@ -2011,6 +2011,19 @@
           },
           "title": "Outcome Ids",
           "type": "array"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "pattern": "^v\\d+\\.\\d+\\.\\d+(?:(?:a|b|rc)\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release"
         },
         "scope_id": {
           "title": "Scope Id",

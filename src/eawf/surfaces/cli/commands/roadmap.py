@@ -215,6 +215,7 @@ def _phase_summary(state: State, phase_id: str) -> dict[str, Any]:
         "source_brief_ids": list(phase.source_brief_ids),
         "iter_ids": iter_ids,
         "wave_count": wave_count,
+        "release": phase.release,
     }
 
 
@@ -672,6 +673,16 @@ def roadmap_revise_cmd(
             ),
         ),
     ] = None,
+    release: Annotated[
+        str | None,
+        typer.Option(
+            "--release",
+            help=(
+                "Release band (vMAJOR.MINOR.PATCH, e.g. v0.5.0) for a phase retitle "
+                "target (--retitle P##). Bands the phase in the rendered roadmap."
+            ),
+        ),
+    ] = None,
     intent_problem: Annotated[
         str | None,
         typer.Option(
@@ -895,9 +906,12 @@ def roadmap_revise_cmd(
                             phase_id=target,
                             title=new_phase_title,
                             description=description,
+                            release=release,
                             intent=intent,
                         )
-                        action_summary = f"edited phase {target}: title={new_phase_title!r}"
+                        action_summary = (
+                            f"edited phase {target}: title={new_phase_title!r} release={release!r}"
+                        )
                     else:
                         full_wave_id = _coerce_full_wave_id(
                             state, phase_id, target, iter_id=target_iter_id
@@ -928,6 +942,7 @@ def roadmap_revise_cmd(
                     "remove_wave": remove_wave,
                     "set_deps": set_deps,
                     "retitle": retitle,
+                    "release": release,
                 },
                 scope_id=phase_id,
                 summary=f"roadmap revise {phase_id}: {action_summary}",
@@ -1429,15 +1444,58 @@ def _render_show_md(rows: list[dict[str, Any]]) -> str:
     ``roadmap show --md`` command path) calls
     :func:`eawf.surfaces.render.plan_view.render_roadmap_markdown`
     directly so the renderer lives in one place — this helper just
-    mirrors the same row → markdown layout so existing tests that pass
-    a dict list keep working.
+    mirrors the same row → markdown layout (including release banding)
+    so existing tests that pass a dict list keep working.
+
+    Rows are banded by their optional ``release`` key when at least one
+    row carries one (``### <version>`` headers, newest first, with an
+    ``### Unreleased`` band trailing); otherwise a single unbanded table
+    is emitted, matching the pre-banding layout.
     """
     if not rows:
         return "_(no phases in state)_"
-    out = ["| Phase | Status | Waves | Depends on | Title |", "|---|---|---|---|---|"]
+    header = ["| Phase | Status | Waves | Depends on | Title |", "|---|---|---|---|---|"]
+    if any(row.get("release") is not None for row in rows):
+        out: list[str] = []
+        for label in _md_band_labels(rows):
+            if label == _UNBANDED_MD_LABEL:
+                band_rows = [row for row in rows if row.get("release") is None]
+            else:
+                band_rows = [row for row in rows if row.get("release") == label]
+            out.append(f"### {label}")
+            out.append("")
+            out.extend(header)
+            out.extend(_render_show_md_body(band_rows))
+            out.append("")
+        if out and out[-1] == "":
+            out.pop()
+        return "\n".join(out)
+    out = list(header)
+    out.extend(_render_show_md_body(rows))
+    return "\n".join(out)
+
+
+#: Trailing band label for dict-rows that carry no ``release`` key.
+_UNBANDED_MD_LABEL = "Unreleased"
+
+
+def _md_band_labels(rows: list[dict[str, Any]]) -> list[str]:
+    """Return ordered release-band labels for dict rows (newest first)."""
+    from eawf.surfaces.render.plan_view import _release_sort_key
+
+    releases = {row.get("release") for row in rows if row.get("release") is not None}
+    ordered = sorted((cast("str", r) for r in releases), key=_release_sort_key, reverse=True)
+    if any(row.get("release") is None for row in rows):
+        ordered.append(_UNBANDED_MD_LABEL)
+    return ordered
+
+
+def _render_show_md_body(rows: list[dict[str, Any]]) -> list[str]:
+    """Render per-phase markdown body rows (no header) for dict rows."""
+    body: list[str] = []
     for row in rows:
         deps = ", ".join(row["depends_on"]) or "—"
-        out.append(
+        body.append(
             f"| `{row['id']}` | `{row['status']}` | {row['wave_count']} | {deps} | {row['title']} |"
         )
-    return "\n".join(out)
+    return body

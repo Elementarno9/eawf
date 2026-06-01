@@ -563,6 +563,189 @@ def test_render_roadmap_markdown_consumes_eu_view_density_and_fields() -> None:
     assert "work-sum" not in md
 
 
+# ---- W02: release-banded roadmap render ------------------------------------
+
+
+def _add_phase(s: dict[str, Any], phase_id: str, *, release: str | None = None) -> None:
+    """Attach an extra phase (with its own I01 iter) to a base-state dict."""
+    iter_id = f"{phase_id}-I01"
+    s["phases"][phase_id] = {
+        "id": phase_id,
+        "scope_id": "QR",
+        "title": f"Phase {phase_id}",
+        "status": "planned",
+        "iter_ids": [iter_id],
+        "outcome_ids": [],
+        "opened_at": "2026-05-08T00:00:00Z",
+        "closed_at": None,
+        "audit_id": None,
+        "release": release,
+    }
+    s["iters"][iter_id] = {
+        "id": iter_id,
+        "phase_id": phase_id,
+        "title": f"Iter {iter_id}",
+        "status": "planned",
+        "wave_ids": [],
+        "estimate_id": None,
+        "audit_id": None,
+        "opened_at": "2026-05-08T00:00:00Z",
+        "closed_at": None,
+    }
+
+
+def _band_header_order(md: str) -> list[str]:
+    """Return the ordered ``### <band>`` header labels in *md*."""
+    return [line[4:] for line in md.splitlines() if line.startswith("### ")]
+
+
+def test_render_roadmap_markdown_unbanded_when_no_release() -> None:
+    """No phase carries a release -> single unbanded table, legacy layout."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    state = State.model_validate(_base_state())
+    md = render_roadmap_markdown(state)
+    assert md.startswith("| Phase | Status | Waves | Depends on | Title |\n")
+    assert "### " not in md
+
+
+def test_render_roadmap_markdown_bands_phases_by_release() -> None:
+    """Phases group under ``### <version>`` bands, newest first, then Unreleased."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    s = _base_state()  # P05 has no release
+    _add_phase(s, "P06", release="v0.5.0")
+    _add_phase(s, "P07", release="v0.4.1")
+    state = State.model_validate(s)
+
+    md = render_roadmap_markdown(state)
+
+    assert _band_header_order(md) == ["v0.5.0", "v0.4.1", "Unreleased"]
+    # Each phase lands in its own band; verify P06 precedes P07 precedes P05.
+    assert md.index("`P06`") < md.index("`P07`") < md.index("`P05`")
+
+
+def test_render_roadmap_markdown_groups_shared_release() -> None:
+    """Two phases on the same release share one band."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    s = _base_state()
+    s["phases"]["P05"]["release"] = "v0.5.0"
+    _add_phase(s, "P06", release="v0.5.0")
+    state = State.model_validate(s)
+
+    md = render_roadmap_markdown(state)
+
+    # One v0.5.0 band, no Unreleased band (every phase is banded).
+    assert _band_header_order(md) == ["v0.5.0"]
+    assert "`P05`" in md
+    assert "`P06`" in md
+
+
+def test_render_roadmap_markdown_all_unreleased_when_filtered() -> None:
+    """A filtered single phase without release renders the unbanded table."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    s = _base_state()
+    _add_phase(s, "P06", release="v0.5.0")
+    state = State.model_validate(s)
+
+    md = render_roadmap_markdown(state, phase_id_filter="P05")
+
+    # Only P05 (no release) survives the filter -> unbanded.
+    assert "### " not in md
+    assert md.startswith("| Phase | Status | Waves | Depends on | Title |\n")
+
+
+def test_render_roadmap_markdown_empty_state_literal_unchanged() -> None:
+    """The empty-state literal is unaffected by banding."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    state = State.model_validate(_base_state())
+    md = render_roadmap_markdown(state, phase_id_filter="P99")
+    assert md == "_(no phases in state)_"
+
+
+def test_render_roadmap_markdown_prerelease_sorts_below_release() -> None:
+    """A prerelease band sorts below its final release under newest-first order."""
+    from eawf.surfaces.render.plan_view import render_roadmap_markdown
+
+    s = _base_state()
+    s["phases"]["P05"]["release"] = "v0.5.0rc1"
+    _add_phase(s, "P06", release="v0.5.0")
+    state = State.model_validate(s)
+
+    md = render_roadmap_markdown(state)
+    # Under newest-first ordering a final release outranks its prerelease of
+    # the same semver core, so v0.5.0 precedes v0.5.0rc1 deterministically.
+    headers = _band_header_order(md)
+    assert headers == ["v0.5.0", "v0.5.0rc1"]
+
+
+def test_release_sort_key_orders_core_then_prerelease() -> None:
+    """``_release_sort_key`` orders by semver core, final above its prereleases."""
+    from eawf.surfaces.render.plan_view import _release_sort_key
+
+    labels = ["v0.4.1", "v0.5.0", "v0.5.0rc1", "v0.5.0a1", "v1.0.0"]
+    newest_first = sorted(labels, key=_release_sort_key, reverse=True)
+    assert newest_first == ["v1.0.0", "v0.5.0", "v0.5.0rc1", "v0.5.0a1", "v0.4.1"]
+
+
+def test_release_sort_key_nonconforming_sorts_last_newest_first() -> None:
+    """A malformed label sorts last under newest-first so it stays visible."""
+    from eawf.surfaces.render.plan_view import _release_sort_key
+
+    labels = ["v0.5.0", "garbage"]
+    newest_first = sorted(labels, key=_release_sort_key, reverse=True)
+    assert newest_first == ["v0.5.0", "garbage"]
+
+
+def test_render_show_md_bands_dict_rows_by_release() -> None:
+    """The CLI dict-row thin wrapper bands rows by their ``release`` key."""
+    from eawf.surfaces.cli.commands.roadmap import _render_show_md
+
+    rows = [
+        {
+            "id": "P06",
+            "status": "planned",
+            "title": "Six",
+            "depends_on": [],
+            "wave_count": 0,
+            "release": "v0.5.0",
+        },
+        {
+            "id": "P05",
+            "status": "active",
+            "title": "Five",
+            "depends_on": [],
+            "wave_count": 0,
+            "release": None,
+        },
+    ]
+    md = _render_show_md(rows)
+    assert _band_header_order(md) == ["v0.5.0", "Unreleased"]
+    assert md.index("`P06`") < md.index("`P05`")
+
+
+def test_render_show_md_unbanded_dict_rows_when_no_release() -> None:
+    """Dict rows without any release render the legacy unbanded table."""
+    from eawf.surfaces.cli.commands.roadmap import _render_show_md
+
+    rows = [
+        {
+            "id": "P05",
+            "status": "active",
+            "title": "Five",
+            "depends_on": [],
+            "wave_count": 0,
+            "release": None,
+        },
+    ]
+    md = _render_show_md(rows)
+    assert "### " not in md
+    assert md.startswith("| Phase | Status | Waves | Depends on | Title |")
+
+
 def test_parse_check_result_skips_malformed_row() -> None:
     s = _base_state()
     _add_wave(s, _wave("P05-I01-W01"))

@@ -87,6 +87,15 @@ HypothesisIdStr = Annotated[
 ]
 IdStr = Annotated[str, Field(min_length=1, pattern=r"^\S+$")]
 ShaStr = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
+#: A ``vMAJOR.MINOR.PATCH`` release label (e.g. ``v0.5.0``). The semver core
+#: is required; an optional PEP-440 pre-release segment (``a`` / ``b`` /
+#: ``rc`` + a number) is accepted so a pre-release phase band (``v0.5.0rc1``)
+#: still validates. This mirrors the grammar :mod:`eawf._version` carries for
+#: ``__version__`` and the ``v``-prefixed tag :func:`eawf release tag` writes.
+ReleaseStr = Annotated[
+    str,
+    Field(pattern=r"^v\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?$"),
+]
 
 McpGrantScopeKind = Literal["wave", "profile", "global"]
 GRANT_SCOPE_KINDS: tuple[McpGrantScopeKind, ...] = get_args(McpGrantScopeKind)
@@ -195,7 +204,15 @@ class Outcome(_StrictModel):
 
 
 class Phase(_StrictModel):
-    """Lifecycle phase."""
+    """Lifecycle phase.
+
+    The ``release`` field bands the phase under a ``vMAJOR.MINOR.PATCH``
+    release version in the rendered roadmap. It is strictly optional
+    (default ``None``) so adding it is additive -- a phase without a
+    release loads unchanged and renders under the "Unreleased" band,
+    and an old ``state.json`` that predates the field stays valid under
+    ``extra="forbid"`` because the missing key takes the default.
+    """
 
     id: PhaseIdStr
     scope_id: str
@@ -207,6 +224,7 @@ class Phase(_StrictModel):
     outcome_ids: list[str] = Field(default_factory=list)
     depends_on: list[PhaseIdStr] = Field(default_factory=list)
     source_brief_ids: list[str] = Field(default_factory=list)
+    release: ReleaseStr | None = None
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
     audit_id: str | None = None
