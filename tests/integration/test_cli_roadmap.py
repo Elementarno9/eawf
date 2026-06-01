@@ -1463,3 +1463,214 @@ def test_roadmap_revise_add_wave_description_over_cap_rejected(workspace: Path) 
     assert res.exit_code != 0
     combined = res.output + (res.stderr or "")
     assert "500" in combined or "string_too_long" in combined
+
+
+def _propose_with_second_iter(workspace: Path) -> None:
+    """Propose P21 (auto-creates I01) then plan a PLANNED P21-I02 iter."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        ["iter", "plan", "P21-I02", "--title", "second iter"],
+    )
+    assert res.exit_code == 0, res.output
+
+
+def test_roadmap_revise_add_wave_iter_targets_named_iter(workspace: Path) -> None:
+    """--iter aims --add-wave at the named iter instead of the I01 default."""
+    _propose_with_second_iter(workspace)
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--iter",
+            "P21-I02",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    # The wave lands under I02, not I01.
+    assert "P21-I02-W01" in state["waves"]
+    assert state["waves"]["P21-I02-W01"]["iter_id"] == "P21-I02"
+    assert state["iters"]["P21-I02"]["wave_ids"] == ["P21-I02-W01"]
+
+
+def test_roadmap_revise_add_wave_bare_iter_suffix_accepted(workspace: Path) -> None:
+    """--iter accepts the bare I## suffix, expanded against the phase."""
+    _propose_with_second_iter(workspace)
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--iter",
+            "I02",
+            "--add-wave",
+            "W03",
+            "--title",
+            "feat: bar",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "S",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert "P21-I02-W03" in state["waves"]
+
+
+def test_roadmap_revise_omitted_iter_keeps_i01_default(workspace: Path) -> None:
+    """Without --iter the add-wave still lands under I01 (back-compat)."""
+    _propose_with_second_iter(workspace)
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: default",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert "P21-I01-W01" in state["waves"]
+    assert "P21-I02-W01" not in state["waves"]
+
+
+def test_roadmap_revise_unknown_iter_rejected(workspace: Path) -> None:
+    """--iter naming an iter absent from state is rejected (NotFound)."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--iter",
+            "P21-I09",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "P21-I09" in combined
+
+
+def test_roadmap_revise_iter_under_other_phase_rejected(workspace: Path) -> None:
+    """--iter naming an iter under a different phase is rejected."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    # A second phase with its own I01.
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P22", "--title", "Y"])
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--iter",
+            "P22-I01",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+    assert res.exit_code != 0
+    combined = res.output + (res.stderr or "")
+    assert "P22-I01" in combined
+
+
+def test_roadmap_revise_invalid_iter_id_rejected(workspace: Path) -> None:
+    """A malformed --iter value surfaces a clean InvalidInput error."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--iter",
+            "not-an-iter",
+            "--add-wave",
+            "W01",
+            "--title",
+            "feat: foo",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+    assert res.exit_code != 0
+
+
+def test_roadmap_revise_retitle_phase_rewrites_title(workspace: Path) -> None:
+    """--retitle against a phase id edits the phase title via edit_phase_plan."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", "P21=Renamed phase"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["title"] == "Renamed phase"
+
+
+def test_roadmap_revise_phase_description_only_edit(workspace: Path) -> None:
+    """--retitle PHASE with no title but --description edits only the description."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "Keep me"])
+    res = runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--retitle",
+            "P21",
+            "--description",
+            "phase narrative",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["phases"]["P21"]["title"] == "Keep me"
+    assert state["phases"]["P21"]["description"] == "phase narrative"
+
+
+def test_roadmap_revise_retitle_phase_over_cap_title_rejected(workspace: Path) -> None:
+    """An over-cap (>72 chars) phase title via --retitle surfaces a clean error."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    res = runner.invoke(
+        app,
+        ["roadmap", "revise", "P21", "--retitle", f"P21={'z' * 73}"],
+    )
+    assert res.exit_code != 0

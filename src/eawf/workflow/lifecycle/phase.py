@@ -567,6 +567,74 @@ def plan_phase(
     return phase
 
 
+def edit_phase_plan(
+    state: State,
+    *,
+    phase_id: str,
+    title: str | None = None,
+    description: str | None = None,
+    intent: IntentBrief | None = None,
+) -> Phase:
+    """Rewrite a PLANNED/ACTIVE phase's ``title`` / ``description`` in place.
+
+    The phase-level counterpart to :func:`edit_wave_plan` /
+    :func:`eawf.workflow.lifecycle.iter_.edit_iter_plan`: it edits the
+    plan-level metadata fields a phase carries (``title``, ``description``,
+    ``intent``) without touching the wave DAG underneath. Each supplied
+    field is routed through the model's assignment validator so the title
+    1-72 character bound and the description <=500-character bound are
+    re-checked; an over-cap value raises :class:`pydantic.ValidationError`.
+    Pass ``None`` to leave a field untouched.
+
+    Status-tier invariant (mirrors :func:`_resolve_revisable_phase`):
+    PLANNED scope is freely mutable and ACTIVE phases stay editable at the
+    metadata level, so both are accepted here. CLOSED and ARCHIVED phases
+    are immutable and rejected -- a terminal phase's title cannot be
+    rewritten through the planner surface (reopen the phase first). The
+    edit never mutates child iters or waves, so the ACTIVE append-only
+    rule at the phase level is satisfied: only the allowed metadata fields
+    change.
+
+    Args:
+        state: State to mutate in place.
+        phase_id: Canonical phase id (e.g. ``P03``).
+        title: Optional replacement title; ``None`` leaves it untouched.
+        description: Optional replacement description (<=500 chars);
+            ``None`` leaves the existing value untouched. The model
+            already permits ``None`` as the "no description" sentinel,
+            so callers cannot clear a description through this helper --
+            that intentional asymmetry mirrors the iter / wave API.
+        intent: Optional replacement :class:`IntentBrief`; ``None``
+            leaves the existing intent untouched.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown or its status is
+            CLOSED / ARCHIVED (only PLANNED or ACTIVE phases are editable).
+        pydantic.ValidationError: when *title* / *description* / *intent*
+            violates its model bound.
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    if phase.status not in {PhaseStatus.PLANNED, PhaseStatus.ACTIVE}:
+        raise LifecycleError(
+            f"phase {phase_id!r} has status {phase.status.value!r}; "
+            "only planned or active phases can be edited"
+        )
+    if title is not None:
+        phase.__pydantic_validator__.validate_assignment(phase, "title", title)
+    if description is not None:
+        phase.__pydantic_validator__.validate_assignment(phase, "description", description)
+    if intent is not None:
+        phase.__pydantic_validator__.validate_assignment(phase, "intent", intent)
+    intent_problem = repr(intent.problem) if intent is not None else None
+    logger.info(
+        f"edit_phase_plan id={phase_id} title={title!r} description={description!r} "
+        f"intent_problem={intent_problem}"
+    )
+    return phase
+
+
 def activate_phase(state: State, *, phase_id: str) -> Phase:
     """Flip a planned phase to active. Sets ``current.phase_id``.
 

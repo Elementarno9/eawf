@@ -766,6 +766,94 @@ def test_wave_fail_happy(workspace: Path) -> None:
     assert state["waves"]["P01-I01-W01"]["status"] == "failed"  # type: ignore[index]
 
 
+# ---- wave release (P29-I02-W01) --------------------------------------------
+
+
+def _plan_and_claim_wave(workspace: Path) -> None:
+    """Bootstrap to a CLAIMED ``P01-I01-W01`` ready to release."""
+    _bootstrap_to_iter(workspace)
+    runner.invoke(
+        app,
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            "P01-I01-W01",
+            "--title",
+            "x",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+    runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "S"])
+
+
+def test_wave_release_happy_returns_to_pending(workspace: Path) -> None:
+    _plan_and_claim_wave(workspace)
+    res = runner.invoke(
+        app,
+        ["--json", "wave", "release", "P01-I01-W01", "--reason", "cannot finish"],
+    )
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    wave = state["waves"]["P01-I01-W01"]  # type: ignore[index]
+    assert wave["status"] == "pending"
+    assert wave["claim_session_id"] is None
+    assert "P01-I01-W01" not in state["current"]["active_wave_ids"]  # type: ignore[index]
+
+
+def test_wave_release_without_reason_succeeds(workspace: Path) -> None:
+    _plan_and_claim_wave(workspace)
+    res = runner.invoke(app, ["--json", "wave", "release", "P01-I01-W01"])
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["waves"]["P01-I01-W01"]["status"] == "pending"  # type: ignore[index]
+
+
+def test_wave_release_closed_wave_exits_3(workspace: Path) -> None:
+    _plan_and_claim_wave(workspace)
+    runner.invoke(app, ["wave", "close", "P01-I01-W01", "--outcome", "done"])
+    res = runner.invoke(app, ["wave", "release", "P01-I01-W01"])
+    assert res.exit_code != 0
+    # State untouched: the wave stays CLOSED.
+    state = _read_state(workspace)
+    assert state["waves"]["P01-I01-W01"]["status"] == "closed"  # type: ignore[index]
+
+
+def test_wave_release_pending_wave_is_noop(workspace: Path) -> None:
+    _bootstrap_to_iter(workspace)
+    runner.invoke(
+        app,
+        [
+            "wave",
+            "plan",
+            "P01-I01",
+            "--id",
+            "P01-I01-W01",
+            "--title",
+            "x",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+        ],
+    )
+    # Releasing a never-claimed (PENDING) wave is idempotent, not an error.
+    res = runner.invoke(app, ["--json", "wave", "release", "P01-I01-W01"])
+    assert res.exit_code == 0, res.output
+    state = _read_state(workspace)
+    assert state["waves"]["P01-I01-W01"]["status"] == "pending"  # type: ignore[index]
+
+
+def test_wave_release_invalid_wave_id_rejected(workspace: Path) -> None:
+    _bootstrap_to_iter(workspace)
+    res = runner.invoke(app, ["wave", "release", "not-a-wave-id"])
+    assert res.exit_code != 0, res.stdout
+
+
 # ---- wave update --files / --add-file / --remove-file (B046) ---------------
 
 

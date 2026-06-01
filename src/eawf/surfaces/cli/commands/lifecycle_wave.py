@@ -854,6 +854,45 @@ def wave_fail_cmd(
     )
 
 
+@wave_app.command("release")
+def wave_release_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave ID to release back to pending.")],
+    reason: Annotated[
+        str | None,
+        typer.Option("--reason", help="Optional reason recorded on the lifecycle log line."),
+    ] = None,
+) -> None:
+    """Release a claimed/in-progress wave back to pending (the inverse of claim).
+
+    Clears the claim binding (``claim_session_id`` / ``worktree_id``) and
+    drops the wave from ``current.active_wave_ids`` so another runtime can
+    re-claim it. The parent iter is left untouched. A CLOSED/FAILED/
+    ABANDONED wave is rejected (terminal status cannot be un-claimed); an
+    already-PENDING wave is a no-op.
+    """
+    from eawf.workflow.lifecycle.transitions import release_wave
+
+    flags: GlobalFlags = ctx.obj
+    if not is_wave_id(wave_id):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid wave id: {wave_id!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    _run_mutation(
+        ctx,
+        command="wave release",
+        args={"id": wave_id, "reason": reason},
+        scope_id=wave_id,
+        text=f"wave release {wave_id} reason={reason!r}",
+        envelope=lambda: {"wave": wave_id, "reason": reason},
+        mutate=lambda state: _wrap_no_return(release_wave(state, wave_id=wave_id, reason=reason)),
+        mutation_kind=MutationKind.WAVE_RELEASE,
+        params={"wave_id": wave_id, "reason": reason},
+    )
+
+
 _WAVE_UPDATE_FILES_ALLOWED_STATUSES: frozenset[WaveStatus] = frozenset(
     {WaveStatus.PENDING, WaveStatus.CLAIMED}
 )

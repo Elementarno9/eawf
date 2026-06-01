@@ -600,9 +600,22 @@ def roadmap_revise_cmd(
         str,
         typer.Argument(help="Phase id to revise (PLANNED, or ACTIVE for PENDING waves)."),
     ],
+    iter_opt: Annotated[
+        str | None,
+        typer.Option(
+            "--iter",
+            help=(
+                "Iter id (P##-I## or bare I##) the plan edit targets. "
+                "Defaults to the phase's first iter (P##-I01) when omitted."
+            ),
+        ),
+    ] = None,
     add_wave: Annotated[
         str | None,
-        typer.Option("--add-wave", help="Add a wave under the phase's I01 iter; pass the wave id."),
+        typer.Option(
+            "--add-wave",
+            help="Add a wave under the target iter (--iter, else I01); pass the wave id.",
+        ),
     ] = None,
     remove_wave: Annotated[
         str | None,
@@ -737,6 +750,7 @@ def roadmap_revise_cmd(
     from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
         edit_iter_plan,
+        edit_phase_plan,
         edit_wave_plan,
         plan_wave,
         remove_wave_plan,
@@ -799,14 +813,22 @@ def roadmap_revise_cmd(
                 is_iter_retitle = bool(retitle and is_iter_id(retitle.partition("=")[0].strip()))
                 if not is_iter_retitle:
                     _resolve_revisable_phase(state, phase_id)
+                # Resolve the iter the plan edit targets. ``--iter`` lets the
+                # operator aim a non-I01 iter; omitted keeps the I01 default.
+                # The iter retitle path resolves its own target from the
+                # ``--retitle`` left-hand side, so it skips this resolution.
+                target_iter_id = (
+                    None if is_iter_retitle else _resolve_target_iter(state, phase_id, iter_opt)
+                )
                 if add_wave:
                     if not wave_title or not files or not effort_bucket:
                         raise cli_errors.UserError(
                             "--add-wave requires --title, --files, and --effort-bucket",
                             kind="InvalidInput",
                         )
-                    full_wave_id = _coerce_full_wave_id(state, phase_id, add_wave)
-                    iter_id = _iter_id_for_phase(state, phase_id)
+                    full_wave_id = _coerce_full_wave_id(
+                        state, phase_id, add_wave, iter_id=target_iter_id
+                    )
                     role = AgentSessionRole(agent_role) if agent_role else None
                     try:
                         bucket = EffortBucket(effort_bucket)
@@ -819,10 +841,13 @@ def roadmap_revise_cmd(
                     plan_wave(
                         state,
                         wave_id=full_wave_id,
-                        iter_id=iter_id,
+                        iter_id=cast("str", target_iter_id),
                         title=wave_title,
                         file_scopes=_split_csv(files),
-                        deps=[_coerce_full_wave_id(state, phase_id, d) for d in _split_csv(deps)],
+                        deps=[
+                            _coerce_full_wave_id(state, phase_id, d, iter_id=target_iter_id)
+                            for d in _split_csv(deps)
+                        ],
                         success_criteria=_split_csv(success),
                         agent_role=role,
                         effort_bucket=bucket,
@@ -831,14 +856,19 @@ def roadmap_revise_cmd(
                     )
                     action_summary = f"added wave {full_wave_id}"
                 elif remove_wave:
-                    full_wave_id = _coerce_full_wave_id(state, phase_id, remove_wave)
+                    full_wave_id = _coerce_full_wave_id(
+                        state, phase_id, remove_wave, iter_id=target_iter_id
+                    )
                     remove_wave_plan(state, wave_id=full_wave_id)
                     action_summary = f"removed wave {full_wave_id}"
                 elif set_deps:
                     target, _, deps_csv = set_deps.partition("=")
-                    full_wave_id = _coerce_full_wave_id(state, phase_id, target.strip())
+                    full_wave_id = _coerce_full_wave_id(
+                        state, phase_id, target.strip(), iter_id=target_iter_id
+                    )
                     new_deps = [
-                        _coerce_full_wave_id(state, phase_id, d) for d in _split_csv(deps_csv)
+                        _coerce_full_wave_id(state, phase_id, d, iter_id=target_iter_id)
+                        for d in _split_csv(deps_csv)
                     ]
                     set_wave_deps(state, wave_id=full_wave_id, deps=new_deps)
                     action_summary = f"set deps on {full_wave_id}: {new_deps}"
@@ -854,8 +884,24 @@ def roadmap_revise_cmd(
                             intent=intent,
                         )
                         action_summary = f"retitled iter {target}: {new_title.strip()!r}"
+                    elif is_phase_id(target):
+                        # Phase-level metadata edit. An empty right-hand side
+                        # leaves the title untouched so a --description-only
+                        # phase edit (--retitle P## --description ...) works;
+                        # the helper re-validates the title bound otherwise.
+                        new_phase_title = new_title.strip() or None
+                        edit_phase_plan(
+                            state,
+                            phase_id=target,
+                            title=new_phase_title,
+                            description=description,
+                            intent=intent,
+                        )
+                        action_summary = f"edited phase {target}: title={new_phase_title!r}"
                     else:
-                        full_wave_id = _coerce_full_wave_id(state, phase_id, target)
+                        full_wave_id = _coerce_full_wave_id(
+                            state, phase_id, target, iter_id=target_iter_id
+                        )
                         edit_wave_plan(
                             state,
                             wave_id=full_wave_id,
@@ -897,16 +943,60 @@ def roadmap_revise_cmd(
     )
 
 
-def _coerce_full_wave_id(state: State, phase_id: str, candidate: str) -> str:
+def _resolve_target_iter(state: State, phase_id: str, iter_opt: str | None) -> str:
+    """Resolve the iter that ``revise`` plan edits target.
+
+    When *iter_opt* is ``None`` the phase's first iter (``P##-I01``) is
+    returned for back-compat with the pre-``--iter`` default. When supplied
+    the iter id is validated: it must be a well-formed iter id, exist in
+    state, and belong to *phase_id*. A bare ``I##`` suffix is expanded
+    against the phase (``P##-I##``).
+
+    Args:
+        state: The validated state document holding the ``iters`` map.
+        phase_id: The target phase id (assumed present in ``state.phases``).
+        iter_opt: The raw ``--iter`` value, or ``None`` for the I01 default.
+
+    Returns:
+        The canonical iter id the plan edit should target.
+
+    Raises:
+        cli_errors.UserError: when *iter_opt* is malformed, names an iter
+            absent from state, or names an iter under a different phase
+            (``kind="InvalidInput"`` / ``"NotFound"``).
+    """
+    if iter_opt is None:
+        return _iter_id_for_phase(state, phase_id)
+    candidate = iter_opt.strip()
+    # Accept the bare ``I##`` form and expand against the phase.
+    if not is_iter_id(candidate) and candidate.startswith("I") and candidate[1:].isdigit():
+        candidate = f"{phase_id}-{candidate}"
+    if not is_iter_id(candidate):
+        raise cli_errors.UserError(f"invalid iter id: {iter_opt!r}", kind="InvalidInput")
+    it = state.iters.get(candidate)
+    if it is None:
+        raise cli_errors.UserError(f"unknown iter {candidate!r}", kind="NotFound")
+    if it.phase_id != phase_id:
+        raise cli_errors.UserError(
+            f"iter {candidate!r} belongs to phase {it.phase_id!r}, not {phase_id!r}",
+            kind="InvalidInput",
+        )
+    return candidate
+
+
+def _coerce_full_wave_id(
+    state: State, phase_id: str, candidate: str, *, iter_id: str | None = None
+) -> str:
     """Accept either the bare ``W##`` form or the full ``P##-I##-W##`` id.
 
-    Bare ``W##`` is expanded against the phase's first iter (``P##-I01``).
+    Bare ``W##`` is expanded against *iter_id* when supplied, else against
+    the phase's first iter (``P##-I01``) for back-compat.
     """
     if is_wave_id(candidate):
         return candidate
     if candidate.startswith("W") and candidate[1:].isdigit():
-        iter_id = _iter_id_for_phase(state, phase_id)
-        full = f"{iter_id}-{candidate}"
+        target_iter = iter_id if iter_id is not None else _iter_id_for_phase(state, phase_id)
+        full = f"{target_iter}-{candidate}"
         if is_wave_id(full):
             return full
     raise cli_errors.UserError(f"invalid wave id reference: {candidate!r}", kind="InvalidInput")
