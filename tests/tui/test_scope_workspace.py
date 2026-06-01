@@ -69,6 +69,20 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point registry resolution at an empty ``tmp_path`` home.
+
+    The workspace screen now mounts a
+    :class:`~eawf.surfaces.tui.widgets.registry_pane.RegistryPane`, which
+    reads ``~/.eawf/registry.json``. Redirecting ``Path.home`` to an empty
+    ``tmp_path`` keeps these launches deterministic and ensures no test
+    reads the operator's real registry (which would leak machine paths
+    into a rendered screenshot).
+    """
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+
 def _multi_repo_state(codes: list[str]) -> State:
     """Return a workspace state seeded with the given abstract repo *codes*."""
     payload = orjson.loads(_WORKSPACE.read_bytes())

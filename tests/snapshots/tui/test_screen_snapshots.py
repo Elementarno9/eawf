@@ -86,6 +86,11 @@ def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_tc, "TEXTUAL_ANIMATIONS", "none")
     monkeypatch.setattr("eawf.surfaces.tui.widgets.git_pane._git_run", lambda *a, **k: None)
     monkeypatch.chdir(tmp_path)
+    # Point registry resolution at an empty ``tmp_path`` home so the
+    # workspace REGISTRY pane + the user PORTFOLIO table render their
+    # honest-empty surface deterministically -- and never leak the
+    # operator's real ``~/.eawf/registry.json`` repo paths into a golden.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
     # The Doctor-mode mount runs the instrument probe, which writes a cache
     # to ``<workspace>/.ea/instrument-probe.json`` -- the workspace resolves
     # to the fixture tree, so redirect the cache into tmp_path to keep a

@@ -4,11 +4,17 @@ The workspace screen has two modes inside the shared
 :class:`~eawf.surfaces.tui.scopes.ScopeScreen` chassis (Header + Footer +
 Heartbeat reused verbatim):
 
-* **table_browse** — a full-screen per-repo
+* **table_browse** — a per-repo
   :class:`~eawf.surfaces.tui.widgets.workspace_table.WorkspaceTable` (one row per
-  linked repo, **always at least one** — never a fallback panel). ``↑↓``
-  focus a repo; the git column refreshes on the host's refresh tick and
-  dims to ``git?`` on a probe failure.
+  linked repo, **always at least one** — never a fallback panel) over a
+  read-only :class:`~eawf.surfaces.tui.widgets.registry_pane.RegistryPane`
+  that lists the explicit ``~/.eawf/registry.json`` entries (code · title
+  · path · ``(active)`` / ``(stale)`` chips). The pane reads ONLY the
+  registry file — never a filesystem scan/walk — so the dashboard honours
+  the explicit-registry-only rule (the registry grows solely via
+  ``eawf init`` / ``eawf repo add``). ``↑↓`` focus a repo; the git column
+  refreshes on the host's refresh tick and dims to ``git?`` on a probe
+  failure.
 * **zoom** — the focused repo's 2x2 quadrant (roadmap · status / git ·
   backlog), reusing the repo-scope widget catalog scoped to the focused
   repo's own ``state.json``. ``Enter`` zooms; ``Esc`` returns.
@@ -35,6 +41,7 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
+from eawf.surfaces.tui.widgets.registry_pane import RegistryPane
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
 logger = logging.getLogger(__name__)
@@ -64,6 +71,25 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
     :class:`~eawf.surfaces.tui.scopes._zoom.RepoZoomMixin`).
     """
 
+    #: The browse container the zoom mixin hides while a quadrant is
+    #: mounted wraps BOTH the workspace table and the registry pane, so
+    #: a zoom hides the whole dashboard together and a return restores it.
+    ZOOM_BROWSE_PANE: ClassVar[str] = "#pane-repos"
+
+    #: ``#pane-repos`` is the unbordered browse container (its two children
+    #: carry the ``.pane`` border); the registry pane sits compact under
+    #: the workspace table so the table keeps the bulk of the body.
+    DEFAULT_CSS: ClassVar[str] = """
+    WorkspaceScreen #pane-repos {
+        height: 1fr;
+        width: 1fr;
+    }
+    WorkspaceScreen #pane-registry {
+        height: auto;
+        max-height: 10;
+    }
+    """
+
     #: ``Enter`` zooms the focused row (via the table's ``RowZoomed``
     #: message); ``Esc`` returns from the zoom quadrant to the table; ``c``
     #: opens the registry-driven config window via the shared
@@ -78,12 +104,23 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _WORKSPACE_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the Home attention band, the table-browse body, + zoom mount."""
+        """Yield the Home band, the per-repo table + registry pane, + zoom mount.
+
+        The ``#pane-repos`` browse container holds the per-repo
+        :class:`WorkspaceTable` (each repo's live progress) over a
+        read-only :class:`RegistryPane` (the explicit registry listing).
+        The container is what the zoom mixin hides on Enter and restores
+        on Esc, so the table + registry pane hide and return together.
+        """
         with Vertical(id="body"):
             yield from attention_band()
-            with Vertical(classes="pane", id="pane-repos"):
-                yield Static("WORKSPACE", classes="pane-title")
-                yield WorkspaceTable(id="workspace-table")
+            with Vertical(id="pane-repos"):
+                with Vertical(classes="pane", id="pane-workspace"):
+                    yield Static("WORKSPACE", classes="pane-title")
+                    yield WorkspaceTable(id="workspace-table")
+                with Vertical(classes="pane", id="pane-registry"):
+                    yield Static("REGISTRY", classes="pane-title")
+                    yield RegistryPane(id="registry-pane")
             yield Container(id="zoom-mount")
 
 
