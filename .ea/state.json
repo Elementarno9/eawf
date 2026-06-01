@@ -8568,7 +8568,8 @@
         "P29-I01-W16",
         "P29-I01-W18",
         "P29-I01-W27",
-        "P29-I01-W28"
+        "P29-I01-W28",
+        "P29-I01-W29"
       ]
     },
     "P29-I02": {
@@ -9386,7 +9387,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T08:17:57.176074Z",
+  "updated_at": "2026-06-01T08:55:08.992720Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -27751,7 +27752,9 @@
     },
     "P29-I01-W10": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P29-I01-W29"
+      ],
       "claim_session_id": "flow-p29-i01",
       "closed_at": "2026-06-01T06:06:10.919929Z",
       "commit": "44c18e3005d33d7d313e9c3e7eb6630cf6107081",
@@ -28408,6 +28411,38 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": "WT-P29-I01-W28-1780301108"
+    },
+    "P29-I01-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I01-W10"
+      ],
+      "description": "Polish: resolve the rule-17 name collision between the new EviBound verdict ladder (W10) and the pre-existing agent_report.CriterionVerdict row. New internal symbol (3 refs), safe to rename before it spreads.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/evidence/**"
+      ],
+      "id": "P29-I01-W29",
+      "intent": null,
+      "iter_id": "P29-I01",
+      "opened_at": "2026-06-01T08:55:08.992573Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "rung4 closed verdict StrEnum renamed CriterionVerdict->EviBoundVerdict so it no longer collides with agent_report.CriterionVerdict",
+        "all refs + workflow/evidence exports + tests updated and green"
+      ],
+      "title": "Rename EviBound CriterionVerdict to EviBoundVerdict (rule-17)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
     },
     "P29-I02-W01": {
       "agent_role": "executor",
