@@ -1379,6 +1379,18 @@
       "scope_id": "P29-I02-W07",
       "status": "done",
       "updated_at": "2026-06-01T16:19:09.272699Z"
+    },
+    "P29-I02-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W08",
+      "scope_id": "P29-I02-W08",
+      "status": "done",
+      "updated_at": "2026-06-01T16:30:07.292658Z"
     }
   },
   "agent_sessions": {
@@ -7676,6 +7688,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W07",
       "updated_at": "2026-06-01T16:01:54.485728Z"
+    },
+    "P29-I02-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W08-bucket-20260601T161948Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I02-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I02-W08",
+      "updated_at": "2026-06-01T16:19:48.398439Z"
     }
   },
   "goals": {
@@ -9649,7 +9674,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T16:19:09.273026Z",
+  "updated_at": "2026-06-01T16:30:07.292962Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28913,9 +28938,9 @@
     "P29-I02-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T16:30:07.292658Z",
+      "commit": "ced9ec3e2b2f692b3e041e12799e7179f5d76824",
       "deps": [],
       "description": "[CLI-8 | scope dec14 | SF] why-explainer coverage extension.",
       "dispatch_history": [],
@@ -28927,10 +28952,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.253653Z",
-      "outcome": null,
+      "outcome": "eawf why extended to superset: hypothesis kind added (verdict/audit/artifact story) + bare-id routing by id-shape; incident/backlog excluded (not in URN_KINDS catalog, urn.py out of file scope - followup); superset grounded by full state-collection enumeration; 24 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf why extends to the superset of explainable kinds (decision/hypothesis/audit/wave/...)"
       ],
