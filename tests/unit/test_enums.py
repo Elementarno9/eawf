@@ -119,6 +119,20 @@ def test_iter_status_rejects_unknown() -> None:
         enums.IterStatus("???")
 
 
+# --- iter.trigger ---
+
+
+def test_iter_trigger_values() -> None:
+    expected = {"reactive", "proactive", "none"}
+    actual = {m.value for m in enums.IterTrigger}
+    assert actual == expected
+
+
+def test_iter_trigger_rejects_unknown() -> None:
+    with pytest.raises(ValueError):
+        enums.IterTrigger("planned")
+
+
 # --- hypothesis.status ---
 
 

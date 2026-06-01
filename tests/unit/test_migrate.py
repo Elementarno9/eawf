@@ -3,10 +3,12 @@
 The first migration edge (v1.0 -> v1.1) tightens every entity ``title``
 to ``max_length=72`` (copying the full over-cap title into the new
 ``description`` first) and renames ``Decision.summary`` /
-``Hypothesis.text`` to ``title``. The live
-:class:`eawf.kernel.state.models.State` model accepts both ``"1.0"`` and
-``"1.1"``, so a migrated state re-loads under the live model. The suite
-exercises:
+``Hypothesis.text`` to ``title``. The second edge (v1.1 -> v1.2) adds
+``Iter.trigger`` and backfills every historical iter to ``"none"`` so it
+drops out of the corrected planned-vs-reactive denominator. The live
+:class:`eawf.kernel.state.models.State` model accepts ``"1.0"``,
+``"1.1"``, and ``"1.2"``, so a migrated state re-loads under the live
+model. The suite exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
 * a full v1.0 state migrating to a re-loadable v1.1 state;
@@ -58,6 +60,8 @@ from eawf.kernel.migrations.v1_0_to_v1_1 import (
     MigrationV10ToV11,
     _truncate_title,
 )
+from eawf.kernel.migrations.v1_1_to_v1_2 import MigrationV11ToV12
+from eawf.kernel.state.enums import IterTrigger
 from eawf.kernel.state.models import State
 
 
@@ -718,7 +722,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.1"
+    assert model_supported_max_version() == "1.2"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -731,9 +735,14 @@ def test_guard_target_supported_permits_v1_1_now_model_advanced() -> None:
     guard_target_supported("1.1")
 
 
+def test_guard_target_supported_permits_v1_2_now_model_advanced() -> None:
+    """The guard permits 1.2 now the live model accepts it (the trigger-field bump)."""
+    guard_target_supported("1.2")
+
+
 def test_guard_target_supported_rejects_target_above_max() -> None:
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        guard_target_supported("1.2")
+        guard_target_supported("1.3")
 
 
 def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> None:
@@ -744,11 +753,11 @@ def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> N
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.2")
+        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.3")
 
     # The on-disk state is byte-for-byte unchanged and no backup was taken.
     assert state_path.read_bytes() == before
-    backup = backup_path_for(state_path, from_version="1.0", to_version="1.2")
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.3")
     assert not backup.exists()
 
 
@@ -789,7 +798,7 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
-    result = CliRunner().invoke(app, ["migrate", "--to", "1.2"])
+    result = CliRunner().invoke(app, ["migrate", "--to", "1.3"])
 
     assert result.exit_code != 0
     assert "exceeds model-supported max" in result.stdout
@@ -797,13 +806,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_1(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_2(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.1) now succeeds + re-loads.
+    """The bare ``eawf migrate`` default target (1.2) walks the full chain + re-loads.
 
-    Previously refused (the model was pinned at 1.0); W22 advanced the
-    Literal so the default target lands a re-loadable v1.1 state.
+    The default target advanced to 1.2 with the ``Iter.trigger`` bump, so a
+    bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 and lands a
+    re-loadable v1.2 state.
     """
     from typer.testing import CliRunner
 
@@ -818,7 +828,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_1(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.1"
+    assert reloaded.schema_version == "1.2"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -1244,3 +1254,207 @@ def test_run_chain_empty_title_migrates_to_model_valid_v1_1(tmp_path: Path) -> N
     assert reloaded.schema_version == "1.1"
     wave = reloaded.waves["P00-I01-W01"]
     assert wave.title == "P00-I01-W01"
+
+
+# --- v1.1 -> v1.2: Iter.trigger backfill -----------------------------------
+#
+# The v1.2 edge adds ``Iter.trigger`` and backfills every historical iter to
+# ``trigger="none"`` (excluding it from the corrected planned-vs-reactive
+# denominator) without clobbering a trigger a later writer already set. The
+# fixtures below build a v1.1 state whose iters exercise the absent-key
+# backfill path and the preserve-existing path in one migration.
+
+
+def _minimal_state_v1_1() -> dict[str, Any]:
+    """Return a full v1.1 state payload that re-loads under the live model.
+
+    The v1.0 -> v1.1 edge only bumps the version marker for a state with no
+    over-cap titles, so a v1.1 minimal state is the v1.0 minimal state with
+    ``schema_version`` advanced — every other key is identical.
+    """
+    payload = _minimal_state_v1_0()
+    payload["schema_version"] = "1.1"
+    return payload
+
+
+def _state_v1_1_with_iters() -> dict[str, Any]:
+    """Return a full v1.1 state carrying three iters for the trigger backfill.
+
+    ``P00-I01`` and ``P00-I02`` carry no ``trigger`` key (the pre-v1.2
+    shape) so the migration backfills them to ``"none"``; ``P00-I03``
+    already carries ``trigger="reactive"`` so the no-clobber path is
+    exercised in the same run. The phase references all three iters and the
+    chain re-loads under the live model after migration.
+    """
+    ts = "2026-05-08T00:00:00Z"
+    payload = _minimal_state_v1_1()
+    payload["phases"] = {
+        "P00": {
+            "id": "P00",
+            "scope_id": "QR",
+            "subproject_id": None,
+            "title": "Phase zero",
+            "status": "active",
+            "iter_ids": ["P00-I01", "P00-I02", "P00-I03"],
+            "outcome_ids": [],
+            "depends_on": [],
+            "source_brief_ids": [],
+            "opened_at": ts,
+            "closed_at": None,
+            "audit_id": None,
+        }
+    }
+    payload["iters"] = {
+        "P00-I01": {
+            "id": "P00-I01",
+            "phase_id": "P00",
+            "title": "Iter one",
+            "status": "closed",
+            "wave_ids": [],
+            "estimate_id": None,
+            "audit_id": None,
+            "opened_at": ts,
+            "closed_at": None,
+        },
+        "P00-I02": {
+            "id": "P00-I02",
+            "phase_id": "P00",
+            "title": "Iter two",
+            "status": "closed",
+            "wave_ids": [],
+            "estimate_id": None,
+            "audit_id": None,
+            "opened_at": ts,
+            "closed_at": None,
+        },
+        "P00-I03": {
+            "id": "P00-I03",
+            "phase_id": "P00",
+            "title": "Iter three",
+            "status": "active",
+            "trigger": "reactive",  # already set: must survive the backfill
+            "wave_ids": [],
+            "estimate_id": None,
+            "audit_id": None,
+            "opened_at": ts,
+            "closed_at": None,
+        },
+    }
+    return payload
+
+
+def test_build_migration_chain_full_v1_0_to_v1_2_two_steps() -> None:
+    """The registry walks v1.0 -> v1.1 -> v1.2 as two ordered steps."""
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.2")
+    assert [(s.from_version, s.to_version) for s in chain] == [("1.0", "1.1"), ("1.1", "1.2")]
+
+
+def test_build_migration_chain_v1_1_to_v1_2_single_step() -> None:
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.1", to_version="1.2")
+    assert len(chain) == 1
+    assert chain[0].from_version == "1.1"
+    assert chain[0].to_version == "1.2"
+
+
+def test_v1_1_to_v1_2_apply_bumps_version() -> None:
+    step = MigrationV11ToV12()
+    out = step.apply(_minimal_state_v1_1())
+    assert out["schema_version"] == "1.2"
+
+
+def test_v1_1_to_v1_2_apply_does_not_mutate_input() -> None:
+    step = MigrationV11ToV12()
+    src = _minimal_state_v1_1()
+    step.apply(src)
+    assert src["schema_version"] == "1.1"
+
+
+def test_v1_1_to_v1_2_apply_empty_iters_is_pure_version_bump() -> None:
+    """Boundary: a state with no iters migrates to a bare version bump."""
+    step = MigrationV11ToV12()
+    src = _minimal_state_v1_1()  # iters == {}
+    out = step.apply(src)
+    expected = dict(src)
+    expected["schema_version"] = "1.2"
+    assert out == expected
+
+
+def test_v1_1_to_v1_2_apply_backfills_absent_trigger_to_none() -> None:
+    """Iters lacking ``trigger`` are backfilled to ``"none"`` (excluded)."""
+    step = MigrationV11ToV12()
+    out = step.apply(_state_v1_1_with_iters())
+    assert out["iters"]["P00-I01"]["trigger"] == IterTrigger.NONE.value
+    assert out["iters"]["P00-I02"]["trigger"] == IterTrigger.NONE.value
+
+
+def test_v1_1_to_v1_2_apply_preserves_preexisting_trigger() -> None:
+    """An iter that already carries a ``trigger`` is never clobbered."""
+    step = MigrationV11ToV12()
+    out = step.apply(_state_v1_1_with_iters())
+    assert out["iters"]["P00-I03"]["trigger"] == IterTrigger.REACTIVE.value
+
+
+def test_v1_1_to_v1_2_apply_is_idempotent() -> None:
+    """Re-applying to the already-migrated 1.2 result (version reset) is stable.
+
+    The pre-check binds to ``schema_version == "1.1"``, so a true re-run goes
+    through an empty chain; resetting only the version marker proves the
+    transform itself never re-touches a row whose ``trigger`` is set.
+    """
+    step = MigrationV11ToV12()
+    once = step.apply(_state_v1_1_with_iters())
+    replay = copy.deepcopy(once)
+    replay["schema_version"] = "1.1"
+    twice = step.apply(replay)
+    assert twice == once
+
+
+def test_v1_1_to_v1_2_check_pre_rejects_wrong_version() -> None:
+    step = MigrationV11ToV12()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_pre({"schema_version": "1.0"})
+
+
+def test_v1_1_to_v1_2_check_post_rejects_unbumped_version() -> None:
+    step = MigrationV11ToV12()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_post({"schema_version": "1.1"})
+
+
+def test_run_chain_v1_1_to_v1_2_reloads_with_backfilled_triggers(tmp_path: Path) -> None:
+    """End-to-end: a v1.1 state migrates to a re-loadable v1.2 state.
+
+    The backfilled iters carry ``trigger == none`` (excluded from the
+    metric denominator) and the pre-set iter keeps its ``reactive`` value
+    after the full canonical-writer round-trip.
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_state_v1_1_with_iters(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.1", to_version="1.2")
+    run_chain(state_path, chain=chain, from_version="1.1", to_version="1.2")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.2"
+    assert reloaded.iters["P00-I01"].trigger is IterTrigger.NONE
+    assert reloaded.iters["P00-I02"].trigger is IterTrigger.NONE
+    assert reloaded.iters["P00-I03"].trigger is IterTrigger.REACTIVE
+
+
+def test_run_chain_full_v1_0_to_v1_2_reloads(tmp_path: Path) -> None:
+    """A v1.0 state walks the full 1.0 -> 1.1 -> 1.2 chain to a re-loadable v1.2.
+
+    The chained run bumps the version twice and defaults the (absent) iter
+    triggers; the minimal fixture carries no iters, so the post-state simply
+    re-loads at 1.2 under the live model.
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_minimal_state_v1_0(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.2")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.2")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.2"

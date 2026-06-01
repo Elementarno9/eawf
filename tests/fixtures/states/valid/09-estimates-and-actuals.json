@@ -66,6 +66,7 @@
       "phase_id": "P01",
       "title": "Iter 1",
       "status": "active",
+      "trigger": "proactive",
       "wave_ids": ["P01-I01-W01"],
       "opened_at": "2026-05-08T00:00:00Z"
     }

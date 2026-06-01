@@ -22,6 +22,7 @@ from __future__ import annotations
 # DEFAULT_REGISTRY. Each ``vX_Y_to_vX_Z`` module calls ``_register`` at
 # import time, so importing the package wires the full chain.
 from eawf.kernel.migrations import v1_0_to_v1_1 as _v1_0_to_v1_1  # noqa: F401
+from eawf.kernel.migrations import v1_1_to_v1_2 as _v1_1_to_v1_2  # noqa: F401
 from eawf.kernel.migrations._base import (
     DEFAULT_REGISTRY,
     Migration,

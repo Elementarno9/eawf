@@ -344,15 +344,15 @@ def test_state_validates_without_intent_field_on_entities() -> None:
     assert state.backlog["B001"].intent is None
 
 
-def test_state_schema_version_unchanged() -> None:
-    """The intent field is additive — schema_version still accepts only 1.0/1.1."""
+def test_state_schema_version_accepts_supported_set() -> None:
+    """The accepted schema-version set is the migrate-chain supported range."""
     from typing import get_args
 
     from eawf.kernel.state.models import State as StateModel
 
     field = StateModel.model_fields["schema_version"]
     versions = set(get_args(field.annotation))
-    assert versions == {"1.0", "1.1"}
+    assert versions == {"1.0", "1.1", "1.2"}
 
 
 # ---- Transition plumb-through -----------------------------------------------

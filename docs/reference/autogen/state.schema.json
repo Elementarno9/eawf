@@ -1286,7 +1286,7 @@
     },
     "Iter": {
       "additionalProperties": false,
-      "description": "Lifecycle iteration.",
+      "description": "Lifecycle iteration.\n\n``trigger`` records *why* the iter was opened so the planned-vs-reactive\nmetric can classify its waves by intent rather than by the ``I##`` id\nsuffix. It defaults to :attr:`IterTrigger.NONE` so the field is additive\n(pre-trigger states and in-code constructors stay valid); the lifecycle\nsurface that opens iters sets the real value, and :class:`IterTrigger`\ndocuments how each value lands in the metric denominator.",
       "properties": {
         "audit_id": {
           "anyOf": [
@@ -1373,6 +1373,10 @@
           "title": "Title",
           "type": "string"
         },
+        "trigger": {
+          "$ref": "#/$defs/IterTrigger",
+          "default": "none"
+        },
         "wave_ids": {
           "items": {
             "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
@@ -1400,6 +1404,16 @@
         "abandoned"
       ],
       "title": "IterStatus",
+      "type": "string"
+    },
+    "IterTrigger": {
+      "description": "Why an iter exists — feeds the planned-vs-reactive metric denominator.\n\nThe planned-vs-reactive split classifies an iter's waves by *why the\niter was opened*, not by the iter's id suffix. The id-suffix heuristic\n(``I01`` planned, ``I02+`` reactive) over-counted reactive work because\na planned scope expansion opens an ``I02+`` iter yet is not repair /\nreactive — that conflation produced the inflated prior reactive-share\nfigure. Tagging the *reason* lets the metric exclude bookkeeping iters\nentirely instead of binning them as reactive.\n\nValues:\n    REACTIVE: Repair cycle or mid-flight scope add (counts toward the\n        reactive numerator and the denominator).\n    PROACTIVE: Planned-scope delivery, including a deliberate scope\n        expansion (counts as planned; in the denominator, not the\n        numerator).\n    NONE: Pure bookkeeping / no-delivery iter that should not skew the\n        ratio — excluded from the metric denominator entirely.",
+      "enum": [
+        "reactive",
+        "proactive",
+        "none"
+      ],
+      "title": "IterTrigger",
       "type": "string"
     },
     "McpGrant": {
@@ -2667,7 +2681,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Top-level eawf state document.\n\n``schema_version`` accepts both ``\"1.0\"`` and ``\"1.1\"`` so an on-disk\nstate written before the v1.1 bump still re-validates after the model\nadvances — the migrate chain rewrites the version string in place, but\na read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so both literals must\nmove in lockstep with the ``v1_0_to_v1_1`` migration step.",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts ``\"1.0\"``, ``\"1.1\"``, and ``\"1.2\"`` so an\non-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in\nplace, but a read of an un-migrated state must never reject. The\naccepted set drives the migrate guard's model-supported max, so the\nliterals move in lockstep with the migration steps (``v1_0_to_v1_1``,\n``v1_1_to_v1_2``).",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -2923,7 +2937,8 @@
     "schema_version": {
       "enum": [
         "1.0",
-        "1.1"
+        "1.1",
+        "1.2"
       ],
       "title": "Schema Version",
       "type": "string"

@@ -28,6 +28,7 @@ that module is listed with its members.
 | `IncidentSeverity` | `low`, `medium`, `high`, `critical` |
 | `IncidentStatus` | `open`, `mitigated`, `resolved`, `wont-fix` |
 | `IterStatus` | `planned`, `active`, `closed`, `abandoned` |
+| `IterTrigger` | `reactive`, `proactive`, `none` |
 | `McpRisk` | `read`, `read-write`, `admin` |
 | `McpStatus` | `not_configured`, `configured`, `installed`, `degraded`, `disabled` |
 | `MemoryStatus` | `active`, `stale`, `superseded`, `pruned` |

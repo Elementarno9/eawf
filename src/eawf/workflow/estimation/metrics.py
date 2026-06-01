@@ -24,11 +24,18 @@ The four metrics, in order:
 3. **Wave elapsed** — for every CLOSED wave with both ``opened_at`` and
    ``closed_at`` populated, compute the wall-clock elapsed minutes and
    roll up count / mean / median / max.
-4. **Planned vs reactive split** — per AGENTS.md D16/D17, the I01 iter of
-   each phase holds the planned-scope waves; waves under I02+ iters are
-   reactive (repair-iter or mid-flight scope add). The split returns the
-   count of each, the share, and the elapsed-EU share if the wave has an
-   actual record.
+4. **Planned vs reactive split** — classifies each wave by *why its iter
+   was opened* (the typed ``Iter.trigger``): a ``reactive`` iter (repair
+   cycle or mid-flight scope add) feeds the reactive numerator, a
+   ``proactive`` iter (planned-scope delivery, incl. a deliberate scope
+   expansion) feeds the planned count, and a ``none`` iter (pure
+   bookkeeping) drops out of the denominator entirely. The earlier
+   id-suffix heuristic (``I01`` planned, ``I02+`` reactive) over-counted
+   reactive work — a planned scope expansion also opens an ``I02+`` iter —
+   producing the inflated prior reactive-share figure; consulting
+   ``trigger`` corrects that definitional artifact. When a wave's iter row
+   is absent from the snapshot the split falls back to the id-suffix
+   heuristic so a state that predates the ``trigger`` field still reports.
 
 The output type is a Pydantic ``BaseModel`` so the CLI's JSON envelope
 (``schema_version=1``) is type-checked at the boundary and re-validates
@@ -45,9 +52,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.enums import AuditVerdict, WaveStatus
+from eawf.kernel.state.enums import AuditVerdict, IterTrigger, WaveStatus
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import State, Wave
+from eawf.kernel.state.models import Iter, State, Wave
 from eawf.workflow.estimation.buckets import critical_path_eu, sum_wave_eu, wave_estimate_eu
 
 # Schema version for the JSON envelope. Bump only when fields change in a
@@ -116,12 +123,18 @@ class WaveElapsedMetric(BaseModel):
 
 
 class PlannedVsReactiveMetric(BaseModel):
-    """Split of waves by iter suffix (I01 = planned, I02+ = reactive).
+    """Split of waves by their iter's :class:`~eawf.kernel.state.enums.IterTrigger`.
 
-    Per AGENTS.md D16/D17: the first iter under each phase holds the
-    planned-scope waves; subsequent iters (I02, I03, ...) capture
-    repair / scope-add reactive work. Waves whose id does not match
-    the canonical grammar are excluded from both counts.
+    A wave under a ``reactive`` iter (repair / scope-add) counts toward
+    :attr:`reactive_count`; a wave under a ``proactive`` iter (planned
+    delivery) counts toward :attr:`planned_count`; a wave under a ``none``
+    iter is excluded from both — it drops out of the denominator so pure
+    bookkeeping iters do not skew the ratio. Waves whose iter row is absent
+    fall back to the id-suffix heuristic (``I01`` planned, ``I02+``
+    reactive); waves whose id does not match the canonical grammar are
+    excluded from both counts. ``reactive_share`` is
+    ``reactive_count / (planned_count + reactive_count)`` and is ``0.0``
+    when that denominator is empty.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -235,18 +248,41 @@ def _iter_id_of(wave_id: str) -> str | None:
     return match.group(1)
 
 
-def _is_reactive_wave(wave: Wave) -> bool:
-    """Return ``True`` when *wave* belongs to an I02+ iter.
+def _classify_wave_by_id(wave_id: str) -> Literal["planned", "reactive", "excluded"]:
+    """Fallback split by id suffix when the wave's iter row is absent.
 
-    The check is performed on the wave id alone (no iter lookup) so the
-    function stays O(1) per wave even for very large states. A wave whose
-    id does not parse is treated as non-reactive (the caller excludes it
-    from both counts via :func:`_iter_id_of`).
+    ``I01`` -> ``"planned"``, ``I02+`` -> ``"reactive"``, an unparseable id
+    -> ``"excluded"``. Used only when the snapshot carries no
+    :class:`~eawf.kernel.state.models.Iter` row for the wave, so a state
+    written before the ``trigger`` field still produces a split.
     """
-    iter_segment = _iter_id_of(wave.id)
+    iter_segment = _iter_id_of(wave_id)
     if iter_segment is None:
-        return False
-    return iter_segment != "I01"
+        return "excluded"
+    return "planned" if iter_segment == "I01" else "reactive"
+
+
+def _classify_wave(
+    wave: Wave, iters: dict[str, Iter]
+) -> Literal["planned", "reactive", "excluded"]:
+    """Bucket *wave* for the planned-vs-reactive split via its iter trigger.
+
+    Resolves the wave's iter row (``iters[wave.iter_id]``) and reads its
+    :class:`~eawf.kernel.state.enums.IterTrigger`: ``reactive`` ->
+    ``"reactive"``, ``proactive`` -> ``"planned"``, ``none`` ->
+    ``"excluded"`` (dropped from the denominator). When no iter row exists
+    for the wave the classification falls back to the id-suffix heuristic
+    (:func:`_classify_wave_by_id`) so a pre-``trigger`` snapshot still
+    reports.
+    """
+    iter_row = iters.get(wave.iter_id)
+    if iter_row is None:
+        return _classify_wave_by_id(wave.id)
+    if iter_row.trigger is IterTrigger.NONE:
+        return "excluded"
+    if iter_row.trigger is IterTrigger.REACTIVE:
+        return "reactive"
+    return "planned"
 
 
 def _stdev_population(values: list[float], mean: float) -> float:
@@ -547,21 +583,22 @@ def compute_wave_elapsed(state: State) -> WaveElapsedMetric:
 
 
 def compute_planned_vs_reactive(state: State) -> PlannedVsReactiveMetric:
-    """Split waves by iter suffix (I01 vs I02+) per AGENTS.md D16/D17.
+    """Split waves by their iter's :class:`~eawf.kernel.state.enums.IterTrigger`.
 
-    Waves whose id does not match the canonical wave-id grammar are
-    excluded from both counts (treated as malformed input rather than
-    rolled into either bucket).
+    Each wave is classified via :func:`_classify_wave`: a ``proactive``
+    iter contributes to ``planned_count``, a ``reactive`` iter to
+    ``reactive_count``, and a ``none`` iter is excluded from both so it
+    drops out of the denominator. Waves whose iter row is absent fall back
+    to the id-suffix heuristic, and waves whose id does not parse are
+    excluded from both counts.
     """
     planned = 0
     reactive = 0
     for wave in state.waves.values():
-        iter_segment = _iter_id_of(wave.id)
-        if iter_segment is None:
-            continue
-        if iter_segment == "I01":
+        bucket = _classify_wave(wave, state.iters)
+        if bucket == "planned":
             planned += 1
-        else:
+        elif bucket == "reactive":
             reactive += 1
     total = planned + reactive
     share = (reactive / total) if total else 0.0

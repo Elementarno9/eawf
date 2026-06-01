@@ -56,6 +56,32 @@ class IterStatus(StrEnum):
     ABANDONED = "abandoned"
 
 
+class IterTrigger(StrEnum):
+    """Why an iter exists — feeds the planned-vs-reactive metric denominator.
+
+    The planned-vs-reactive split classifies an iter's waves by *why the
+    iter was opened*, not by the iter's id suffix. The id-suffix heuristic
+    (``I01`` planned, ``I02+`` reactive) over-counted reactive work because
+    a planned scope expansion opens an ``I02+`` iter yet is not repair /
+    reactive — that conflation produced the inflated prior reactive-share
+    figure. Tagging the *reason* lets the metric exclude bookkeeping iters
+    entirely instead of binning them as reactive.
+
+    Values:
+        REACTIVE: Repair cycle or mid-flight scope add (counts toward the
+            reactive numerator and the denominator).
+        PROACTIVE: Planned-scope delivery, including a deliberate scope
+            expansion (counts as planned; in the denominator, not the
+            numerator).
+        NONE: Pure bookkeeping / no-delivery iter that should not skew the
+            ratio — excluded from the metric denominator entirely.
+    """
+
+    REACTIVE = "reactive"
+    PROACTIVE = "proactive"
+    NONE = "none"
+
+
 class WaveStatus(StrEnum):
     PENDING = "pending"
     CLAIMED = "claimed"

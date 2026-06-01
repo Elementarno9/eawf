@@ -23,12 +23,15 @@ from eawf.kernel.state.enums import (
     AuditVerdict,
     Confidence,
     EffortBucket,
+    IterStatus,
+    IterTrigger,
     WaveStatus,
 )
 from eawf.kernel.state.models import (
     ActualSummary,
     Audit,
     EstimateSummary,
+    Iter,
     State,
     Wave,
 )
@@ -112,6 +115,19 @@ def _wave(
         effort_bucket=effort_bucket,
         opened_at=opened_at,
         closed_at=closed_at,
+    )
+
+
+def _iter(*, iter_id: str, trigger: IterTrigger) -> Iter:
+    """Return an ``Iter`` carrying *trigger* with the minimum required fields."""
+    phase_id = iter_id.split("-")[0]
+    return Iter(
+        id=iter_id,
+        phase_id=phase_id,
+        title=f"iter {iter_id}",
+        status=IterStatus.CLOSED,
+        trigger=trigger,
+        opened_at=_T0,
     )
 
 
@@ -479,10 +495,105 @@ def test_compute_planned_vs_reactive_i02_counts_as_reactive() -> None:
 
 
 def test_compute_planned_vs_reactive_i10_counts_as_reactive() -> None:
-    """Two-digit iter suffix (I10) is still classified as reactive."""
+    """Two-digit iter suffix (I10) is still classified as reactive (fallback path)."""
     state = _empty_state()
     state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
     state.waves["P01-I10-W01"] = _wave(wave_id="P01-I10-W01")
+    result = compute_planned_vs_reactive(state)
+    assert result.planned_count == 1
+    assert result.reactive_count == 1
+    assert result.reactive_share == pytest.approx(0.5)
+
+
+# ---- compute_planned_vs_reactive: Iter.trigger denominator -------------------
+
+
+def test_compute_planned_vs_reactive_trigger_none_excluded_from_denominator() -> None:
+    """A ``none``-trigger iter drops its waves out of the denominator entirely."""
+    state = _empty_state()
+    # Two waves under a none-trigger iter + one proactive wave: only the
+    # proactive wave is in the denominator, so the reactive share is 0.
+    state.iters["P01-I01"] = _iter(iter_id="P01-I01", trigger=IterTrigger.NONE)
+    state.iters["P01-I02"] = _iter(iter_id="P01-I02", trigger=IterTrigger.PROACTIVE)
+    state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
+    state.waves["P01-I01-W02"] = _wave(wave_id="P01-I01-W02")
+    state.waves["P01-I02-W01"] = _wave(wave_id="P01-I02-W01")
+    result = compute_planned_vs_reactive(state)
+    assert result.planned_count == 1
+    assert result.reactive_count == 0
+    assert result.reactive_share == pytest.approx(0.0)
+
+
+def test_compute_planned_vs_reactive_proactive_i02_counts_as_planned() -> None:
+    """An I02+ iter tagged ``proactive`` counts as planned, not reactive.
+
+    This is the artifact the wave corrects: the old id-suffix heuristic
+    would have binned this I02 wave as reactive, but a proactive scope
+    expansion is planned work.
+    """
+    state = _empty_state()
+    state.iters["P01-I01"] = _iter(iter_id="P01-I01", trigger=IterTrigger.PROACTIVE)
+    state.iters["P01-I02"] = _iter(iter_id="P01-I02", trigger=IterTrigger.PROACTIVE)
+    state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
+    state.waves["P01-I02-W01"] = _wave(wave_id="P01-I02-W01")
+    result = compute_planned_vs_reactive(state)
+    assert result.planned_count == 2
+    assert result.reactive_count == 0
+    assert result.reactive_share == pytest.approx(0.0)
+
+
+def test_compute_planned_vs_reactive_reactive_trigger_counts_as_reactive() -> None:
+    """A ``reactive``-trigger iter feeds the reactive numerator."""
+    state = _empty_state()
+    state.iters["P01-I01"] = _iter(iter_id="P01-I01", trigger=IterTrigger.PROACTIVE)
+    state.iters["P01-I02"] = _iter(iter_id="P01-I02", trigger=IterTrigger.REACTIVE)
+    state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
+    state.waves["P01-I02-W01"] = _wave(wave_id="P01-I02-W01")
+    result = compute_planned_vs_reactive(state)
+    assert result.planned_count == 1
+    assert result.reactive_count == 1
+    assert result.reactive_share == pytest.approx(0.5)
+
+
+def test_compute_planned_vs_reactive_all_none_is_empty_denominator() -> None:
+    """Boundary: every iter ``none`` -> 0 / 0 with share 0.0 (renders n/a)."""
+    state = _empty_state()
+    state.iters["P01-I01"] = _iter(iter_id="P01-I01", trigger=IterTrigger.NONE)
+    state.iters["P01-I02"] = _iter(iter_id="P01-I02", trigger=IterTrigger.NONE)
+    state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
+    state.waves["P01-I02-W01"] = _wave(wave_id="P01-I02-W01")
+    result = compute_planned_vs_reactive(state)
+    assert result == PlannedVsReactiveMetric(
+        planned_count=0,
+        reactive_count=0,
+        reactive_share=0.0,
+    )
+
+
+def test_compute_planned_vs_reactive_mixed_triggers_share() -> None:
+    """Mixed reactive/proactive/none: none is excluded; share over the rest."""
+    state = _empty_state()
+    state.iters["P01-I01"] = _iter(iter_id="P01-I01", trigger=IterTrigger.PROACTIVE)
+    state.iters["P01-I02"] = _iter(iter_id="P01-I02", trigger=IterTrigger.REACTIVE)
+    state.iters["P01-I03"] = _iter(iter_id="P01-I03", trigger=IterTrigger.NONE)
+    # proactive: 2 planned; reactive: 1; none: 1 excluded.
+    state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
+    state.waves["P01-I01-W02"] = _wave(wave_id="P01-I01-W02")
+    state.waves["P01-I02-W01"] = _wave(wave_id="P01-I02-W01")
+    state.waves["P01-I03-W01"] = _wave(wave_id="P01-I03-W01")
+    result = compute_planned_vs_reactive(state)
+    assert result.planned_count == 2
+    assert result.reactive_count == 1
+    # Denominator excludes the none-iter wave: 1 / (2 + 1).
+    assert result.reactive_share == pytest.approx(1 / 3)
+
+
+def test_compute_planned_vs_reactive_falls_back_to_id_when_iter_absent() -> None:
+    """A wave whose iter row is absent falls back to the id-suffix heuristic."""
+    state = _empty_state()
+    # No iter rows at all: I01 -> planned, I02 -> reactive via the fallback.
+    state.waves["P01-I01-W01"] = _wave(wave_id="P01-I01-W01")
+    state.waves["P01-I02-W01"] = _wave(wave_id="P01-I02-W01")
     result = compute_planned_vs_reactive(state)
     assert result.planned_count == 1
     assert result.reactive_count == 1

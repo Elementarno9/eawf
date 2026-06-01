@@ -35,6 +35,7 @@ from eawf.kernel.state.enums import (
     IncidentSeverity,
     IncidentStatus,
     IterStatus,
+    IterTrigger,
     McpRisk,
     McpStatus,
     MemoryStatus,
@@ -210,13 +211,22 @@ class Phase(_StrictModel):
 
 
 class Iter(_StrictModel):
-    """Lifecycle iteration."""
+    """Lifecycle iteration.
+
+    ``trigger`` records *why* the iter was opened so the planned-vs-reactive
+    metric can classify its waves by intent rather than by the ``I##`` id
+    suffix. It defaults to :attr:`IterTrigger.NONE` so the field is additive
+    (pre-trigger states and in-code constructors stay valid); the lifecycle
+    surface that opens iters sets the real value, and :class:`IterTrigger`
+    documents how each value lands in the metric denominator.
+    """
 
     id: IterIdStr
     phase_id: PhaseIdStr
     title: Annotated[str, Field(min_length=1, max_length=72)]
     description: Annotated[str, Field(max_length=500)] | None = None
     status: IterStatus
+    trigger: IterTrigger = IterTrigger.NONE
     wave_ids: list[WaveIdStr] = Field(default_factory=list)
     estimate_id: str | None = None
     audit_id: str | None = None
@@ -665,15 +675,16 @@ class Principal(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts both ``"1.0"`` and ``"1.1"`` so an on-disk
-    state written before the v1.1 bump still re-validates after the model
-    advances — the migrate chain rewrites the version string in place, but
-    a read of an un-migrated state must never reject. The accepted set
-    drives the migrate guard's model-supported max, so both literals must
-    move in lockstep with the ``v1_0_to_v1_1`` migration step.
+    ``schema_version`` accepts ``"1.0"``, ``"1.1"``, and ``"1.2"`` so an
+    on-disk state written before any bump still re-validates after the
+    model advances — the migrate chain rewrites the version string in
+    place, but a read of an un-migrated state must never reject. The
+    accepted set drives the migrate guard's model-supported max, so the
+    literals move in lockstep with the migration steps (``v1_0_to_v1_1``,
+    ``v1_1_to_v1_2``).
     """
 
-    schema_version: Literal["1.0", "1.1"]
+    schema_version: Literal["1.0", "1.1", "1.2"]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime

@@ -76,7 +76,7 @@ def test_metrics_json_envelope_schema_version_one(tmp_path: Path) -> None:
     assert payload["wave_elapsed"]["sample_count"] == 0
     # Fixture has no audits ⇒ decided_count == 0.
     assert payload["audit_pass_rate"]["decided_count"] == 0
-    # Single I01 wave ⇒ planned=1, reactive=0.
+    # Single wave under a proactive-trigger iter ⇒ planned=1, reactive=0.
     assert payload["planned_vs_reactive"]["planned_count"] == 1
     assert payload["planned_vs_reactive"]["reactive_count"] == 0
 
