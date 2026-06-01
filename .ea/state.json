@@ -1716,6 +1716,18 @@
       "status": "done",
       "updated_at": "2026-06-01T22:37:03.635247Z"
     },
+    "P29-I03-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I03-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I03-W04",
+      "scope_id": "P29-I03-W04",
+      "status": "done",
+      "updated_at": "2026-06-01T23:09:08.228252Z"
+    },
     "P29-I03-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8436,6 +8448,19 @@
       "scope_id": "P29-I03-W03",
       "updated_at": "2026-06-01T22:26:40.466373Z"
     },
+    "P29-I03-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I03-W04-bucket-20260601T225722Z",
+      "display": "3.5 EU · exp ~105m · pess ~378m",
+      "expected_eu": 3.5,
+      "expected_minutes": 105.0,
+      "id": "EST-P29-I03-W04",
+      "pessimistic_eu": 12.6,
+      "pessimistic_minutes": 378.0,
+      "reference_class": "bucket:XL",
+      "scope_id": "P29-I03-W04",
+      "updated_at": "2026-06-01T22:57:22.350117Z"
+    },
     "P29-I03-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I03-W05-bucket-20260601T224639Z",
@@ -10436,7 +10461,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T22:57:03.246017Z",
+  "updated_at": "2026-06-01T23:09:08.228762Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -31195,10 +31220,10 @@
         "P29-I04-W06",
         "P29-I04-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i03",
+      "claimed_at": "2026-06-01T22:57:22.350114Z",
+      "closed_at": "2026-06-01T23:09:08.228252Z",
+      "commit": "d9183371aa59b6d65fefa3a818022813e0c65c9f",
       "deps": [
         "P29-I03-W01",
         "P29-I03-W02",
@@ -31214,10 +31239,10 @@
       "intent": null,
       "iter_id": "P29-I03",
       "opened_at": "2026-06-01T00:19:14.273321Z",
-      "outcome": null,
+      "outcome": "runtime/sandbox/jail.py per-OS FS container (keystone). Linux bwrap argv-prefix (ro-bind root + rw cwd-bind + --unshare-pid + --die-with-parent [#529] + tmpfs-mask cred dirs); macOS sandbox-exec -f seatbelt profile (deny default + allow file-write* subpath cwd + cred-dir read-denies + Keychain carve-out). Consumes W03 verdict: argv-PREFIX only, daemon stays sole session-setter, NO wrapper setsid/--new-session so cancel_process_group reaps unchanged (guard tests: test_build_jail_argv_linux_preserves_pgid_no_new_session + darwin_no_setsid). denyRead 8 cross-tool cred dirs w/ per-lane own-cred carve-out (claude Keychain/macOS + ~/.claude/.credentials.json; codex CODEX_HOME/auth.json). cwd validated via reused assert_cwd_inside. Windows feature-gated (jail_supported False + JailUnavailableOnWindowsError reusing egress SandboxError). Wired into spawn_session feature-detected (jail_supported + shutil.which), absent-tool=unjailed+WARN; env=/cwd/start_new_session untouched. 360 sandbox/runtimes tests green; floor gate for all I04 spawn",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "runtime/sandbox/jail.py FS container, per-OS, confines spawned children to the worktree",
         "jail.py is ABSENT on main -> build, not wire; this IS the floor gate"
