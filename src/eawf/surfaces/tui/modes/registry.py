@@ -179,6 +179,23 @@ def _trust_factory(_app: EaApp) -> Screen[None]:
     return TrustModeScreen()
 
 
+def _feed_screen() -> Screen[None]:
+    """Build the live-feed pane for the Feed mode (digit 5).
+
+    Lazy-imports :class:`~eawf.surfaces.tui.modes.feed.FeedModeScreen` (which
+    imports the scope chassis) so the registry stays import-cycle-free, the
+    same deferral :func:`_placeholder_factory` uses. The pane subscribes to
+    the App's live-event seam on mount, so it needs no per-instance launch
+    state and ignores the app argument.
+
+    Returns:
+        A fresh :class:`FeedModeScreen` for the Feed mode's screen stack.
+    """
+    from eawf.surfaces.tui.modes.feed import FeedModeScreen
+
+    return FeedModeScreen()
+
+
 #: The default six-mode layout seeded on the chassis. Digit order is the
 #: switch order (``1``..``6``). ``home`` (the launch default,
 #: :data:`DEFAULT_MODE`) renders the resolved scope screen; ``trust`` renders
@@ -191,7 +208,7 @@ MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("trust", "2", "Trust", _trust_factory),
     ModeSpec("doctor", "3", "Doctor", _placeholder_factory("Doctor")),
     ModeSpec("evidence", "4", "Evidence", _evidence_factory),
-    ModeSpec("feed", "5", "Feed", _placeholder_factory("Feed")),
+    ModeSpec("feed", "5", "Feed", lambda _app: _feed_screen()),
     ModeSpec("config", "6", "Config", _placeholder_factory("Config")),
 )
 

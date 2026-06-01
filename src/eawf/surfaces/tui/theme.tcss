@@ -72,6 +72,26 @@ Heartbeat.-degraded {
     text-style: italic;
 }
 
+/* --- live event-feed pane (Feed mode, digit 5) --- */
+.feed-body {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#feed-list {
+    height: 1fr;
+}
+
+.feed-row {
+    height: auto;
+}
+
+.feed-empty {
+    color: $text-muted;
+    text-style: italic;
+    height: 1;
+}
+
 /* --- quadrant / strip rows + bordered panes (RepoScreen / WorkspaceScreen) --- */
 .row {
     height: 1fr;

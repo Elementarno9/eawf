@@ -36,6 +36,7 @@ Regenerate the goldens after an intentional layout change with::
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 
 import orjson
@@ -45,6 +46,7 @@ from textual.widgets import TabbedContent
 from eawf.kernel.config.registry import registry_lookup
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
@@ -182,6 +184,57 @@ def test_user_screen_snapshot() -> None:
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "user_screen.txt")
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Feed mode (digit 5) — live event-feed pane, empty + populated
+# --------------------------------------------------------------------------
+
+
+def _feed_event(event_id: str, summary: str) -> Envelope:
+    """Build a fixed-timestamp event envelope for the Feed-pane goldens."""
+    return Envelope(
+        id=event_id,
+        kind="event",  # type: ignore[arg-type]
+        scope_id="urn:eawf:v1:state:QR",
+        created_at=datetime(2026, 5, 27, 9, 30, 15, tzinfo=UTC),
+        updated_at=None,
+        summary=summary,
+        payload={"event_type": "test", "status": "ok"},
+    )
+
+
+def test_feed_mode_empty_snapshot() -> None:
+    """The Feed pane renders an honest-empty live notice before any event."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("5")  # -> Feed mode
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "feed_mode_empty.txt")
+
+    asyncio.run(body())
+
+
+def test_feed_mode_populated_snapshot() -> None:
+    """The Feed pane renders buffered events newest-first on switch-in."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            # Seed deterministic events into the App buffer before switching;
+            # the Feed pane seeds from the buffer on mount (newest-first).
+            await app._on_event(_feed_event("EV-1", "wave P01-I01-W01 claimed"))
+            await app._on_event(_feed_event("EV-2", "wave P01-I01-W01 closed"))
+            await settle_screen(pilot)
+            await pilot.press("5")  # -> Feed mode
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "feed_mode_populated.txt")
 
     asyncio.run(body())
 

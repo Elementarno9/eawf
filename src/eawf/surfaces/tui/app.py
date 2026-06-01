@@ -39,9 +39,10 @@ import asyncio
 import logging
 import os
 import socket
+from collections import deque
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 from textual.app import App
 from textual.binding import Binding, BindingType
@@ -83,10 +84,19 @@ from eawf.surfaces.tui.widgets.header import (
     build_breadcrumb,
 )
 
+if TYPE_CHECKING:
+    from eawf.surfaces.tui.modes.feed import FeedModeScreen
+
 logger = logging.getLogger(__name__)
 
 DEGRADED_BANNER_ID = "degraded-banner"
 DEGRADED_BANNER_HIDDEN_CLASS = "degraded-banner--hidden"
+
+#: Cap on the App-owned live event ring buffer. The Feed pane renders this
+#: buffer newest-first; the bound mirrors the on-disk ``/events`` overlay
+#: ring (50) with headroom so a burst of pushes between mode switches stays
+#: visible. Oldest envelopes drop off the tail once the cap is reached.
+LIVE_EVENT_BUFFER_MAX: int = 200
 
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
 #: mirror :class:`eawf.kernel.state.enums.ScopeKind`; ``user`` is the registry-
@@ -339,6 +349,19 @@ class EaApp(App[None]):
         self._init_wizard_open = False
         self._init_wizard_auto_opened = False
         self._toast_emitter = ToastEmitter()
+        # Live event ring buffer fed by the daemon ``event.subscribe`` push
+        # stream (via the read-only binding's ``on_event`` hook). The Feed
+        # mode pane renders this newest-first; appends here run on the event
+        # loop thread (the binding marshals pushes back via
+        # ``run_coroutine_threadsafe``), so no extra lock is needed. Bounded
+        # at LIVE_EVENT_BUFFER_MAX so an idle session never grows unbounded.
+        self._live_event_buffer: deque[Envelope] = deque(maxlen=LIVE_EVENT_BUFFER_MAX)
+        # Mounted Feed panes that want each live envelope pushed to them as it
+        # arrives. A pane registers on mount + seeds from the buffer, and
+        # unregisters on unmount, so the fan-out never targets a torn-down
+        # screen. List (not set) because FeedModeScreen is not hashable-stable
+        # across Textual's screen lifecycle; the membership churn is tiny.
+        self._feed_listeners: list[FeedModeScreen] = []
         self._last_state: State | None = None
         self._last_open_pause_count = 0
         self._reference_back_stack: list[ReferenceTarget] = []
@@ -453,11 +476,64 @@ class EaApp(App[None]):
     async def _on_event(self, envelope: Envelope) -> None:
         """Receive live daemon event envelopes from the binding.
 
-        The current app logic refreshes state after every push and then
-        computes toasts / needs_user modal state from the durable stores,
-        so this hook only records the live seam for diagnostics.
+        Two consumers ride this hook: the toast / needs_user logic still
+        recomputes from the durable stores on the matching state refresh,
+        and the live Feed pane subscribes off this seam. Each push is
+        appended to the App-owned ring buffer (:attr:`_live_event_buffer`)
+        and fanned out to every mounted Feed pane so the pane shows live
+        events without opening a second daemon subscription. This runs on
+        the event-loop thread (the binding marshals pushes back via
+        ``run_coroutine_threadsafe``), so the deque append and the
+        listener fan-out need no extra lock.
+
+        Args:
+            envelope: The live event envelope pushed by the daemon.
         """
         logger.debug(f"_on_event id={envelope.id!r} kind={envelope.kind.value!r}")
+        self._live_event_buffer.append(envelope)
+        for listener in list(self._feed_listeners):
+            listener.append_event(envelope)
+
+    @property
+    def live_event_buffer(self) -> tuple[Envelope, ...]:
+        """Return a snapshot of the live event buffer, oldest-first.
+
+        The Feed pane seeds its scroll from this on mount so a mode switch
+        into Feed mid-session shows the events that arrived before the pane
+        existed. A tuple copy keeps the caller from mutating the deque.
+
+        Returns:
+            The buffered live envelopes in arrival order (oldest first).
+        """
+        return tuple(self._live_event_buffer)
+
+    def register_feed_listener(self, listener: FeedModeScreen) -> None:
+        """Register *listener* to receive each live envelope on arrival.
+
+        Idempotent: a double-register (e.g. a remount) does not duplicate
+        the fan-out target. Called from
+        :meth:`~eawf.surfaces.tui.modes.feed.FeedModeScreen.on_mount`.
+
+        Args:
+            listener: The Feed pane to push live envelopes to.
+        """
+        if listener not in self._feed_listeners:
+            self._feed_listeners.append(listener)
+            logger.debug(f"register_feed_listener count={len(self._feed_listeners)}")
+
+    def unregister_feed_listener(self, listener: FeedModeScreen) -> None:
+        """Unregister *listener* so the fan-out skips a torn-down pane.
+
+        A no-op when the listener was never registered (defensive against a
+        double-unmount). Called from
+        :meth:`~eawf.surfaces.tui.modes.feed.FeedModeScreen.on_unmount`.
+
+        Args:
+            listener: The Feed pane to stop pushing live envelopes to.
+        """
+        if listener in self._feed_listeners:
+            self._feed_listeners.remove(listener)
+            logger.debug(f"unregister_feed_listener count={len(self._feed_listeners)}")
 
     def _open_pauses_for_state(self, state: State) -> list[Any]:
         """Return open pauses for *state*; degrade to empty on read errors."""
@@ -693,9 +769,17 @@ class EaApp(App[None]):
         self.notify(f"init path: {command}", severity="information")
 
     async def _on_degraded(self, degraded: bool) -> None:
-        """Receive a degraded-mode flip from the binder."""
+        """Receive a degraded-mode flip from the binder.
+
+        Drives the header degraded banner and, for any mounted Feed pane
+        still showing its honest-empty notice, swaps that notice between the
+        live-waiting and daemon-unreachable wording so the feed never
+        implies a live stream while the binding is in poll fallback.
+        """
         self.degraded = degraded
         self._sync_degraded_banner()
+        for listener in list(self._feed_listeners):
+            listener.refresh_empty_notice()
 
     def _sync_degraded_banner(self) -> None:
         """Toggle banner visibility and text without remounting the widget."""

@@ -406,10 +406,10 @@ def test_placeholder_mode_renders_honest_empty_coming_soon() -> None:
 
 #: Modes whose real pane wave has landed -- excluded from the placeholder
 #: coming-soon loop. ``home`` is the scope-bearing mode; ``trust`` is the
-#: trust-scorecard pane; ``evidence`` is the agent-report rollup pane. The
-#: remaining modes still ship as placeholders until their per-pane waves
-#: replace the registry factory.
-_REAL_PANE_MODES: frozenset[str] = frozenset({"home", "trust", "evidence"})
+#: trust-scorecard pane; ``evidence`` is the agent-report rollup pane;
+#: ``feed`` is the live event-feed pane. The remaining modes still ship as
+#: placeholders until their per-pane waves replace the registry factory.
+_REAL_PANE_MODES: frozenset[str] = frozenset({"home", "trust", "evidence", "feed"})
 
 
 def test_every_placeholder_mode_boots_and_titles_itself() -> None:
