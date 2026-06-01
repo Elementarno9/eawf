@@ -1056,6 +1056,18 @@
       "status": "done",
       "updated_at": "2026-06-01T05:36:27.583389Z"
     },
+    "P29-I01-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W10",
+      "scope_id": "P29-I01-W10",
+      "status": "done",
+      "updated_at": "2026-06-01T06:06:10.919929Z"
+    },
     "P29-I01-W11": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1079,6 +1091,18 @@
       "scope_id": "P29-I01-W12",
       "status": "done",
       "updated_at": "2026-06-01T05:47:42.727887Z"
+    },
+    "P29-I01-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W19",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W19",
+      "scope_id": "P29-I01-W19",
+      "status": "done",
+      "updated_at": "2026-06-01T06:11:30.712207Z"
     },
     "P29-I01-W20": {
       "actual_cost_usd": 0.0,
@@ -1127,6 +1151,18 @@
       "scope_id": "P29-I01-W23",
       "status": "done",
       "updated_at": "2026-06-01T04:23:44.128336Z"
+    },
+    "P29-I01-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W24",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W24",
+      "scope_id": "P29-I01-W24",
+      "status": "done",
+      "updated_at": "2026-06-01T06:16:48.301206Z"
     }
   },
   "agent_sessions": {
@@ -7053,6 +7089,19 @@
       "scope_id": "P29-I01-W09",
       "updated_at": "2026-06-01T05:04:47.986339Z"
     },
+    "P29-I01-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W10-bucket-20260601T054806Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I01-W10",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I01-W10",
+      "updated_at": "2026-06-01T05:48:06.951181Z"
+    },
     "P29-I01-W11": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I01-W11-bucket-20260601T042456Z",
@@ -7078,6 +7127,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I01-W12",
       "updated_at": "2026-06-01T05:04:49.306469Z"
+    },
+    "P29-I01-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W19-bucket-20260601T054808Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I01-W19",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I01-W19",
+      "updated_at": "2026-06-01T05:48:08.228814Z"
     },
     "P29-I01-W20": {
       "confidence": "low",
@@ -7130,6 +7192,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I01-W23",
       "updated_at": "2026-06-01T03:40:36.583784Z"
+    },
+    "P29-I01-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W24-bucket-20260601T054809Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I01-W24",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I01-W24",
+      "updated_at": "2026-06-01T05:48:09.517395Z"
     }
   },
   "goals": {
@@ -9059,7 +9134,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T05:47:43.927549Z",
+  "updated_at": "2026-06-01T06:16:49.528298Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -27425,9 +27500,9 @@
     "P29-I01-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T06:06:10.919929Z",
+      "commit": "44c18e3005d33d7d313e9c3e7eb6630cf6107081",
       "deps": [
         "P29-I01-W08"
       ],
@@ -27442,17 +27517,17 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.262199Z",
-      "outcome": null,
+      "outcome": "rung-4 attested (render-only, lowest assurance) + closed CriterionVerdict StrEnum certified|supported|refuted|unresolved|attested; refute-first precedence",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "rung-4 attested (render-only, lowest assurance) added; closed verdict StrEnum certified|supported|refuted|unresolved|attested"
       ],
       "title": "Add rung-4 attested render and refute-first verdict vocab",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W10-1780292887"
     },
     "P29-I01-W11": {
       "agent_role": "executor",
@@ -27742,9 +27817,9 @@
         "P29-I01-W15",
         "P29-I01-W16"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T06:11:30.712207Z",
+      "commit": "9f468988ea9294b108c17a7e89ac0b6e2cfbbc61",
       "deps": [],
       "description": "[URG | control-plane/tui | SF] one urgency field; consumed by RO-9/11/12 and TUI-4/5.",
       "dispatch_history": [],
@@ -27757,17 +27832,17 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.250257Z",
-      "outcome": null,
+      "outcome": "shared Urgency StrEnum (low|normal|high|urgent) + OpenQuestion.urgency; FOLLOWUP UserQuestion+OpenPause (workflow/skills) wiring deferred to re-point wave; stale goldens",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "urgency field added to UserQuestion + the pause schema; shared by needs_user, research, and the attention feed"
       ],
       "title": "Add urgency field to UserQuestion and pause schema",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W19-1780292889"
     },
     "P29-I01-W20": {
       "agent_role": "executor",
@@ -27914,9 +27989,9 @@
     "P29-I01-W24": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T06:16:48.301206Z",
+      "commit": "d710028ec03d6e9010b0b27cb830849a05495e10",
       "deps": [
         "P29-I01-W21"
       ],
@@ -27931,10 +28006,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.263936Z",
-      "outcome": null,
+      "outcome": "schema-forced LLMAssistResult + bounded re-ask loop (max 3) + LLMAssistError typed failure; mocked spawn; no StoreKind (transient); daemon dispatch-runner wiring deferred",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "schema-forced LLMAssistResult store + a bounded re-ask loop on schema-mismatch",
         "LLMAssistResult store is absent on main"
@@ -27942,7 +28017,7 @@
       "title": "Build schema-forced LLMAssistResult and re-ask loop",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W24-1780292890"
     },
     "P29-I01-W25": {
       "agent_role": "executor",
@@ -33128,6 +33203,17 @@
       "status": "merged",
       "wave_id": "P29-I01-W09"
     },
+    "WT-P29-I01-W10-1780292887": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w10",
+      "created_at": "2026-06-01T05:48:07.761796Z",
+      "id": "WT-P29-I01-W10-1780292887",
+      "merged_commit": "44c18e3",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w10",
+      "status": "merged",
+      "wave_id": "P29-I01-W10"
+    },
     "WT-P29-I01-W11-1780287897": {
       "base_branch": "feature/eawf-v0.5-p29",
       "branch": "feature/eawf-v0.1-p29-w11",
@@ -33149,6 +33235,17 @@
       "path": ".ea/worktrees/p29-w12",
       "status": "merged",
       "wave_id": "P29-I01-W12"
+    },
+    "WT-P29-I01-W19-1780292889": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w19",
+      "created_at": "2026-06-01T05:48:09.046443Z",
+      "id": "WT-P29-I01-W19-1780292889",
+      "merged_commit": "9f46898",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w19",
+      "status": "merged",
+      "wave_id": "P29-I01-W19"
     },
     "WT-P29-I01-W20-1780282682": {
       "base_branch": "feature/eawf-v0.5-p29",
@@ -33193,6 +33290,17 @@
       "path": ".ea/worktrees/p29-w23",
       "status": "merged",
       "wave_id": "P29-I01-W23"
+    },
+    "WT-P29-I01-W24-1780292890": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w24",
+      "created_at": "2026-06-01T05:48:10.346967Z",
+      "id": "WT-P29-I01-W24-1780292890",
+      "merged_commit": "d710028",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w24",
+      "status": "merged",
+      "wave_id": "P29-I01-W24"
     }
   }
 }
