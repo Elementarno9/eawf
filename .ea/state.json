@@ -1584,6 +1584,18 @@
       "status": "done",
       "updated_at": "2026-06-01T19:49:07.617111Z"
     },
+    "P29-I02-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W25",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W25",
+      "scope_id": "P29-I02-W25",
+      "status": "done",
+      "updated_at": "2026-06-01T20:04:43.549745Z"
+    },
     "P29-I02-W27": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1607,6 +1619,18 @@
       "scope_id": "P29-I02-W28",
       "status": "done",
       "updated_at": "2026-06-01T19:42:50.715919Z"
+    },
+    "P29-I02-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W29",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W29",
+      "scope_id": "P29-I02-W29",
+      "status": "done",
+      "updated_at": "2026-06-01T20:19:44.987716Z"
     }
   },
   "agent_sessions": {
@@ -3951,9 +3975,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P29-I02-W25",
-      "P29-I02-W26",
-      "P29-I02-W29"
+      "P29-I02-W26"
     ],
     "iter_id": "P29-I02",
     "phase_id": "P29",
@@ -10166,10 +10188,10 @@
       "scope_kind": "wave"
     }
   },
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T19:54:17.937515Z",
+  "updated_at": "2026-06-01T20:19:44.988083Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -25424,6 +25446,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T172000Z-operator-codex",
+      "claimed_at": "2026-05-27T17:12:54.752702+00:00",
       "closed_at": "2026-05-27T17:26:14.215265Z",
       "commit": "b16f07d01ebff875237c63c03de75f7ba0749727",
       "deps": [
@@ -25611,6 +25634,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T193500Z-operator-codex",
+      "claimed_at": "2026-05-27T17:30:49.095512+00:00",
       "closed_at": "2026-05-27T17:35:12.040427Z",
       "commit": "41ddda3dfa3cdaba2c75946e186bbbcfa4112999",
       "deps": [
@@ -25646,6 +25670,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "claimed_at": "2026-05-27T17:38:15.572590+00:00",
       "closed_at": "2026-05-27T17:55:44.033036Z",
       "commit": "318d70a438a0440ec0673d4ebc015e9844dc3247",
       "deps": [],
@@ -25680,6 +25705,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "claimed_at": "2026-05-27T17:38:16.123218+00:00",
       "closed_at": "2026-05-27T18:02:18.604869Z",
       "commit": "f8e85156b4bbb6889e9499518fa7462ce0e58a8c",
       "deps": [],
@@ -25713,6 +25739,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "claimed_at": "2026-05-27T17:38:16.672881+00:00",
       "closed_at": "2026-05-27T18:09:56.191727Z",
       "commit": "2a9fb45e410f9acc618b25cc2af8d34a7b646898",
       "deps": [],
@@ -25746,6 +25773,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "claimed_at": "2026-05-27T17:38:17.210658+00:00",
       "closed_at": "2026-05-27T18:13:21.687973Z",
       "commit": "2ae4e09d404abffc23987541cd107a30be35591e",
       "deps": [],
@@ -25779,6 +25807,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
+      "claimed_at": "2026-05-27T17:58:14.751458+00:00",
       "closed_at": "2026-05-27T17:59:48.273129Z",
       "commit": "42dc3d7e0e0fae3f7cd0bcc173a9f1d0dee559e6",
       "deps": [],
@@ -25819,6 +25848,7 @@
         "P28-I03-W33"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:07:02.440036+00:00",
       "closed_at": "2026-05-27T21:19:36.655867Z",
       "commit": "6bcd6acf8b23b7467276c35aa4b9cfa36cdb795b",
       "deps": [
@@ -25859,6 +25889,7 @@
         "P28-I03-W33"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:21:24.623266+00:00",
       "closed_at": "2026-05-27T21:29:14.676851Z",
       "commit": "be2520351bd588d883edffeb2a00536ce340a5da",
       "deps": [
@@ -25895,6 +25926,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:07:02.991571+00:00",
       "closed_at": "2026-05-27T21:19:32.423449Z",
       "commit": "ecc5d99c0f4b59ed61e733223c69a1d9fdf7ff60",
       "deps": [],
@@ -25932,6 +25964,7 @@
         "P28-I03-W36"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:07:03.533048+00:00",
       "closed_at": "2026-05-27T21:19:37.264729Z",
       "commit": "877036469d9ea640cacbf8681e207093b4d4d7e4",
       "deps": [],
@@ -25968,6 +26001,7 @@
         "P28-I03-W18"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:07:04.074875+00:00",
       "closed_at": "2026-05-27T21:25:53.179661Z",
       "commit": "8407549e343cef58a25040ec55b5c16b24183182",
       "deps": [],
@@ -26006,6 +26040,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:07:04.622945+00:00",
       "closed_at": "2026-05-27T21:20:47.444499Z",
       "commit": "cac14025a123f00b8cf22b12163a03cb05c11b90",
       "deps": [],
@@ -26038,6 +26073,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:31:15.522828+00:00",
       "closed_at": "2026-05-27T21:48:35.648340Z",
       "commit": "c5e1244f4e2479f91f34936add3d3ee2b7e4f8cb",
       "deps": [
@@ -26073,6 +26109,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:31:46.405722+00:00",
       "closed_at": "2026-05-27T21:46:22.490172Z",
       "commit": "d988e1a9aa10269654cc8f33bf6bf80fd43176dc",
       "deps": [
@@ -26107,6 +26144,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:31:50.666140+00:00",
       "closed_at": "2026-05-27T22:02:30.763971Z",
       "commit": "292ffc1a60c6adc22aa255e34277a63b6055ddb7",
       "deps": [
@@ -26146,6 +26184,7 @@
         "P28-I03-W32"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:07:05.174756+00:00",
       "closed_at": "2026-05-27T21:23:12.003517Z",
       "commit": "9e382d9c0b5e0e4746305e8fd23c35424918ae25",
       "deps": [
@@ -26189,6 +26228,7 @@
         "P28-I03-W17"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:31:57.112967+00:00",
       "closed_at": "2026-05-27T21:46:22.362505Z",
       "commit": "cfa95f4615c295865f97612cfe093a7e6fb44d64",
       "deps": [
@@ -26226,6 +26266,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:50:00.655544+00:00",
       "closed_at": "2026-05-27T22:01:34.604479Z",
       "commit": "95e38f998f43319ca1068c38627cec2e178bc708",
       "deps": [
@@ -26266,6 +26307,7 @@
         "P28-I03-W27"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:07:05.722663+00:00",
       "closed_at": "2026-05-27T21:25:53.271898Z",
       "commit": "1cc617d4ec21d1432827d9520dd83b0f1518abc4",
       "deps": [
@@ -26306,6 +26348,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:32:00.511014+00:00",
       "closed_at": "2026-05-27T21:45:16.166622Z",
       "commit": "b0575957770ff80b713d95ad4d2498d0e0226675",
       "deps": [
@@ -26340,6 +26383,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:04:35.499267+00:00",
       "closed_at": "2026-05-27T21:19:33.049556Z",
       "commit": "f93739c78a9e6ac9ffd1d5d63cf28e058cd793ba",
       "deps": [],
@@ -26372,6 +26416,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:50:01.196762+00:00",
       "closed_at": "2026-05-27T22:03:52.747963Z",
       "commit": "ec31de5febaa30eeac462093a05f6d5294b4e8c2",
       "deps": [
@@ -26409,6 +26454,7 @@
         "P28-I03-W34"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:50:01.733533+00:00",
       "closed_at": "2026-05-27T22:11:58.273361Z",
       "commit": "d27bc518646e0f94a6f6c9adfebfafe296f0871c",
       "deps": [
@@ -26450,6 +26496,7 @@
         "P28-I03-W29"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:32:03.999821+00:00",
       "closed_at": "2026-05-27T21:48:35.545962Z",
       "commit": "0fcf3972d40bb8d8983ee986dc101c9eb10da6a9",
       "deps": [
@@ -26485,6 +26532,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:04:36.023352+00:00",
       "closed_at": "2026-05-27T21:19:33.657390Z",
       "commit": "6c6a55d0e7af26b5a312f4c7c616e3f6989d6252",
       "deps": [],
@@ -26518,6 +26566,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:04:34.970675+00:00",
       "closed_at": "2026-05-27T21:19:34.251870Z",
       "commit": "a58b228e243d5786c6206bb264bb8ba2f90e7d26",
       "deps": [],
@@ -26549,6 +26598,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T22:03:04.520442+00:00",
       "closed_at": "2026-05-27T22:51:56.477521Z",
       "commit": "43879882553f7914748c0a0c66505f23701196e5",
       "deps": [
@@ -26588,6 +26638,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:04:33.371336+00:00",
       "closed_at": "2026-05-27T21:19:34.843959Z",
       "commit": "18d9f11c64bc9a9e69e2f96863721cd2da79a576",
       "deps": [],
@@ -26621,6 +26672,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:21:25.083959+00:00",
       "closed_at": "2026-05-27T21:26:46.602801Z",
       "commit": "f170e13d4f02a009670a2323ee53f9975ee16a72",
       "deps": [],
@@ -26654,6 +26706,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:04:33.913962+00:00",
       "closed_at": "2026-05-27T21:19:35.448936Z",
       "commit": "60c815907e47a11b18164561a78f67eb076afe02",
       "deps": [],
@@ -26684,6 +26737,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:04:34.443383+00:00",
       "closed_at": "2026-05-27T21:19:36.053408Z",
       "commit": "386f38f2d8ad734a0c41e5fee085d51a056b75b8",
       "deps": [],
@@ -26716,6 +26770,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:35:02.858006+00:00",
       "closed_at": "2026-05-27T21:42:27.619362Z",
       "commit": "c85b6405c8cb1ac954d1c0b48ca10a781700a0dc",
       "deps": [
@@ -26751,6 +26806,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T22:03:05.018079+00:00",
       "closed_at": "2026-05-27T22:51:57.203833Z",
       "commit": "367faa8406460bed06822d61c3a298cf6af6730b",
       "deps": [
@@ -26788,6 +26844,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T22:03:05.520082+00:00",
       "closed_at": "2026-05-27T22:51:57.897812Z",
       "commit": "eeb8daf953fd01e968fb8cf1379a50767df9bbb6",
       "deps": [
@@ -26824,6 +26881,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T22:03:06.003413+00:00",
       "closed_at": "2026-05-27T23:02:48.319109Z",
       "commit": "a622e0868146e377e39d98088db94b06968b9fc6",
       "deps": [
@@ -26863,6 +26921,7 @@
         "P28-I03-W27"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:21:25.562387+00:00",
       "closed_at": "2026-05-27T21:34:14.368923Z",
       "commit": "3dd44ddeeb7af374999643989c047861035a7e85",
       "deps": [
@@ -26903,6 +26962,7 @@
         "P28-I03-W37"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:50:02.266911+00:00",
       "closed_at": "2026-05-27T22:05:04.138718Z",
       "commit": "c21891dc288d6d48a31caf426563b547c5997d28",
       "deps": [
@@ -26939,6 +26999,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T22:03:06.500135+00:00",
       "closed_at": "2026-05-27T22:51:58.581475Z",
       "commit": "ea0e609c9b6f7c599f84cec1fd2d17a94ea8778d",
       "deps": [
@@ -26981,6 +27042,7 @@
         "P28-I03-W34"
       ],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:50:02.802142+00:00",
       "closed_at": "2026-05-27T22:01:34.737012Z",
       "commit": "bef9cbb75c529a884ac74d4efca66e2384d8077d",
       "deps": [
@@ -27019,6 +27081,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260528T000000Z-operator-claude",
+      "claimed_at": "2026-05-27T22:49:21.939722+00:00",
       "closed_at": "2026-05-28T00:52:28.705745Z",
       "commit": null,
       "deps": [
@@ -27058,6 +27121,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T22:03:07.023201+00:00",
       "closed_at": "2026-05-27T22:51:59.264917Z",
       "commit": "0f6730ef08d876db7e579328473fe9b154da004d",
       "deps": [
@@ -27098,6 +27162,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-05-27T21:21:26.065192+00:00",
       "closed_at": "2026-05-27T21:30:15.458360Z",
       "commit": "f8c1c22424cab19206d91fba3c7f220dc6dcd66d",
       "deps": [
@@ -27131,6 +27196,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "SES-20260528T000000Z-operator-claude",
+      "claimed_at": "2026-05-27T22:49:22.473667+00:00",
       "closed_at": "2026-05-28T00:52:30.819513Z",
       "commit": null,
       "deps": [
@@ -27173,6 +27239,7 @@
         "P28-I03-W39"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:43:56.263569+00:00",
       "closed_at": "2026-05-28T10:58:57.238954Z",
       "commit": "f9ac16f89995e5d64b6260ca0542241ec4ceb557",
       "deps": [],
@@ -27204,6 +27271,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T11:07:26.618142+00:00",
       "closed_at": "2026-05-28T11:07:27.231651Z",
       "commit": "6a84c8e57cb818ee191f37274fd37fc2f88ee452",
       "deps": [
@@ -27252,6 +27320,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:38.666939+00:00",
       "closed_at": "2026-05-28T11:00:08.790295Z",
       "commit": "06f8b9919639a668c074d7dc44a5906596a78a99",
       "deps": [],
@@ -27294,6 +27363,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:39.186516+00:00",
       "closed_at": "2026-05-28T10:56:16.030559Z",
       "commit": "1ae94cb9f7bd3f65a48f5fa6ec5fc9f7b1040aef",
       "deps": [],
@@ -27329,6 +27399,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:39.696575+00:00",
       "closed_at": "2026-05-28T10:56:55.668410Z",
       "commit": "7783d068557a5db5790482b52af50e4e0160c45f",
       "deps": [],
@@ -27367,6 +27438,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:40.200914+00:00",
       "closed_at": "2026-05-28T11:00:22.572614Z",
       "commit": "69eadef2f948908f6d0f4ec30f1f23ba48d6aa01",
       "deps": [],
@@ -27409,6 +27481,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:40.704620+00:00",
       "closed_at": "2026-05-28T11:00:35.549319Z",
       "commit": "d773be7af24e36e87eb55ca8db99f5f96a6cc556",
       "deps": [],
@@ -27448,6 +27521,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:41.227907+00:00",
       "closed_at": "2026-05-28T10:57:40.372635Z",
       "commit": "a02c383cdfe4dba229ae1a6c2d98f55877bc7798",
       "deps": [],
@@ -27489,6 +27563,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:41.743401+00:00",
       "closed_at": "2026-05-28T10:57:54.642543Z",
       "commit": "99be761db4ba50d13c8d729dca916ab4778be8ce",
       "deps": [],
@@ -27529,6 +27604,7 @@
         "P28-I03-W48"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T10:44:42.235579+00:00",
       "closed_at": "2026-05-28T10:58:56.549484Z",
       "commit": "f9ac16f89995e5d64b6260ca0542241ec4ceb557",
       "deps": [],
@@ -27565,6 +27641,7 @@
         "P28-I03-W49"
       ],
       "claim_session_id": "SES-20260528T120000Z-operator-codex",
+      "claimed_at": "2026-05-28T11:27:56.619486+00:00",
       "closed_at": "2026-05-28T11:28:59.109423Z",
       "commit": "3b88c8c73fea723b4c4654f54554ce7cd177c016",
       "deps": [
@@ -27614,6 +27691,7 @@
         "P28-I03-W50"
       ],
       "claim_session_id": "codex-p28-i03-w49",
+      "claimed_at": "2026-05-28T11:48:41.932565+00:00",
       "closed_at": "2026-05-28T11:50:45.373947Z",
       "commit": "cc9044e6daa3b375153f5bfeaae30442e780ad86",
       "deps": [
@@ -27654,6 +27732,7 @@
         "P28-I03-W51"
       ],
       "claim_session_id": "codex-p28-i03-w50",
+      "claimed_at": "2026-05-28T12:04:20.436990+00:00",
       "closed_at": "2026-05-28T12:09:39.568803Z",
       "commit": "0184347693b6ca87c69016aa8d4f7f35027d757d",
       "deps": [
@@ -27692,6 +27771,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "codex-p28-i03-w51",
+      "claimed_at": "2026-05-28T12:23:13.663445+00:00",
       "closed_at": "2026-05-28T12:27:35.932165Z",
       "commit": "f3676a4259870cc15360fca75074b63573e61329",
       "deps": [
@@ -27731,6 +27811,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T18:03:28.853355+00:00",
       "closed_at": "2026-05-28T18:03:33.673835Z",
       "commit": null,
       "deps": [],
@@ -27768,6 +27849,7 @@
       "agent_role": "polisher",
       "blocks": [],
       "claim_session_id": "inline-polisher",
+      "claimed_at": "2026-05-28T17:23:04.159153+00:00",
       "closed_at": "2026-05-28T17:29:32.689559Z",
       "commit": null,
       "deps": [],
@@ -27810,6 +27892,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T18:09:52.441548+00:00",
       "closed_at": "2026-05-28T18:09:53.046596Z",
       "commit": null,
       "deps": [],
@@ -27842,6 +27925,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T19:49:43.116393+00:00",
       "closed_at": "2026-05-28T19:49:43.695281Z",
       "commit": null,
       "deps": [
@@ -27877,6 +27961,7 @@
       "agent_role": "planner",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T20:00:40.568786+00:00",
       "closed_at": "2026-05-28T20:00:41.110598Z",
       "commit": null,
       "deps": [
@@ -27915,6 +28000,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T18:25:57.094212+00:00",
       "closed_at": "2026-05-28T18:25:57.687274Z",
       "commit": null,
       "deps": [],
@@ -27949,6 +28035,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T18:04:45.749441+00:00",
       "closed_at": "2026-05-28T18:04:46.342160Z",
       "commit": null,
       "deps": [],
@@ -27983,6 +28070,7 @@
         "P28-I03-W60"
       ],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T18:09:46.562584+00:00",
       "closed_at": "2026-05-28T18:09:47.153003Z",
       "commit": null,
       "deps": [],
@@ -28019,6 +28107,7 @@
         "P28-I03-W61"
       ],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T18:35:12.183924+00:00",
       "closed_at": "2026-05-28T18:35:12.762787Z",
       "commit": null,
       "deps": [
@@ -28063,6 +28152,7 @@
         "P28-I03-W56"
       ],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T19:12:32.501045+00:00",
       "closed_at": "2026-05-28T19:12:33.081685Z",
       "commit": null,
       "deps": [
@@ -28110,6 +28200,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T18:41:03.841880+00:00",
       "closed_at": "2026-05-28T18:41:04.426447Z",
       "commit": null,
       "deps": [],
@@ -28144,6 +28235,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T21:21:41.526990+00:00",
       "closed_at": "2026-05-28T21:22:06.102339Z",
       "commit": null,
       "deps": [],
@@ -28173,6 +28265,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T23:02:53.289217+00:00",
       "closed_at": "2026-05-28T23:02:53.855366Z",
       "commit": null,
       "deps": [],
@@ -28207,6 +28300,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "main-replay",
+      "claimed_at": "2026-05-28T23:16:20.264390+00:00",
       "closed_at": "2026-05-28T23:16:51.203062Z",
       "commit": null,
       "deps": [],
@@ -28240,6 +28334,7 @@
         "P29-I05-W01"
       ],
       "claim_session_id": "flow-p29-i01",
+      "claimed_at": "2026-06-01T01:22:49.293728+00:00",
       "closed_at": "2026-06-01T02:53:29.209391Z",
       "commit": "55b8e58b5eb6bb63b64da995585f8d705ed3ce5c",
       "deps": [],
@@ -29230,6 +29325,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T14:35:41.966216+00:00",
       "closed_at": "2026-06-01T14:50:59.771779Z",
       "commit": "90612d01b1b3e706d454d65de5ed663a10260942",
       "deps": [],
@@ -29259,6 +29355,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T14:53:06.622912+00:00",
       "closed_at": "2026-06-01T15:08:39.653848Z",
       "commit": "ca46adf501d019271b7f083970bb576223fee54c",
       "deps": [],
@@ -29288,6 +29385,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T15:09:22.866154+00:00",
       "closed_at": "2026-06-01T15:19:04.522782Z",
       "commit": "add07b51b05941a19812af56aacbf5bc5983e766",
       "deps": [],
@@ -29317,6 +29415,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T15:21:33.887215+00:00",
       "closed_at": "2026-06-01T15:31:58.546459Z",
       "commit": "11141b9f9b3e4034f9d9d5a6bf7c505807450be2",
       "deps": [],
@@ -29346,6 +29445,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T15:32:48.412413+00:00",
       "closed_at": "2026-06-01T15:47:36.058983Z",
       "commit": "8a82f2adaaa1e757630e5f47bba29c6c6dfa43f8",
       "deps": [],
@@ -29376,6 +29476,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T15:48:17.831296+00:00",
       "closed_at": "2026-06-01T16:01:03.022784Z",
       "commit": "1564dd8f076d0b1b96fd7920933bedd89a5f90c1",
       "deps": [],
@@ -29405,6 +29506,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T16:01:54.496255+00:00",
       "closed_at": "2026-06-01T16:19:09.272699Z",
       "commit": "abc44a7da91d6e3d9b3594bdbc8123bc2845aab8",
       "deps": [],
@@ -29434,6 +29536,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T16:19:48.408690+00:00",
       "closed_at": "2026-06-01T16:30:07.292658Z",
       "commit": "ced9ec3e2b2f692b3e041e12799e7179f5d76824",
       "deps": [],
@@ -29465,6 +29568,7 @@
         "P29-I07-W07"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T16:33:08.807025+00:00",
       "closed_at": "2026-06-01T16:43:58.855019Z",
       "commit": "e50435df03b59818f858818bca080857f7c9dc6c",
       "deps": [],
@@ -29494,6 +29598,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T16:44:39.252118+00:00",
       "closed_at": "2026-06-01T16:52:40.483350Z",
       "commit": "b2453e398e4e017aa1883340fae7db90bd0b7cae",
       "deps": [],
@@ -29524,6 +29629,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T16:59:40.958783+00:00",
       "closed_at": "2026-06-01T17:11:58.875597Z",
       "commit": "458ae78b0f28f29e32f77fab249388ee95579d61",
       "deps": [],
@@ -29553,6 +29659,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T17:12:40.096552+00:00",
       "closed_at": "2026-06-01T17:24:06.292121Z",
       "commit": "b23854c066f4344625870d7302dc769f6ae7ffff",
       "deps": [],
@@ -29584,6 +29691,7 @@
         "P29-I06-W01"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T17:24:27.256599+00:00",
       "closed_at": "2026-06-01T17:45:33.104354Z",
       "commit": "7dc375915dead4f01285ab76184f2b29ef5b4a7c",
       "deps": [],
@@ -29617,6 +29725,7 @@
         "P29-I02-W16"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T17:48:09.568104+00:00",
       "closed_at": "2026-06-01T17:53:05.529182Z",
       "commit": null,
       "deps": [],
@@ -29648,6 +29757,7 @@
         "P29-I02-W16"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T17:48:40.694286+00:00",
       "closed_at": "2026-06-01T18:01:56.046158Z",
       "commit": "05e149b1d69ab601c3fb06f509c816f58241ecae",
       "deps": [],
@@ -29691,6 +29801,7 @@
         "P29-I04-W12"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T18:14:29.873391+00:00",
       "closed_at": "2026-06-01T18:44:51.366835Z",
       "commit": "459b6891fc9693bcd0357733583efc87f8b3beec",
       "deps": [
@@ -29724,6 +29835,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T19:33:47.656983+00:00",
       "closed_at": "2026-06-01T19:52:48.207249Z",
       "commit": "433163f64dbf251792aa62972bb22d66efe8b0f7",
       "deps": [
@@ -29757,6 +29869,7 @@
         "P29-I02-W19"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T17:48:41.281746+00:00",
       "closed_at": "2026-06-01T18:13:47.845928Z",
       "commit": "d4a9d803609215a3e8d28e1f700ea11660c76bda",
       "deps": [
@@ -29788,6 +29901,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T18:49:03.287752+00:00",
       "closed_at": "2026-06-01T19:27:12.049891Z",
       "commit": "22884af37f3ef555db29f439aa7c6487e735df8d",
       "deps": [
@@ -29820,6 +29934,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T18:49:03.763092+00:00",
       "closed_at": "2026-06-01T19:12:57.553355Z",
       "commit": "08aad04531d27897c4935c6ac825fc53a4666a06",
       "deps": [
@@ -29851,6 +29966,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T18:49:04.241231+00:00",
       "closed_at": "2026-06-01T19:26:07.255357Z",
       "commit": "986ee63b44d274c4e5179de968487a7790eddd5b",
       "deps": [
@@ -29882,6 +29998,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T18:49:04.716921+00:00",
       "closed_at": "2026-06-01T19:12:58.317708Z",
       "commit": "584911f6bb13b5299b9f34079a361018e04b8e16",
       "deps": [
@@ -29915,6 +30032,7 @@
         "P29-I02-W29"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T19:33:48.138576+00:00",
       "closed_at": "2026-06-01T19:54:17.405079Z",
       "commit": "ddb9e61b84f394937a57a76ad0c9b335ac8710b4",
       "deps": [
@@ -29948,6 +30066,7 @@
         "P29-I02-W25"
       ],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T19:33:48.616398+00:00",
       "closed_at": "2026-06-01T19:49:07.617111Z",
       "commit": "a7cabbbfe2b6cba81920c4e1bcbf9260ec77bfad",
       "deps": [
@@ -29979,8 +30098,9 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
-      "closed_at": null,
-      "commit": null,
+      "claimed_at": "2026-06-01T19:49:08.192528+00:00",
+      "closed_at": "2026-06-01T20:04:43.549745Z",
+      "commit": "fa26a800bb7127ab0dd4b0d5a27f78de129d3c2d",
       "deps": [
         "P29-I02-W24"
       ],
@@ -29994,10 +30114,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.271626Z",
-      "outcome": null,
+      "outcome": "advisory read-only cross-repo PR view (/prs palette verb): gather_cross_repo_prs spans the explicit registry (read_registry, no scan - trip-wire pinned), reuses single-repo pr_list.fetch_open_prs per repo on a worker; BINDINGS = move/open_web/close only (no mutating verb - asserted), per-repo graceful (unavailable) degradation, honest-empty. 1774 tests. Cherry-picked 8b4b0d5 clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "advisory read-only cross-repo PR view"
       ],
@@ -30010,6 +30130,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T19:52:48.754211+00:00",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -30041,6 +30162,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T18:49:05.193486+00:00",
       "closed_at": "2026-06-01T19:18:15.775975Z",
       "commit": "7f788aec590882417fbfd8b193dc29ec021fe282",
       "deps": [
@@ -30073,6 +30195,7 @@
       "agent_role": "executor",
       "blocks": [],
       "claim_session_id": "op-p29i02",
+      "claimed_at": "2026-06-01T19:33:49.096369+00:00",
       "closed_at": "2026-06-01T19:42:50.715919Z",
       "commit": "60e8d2abe181f6189b2cf4bb476b52fb912eea9f",
       "deps": [
@@ -30106,8 +30229,9 @@
         "P29-I02-W30"
       ],
       "claim_session_id": "op-p29i02",
-      "closed_at": null,
-      "commit": null,
+      "claimed_at": "2026-06-01T19:54:17.948880+00:00",
+      "closed_at": "2026-06-01T20:19:44.987716Z",
+      "commit": "82adf126b489b5f7708b9b3a496ebe801179007f",
       "deps": [
         "P29-I02-W23"
       ],
@@ -30127,10 +30251,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T18:26:42.440130Z",
-      "outcome": null,
+      "outcome": "Wave.claimed_at work-start field stamped at claim + 1.2->1.3 migration backfilling claimed_at from wave_claimed events (idempotent, None for no-claim waves, EventAnchoredMigration protocol); TUI _wave_time_burn_bar + daemon _publish_wave_elapsed_updates anchor on claimed_at (None->no clock, NO opened_at fallback -> ~60x inflation cannot recur); schema regen + migration doc. 965 tests. Cherry-picked 42545e31 clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "Wave gains claimed_at typed field stamped in claim_wave",
         "schema_version bumped with migration backfilling claimed_at from wave_claimed event anchors",
