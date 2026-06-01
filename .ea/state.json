@@ -1283,6 +1283,18 @@
       "scope_id": "P29-I01-W28",
       "status": "done",
       "updated_at": "2026-06-01T08:17:55.954840Z"
+    },
+    "P29-I01-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W29",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W29",
+      "scope_id": "P29-I01-W29",
+      "status": "done",
+      "updated_at": "2026-06-01T09:05:13.217412Z"
     }
   },
   "agent_sessions": {
@@ -7455,6 +7467,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I01-W28",
       "updated_at": "2026-06-01T08:05:07.638114Z"
+    },
+    "P29-I01-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W29-bucket-20260601T085515Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I01-W29",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I01-W29",
+      "updated_at": "2026-06-01T08:55:15.417949Z"
     }
   },
   "goals": {
@@ -9387,7 +9412,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T08:55:08.992720Z",
+  "updated_at": "2026-06-01T09:05:14.354147Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28415,9 +28440,9 @@
     "P29-I01-W29": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T09:05:13.217412Z",
+      "commit": "274e7cc4a1f13482fa35cca430f0d214fc5551a5",
       "deps": [
         "P29-I01-W10"
       ],
@@ -28431,10 +28456,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T08:55:08.992573Z",
-      "outcome": null,
+      "outcome": "rename rung4 CriterionVerdict->EviBoundVerdict (rule-17 collision with agent_report.CriterionVerdict resolved); internal symbol 3 refs+export+tests updated; evidence cluster 108 green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "rung4 closed verdict StrEnum renamed CriterionVerdict->EviBoundVerdict so it no longer collides with agent_report.CriterionVerdict",
         "all refs + workflow/evidence exports + tests updated and green"
@@ -28442,7 +28467,7 @@
       "title": "Rename EviBound CriterionVerdict to EviBoundVerdict (rule-17)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W29-1780304116"
     },
     "P29-I02-W01": {
       "agent_role": "executor",
@@ -33770,6 +33795,17 @@
       "path": ".ea/worktrees/p29-w28",
       "status": "merged",
       "wave_id": "P29-I01-W28"
+    },
+    "WT-P29-I01-W29-1780304116": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w29",
+      "created_at": "2026-06-01T08:55:16.313741Z",
+      "id": "WT-P29-I01-W29-1780304116",
+      "merged_commit": "274e7cc",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w29",
+      "status": "merged",
+      "wave_id": "P29-I01-W29"
     }
   }
 }
