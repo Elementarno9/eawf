@@ -1427,6 +1427,18 @@
       "scope_id": "P29-I02-W11",
       "status": "done",
       "updated_at": "2026-06-01T17:11:58.875597Z"
+    },
+    "P29-I02-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W12",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W12",
+      "scope_id": "P29-I02-W12",
+      "status": "done",
+      "updated_at": "2026-06-01T17:24:06.292121Z"
     }
   },
   "agent_sessions": {
@@ -7776,6 +7788,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I02-W11",
       "updated_at": "2026-06-01T16:59:40.948632Z"
+    },
+    "P29-I02-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W12-bucket-20260601T171240Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I02-W12",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I02-W12",
+      "updated_at": "2026-06-01T17:12:40.085162Z"
     }
   },
   "goals": {
@@ -9749,7 +9774,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T17:11:58.876037Z",
+  "updated_at": "2026-06-01T17:24:06.292537Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29132,9 +29157,9 @@
     "P29-I02-W12": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T17:24:06.292121Z",
+      "commit": "b23854c066f4344625870d7302dc769f6ae7ffff",
       "deps": [],
       "description": "[CLI-12 | scope I01 | SF] wal admin + snapshot-pairing gate; the latter fires on the phase PR.",
       "dispatch_history": [],
@@ -29146,10 +29171,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.254897Z",
-      "outcome": null,
+      "outcome": "B070 read-only eawf wal admin group (status/list/show; no mutating verb - replay stays daemon recovery); B073 snapshot-pairing gate confirmed already CI-wired (ci.yaml:161) + tested (30 tests), gap filled = local pre-PR run recipe doc (snapshot-gate.md, coverage-gate doc convention); also cleared latent W11 state.schema.json MemoryTier drift; 85 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "wal.* admin command (B070) wired; snapshot-pairing CI gate (B073) wired"
       ],
