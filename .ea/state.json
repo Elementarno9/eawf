@@ -1439,6 +1439,18 @@
       "scope_id": "P29-I02-W12",
       "status": "done",
       "updated_at": "2026-06-01T17:24:06.292121Z"
+    },
+    "P29-I02-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W13",
+      "scope_id": "P29-I02-W13",
+      "status": "done",
+      "updated_at": "2026-06-01T17:45:33.104354Z"
     }
   },
   "agent_sessions": {
@@ -7801,6 +7813,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I02-W12",
       "updated_at": "2026-06-01T17:12:40.085162Z"
+    },
+    "P29-I02-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W13-bucket-20260601T172427Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W13",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W13",
+      "updated_at": "2026-06-01T17:24:27.245096Z"
     }
   },
   "goals": {
@@ -9774,7 +9799,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T17:24:06.292537Z",
+  "updated_at": "2026-06-01T17:45:33.104766Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29188,9 +29213,9 @@
       "blocks": [
         "P29-I06-W01"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T17:45:33.104354Z",
+      "commit": "7dc375915dead4f01285ab76184f2b29ef5b4a7c",
       "deps": [],
       "description": "[CLI-13 | scope 7-topic#2 | SF] /mockup skill; PLUG-1 registers it as a SkillSpec row.",
       "dispatch_history": [],
@@ -29204,10 +29229,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.255198Z",
-      "outcome": null,
+      "outcome": "/mockup skill authored (_MOCKUP_BODY + SkillSpec row PLUG-1 + typed MockupBody; model+user-invocable, read-only) + UserQuestionOption.preview field (side-by-side AUQ mockups); skill goldens + skills.md autogen regen; .secrets.baseline refreshed for plugin-hash false-positive; 524 tests green, pre-commit + mypy clean; skill reconcile clean. (executor socket-dropped pre-commit; orchestrator verified + committed)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "/mockup skill authored; UserQuestionOption gains a preview field for side-by-side AUQ mockups"
       ],
