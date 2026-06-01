@@ -1092,6 +1092,42 @@
       "status": "done",
       "updated_at": "2026-06-01T05:47:42.727887Z"
     },
+    "P29-I01-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W13",
+      "scope_id": "P29-I01-W13",
+      "status": "done",
+      "updated_at": "2026-06-01T06:49:18.016030Z"
+    },
+    "P29-I01-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W14",
+      "scope_id": "P29-I01-W14",
+      "status": "done",
+      "updated_at": "2026-06-01T07:05:15.089177Z"
+    },
+    "P29-I01-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W17",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W17",
+      "scope_id": "P29-I01-W17",
+      "status": "done",
+      "updated_at": "2026-06-01T06:54:36.420855Z"
+    },
     "P29-I01-W19": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1163,6 +1199,18 @@
       "scope_id": "P29-I01-W24",
       "status": "done",
       "updated_at": "2026-06-01T06:16:48.301206Z"
+    },
+    "P29-I01-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I01-W25",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I01-W25",
+      "scope_id": "P29-I01-W25",
+      "status": "done",
+      "updated_at": "2026-06-01T06:59:54.722227Z"
     }
   },
   "agent_sessions": {
@@ -7128,6 +7176,45 @@
       "scope_id": "P29-I01-W12",
       "updated_at": "2026-06-01T05:04:49.306469Z"
     },
+    "P29-I01-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W13-bucket-20260601T062457Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W13",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W13",
+      "updated_at": "2026-06-01T06:24:57.348872Z"
+    },
+    "P29-I01-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W14-bucket-20260601T062458Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I01-W14",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I01-W14",
+      "updated_at": "2026-06-01T06:24:58.695094Z"
+    },
+    "P29-I01-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W17-bucket-20260601T062459Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I01-W17",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I01-W17",
+      "updated_at": "2026-06-01T06:24:59.987431Z"
+    },
     "P29-I01-W19": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I01-W19-bucket-20260601T054808Z",
@@ -7205,6 +7292,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P29-I01-W24",
       "updated_at": "2026-06-01T05:48:09.517395Z"
+    },
+    "P29-I01-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I01-W25-bucket-20260601T062501Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I01-W25",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I01-W25",
+      "updated_at": "2026-06-01T06:25:01.305361Z"
     }
   },
   "goals": {
@@ -9134,7 +9234,7 @@
   "schema_version": "1.1",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T06:16:49.528298Z",
+  "updated_at": "2026-06-01T07:05:16.200716Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -27606,9 +27706,9 @@
         "P29-I01-W16",
         "P29-I01-W18"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T06:49:18.016030Z",
+      "commit": "cb5ff5b2aa3ac7f2a4ee639ba80c8b3b3a304396",
       "deps": [
         "P29-I01-W12",
         "P29-I01-W08"
@@ -27623,10 +27723,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.262554Z",
-      "outcome": null,
+      "outcome": "SaturationReport four-gate reducer (no open question/novelty decay/no contradiction/integration closed); drives loop-until-dry; frozen dataclass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "SaturationReport reduces the claim ledger over four gates (no open question / novelty decay / no contradiction / integration closed)",
         "drives loop-until-dry"
@@ -27634,7 +27734,7 @@
       "title": "Add SaturationReport reducer with four gates",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W13-1780295098"
     },
     "P29-I01-W14": {
       "agent_role": "executor",
@@ -27642,9 +27742,9 @@
         "P29-I01-W15",
         "P29-I04-W13"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T07:05:15.089177Z",
+      "commit": "1860231df2de0566f07eb657b2accbea0d02d77f",
       "deps": [
         "P29-I01-W12"
       ],
@@ -27659,10 +27759,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.262901Z",
-      "outcome": null,
+      "outcome": "ResearchCampaign StoreKind + plan-only Level-1 runner + typed research: block; __init__ conflict vs W13 resolved (both lazy-exports, sorted); stale goldens (StoreKind); ProfileBody.research mount deferred",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "ResearchCampaign StoreKind added; a plan-only Level-1 runner stages a campaign without live spawn",
         "per-domain config via a typed research: profile block"
@@ -27670,7 +27770,7 @@
       "title": "Add ResearchCampaign store and plan-only Level-1 runner",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W14-1780295099"
     },
     "P29-I01-W15": {
       "agent_role": "executor",
@@ -27747,9 +27847,9 @@
     "P29-I01-W17": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T06:54:36.420855Z",
+      "commit": "5ca0c4b8933dab95a2b6dc1f21d301455877bb92",
       "deps": [
         "P29-I01-W12",
         "P29-I01-W19"
@@ -27758,23 +27858,24 @@
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
+        "src/eawf/workflow/skills/**",
         "src/eawf/kernel/spec/**"
       ],
       "id": "P29-I01-W17",
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.263242Z",
-      "outcome": null,
+      "outcome": "clarify->needs_user bridge carrying urgency; COMPLETED W19 OpenPause urgency wiring (record_pause/list_open_pauses); workflow/skills only",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "clarify proposals bridge into needs_user pauses carrying urgency; resolves the clarify->needs_user disconnect"
       ],
       "title": "Bridge clarify proposals into needs_user pauses",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W17-1780295100"
     },
     "P29-I01-W18": {
       "agent_role": "executor",
@@ -28025,9 +28126,9 @@
         "P29-I03-W05",
         "P29-I04-W11"
       ],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i01",
+      "closed_at": "2026-06-01T06:59:54.722227Z",
+      "commit": "8e8711d9ec2e3777d4f4e4af0b5d70dd8696c486",
       "deps": [
         "P29-I01-W21"
       ],
@@ -28042,10 +28143,10 @@
       "intent": null,
       "iter_id": "P29-I01",
       "opened_at": "2026-06-01T00:19:14.264263Z",
-      "outcome": null,
+      "outcome": "soft+hard cancel_process_group (SIGTERM/SIGKILL pgid) + cancel_with_grace composing terminate_with_grace; FLOOR-6 HALT seam",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "soft + hard cancel via cancel_process_group (pgid kill); terminate_with_grace already on main",
         "the pgid-kill primitive the floor HALT (FLOOR-6) wires to"
@@ -28053,7 +28154,7 @@
       "title": "Build soft and hard cancel via cancel_process_group",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P29-I01-W25-1780295102"
     },
     "P29-I01-W26": {
       "agent_role": "executor",
@@ -33236,6 +33337,39 @@
       "status": "merged",
       "wave_id": "P29-I01-W12"
     },
+    "WT-P29-I01-W13-1780295098": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w13",
+      "created_at": "2026-06-01T06:24:58.230693Z",
+      "id": "WT-P29-I01-W13-1780295098",
+      "merged_commit": "cb5ff5b",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w13",
+      "status": "merged",
+      "wave_id": "P29-I01-W13"
+    },
+    "WT-P29-I01-W14-1780295099": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w14",
+      "created_at": "2026-06-01T06:24:59.523216Z",
+      "id": "WT-P29-I01-W14-1780295099",
+      "merged_commit": null,
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w14",
+      "status": "abandoned",
+      "wave_id": "P29-I01-W14"
+    },
+    "WT-P29-I01-W17-1780295100": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w17",
+      "created_at": "2026-06-01T06:25:00.822364Z",
+      "id": "WT-P29-I01-W17-1780295100",
+      "merged_commit": "5ca0c4b",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w17",
+      "status": "merged",
+      "wave_id": "P29-I01-W17"
+    },
     "WT-P29-I01-W19-1780292889": {
       "base_branch": "feature/eawf-v0.5-p29",
       "branch": "feature/eawf-v0.1-p29-w19",
@@ -33301,6 +33435,17 @@
       "path": ".ea/worktrees/p29-w24",
       "status": "merged",
       "wave_id": "P29-I01-W24"
+    },
+    "WT-P29-I01-W25-1780295102": {
+      "base_branch": "feature/eawf-v0.5-p29",
+      "branch": "feature/eawf-v0.1-p29-w25",
+      "created_at": "2026-06-01T06:25:02.140319Z",
+      "id": "WT-P29-I01-W25-1780295102",
+      "merged_commit": "8e8711d",
+      "owner_session_id": "flow-p29-i01",
+      "path": ".ea/worktrees/p29-w25",
+      "status": "merged",
+      "wave_id": "P29-I01-W25"
     }
   }
 }
