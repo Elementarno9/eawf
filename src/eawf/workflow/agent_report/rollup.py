@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -9,13 +10,26 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import cast
 
-from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, DispatchNote
-from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    DispatchNote,
+    WaveStatus,
+)
+from eawf.kernel.state.ids import natural_key
+from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.models import TelemetrySession, TelemetryToolCall
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
+
+logger = logging.getLogger(__name__)
+
+#: Report verdicts that mark a wave attempt as failed for retro flagging.
+_FAILED_VERDICTS: frozenset[AgentReportVerdict] = frozenset(
+    {AgentReportVerdict.FAIL, AgentReportVerdict.BLOCKED}
+)
 
 
 @dataclass(frozen=True)
@@ -132,6 +146,185 @@ def operator_rollup(state_path: Path, phase_id: str) -> dict[str, object]:
         "by_role": dict(sorted(by_role.items())),
         "latest": latest,
     }
+
+
+@dataclass(frozen=True)
+class RetroWaveRow:
+    """One wave joined to its latest agent report in a phase-retro digest."""
+
+    wave_id: str
+    iter_id: str
+    title: str
+    status: str
+    outcome: str | None
+    report_verdict: str | None
+    report_id: str | None
+    report_count: int
+    failed: bool
+
+    @property
+    def has_report(self) -> bool:
+        """Return whether any agent report joined to this wave."""
+        return self.report_count > 0
+
+    def as_summary(self) -> dict[str, object]:
+        """Return a compact JSON-friendly summary."""
+        return {
+            "wave_id": self.wave_id,
+            "iter_id": self.iter_id,
+            "title": self.title,
+            "status": self.status,
+            "outcome": self.outcome,
+            "report_verdict": self.report_verdict,
+            "report_id": self.report_id,
+            "report_count": self.report_count,
+            "has_report": self.has_report,
+            "failed": self.failed,
+        }
+
+
+@dataclass(frozen=True)
+class PhaseRetroDigest:
+    """Closure digest joining every wave under a phase to its agent report(s)."""
+
+    phase_id: str
+    waves: tuple[RetroWaveRow, ...]
+    wave_count: int
+    closed_count: int
+    failed_count: int
+    reportless_count: int
+
+    def as_payload(self) -> dict[str, object]:
+        """Return a JSON-friendly digest payload."""
+        return {
+            "phase_id": self.phase_id,
+            "wave_count": self.wave_count,
+            "closed_count": self.closed_count,
+            "failed_count": self.failed_count,
+            "reportless_count": self.reportless_count,
+            "waves": [row.as_summary() for row in self.waves],
+        }
+
+
+def _retro_wave_row(wave: Wave, reports: list[AgentReportRow]) -> RetroWaveRow:
+    """Join one wave to its reports and derive the failed flag.
+
+    The join key is ``wave.id == AgentReportHeader.base_id`` (the same key the
+    dispatch runner stamps via ``base_id=wave_id``). The latest report by
+    ``(created_at, id)`` supplies the surfaced verdict. A wave is failed when
+    its :class:`~eawf.kernel.state.enums.WaveStatus` is ``FAILED`` or its latest
+    report verdict is ``fail`` / ``blocked``.
+
+    Args:
+        wave: The wave whose report join should be computed.
+        reports: Report rows already filtered to ``base_id == wave.id``.
+
+    Returns:
+        The joined :class:`RetroWaveRow`.
+    """
+    latest = max(
+        reports,
+        key=lambda row: (row.envelope.created_at, row.envelope.id),
+        default=None,
+    )
+    verdict = latest.payload.body.verdict if latest is not None else None
+    status_failed = wave.status is WaveStatus.FAILED
+    verdict_failed = verdict in _FAILED_VERDICTS if verdict is not None else False
+    return RetroWaveRow(
+        wave_id=wave.id,
+        iter_id=wave.iter_id,
+        title=wave.title,
+        status=wave.status.value,
+        outcome=wave.outcome,
+        report_verdict=verdict.value if verdict is not None else None,
+        report_id=latest.envelope.id if latest is not None else None,
+        report_count=len(reports),
+        failed=status_failed or verdict_failed,
+    )
+
+
+def phase_retro_digest(state: State, state_path: Path, phase_id: str) -> PhaseRetroDigest:
+    """Build a closure digest for *phase_id* joining waves to agent reports.
+
+    Walks every iter under *phase_id* and every wave under those iters, then
+    joins each wave to its agent-report rows by ``wave.id == base_id`` (see
+    :func:`_retro_wave_row`). Renders honestly empty: when no reports exist for
+    the phase, every wave still appears with ``report_verdict`` ``None`` and the
+    reportless count equals the wave count.
+
+    Args:
+        state: Loaded, validated state supplying the phase/iter/wave tree.
+        state_path: Path to ``state.json``; the report stores resolve under its
+            sibling ``store/`` directory.
+        phase_id: Phase id to digest, e.g. ``P29``.
+
+    Returns:
+        The assembled :class:`PhaseRetroDigest`.
+
+    Raises:
+        ValueError: When *phase_id* is not a known phase in *state*.
+    """
+    if phase_id not in state.phases:
+        raise ValueError(f"unknown phase: {phase_id!r}")
+    iter_ids = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
+    waves = sorted(
+        (w for w in state.waves.values() if w.iter_id in iter_ids),
+        key=lambda w: natural_key(w.id),
+    )
+    reports_by_wave: dict[str, list[AgentReportRow]] = {}
+    for wave in waves:
+        reports_by_wave[wave.id] = iter_agent_reports(state_path, base_id=wave.id)
+    rows = tuple(_retro_wave_row(wave, reports_by_wave[wave.id]) for wave in waves)
+    closed_count = sum(1 for row in rows if row.status == WaveStatus.CLOSED.value)
+    failed_count = sum(1 for row in rows if row.failed)
+    reportless_count = sum(1 for row in rows if not row.has_report)
+    logger.info(
+        f"phase_retro_digest phase={phase_id} waves={len(rows)} "
+        f"closed={closed_count} failed={failed_count} reportless={reportless_count}"
+    )
+    return PhaseRetroDigest(
+        phase_id=phase_id,
+        waves=rows,
+        wave_count=len(rows),
+        closed_count=closed_count,
+        failed_count=failed_count,
+        reportless_count=reportless_count,
+    )
+
+
+def render_phase_retro_markdown(digest: PhaseRetroDigest) -> str:
+    """Render a :class:`PhaseRetroDigest` as a Markdown closure digest.
+
+    The table lists one row per wave with its status, outcome, joined report
+    verdict (or ``no report``), and a failed marker. An honest-empty phase (no
+    reports) still renders every wave with ``no report`` in the verdict column.
+
+    Args:
+        digest: The digest to render.
+
+    Returns:
+        A Markdown string with a heading, summary line, and per-wave table.
+    """
+    lines = [
+        f"## Phase retro: {digest.phase_id}",
+        "",
+        (
+            f"{digest.wave_count} wave(s): {digest.closed_count} closed, "
+            f"{digest.failed_count} failed, {digest.reportless_count} reportless"
+        ),
+        "",
+    ]
+    if not digest.waves:
+        lines.append("(no waves)")
+        return "\n".join(lines)
+    lines.append("| wave | status | verdict | failed | outcome |")
+    lines.append("| --- | --- | --- | --- | --- |")
+    for row in digest.waves:
+        verdict = row.report_verdict if row.report_verdict is not None else "no report"
+        failed = "yes" if row.failed else "no"
+        outcome = row.outcome if row.outcome else "-"
+        lines.append(f"| {row.wave_id} | {row.status} | {verdict} | {failed} | {outcome} |")
+    return "\n".join(lines)
 
 
 def per_wave_attempt_rollup(
@@ -366,10 +559,14 @@ def _exit_status_label(session: SessionAttempt | None) -> str:
 __all__ = [
     "AgentReportRow",
     "PerWaveAttemptRollup",
+    "PhaseRetroDigest",
+    "RetroWaveRow",
     "WaveAttemptTimelineRow",
     "error_kind_by_attempt_from_store",
     "find_agent_report",
     "iter_agent_reports",
     "operator_rollup",
     "per_wave_attempt_rollup",
+    "phase_retro_digest",
+    "render_phase_retro_markdown",
 ]

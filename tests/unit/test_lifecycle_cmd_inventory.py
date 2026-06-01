@@ -33,7 +33,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
 # wave, so the wave assertion checks containment (superset), not equality.
 EXPECTED_PROJECT_VERBS = {"init"}
 EXPECTED_SUBPROJECT_VERBS = {"add", "switch"}
-EXPECTED_PHASE_VERBS = {"open", "close", "activate", "reopen", "prepare-close"}
+EXPECTED_PHASE_VERBS = {"open", "close", "activate", "reopen", "prepare-close", "retro"}
 EXPECTED_ITER_VERBS = {"activate", "open", "close", "plan"}
 EXPECTED_WAVE_VERBS = {
     "plan",

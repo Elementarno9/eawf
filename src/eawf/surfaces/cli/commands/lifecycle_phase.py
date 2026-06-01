@@ -573,6 +573,67 @@ def phase_reopen_cmd(
     )
 
 
+@phase_app.command("retro")
+def phase_retro_cmd(
+    ctx: typer.Context,
+    phase_id: Annotated[str, typer.Argument(help="Phase ID to digest.")],
+    md: Annotated[
+        bool, typer.Option("--md", help="Render the digest as a markdown table.")
+    ] = False,
+) -> None:
+    """Emit a closure digest joining the phase's waves to their agent reports.
+
+    Read-only. For each wave under *phase_id*, the digest joins the wave to its
+    agent report(s) by ``wave_id == base_id`` and surfaces per-wave status,
+    outcome, and report verdict (``no report`` when none exists), flags failed
+    waves, and prints a phase-level summary (closed / failed / reportless
+    counts). ``--md`` emits a markdown table; ``--json`` (top-level flag) emits
+    the JSON payload. Renders honestly empty when no reports exist.
+    """
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.agent_report.rollup import (
+        phase_retro_digest,
+        render_phase_retro_markdown,
+    )
+
+    flags: GlobalFlags = ctx.obj
+    if not is_phase_id(phase_id):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid phase id: {phase_id!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    if md and flags.json_output:
+        cli_errors.emit_error(
+            cli_errors.UserError("--md and --json are contradictory", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = resolve_state_path(flags.workspace)
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+        return
+    try:
+        with state_transaction(state_path, read_only=True) as state:
+            digest = phase_retro_digest(state, state_path, phase_id)
+    except ValueError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+        return
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    if md:
+        emit_json_or_text(digest.as_payload(), render_phase_retro_markdown(digest), flags=flags)
+        return
+    text = (
+        f"phase retro {phase_id}: {digest.wave_count} wave(s), "
+        f"{digest.closed_count} closed, {digest.failed_count} failed, "
+        f"{digest.reportless_count} reportless"
+    )
+    emit_json_or_text(digest.as_payload(), text, flags=flags)
+
+
 def _closed_wave_commit_summary(
     state: State,
     *,

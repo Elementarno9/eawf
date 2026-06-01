@@ -352,6 +352,7 @@ Phase lifecycle (open, close, reopen).
 | `open` | Open a new phase. Provide an explicit ID or use ``--auto``. |
 | `prepare-close` | Compute a pre-close checklist for *phase_id* without closing it. |
 | `reopen` | Reopen a closed phase. Used for follow-up iters after a phase close. |
+| `retro` | Emit a closure digest joining the phase's waves to their agent reports. |
 
 ### `eawf plan`
 

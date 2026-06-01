@@ -1,11 +1,14 @@
 """``/memory`` skill — read/write/list curated durable memory records.
 
 ``/memory`` is the skill surface over the tiered-memory store. The
-three verbs map onto the operator-facing ``eawf memory`` CLI:
+three skill verbs map onto real ``eawf memory`` CLI commands:
 
-- ``/memory save <name>``  → records a WORKING-tier entry intent.
-- ``/memory list``         → enumerates the current entries.
-- ``/memory forget <name>``→ soft-deletes (prunes) an entry.
+- ``/memory save <name>``   → ``eawf memory add`` (``<name>`` is the entry
+  ``--title``).
+- ``/memory list``          → ``eawf memory list``.
+- ``/memory forget <name>`` → ``eawf memory prune`` (a scope/age-filtered
+  soft-delete; the CLI has no by-name forget, so the routed hint names the
+  ``--scope`` filter rather than a positional name).
 
 Per the authority map, the daemon is the sole canonical writer of the
 memory JSONL store; the skill therefore does **not** mutate the store
@@ -56,12 +59,37 @@ _DEFAULT_VERB = "save"
 # Verbs that operate on a single named entry and therefore require ``name``.
 _NAMED_VERBS: frozenset[str] = frozenset({"save", "forget"})
 
-# Map each verb to the canonical ``eawf memory`` writer command.
+# Map each skill verb to the canonical ``eawf memory`` CLI command it routes
+# to. The leaf command (``add`` / ``list`` / ``prune``) must stay a registered
+# ``memory_app`` verb; the skill-vs-CLI drift test pins exactly that.
 _VERB_TO_CLI: dict[str, str] = {
     "save": "eawf memory add",
     "list": "eawf memory list",
     "forget": "eawf memory prune",
 }
+
+
+def _next_action_for(verb: str, name: str | None) -> str:
+    """Return the flag-correct ``eawf memory`` hint for *verb*.
+
+    The ``add`` and ``prune`` CLI verbs take options, not a positional entry
+    name: ``add`` carries the name as ``--title`` and ``prune`` is scope/age
+    filtered. The hint therefore renders the real flag shape rather than
+    appending a bare positional that the CLI would reject.
+
+    Args:
+        verb: One of the skill verbs in :data:`_VALID_VERBS`.
+        name: Entry name when supplied; ``None`` for unnamed verbs (``list``).
+
+    Returns:
+        A copy-pasteable ``eawf memory`` command hint.
+    """
+    cli = _VERB_TO_CLI[verb]
+    if verb == "save":
+        return f"{cli} --title {name}" if name else f"{cli} --title <name>"
+    if verb == "forget":
+        return f"{cli} --scope <scope>"
+    return cli
 
 
 def _coerce_verb(value: Any) -> str:
@@ -97,7 +125,6 @@ class MemorySkill(Skill):
         name = args.get("name")
         name_str = str(name) if name else None
         tier = _coerce_tier(args.get("tier"))
-        cli = _VERB_TO_CLI[verb]
 
         if verb in _NAMED_VERBS and not name_str:
             return SkillResult(
@@ -109,7 +136,7 @@ class MemorySkill(Skill):
                     "tier": tier.value,
                     "reason": f"{verb!r} requires a memory entry name",
                 },
-                next_valid_actions=[f"{cli} <name>"],
+                next_valid_actions=[_next_action_for(verb, None)],
             )
 
         evt_id = emit_event(
@@ -129,7 +156,7 @@ class MemorySkill(Skill):
                 "tier": tier.value,
             },
             persisted_store_records=[evt_id],
-            next_valid_actions=[cli if name_str is None else f"{cli} {name_str}"],
+            next_valid_actions=[_next_action_for(verb, name_str)],
         )
 
 
