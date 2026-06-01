@@ -41,7 +41,10 @@ in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final, Literal, Protocol, runtime_checkable
+from decimal import Decimal
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_checkable
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
@@ -99,6 +102,96 @@ class SessionResumeFailedError(Exception):
     ``DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH`` (per the V8
     fall-through).
     """
+
+
+class RuntimeSpawnError(RuntimeError):
+    """Raised when a live runtime spawn fails to produce a usable result.
+
+    Covers a non-zero subprocess exit, empty stdout, an unparseable
+    result envelope, a non-object envelope, or a runtime-reported error
+    result. The daemon's dispatch path catches this so a raw
+    :class:`json.JSONDecodeError` / partial-output failure surfaces as a
+    typed adapter-layer error rather than leaking out of the spawn seam.
+    """
+
+
+# ---------------------------------------------------------------------------
+# Live-spawn outcome (transient; NOT state-resident)
+# ---------------------------------------------------------------------------
+
+
+class SpawnResult(BaseModel):
+    """Outcome of one **live** runtime subprocess spawn.
+
+    Transient — NOT state-resident. Carries the raw runtime ``text`` +
+    the parsed per-call token usage from a single
+    :meth:`~eawf.runtime.runtimes.claude.adapter.ClaudeAdapter.spawn_session`
+    call. Distinct from
+    :class:`~eawf.kernel.state.models.SessionAttempt` (the ``state.json``
+    bookkeeping row) precisely because the raw ``text`` must never land
+    in ``state.json`` per rule 16: a later wave validates + meters +
+    persists a typed body from this result, then stamps the lean
+    ``SessionAttempt``.
+
+    The bare name ``SessionResult`` is already taken twice in the tree
+    (the ``agent.session`` JSON-RPC response model and the session-store
+    operation outcome), so the live-spawn result is named ``SpawnResult``
+    to keep one canonical name per concept (rule 17). The schema-forced
+    ``LLMAssistResult`` store a later wave adds wraps the validated body
+    derived from this transient result.
+
+    Attributes:
+        session_id: Runtime-emitted session identifier.
+        runtime: Adapter id that produced the result (e.g.
+            ``"claude-code"``).
+        model: Model alias/id the spawn was *requested* with (what the
+            caller passed to ``--model``).
+        resolved_model: Full model id the runtime actually billed against
+            (claude reports this under ``modelUsage``); ``None`` when the
+            envelope does not disclose it. A later metering writer prices
+            against ``resolved_model or model`` so an alias like ``haiku``
+            still resolves to a priced ledger row.
+        subprocess_pid: PID of the spawned subprocess (always populated
+            on a live spawn).
+        exit_status: Subprocess exit code.
+        text: Raw runtime answer text (the ``result`` field of the
+            runtime JSON envelope). Never persisted to ``state.json``.
+        input_tokens: Non-cached input tokens billed this call.
+        output_tokens: Output tokens billed this call.
+        cache_creation_input_tokens: Prompt-cache write tokens (total
+            across both TTL tiers).
+        cache_creation_5m_input_tokens: Cache-write tokens at the 5-minute
+            TTL. When the envelope discloses no TTL split, the whole write
+            total lands here (the conservative prior rate).
+        cache_creation_1h_input_tokens: Cache-write tokens at the 1-hour
+            TTL.
+        cache_read_input_tokens: Prompt-cache read tokens.
+        cost_usd_reported: Runtime self-reported cost when the envelope
+            carries one (claude ``total_cost_usd``). A later metering
+            writer prices independently via the Decimal ledger; this is a
+            cross-check only.
+        started_at: When the subprocess started.
+        ended_at: When the subprocess exited.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(min_length=1)
+    runtime: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    resolved_model: str | None = None
+    subprocess_pid: Annotated[int, Field(ge=1)]
+    exit_status: int
+    text: str
+    input_tokens: Annotated[int, Field(ge=0)] = 0
+    output_tokens: Annotated[int, Field(ge=0)] = 0
+    cache_creation_input_tokens: Annotated[int, Field(ge=0)] = 0
+    cache_creation_5m_input_tokens: Annotated[int, Field(ge=0)] = 0
+    cache_creation_1h_input_tokens: Annotated[int, Field(ge=0)] = 0
+    cache_read_input_tokens: Annotated[int, Field(ge=0)] = 0
+    cost_usd_reported: Decimal | None = None
+    started_at: UtcDatetime
+    ended_at: UtcDatetime
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +415,8 @@ __all__ = [
     "DispatchEventKind",
     "ErrorClass",
     "RuntimeAdapter",
+    "RuntimeSpawnError",
     "SessionResumeFailedError",
+    "SpawnResult",
     "emit_runtime_event",
 ]

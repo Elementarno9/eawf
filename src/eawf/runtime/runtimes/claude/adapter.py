@@ -9,17 +9,23 @@ subprocess outcomes.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import re
 import uuid
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtime.runtimes.adapter import (
     ErrorClass,
     RuntimeAdapter,
+    RuntimeSpawnError,
     SessionResumeFailedError,
+    SpawnResult,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
@@ -37,6 +43,114 @@ _AUTH_RE = re.compile(
 _SERVER_RE = re.compile(rb"\b(?:5\d\d|internal_server_error|overloaded_error)\b", re.IGNORECASE)
 _TIMEOUT_RE = re.compile(rb"\b(?:timeout|deadline_exceeded)\b", re.IGNORECASE)
 _API_RE = re.compile(rb"\b4\d\d\b")
+
+
+def _parse_claude_result(
+    *,
+    runtime: str,
+    model: str,
+    stdout: bytes,
+    stderr: bytes,
+    exit_status: int,
+    subprocess_pid: int,
+    started_at: datetime,
+    ended_at: datetime,
+) -> SpawnResult:
+    """Parse a ``claude -p --output-format json`` envelope into a result.
+
+    The single-result JSON envelope carries ``result`` (the answer text),
+    ``session_id``, ``usage`` (the token classes), an optional
+    ``modelUsage`` map naming the billed model, and an optional
+    ``total_cost_usd``. Kept standalone (no adapter ``self``) so the parse
+    is unit-testable against a fixed envelope without spawning a
+    subprocess.
+
+    The function is fail-fast: every malformed-output condition raises
+    :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` rather than
+    returning a partially-populated result, so a caller never silently
+    meters a garbage spawn.
+
+    Args:
+        runtime: Adapter id stamped onto the result (e.g. ``"claude-code"``).
+        model: Model alias/id the spawn was requested with.
+        stdout: Raw subprocess stdout bytes (the JSON envelope).
+        stderr: Raw subprocess stderr bytes (surfaced in the error on a
+            non-zero exit).
+        exit_status: Subprocess exit code.
+        subprocess_pid: PID of the spawned subprocess.
+        started_at: When the subprocess started.
+        ended_at: When the subprocess exited.
+
+    Returns:
+        The validated :class:`SpawnResult` for the completed call.
+
+    Raises:
+        RuntimeSpawnError: non-zero exit, empty stdout, unparseable JSON,
+            a non-object envelope, a non-object usage block, or an
+            ``is_error`` result.
+    """
+
+    if exit_status != 0:
+        snippet = stderr.decode(errors="replace").strip()[:200]
+        raise RuntimeSpawnError(
+            f"claude spawn exited nonzero: status={exit_status} stderr={snippet!r}"
+        )
+    raw = stdout.decode(errors="replace").strip()
+    if not raw:
+        raise RuntimeSpawnError("claude spawn produced empty stdout")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeSpawnError(f"claude output is not valid json: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeSpawnError(f"claude output is not a json object: {type(data).__name__}")
+    if data.get("is_error"):
+        detail = data.get("subtype") or data.get("result")
+        raise RuntimeSpawnError(f"claude reported an error result: {detail!r}")
+    usage = data.get("usage") or {}
+    if not isinstance(usage, dict):
+        raise RuntimeSpawnError("claude usage block is not a json object")
+
+    text_field = data.get("result")
+    text = "" if text_field is None else str(text_field)
+
+    cache_write_total = int(usage.get("cache_creation_input_tokens", 0) or 0)
+    ttl_split = usage.get("cache_creation")
+    if isinstance(ttl_split, dict):
+        cache_write_5m = int(ttl_split.get("ephemeral_5m_input_tokens", 0) or 0)
+        cache_write_1h = int(ttl_split.get("ephemeral_1h_input_tokens", 0) or 0)
+    else:
+        cache_write_5m = 0
+        cache_write_1h = 0
+    if cache_write_5m == 0 and cache_write_1h == 0 and cache_write_total > 0:
+        # Envelope disclosed no TTL split: attribute the whole write to the
+        # 5-minute tier (the conservative prior) rather than dropping it.
+        cache_write_5m = cache_write_total
+
+    model_usage = data.get("modelUsage")
+    resolved_model = next(iter(model_usage), None) if isinstance(model_usage, dict) else None
+
+    cost_reported = data.get("total_cost_usd")
+    session_field = str(data.get("session_id") or "")
+
+    return SpawnResult(
+        session_id=session_field or f"{runtime}-{subprocess_pid}",
+        runtime=runtime,
+        model=model,
+        resolved_model=resolved_model,
+        subprocess_pid=subprocess_pid,
+        exit_status=exit_status,
+        text=text,
+        input_tokens=int(usage.get("input_tokens", 0) or 0),
+        output_tokens=int(usage.get("output_tokens", 0) or 0),
+        cache_creation_input_tokens=cache_write_total or (cache_write_5m + cache_write_1h),
+        cache_creation_5m_input_tokens=cache_write_5m,
+        cache_creation_1h_input_tokens=cache_write_1h,
+        cache_read_input_tokens=int(usage.get("cache_read_input_tokens", 0) or 0),
+        cost_usd_reported=(Decimal(str(cost_reported)) if cost_reported is not None else None),
+        started_at=started_at,
+        ended_at=ended_at,
+    )
 
 
 class ClaudeAdapter:
@@ -121,6 +235,100 @@ class ClaudeAdapter:
             session_id=session_id,
             session_log_handle=self.session_log_handle(session_id),
             started_at=datetime.now(UTC),
+        )
+
+    async def spawn_session(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        cwd: str | None = None,
+        extra_args: Sequence[str] = (),
+        timeout: float | None = None,
+        on_spawn: Callable[[int], None] | None = None,
+    ) -> SpawnResult:
+        """Spawn a live ``claude -p`` subprocess and collect its result.
+
+        Runs ``claude -p <prompt> --output-format json --model <model>``
+        via :func:`asyncio.create_subprocess_exec`, captures stdout (the
+        usage JSON envelope) + stderr, and parses the outcome into a typed
+        :class:`~eawf.runtime.runtimes.adapter.SpawnResult` (raw text +
+        the token classes + pid + exit + the optional self-reported cost).
+        The child is started in its own session / process group
+        (``start_new_session=True``) so a later cancel can signal the whole
+        group by pgid without this wave building the cancel path.
+
+        This wave builds the spawn mechanism + the parse only. Metering,
+        cancellation, and the schema-forced re-ask loop are separate waves
+        and are deliberately NOT wired here.
+
+        The optional *on_spawn* callback fires with the child PID the
+        moment the subprocess exists — before output is awaited — so a
+        later cancel path can register the pid and halt a still-running
+        call mid-flight.
+
+        Args:
+            prompt: Rendered prompt passed to ``claude -p``.
+            model: Model alias/id for ``--model``. No hardcoded floor —
+                the caller resolves it (the routing decision feeds this).
+            cwd: Working directory for the subprocess; ``None`` inherits
+                the parent's.
+            extra_args: Extra CLI args appended verbatim (the routing /
+                structured-output escape hatch).
+            timeout: Wall-clock ceiling in seconds; ``None`` waits
+                indefinitely. On expiry the child is killed and a typed
+                error is raised.
+            on_spawn: Optional callback invoked with the child PID right
+                after spawn (before output is awaited).
+
+        Returns:
+            The validated :class:`SpawnResult` for the completed call.
+
+        Raises:
+            RuntimeSpawnError: the spawn timed out, exited non-zero, or
+                returned an unparseable / error result envelope.
+        """
+
+        argv = [
+            self.cli_binary,
+            "-p",
+            prompt,
+            "--output-format",
+            "json",
+            "--model",
+            model,
+            *extra_args,
+        ]
+        started_at = datetime.now(UTC)
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
+            cwd=cwd,
+        )
+        pid = proc.pid
+        logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")
+        if on_spawn is not None:
+            on_spawn(pid)
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeSpawnError(
+                f"claude spawn timed out: timeout={timeout}s pid={pid}"
+            ) from None
+        ended_at = datetime.now(UTC)
+        return _parse_claude_result(
+            runtime=self.id,
+            model=model,
+            stdout=stdout or b"",
+            stderr=stderr or b"",
+            exit_status=proc.returncode if proc.returncode is not None else -1,
+            subprocess_pid=pid,
+            started_at=started_at,
+            ended_at=ended_at,
         )
 
     async def continue_session(
