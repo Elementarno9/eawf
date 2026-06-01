@@ -41,6 +41,7 @@ import os
 import socket
 from collections import deque
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
@@ -48,6 +49,7 @@ from textual.app import App
 from textual.binding import Binding, BindingType
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
+from textual.widget import AwaitMount
 from textual.widgets import Static
 
 from eawf.kernel.state.enums import ScopeKind
@@ -57,8 +59,11 @@ from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.render.link_wrap import REFERENCE_KINDS
 from eawf.surfaces.tui.modes import (
     DEFAULT_MODE,
+    NavPosition,
+    NavState,
     build_modes,
     mode_bindings,
+    mode_title,
 )
 from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.surfaces.tui.screens.overlays.reference import (
@@ -342,6 +347,13 @@ class EaApp(App[None]):
         # calls a callable then passes the Screen-or-name to ``_get_screen``),
         # but mypy cannot unify the invariant dict value types.
         self._modes = cast("dict[str, str | Callable[[], Screen[Any]]]", build_modes(self))
+        # The bound SCOPE x MODE navigation state machine. The launch
+        # position is (resolved scope, DEFAULT_MODE) -- always legal, since
+        # the Home launch mode is scope-agnostic. Every scope / mode switch
+        # consults this validator before swapping the screen, so an illegal
+        # (scope, mode) corner (user x {trust, evidence, feed}) is rejected
+        # at the boundary rather than landing in a sourceless view.
+        self._nav: NavState = NavState.initial(scope, DEFAULT_MODE)
         self._state_path = state_path
         self._binding: StateBinding | None = None
         self._help_open = False
@@ -506,6 +518,21 @@ class EaApp(App[None]):
             The buffered live envelopes in arrival order (oldest first).
         """
         return tuple(self._live_event_buffer)
+
+    @property
+    def nav_position(self) -> NavPosition:
+        """Return the current bound SCOPE x MODE navigation position.
+
+        The single source of truth for where the operator is in the
+        ``(scope, mode)`` matrix. The header reads this so the breadcrumb
+        renders the bound nav position rather than reconstructing it from the
+        separate ``_scope`` / ``current_mode`` fields (which the nav wiring
+        keeps in lockstep with this position on every accepted switch).
+
+        Returns:
+            The current :class:`~eawf.surfaces.tui.modes.NavPosition`.
+        """
+        return self._nav.position
 
     def register_feed_listener(self, listener: FeedModeScreen) -> None:
         """Register *listener* to receive each live envelope on arrival.
@@ -822,11 +849,49 @@ class EaApp(App[None]):
         for bar in self.query(EUBar):
             bar.render_mode = mode
 
+    def switch_mode(self, mode: str) -> AwaitMount:
+        """Switch the active content mode, gated by the nav state machine.
+
+        Overrides Textual's native ``switch_mode`` so the digit-key bindings
+        **and** the ``/<mode>`` palette verbs (both route here) consult the
+        bound :class:`~eawf.surfaces.tui.modes.NavState` before the mode
+        flips. When the target ``(current_scope, mode)`` pair is illegal --
+        the user portfolio scope crossed with a single-scope data mode
+        (``trust`` / ``evidence`` / ``feed``) -- the switch is rejected: the
+        app toasts the reason, logs it, and no-ops (returns a no-op
+        :class:`~textual.widget.AwaitMount` for the current screen) rather
+        than landing the operator in a sourceless view. An accepted switch
+        advances the nav position, then delegates to the native
+        ``switch_mode`` (which itself no-ops when already in *mode*).
+
+        Args:
+            mode: The requested target mode name.
+
+        Returns:
+            The native ``switch_mode`` await object on an accepted switch, or
+            a no-op :class:`~textual.widget.AwaitMount` for the current
+            screen when the nav bound rejected the target.
+        """
+        transition = self._nav.resolve_mode(mode)
+        if not transition.accepted:
+            logger.info(f"switch_mode rejected mode={mode!r} reason={transition.reason!r}")
+            self.notify(f"{mode} is unavailable here: {transition.reason}", severity="warning")
+            return AwaitMount(self.screen, [])
+        self._nav = replace(self._nav, position=transition.position)
+        return super().switch_mode(mode)
+
     def action_switch_scope(self, scope: str) -> None:
         """Switch the active scope screen (raw ``w`` / ``r`` / ``u``).
 
         The ``ctrl+w`` / ``ctrl+r`` / ``ctrl+u`` chords route here too as
         hidden muscle-memory aliases.
+
+        The switch is gated by the bound :class:`~eawf.surfaces.tui.modes.NavState`:
+        when the target ``(scope, current_mode)`` pair is illegal -- the
+        user portfolio scope crossed with a single-scope data mode
+        (``trust`` / ``evidence`` / ``feed``) -- the switch is rejected (the
+        app toasts the reason, logs it, and no-ops) rather than landing in a
+        sourceless view. An accepted switch advances the nav position.
 
         Every scope rebinds :attr:`state` before the screen swap so the
         target screen never renders against a stale binding. Switching to
@@ -845,6 +910,18 @@ class EaApp(App[None]):
         if scope not in self.SCREENS:
             logger.warning(f"action_switch_scope unknown scope={scope!r}")
             return
+        transition = self._nav.resolve_scope(scope)
+        if not transition.accepted:
+            logger.info(
+                f"action_switch_scope rejected scope={scope!r} mode={self.current_mode!r} "
+                f"reason={transition.reason!r}"
+            )
+            self.notify(
+                f"{mode_title(self.current_mode)} is unavailable at the {scope} scope",
+                severity="warning",
+            )
+            return
+        self._nav = replace(self._nav, position=transition.position)
         if scope == "user":
             from eawf.surfaces.tui.scopes.user import synthesize_user_state
 

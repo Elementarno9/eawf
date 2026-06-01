@@ -209,21 +209,28 @@ class Header(Static):
         self._repaint()
 
     def _repaint(self) -> None:
-        """Re-render the header line from the current state + scope + mode.
+        """Re-render the header line from the current state + bound nav position.
 
-        Reads the host app's active screen scope (``EaApp._scope``) so the
-        breadcrumb's scope segment tracks the screen the operator is on,
-        not the bound state's ``scope_kind`` (which reads ``workspace`` for
-        the user scope's synthesized portfolio), and the host's active mode
-        (``EaApp.current_mode``) for the leading mode segment. A bare
-        harness without either attribute falls back gracefully (no mode
-        segment, ``state.scope_kind`` for the scope).
+        Reads the host app's bound nav position (``EaApp.nav_position``) so
+        the breadcrumb's scope + mode segments track the validated
+        ``(scope, mode)`` the operator is on -- the single source of truth
+        the nav state machine owns -- rather than the bound state's
+        ``scope_kind`` (which reads ``workspace`` for the user scope's
+        synthesized portfolio). A bare harness without ``nav_position`` falls
+        back to the separate ``_scope`` / ``current_mode`` fields, and one
+        without those falls back gracefully (no mode segment,
+        ``state.scope_kind`` for the scope).
         """
         from eawf.surfaces.tui.modes import mode_title
 
-        scope = getattr(self.app, "_scope", None)
-        mode_name = getattr(self.app, "current_mode", None)
-        mode = mode_title(mode_name) if isinstance(mode_name, str) else None
+        position = getattr(self.app, "nav_position", None)
+        if position is not None:
+            scope: str | None = position.scope
+            mode: str | None = mode_title(position.mode)
+        else:
+            scope = getattr(self.app, "_scope", None)
+            mode_name = getattr(self.app, "current_mode", None)
+            mode = mode_title(mode_name) if isinstance(mode_name, str) else None
         self.update(render_header(self.state, scope, mode))
 
 

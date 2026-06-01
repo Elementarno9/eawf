@@ -17,6 +17,14 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
 from eawf.surfaces.tui.modes.feed import FeedModeScreen
+from eawf.surfaces.tui.modes.nav import (
+    NAV_SCOPES,
+    NavPosition,
+    NavState,
+    NavTransition,
+    is_legal_position,
+    legal_scopes_for_mode,
+)
 from eawf.surfaces.tui.modes.placeholder import PlaceholderModeScreen
 from eawf.surfaces.tui.modes.registry import (
     DEFAULT_MODE,
@@ -31,11 +39,17 @@ from eawf.surfaces.tui.modes.registry import (
 __all__ = [
     "DEFAULT_MODE",
     "MODE_REGISTRY",
+    "NAV_SCOPES",
     "EvidenceModeScreen",
     "FeedModeScreen",
     "ModeSpec",
+    "NavPosition",
+    "NavState",
+    "NavTransition",
     "PlaceholderModeScreen",
     "build_modes",
+    "is_legal_position",
+    "legal_scopes_for_mode",
     "mode_bindings",
     "mode_for_name",
     "mode_title",
