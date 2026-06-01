@@ -55,7 +55,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.state.enums import AuditVerdict, IterTrigger, WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State, Wave
-from eawf.workflow.estimation.buckets import critical_path_eu, sum_wave_eu, wave_estimate_eu
+from eawf.workflow.estimation.buckets import (
+    critical_path_eu,
+    resolve_wave_actual,
+    sum_wave_eu,
+    wave_estimate_eu,
+)
 
 # Schema version for the JSON envelope. Bump only when fields change in a
 # wire-breaking way.
@@ -435,14 +440,13 @@ def compute_eu_variance(state: State) -> EuVarianceMetric:
     mean it ran over.
     """
     estimates = state.estimates or {}
-    actuals = state.actuals or {}
     deltas: list[float] = []
     inside_pessimistic = 0
     for wave in state.waves.values():
         if wave.status != WaveStatus.CLOSED:
             continue
         est = estimates.get(wave.id)
-        act = actuals.get(wave.id)
+        act = resolve_wave_actual(state, wave.id)
         if est is None or act is None:
             continue
         delta = act.elapsed_eu - est.expected_eu
@@ -494,7 +498,6 @@ def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetr
         variance percentage (``None`` when not computable).
     """
     estimates = state.estimates or {}
-    actuals = state.actuals or {}
     planned_eu = 0.0
     actual_eu = 0.0
     sample_count = 0
@@ -502,7 +505,7 @@ def compute_estimate_actual_variance(state: State) -> EstimateActualVarianceMetr
         if wave.status != WaveStatus.CLOSED:
             continue
         est = estimates.get(wave.id)
-        act = actuals.get(wave.id)
+        act = resolve_wave_actual(state, wave.id)
         if est is None or act is None:
             continue
         planned_eu += est.expected_eu

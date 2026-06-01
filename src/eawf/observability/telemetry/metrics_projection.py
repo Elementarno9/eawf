@@ -17,7 +17,11 @@ from eawf.observability.telemetry.models import (
     TelemetrySession,
 )
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
-from eawf.workflow.estimation.buckets import CalibrationReport, calibrate_buckets
+from eawf.workflow.estimation.buckets import (
+    CalibrationReport,
+    calibrate_buckets,
+    resolve_wave_actual,
+)
 from eawf.workflow.estimation.metrics import (
     EstimateActualVarianceMetric,
     WaveElapsedMetric,
@@ -315,7 +319,6 @@ def _state_for_scope(state: State, *, scope: str | None) -> State:
 def _variance_rows(state: State, *, scope: str | None) -> list[VarianceWaveProjection]:
     """Return all per-wave variance drill rows for the requested scope."""
     estimates = state.estimates or {}
-    actuals = state.actuals or {}
     rows: list[VarianceWaveProjection] = []
     for wave in state.waves.values():
         if not _state_wave_in_scope(wave, state, scope):
@@ -323,7 +326,7 @@ def _variance_rows(state: State, *, scope: str | None) -> list[VarianceWaveProje
         if wave.status != WaveStatus.CLOSED or wave.effort_bucket is None:
             continue
         est = _estimate_for_wave(estimates, wave.id)
-        act = _actual_for_wave(actuals, wave.id)
+        act = _actual_for_wave(state, wave.id)
         if est is None or act is None:
             continue
         delta = act.elapsed_eu - est.expected_eu
@@ -354,15 +357,15 @@ def _estimate_for_wave(rows: dict[str, EstimateSummary], wave_id: str) -> Estima
     return None
 
 
-def _actual_for_wave(rows: dict[str, ActualSummary], wave_id: str) -> ActualSummary | None:
-    """Return the actual keyed by wave id or carrying wave id as scope."""
-    direct = rows.get(wave_id)
-    if direct is not None:
-        return direct
-    for row in rows.values():
-        if row.scope_id == wave_id:
-            return row
-    return None
+def _actual_for_wave(state: State, wave_id: str) -> ActualSummary | None:
+    """Resolve a wave's actual via the unified estimation accessor.
+
+    Thin delegation to
+    :func:`~eawf.workflow.estimation.buckets.resolve_wave_actual` so the
+    projection shares the single realized-EU resolution path (dict-key first,
+    then ``scope_id`` scan) rather than re-deriving it here.
+    """
+    return resolve_wave_actual(state, wave_id)
 
 
 def _compute_variance(state: State, *, scope: str | None) -> EstimateActualVarianceMetric:
@@ -423,7 +426,6 @@ def _per_role_calibration(
     now: datetime,
 ) -> tuple[RoleCalibrationProjection, ...]:
     """Return CalibrationReport rows for each observed agent role."""
-    actuals = state.actuals or {}
     scoped_waves = [
         wave
         for wave in state.waves.values()
@@ -436,7 +438,7 @@ def _per_role_calibration(
             continue
         role_actuals: dict[str, ActualSummary] = {}
         for wave_id in role_waves:
-            actual = _actual_for_wave(actuals, wave_id)
+            actual = _actual_for_wave(state, wave_id)
             if actual is not None:
                 role_actuals[wave_id] = actual
         role_state = state.model_copy(update={"waves": role_waves, "actuals": role_actuals})

@@ -362,7 +362,7 @@ def test_estimate_for_wave_falls_back_to_scope_id_search() -> None:
 
 
 def test_actual_for_wave_returns_none_when_no_match() -> None:
-    """Pins line 365 — no key match AND no ``scope_id`` match returns None."""
+    """No key match AND no ``scope_id`` match returns None via the delegator."""
     other = ActualSummary(
         id="ACT-other",
         scope_id="other-wave",
@@ -371,8 +371,8 @@ def test_actual_for_wave_returns_none_when_no_match() -> None:
         current_store_record_id="ACT-other",
         updated_at=_NOW,
     )
-    rows = {"ACT-other": other}
-    assert _actual_for_wave(rows, "P99-I99-W99") is None
+    state = _state_with_waves("P01-I01-W01").model_copy(update={"actuals": {"ACT-other": other}})
+    assert _actual_for_wave(state, "P99-I99-W99") is None
 
 
 def test_actual_for_wave_falls_back_to_scope_id_search() -> None:
@@ -384,6 +384,6 @@ def test_actual_for_wave_falls_back_to_scope_id_search() -> None:
         current_store_record_id="ACT-foo",
         updated_at=_NOW,
     )
-    rows = {"ACT-foo": act}
-    found = _actual_for_wave(rows, "P01-I01-W01")
+    state = _state_with_waves("P01-I01-W01").model_copy(update={"actuals": {"ACT-foo": act}})
+    found = _actual_for_wave(state, "P01-I01-W01")
     assert found is act

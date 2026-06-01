@@ -11,8 +11,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.schema import EstimationConfig
 from eawf.kernel.state.enums import Confidence, EffortBucket, WaveStatus
-from eawf.kernel.state.models import EstimateSummary, State, Wave
+from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
 
+#: Code-canonical effort-bucket EU calibration — the single source of the
+#: bucket -> expected-EU mapping. One EU is ~30 minutes of agent-driven
+#: session time (:data:`EU_MINUTES`), so XS is a ~7.5-minute task and XL a
+#: ~105-minute one. Operator config (``estimation.buckets.overrides``) may
+#: tighten a bucket per repo, but this table is the fallback every estimate
+#: and the drift calibration compare against. The values are pinned by
+#: ``tests/workflow/estimation/test_buckets.py::test_bucket_eu_is_canonical_table``
+#: so a silent edit reds a test rather than shifting every projection.
 BUCKET_EU: dict[EffortBucket, float] = {
     EffortBucket.XS: 0.25,
     EffortBucket.S: 0.5,
@@ -73,6 +81,111 @@ def critical_path_eu(waves: list[Wave]) -> float:
     if not waves:
         return 0.0
     return round(max(_cost(wave, set()) for wave in waves), 2)
+
+
+def resolve_wave_actual(state: State, wave_id: str) -> ActualSummary | None:
+    """Resolve a wave's :class:`ActualSummary` — the single resolution path.
+
+    This is the **one** place that maps a wave id onto its actual row, so
+    every realized-EU reader (the :func:`actual_eu_for_wave` /
+    :func:`actual_eu_for_iter` / :func:`actual_eu_for_phase` accessors, plus
+    any caller that needs the full row for the pessimistic bound or existence
+    check) shares one resolution semantics instead of re-deriving it.
+
+    Resolution handles both keying conventions that appear in ``state.actuals``
+    on disk: an actual stored under its wave-id dict key, **and** an actual
+    whose dict key differs but whose ``scope_id`` is the wave id. The dict-key
+    match wins when both are present (it is the canonical key); the
+    ``scope_id`` scan is the fallback. Returns ``None`` when neither resolves.
+
+    Args:
+        state: Loaded typed :class:`State` snapshot (read-only).
+        wave_id: The wave whose actual is wanted.
+
+    Returns:
+        The resolved :class:`ActualSummary`, or ``None`` when *wave_id* has no
+        actual under either keying convention.
+    """
+    actuals = state.actuals or {}
+    direct = actuals.get(wave_id)
+    if direct is not None:
+        return direct
+    for actual in actuals.values():
+        if actual.scope_id == wave_id:
+            return actual
+    return None
+
+
+def actual_eu_for_wave(state: State, wave_id: str) -> float:
+    """Return realized EU for one wave — the single realized-EU accessor.
+
+    Reads ``elapsed_eu`` off the actual resolved by :func:`resolve_wave_actual`
+    (the realized-EU counterpart to :func:`wave_estimate_eu` on the planned
+    side). A wave with no matching actual contributes ``0.0`` — there is no
+    realized effort to report yet.
+
+    Args:
+        state: Loaded typed :class:`State` snapshot (read-only).
+        wave_id: The wave whose realized EU is wanted.
+
+    Returns:
+        The wave's ``ActualSummary.elapsed_eu``, or ``0.0`` when no actual
+        resolves to *wave_id*.
+    """
+    actual = resolve_wave_actual(state, wave_id)
+    return actual.elapsed_eu if actual is not None else 0.0
+
+
+def actual_eu_for_iter(state: State, iter_id: str) -> float:
+    """Return realized EU summed across an iter's waves.
+
+    Sums :func:`actual_eu_for_wave` over every wave whose ``iter_id`` matches
+    *iter_id*. An iter with no waves, or whose waves carry no actuals, returns
+    ``0.0``.
+
+    Args:
+        state: Loaded typed :class:`State` snapshot (read-only).
+        iter_id: The iter whose realized EU is wanted.
+
+    Returns:
+        The summed realized EU across the iter's waves, rounded to 2 dp.
+    """
+    total = sum(
+        actual_eu_for_wave(state, wave.id)
+        for wave in state.waves.values()
+        if wave.iter_id == iter_id
+    )
+    return round(total, 2)
+
+
+def actual_eu_for_phase(state: State, phase_id: str) -> float:
+    """Return realized EU summed across a phase's waves.
+
+    Resolves the phase's iters (``Iter.phase_id == phase_id``) and sums
+    :func:`actual_eu_for_wave` over every wave under those iters. A phase with
+    no waves, or whose waves carry no actuals, returns ``0.0``.
+
+    This is the accessor a phase-scoped EU / status pane reads for its
+    consumed-EU numerator; the return shape (a plain ``float`` keyed by phase
+    id) is a drop-in for an inline ``sum(elapsed_eu ...)`` so the consumer
+    needs no reshape.
+
+    Args:
+        state: Loaded typed :class:`State` snapshot (read-only).
+        phase_id: The phase whose realized EU is wanted.
+
+    Returns:
+        The summed realized EU across the phase's waves, rounded to 2 dp.
+    """
+    phase_iter_ids = {
+        iter_row.id for iter_row in state.iters.values() if iter_row.phase_id == phase_id
+    }
+    total = sum(
+        actual_eu_for_wave(state, wave.id)
+        for wave in state.waves.values()
+        if wave.iter_id in phase_iter_ids
+    )
+    return round(total, 2)
 
 
 class BucketCalibration(BaseModel):
