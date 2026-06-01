@@ -1499,6 +1499,66 @@
       "scope_id": "P29-I02-W18",
       "status": "done",
       "updated_at": "2026-06-01T18:13:47.845928Z"
+    },
+    "P29-I02-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W19",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W19",
+      "scope_id": "P29-I02-W19",
+      "status": "done",
+      "updated_at": "2026-06-01T19:27:12.049891Z"
+    },
+    "P29-I02-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W20",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W20",
+      "scope_id": "P29-I02-W20",
+      "status": "done",
+      "updated_at": "2026-06-01T19:12:57.553355Z"
+    },
+    "P29-I02-W21": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W21",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W21",
+      "scope_id": "P29-I02-W21",
+      "status": "done",
+      "updated_at": "2026-06-01T19:26:07.255357Z"
+    },
+    "P29-I02-W22": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W22",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W22",
+      "scope_id": "P29-I02-W22",
+      "status": "done",
+      "updated_at": "2026-06-01T19:12:58.317708Z"
+    },
+    "P29-I02-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W27",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W27",
+      "scope_id": "P29-I02-W27",
+      "status": "done",
+      "updated_at": "2026-06-01T19:18:15.775975Z"
     }
   },
   "agent_sessions": {
@@ -7926,6 +7986,71 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W18",
       "updated_at": "2026-06-01T17:48:41.263441Z"
+    },
+    "P29-I02-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W19-bucket-20260601T184903Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W19",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W19",
+      "updated_at": "2026-06-01T18:49:03.273187Z"
+    },
+    "P29-I02-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W20-bucket-20260601T184903Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W20",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W20",
+      "updated_at": "2026-06-01T18:49:03.753139Z"
+    },
+    "P29-I02-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W21-bucket-20260601T184904Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I02-W21",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I02-W21",
+      "updated_at": "2026-06-01T18:49:04.231062Z"
+    },
+    "P29-I02-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W22-bucket-20260601T184904Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W22",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W22",
+      "updated_at": "2026-06-01T18:49:04.707019Z"
+    },
+    "P29-I02-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W27-bucket-20260601T184905Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W27",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W27",
+      "updated_at": "2026-06-01T18:49:05.182470Z"
     }
   },
   "goals": {
@@ -9084,7 +9209,8 @@
         "P29-I02-W27",
         "P29-I02-W28",
         "P29-I02-W25",
-        "P29-I02-W29"
+        "P29-I02-W29",
+        "P29-I02-W30"
       ]
     },
     "P29-I03": {
@@ -9900,7 +10026,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T18:44:51.367201Z",
+  "updated_at": "2026-06-01T19:27:12.050216Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -29518,9 +29644,9 @@
     "P29-I02-W19": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T19:27:12.049891Z",
+      "commit": "22884af37f3ef555db29f439aa7c6487e735df8d",
       "deps": [
         "P29-I01-W19",
         "P29-I02-W18"
@@ -29535,10 +29661,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.264928Z",
-      "outcome": null,
+      "outcome": "attention-feed reducer (build_attention_feed: ranks needs_user pauses + failed-wave + incident + question + ready-wave by urgency, honest-empty) + Home overview band led by every scope screen (attention_band, preserves W16 scope orthogonality - no separate HomeModeScreen); 21 new tests, 4 scope goldens regen. Cherry-picked fdba2b24 -> 22884af3 clean",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "attention-feed reducer + a Home-mode pane ranking what needs the operator by urgency"
       ],
@@ -29550,9 +29676,9 @@
     "P29-I02-W20": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T19:12:57.553355Z",
+      "commit": "08aad04531d27897c4935c6ac825fc53a4666a06",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29566,10 +29692,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.265262Z",
-      "outcome": null,
+      "outcome": "Trust mode pane (digit 2) over compute_trust_scorecard; honest residuals/n/labels when populated, honest-negative banner (no fabricated score) when data-starved (is_data_starved: no labels+store-rows+calibration); fixed Textual [EV-] markup-swallow trap. Cherry-picked aced8b3b -> 08aad045 (registry doc + chassis-test helper merged)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Trust mode pane renders compute_trust_scorecard honestly (residuals, no Goodhartable fake) even when data-starved"
       ],
@@ -29581,9 +29707,9 @@
     "P29-I02-W21": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T19:26:07.255357Z",
+      "commit": "986ee63b44d274c4e5179de968487a7790eddd5b",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29597,10 +29723,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.265586Z",
-      "outcome": null,
+      "outcome": "Doctor mode pane (digit 3) folds eawf doctor checks (run_all + overall_status reducer) + git-state drift (detect_git_state_drift) + recent event tail into one health view; renderer-not-reimplementer (reuses doctor check lib). 652 tests. Cherry-picked 75ea373a -> 986ee63b; merge adopted registry-derived placeholder detection (drops _REAL_PANE_MODES maintenance), repointed placeholder example to config",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Doctor mode pane folds events + drift checks into one health view"
       ],
@@ -29612,9 +29738,9 @@
     "P29-I02-W22": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T19:12:58.317708Z",
+      "commit": "584911f6bb13b5299b9f34079a361018e04b8e16",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29628,10 +29754,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.265906Z",
-      "outcome": null,
+      "outcome": "Evidence mode pane (digit 4) over agent_report rollup (iter_agent_reports); honest-empty common path (no reports -> notice + hidden table), populated path shows role/verdict/wave-join/followups; 918 tests. Cherry-picked 931b6f42 -> 584911f6 (registry doc + _REAL_PANE_MODES helper merged to {home,trust,evidence})",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Evidence mode pane over the agent-report rollup (default 6-mode layout; renders empty honestly until reports exist)"
       ],
@@ -29771,9 +29897,9 @@
     "P29-I02-W27": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T19:18:15.775975Z",
+      "commit": "7f788aec590882417fbfd8b193dc29ec021fe282",
       "deps": [
         "P29-I02-W16"
       ],
@@ -29787,10 +29913,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.267216Z",
-      "outcome": null,
+      "outcome": "Feed mode pane (digit 5) live event feed off daemon event.subscribe; reuses existing off-thread StateBinding seam (asyncio.to_thread, no 2nd socket) + App live ring buffer + listener fan-out; newest-first, honest-empty pre-events, honest-degraded if daemon unreachable, clean teardown on unmount. 728 tests. Spike confirmed non-blocking worker delivery. Cherry-picked e6e3593a -> 7f788aec (registry/__init__/chassis-test union-merged)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "event.subscribe live feed wired into panes without blocking the UI thread",
         "pre-claim spike confirms worker delivery without blocking"
@@ -29833,7 +29959,9 @@
     },
     "P29-I02-W29": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P29-I02-W30"
+      ],
       "claim_session_id": null,
       "closed_at": null,
       "commit": null,
@@ -29869,6 +29997,47 @@
         "boundary and error tests cover claim stamping migration backfill and None-anchor empty-state"
       ],
       "title": "Anchor wave elapsed clocks on claimed_at not opened_at",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I02-W30": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I02-W29"
+      ],
+      "description": "Flat 15-min stale alarm fires identically for XS and XL because it ignores effort_bucket. Replace with size-relative over-budget advisory: warn at 0.8x and error at 1.0x of pessimistic_minutes reusing gauge band thresholds so gauge and modal agree, escalating one-shot per band, plus one generous absolute backstop for abandoned waves. True idle detection via no-progress heartbeat defers to I04 AgentSession.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/stale_wave.py",
+        "src/eawf/runtime/daemon/main.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
+        "tests/**"
+      ],
+      "id": "P29-I02-W30",
+      "intent": null,
+      "iter_id": "P29-I02",
+      "opened_at": "2026-06-01T19:11:55.984104Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Stale detector replaces the flat window with size-relative bands keyed on pessimistic_minutes",
+        "warn at 0.8x and error at 1.0x reuse the gauge band fraction constants via one shared band helper",
+        "the shared band helper replaces the duplicate elapsed-band and burn-marker so gauge and modal agree",
+        "each band fires one-shot per crossing with warn-then-error escalation",
+        "a generous absolute backstop fires once when elapsed exceeds the hard ceiling regardless of size",
+        "advisory keep release defer actions stay operator-run with no automatic lifecycle mutation",
+        "boundary and error tests cover each band threshold the backstop and the escalation dedup"
+      ],
+      "title": "Replace flat stale alarm with size-relative over-budget bands",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
