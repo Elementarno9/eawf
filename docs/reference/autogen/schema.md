@@ -15,6 +15,7 @@ Full schema: [`state.schema.json`](state.schema.json)
 | `artifacts` | yes |
 | `audits` | no |
 | `backlog` | no |
+| `claims` | no |
 | `current` | yes |
 | `decisions` | no |
 | `estimates` | no |
@@ -27,6 +28,7 @@ Full schema: [`state.schema.json`](state.schema.json)
 | `mcp_grants` | no |
 | `mcp_servers` | no |
 | `memory_index` | no |
+| `open_questions` | no |
 | `outcomes` | no |
 | `phases` | yes |
 | `plugins` | yes |

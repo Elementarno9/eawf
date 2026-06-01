@@ -509,6 +509,113 @@
       "title": "BacklogStatus",
       "type": "string"
     },
+    "Claim": {
+      "additionalProperties": false,
+      "description": "A single typed claim in a research-campaign ledger.\n\nThe Claim ledger is the prerequisite of the pruning pass and the\nSaturationReport: a campaign accumulates claims as it surveys sources,\nand the ledger lets a downstream pass detect saturation (no new claims\narriving) and prune subsumed rows. Each claim names a single assertion\n(``title``) with optional long-form context (``description``) and carries\nthe ``evidence_refs`` that ratify it — repo-relative paths, Eawf URNs, or\nexternal URLs — so the EviBound scorer can score \"every claim resolves\"\nover the ledger.\n\nThe field shape mirrors the sibling research entity\n:class:`Hypothesis`: a bounded imperative ``title`` (no trailing period),\na 500-char optional ``description``, a ``scope_id`` binding the claim to\nits campaign scope, and a closed :class:`ClaimStatus` lifecycle.\n``answers_question_id`` back-links a claim to the separate\n:class:`OpenQuestion` entity it resolves; it defaults to ``None`` for a\nfree-standing claim.\n\nAttributes:\n    id: Stable claim id (``IdStr`` — non-empty, no whitespace).\n    scope_id: Campaign / research scope the claim belongs to.\n    title: Imperative noun-phrase stating the claim, bounded at 72\n        characters with no trailing period (entity-title convention).\n    description: Optional long-form statement bounded at 500 characters.\n    status: Closed :class:`ClaimStatus` lifecycle position.\n    evidence_refs: Repo-relative / URN / external-URL strings that\n        ratify the claim. Default empty so a freshly logged claim whose\n        evidence is not yet attached still validates (the EviBound gate\n        scores resolution downstream, not at ingestion).\n    source_artifact_id: Optional id of the artifact (notebook, brief,\n        dataset) the claim was distilled from.\n    answers_question_id: Optional :class:`OpenQuestion` id this claim\n        answers; ``None`` for a claim not tied to a tracked question.\n    created_at: When the claim was logged into the ledger.\n    superseded_by: Id of the later claim that subsumes this one when\n        :attr:`status` is :attr:`ClaimStatus.SUPERSEDED`; ``None``\n        otherwise.",
+      "properties": {
+        "answers_question_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answers Question Id"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "source_artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Artifact Id"
+        },
+        "status": {
+          "$ref": "#/$defs/ClaimStatus"
+        },
+        "superseded_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Superseded By"
+        },
+        "title": {
+          "maxLength": 72,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "title",
+        "status",
+        "created_at"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "ClaimStatus": {
+      "description": "Lifecycle of a research-campaign :class:`~eawf.kernel.state.models.Claim`.\n\nA claim enters the ledger ``OPEN`` and moves toward an evidence-backed\nterminal state as the campaign accrues references. ``SUPERSEDED`` is the\nprune target the pruning pass + SaturationReport key on: a later claim\nsubsumes an earlier one, so the earlier row stays in the ledger for\ntraceability but no longer counts toward live coverage.",
+      "enum": [
+        "open",
+        "supported",
+        "refuted",
+        "superseded"
+      ],
+      "title": "ClaimStatus",
+      "type": "string"
+    },
     "Confidence": {
       "enum": [
         "high",
@@ -1632,6 +1739,103 @@
       "title": "MemoryTier",
       "type": "string"
     },
+    "OpenQuestion": {
+      "additionalProperties": false,
+      "description": "An unresolved research question tracked as its own first-class entity.\n\nAn open question is NOT folded into :class:`Claim`: a question is a gap to\nclose, a claim is an assertion that closes it, and conflating the two\nloses the distinction the research-campaign control plane needs (a\nquestion can outlive many candidate claims, and an operator can add a\nquestion mid-run through the input channel). The ``BLOCKED`` status feeds\nthe balanced-autonomy interrupt: a blocking question is the only kind that\nraises to the operator.\n\nThe field shape mirrors the sibling research entities (:class:`Claim` /\n:class:`Hypothesis`): a bounded imperative ``title`` with no trailing\nperiod, a 500-char optional ``description``, a ``scope_id`` binding the\nquestion to its campaign, and a closed :class:`OpenQuestionStatus`.\n\nAttributes:\n    id: Stable question id (``IdStr`` — non-empty, no whitespace).\n    scope_id: Campaign / research scope the question belongs to.\n    title: Imperative noun-phrase stating the question, bounded at 72\n        characters with no trailing period (entity-title convention).\n    description: Optional long-form framing bounded at 500 characters.\n    status: Closed :class:`OpenQuestionStatus` lifecycle position.\n    blocking: Whether an unanswered question gates further campaign work;\n        a ``True`` value is what the balanced-autonomy interrupt raises to\n        the operator. Defaults to ``False`` (advisory question).\n    urgency: Shared :class:`~eawf.kernel.state.enums.Urgency` ladder ranking\n        how soon the operator should look at the question. The same enum\n        ranks needs_user pauses and the attention feed, so an open question\n        sorts against pauses on one comparable scale. Defaults to\n        :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` so the field is\n        additive (pre-urgency states and in-code constructors stay valid).\n    answered_by_claim_id: Optional :class:`Claim` id that resolved the\n        question when :attr:`status` is\n        :attr:`OpenQuestionStatus.ANSWERED`; ``None`` otherwise.\n    created_at: When the question was opened.\n    resolved_at: When the question reached a terminal state\n        (``ANSWERED`` / ``DROPPED``); ``None`` while still open.",
+      "properties": {
+        "answered_by_claim_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Answered By Claim Id"
+        },
+        "blocking": {
+          "default": false,
+          "title": "Blocking",
+          "type": "boolean"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "resolved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved At"
+        },
+        "scope_id": {
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/OpenQuestionStatus"
+        },
+        "title": {
+          "maxLength": 72,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "urgency": {
+          "$ref": "#/$defs/Urgency",
+          "default": "normal"
+        }
+      },
+      "required": [
+        "id",
+        "scope_id",
+        "title",
+        "status",
+        "created_at"
+      ],
+      "title": "OpenQuestion",
+      "type": "object"
+    },
+    "OpenQuestionStatus": {
+      "description": "Lifecycle of a research-campaign :class:`~eawf.kernel.state.models.OpenQuestion`.\n\nAn open question is its own first-class entity, not a claim variant: a\nquestion is a gap to close, a claim is the assertion that closes it. It\nenters ``OPEN``, reaches ``ANSWERED`` once a claim or artifact resolves\nit, or ``DROPPED`` when the campaign decides it is out of scope.\n``BLOCKED`` marks a question whose answer gates further work — the only\nstatus the balanced-autonomy interrupt surface raises to the operator, so\nan advisory question never interrupts while a blocking one always does.",
+      "enum": [
+        "open",
+        "answered",
+        "blocked",
+        "dropped"
+      ],
+      "title": "OpenQuestionStatus",
+      "type": "string"
+    },
     "Outcome": {
       "additionalProperties": false,
       "description": "Quantitative outcome attached to a goal.",
@@ -2277,6 +2481,17 @@
       "title": "SubprojectStatus",
       "type": "string"
     },
+    "Urgency": {
+      "description": "Shared time-pressure ladder for operator-facing pauses and questions.\n\nOne closed vocabulary feeds three surfaces that all ask \"how soon does a\nhuman need to look at this\": the ``needs_user`` pause, a research-campaign\n:class:`~eawf.kernel.state.models.OpenQuestion`, and the attention feed that\nranks open items for the operator. Defining the ladder once here (rather\nthan a per-surface copy) keeps the three rankings comparable — an attention\nfeed can sort a needs_user pause and a blocking research question on the\nsame scale.\n\nUrgency is *time pressure to surface*, deliberately distinct from\n:class:`BacklogPriority` (long-horizon backlog ranking, ``P0``-``P3``) and\n:class:`IncidentSeverity` (blast radius of a fault). The ladder runs from\nthe most deferrable to the most immediate:\n\n- :attr:`LOW` — advisory; can wait for the next operator sweep.\n- :attr:`NORMAL` — default; surfaces in the ordinary attention feed.\n- :attr:`HIGH` — should be looked at this session.\n- :attr:`URGENT` — blocks progress; raise to the operator now.",
+      "enum": [
+        "low",
+        "normal",
+        "high",
+        "urgent"
+      ],
+      "title": "Urgency",
+      "type": "string"
+    },
     "Wave": {
       "additionalProperties": false,
       "description": "Atomic execution unit under an iter.",
@@ -2742,6 +2957,21 @@
       "default": null,
       "title": "Backlog"
     },
+    "claims": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/Claim"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Claims"
+    },
     "current": {
       "$ref": "#/$defs/CurrentPointers"
     },
@@ -2879,6 +3109,21 @@
       ],
       "default": null,
       "title": "Memory Index"
+    },
+    "open_questions": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/OpenQuestion"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Open Questions"
     },
     "outcomes": {
       "anyOf": [

@@ -15,6 +15,7 @@ that module is listed with its members.
 | `AuditVerdict` | `pass`, `minor`, `major` |
 | `BacklogPriority` | `P0`, `P1`, `P2`, `P3` |
 | `BacklogStatus` | `open`, `in_progress`, `closed`, `deferred` |
+| `ClaimStatus` | `open`, `supported`, `refuted`, `superseded` |
 | `Confidence` | `high`, `medium`, `low` |
 | `DecisionStatus` | `active`, `superseded`, `reversed`, `obsolete` |
 | `DispatchNote` | `fresh_dispatch`, `continue_from_session`, `continue_failed_fell_back_to_fresh`, `switch_on_error`, `switch_manual` |
@@ -33,6 +34,7 @@ that module is listed with its members.
 | `McpStatus` | `not_configured`, `configured`, `installed`, `degraded`, `disabled` |
 | `MemoryStatus` | `active`, `stale`, `superseded`, `pruned` |
 | `MemoryTier` | `working`, `archival`, `retrieval` |
+| `OpenQuestionStatus` | `open`, `answered`, `blocked`, `dropped` |
 | `OutcomeDirection` | `min`, `max`, `equal`, `range` |
 | `OutcomeStatus` | `pending`, `met`, `missed`, `waived` |
 | `PhaseStatus` | `planned`, `active`, `closed`, `archived` |
@@ -42,7 +44,8 @@ that module is listed with its members.
 | `ScopeTier` | `workspace`, `repo`, `phase`, `iter`, `wave` |
 | `SkillEnvelopeStatus` | `ok`, `needs_user`, `blocked`, `failed`, `partial` |
 | `SpecStatus` | `draft`, `ready`, `implemented`, `archived` |
-| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated` |
+| `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated`, `research_campaign` |
 | `SubprojectStatus` | `active`, `planned`, `deferred`, `retired` |
+| `Urgency` | `low`, `normal`, `high`, `urgent` |
 | `WaveStatus` | `pending`, `claimed`, `in_progress`, `closed`, `failed`, `abandoned` |
 | `WorktreeStatus` | `active`, `conflicted`, `merged`, `abandoned` |

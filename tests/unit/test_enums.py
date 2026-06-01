@@ -484,6 +484,7 @@ def test_store_kind_values() -> None:
         "registry_updated",
         # P25-W03 — spec writer / cache lifecycle events.
         "spec_updated",
+        "research_campaign",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

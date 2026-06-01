@@ -241,6 +241,7 @@ Dispatch hook events through the Eä hook runner.
 
 | Verb | Summary |
 |---|---|
+| `dispatch` | Seed an interim verdict cohort from an ``agent_end`` event read from stdin. |
 | `eawf012-design-provenance` | Reject design/audit/agent provenance breadcrumbs in source comments. |
 | `eawf013-bracket-position` | Reject detached or post-punctuation numeric citation brackets. |
 | `eawf014-no-manual-wrap` | Reject manually wrapped rendered Markdown paragraphs. |
