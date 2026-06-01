@@ -1319,6 +1319,18 @@
       "scope_id": "P29-I02-W02",
       "status": "done",
       "updated_at": "2026-06-01T15:08:39.653848Z"
+    },
+    "P29-I02-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W03",
+      "scope_id": "P29-I02-W03",
+      "status": "done",
+      "updated_at": "2026-06-01T15:19:04.522782Z"
     }
   },
   "agent_sessions": {
@@ -7551,6 +7563,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W02",
       "updated_at": "2026-06-01T14:53:06.605446Z"
+    },
+    "P29-I02-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W03-bucket-20260601T150922Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W03",
+      "updated_at": "2026-06-01T15:09:22.854787Z"
     }
   },
   "goals": {
@@ -9494,7 +9519,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T15:08:39.654247Z",
+  "updated_at": "2026-06-01T15:19:04.523268Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28612,9 +28637,9 @@
     "P29-I02-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T15:19:04.522782Z",
+      "commit": "add07b51b05941a19812af56aacbf5bc5983e766",
       "deps": [],
       "description": "[CLI-3 | scope 7-topic#6 | SF] operator-preference knobs feeding planner + AUQ defaults.",
       "dispatch_history": [],
@@ -28626,10 +28651,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.252140Z",
-      "outcome": null,
+      "outcome": "preferences.* config keys (solution_bias=simple|balanced|thorough, scope_size=EffortBucket, auto_choose=off|recommended|always) strict model + defaults + leaf catalog + menu registry; 273 tests green. Followup: non-interactive config-set value-gate is a pre-existing systemic gap (all choice keys)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "preferences.* config keys added (solution_bias / scope_size / auto_choose) with strict validation"
       ],
