@@ -1307,6 +1307,18 @@
       "scope_id": "P29-I02-W01",
       "status": "done",
       "updated_at": "2026-06-01T14:50:59.771779Z"
+    },
+    "P29-I02-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I02-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I02-W02",
+      "scope_id": "P29-I02-W02",
+      "status": "done",
+      "updated_at": "2026-06-01T15:08:39.653848Z"
     }
   },
   "agent_sessions": {
@@ -7526,6 +7538,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I02-W01",
       "updated_at": "2026-06-01T14:35:41.955656Z"
+    },
+    "P29-I02-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I02-W02-bucket-20260601T145306Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I02-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I02-W02",
+      "updated_at": "2026-06-01T14:53:06.605446Z"
     }
   },
   "goals": {
@@ -9469,7 +9494,7 @@
   "schema_version": "1.2",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-01T14:50:59.772239Z",
+  "updated_at": "2026-06-01T15:08:39.654247Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -28558,9 +28583,9 @@
     "P29-I02-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29i02",
+      "closed_at": "2026-06-01T15:08:39.653848Z",
+      "commit": "ca46adf501d019271b7f083970bb576223fee54c",
       "deps": [],
       "description": "[CLI-2 | scope render-cleanup | SF] phase=release banding in the roadmap view.",
       "dispatch_history": [],
@@ -28572,10 +28597,10 @@
       "intent": null,
       "iter_id": "P29-I02",
       "opened_at": "2026-06-01T00:19:14.251817Z",
-      "outcome": null,
+      "outcome": "Phase.release validated field (vMAJOR.MINOR.PATCH); edit_phase_plan + roadmap revise --release setter; release-banded roadmap render (back-compat for no-release states); schema+cli.md autogen regen (also fixed W01 wave-release drift); 185 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "Phase.release field added; roadmap render bands phases by release version"
       ],
