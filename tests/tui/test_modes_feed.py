@@ -1,4 +1,4 @@
-"""Tests for the live event-feed pane (P29-I02-W27, Feed mode digit 5).
+"""Tests for the live event-feed pane (P29-I02-W27, Feed mode digit 7).
 
 The Feed mode renders a live, newest-first view of the daemon
 ``event.subscribe`` push stream. It does not open its own subscription:
@@ -53,7 +53,7 @@ _REPO = _FIXTURES / "03-phase-iter-wave-active.json"
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
 
 #: The digit key that switches to the Feed mode.
-_FEED_DIGIT = "5"
+_FEED_DIGIT = "7"
 
 
 @pytest.fixture(autouse=True)

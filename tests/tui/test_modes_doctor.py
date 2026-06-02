@@ -1,6 +1,6 @@
 """Tests for the Doctor-mode health pane (P29-I02-W21, TUI-3).
 
-The Doctor mode (digit ``3``) folds the same health signals ``eawf
+The Doctor mode (digit ``5``) folds the same health signals ``eawf
 doctor`` reports into ONE in-TUI health view -- the doctor check library,
 git/state commit drift, and the recent event-store tail -- and rolls them
 up to one overall health. These tests pin:
@@ -394,7 +394,7 @@ def test_doctor_mode_factory_ignores_app_and_builds_screen() -> None:
     assert isinstance(screen, DoctorModeScreen)
     # Doctor keeps its digit + title in the registry.
     spec = next(s for s in MODE_REGISTRY if s.name == "doctor")
-    assert (spec.digit, spec.title) == ("3", "Doctor")
+    assert (spec.digit, spec.title) == ("5", "Doctor")
 
 
 # --------------------------------------------------------------------------
@@ -403,13 +403,13 @@ def test_doctor_mode_factory_ignores_app_and_builds_screen() -> None:
 
 
 def test_doctor_mode_mounts_and_renders_health_view() -> None:
-    """Digit ``3`` switches to Doctor; the pane renders a rollup + check rows."""
+    """Digit ``5`` switches to Doctor; the pane renders a rollup + check rows."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("3")
+            await pilot.press("5")
             await settle_screen(pilot)
             assert app.current_mode == "doctor"
             assert isinstance(app.screen, DoctorModeScreen)
@@ -433,7 +433,7 @@ def test_doctor_mode_renders_honest_empty_clean_case() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("3")
+            await pilot.press("5")
             await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
             assert "git_state_drift" in frame
@@ -453,7 +453,7 @@ def test_doctor_mode_keeps_shared_chassis_brand() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("3")
+            await pilot.press("5")
             await settle_screen(pilot)
             header_row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]
             assert BRAND in header_row
@@ -469,7 +469,7 @@ def test_doctor_mode_round_trip_back_to_home() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("3")
+            await pilot.press("5")
             await settle_screen(pilot)
             assert isinstance(app.screen, DoctorModeScreen)
             await pilot.press("1")

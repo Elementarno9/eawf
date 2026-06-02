@@ -2,9 +2,9 @@
 
 The TUI runs two orthogonal axes: a **scope** (``repo`` / ``workspace`` /
 ``user``, switched with ``w`` / ``r`` / ``u``) and a **mode** (``home`` /
-``trust`` / ``doctor`` / ``evidence`` / ``feed`` / ``config`` /
-``research_board`` / ``agent_watch`` / ``autopilot``, switched with digit keys
-``1``..``9``). The W16 chassis left every ``(scope, mode)`` pair reachable;
+``autopilot`` / ``research_board`` / ``trust`` / ``doctor`` / ``evidence`` /
+``feed`` / ``agent_watch``, switched with digit keys
+``1``..``8``). The W16 chassis left every ``(scope, mode)`` pair reachable;
 this module pins the **bounded** subset that is genuinely legal and refuses
 the rest at the boundary, so a switch never lands the operator in a view that
 has no honest data source.
@@ -26,7 +26,6 @@ mode              repo  workspace  user
 ================  ====  =========  ====
 home              yes   yes        yes
 doctor            yes   yes        yes
-config            yes   yes        yes
 trust             yes   yes        no
 evidence          yes   yes        no
 feed              yes   yes        no
@@ -39,9 +38,9 @@ autopilot         yes   yes        no
   screen, so it is legal at every scope by construction.
 * ``doctor`` is scope-independent (it folds the same install / state /
   drift health regardless of scope -- see
-  :func:`~eawf.surfaces.tui.modes.doctor.doctor_mode_factory`), and
-  ``config`` opens the registry-driven config window (scope-agnostic), so
-  both stay legal everywhere.
+  :func:`~eawf.surfaces.tui.modes.doctor.doctor_mode_factory`), so it stays
+  legal everywhere. (Config is not a mode -- it opens the registry-driven
+  config window from every scope via the ``c`` key.)
 * ``trust`` / ``evidence`` / ``feed`` / ``research_board`` / ``agent_watch`` /
   ``autopilot`` read a **single scope's** ``state.json`` + its per-scope stores
   under ``<state_dir>/store/`` (the trust scorecard, the agent-report rollup,

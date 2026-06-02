@@ -1,6 +1,6 @@
 """Tests for the Trust mode pane over ``compute_trust_scorecard`` (W20).
 
-The Trust mode (digit ``2``) fills the W16 chassis seam with an honest
+The Trust mode (digit ``4``) fills the W16 chassis seam with an honest
 provenance pane. These tests pin the two halves:
 
 * the pure render helpers (one per scorecard section) and the
@@ -432,7 +432,7 @@ def test_trust_pane_renders_populated_scorecard_fields(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust
+            await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             assert isinstance(app.screen, TrustModeScreen)
             assert app.screen.starved is False
@@ -468,7 +468,7 @@ def test_trust_pane_data_starved_renders_honest_negative(tmp_path: Path) -> None
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust
+            await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             assert isinstance(app.screen, TrustModeScreen)
             assert app.screen.starved is True
@@ -491,7 +491,7 @@ def test_trust_pane_starved_then_keeps_chassis_brand(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust
+            await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
             # Brand outside-left of the breadcrumb; the Trust mode title leads.

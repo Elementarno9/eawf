@@ -1,6 +1,6 @@
 """Tests for the autopilot ready-wave frontier + dispatch pane (P29-I04-W12).
 
-The Autopilot mode (digit ``9``) renders the **dependency frontier** of the
+The Autopilot mode (digit ``2``) renders the **dependency frontier** of the
 active scope's wave graph -- the PENDING waves that are claim-ready right now
 (every dep CLOSED + no lower-numbered ready sibling under the same iter), in
 claim order -- and offers a **dispatch** control that asks the daemon to
@@ -15,7 +15,7 @@ live-spawn the selected ready wave via the ``agent.dispatch`` RPC
   directly-built rows / states so the logic is verified without mounting
   Textual, including that the listed order matches
   :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier`; and
-* the mounted pane under a Pilot: digit ``9`` switches to the mode and the
+* the mounted pane under a Pilot: digit ``2`` switches to the mode and the
   breadcrumb leads with the ``Autopilot`` segment; an honest-empty scope (no
   claim-ready wave) renders the "no ready waves" banner; a seeded scope whose
   waves form a ready frontier lists the ready waves in claim order; and the
@@ -70,7 +70,7 @@ from eawf.surfaces.tui.snapshot import (
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 
 #: The digit key that switches to the Autopilot mode.
-_AUTOPILOT_DIGIT = "9"
+_AUTOPILOT_DIGIT = "2"
 
 
 @pytest.fixture(autouse=True)
@@ -277,11 +277,11 @@ def test_render_ready_row_surfaces_wave_id_iter_and_title() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_autopilot_mode_registers_on_digit_nine(tmp_path: Path) -> None:
-    """Digit ``9`` switches to the Autopilot mode and leads the breadcrumb.
+def test_autopilot_mode_registers_on_digit_two(tmp_path: Path) -> None:
+    """Digit ``2`` switches to the Autopilot mode and leads the breadcrumb.
 
-    Pins the registry wiring: the new ModeSpec row registers the mode under
-    digit ``9`` (the next free digit), so the digit key switches to an
+    Pins the registry wiring: the ModeSpec row registers the mode under
+    digit ``2`` (its brief-assigned slot), so the digit key switches to an
     :class:`AutopilotModeScreen` and the header breadcrumb leads with the
     ``Autopilot`` segment derived from the registry title.
     """

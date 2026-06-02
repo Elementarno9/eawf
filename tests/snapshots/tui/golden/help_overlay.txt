@@ -14,25 +14,25 @@
       │    c          open config (any scope)                                                                    │
       │    i          open needs_user inbox (by urgency)                                                         │
       │    F5         force refresh                                                                              │
-      │    ?          open help                                                                              ▅▅  │
+      │    ?          open help                                                                              ▄▄  │
       │    /          open palette                                                                               │
       │    Tab        next pane                                                                                  │
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
       │  Modes (digit keys)                                                                                      │
       │    1          switch to Home mode                                                                        │
-      │    2          switch to Trust mode                                                                       │
-      │    3          switch to Doctor mode                                                                      │
-      │    4          switch to Evidence mode                                                                    │
-      │    5          switch to Feed mode                                                                        │
-      │    6          switch to Config mode                                                                      │
-      │    7          switch to Research mode                                                                    │
+      │    2          switch to Autopilot mode                                                                   │
+      │    3          switch to Research mode                                                                    │
+      │    4          switch to Trust mode                                                                       │
+      │    5          switch to Doctor mode                                                                      │
+      │    6          switch to Evidence mode                                                                    │
+      │    7          switch to Feed mode                                                                        │
       │    8          switch to Watch mode                                                                       │
-      │    9          switch to Autopilot mode                                                                   │
       │                                                                                                          │
       │  Pane navigation (vim alias)                                                                             │
       │    ↑          line up  (k)                                                                               │
       │    ↓          line down  (j)                                                                             │
       │    ←          collapse row / scroll left  (h)                                                            │
+      │    →          expand row / scroll right  (l)                                                             │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘

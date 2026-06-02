@@ -1,16 +1,16 @@
 """Tests for the Textual MODES chassis (P29-I02-W16, TUI-1).
 
 The TUI runs on Textual's native :attr:`textual.app.App.MODES` +
-``switch_mode``: a **mode** is a content surface (Home / Trust / Doctor /
-Evidence / Feed / Config / Research / Watch / Autopilot) switched with digit
-keys ``1``..``9``, declared once in :mod:`eawf.surfaces.tui.modes.registry` --
+``switch_mode``: a **mode** is a content surface (Home / Autopilot /
+Research / Trust / Doctor / Evidence / Feed / Watch) switched with digit
+keys ``1``..``8``, declared once in :mod:`eawf.surfaces.tui.modes.registry` --
 the one seam the per-pane waves extend. These tests pin the chassis the pane
 waves build on:
 
 * the registry composes ``App.MODES``, the digit bindings, and the
   ``/<mode>`` palette verbs from one declarative source (the pure-unit
   half, testable without Textual);
-* the app boots into the default (Home) mode; digit ``1``..``9`` switch
+* the app boots into the default (Home) mode; digit ``1``..``8`` switch
   modes; ``switch_mode`` no-ops when already in the mode; a palette verb
   switches mode;
 * the breadcrumb leads with the active mode title and keeps the ``Eae``
@@ -18,9 +18,7 @@ waves build on:
 * the scope switch (``w`` / ``r`` / ``u``) stays an in-mode operation
   (mode and scope are orthogonal axes);
 * switching mode away from a zoomed workspace and back preserves the zoom
-  (the W15 guard stays intact through the mode-switch suspend);
-* a placeholder mode renders an honest-empty ``<title> - coming soon``
-  body so every digit key works before the pane waves land.
+  (the W15 guard stays intact through the mode-switch suspend).
 
 Determinism follows the project Pilot-worker rule: each Pilot body drains
 workers via :func:`~eawf.surfaces.tui.snapshot.settle_screen` (``pilot.pause()``
@@ -37,7 +35,6 @@ from pathlib import Path
 import pytest
 
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.modes import PlaceholderModeScreen
 from eawf.surfaces.tui.modes.registry import (
     DEFAULT_MODE,
     MODE_REGISTRY,
@@ -68,14 +65,13 @@ _FIXTURE_REPO = "QR"
 #: the launch default is caught loudly.
 _EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
     ("home", "1", "Home"),
-    ("trust", "2", "Trust"),
-    ("doctor", "3", "Doctor"),
-    ("evidence", "4", "Evidence"),
-    ("feed", "5", "Feed"),
-    ("config", "6", "Config"),
-    ("research_board", "7", "Research"),
+    ("autopilot", "2", "Autopilot"),
+    ("research_board", "3", "Research"),
+    ("trust", "4", "Trust"),
+    ("doctor", "5", "Doctor"),
+    ("evidence", "6", "Evidence"),
+    ("feed", "7", "Feed"),
     ("agent_watch", "8", "Watch"),
-    ("autopilot", "9", "Autopilot"),
 )
 
 
@@ -85,7 +81,7 @@ def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     The ``u`` scope switch reads ``~/.eawf/registry.json``; redirecting
     ``Path.home`` keeps the switch deterministic and reads no real
-    registry. The Doctor mode (digit ``3``) runs the instrument probe on
+    registry. The Doctor mode (digit ``5``) runs the instrument probe on
     mount, which writes a cache to ``<workspace>/.ea/instrument-probe.json``
     -- the workspace resolves to the fixture tree, so redirect the cache
     into ``tmp_path`` to keep a stray probe file out of ``tests/fixtures/``.
@@ -137,11 +133,9 @@ def test_build_modes_maps_each_name_to_a_zero_arg_factory() -> None:
     modes = build_modes(app)
     assert sorted(modes) == sorted(spec.name for spec in MODE_REGISTRY)
     # Home resolves to the cached scope-screen NAME (so switch_screen reuses
-    # the same instance); trust builds its real pane; an unbuilt mode
-    # (config) still builds a PlaceholderModeScreen.
+    # the same instance); trust builds its real pane.
     assert modes["home"]() == "repo"
     assert isinstance(modes["trust"](), TrustModeScreen)
-    assert isinstance(modes["config"](), PlaceholderModeScreen)
 
 
 def test_build_modes_home_factory_tracks_resolved_scope() -> None:
@@ -162,7 +156,7 @@ def test_mode_for_name_resolves_or_none() -> None:
     """``mode_for_name`` resolves a registered spec, else ``None``."""
     spec = mode_for_name("doctor")
     assert spec is not None
-    assert (spec.digit, spec.title) == ("3", "Doctor")
+    assert (spec.digit, spec.title) == ("5", "Doctor")
     assert mode_for_name("nope") is None
 
 
@@ -188,8 +182,9 @@ def test_palette_exposes_a_switch_verb_per_non_colliding_mode() -> None:
     # home / trust / doctor / evidence / feed get their /<mode> verb.
     for stem in ("home", "trust", "doctor", "evidence", "feed"):
         assert f"/{stem}" in names
-    # /config keeps its pre-existing config-window meaning (the config MODE
-    # collides and is reachable via digit 6 instead).
+    # /config is the config-window verb only -- config is not a mode (it is
+    # reachable from every scope via the ``c`` key), so it owns no /<mode>
+    # verb and no digit, leaving a single /config entry.
     config_verbs = [v for v in VERBS if v.name == "/config"]
     assert len(config_verbs) == 1
     assert "config window" in config_verbs[0].hint
@@ -238,11 +233,11 @@ def test_switch_mode_no_ops_when_already_in_mode() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust
+            await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             screen_before = app.screen
             assert app.current_mode == "trust"
-            await pilot.press("2")  # already in trust
+            await pilot.press("4")  # already in trust
             await settle_screen(pilot)
             assert app.current_mode == "trust"
             assert app.screen is screen_before
@@ -282,7 +277,7 @@ def test_breadcrumb_leads_with_mode_and_keeps_brand_outside_left() -> None:
             assert header_row.index(BRAND) < header_row.index("Home")
             assert header_row.index("Home") < header_row.index("repo")
             # Switching modes repaints the breadcrumb's leading segment.
-            await pilot.press("2")  # -> trust
+            await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             trust_row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]
             assert BRAND in trust_row
@@ -338,7 +333,7 @@ def test_scope_survives_a_mode_round_trip() -> None:
             await settle_screen(pilot)
             home_screen = app.screen
             assert isinstance(home_screen, WorkspaceScreen)
-            await pilot.press("3")  # -> doctor (a real pane, orthogonal to scope)
+            await pilot.press("5")  # -> doctor (a real pane, orthogonal to scope)
             await settle_screen(pilot)
             assert app.current_mode == "doctor"
             await pilot.press("1")  # back to Home
@@ -373,7 +368,7 @@ def test_mode_switch_away_from_zoomed_workspace_and_back_preserves_zoom() -> Non
             assert screen.zoomed
             assert screen._zoomed_code == _FIXTURE_REPO
             # Switch to another mode (Doctor), then back to Home.
-            await pilot.press("3")
+            await pilot.press("5")
             await settle_screen(pilot)
             assert app.current_mode == "doctor"
             await pilot.press("1")
@@ -384,58 +379,5 @@ def test_mode_switch_away_from_zoomed_workspace_and_back_preserves_zoom() -> Non
             assert back.zoomed  # zoom rebuilt across the mode round-trip
             assert back._zoomed_code == _FIXTURE_REPO
             assert len(back.query("#zoom-quadrant")) == 1
-
-    asyncio.run(body())
-
-
-# --------------------------------------------------------------------------
-# Placeholder mode -- honest-empty body
-# --------------------------------------------------------------------------
-
-
-def test_placeholder_mode_renders_honest_empty_coming_soon() -> None:
-    """A mode whose pane wave has not landed renders ``<title> - coming soon``."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_REPO)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await settle_screen(pilot)
-            await pilot.press("6")  # -> config (still a placeholder)
-            await settle_screen(pilot)
-            assert isinstance(app.screen, PlaceholderModeScreen)
-            frame = normalize_snapshot(capture_screen_text(app))
-            assert "Config - coming soon" in frame
-            # The placeholder keeps the shared chassis: brand + breadcrumb.
-            assert BRAND in frame.splitlines()[0]
-
-    asyncio.run(body())
-
-
-def test_every_placeholder_mode_boots_and_titles_itself() -> None:
-    """Each still-unbuilt placeholder mode renders its own coming-soon title.
-
-    Drives only the modes whose factory still produces a
-    :class:`PlaceholderModeScreen`, derived from the registry so a pane
-    wave that fills a mode (Home, Doctor, ...) drops out of the set
-    automatically rather than failing this assertion.
-    """
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_REPO)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await settle_screen(pilot)
-            placeholder_specs = [
-                spec
-                for spec in MODE_REGISTRY
-                if isinstance(spec.factory(app), PlaceholderModeScreen)
-            ]
-            # At least one mode is still an unbuilt placeholder this band.
-            assert placeholder_specs
-            for spec in placeholder_specs:
-                await pilot.press(spec.digit)
-                await settle_screen(pilot)
-                assert isinstance(app.screen, PlaceholderModeScreen)
-                frame = normalize_snapshot(capture_screen_text(app))
-                assert f"{spec.title} - coming soon" in frame
 
     asyncio.run(body())

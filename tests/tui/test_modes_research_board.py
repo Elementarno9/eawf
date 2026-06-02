@@ -1,6 +1,6 @@
 """Tests for the Research mode pane over the ResearchCampaign store (W13).
 
-The Research mode (digit ``7``) renders the research-campaign overview for
+The Research mode (digit ``3``) renders the research-campaign overview for
 the active scope: the staged campaigns persisted under the per-scope
 ``research_campaign`` store, the state-resident
 :class:`~eawf.kernel.state.models.Claim` ledger (with each claim's
@@ -15,7 +15,7 @@ These tests pin the two halves:
   :func:`~eawf.surfaces.tui.modes.research_board.read_campaign_rows`, tested
   against directly-built rows / on-disk stores so the composition is
   verified without mounting Textual; and
-* the mounted pane under a Pilot: digit ``7`` switches to the mode and the
+* the mounted pane under a Pilot: digit ``3`` switches to the mode and the
   breadcrumb leads with the ``Research`` segment; an honest-empty scope (no
   campaign, no claim, no question) renders the "no active research campaign"
   banner; a seeded scope (a staged campaign plus claims + open questions)
@@ -342,11 +342,11 @@ def test_render_open_questions_blocking_marks_the_row() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_research_board_mode_registers_on_digit_seven(tmp_path: Path) -> None:
-    """Digit ``7`` switches to the Research mode and leads the breadcrumb.
+def test_research_board_mode_registers_on_digit_three(tmp_path: Path) -> None:
+    """Digit ``3`` switches to the Research mode and leads the breadcrumb.
 
-    Pins the registry wiring: the new ModeSpec row registers the mode under
-    digit ``7`` (the next free digit), so the digit key switches to a
+    Pins the registry wiring: the ModeSpec row registers the mode under
+    digit ``3`` (its brief-assigned slot), so the digit key switches to a
     :class:`ResearchBoardModeScreen` and the header breadcrumb leads with the
     ``Research`` segment derived from the registry title.
     """
@@ -356,7 +356,7 @@ def test_research_board_mode_registers_on_digit_seven(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("7")  # -> research_board
+            await pilot.press("3")  # -> research_board
             await settle_screen(pilot)
             assert isinstance(app.screen, ResearchBoardModeScreen)
             frame = normalize_snapshot(capture_screen_text(app))
@@ -378,7 +378,7 @@ def test_research_board_pane_renders_honest_empty(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("7")  # -> research_board
+            await pilot.press("3")  # -> research_board
             await settle_screen(pilot)
             assert isinstance(app.screen, ResearchBoardModeScreen)
             assert app.screen.empty is True
@@ -407,7 +407,7 @@ def test_research_board_pane_renders_seeded_campaign(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("7")  # -> research_board
+            await pilot.press("3")  # -> research_board
             await settle_screen(pilot)
             assert isinstance(app.screen, ResearchBoardModeScreen)
             assert app.screen.empty is False
@@ -435,7 +435,7 @@ def test_research_board_pane_keeps_chassis_brand(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("7")  # -> research_board
+            await pilot.press("3")  # -> research_board
             await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
             header_row = frame.splitlines()[0]

@@ -1,6 +1,6 @@
 """Tests for the Evidence mode pane over the agent-report rollup (W22).
 
-The Evidence mode (digit ``4``) renders the typed agent-report rollup for
+The Evidence mode (digit ``6``) renders the typed agent-report rollup for
 the active scope: one row per report joining role / verdict / wave
 (``base_id``) / attempt / follow-up count, plus a follow-up detail block.
 These tests pin both halves:
@@ -424,13 +424,13 @@ def test_sort_evidence_rows_orders_by_natural_wave_then_role() -> None:
 
 
 def test_evidence_pane_renders_honest_empty_when_no_reports() -> None:
-    """Digit 4 boots the Evidence pane honest-empty (the common path)."""
+    """Digit 6 boots the Evidence pane honest-empty (the common path)."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("4")
+            await pilot.press("6")
             await settle_screen(pilot)
             assert isinstance(app.screen, EvidenceModeScreen)
             frame = normalize_snapshot(capture_screen_text(app))
@@ -454,7 +454,7 @@ def test_evidence_pane_renders_reports_with_role_verdict_wave(tmp_path: Path) ->
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("4")
+            await pilot.press("6")
             await settle_screen(pilot)
             screen = app.screen
             assert isinstance(screen, EvidenceModeScreen)
@@ -489,7 +489,7 @@ def test_evidence_pane_surfaces_followups_in_detail_block(tmp_path: Path) -> Non
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("4")
+            await pilot.press("6")
             await settle_screen(pilot)
             screen = app.screen
             assert isinstance(screen, EvidenceModeScreen)

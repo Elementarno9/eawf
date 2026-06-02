@@ -2,9 +2,9 @@
 
 The TUI runs two orthogonal axes -- a **scope** (``repo`` / ``workspace`` /
 ``user``, switched with ``w`` / ``r`` / ``u``) and a **mode** (``home`` /
-``trust`` / ``doctor`` / ``evidence`` / ``feed`` / ``config`` /
-``research_board`` / ``agent_watch`` / ``autopilot``, switched with digit keys
-``1``..``9``). W16 left every ``(scope, mode)`` pair reachable;
+``autopilot`` / ``research_board`` / ``trust`` / ``doctor`` / ``evidence`` /
+``feed`` / ``agent_watch``, switched with digit keys
+``1``..``8``). W16 left every ``(scope, mode)`` pair reachable;
 this wave bounds the genuinely-legal subset and rejects the rest **at the
 boundary** so a switch never lands in a sourceless view. These tests pin:
 
@@ -56,7 +56,7 @@ _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 #: cross-repo ``user`` portfolio scope (no single repo state to read).
 _SCOPE_BOUND = ("trust", "evidence", "feed", "research_board", "agent_watch", "autopilot")
 #: The scope-agnostic modes -- legal at every scope.
-_SCOPE_FREE = ("home", "doctor", "config")
+_SCOPE_FREE = ("home", "doctor")
 
 
 @pytest.fixture(autouse=True)
@@ -212,7 +212,7 @@ def test_switch_mode_rejects_illegal_mode_at_user_scope_with_toast() -> None:
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
                 (message, kw.get("severity"))
             )
-            await pilot.press("2")  # -> trust (illegal at user)
+            await pilot.press("4")  # -> trust (illegal at user)
             await settle_screen(pilot)
             # No-op: the mode stays home, the position is unchanged, no crash.
             assert app.current_mode == "home"
@@ -236,7 +236,7 @@ def test_switch_mode_accepts_legal_mode_at_user_scope() -> None:
             if app.screen.__class__.__name__ == "InitWizardModal":
                 await pilot.press("escape")
                 await settle_screen(pilot)
-            await pilot.press("3")  # -> doctor (scope-free, legal everywhere)
+            await pilot.press("5")  # -> doctor (scope-free, legal everywhere)
             await settle_screen(pilot)
             assert app.current_mode == "doctor"
             assert app.nav_position == NavPosition(scope="user", mode="doctor")
@@ -252,7 +252,7 @@ def test_switch_scope_rejects_user_when_current_mode_is_scope_bound() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust (legal at repo)
+            await pilot.press("4")  # -> trust (legal at repo)
             await settle_screen(pilot)
             assert app.nav_position == NavPosition(scope="repo", mode="trust")
             app.notify = lambda message, *_a, **kw: notices.append(  # type: ignore[method-assign]
@@ -321,7 +321,7 @@ def test_breadcrumb_reflects_the_bound_nav_position() -> None:
             assert BRAND in row
             assert row.index(BRAND) < row.index("Home") < row.index("repo")
             # Flip to a legal mode; the breadcrumb tracks the bound position.
-            await pilot.press("2")  # -> trust
+            await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             assert app.nav_position == NavPosition(scope="repo", mode="trust")
             trust_row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]
@@ -341,7 +341,7 @@ def test_rejected_switch_leaves_breadcrumb_on_prior_position() -> None:
             if app.screen.__class__.__name__ == "InitWizardModal":
                 await pilot.press("escape")
                 await settle_screen(pilot)
-            await pilot.press("2")  # -> trust, rejected at user scope
+            await pilot.press("4")  # -> trust, rejected at user scope
             await settle_screen(pilot)
             row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]
             # Breadcrumb still leads with Home (the unchanged bound mode).

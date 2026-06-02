@@ -9,7 +9,7 @@ multi-repo / QoL) can build in parallel without colliding on a central
 dict in ``app.py``.
 
 Mode vs scope are orthogonal axes. A **mode** is a content surface
-(Home / Trust / Doctor / ...), switched with digit keys ``1``..``9``. The
+(Home / Trust / Doctor / ...), switched with digit keys ``1``..``8``. The
 **scope** (repo / workspace / user, switched with ``w`` / ``r`` / ``u``)
 stays an in-mode operation: the Home mode renders the resolved scope
 screen, and the scope switch swaps that screen within the Home mode's own
@@ -22,16 +22,15 @@ A pane wave that builds, say, the Trust pane does exactly two things:
 
 1. Add its pane screen module (e.g. ``modes/trust.py`` exporting a
    ``TrustModeScreen(ScopeScreen)``).
-2. Replace that mode's ``factory`` in :data:`MODE_REGISTRY` below with a
-   one-line lambda returning its screen, e.g.::
+2. Add a :class:`ModeSpec` row in :data:`MODE_REGISTRY` below carrying its
+   next free digit and a one-line factory returning its screen, e.g.::
 
-       ModeSpec("trust", "2", "Trust", lambda app: TrustModeScreen()),
+       ModeSpec("trust", "4", "Trust", lambda app: TrustModeScreen()),
 
-   (drop the ``PlaceholderModeScreen`` the seed shipped). Nothing else in
-   ``app.py`` changes -- :func:`build_modes`, :func:`mode_bindings`, and
-   the ``/trust`` palette verb all derive from the registry, so the mode
-   keeps its digit key, its breadcrumb segment, and its palette verb for
-   free.
+   Nothing else in ``app.py`` changes -- :func:`build_modes`,
+   :func:`mode_bindings`, and the ``/trust`` palette verb all derive from
+   the registry, so the mode keeps its digit key, its breadcrumb segment,
+   and its palette verb for free.
 
 The factory takes the live :class:`~eawf.surfaces.tui.app.EaApp` so a mode
 that depends on per-instance launch state (the Home mode reads the
@@ -57,8 +56,8 @@ logger = logging.getLogger(__name__)
 
 #: A mode factory: ``(app) -> Screen | str``. Takes the live app so a mode
 #: that needs per-instance launch state (Home reads ``app._scope``) can
-#: build the right base screen; placeholder modes ignore the argument. A
-#: ``str`` return is a name in ``App.SCREENS`` -- Textual resolves it to
+#: build the right base screen; modes that ignore it discard the argument.
+#: A ``str`` return is a name in ``App.SCREENS`` -- Textual resolves it to
 #: the **cached** named instance, which the Home mode returns so its base
 #: screen is the same instance ``switch_screen`` reuses across scope
 #: switches (no duplicate scope-screen instance per mode init).
@@ -74,15 +73,13 @@ class ModeSpec:
             :attr:`textual.app.App.MODES` and the value
             ``switch_mode`` is called with. Also the breadcrumb segment
             and the ``/<name>`` palette-verb stem.
-        digit: The digit key (``"1"``..``"9"``) that switches to this
+        digit: The digit key (``"1"``..``"8"``) that switches to this
             mode. Digits are the mode axis only; arrows stay primary
             intra-pane per the keymap convention.
         title: The human-readable mode title shown in the breadcrumb and
             the help / placeholder surfaces (e.g. ``"Home"``).
-        factory: Builds the mode's base screen from the live app. A pane
-            wave swaps the seed ``PlaceholderModeScreen`` factory for its
-            real screen (the one-line registration recipe in the module
-            docstring).
+        factory: Builds the mode's base screen from the live app (the
+            one-line registration recipe in the module docstring).
     """
 
     name: str
@@ -147,29 +144,6 @@ def _evidence_factory(_app: EaApp) -> Screen[None]:
     return EvidenceModeScreen()
 
 
-def _placeholder_factory(title: str) -> ModeFactory:
-    """Return a factory that builds a titled :class:`PlaceholderModeScreen`.
-
-    The seed factory for every mode whose pane wave has not landed yet:
-    it renders the shared chassis around a ``<title> - coming soon``
-    notice so the mode's digit key works the day the chassis ships.
-
-    Args:
-        title: The mode title rendered in the coming-soon notice.
-
-    Returns:
-        A :data:`ModeFactory` that ignores its app argument and builds the
-        placeholder screen for *title*.
-    """
-
-    def factory(_app: EaApp) -> Screen[None]:
-        from eawf.surfaces.tui.modes.placeholder import PlaceholderModeScreen
-
-        return PlaceholderModeScreen(title)
-
-    return factory
-
-
 def _trust_factory(_app: EaApp) -> Screen[None]:
     """Build the Trust mode's pane over ``compute_trust_scorecard``.
 
@@ -192,11 +166,11 @@ def _trust_factory(_app: EaApp) -> Screen[None]:
 
 
 def _feed_factory(_app: EaApp) -> Screen[None]:
-    """Build the live-feed pane for the Feed mode (digit 5).
+    """Build the live-feed pane for the Feed mode (digit 7).
 
     Lazy-imports :class:`~eawf.surfaces.tui.modes.feed.FeedModeScreen` (which
     imports the scope chassis) so the registry stays import-cycle-free, the
-    same deferral :func:`_placeholder_factory` uses. The pane subscribes to
+    same deferral :func:`_trust_factory` uses. The pane subscribes to
     the App's live-event seam on mount, so it needs no per-instance launch
     state and ignores the app argument.
 
@@ -212,7 +186,7 @@ def _feed_factory(_app: EaApp) -> Screen[None]:
 
 
 def _research_board_factory(_app: EaApp) -> Screen[None]:
-    """Build the Research mode pane over the ResearchCampaign store (digit 7).
+    """Build the Research mode pane over the ResearchCampaign store (digit 3).
 
     Lazy-imports
     :class:`~eawf.surfaces.tui.modes.research_board.ResearchBoardModeScreen`
@@ -256,7 +230,7 @@ def _agent_watch_factory(_app: EaApp) -> Screen[None]:
 
 
 def _autopilot_factory(_app: EaApp) -> Screen[None]:
-    """Build the ready-wave frontier + dispatch pane for the Autopilot mode (digit 9).
+    """Build the ready-wave frontier + dispatch pane for the Autopilot mode (digit 2).
 
     Lazy-imports
     :class:`~eawf.surfaces.tui.modes.autopilot.AutopilotModeScreen` (which
@@ -283,8 +257,8 @@ def _doctor_factory(app: EaApp) -> Screen[None]:
     The Doctor pane imports :class:`~eawf.surfaces.tui.scopes.ScopeScreen`,
     which pulls the scope-screen graph; importing it at module top would
     cycle with ``app.py`` (which imports this registry early). Defer the
-    import into the factory body -- the same shape the placeholder factory
-    uses -- so the registry stays screen-free at import time.
+    import into the factory body -- the same shape the sibling factories
+    use -- so the registry stays screen-free at import time.
 
     Args:
         app: The live app (forwarded to the pane factory, which ignores it
@@ -299,28 +273,28 @@ def _doctor_factory(app: EaApp) -> Screen[None]:
 
 
 #: The default mode layout seeded on the chassis. Digit order is the switch
-#: order (``1``..``9``). ``home`` (the launch default, :data:`DEFAULT_MODE`)
-#: renders the resolved scope screen; ``trust`` renders the estimation trust
-#: scorecard; ``doctor`` folds the install / state / drift health view;
-#: ``evidence`` renders the agent-report rollup (honest-empty until reports
-#: exist); ``feed`` renders the live event feed; ``research_board`` renders
-#: the research-campaign overview (campaigns / claims / open questions,
-#: honest-empty until a campaign is staged); ``agent_watch`` zooms one
-#: dispatched session's live stream with a cancel control (honest-empty until
-#: a session is dispatched); ``autopilot`` renders the ready-wave dependency
-#: frontier with dispatch controls (honest-empty until a wave is claim-ready).
-#: The remaining modes ship as honest-empty placeholders that their per-pane
-#: waves replace via the one-line registration recipe (module docstring).
+#: order (``1``..``8``), matching the ratified mode-order brief. ``home``
+#: (the launch default, :data:`DEFAULT_MODE`) renders the resolved scope
+#: screen; ``autopilot`` renders the ready-wave dependency frontier with
+#: dispatch controls (honest-empty until a wave is claim-ready);
+#: ``research_board`` renders the research-campaign overview (campaigns /
+#: claims / open questions, honest-empty until a campaign is staged);
+#: ``trust`` renders the estimation trust scorecard; ``doctor`` folds the
+#: install / state / drift health view; ``evidence`` renders the agent-report
+#: rollup (honest-empty until reports exist); ``feed`` renders the live event
+#: feed; ``agent_watch`` zooms one dispatched session's live stream with a
+#: cancel control (honest-empty until a session is dispatched). Config is not
+#: a mode -- it is reachable from every scope via the ``c`` key (and the
+#: ``/config`` palette verb), so it owns no digit here.
 MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("home", "1", "Home", _home_screen),
-    ModeSpec("trust", "2", "Trust", _trust_factory),
-    ModeSpec("doctor", "3", "Doctor", _doctor_factory),
-    ModeSpec("evidence", "4", "Evidence", _evidence_factory),
-    ModeSpec("feed", "5", "Feed", _feed_factory),
-    ModeSpec("config", "6", "Config", _placeholder_factory("Config")),
-    ModeSpec("research_board", "7", "Research", _research_board_factory),
+    ModeSpec("autopilot", "2", "Autopilot", _autopilot_factory),
+    ModeSpec("research_board", "3", "Research", _research_board_factory),
+    ModeSpec("trust", "4", "Trust", _trust_factory),
+    ModeSpec("doctor", "5", "Doctor", _doctor_factory),
+    ModeSpec("evidence", "6", "Evidence", _evidence_factory),
+    ModeSpec("feed", "7", "Feed", _feed_factory),
     ModeSpec("agent_watch", "8", "Watch", _agent_watch_factory),
-    ModeSpec("autopilot", "9", "Autopilot", _autopilot_factory),
 )
 
 #: The launch mode -- the chassis boots into Home (the scope-bearing

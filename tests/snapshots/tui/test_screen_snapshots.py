@@ -226,7 +226,7 @@ def test_feed_mode_empty_snapshot() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
-            await pilot.press("5")  # -> Feed mode
+            await pilot.press("7")  # -> Feed mode
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "feed_mode_empty.txt")
 
@@ -245,7 +245,7 @@ def test_feed_mode_populated_snapshot() -> None:
             await app._on_event(_feed_event("EV-1", "wave P01-I01-W01 claimed"))
             await app._on_event(_feed_event("EV-2", "wave P01-I01-W01 closed"))
             await settle_screen(pilot)
-            await pilot.press("5")  # -> Feed mode
+            await pilot.press("7")  # -> Feed mode
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "feed_mode_populated.txt")
 
@@ -366,14 +366,14 @@ def _trust_populated_state(tmp_path: Path) -> Path:
 
 
 def test_trust_pane_populated_snapshot(tmp_path: Path) -> None:
-    """The Trust pane (digit 2) over a closed+verified repo renders its scorecard."""
+    """The Trust pane (digit 4) over a closed+verified repo renders its scorecard."""
 
     async def body() -> None:
         state_path = _trust_populated_state(tmp_path)
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust mode
+            await pilot.press("4")  # -> trust mode
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "trust_pane_populated.txt")
 
@@ -387,7 +387,7 @@ def test_trust_pane_data_starved_snapshot() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_STATE)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
-            await pilot.press("2")  # -> trust mode
+            await pilot.press("4")  # -> trust mode
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "trust_pane_data_starved.txt")
 
@@ -795,7 +795,7 @@ def test_doctor_mode_snapshot() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
-            await pilot.press("3")  # -> doctor
+            await pilot.press("5")  # -> doctor
             await settle_screen(pilot)
             screen = app.screen
             assert isinstance(screen, DoctorModeScreen)
