@@ -7,11 +7,16 @@ with **no per-scope duplication**. It renders, left to right:
 * the literal ``Eä`` brand (capital E + a-umlaut), bold-accent styled,
   positioned **outside-left** of the breadcrumb per the operator
   branding convention;
-* a ``scope > code > phase`` breadcrumb derived from the bound
-  :class:`~eawf.kernel.state.models.State` (rendered with the angle-ornament
-  separator :data:`CRUMB_SEP`);
-* a runtime cell — ``runtime: idle`` muted when nothing is
-  dispatched, flipping to the active runtime when a wave is running;
+* a full-location ``scope > code > phase > iter > mode`` breadcrumb
+  derived from the bound :class:`~eawf.kernel.state.models.State`
+  (rendered with the angle-ornament separator :data:`CRUMB_SEP`), with an
+  optional trailing ``> <entity>`` segment when a peek/detail is open.
+  Each segment that maps to an existing app action is a Textual
+  ``[@click=...]`` nav link to that target; see :func:`build_breadcrumb`
+  for the per-segment wiring;
+* a runtime cell — ``runtime: idle`` muted when nothing is dispatched,
+  flipping to ``runtime: <runtime> - <n> running`` (the active runtime id
+  + the running-wave count) when one or more waves are active;
 * a UTC clock (``HH:MM UTC``).
 
 The header is driven by the host :class:`~eawf.surfaces.tui.app.EaApp`
@@ -37,6 +42,9 @@ from typing import TYPE_CHECKING, ClassVar
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from eawf.kernel.state.enums import AgentSessionStatus
+from eawf.surfaces.tui.widgets.markup import escape_markup
+
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
@@ -58,68 +66,175 @@ CRUMB_SEP: str = " ❯ "  # noqa: RUF001
 #: stays visible and muted so the operator sees the field exists.
 RUNTIME_IDLE: str = "idle"
 
+#: The Home mode name (a key of the mode registry). The ``code`` segment
+#: links here so a click on the project code returns the operator to the
+#: scope-bearing Home mode. Kept as a literal so the breadcrumb builder
+#: stays a pure function with no registry import (avoids an import cycle).
+_HOME_MODE_NAME: str = "home"
+
+
+def _link(label: str, action: str | None) -> str:
+    """Wrap *label* in a Textual ``[@click=...]`` span, or escape it plain.
+
+    *label* is always markup-escaped (a project code or entity title can
+    carry a ``[`` that the content-markup parser would otherwise eat). When
+    *action* is given the escaped label is wrapped in a ``[@click=action]``
+    link; when it is ``None`` the segment renders as plain (non-clickable)
+    escaped text — the honest fallback for a segment with no existing nav
+    action to wire to.
+
+    Args:
+        label: The segment display text.
+        action: The Textual action string to fire on click (e.g.
+            ``"switch_scope('repo')"``), or ``None`` for a plain segment.
+
+    Returns:
+        The content-markup for the segment.
+    """
+    safe = escape_markup(label)
+    if action is None:
+        return safe
+    return f"[@click={action}]{safe}[/]"
+
 
 def build_breadcrumb(
     state: State | None,
     scope: str | None = None,
     mode: str | None = None,
+    *,
+    mode_name: str | None = None,
+    entity: str | None = None,
+    clickable: bool = False,
 ) -> str:
-    """Build the ``mode > scope > code > phase`` breadcrumb from typed state.
+    """Build the ``scope > code > phase > iter > mode`` breadcrumb from state.
 
-    The optional leading *mode* segment is the active content mode
-    (Home / Trust / Doctor / ...); mode and scope are orthogonal axes, so
-    the mode leads the in-mode scope. The scope segment comes from *scope*
-    (the active **screen** scope: ``repo`` / ``workspace`` / ``user``) when
-    supplied, falling back to ``state.scope_kind`` otherwise. The override
-    matters for the user scope, whose synthesized portfolio state carries
+    The breadcrumb reads as a full-location trail, left (broad) to right
+    (specific): the *scope* segment (the active **screen** scope:
+    ``repo`` / ``workspace`` / ``user``) comes from *scope* when supplied,
+    falling back to ``state.scope_kind`` otherwise. The override matters
+    for the user scope, whose synthesized portfolio state carries
     ``scope_kind=workspace`` — without it the user screen's breadcrumb
-    would lead with ``workspace`` instead of ``user``.
+    would lead with ``workspace`` instead of ``user``. The *code* segment
+    is the project code; *phase* and *iter* come from
+    ``state.current.phase_id`` / ``state.current.iter_id`` and appear only
+    while each is active. The trailing *mode* segment is the active content
+    mode (Home / Trust / Doctor / ...); mode and scope are orthogonal axes,
+    so the mode trails the in-mode location. An optional *entity* segment
+    trails everything when a peek/detail is open.
+
+    When *clickable* is set, each segment that maps to an **existing** app
+    action becomes a Textual ``[@click=...]`` link:
+
+    * scope -> ``switch_scope('<scope>')`` (the raw scope-switch action);
+    * code  -> ``switch_mode('home')`` (return to the Home mode);
+    * phase -> ``open_phase_ref('<phase>')`` (the phase reference card);
+    * iter  -> ``open_iter_ref('<iter>')`` (the iter reference card);
+    * mode  -> ``switch_mode('<mode_name>')`` when *mode_name* is given
+      (the mode segment displays the *mode* title but links by name).
+
+    The *entity* segment has no generic nav action, so it always renders
+    as plain (non-clickable) text. When *clickable* is unset every segment
+    is plain escaped text — the contract the non-TTY status frame relies on.
 
     Falls back to :data:`DEFAULT_PROJECT_CODE` when no state is loaded so
     the header stays informative during the daemon cold-spawn window; the
-    *mode* segment, when given, still leads the fallback so the active mode
-    is visible before first state load.
+    *mode* segment, when given, still trails the fallback so the active
+    mode is visible before first state load.
 
     Args:
         state: The currently bound state, or ``None`` before first load.
         scope: The active screen scope name to use for the scope segment,
             or ``None`` to read it from ``state.scope_kind``.
-        mode: The active mode title to lead the breadcrumb with, or
+        mode: The active mode **title** to trail the breadcrumb with, or
             ``None`` to omit the mode segment.
+        mode_name: The active mode **name** (registry key) the mode
+            segment links to via ``switch_mode``; ``None`` leaves the mode
+            segment plain text even when *clickable* is set.
+        entity: An optional trailing entity label (an open peek/detail),
+            or ``None`` to omit it.
+        clickable: Emit ``[@click=...]`` markup for the wired segments when
+            ``True``; render every segment as plain escaped text when
+            ``False`` (the default — the non-markup / ASCII consumers).
 
     Returns:
         The breadcrumb string (without the brand prefix).
     """
+    parts: list[str] = []
     if state is None:
-        return CRUMB_SEP.join([mode, DEFAULT_PROJECT_CODE]) if mode else DEFAULT_PROJECT_CODE
-    code = state.project.code if state.project is not None else DEFAULT_PROJECT_CODE
-    first = scope if scope is not None else state.scope_kind.value
-    parts: list[str] = [first, code]
-    if state.current.phase_id is not None:
-        parts.append(state.current.phase_id)
+        parts.append(_link(DEFAULT_PROJECT_CODE, None))
+    else:
+        code = state.project.code if state.project is not None else DEFAULT_PROJECT_CODE
+        scope_label = scope if scope is not None else state.scope_kind.value
+        parts.append(_link(scope_label, f"switch_scope({scope_label!r})" if clickable else None))
+        parts.append(_link(code, f"switch_mode({_HOME_MODE_NAME!r})" if clickable else None))
+        if state.current.phase_id is not None:
+            phase = state.current.phase_id
+            parts.append(_link(phase, f"open_phase_ref({phase!r})" if clickable else None))
+        if state.current.iter_id is not None:
+            iter_id = state.current.iter_id
+            parts.append(_link(iter_id, f"open_iter_ref({iter_id!r})" if clickable else None))
     if mode is not None:
-        parts.insert(0, mode)
+        link_mode = clickable and mode_name is not None
+        mode_action = f"switch_mode({mode_name!r})" if link_mode else None
+        parts.append(_link(mode, mode_action))
+    if entity is not None:
+        parts.append(_link(entity, None))
     return CRUMB_SEP.join(parts)
+
+
+def active_runtime_id(state: State | None) -> str | None:
+    """Return the runtime id currently driving an active wave, or ``None``.
+
+    Reads the active runtime off the bound state's agent sessions: an
+    ACTIVE :class:`~eawf.kernel.state.models.AgentSession` is a live
+    runtime-backed subagent, and its ``runtime`` field is the adapter id
+    (``"claude"`` / ``"codex"`` / ``"opencode"``). When several are ACTIVE
+    the most-recently-started one wins (the runtime the operator most
+    likely just dispatched), mirroring the agent-watch zoom's pick. Returns
+    ``None`` when no ACTIVE session carries a runtime — the honest case
+    where the header knows a wave is running but not yet which runtime.
+
+    Args:
+        state: The currently bound state, or ``None``.
+
+    Returns:
+        The active runtime adapter id, or ``None`` when none is resolvable.
+    """
+    if state is None or not state.agent_sessions:
+        return None
+    active = [
+        sess for sess in state.agent_sessions.values() if sess.status is AgentSessionStatus.ACTIVE
+    ]
+    if not active:
+        return None
+    return max(active, key=lambda sess: sess.started_at).runtime
 
 
 def runtime_cell_text(state: State | None) -> str:
     """Return the runtime-cell label for *state*.
 
     The runtime cell shows ``runtime: idle`` (muted) when no wave is
-    dispatched; once a wave is active it surfaces ``runtime: active``.
-    The richer per-runtime id + switchover colour banding lands with
-    the event-stream wiring in a later wave; this is the idle/active
-    seam those revisions extend.
+    dispatched. Once one or more waves are active it surfaces the live
+    runtime id + the running-wave count, e.g. ``runtime: claude - 2
+    running``. When waves are active but no ACTIVE agent session resolves a
+    runtime id (the header knows N waves run but not yet which runtime), it
+    falls back to ``runtime: <n> running`` — honest about the count without
+    inventing a runtime name.
 
     Args:
         state: The currently bound state, or ``None``.
 
     Returns:
-        The runtime-cell text, e.g. ``runtime: idle``.
+        The runtime-cell text, e.g. ``runtime: idle`` or ``runtime: claude
+        - 2 running``.
     """
     if state is None or not state.current.active_wave_ids:
         return f"runtime: {RUNTIME_IDLE}"
-    return "runtime: active"
+    running = len(state.current.active_wave_ids)
+    runtime = active_runtime_id(state)
+    if runtime is None:
+        return f"runtime: {running} running"
+    return f"runtime: {runtime} - {running} running"
 
 
 def _clock_text() -> str:
@@ -127,25 +242,36 @@ def _clock_text() -> str:
     return f"{datetime.now(UTC):%H:%M} UTC"
 
 
-def render_header(state: State | None, scope: str | None = None, mode: str | None = None) -> str:
+def render_header(
+    state: State | None,
+    scope: str | None = None,
+    mode: str | None = None,
+    *,
+    mode_name: str | None = None,
+    entity: str | None = None,
+) -> str:
     """Render the full header content-markup line from *state*.
 
     Pure render source — unit-testable without mounting the widget. The
     brand is wrapped in a ``[$accent][b]…[/b][/]`` span so it carries the
-    palette accent colour + bold; the runtime cell is muted via
-    ``[$muted]…[/]``.
+    palette accent colour + bold; the breadcrumb segments carry their
+    ``[@click=...]`` nav links (this is the clickable render path), and the
+    runtime cell is muted via ``[$muted]…[/]``.
 
     Args:
         state: The currently bound state, or ``None``.
         scope: The active screen scope name driving the breadcrumb's
             scope segment, or ``None`` to read it from ``state.scope_kind``.
-        mode: The active mode title leading the breadcrumb, or ``None`` to
+        mode: The active mode title trailing the breadcrumb, or ``None`` to
             omit the mode segment.
+        mode_name: The active mode name the mode segment links to via
+            ``switch_mode``, or ``None`` to leave the mode segment plain.
+        entity: An optional trailing entity label (an open peek/detail).
 
     Returns:
         A Textual content-markup string for the header line.
     """
-    crumb = build_breadcrumb(state, scope, mode)
+    crumb = build_breadcrumb(state, scope, mode, mode_name=mode_name, entity=entity, clickable=True)
     runtime = runtime_cell_text(state)
     return (
         f"[$accent][b]{BRAND}[/b][/]  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
@@ -216,22 +342,26 @@ class Header(Static):
         ``(scope, mode)`` the operator is on -- the single source of truth
         the nav state machine owns -- rather than the bound state's
         ``scope_kind`` (which reads ``workspace`` for the user scope's
-        synthesized portfolio). A bare harness without ``nav_position`` falls
-        back to the separate ``_scope`` / ``current_mode`` fields, and one
-        without those falls back gracefully (no mode segment,
-        ``state.scope_kind`` for the scope).
+        synthesized portfolio). The mode segment is passed both its title
+        (for display) and its name (for the ``switch_mode`` click target).
+        A bare harness without ``nav_position`` falls back to the separate
+        ``_scope`` / ``current_mode`` fields, and one without those falls
+        back gracefully (no mode segment, ``state.scope_kind`` for the
+        scope).
         """
         from eawf.surfaces.tui.modes import mode_title
 
         position = getattr(self.app, "nav_position", None)
         if position is not None:
             scope: str | None = position.scope
+            mode_name: str | None = position.mode
             mode: str | None = mode_title(position.mode)
         else:
             scope = getattr(self.app, "_scope", None)
-            mode_name = getattr(self.app, "current_mode", None)
-            mode = mode_title(mode_name) if isinstance(mode_name, str) else None
-        self.update(render_header(self.state, scope, mode))
+            raw_mode = getattr(self.app, "current_mode", None)
+            mode_name = raw_mode if isinstance(raw_mode, str) else None
+            mode = mode_title(raw_mode) if isinstance(raw_mode, str) else None
+        self.update(render_header(self.state, scope, mode, mode_name=mode_name))
 
 
 __all__ = [
@@ -240,6 +370,7 @@ __all__ = [
     "DEFAULT_PROJECT_CODE",
     "RUNTIME_IDLE",
     "Header",
+    "active_runtime_id",
     "build_breadcrumb",
     "render_header",
     "runtime_cell_text",

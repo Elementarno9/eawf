@@ -13,8 +13,8 @@ waves build on:
 * the app boots into the default (Home) mode; digit ``1``..``8`` switch
   modes; ``switch_mode`` no-ops when already in the mode; a palette verb
   switches mode;
-* the breadcrumb leads with the active mode title and keeps the ``Eae``
-  brand outside-left;
+* the breadcrumb trails with the active mode title (after the scope > code
+  > phase > iter location) and keeps the ``Eae`` brand outside-left;
 * the scope switch (``w`` / ``r`` / ``u``) stays an in-mode operation
   (mode and scope are orthogonal axes);
 * switching mode away from a zoomed workspace and back preserves the zoom
@@ -264,19 +264,20 @@ def test_palette_verb_switches_mode() -> None:
     asyncio.run(body())
 
 
-def test_breadcrumb_leads_with_mode_and_keeps_brand_outside_left() -> None:
-    """The header row is ``Eae  <Mode> > <scope> > ...`` -- brand outside-left."""
+def test_breadcrumb_trails_with_mode_and_keeps_brand_outside_left() -> None:
+    """The header row is ``Eae  <scope> > ... > <Mode>`` -- brand outside-left."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             header_row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]
-            # Brand is outside-left of the breadcrumb; the mode title leads it.
+            # Brand is outside-left of the breadcrumb; the scope leads, the mode
+            # title trails the full-location trail.
             assert BRAND in header_row
-            assert header_row.index(BRAND) < header_row.index("Home")
-            assert header_row.index("Home") < header_row.index("repo")
-            # Switching modes repaints the breadcrumb's leading segment.
+            assert header_row.index(BRAND) < header_row.index("repo")
+            assert header_row.index("repo") < header_row.index("Home")
+            # Switching modes repaints the breadcrumb's trailing segment.
             await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             trust_row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]

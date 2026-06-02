@@ -1,10 +1,13 @@
-"""Unit + Pilot tests for the C06 shared ``Header`` widget (P26-W18).
+"""Unit + Pilot tests for the C06 shared ``Header`` widget.
 
 Covers the pure render source (:func:`build_breadcrumb`,
-:func:`runtime_cell_text`, :func:`render_header`) including the
-None-state fallback frame, the brand prefix + breadcrumb separator, the
-idle/active runtime cell (D29), and a Pilot-driven paint under the real
-palette confirming the ``Eä`` brand reaches the rendered screen.
+:func:`active_runtime_id`, :func:`runtime_cell_text`,
+:func:`render_header`): the full-location ``scope > code > phase > iter >
+mode`` order with the optional trailing entity segment, the per-segment
+``[@click=...]`` nav wiring (clickable only for existing actions), the
+None-state fallback frame, the real runtime cell (runtime id + running
+count vs honest idle), and a Pilot-driven paint under the real palette
+confirming the ``Eä`` brand reaches the rendered screen.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from eawf.surfaces.tui.widgets.header import (
     DEFAULT_PROJECT_CODE,
     RUNTIME_IDLE,
     Header,
+    active_runtime_id,
     build_breadcrumb,
     render_header,
     runtime_cell_text,
@@ -35,6 +39,12 @@ _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
+
+#: The active fixture's facts, pinned so the assertions read clearly.
+_CODE = "QR"
+_PHASE = "P01"
+_ITER = "P01-I01"
+_WAVE = "P01-I01-W01"
 
 
 class _Harness(PaletteHarnessApp):
@@ -51,14 +61,40 @@ def _load(path: Path) -> State:
 
 
 def _state_with_active_wave() -> State:
-    """Return the active fixture with a wave id pinned into ``current``."""
+    """Return the active fixture with one wave id pinned into ``current``.
+
+    The fixture carries no agent session, so this exercises the
+    runtime-unknown path (count without a resolvable runtime id).
+    """
     payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
-    payload["current"]["active_wave_ids"] = ["P01-I01-W01"]
+    payload["current"]["active_wave_ids"] = [_WAVE]
+    return State.model_validate(payload)
+
+
+def _state_with_active_runtime(*, runtime: str = "claude", count: int = 2) -> State:
+    """Return the active fixture with *count* active waves + ACTIVE sessions.
+
+    Injects *count* ACTIVE agent sessions on *runtime* so the runtime cell
+    resolves a real runtime id alongside the running count.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["current"]["active_wave_ids"] = [f"P01-I01-W{n:02d}" for n in range(1, count + 1)]
+    payload["agent_sessions"] = {
+        f"S{n:02d}": {
+            "id": f"S{n:02d}",
+            "role": "executor",
+            "runtime": runtime,
+            "scope_id": _CODE,
+            "status": "active",
+            "started_at": f"2026-05-08T00:0{n}:00Z",
+        }
+        for n in range(1, count + 1)
+    }
     return State.model_validate(payload)
 
 
 # --------------------------------------------------------------------------
-# build_breadcrumb — None fallback + populated + workspace-no-project
+# build_breadcrumb — full-location order, segments, fallbacks
 # --------------------------------------------------------------------------
 
 
@@ -69,15 +105,50 @@ def test_build_breadcrumb_none_state_falls_back_to_default_code() -> None:
 def test_build_breadcrumb_repo_fixture_includes_scope_and_code() -> None:
     crumb = build_breadcrumb(_load(_EMPTY_REPO))
     assert "repo" in crumb
-    assert "QR" in crumb
+    assert _CODE in crumb
     assert CRUMB_SEP in crumb
 
 
-def test_build_breadcrumb_includes_phase_when_active() -> None:
+def test_build_breadcrumb_scope_leads_code_follows() -> None:
+    # scope > code: the broad-to-specific full-location order leads with scope.
+    crumb = build_breadcrumb(_load(_EMPTY_REPO))
+    assert crumb.index("repo") < crumb.index(_CODE)
+
+
+def test_build_breadcrumb_full_order_scope_code_phase_iter_mode() -> None:
+    crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), mode="Home")
+    segments = [seg.strip() for seg in crumb.split(CRUMB_SEP.strip())]
+    assert segments == ["repo", _CODE, _PHASE, _ITER, "Home"]
+
+
+def test_build_breadcrumb_includes_iter_when_active() -> None:
+    # The active fixture has an iter pinned -> iter segment present, after phase.
     crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE))
-    assert "P01" in crumb
-    # scope + code + phase => two separators.
-    assert crumb.count(CRUMB_SEP.strip()) == 2
+    assert _ITER in crumb
+    assert crumb.index(_PHASE) < crumb.index(_ITER)
+
+
+def test_build_breadcrumb_omits_iter_when_no_iter_active() -> None:
+    # The empty-repo fixture has no active iter -> no iter segment.
+    crumb = build_breadcrumb(_load(_EMPTY_REPO))
+    assert "-I" not in crumb
+
+
+def test_build_breadcrumb_mode_trails_not_leads() -> None:
+    crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), mode="Home")
+    # Mode now trails the location, not leads it.
+    assert crumb.index("Home") > crumb.index(_ITER)
+
+
+def test_build_breadcrumb_entity_segment_trails_when_supplied() -> None:
+    crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), mode="Home", entity="ART-7")
+    segments = [seg.strip() for seg in crumb.split(CRUMB_SEP.strip())]
+    assert segments == ["repo", _CODE, _PHASE, _ITER, "Home", "ART-7"]
+
+
+def test_build_breadcrumb_entity_segment_absent_when_not_supplied() -> None:
+    crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), mode="Home")
+    assert "ART-7" not in crumb
 
 
 def test_build_breadcrumb_workspace_uses_default_code_when_no_project() -> None:
@@ -86,9 +157,95 @@ def test_build_breadcrumb_workspace_uses_default_code_when_no_project() -> None:
     assert DEFAULT_PROJECT_CODE in crumb
 
 
+def test_build_breadcrumb_user_scope_override_leads_user() -> None:
+    # The user screen passes scope="user" over a workspace-shaped state.
+    crumb = build_breadcrumb(_load(_WORKSPACE), "user")
+    assert crumb.startswith("user")
+
+
+def test_build_breadcrumb_none_state_mode_trails_default_code() -> None:
+    crumb = build_breadcrumb(None, mode="Home")
+    segments = [seg.strip() for seg in crumb.split(CRUMB_SEP.strip())]
+    assert segments == [DEFAULT_PROJECT_CODE, "Home"]
+
+
 # --------------------------------------------------------------------------
-# runtime_cell_text — idle (D29) vs active
+# build_breadcrumb — clickable @click wiring (existing actions only)
 # --------------------------------------------------------------------------
+
+
+def test_build_breadcrumb_plain_by_default_has_no_click_markup() -> None:
+    crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), mode="Home", mode_name="home")
+    assert "@click=" not in crumb
+
+
+def test_build_breadcrumb_clickable_wires_scope_to_switch_scope() -> None:
+    crumb = build_breadcrumb(_load(_EMPTY_REPO), "repo", clickable=True)
+    assert "[@click=switch_scope('repo')]repo[/]" in crumb
+
+
+def test_build_breadcrumb_clickable_wires_code_to_home_mode() -> None:
+    crumb = build_breadcrumb(_load(_EMPTY_REPO), clickable=True)
+    assert f"[@click=switch_mode('home')]{_CODE}[/]" in crumb
+
+
+def test_build_breadcrumb_clickable_wires_phase_and_iter_to_ref_actions() -> None:
+    crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), clickable=True)
+    assert f"[@click=open_phase_ref('{_PHASE}')]{_PHASE}[/]" in crumb
+    assert f"[@click=open_iter_ref('{_ITER}')]{_ITER}[/]" in crumb
+
+
+def test_build_breadcrumb_clickable_wires_mode_by_name_not_title() -> None:
+    # research_board's title is "Research" but the click target is the name.
+    crumb = build_breadcrumb(
+        _load(_PHASE_ITER_WAVE), mode="Research", mode_name="research_board", clickable=True
+    )
+    assert "[@click=switch_mode('research_board')]Research[/]" in crumb
+
+
+def test_build_breadcrumb_clickable_mode_plain_without_name() -> None:
+    # No mode_name => the mode segment stays plain text (no dangling action).
+    # (The code segment still links to switch_mode('home'); only the trailing
+    # mode segment must be plain.)
+    crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), mode="Home", clickable=True)
+    last_segment = crumb.rsplit(CRUMB_SEP, 1)[-1]
+    assert last_segment == "Home"
+    assert "@click" not in last_segment
+
+
+def test_build_breadcrumb_clickable_entity_segment_is_plain() -> None:
+    # The entity segment has no generic nav action => never clickable.
+    crumb = build_breadcrumb(
+        _load(_PHASE_ITER_WAVE), mode="Home", mode_name="home", entity="ART-7", clickable=True
+    )
+    assert crumb.endswith("ART-7")
+    assert "@click" not in crumb.rsplit(CRUMB_SEP, 1)[-1]
+
+
+def test_build_breadcrumb_clickable_escapes_entity_brackets() -> None:
+    # A bracketed entity label is markup-escaped so it renders literally.
+    crumb = build_breadcrumb(
+        _load(_PHASE_ITER_WAVE), mode="Home", mode_name="home", entity="[P01-W01]", clickable=True
+    )
+    assert "\\[P01-W01]" in crumb
+
+
+# --------------------------------------------------------------------------
+# active_runtime_id + runtime_cell_text — real runtime cell
+# --------------------------------------------------------------------------
+
+
+def test_active_runtime_id_none_state_is_none() -> None:
+    assert active_runtime_id(None) is None
+
+
+def test_active_runtime_id_no_sessions_is_none() -> None:
+    # The empty-repo fixture has no agent sessions.
+    assert active_runtime_id(_load(_EMPTY_REPO)) is None
+
+
+def test_active_runtime_id_returns_active_session_runtime() -> None:
+    assert active_runtime_id(_state_with_active_runtime(runtime="codex")) == "codex"
 
 
 def test_runtime_cell_text_none_state_is_idle() -> None:
@@ -96,16 +253,22 @@ def test_runtime_cell_text_none_state_is_idle() -> None:
 
 
 def test_runtime_cell_text_no_active_wave_is_idle() -> None:
-    # The empty-repo fixture has no active wave => idle (D29).
     assert runtime_cell_text(_load(_EMPTY_REPO)) == f"runtime: {RUNTIME_IDLE}"
 
 
-def test_runtime_cell_text_active_wave_is_active() -> None:
-    assert runtime_cell_text(_state_with_active_wave()) == "runtime: active"
+def test_runtime_cell_text_active_with_runtime_shows_id_and_count() -> None:
+    cell = runtime_cell_text(_state_with_active_runtime(runtime="claude", count=2))
+    assert cell == "runtime: claude - 2 running"
+
+
+def test_runtime_cell_text_active_without_resolved_runtime_shows_count() -> None:
+    # One active wave but no ACTIVE session => honest count, no runtime id.
+    cell = runtime_cell_text(_state_with_active_wave())
+    assert cell == "runtime: 1 running"
 
 
 # --------------------------------------------------------------------------
-# render_header — brand prefix present in every frame
+# render_header — brand prefix, click markup, runtime cell, UTC clock
 # --------------------------------------------------------------------------
 
 
@@ -118,8 +281,23 @@ def test_render_header_none_state_has_brand_and_default_code() -> None:
 
 def test_render_header_populated_has_brand_left_of_breadcrumb() -> None:
     rendered = render_header(_load(_PHASE_ITER_WAVE))
-    # Brand sits outside-left of the breadcrumb.
-    assert rendered.index(BRAND) < rendered.index("QR")
+    assert rendered.index(BRAND) < rendered.index(_CODE)
+
+
+def test_render_header_carries_clickable_segments() -> None:
+    rendered = render_header(_load(_PHASE_ITER_WAVE), "repo", "Home", mode_name="home")
+    assert "[@click=switch_scope('repo')]repo[/]" in rendered
+    assert f"[@click=open_phase_ref('{_PHASE}')]" in rendered
+
+
+def test_render_header_shows_runtime_cell_with_count() -> None:
+    rendered = render_header(_state_with_active_runtime(runtime="claude", count=2))
+    assert "runtime: claude - 2 running" in rendered
+
+
+def test_render_header_includes_utc_clock() -> None:
+    rendered = render_header(_load(_EMPTY_REPO))
+    assert "UTC" in rendered
 
 
 # --------------------------------------------------------------------------
@@ -136,7 +314,7 @@ def test_header_paints_brand_and_breadcrumb() -> None:
             await pilot.pause()
             rendered = app.export_screenshot()
             assert BRAND in rendered
-            assert "QR" in rendered
+            assert _CODE in rendered
 
     asyncio.run(body())
 
@@ -151,7 +329,7 @@ def test_header_repaints_on_state_revision() -> None:
             assert DEFAULT_PROJECT_CODE in app.export_screenshot()
             header.state = _load(_EMPTY_REPO)
             await pilot.pause()
-            assert "QR" in app.export_screenshot()
+            assert _CODE in app.export_screenshot()
 
     asyncio.run(body())
 

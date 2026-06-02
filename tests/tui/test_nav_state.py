@@ -317,9 +317,10 @@ def test_breadcrumb_reflects_the_bound_nav_position() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]
-            # Brand outside-left; the bound mode (Home) leads the bound scope.
+            # Brand outside-left; the bound scope leads, the bound mode (Home)
+            # trails the full-location trail.
             assert BRAND in row
-            assert row.index(BRAND) < row.index("Home") < row.index("repo")
+            assert row.index(BRAND) < row.index("repo") < row.index("Home")
             # Flip to a legal mode; the breadcrumb tracks the bound position.
             await pilot.press("4")  # -> trust
             await settle_screen(pilot)
@@ -344,7 +345,7 @@ def test_rejected_switch_leaves_breadcrumb_on_prior_position() -> None:
             await pilot.press("4")  # -> trust, rejected at user scope
             await settle_screen(pilot)
             row = normalize_snapshot(capture_screen_text(app)).splitlines()[0]
-            # Breadcrumb still leads with Home (the unchanged bound mode).
+            # Breadcrumb still carries Home (the unchanged bound mode), not Trust.
             assert "Home" in row
             assert "Trust" not in row
 
