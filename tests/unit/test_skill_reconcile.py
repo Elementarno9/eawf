@@ -4,15 +4,17 @@ registry-vs-disk reconcile sweep (``eawf.workflow.skills.discovery``).
 Two contracts are pinned here:
 
 - **Model-invocation split.** Read-only / investigative skills
-  (research, audit, review, security-review, blitz, differentiate) render
-  with ``disable_model_invocation=False`` so the model may auto-invoke
-  them; mutating / lifecycle skills (prep, ship, polish, init, roadmap,
-  flow, memory, agent-dispatch, wave-spec) stay model-barred
-  (``disable_model_invocation=True``) so the model cannot autonomously
-  drive a state mutation or commit. ``spike`` and ``deep-research`` are
-  not standalone registry skills — both are modes of ``/research`` (the
-  spike-workflow convention + the ``deep-research`` survey depth), which
-  is already model-invocable.
+  (research, audit, review, security-review, blitz, differentiate,
+  mockup, spike) render with ``disable_model_invocation=False`` so the
+  model may auto-invoke them; mutating / lifecycle skills (prep, ship,
+  polish, init, roadmap, flow, memory, agent-dispatch, wave-spec) stay
+  model-barred (``disable_model_invocation=True``) so the model cannot
+  autonomously drive a state mutation or commit. ``design`` is the
+  read-only-but-model-barred case: it writes only under ``.ea/local/``
+  yet stays model-barred because it is an operator-driven multi-round
+  ``AskUserQuestion`` design pass, not a model-autoinvocable probe.
+  ``deep-research`` is not a standalone registry skill — it is a mode of
+  ``/research`` (the survey depth), which is already model-invocable.
 - **Reconcile.** :func:`reconcile_skills` diffs the frozen
   :data:`SKILL_REGISTRY` against a rendered ``<root>/<name>/SKILL.md``
   tree and reports missing-on-disk, extra-on-disk, and flag-mismatch
@@ -34,12 +36,14 @@ from eawf.workflow.skills.discovery import (
 
 # Read-only / investigative / advisory skills the model MAY auto-invoke.
 # These either make no persisted change (research, audit, review,
-# security-review, blitz, differentiate, mockup) or only resolve a value /
-# record a telemetry-or-intent event while routing the actual mutation to
-# the daemon (coauthor resolves a trailer; compress records a compression
-# directive) — none drives a lifecycle / state transition on its own, so
-# autonomous invocation is safe. ``mockup`` produces ASCII UI mockups as
-# AskUserQuestion previews and drives no state mutation.
+# security-review, blitz, differentiate, mockup, spike) or only resolve a
+# value / record a telemetry-or-intent event while routing the actual
+# mutation to the daemon (coauthor resolves a trailer; compress records a
+# compression directive) — none drives a lifecycle / state transition on
+# its own, so autonomous invocation is safe. ``mockup`` produces ASCII UI
+# mockups as AskUserQuestion previews; ``spike`` is a read-only multi-axis
+# direction investigation that writes only under ``.ea/local/`` — both
+# drive no state mutation.
 _READ_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
     {
         "research",
@@ -49,8 +53,20 @@ _READ_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
         "blitz",
         "differentiate",
         "mockup",
+        "spike",
         "coauthor",
         "compress",
+    }
+)
+
+# Read-only-but-model-barred skills: they write only under ``.ea/local/``
+# (no state mutation) yet stay model-barred because they are
+# operator-driven multi-round ``AskUserQuestion`` passes, not
+# model-autoinvocable probes. ``design`` triangulates an interactive
+# surface (statechart + matrix + journeys) across operator AUQ rounds.
+_READ_ONLY_MODEL_BARRED_SKILL_NAMES: frozenset[str] = frozenset(
+    {
+        "design",
     }
 )
 
@@ -113,6 +129,16 @@ def test_mutating_skill_is_model_barred(name: str) -> None:
     )
 
 
+@pytest.mark.parametrize("name", sorted(_READ_ONLY_MODEL_BARRED_SKILL_NAMES))
+def test_read_only_model_barred_skill_is_user_invocable_and_model_barred(name: str) -> None:
+    """Each read-only-but-model-barred skill is slash-visible yet model-barred."""
+    spec = _registry_by_name()[name]
+    assert spec.user_invocable is True, f"{name} must stay in the slash menu"
+    assert spec.disable_model_invocation is True, (
+        f"{name} is an operator-driven AUQ pass and must stay model-barred"
+    )
+
+
 @pytest.mark.parametrize("name", sorted(_MODEL_ONLY_SKILL_NAMES))
 def test_model_only_playbook_is_model_invocable(name: str) -> None:
     """Model-only playbooks stay hidden-but-model-invocable."""
@@ -122,13 +148,18 @@ def test_model_only_playbook_is_model_invocable(name: str) -> None:
 
 
 def test_classification_partitions_the_registry() -> None:
-    """The three classified sets exactly cover every registry skill.
+    """The four classified sets exactly cover every registry skill.
 
     Guards against a new skill landing without an explicit read-only /
-    mutating / model-only classification (which would leave its
-    model-invocability un-pinned).
+    read-only-model-barred / mutating / model-only classification (which
+    would leave its model-invocability un-pinned).
     """
-    classified = _READ_ONLY_SKILL_NAMES | _MUTATING_SKILL_NAMES | _MODEL_ONLY_SKILL_NAMES
+    classified = (
+        _READ_ONLY_SKILL_NAMES
+        | _READ_ONLY_MODEL_BARRED_SKILL_NAMES
+        | _MUTATING_SKILL_NAMES
+        | _MODEL_ONLY_SKILL_NAMES
+    )
     registry_names = {spec.skill_name for spec in SKILL_REGISTRY}
     assert classified == registry_names
 
