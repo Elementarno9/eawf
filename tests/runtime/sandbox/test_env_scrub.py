@@ -43,6 +43,8 @@ _FULL_BASE_ENV: dict[str, str] = {
     # codex-lane auth (placeholder, non-secret values)
     "OPENAI_API_KEY": "placeholder-openai",  # pragma: allowlist secret
     "CODEX_HOME": "/sandbox/agent/.codex",
+    # opencode-lane non-secret feature flag (OPENCODE_* family is kept)
+    "OPENCODE_ENABLE_EXA": "1",
     # must-drop credential families (placeholder, non-secret values)
     "AWS_SECRET_ACCESS_KEY": "placeholder-aws",  # pragma: allowlist secret
     "AWS_SESSION_TOKEN": "placeholder-aws-session",
@@ -124,11 +126,49 @@ def test_build_child_env_codex_lane_drops_claude_auth() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Credential families dropped on BOTH lanes
+# opencode lane: keep OPENCODE_* family, drop BOTH vendors' API-key auth
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("runtime", ["claude-code", "codex"])
+def test_build_child_env_opencode_lane_keeps_opencode_family() -> None:
+    """opencode lane keeps the OPENCODE_* family (data-dir override + flags)."""
+    env = build_child_env("opencode", base_env=_FULL_BASE_ENV)
+    assert env["OPENCODE_ENABLE_EXA"] == "1"
+
+
+def test_build_child_env_opencode_lane_drops_both_vendor_auth() -> None:
+    """opencode reads creds from its on-disk store, so both vendor auth keys drop."""
+    env = build_child_env("opencode", base_env=_FULL_BASE_ENV)
+    assert "ANTHROPIC_API_KEY" not in env
+    assert "CLAUDE_CONFIG_DIR" not in env
+    assert "OPENAI_API_KEY" not in env
+    assert "CODEX_HOME" not in env
+
+
+# ---------------------------------------------------------------------------
+# extra_path_dir: PREPENDED to the pinned floor, parent PATH still dropped
+# ---------------------------------------------------------------------------
+
+
+def test_build_child_env_extra_path_dir_prepended_to_pinned_floor() -> None:
+    """extra_path_dir prepends to the pinned PATH; the parent PATH never leaks."""
+    env = build_child_env("opencode", base_env=_FULL_BASE_ENV, extra_path_dir="/opt/homebrew/bin")
+    assert env["PATH"] == "/opt/homebrew/bin:" + _PINNED_PATH
+    assert "/opt/evil/bin" not in env["PATH"]
+
+
+def test_build_child_env_extra_path_dir_already_in_floor_not_duplicated() -> None:
+    """A dir already in the pinned floor is not prepended again (no duplicate)."""
+    env = build_child_env("codex", base_env=_FULL_BASE_ENV, extra_path_dir="/usr/bin")
+    assert env["PATH"] == _PINNED_PATH
+
+
+# ---------------------------------------------------------------------------
+# Credential families dropped on EVERY lane
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "codex", "opencode"])
 def test_build_child_env_drops_all_credential_families(runtime: str) -> None:
     """No must-drop credential family survives on either lane."""
     env = build_child_env(runtime, base_env=_FULL_BASE_ENV)
@@ -174,7 +214,7 @@ def test_build_child_env_missing_lang_defaults() -> None:
 def test_build_child_env_unknown_runtime_raises() -> None:
     """An unknown runtime lane raises ValueError naming the value."""
     with pytest.raises(ValueError, match="unknown runtime lane"):
-        build_child_env("opencode", base_env=_FULL_BASE_ENV)
+        build_child_env("gemini-cli", base_env=_FULL_BASE_ENV)
 
 
 # ---------------------------------------------------------------------------

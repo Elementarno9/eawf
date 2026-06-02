@@ -23,7 +23,7 @@ import re
 import shutil
 import sys
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -41,16 +41,13 @@ from eawf.runtime.runtimes.adapter import (
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
+from eawf.runtime.sandbox.env_scrub import build_child_env
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
-
-#: This adapter's canonical runtime id, reused by the local env-scrub /
-#: jail helpers so the floor logging carries the lane.
-_RUNTIME_ID: str = "opencode"
 
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate[_ -]?limit)\b", re.IGNORECASE)
 _AUTH_RE = re.compile(
@@ -62,39 +59,16 @@ _TIMEOUT_RE = re.compile(rb"\b(?:timeout|deadline_exceeded)\b", re.IGNORECASE)
 _API_RE = re.compile(rb"\b4\d\d\b")
 
 # ---------------------------------------------------------------------------
-# Floor helpers (env-scrub + OS jail), kept opencode-local
+# OS-jail helpers, kept opencode-local (mirrors the codex lane)
 # ---------------------------------------------------------------------------
 #
-# The shared floor modules (``eawf.runtime.sandbox.env_scrub`` /
-# ``eawf.runtime.sandbox.jail``) only register the claude-code + codex auth
-# lanes today, so ``build_child_env("opencode")`` and
-# ``jail_command(runtime="opencode")`` both raise ValueError for this lane.
-# Until the opencode lane is registered there, this module keeps a local
-# env-scrub allowlist for the opencode auth family and a local jail
-# passthrough that fail-soft degrades to unjailed when the shared jail
-# rejects the unknown lane -- the same fail-soft contract the claude helper
-# already uses for a missing wrapper binary. The FS-jail still confines the
-# child once the lane is registered upstream.
-
-#: The PINNED PATH floor -- the parent ``PATH`` is deliberately never passed
-#: through so a hostile entry injected into the operator's ``PATH`` cannot
-#: reach the spawned child. Mirrors the shared env-scrub floor.
-_PINNED_PATH: str = "/usr/bin:/bin:/usr/sbin:/sbin"
-
-#: Locale default seeded when the base env carries no ``LANG``.
-_DEFAULT_LANG: str = "C.UTF-8"
-
-#: Exact-match floor keys copied verbatim from the base env when present.
-#: ``PATH`` is pinned (never copied); ``LANG`` is defaulted when absent.
-_FLOOR_EXACT_KEYS: frozenset[str] = frozenset({"HOME", "TERM"})
-
-#: Floor locale carry-through prefix. ``LANG`` is seeded separately.
-_FLOOR_PREFIXES: tuple[str, ...] = ("LC_",)
-
-#: opencode-lane auth: prefix family kept when present. opencode reads its
-#: own credential from its on-disk store under the data dir; the ``OPENCODE_*``
-#: prefix carries the data-dir override + feature flags the child needs.
-_OPENCODE_AUTH_PREFIXES: tuple[str, ...] = ("OPENCODE_",)
+# The env-scrub floor delegates to the shared
+# ``eawf.runtime.sandbox.env_scrub.build_child_env`` -- the opencode auth lane
+# is registered there alongside claude + codex -- so this module keeps no
+# local env allowlist. The jail wrapper-resolution helpers stay local (the
+# same shape the codex adapter keeps), but the opencode auth lane is now
+# registered with the shared jail too, so ``_maybe_jail_argv`` engages the FS
+# container with no unjailed-lane degrade.
 
 #: The OS-jail wrapper binary per platform. The spawn jails the child only
 #: when the platform supports it AND the wrapper resolves on PATH.
@@ -102,65 +76,6 @@ _JAIL_WRAPPER_BINARY: dict[str, str] = {
     "darwin": "sandbox-exec",
     "linux": "bwrap",
 }
-
-
-def _build_child_env(
-    *,
-    base_env: Mapping[str, str] | None = None,
-    extra_path_dir: str | None = None,
-) -> dict[str, str]:
-    """Build a scrubbed child environment for the opencode lane.
-
-    Constructs the env an ``env -i``-equivalent allowlist would: start from
-    empty, seed the shared floor (``HOME``, a pinned ``PATH``, ``LANG`` /
-    ``LC_*``, ``TERM``), then add only the ``OPENCODE_*`` auth family. Every
-    variable not on the allowlist -- ``AWS_*``, ``GH_*`` / ``GITHUB_*``,
-    ``SSH_*``, ``KUBECONFIG``, the cross-lane ``ANTHROPIC_*`` / ``OPENAI_*``
-    credentials, and any unknown variable -- is absent by construction.
-
-    Kept opencode-local because the shared
-    :func:`eawf.runtime.sandbox.env_scrub.build_child_env` does not yet
-    register the opencode lane (it raises ValueError for it); this mirrors
-    that module's allowlist floor with the opencode auth family.
-
-    Args:
-        base_env: The source environment to filter. Defaults to
-            :data:`os.environ`; tests inject a fake mapping rather than
-            mutating the real process environment.
-        extra_path_dir: An additional directory PREPENDED to the pinned
-            ``PATH`` floor. The spawn passes the resolved opencode binary's
-            own directory here so the child can exec its CLI even when the
-            binary lives outside the pinned floor (e.g. a Homebrew prefix);
-            the parent ``PATH`` itself is still never passed through. ``None``
-            keeps the floor pinned verbatim.
-
-    Returns:
-        A fresh ``dict`` of the scrubbed child environment. Always carries a
-        pinned ``PATH`` and a ``LANG`` (defaulted to ``C.UTF-8`` when the
-        base env has none), even from an empty *base_env*.
-    """
-    source = os.environ if base_env is None else base_env
-    child: dict[str, str] = {}
-    for key in _FLOOR_EXACT_KEYS:
-        value = source.get(key)
-        if value is not None:
-            child[key] = value
-    if extra_path_dir and extra_path_dir not in _PINNED_PATH.split(os.pathsep):
-        child["PATH"] = extra_path_dir + os.pathsep + _PINNED_PATH
-    else:
-        child["PATH"] = _PINNED_PATH
-    child["LANG"] = source.get("LANG", _DEFAULT_LANG)
-    keep_prefixes = _FLOOR_PREFIXES + _OPENCODE_AUTH_PREFIXES
-    for key, value in source.items():
-        if key in child:
-            continue
-        if any(key.startswith(prefix) for prefix in keep_prefixes):
-            child[key] = value
-    logger.info(
-        f"_build_child_env runtime={_RUNTIME_ID!r} kept={len(child)} "
-        f"dropped={max(len(source) - len(child), 0)}"
-    )
-    return child
 
 
 def _resolve_binary_dir(binary: str) -> str | None:
@@ -228,13 +143,6 @@ def _maybe_jail_argv(argv: list[str], *, runtime: str, cwd: str | None) -> list[
     child runs UNJAILED with a loud warning -- this keeps the spawn working
     on hosts without the tool and keeps CI green.
 
-    The shared jail does not yet register the opencode auth lane, so
-    :func:`~eawf.runtime.sandbox.jail.jail_command` raises ValueError for it;
-    that is caught here and the spawn degrades to unjailed-with-warning (the
-    same fail-soft contract as a missing wrapper binary) rather than crashing
-    the spawn. Once the lane is registered upstream the jail engages with no
-    change here.
-
     The daemon stays the sole session-setter: only the argv gains the prefix
     here; ``start_new_session`` / ``env`` / ``cwd`` on the spawn are
     untouched, so the wrapper inherits the daemon-set process group and the
@@ -274,14 +182,7 @@ def _maybe_jail_argv(argv: list[str], *, runtime: str, cwd: str | None) -> list[
         )
         return argv
 
-    try:
-        jailed = jail_command(argv, runtime=runtime, cwd=cwd_path, root=root)
-    except ValueError as exc:
-        logger.warning(
-            f"spawn_session jail=unavailable runtime={runtime!r} cwd={cwd_path!s} "
-            f"reason=lane-not-registered detail={exc!r}"
-        )
-        return argv
+    jailed = jail_command(argv, runtime=runtime, cwd=cwd_path, root=root)
     logger.info(f"spawn_session jail=on wrapper={wrapper!r} runtime={runtime!r} cwd={cwd_path!s}")
     return jailed
 
@@ -630,14 +531,14 @@ class OpenCodeAdapter:
         self-reported cost). The child is started in its own session /
         process group (``start_new_session=True``) so a later cancel can
         signal the whole group by pgid. The child environment is SCRUBBED via
-        the opencode-local :func:`_build_child_env` -- it receives an
-        allowlist floor (pinned ``PATH`` + ``HOME`` / locale / ``TERM``) plus
-        the ``OPENCODE_*`` family, never the full parent env (which would
-        carry ``AWS_*`` / ``GH_*`` / ``SSH_*`` / cross-lane credentials into
-        the child). The argv is additionally prefixed with the OS filesystem
-        jail (bubblewrap / seatbelt) when the host supports it and the
-        opencode auth lane is registered with the shared jail; otherwise the
-        child runs unjailed with a warning rather than failing.
+        the shared :func:`~eawf.runtime.sandbox.env_scrub.build_child_env`
+        opencode lane -- it receives an allowlist floor (pinned ``PATH`` +
+        ``HOME`` / locale / ``TERM``) plus the ``OPENCODE_*`` family, never
+        the full parent env (which would carry ``AWS_*`` / ``GH_*`` /
+        ``SSH_*`` / cross-lane credentials into the child). The argv is
+        additionally prefixed with the OS filesystem jail (bubblewrap /
+        seatbelt) when the host supports it; an absent wrapper binary runs
+        the child unjailed with a warning rather than failing.
 
         denied-tools gap (honest): opencode has no clean per-call ``opencode
         run`` deny flag -- tool restriction is via ``permission:`` agent
@@ -712,7 +613,7 @@ class OpenCodeAdapter:
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
             cwd=cwd,
-            env=_build_child_env(extra_path_dir=binary_dir),
+            env=build_child_env(self.id, extra_path_dir=binary_dir),
         )
         pid = proc.pid
         logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")

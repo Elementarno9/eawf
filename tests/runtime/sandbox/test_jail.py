@@ -44,6 +44,7 @@ from eawf.runtime.sandbox.jail import (
 
 _CLAUDE: str = "claude-code"
 _CODEX: str = "codex"
+_OPENCODE: str = "opencode"
 
 #: The cross-tool credential dirs the jail must deny read of (every one of
 #: these, on both lanes).
@@ -235,11 +236,22 @@ def test_build_seatbelt_profile_codex_carves_out_own_cred(
     assert f'(allow file-read* (subpath "{codex_dir}"))' in profile
 
 
+def test_build_seatbelt_profile_opencode_carves_out_own_cred(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """opencode lane permits read of its data-dir ``auth.json``'s dir."""
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    _root, cwd = _repo_with_cwd(tmp_path)
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_OPENCODE, home=tmp_path)
+    opencode_dir = str((tmp_path / ".local" / "share" / "opencode").resolve())
+    assert f'(allow file-read* (subpath "{opencode_dir}"))' in profile
+
+
 def test_build_seatbelt_profile_unknown_runtime_raises(tmp_path: Path) -> None:
     """An unknown runtime lane raises ValueError naming the value."""
     _root, cwd = _repo_with_cwd(tmp_path)
     with pytest.raises(ValueError, match="unknown runtime lane"):
-        build_seatbelt_profile(cwd=cwd, runtime="opencode", home=tmp_path)
+        build_seatbelt_profile(cwd=cwd, runtime="gemini-cli", home=tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +342,24 @@ def test_jail_command_unknown_runtime_raises(tmp_path: Path) -> None:
     """An unknown runtime lane raises ValueError before any argv is built."""
     root, cwd = _repo_with_cwd(tmp_path)
     with pytest.raises(ValueError, match="unknown runtime lane"):
-        jail_command(["x"], runtime="opencode", cwd=cwd, root=root, platform="linux", home=tmp_path)
+        jail_command(
+            ["x"], runtime="gemini-cli", cwd=cwd, root=root, platform="linux", home=tmp_path
+        )
+
+
+def test_jail_command_opencode_lane_jails(tmp_path: Path) -> None:
+    """The opencode lane is a known lane: jail_command wraps its argv (no raise)."""
+    root, cwd = _repo_with_cwd(tmp_path)
+    jailed = jail_command(
+        ["opencode", "run"],
+        runtime=_OPENCODE,
+        cwd=cwd,
+        root=root,
+        platform="linux",
+        home=tmp_path,
+    )
+    assert jailed[0] == "bwrap"
+    assert jailed[-2:] == ["opencode", "run"]
 
 
 # ---------------------------------------------------------------------------

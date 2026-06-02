@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 #: codex id mirrors the codex adapter's canonical id.
 _CLAUDE_RUNTIME: str = "claude-code"
 _CODEX_RUNTIME: str = "codex"
+_OPENCODE_RUNTIME: str = "opencode"
 
 #: The PINNED PATH floor. The parent ``PATH`` is deliberately NOT passed
 #: through -- a spawned agent gets a fixed, minimal search path so a
@@ -81,18 +82,28 @@ _CODEX_AUTH_EXACT: frozenset[str] = frozenset({"CODEX_HOME"})
 #: API-key fallback to the ChatGPT-auth ``auth.json`` primary.
 _CODEX_AUTH_PREFIXES: tuple[str, ...] = ("OPENAI_",)
 
+#: opencode-lane auth: opencode reads its own credential from its on-disk
+#: data-dir store (OAuth-Claude ``auth.json``), not the env, so the lane
+#: carries NO exact auth key -- only the ``OPENCODE_*`` family (data-dir
+#: override + feature flags). The cross-lane ``ANTHROPIC_*`` / ``OPENAI_*``
+#: credentials are dropped by omission.
+_OPENCODE_AUTH_EXACT: frozenset[str] = frozenset()
+_OPENCODE_AUTH_PREFIXES: tuple[str, ...] = ("OPENCODE_",)
+
 
 def _lane_allowlist(runtime: str) -> tuple[frozenset[str], tuple[str, ...]]:
     """Return the ``(exact_keys, prefixes)`` auth allowlist for *runtime*.
 
     Args:
-        runtime: The runtime adapter id (``"claude-code"`` or ``"codex"``).
+        runtime: The runtime adapter id (``"claude-code"``, ``"codex"``,
+            or ``"opencode"``).
 
     Returns:
         A pair of the lane's exact-match auth keys and its prefix
         families. The cross-lane key is absent from both by omission, so
-        the claude lane drops ``OPENAI_*`` / ``CODEX_HOME`` and the codex
-        lane drops ``ANTHROPIC_*`` / ``CLAUDE_*`` / ``CLAUDE_CONFIG_DIR``.
+        the claude lane drops ``OPENAI_*`` / ``CODEX_HOME``, the codex
+        lane drops ``ANTHROPIC_*`` / ``CLAUDE_*`` / ``CLAUDE_CONFIG_DIR``,
+        and the opencode lane drops both vendors' API-key families.
 
     Raises:
         ValueError: When *runtime* is not a known auth lane.
@@ -101,6 +112,8 @@ def _lane_allowlist(runtime: str) -> tuple[frozenset[str], tuple[str, ...]]:
         return _CLAUDE_AUTH_EXACT, _CLAUDE_AUTH_PREFIXES
     if runtime == _CODEX_RUNTIME:
         return _CODEX_AUTH_EXACT, _CODEX_AUTH_PREFIXES
+    if runtime == _OPENCODE_RUNTIME:
+        return _OPENCODE_AUTH_EXACT, _OPENCODE_AUTH_PREFIXES
     raise ValueError(f"unknown runtime lane: {runtime!r}")
 
 
@@ -108,6 +121,7 @@ def build_child_env(
     runtime: str,
     *,
     base_env: Mapping[str, str] | None = None,
+    extra_path_dir: str | None = None,
 ) -> dict[str, str]:
     """Build a scrubbed child environment for a spawned runtime.
 
@@ -126,6 +140,12 @@ def build_child_env(
         base_env: The source environment to filter. Defaults to
             :data:`os.environ`; tests inject a fake mapping rather than
             mutating the real process environment.
+        extra_path_dir: An additional directory PREPENDED to the pinned
+            ``PATH`` floor. The spawn passes the resolved CLI binary's own
+            directory here so the scrubbed child can still exec a tool
+            installed outside the pinned floor (e.g. a Homebrew / npm-global
+            prefix); the parent ``PATH`` itself is still never passed
+            through. ``None`` (the default) keeps the floor pinned verbatim.
 
     Returns:
         A fresh ``dict`` of the scrubbed child environment. Always carries
@@ -146,8 +166,14 @@ def build_child_env(
         if value is not None:
             child[key] = value
 
-    # Floor PATH is PINNED -- never the parent PATH.
-    child["PATH"] = _PINNED_PATH
+    # Floor PATH is PINNED -- never the parent PATH. An optional
+    # extra_path_dir (the resolved spawn binary's own directory) is
+    # PREPENDED so the scrubbed child can still exec a CLI installed outside
+    # the pinned floor; the parent PATH is still never passed through.
+    if extra_path_dir and extra_path_dir not in _PINNED_PATH.split(os.pathsep):
+        child["PATH"] = extra_path_dir + os.pathsep + _PINNED_PATH
+    else:
+        child["PATH"] = _PINNED_PATH
 
     # Floor LANG is seeded with a default when the parent has none.
     child["LANG"] = source.get("LANG", _DEFAULT_LANG)

@@ -60,10 +60,12 @@ logger = logging.getLogger(__name__)
 
 #: The auth lanes a jail can be built for, keyed on the runtime adapter id
 #: (matching :data:`~eawf.runtime.sandbox.env_scrub._CLAUDE_RUNTIME` /
-#: ``_CODEX_RUNTIME``). An unknown runtime is a fail-fast ValueError.
+#: ``_CODEX_RUNTIME`` / ``_OPENCODE_RUNTIME``). An unknown runtime is a
+#: fail-fast ValueError.
 _CLAUDE_RUNTIME: str = "claude-code"
 _CODEX_RUNTIME: str = "codex"
-_KNOWN_RUNTIMES: frozenset[str] = frozenset({_CLAUDE_RUNTIME, _CODEX_RUNTIME})
+_OPENCODE_RUNTIME: str = "opencode"
+_KNOWN_RUNTIMES: frozenset[str] = frozenset({_CLAUDE_RUNTIME, _CODEX_RUNTIME, _OPENCODE_RUNTIME})
 
 #: Cross-tool credential directories the jail DENIES read of, named
 #: relative to ``$HOME`` (the ``~`` is expanded against the child's HOME at
@@ -151,7 +153,9 @@ def _own_cred_abspath(runtime: str, *, home: Path) -> Path:
     Returns:
         The absolute own-credential path. For codex this is
         ``$CODEX_HOME/auth.json`` resolved from the environment when set,
-        else ``~/.codex/auth.json``; for claude it is
+        else ``~/.codex/auth.json``; for opencode it is the data-dir
+        ``auth.json`` (``$XDG_DATA_HOME/opencode/auth.json`` when set, else
+        ``~/.local/share/opencode/auth.json``); for claude it is
         ``~/.claude/.credentials.json`` (the macOS Keychain carve-out is
         applied separately in the seatbelt profile).
     """
@@ -159,6 +163,10 @@ def _own_cred_abspath(runtime: str, *, home: Path) -> Path:
         codex_home = os.environ.get("CODEX_HOME")
         base = Path(codex_home) if codex_home else home / ".codex"
         return base / "auth.json"
+    if runtime == _OPENCODE_RUNTIME:
+        xdg_data = os.environ.get("XDG_DATA_HOME")
+        base = Path(xdg_data) if xdg_data else home / ".local" / "share"
+        return base / "opencode" / "auth.json"
     return home / _CLAUDE_OWN_CRED
 
 

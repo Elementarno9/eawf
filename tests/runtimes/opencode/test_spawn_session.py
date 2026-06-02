@@ -26,7 +26,6 @@ from eawf.runtime.runtimes.adapter import RuntimeSpawnError, SpawnResult
 from eawf.runtime.runtimes.opencode import adapter as opencode_adapter
 from eawf.runtime.runtimes.opencode.adapter import (
     OpenCodeAdapter,
-    _build_child_env,
     _line_json_objects,
     _parse_opencode_result,
 )
@@ -155,9 +154,7 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
 
     monkeypatch.setattr(opencode_adapter.asyncio, "create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(opencode_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
-    monkeypatch.setattr(
-        opencode_adapter, "_build_child_env", lambda **_kwargs: {"PATH": "/usr/bin"}
-    )
+    monkeypatch.setattr(opencode_adapter, "build_child_env", lambda *_a, **_k: {"PATH": "/usr/bin"})
     return calls
 
 
@@ -383,61 +380,6 @@ def test_parse_opencode_result_error_event_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _build_child_env -- allowlist scrub (opencode lane)
-# ---------------------------------------------------------------------------
-
-
-def test_build_child_env_keeps_floor_and_opencode_auth() -> None:
-    """The scrub keeps the floor + the OPENCODE_* family and pins PATH."""
-    env = _build_child_env(
-        base_env={
-            "HOME": "/sandbox/agent",
-            "TERM": "xterm",
-            "PATH": "/hostile/bin",
-            "LC_ALL": "en_US.UTF-8",
-            "OPENCODE_ENABLE_EXA": "1",
-        }
-    )
-    assert env["HOME"] == "/sandbox/agent"
-    assert env["TERM"] == "xterm"
-    assert env["LC_ALL"] == "en_US.UTF-8"
-    assert env["OPENCODE_ENABLE_EXA"] == "1"
-    # PATH is pinned, never the (hostile) parent PATH.
-    assert env["PATH"] != "/hostile/bin"
-    assert env["PATH"] == "/usr/bin:/bin:/usr/sbin:/sbin"
-
-
-def test_build_child_env_drops_cross_lane_and_unknown_creds() -> None:
-    """Cross-lane + unknown credential vars are absent by construction."""
-    env = _build_child_env(
-        base_env={
-            "AWS_SECRET_ACCESS_KEY": "x",
-            "GH_TOKEN": "x",
-            "SSH_AUTH_SOCK": "/tmp/sock",
-            "ANTHROPIC_API_KEY": "x",
-            "OPENAI_API_KEY": "x",
-            "KUBECONFIG": "/tmp/kc",
-        }
-    )
-    for dropped in (
-        "AWS_SECRET_ACCESS_KEY",
-        "GH_TOKEN",
-        "SSH_AUTH_SOCK",
-        "ANTHROPIC_API_KEY",
-        "OPENAI_API_KEY",
-        "KUBECONFIG",
-    ):
-        assert dropped not in env
-
-
-def test_build_child_env_defaults_lang_when_absent() -> None:
-    """LANG is seeded with a default even from an empty base env."""
-    env = _build_child_env(base_env={})
-    assert env["LANG"] == "C.UTF-8"
-    assert env["PATH"] == "/usr/bin:/bin:/usr/sbin:/sbin"
-
-
-# ---------------------------------------------------------------------------
 # spawn_session -- forks ``opencode run`` (mocked subprocess)
 # ---------------------------------------------------------------------------
 
@@ -484,8 +426,8 @@ def test_spawn_session_scrubs_child_env(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(opencode_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
     monkeypatch.setattr(
         opencode_adapter,
-        "_build_child_env",
-        lambda **_kwargs: {"PATH": "/usr/bin", "HOME": "/sandbox/agent"},
+        "build_child_env",
+        lambda *_a, **_k: {"PATH": "/usr/bin", "HOME": "/sandbox/agent"},
     )
 
     import asyncio
@@ -558,9 +500,7 @@ def test_spawn_session_jail_wraps_inner_argv(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(opencode_adapter.asyncio, "create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(opencode_adapter, "_maybe_jail_argv", _recording_jail)
-    monkeypatch.setattr(
-        opencode_adapter, "_build_child_env", lambda **_kwargs: {"PATH": "/usr/bin"}
-    )
+    monkeypatch.setattr(opencode_adapter, "build_child_env", lambda *_a, **_k: {"PATH": "/usr/bin"})
 
     import asyncio
 
