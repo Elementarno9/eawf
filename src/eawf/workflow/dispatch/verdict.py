@@ -42,9 +42,10 @@ session, never the executor's. :func:`produce_wave_verdict` registers its
 own auditor session; if the resolved author session turns out to be the
 executor's (role EXECUTOR) the append is refused with
 :class:`ExecutorSelfReportError` -- a self-report is a fail-fast typed
-error, not a silently-accepted verdict. The auditor prompt overrides the
-role contract's ``memory`` to ``False`` so the author re-reads the diff
-cold rather than recalling the executor's narrative.
+error, not a silently-accepted verdict. Fresh context is structural: the
+author runs in its own AUDITOR session over a diff-only prompt -- the
+executor's narrative is never threaded in -- so the verdict re-reads the
+diff cold.
 """
 
 from __future__ import annotations
@@ -72,15 +73,12 @@ from eawf.workflow.agent_report.store import (
     AgentReportAppendResult,
     append_agent_report,
 )
-from eawf.workflow.agents.specs.models import RoleContract
-from eawf.workflow.agents.specs.roles import get_role_spec
 from eawf.workflow.dispatch.llm_assist import (
     DEFAULT_MAX_ATTEMPTS,
     LLMAssistResult,
     SpawnFn,
     assist_with_schema,
 )
-from eawf.workflow.dispatch.renderer import build_role_contract
 from eawf.workflow.lifecycle.wave_sha import derive_diff_base
 
 logger = logging.getLogger(__name__)
@@ -449,25 +447,6 @@ def parse_auditor_report_body(raw: object) -> AuditorReportBody:
     return _AUDITOR_BODY_ADAPTER.validate_python(raw)
 
 
-def _auditor_role_contract(state: State, wave: Wave) -> RoleContract:
-    """Return the auditor role contract for *wave* with memory forced off.
-
-    Projects the registered auditor :class:`RoleSpec` into a
-    :class:`RoleContract` via
-    :func:`eawf.workflow.dispatch.renderer.build_role_contract` (threading
-    the wave's sandbox deny-list), then overrides ``memory`` to ``False``.
-    The override is the fresh-context guarantee: even if the auditor role's
-    registered spec defaults ``memory`` on, the verdict author re-reads the
-    diff cold rather than recalling the executor's narrative.
-    """
-    contract = build_role_contract(
-        get_role_spec(AgentSessionRole.AUDITOR),
-        state=state,
-        wave_id=wave.id,
-    )
-    return contract.model_copy(update={"memory": False})
-
-
 #: Suffix appended to the wave id to scope the fresh auditor session. The
 #: session store enforces one ACTIVE session per ``(scope_id, runtime)``;
 #: the wave-close producer may run while the executor session is still
@@ -614,8 +593,8 @@ async def produce_wave_verdict(
     :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`; a
     test binds a recording stub returning a canned auditor
     :class:`~eawf.runtime.runtimes.adapter.SpawnResult`, so no real
-    subprocess runs. The auditor role contract's ``memory`` is forced to
-    ``False`` (:func:`_auditor_role_contract`) for the fresh-context audit.
+    subprocess runs. Fresh context is structural: the auditor runs in its
+    own session over a diff-only prompt, never the executor's narrative.
 
     Args:
         state: Loaded, validated state -- mutated in place by the session
@@ -650,7 +629,6 @@ async def produce_wave_verdict(
         eawf.workflow.agent_report.store.AgentReportRoleMismatchError: When
             the persisted body role disagrees with the author session role.
     """
-    contract = _auditor_role_contract(state, wave)
     auditor_session = _resolve_auditor_session(
         state=state,
         events_path=events_path,
@@ -678,8 +656,7 @@ async def produce_wave_verdict(
     )
     logger.info(
         f"produce_wave_verdict wave={wave.id} session={auditor_session.id!r} "
-        f"verdict={body.verdict.value!r} attempt={append_result.attempt} "
-        f"memory={contract.memory}"
+        f"verdict={body.verdict.value!r} attempt={append_result.attempt}"
     )
     return WaveVerdictResult(
         append_result=append_result,

@@ -90,9 +90,6 @@ WATCH_ROW_CLASS: str = FEED_ROW_CLASS
 #: empty surface is unmistakable rather than reading as a quiet live stream.
 EMPTY_NOTICE: str = "no active dispatched session"
 
-#: Notice when a session is being watched but no event has arrived yet.
-WATCH_WAITING: str = "watching {target} -- waiting for session events..."
-
 #: Notice when the App is degraded (daemon unreachable) so the operator knows
 #: the stream is not flowing rather than merely quiet.
 WATCH_DEGRADED: str = "daemon unreachable -- session stream paused until it returns"
@@ -483,7 +480,7 @@ class AgentWatchModeScreen(ScopeScreen):
             return EMPTY_NOTICE
         if getattr(self.app, "degraded", False):
             return WATCH_DEGRADED
-        return WATCH_WAITING.format(target=self.target.label)
+        return f"watching {self.target.label} -- waiting for session events..."
 
     def _pick_target(self) -> WatchTarget | None:
         """Resolve the default watch target from the bound read-only state."""
@@ -525,7 +522,6 @@ __all__ = [
     "WATCH_LIST_ID",
     "WATCH_RESULT_ID",
     "WATCH_ROW_CLASS",
-    "WATCH_WAITING",
     "AgentWatchModeScreen",
     "WatchTarget",
     "is_watched_event",
