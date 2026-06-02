@@ -11278,7 +11278,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T19:00:49.698940Z",
+  "updated_at": "2026-06-02T19:01:58.705837Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -32940,8 +32940,8 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
         "src/eawf/surfaces/tui/widgets/backlog_table.py",
-        "src/eawf/surfaces/tui/widgets/multichoice_checklist.py",
-        "tests/tui/**"
+        "tests/tui/**",
+        "src/eawf/surfaces/tui/screens/overlays/multichoice_checklist.py"
       ],
       "id": "P29-I05-W09",
       "intent": null,
