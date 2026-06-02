@@ -71,7 +71,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import State
+from eawf.kernel.state.models import State, Wave
 from eawf.kernel.state.mutations import (
     DecisionMutationError,
     MemoryMutationError,
@@ -605,7 +605,17 @@ def _compute_wave_close_readiness(
     state_path: Path,
     repo_root: Path,
 ) -> CloseReadiness | None:
-    """Return the pre-close readiness view for a wave-close mutation."""
+    """Return the pre-close readiness view for a wave-close mutation.
+
+    Raises:
+        LifecycleError: When verify enforcement is active and the wave's
+            fresh-context auditor verdict gate
+            (:func:`eawf.workflow.dispatch.verdict.verify_wave_verdict_gate`)
+            blocks -- a high-risk or sampled wave whose freshest auditor
+            verdict is absent or FAIL / BLOCKED cannot close. The daemon
+            maps this onto ``validation_failed`` like every other
+            wave-close lifecycle rejection.
+    """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.verify import compute as compute_readiness
     from eawf.workflow.verify.readiness import load_active_verify_block
@@ -621,12 +631,48 @@ def _compute_wave_close_readiness(
     )
     if verify_block is None or not verify_block.enforce:
         return None
+    _enforce_wave_verdict_gate(state.waves[wave_id], state_path=state_path)
     return compute_readiness(
         wave_id,
         state=state,
         store_dir=_store_dir(state_path),
         repo_root=repo_root,
         config_root=_config_root_for_state_path(state_path),
+    )
+
+
+def _enforce_wave_verdict_gate(wave: Wave, *, state_path: Path) -> None:
+    """Raise when the wave's fresh-auditor verdict gate blocks close.
+
+    The single additive daemon-side hook into the dispatch-layer verdict
+    producer (P29-I04-W07). It runs only on the enforcing close path (the
+    caller has already confirmed ``verify_block.enforce``), so the
+    advisory-only close paths -- and every wave-close test that does not
+    enable enforcement -- are unaffected. The gate blocks only the required
+    subset: a high-risk (``"always"``) or sampled wave whose freshest
+    auditor verdict is absent or not close-ready raises; a ``"skip"``
+    mechanical wave never blocks.
+
+    Args:
+        wave: The wave being closed.
+        state_path: Path to ``state.json``; the auditor report store
+            resolves under its sibling ``store/`` directory.
+
+    Raises:
+        LifecycleError: When the verdict gate refuses close.
+    """
+    from eawf.workflow.dispatch.verdict import verify_wave_verdict_gate
+
+    gate = verify_wave_verdict_gate(wave, state_path=state_path)
+    if gate.passed:
+        return
+    reasons = "; ".join(gate.reasons) if gate.reasons else "no reasons recorded"
+    logger.warning(
+        f"_enforce_wave_verdict_gate wave={wave.id} requirement={gate.requirement} "
+        f"blocked reasons=[{reasons}]"
+    )
+    raise LifecycleError(
+        f"wave {wave.id!r} verdict gate blocked close (requirement={gate.requirement}): {reasons}"
     )
 
 
