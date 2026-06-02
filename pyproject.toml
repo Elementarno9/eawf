@@ -235,12 +235,17 @@ max-loc = 1400
 # follow-ups instead of making EAWF010 red the full verification suite. P29-I02
 # grew the roadmap CLI command group and the plan-view renderer past the cap
 # while preserving behavior; both are extract-module split followups, registered
-# here per the un-grandfather-on-touch rule until that split lands.
+# here per the un-grandfather-on-touch rule until that split lands. The TUI app
+# shell was already past the cap before P29-I04, and the I04 live-view waves
+# touched it (mode-registry digit-range docstrings + the live-feed listener
+# Protocol retype) while preserving behavior, so it joins the list as an
+# extract-module split followup (B083) rather than reding the suite.
 exclude = [
     "src/eawf/kernel/config/registry/leaf_catalog.py",
     "src/eawf/runtime/daemon/methods/state.py",
     "src/eawf/surfaces/cli/commands/roadmap.py",
     "src/eawf/surfaces/render/plan_view.py",
+    "src/eawf/surfaces/tui/app.py",
 ]
 
 [tool.eawf.lint.eawf011]
