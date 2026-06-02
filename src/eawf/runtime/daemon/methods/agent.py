@@ -69,6 +69,7 @@ from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.runtime.daemon.dispatch_runner import DispatchResult, DispatchTokens, run_dispatch
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.lock import portalock
+from eawf.runtime.runtimes.adapter import ErrorClass, RuntimeSpawnError, SpawnResult
 from eawf.runtime.runtimes.dispatch import resolve_adapter
 from eawf.runtime.runtimes.manifest import RuntimeId
 from eawf.runtime.runtimes.metering import price_spawn_result
@@ -77,6 +78,7 @@ from eawf.runtime.runtimes.selector import select_adapter
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.runtime.session.store import SessionConflict, start_session
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope
+from eawf.workflow.dispatch.retry import spawn_with_retry
 from eawf.workflow.dispatch.routing import resolve_routing
 from eawf.workflow.evidence._io import load_state
 
@@ -661,23 +663,27 @@ async def _spawn_and_dispatch(
     3. Resolve the per-wave sandbox deny-list
        (:func:`eawf.runtime.sandbox.policy.resolve_denied_tools`) so the
        spawned child is launched with those tools disabled.
-    4. Resolve the runtime adapter instance
-       (:func:`eawf.runtime.runtimes.selector.select_adapter`).
-    5. ``await`` the adapter's
-       :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
-       (jailed argv + scrubbed env + the deny-list -- the safety floor),
-       capturing the child pid via the ``on_spawn`` callback.
+    4. Resolve the per-wave runtime preference ladder so the bounded retry
+       loop's V5 reactive switch has a fall-through target.
+    5. Spawn for real behind the floor through
+       :func:`eawf.workflow.dispatch.retry.spawn_with_retry` (jailed argv +
+       scrubbed env + the deny-list -- the safety floor), capturing the
+       child pid via the ``on_spawn`` callback. The loop retries the same
+       runtime on a rate limit, switches to the next preference runtime on
+       an availability error, and halts on auth.
     6. Price the spawn via
        :func:`eawf.runtime.runtimes.metering.price_spawn_result`.
     7. Drive :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch`
        with the registered session id so the ``agent_end`` report emit
-       fires.
+       fires (keyed on the serving runtime, which a V5 switch may have moved
+       past the originally-resolved one).
 
     Args:
         ctx: Daemon method context — supplies ``state_path``, ``event_path``,
             ``bus``.
         wave_id: ``W<NN>`` wave being dispatched.
-        runtime: Resolved runtime adapter id (plugin spelling).
+        runtime: Resolved runtime adapter id (plugin spelling) for the first
+            spawn; the retry loop may switch past it on an availability error.
         model_override: Optional explicit model id; when ``None`` the
             model is resolved from the wave's routing inputs.
         trace_request_id: Optional daemon RPC request id for the §5.8
@@ -685,14 +691,15 @@ async def _spawn_and_dispatch(
 
     Returns:
         A :class:`DispatchPlan` carrying the real captured ``pid``, the
-        registered session id, and the runner's emitted ``event_ids``
-        (including the report-driven events).
+        registered session id, the serving runtime, and the runner's emitted
+        ``event_ids`` (including the report-driven events).
 
     Raises:
         LiveSpawnError: When ``ctx.state_path`` or ``ctx.event_path`` is
             unset (asserted defensively after the dispatch-level guard).
-        eawf.runtime.runtimes.adapter.RuntimeSpawnError: When the live spawn
-            times out, exits non-zero, or returns an unparseable result.
+        eawf.workflow.dispatch.retry.RetryExhaustedError: When the bounded
+            retry loop terminated without a usable result (an auth halt, a
+            switch ladder run out of runtimes, or the attempt ceiling hit).
     """
     if ctx.state_path is None or ctx.event_path is None:
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
@@ -715,21 +722,50 @@ async def _spawn_and_dispatch(
     denied = resolve_denied_tools(state.sandbox_policies, wave_id=wave_id)
     logger.info(f"_spawn_and_dispatch wave={wave_id} denied_tools={len(denied)}")
 
-    # 4. Resolve the concrete adapter instance for the runtime id.
-    adapter = select_adapter(runtime)
+    # 4. Resolve the per-wave runtime preference ladder so the retry loop's
+    # V5 reactive switch has a runtime to fall through to on an availability
+    # error (server / timeout / api). Empty when the wave pins one runtime.
+    wave = state.waves.get(wave_id)
+    preference = list(wave.runtime_preference) if wave and wave.runtime_preference else []
 
-    # 5. Spawn for real behind the floor (the adapter jails the argv +
-    # scrubs the child env + applies the deny-list), capturing the child pid
-    # via on_spawn.
+    # 5. Spawn for real behind the floor through the bounded retry loop: a
+    # rate limit retries the same runtime, an availability error switches to
+    # the next preference runtime, and an auth error halts. The closure
+    # re-resolves the per-runtime adapter so a switch spawns on the next
+    # runtime's adapter; ``parse_error`` classifies a ``RuntimeSpawnError``.
+    # The adapter jails the argv + scrubs the child env + applies the
+    # deny-list. The captured pid rides the ``on_spawn`` callback.
     captured_pid: list[int] = []
-    spawn_result = await adapter.spawn_session(
-        envelope.prompt,
-        model=model,
-        cwd=str(state_path.parent.parent),
-        denied_tools=sorted(denied),
-        on_spawn=captured_pid.append,
+
+    async def _spawn_once(spawn_runtime: str) -> SpawnResult:
+        spawn_adapter = select_adapter(spawn_runtime)
+        return await spawn_adapter.spawn_session(
+            envelope.prompt,
+            model=model,
+            cwd=str(state_path.parent.parent),
+            denied_tools=sorted(denied),
+            on_spawn=captured_pid.append,
+        )
+
+    def _classify(exc: RuntimeSpawnError, spawn_runtime: str) -> ErrorClass:
+        # parse_error wants a concrete exit code; a parse-level failure with
+        # no exit context coerces to -1, which falls through to the
+        # conservative RUNTIME_API_ERROR (a switch signal).
+        exit_status = exc.exit_status if exc.exit_status is not None else -1
+        return select_adapter(spawn_runtime).parse_error(exit_status, exc.stderr)
+
+    spawn_result = await spawn_with_retry(
+        runtime=runtime,
+        preference=preference,
+        spawn=_spawn_once,
+        classify=_classify,
     )
-    pid = captured_pid[0] if captured_pid else spawn_result.subprocess_pid
+    # The serving runtime is the one the accepted spawn ran on -- a V5 switch
+    # may have moved it past the originally-resolved runtime. Each adapter
+    # stamps its own id on the result, so this is authoritative.
+    serving_runtime = spawn_result.runtime
+    adapter = select_adapter(serving_runtime)
+    pid = captured_pid[-1] if captured_pid else spawn_result.subprocess_pid
 
     # 6. Price the spawn from its token classes.
     metered = price_spawn_result(spawn_result)
@@ -741,8 +777,9 @@ async def _spawn_and_dispatch(
     )
 
     # 7. Drive the runner with the registered session id so the
-    # ``agent_end`` executor-report emit fires (no fallback in this path).
-    runtime_triple = _runtime_triple(runtime)
+    # ``agent_end`` executor-report emit fires. The serving runtime is the
+    # one the accepted spawn ran on (a V5 switch may have moved it).
+    runtime_triple = _runtime_triple(serving_runtime)
     result: DispatchResult = run_dispatch(
         ctx,
         wave_id=wave_id,
@@ -756,25 +793,31 @@ async def _spawn_and_dispatch(
         trace_request_id=trace_request_id,
         session_id=session_id,
     )
+    # A V5 reactive switch moved the serving runtime past the originally-
+    # resolved one, so the attempt records the swap as a SWITCH_ON_ERROR;
+    # an unswitched spawn stays a plain FRESH_DISPATCH.
+    switched = serving_runtime != runtime
+    note = DispatchNote.SWITCH_ON_ERROR if switched else DispatchNote.FRESH_DISPATCH
+    runtime_from = runtime if switched else None
     logger.info(
-        f"_spawn_and_dispatch wave={wave_id} runtime={runtime!r} pid={pid} "
+        f"_spawn_and_dispatch wave={wave_id} runtime={serving_runtime!r} pid={pid} "
         f"session={session_id!r} cost_usd={metered.cost_usd} report_id={result.report_id!r}"
     )
     return DispatchPlan(
         session_id=session_id,
         attempt=1,
         pid=pid,
-        runtime=runtime,
+        runtime=serving_runtime,
         annotation=DispatchAnnotation(
             attempt=1,
-            note=DispatchNote.FRESH_DISPATCH,
-            runtime_from=None,
-            runtime_to=runtime,
+            note=note,
+            runtime_from=runtime_from,
+            runtime_to=serving_runtime,
             occurred_at=datetime.now(UTC),
         ),
         session_attempt=SessionAttempt(
             attempt=1,
-            runtime=runtime,
+            runtime=serving_runtime,
             session_id=session_id,
             session_log_handle=adapter.session_log_handle(spawn_result.session_id),
             started_at=spawn_result.started_at,

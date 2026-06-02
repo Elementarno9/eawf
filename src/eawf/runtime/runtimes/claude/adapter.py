@@ -195,7 +195,9 @@ def _parse_claude_result(
     if exit_status != 0:
         snippet = stderr.decode(errors="replace").strip()[:200]
         raise RuntimeSpawnError(
-            f"claude spawn exited nonzero: status={exit_status} stderr={snippet!r}"
+            f"claude spawn exited nonzero: status={exit_status} stderr={snippet!r}",
+            exit_status=exit_status,
+            stderr=stderr,
         )
     raw = stdout.decode(errors="replace").strip()
     if not raw:
@@ -459,8 +461,11 @@ class ClaudeAdapter:
         except TimeoutError:
             proc.kill()
             await proc.wait()
+            # 124 is the conventional timeout exit code parse_error maps to
+            # RUNTIME_TIMEOUT, so a classifier routes the V5 switch ladder.
             raise RuntimeSpawnError(
-                f"claude spawn timed out: timeout={timeout}s pid={pid}"
+                f"claude spawn timed out: timeout={timeout}s pid={pid}",
+                exit_status=124,
             ) from None
         ended_at = datetime.now(UTC)
         return _parse_claude_result(

@@ -113,7 +113,33 @@ class RuntimeSpawnError(RuntimeError):
     result. The daemon's dispatch path catches this so a raw
     :class:`json.JSONDecodeError` / partial-output failure surfaces as a
     typed adapter-layer error rather than leaking out of the spawn seam.
+
+    Carries the optional spawn-failure context (:attr:`exit_status` +
+    :attr:`stderr`) so a caller can feed it back through
+    :meth:`RuntimeAdapter.parse_error` to classify the failure into a
+    canonical :data:`ErrorClass` for the V5 reactive-switch ladder. The
+    raise sites that have the subprocess exit + stderr in hand (a non-zero
+    exit, a timeout) populate them; the parse-level raise sites (empty
+    stdout, unparseable JSON) leave the defaults, so a classifier coerces
+    them to the conservative ``RUNTIME_API_ERROR`` (a switch signal).
+
+    Attributes:
+        exit_status: Subprocess exit code when known (``None`` for a
+            parse-level failure with no exit context).
+        stderr: Captured stderr bytes when known (``b""`` for a
+            parse-level failure).
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        exit_status: int | None = None,
+        stderr: bytes = b"",
+    ) -> None:
+        super().__init__(message)
+        self.exit_status = exit_status
+        self.stderr = stderr
 
 
 # ---------------------------------------------------------------------------

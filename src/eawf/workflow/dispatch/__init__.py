@@ -22,6 +22,12 @@ Public API:
   spawn's answer text against the forced ``agent_end`` schema into a typed
   :class:`LLMAssistResult`, or raises :class:`LLMAssistError` once the retry
   ceiling is exhausted.
+- :func:`spawn_with_retry` — the bounded spawn-retry loop over the CLI failure
+  taxonomy: it classifies a :class:`RuntimeSpawnError` into the V5 ladder action
+  (retry-same / switch-runtime / halt), respawns or switches accordingly, and on
+  a terminal failure raises :class:`RetryExhaustedError` carrying every attempt
+  plus a tiered :class:`FailureNotice` (``transient_retryable`` / ``switched`` /
+  ``fatal_halt``).
 
 Both renderers are pure functions — no I/O, no logging side-effects
 beyond the module-level ``logger``. The CLI handlers in
@@ -45,6 +51,14 @@ from eawf.workflow.dispatch.renderer import (
     render_dispatch_envelope,
     render_wave_prompt,
 )
+from eawf.workflow.dispatch.retry import (
+    FailureNotice,
+    FailureTier,
+    RetryExhaustedError,
+    SpawnAttemptFailure,
+    failure_tier_for_action,
+    spawn_with_retry,
+)
 from eawf.workflow.dispatch.routing import (
     DEFAULT_ROUTING_TABLE,
     RoutingDecision,
@@ -57,15 +71,21 @@ __all__ = [
     "DEFAULT_ROUTING_TABLE",
     "DISPATCH_RUNTIMES",
     "DispatchEnvelope",
+    "FailureNotice",
+    "FailureTier",
     "LLMAssistError",
     "LLMAssistResult",
+    "RetryExhaustedError",
     "RoutingDecision",
     "SchemaAttemptFailure",
+    "SpawnAttemptFailure",
     "assist_with_schema",
     "build_role_contract",
     "build_subagent_spec",
+    "failure_tier_for_action",
     "render_dispatch_envelope",
     "render_wave_prompt",
     "resolve_routing",
     "seed_interim_verdict",
+    "spawn_with_retry",
 ]

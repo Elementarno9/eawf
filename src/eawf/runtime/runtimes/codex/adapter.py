@@ -336,7 +336,9 @@ def _parse_codex_result(
     if exit_status != 0:
         snippet = stderr.decode(errors="replace").strip()[:200]
         raise RuntimeSpawnError(
-            f"codex spawn exited nonzero: status={exit_status} stderr={snippet!r}"
+            f"codex spawn exited nonzero: status={exit_status} stderr={snippet!r}",
+            exit_status=exit_status,
+            stderr=stderr,
         )
     if not stdout.decode(errors="replace").strip():
         raise RuntimeSpawnError("codex spawn produced empty stdout")
@@ -572,8 +574,11 @@ class CodexAdapter:
         except TimeoutError:
             proc.kill()
             await proc.wait()
+            # 124 is the conventional timeout exit code parse_error maps to
+            # RUNTIME_TIMEOUT, so a classifier routes the V5 switch ladder.
             raise RuntimeSpawnError(
-                f"codex spawn timed out: timeout={timeout}s pid={pid}"
+                f"codex spawn timed out: timeout={timeout}s pid={pid}",
+                exit_status=124,
             ) from None
         ended_at = datetime.now(UTC)
         return _parse_codex_result(
