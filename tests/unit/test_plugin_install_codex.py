@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+import eawf
 from eawf.runtime.runtimes.codex import doctor_plugin, expected_paths, install_plugin
 from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
 from eawf.runtime.runtimes.codex.plugin_install import IntegrityViolation
@@ -172,7 +173,7 @@ def test_install_codex_emits_manifest_toml(tmp_path: Path, fake_home: Path, scop
     assert manifest_path.is_file()
     body = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert body["name"] == "eawf"
-    assert body["version"] == "1.0"
+    assert body["version"] == eawf.__version__
     assert body["description"]
     assert body["skills"] == "./skills/"
     # Codex requires `hooks` to be a list of {event_type, path} objects, not
@@ -207,6 +208,17 @@ def test_manifest_interface_omits_url_fields(tmp_path: Path) -> None:
     iface = body["interface"]
     for k in ("websiteURL", "privacyPolicyURL", "termsOfServiceURL", "composerIcon", "logo"):
         assert k not in iface, f"{k} leaks into manifest"
+
+
+def test_manifest_version_tracks_package_version(tmp_path: Path) -> None:
+    """``plugin.json`` version derives from ``eawf.__version__`` so Codex's
+    $VERSION-keyed cache invalidates on every release rather than pinning a
+    stale ``1.0`` literal."""
+    install_plugin(tmp_path)
+    manifest_path = tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / "plugin.json"
+    body = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert body["version"] == eawf.__version__
+    assert body["version"] != "1.0" or eawf.__version__ == "1.0"
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])

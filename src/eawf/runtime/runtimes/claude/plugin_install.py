@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import eawf
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
@@ -61,7 +62,9 @@ from eawf.surfaces.render.skills import (
 logger = logging.getLogger(__name__)
 
 
-_PLUGIN_VERSION: str = "1.0"
+# Plugin version tracks the package version so the managed manifest advances
+# on every release; a frozen literal would never re-trigger an upgrade.
+_PLUGIN_VERSION: str = eawf.__version__
 _GENERATOR: str = "eawf-plugin-claude"
 _MANAGED_KEY: str = "__eawf_managed"
 _HOOK_FILE_MODE: int = 0o755

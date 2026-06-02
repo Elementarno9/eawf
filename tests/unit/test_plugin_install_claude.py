@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+import eawf
 from eawf.runtime.runtimes.claude.plugin_install import (
     InstallResult,
     IntegrityViolation,
@@ -133,10 +134,21 @@ def test_install_plugin_settings_managed_namespace_only(tmp_path: Path) -> None:
     assert parsed["additionalDirectories"] == user_payload["additionalDirectories"]
     assert "__eawf_managed" in parsed
     managed = parsed["__eawf_managed"]
-    assert managed["version"] == "1.0"
+    assert managed["version"] == eawf.__version__
     assert {s["name"] for s in managed["skills"]} == {s.skill_name for s in SKILL_REGISTRY}
     assert {a["name"] for a in managed["agents"]} == {a.role for a in AGENT_REGISTRY}
     assert "hash" in managed and len(managed["hash"]) == 16
+
+
+def test_managed_block_version_tracks_package_version(tmp_path: Path) -> None:
+    """The ``__eawf_managed`` block version derives from ``eawf.__version__`` so
+    the manifest advances on every release rather than pinning a stale ``1.0``
+    literal that never re-triggers an upgrade."""
+    install_plugin(tmp_path)
+    settings_path = tmp_path / ".claude" / "settings.json"
+    managed = json.loads(settings_path.read_text(encoding="utf-8"))["__eawf_managed"]
+    assert managed["version"] == eawf.__version__
+    assert managed["version"] != "1.0" or eawf.__version__ == "1.0"
 
 
 def test_install_plugin_hooks_are_executable(tmp_path: Path) -> None:

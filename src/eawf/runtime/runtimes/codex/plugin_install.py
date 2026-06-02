@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+import eawf
 from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
 from eawf.runtime.runtimes.codex.skills import (
     render_codex_agent_toml,
@@ -72,7 +73,9 @@ logger = logging.getLogger(__name__)
 Scope = Literal["project", "user"]
 
 _PLUGIN_NAME: str = "eawf"
-_PLUGIN_VERSION: str = "1.0"
+# Plugin version tracks the package version so Codex's $VERSION-keyed cache
+# invalidates on every release; a frozen literal would pin stale skills.
+_PLUGIN_VERSION: str = eawf.__version__
 _PLUGIN_DESCRIPTION: str = "Eä Workflow plugin — agent-driven development skills and hooks."
 _GENERATOR: str = "eawf-plugin-codex"
 _MANAGED_TABLE: str = "__eawf_managed"

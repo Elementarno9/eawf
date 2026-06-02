@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import eawf
 from eawf.runtime.runtimes.opencode import doctor_plugin, install_plugin
 from eawf.runtime.runtimes.opencode.plugin_install import (
     IntegrityViolation,
@@ -312,7 +313,7 @@ def test_doctor_reports_legacy_workspace_root_paths(tmp_path: Path) -> None:
 def test_expected_plugin_js_carries_version_stamp() -> None:
     body = expected_plugin_js_bytes().decode("utf-8")
     assert "__EAWF_PLUGIN_VERSION__" not in body
-    assert "version: '1.0'" in body
+    assert f"version: '{eawf.__version__}'" in body
 
 
 def test_expected_plugin_js_wires_runtime_and_agent_end_hook() -> None:

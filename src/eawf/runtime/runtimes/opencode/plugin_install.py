@@ -40,6 +40,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any, Literal
 
+import eawf
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
 from eawf.surfaces.render.manifest import (
@@ -60,7 +61,9 @@ logger = logging.getLogger(__name__)
 Scope = Literal["project", "user"]
 
 _PLUGIN_NAME: str = "eawf"
-_PLUGIN_VERSION: str = "1.0"
+# Plugin version tracks the package version so the emitted plugin.js + manifest
+# advance on every release; a frozen literal would never re-trigger an upgrade.
+_PLUGIN_VERSION: str = eawf.__version__
 _GENERATOR: str = "eawf-plugin-opencode"
 _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 _PLUGIN_TEMPLATE_PACKAGE: str = "eawf.runtime.runtimes.opencode.templates"
