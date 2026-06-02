@@ -2,15 +2,15 @@
 
 The TUI runs on Textual's native :attr:`textual.app.App.MODES` +
 ``switch_mode``: a **mode** is a content surface (Home / Trust / Doctor /
-Evidence / Feed / Config / Research / Watch) switched with digit keys
-``1``..``8``, declared once in :mod:`eawf.surfaces.tui.modes.registry` -- the
-one seam the per-pane waves extend. These tests pin the chassis the pane
+Evidence / Feed / Config / Research / Watch / Autopilot) switched with digit
+keys ``1``..``9``, declared once in :mod:`eawf.surfaces.tui.modes.registry` --
+the one seam the per-pane waves extend. These tests pin the chassis the pane
 waves build on:
 
 * the registry composes ``App.MODES``, the digit bindings, and the
   ``/<mode>`` palette verbs from one declarative source (the pure-unit
   half, testable without Textual);
-* the app boots into the default (Home) mode; digit ``1``..``8`` switch
+* the app boots into the default (Home) mode; digit ``1``..``9`` switch
   modes; ``switch_mode`` no-ops when already in the mode; a palette verb
   switches mode;
 * the breadcrumb leads with the active mode title and keeps the ``Eae``
@@ -75,6 +75,7 @@ _EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
     ("config", "6", "Config"),
     ("research_board", "7", "Research"),
     ("agent_watch", "8", "Watch"),
+    ("autopilot", "9", "Autopilot"),
 )
 
 
@@ -216,7 +217,7 @@ def test_app_boots_into_the_default_home_mode() -> None:
 
 
 def test_digit_keys_switch_modes() -> None:
-    """Digit ``1``..``6`` switch ``current_mode`` to each registered mode."""
+    """Digit ``1``..``9`` switch ``current_mode`` to each registered mode."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
