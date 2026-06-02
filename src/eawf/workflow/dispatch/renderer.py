@@ -94,17 +94,20 @@ logger = logging.getLogger(__name__)
 # settings.json writes; the dispatch adapter exposes ``"claude-code"``
 # at the CLI surface so the two SDK-vs-CLI cousins read symmetrically.
 # This tuple is the source of truth — the CLI layer imports it directly
-# rather than re-declaring the allow-list. ``codex`` (D12) shares the
-# claude-code envelope shape: ``prompt`` carries the full Markdown body
-# and MCP wiring rides through the runtime's own config file rather than
-# the envelope, so the dispatch surface stays symmetric.
+# rather than re-declaring the allow-list. ``codex`` (D12) and ``opencode``
+# share the claude-code envelope shape: ``prompt`` carries the full Markdown
+# body and MCP wiring rides through the runtime's own config file rather than
+# the envelope, so the dispatch surface stays symmetric across the three
+# vendor families.
 _CLI_RUNTIME_CLAUDE_CODE: str = "claude-code"
 _CLI_RUNTIME_CLAUDE_AGENT_SDK: str = "claude-agent-sdk"
 _CLI_RUNTIME_CODEX: str = "codex"
+_CLI_RUNTIME_OPENCODE: str = "opencode"
 DISPATCH_RUNTIMES: tuple[str, ...] = (
     _CLI_RUNTIME_CLAUDE_CODE,
     _CLI_RUNTIME_CLAUDE_AGENT_SDK,
     _CLI_RUNTIME_CODEX,
+    _CLI_RUNTIME_OPENCODE,
 )
 _HIDDEN_DECISION_STATUSES: frozenset[DecisionStatus] = frozenset(
     {DecisionStatus.OBSOLETE, DecisionStatus.SUPERSEDED}
@@ -182,8 +185,9 @@ def render_dispatch_envelope(
         state: Validated, read-only state snapshot.
         wave_id: Target wave id (must exist in ``state.waves``).
         runtime: CLI-facing runtime name. Must be one of
-            ``"claude-code"`` or ``"claude-agent-sdk"``; anything else
-            raises :class:`ValueError` with the canonical
+            :data:`DISPATCH_RUNTIMES` (``"claude-code"`` /
+            ``"claude-agent-sdk"`` / ``"codex"`` / ``"opencode"``); anything
+            else raises :class:`ValueError` with the canonical
             ``unknown runtime ...; expected one of [...]`` format that
             matches :func:`eawf.runtime.mcp.installer._validate_runtime`.
         repo_root: Optional repo root used for spike-brief discovery and
@@ -210,12 +214,12 @@ def render_dispatch_envelope(
     # re-project it. The shared spec keeps the two surfaces aligned.
     spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
     prompt = _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
-    if runtime in {_CLI_RUNTIME_CLAUDE_CODE, _CLI_RUNTIME_CODEX}:
-        # codex shares the claude-code envelope shape: ``prompt`` carries
-        # the full Markdown body and the runtime reads MCP wiring from its
-        # own config file (``.codex/config.toml``, per D12) rather than the
-        # envelope, mirroring how the claude-code agent reads
-        # ``settings.json`` on disk.
+    if runtime in {_CLI_RUNTIME_CLAUDE_CODE, _CLI_RUNTIME_CODEX, _CLI_RUNTIME_OPENCODE}:
+        # codex + opencode share the claude-code envelope shape: ``prompt``
+        # carries the full Markdown body and the runtime reads MCP wiring from
+        # its own config file (codex ``.codex/config.toml`` per D12, opencode
+        # ``opencode.json``) rather than the envelope, mirroring how the
+        # claude-code agent reads ``settings.json`` on disk.
         return DispatchEnvelope(
             runtime=runtime,
             wave_id=wave_id,

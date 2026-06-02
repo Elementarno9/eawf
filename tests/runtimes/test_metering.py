@@ -228,6 +228,71 @@ def test_price_spawn_result_surfaces_session_id_for_correlation() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Cross-vendor pricing (P29-I04-W15): a real codex / opencode spawn must price
+# honestly (priced=True) rather than silently fall back to priced=False / $0.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("runtime", "model"),
+    [
+        ("codex", "gpt-5-codex"),
+        ("codex", "gpt-5"),
+        ("codex", "gpt-5-mini"),
+        ("opencode", "anthropic/claude-opus-4-8"),
+        ("opencode", "anthropic/claude-sonnet-4-6"),
+    ],
+)
+def test_price_spawn_result_prices_cross_vendor_models_honestly(runtime: str, model: str) -> None:
+    """A codex / opencode spawn prices priced=True against its own vendor model.
+
+    Boundary: each runtime resolves its OWN model id to a real pricing row, so
+    ``price_spawn_result`` no longer silently returns priced=False for a real
+    cross-vendor spawn.
+    """
+    pricing = lookup_pricing(model)
+    assert pricing is not None
+    result = _spawn_result(runtime=runtime, model=model, resolved_model=None)
+    metered = price_spawn_result(result)
+
+    assert metered.priced is True
+    assert metered.model == model
+    assert metered.cost_usd > Decimal("0")
+    expected = (
+        100 * pricing.input_per_token
+        + 42 * pricing.output_per_token
+        + 50 * pricing.cache_write_5m_per_token
+        + 30 * pricing.cache_write_1h_per_token
+        + 200 * pricing.cache_read_per_token
+    )
+    assert metered.cost_usd == expected
+
+
+def test_price_spawn_result_codex_dated_model_prices_via_prefix() -> None:
+    """A suffixed codex id prices via its longest-prefix tier row (priced)."""
+    result = _spawn_result(
+        runtime="codex", model="gpt-5-codex", resolved_model="gpt-5-codex-preview"
+    )
+    metered = price_spawn_result(result)
+    assert metered.priced is True
+    assert metered.cost_usd > Decimal("0")
+
+
+def test_price_spawn_result_unknown_codex_model_still_degrades_honestly() -> None:
+    """Error path: an unknown OpenAI id (no tier row) degrades to priced=False.
+
+    The honest-degrade contract holds for the cross-vendor lane too: a model id
+    that matches no pricing row yields cost 0 with priced=False (no raise, no
+    pretend-billed zero), distinct from a real codex spawn that now prices.
+    """
+    assert lookup_pricing("gpt-4o") is None
+    result = _spawn_result(runtime="codex", model="gpt-4o", resolved_model=None)
+    metered = price_spawn_result(result)
+    assert metered.cost_usd == Decimal("0")
+    assert metered.priced is False
+
+
+# --------------------------------------------------------------------------- #
 # meter_and_emit: the emitted dispatch_cost carries the real (non-$0) cost.
 # --------------------------------------------------------------------------- #
 

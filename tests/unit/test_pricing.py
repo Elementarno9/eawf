@@ -229,9 +229,77 @@ def test_lookup_pricing_codex_dated_variant_resolves() -> None:
 
 
 def test_lookup_pricing_opencode_still_unpriced() -> None:
-    # No new alias is a prefix of "opencode"; it stays unpriced (None) as
-    # before, confirming the new keys did not widen the match set wrongly.
+    # The bare runtime id "opencode" is NOT a model id (opencode addresses
+    # models in provider/model form); no key is a prefix of it, so it stays
+    # unpriced (None), confirming the new keys did not widen the match set
+    # wrongly. The opencode MODEL ids ("anthropic/...") are priced separately.
     assert lookup_pricing("opencode") is None
+
+
+# --------------------------------------------------------------------------
+# Cross-vendor per-tier model rows (P29-I04-W15): codex bare ids + opencode
+# provider/model ids the dispatch routing table emits must all price.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("model_id", ["gpt-5-mini", "gpt-5", "gpt-5-codex"])
+def test_codex_tier_rows_present_and_priced(model_id: str) -> None:
+    # Each codex per-tier id the routing table emits prices non-zero
+    # (placeholder rate pending operator confirmation) -- a codex juror spawn
+    # must not silently bill $0.
+    row = PRICING[model_id]
+    assert row.input_per_token > Decimal("0")
+    assert row.output_per_token > Decimal("0")
+
+
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        "anthropic/claude-haiku-4-5",
+        "anthropic/claude-sonnet-4-6",
+        "anthropic/claude-opus-4-8",
+    ],
+)
+def test_opencode_provider_model_rows_present_and_priced(model_id: str) -> None:
+    # The opencode provider/model ids price at the REAL anthropic rates (the
+    # OAuth-Claude lane), so they mirror the bare claude row's input rate.
+    row = PRICING[model_id]
+    bare = model_id.removeprefix("anthropic/")
+    assert row.input_per_token == PRICING[bare].input_per_token
+    assert row.output_per_token == PRICING[bare].output_per_token
+
+
+def test_lookup_pricing_gpt5_codex_prefers_longest_prefix_over_gpt5() -> None:
+    # Both "gpt-5" and "gpt-5-codex" are keys; the codex id must bind the
+    # longer, more specific row rather than the gpt-5 mid-tier row.
+    assert lookup_pricing("gpt-5-codex") is PRICING["gpt-5-codex"]
+    # A suffixed codex id still binds the codex row, not gpt-5.
+    assert lookup_pricing("gpt-5-codex-preview") is PRICING["gpt-5-codex"]
+
+
+def test_lookup_pricing_gpt5_dated_variant_resolves() -> None:
+    # A dated/suffixed gpt-5 id with no exact row prices via the gpt-5 prefix
+    # row (and NOT gpt-5-codex, which is not a prefix of "gpt-5-2026").
+    assert lookup_pricing("gpt-5-2026") is PRICING["gpt-5"]
+
+
+def test_lookup_pricing_opencode_model_dated_variant_resolves() -> None:
+    # A dated opencode provider/model id longest-prefix-matches its tier row.
+    result = lookup_pricing("anthropic/claude-opus-4-8-20260101")
+    assert result is PRICING["anthropic/claude-opus-4-8"]
+
+
+def test_lookup_pricing_gpt4o_still_miss() -> None:
+    # The new gpt-5* keys must not widen the match set to an unrelated OpenAI
+    # id: "gpt-5" is not a prefix of "gpt-4o", so it stays a miss.
+    assert lookup_pricing("gpt-4o") is None
+
+
+def test_cross_vendor_rows_keep_currency_check_green() -> None:
+    # The W15 codex + opencode additions must not introduce drift.
+    report = check_pricing_currency()
+    assert report.is_current is True
+    assert report.findings == []
 
 
 def test_new_rows_keep_currency_check_green() -> None:

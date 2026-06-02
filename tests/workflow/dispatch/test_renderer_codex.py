@@ -73,6 +73,28 @@ def test_dispatch_runtimes_includes_codex() -> None:
     assert "claude-agent-sdk" in DISPATCH_RUNTIMES
 
 
+def test_dispatch_runtimes_includes_opencode() -> None:
+    """The allow-list carries ``opencode`` (P29-I04-W15) so its spawn is reachable."""
+    assert "opencode" in DISPATCH_RUNTIMES
+
+
+def test_opencode_envelope_renders_same_prompt_as_claude_code() -> None:
+    """The opencode envelope mirrors claude-code: same prompt body, empty MCP wiring.
+
+    opencode shares the claude-code envelope shape (prompt carries the full
+    body; MCP wiring rides through ``opencode.json``, not the envelope), so the
+    live-spawn renderer reaches the opencode lane the same way.
+    """
+    state = _empty_state()
+    _seed_single_wave(state)
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "opencode")
+    assert isinstance(envelope, DispatchEnvelope)
+    assert envelope.runtime == "opencode"
+    assert envelope.prompt == render_wave_prompt(state, "P01-I01-W01")
+    assert envelope.mcp_servers == []
+    assert envelope.allowed_tools == []
+
+
 def test_codex_envelope_uses_claude_code_shape() -> None:
     """The codex envelope mirrors claude-code: prompt body, empty MCP wiring."""
     state = _empty_state()
@@ -100,13 +122,19 @@ def test_codex_envelope_renders_same_prompt_as_claude_code() -> None:
 
 
 def test_unknown_runtime_error_message_lists_codex_among_supported() -> None:
-    """The unsupported-runtime error names every entry, including codex."""
+    """The unsupported-runtime error names every supported entry.
+
+    ``opencode`` joined :data:`DISPATCH_RUNTIMES` (P29-I04-W15), so the
+    unsupported example here is a genuinely-unknown runtime; the error must
+    still name every supported entry including codex + opencode.
+    """
     state = _empty_state()
     _seed_single_wave(state)
     with pytest.raises(ValueError) as excinfo:
-        render_dispatch_envelope(state, "P01-I01-W01", "opencode")
+        render_dispatch_envelope(state, "P01-I01-W01", "gemini")
     msg = str(excinfo.value)
     assert "codex" in msg
+    assert "opencode" in msg
     assert "claude-code" in msg
     assert "claude-agent-sdk" in msg
 

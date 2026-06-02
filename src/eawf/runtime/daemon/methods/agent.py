@@ -79,7 +79,7 @@ from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.runtime.session.store import SessionConflict, start_session
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope
 from eawf.workflow.dispatch.retry import spawn_with_retry
-from eawf.workflow.dispatch.routing import resolve_routing
+from eawf.workflow.dispatch.routing import model_for_runtime
 from eawf.workflow.evidence._io import load_state
 
 logger = logging.getLogger(__name__)
@@ -501,23 +501,31 @@ _DEFAULT_SPAWN_ROLE: AgentSessionRole = AgentSessionRole.EXECUTOR
 _DEFAULT_SPAWN_EFFORT: EffortBucket = EffortBucket.M
 
 
-def _resolve_spawn_model(state_path: Path, *, wave_id: str, override: str | None) -> str:
+def _resolve_spawn_model(
+    state_path: Path, *, wave_id: str, runtime: str, override: str | None
+) -> str:
     """Resolve the model id the live spawn prices + runs against.
 
     An explicit *override* wins. Otherwise the model is resolved from the
-    wave's ``(agent_role, effort_bucket)`` via
-    :func:`eawf.workflow.dispatch.routing.resolve_routing`, falling back to
-    the executor / medium-effort defaults when the wave omits either field
-    so the resolver always returns a priced row.
+    wave's ``(agent_role, effort_bucket)`` AND the serving *runtime* via
+    :func:`eawf.workflow.dispatch.routing.model_for_runtime`, falling back to
+    the executor / medium-effort defaults when the wave omits either field so
+    the resolver always returns a priced row. Threading the runtime is the
+    cross-vendor fix: a codex / opencode spawn must run its OWN vendor's model
+    (a bare OpenAI id / a ``provider/model`` id) rather than a claude id the
+    foreign CLI rejects; the claude path stays byte-identical.
 
     Args:
         state_path: Path to ``state.json`` (read to recover the wave's
             role + effort hints).
         wave_id: ``W<NN>`` wave being dispatched.
+        runtime: Resolved runtime adapter id (plugin-manifest spelling) the
+            model is selected for. Mapped to the short ``RuntimeTriple``
+            spelling the routing table keys on.
         override: Caller-supplied ``model`` param; wins when set.
 
     Returns:
-        The resolved model id (a key of the pricing snapshot).
+        The resolved per-runtime model id (a key of the pricing snapshot).
 
     Raises:
         ValueError: When *wave_id* is unknown in the on-disk state.
@@ -530,12 +538,13 @@ def _resolve_spawn_model(state_path: Path, *, wave_id: str, override: str | None
         raise ValueError(f"unknown wave: {wave_id!r}")
     role = wave.agent_role if wave.agent_role is not None else _DEFAULT_SPAWN_ROLE
     effort = wave.effort_bucket if wave.effort_bucket is not None else _DEFAULT_SPAWN_EFFORT
-    decision = resolve_routing(role, effort)
+    triple = _runtime_triple(runtime)
+    model = model_for_runtime(role, effort, triple)
     logger.debug(
         f"_resolve_spawn_model wave={wave_id} role={role.value} "
-        f"effort={effort.value} model={decision.model!r}"
+        f"effort={effort.value} runtime={triple!r} model={model!r}"
     )
-    return decision.model
+    return model
 
 
 def _register_executor_session(
@@ -709,9 +718,14 @@ async def _spawn_and_dispatch(
     # dispatch runner has a session row to use as report authority.
     session_id = _register_executor_session(ctx, wave_id=wave_id, runtime=runtime)
 
-    # 2. Resolve the model + render the prompt. The executor lane runs on
-    # the claude-code runtime; the renderer accepts that spelling.
-    model = _resolve_spawn_model(state_path, wave_id=wave_id, override=model_override)
+    # 2. Resolve the per-runtime model for the first spawn + render the prompt.
+    # The model is selected for the resolved runtime so a codex / opencode spawn
+    # runs its own vendor's model rather than a claude id the foreign CLI
+    # rejects. A V5 switch re-resolves the model for the switched runtime inside
+    # the spawn closure (below), so each runtime always spawns its own model.
+    model = _resolve_spawn_model(
+        state_path, wave_id=wave_id, runtime=runtime, override=model_override
+    )
     state = load_state(state_path)
     envelope = render_dispatch_envelope(state, wave_id, runtime, repo_root=state_path.parent.parent)
 
@@ -739,9 +753,20 @@ async def _spawn_and_dispatch(
 
     async def _spawn_once(spawn_runtime: str) -> SpawnResult:
         spawn_adapter = select_adapter(spawn_runtime)
+        # Re-resolve the model for the runtime actually spawning: on the first
+        # spawn this equals ``model``; after a V5 switch the switched runtime
+        # gets ITS own vendor model (a bare claude id would be rejected by the
+        # codex / opencode CLI). An explicit override pins the model regardless.
+        spawn_model = (
+            model
+            if spawn_runtime == runtime
+            else _resolve_spawn_model(
+                state_path, wave_id=wave_id, runtime=spawn_runtime, override=model_override
+            )
+        )
         return await spawn_adapter.spawn_session(
             envelope.prompt,
-            model=model,
+            model=spawn_model,
             cwd=str(state_path.parent.parent),
             denied_tools=sorted(denied),
             on_spawn=captured_pid.append,

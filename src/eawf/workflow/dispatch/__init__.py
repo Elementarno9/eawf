@@ -62,6 +62,7 @@ from eawf.workflow.dispatch.retry import (
 from eawf.workflow.dispatch.routing import (
     DEFAULT_ROUTING_TABLE,
     RoutingDecision,
+    model_for_runtime,
     resolve_routing,
 )
 from eawf.workflow.dispatch.seed import seed_interim_verdict
@@ -83,6 +84,7 @@ __all__ = [
     "build_role_contract",
     "build_subagent_spec",
     "failure_tier_for_action",
+    "model_for_runtime",
     "render_dispatch_envelope",
     "render_wave_prompt",
     "resolve_routing",

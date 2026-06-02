@@ -55,6 +55,32 @@ _MODEL_HAIKU: str = "claude-haiku-4-5"
 #: surface's ``RuntimeName`` vocabulary.
 _DEFAULT_RUNTIME: str = "claude"
 
+#: Ordered tier index (cheapest -> most capable) the per-runtime model maps
+#: key on. The claude model a :class:`RoutingDecision` carries pins the tier;
+#: :func:`model_for_runtime` maps that tier onto the queried runtime's own
+#: vendor model so a codex / opencode juror spawns its OWN vendor's model at
+#: the same capability tier rather than a claude id the foreign CLI rejects.
+_TIER_INDEX_BY_MODEL: dict[str, int] = {_MODEL_HAIKU: 0, _MODEL_SONNET: 1, _MODEL_OPUS: 2}
+
+#: Per-runtime model id per tier, indexed by :data:`_TIER_INDEX_BY_MODEL`.
+#: The short ``RuntimeTriple`` spelling keys the outer map (the same vocabulary
+#: :attr:`RoutingDecision.runtime` carries). ``claude`` mirrors the tier ladder
+#: verbatim so the claude spawn model is byte-identical to the pre-W15 surface.
+#: ``codex`` routes bare OpenAI ids; ``opencode`` routes the ``provider/model``
+#: form the opencode CLI ``-m`` flag expects (anthropic provider, so an
+#: OAuth-Claude opencode lane prices at the real anthropic rates). Every id is a
+#: key the cost ledger prices through
+#: :func:`eawf.observability.telemetry.pricing.lookup_pricing`.
+_RUNTIME_TIER_MODEL: dict[str, tuple[str, str, str]] = {
+    "claude": (_MODEL_HAIKU, _MODEL_SONNET, _MODEL_OPUS),
+    "codex": ("gpt-5-mini", "gpt-5", "gpt-5-codex"),
+    "opencode": (
+        f"anthropic/{_MODEL_HAIKU}",
+        f"anthropic/{_MODEL_SONNET}",
+        f"anthropic/{_MODEL_OPUS}",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class RoutingDecision:
@@ -190,8 +216,66 @@ def resolve_routing(
     return decision
 
 
+def model_for_runtime(
+    agent_role: AgentSessionRole,
+    effort_bucket: EffortBucket,
+    runtime: str,
+    *,
+    table: dict[tuple[AgentSessionRole, EffortBucket], RoutingDecision] | None = None,
+) -> str:
+    """Resolve the model id for *runtime* at *agent_role* x *effort_bucket*.
+
+    Pure function -- no I/O, no hidden state. Resolves the routing decision
+    via :func:`resolve_routing` (so an operator *table* override still wins),
+    reads the capability tier off the decision's claude model, then maps that
+    tier onto *runtime*'s own vendor model via :data:`_RUNTIME_TIER_MODEL`.
+
+    This is the per-runtime model the live spawn / cross-vendor juror runs
+    against: a codex juror gets a bare OpenAI id, an opencode juror gets the
+    ``provider/model`` form its CLI ``-m`` flag expects, and a claude spawn gets
+    the same claude id :func:`resolve_routing` already returned (byte-identical
+    to the pre-W15 surface). Every returned id is a key the cost ledger prices
+    through :func:`eawf.observability.telemetry.pricing.lookup_pricing`.
+
+    Args:
+        agent_role: The wave's :class:`~eawf.kernel.state.enums.AgentSessionRole`.
+        effort_bucket: The wave's
+            :class:`~eawf.kernel.state.enums.EffortBucket`.
+        runtime: The short ``RuntimeTriple`` spelling (``claude`` / ``codex`` /
+            ``opencode``) the spawn runs on.
+        table: Optional operator-supplied override map forwarded to
+            :func:`resolve_routing`.
+
+    Returns:
+        The per-runtime model id for the tier.
+
+    Raises:
+        ValueError: When *runtime* is not one of the three short triple
+            spellings, or the resolved tier model is not a known tier.
+    """
+    decision = resolve_routing(agent_role, effort_bucket, table=table)
+    tier_models = _RUNTIME_TIER_MODEL.get(runtime)
+    if tier_models is None:
+        known = ", ".join(sorted(_RUNTIME_TIER_MODEL))
+        raise ValueError(f"unknown runtime: {runtime!r} (known: {known})")
+    tier = _TIER_INDEX_BY_MODEL.get(decision.model)
+    if tier is None:
+        # The default table only ever yields the three tier ids, so this is
+        # reachable only via a sparse operator override whose model is off the
+        # tier ladder; fall back to the runtime's mid (sonnet-equivalent) tier
+        # so the resolver still returns a priced row rather than raising.
+        tier = _TIER_INDEX_BY_MODEL[_MODEL_SONNET]
+    model = tier_models[tier]
+    logger.debug(
+        f"model_for_runtime role={agent_role.value} effort={effort_bucket.value} "
+        f"runtime={runtime!r} model={model!r}"
+    )
+    return model
+
+
 __all__ = [
     "DEFAULT_ROUTING_TABLE",
     "RoutingDecision",
+    "model_for_runtime",
     "resolve_routing",
 ]

@@ -30,9 +30,11 @@ import pytest
 
 from eawf.kernel.config.registry import LEAF_KEY_REGISTRY, leaf_key_lookup
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
+from eawf.observability.telemetry.pricing import lookup_pricing
 from eawf.workflow.dispatch import (
     DEFAULT_ROUTING_TABLE,
     RoutingDecision,
+    model_for_runtime,
     resolve_routing,
 )
 
@@ -186,6 +188,109 @@ def test_routing_decision_is_frozen() -> None:
     decision = RoutingDecision(model="claude-opus-4-8", runtime="claude")
     with pytest.raises(dataclasses.FrozenInstanceError):
         decision.model = "claude-haiku-4-5"  # type: ignore[misc]
+
+
+# --- model_for_runtime: per-runtime vendor model resolution ------------------
+
+
+def test_model_for_runtime_claude_is_byte_identical_to_resolve_routing() -> None:
+    """The claude path returns the exact model resolve_routing already emits.
+
+    Cross-vendor model resolution must not perturb the claude lane: every
+    (role, effort) pair resolves to the same claude model id as before.
+    """
+    for role in AgentSessionRole:
+        for effort in EffortBucket:
+            assert model_for_runtime(role, effort, "claude") == resolve_routing(role, effort).model
+
+
+def test_model_for_runtime_codex_routes_bare_openai_ids() -> None:
+    """A codex spawn resolves its OWN vendor model (bare OpenAI id) per tier."""
+    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "codex") == "gpt-5-mini"
+    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.M, "codex") == "gpt-5"
+    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XL, "codex") == "gpt-5-codex"
+
+
+def test_model_for_runtime_opencode_routes_provider_model_form() -> None:
+    """An opencode spawn resolves the ``provider/model`` form its CLI expects."""
+    assert (
+        model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "opencode")
+        == "anthropic/claude-haiku-4-5"
+    )
+    assert (
+        model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XL, "opencode")
+        == "anthropic/claude-opus-4-8"
+    )
+
+
+def test_model_for_runtime_preserves_tier_across_vendors() -> None:
+    """Each runtime resolves its own model at the SAME capability tier.
+
+    Boundary: a reasoning-heavy role at M effort bumps to the top tier; that
+    bump must carry across every vendor (opus / gpt-5-codex / anthropic-opus).
+    """
+    role, effort = AgentSessionRole.REVIEWER, EffortBucket.M
+    assert model_for_runtime(role, effort, "claude") == "claude-opus-4-8"
+    assert model_for_runtime(role, effort, "codex") == "gpt-5-codex"
+    assert model_for_runtime(role, effort, "opencode") == "anthropic/claude-opus-4-8"
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex", "opencode"])
+def test_every_per_runtime_model_is_priced(runtime: str) -> None:
+    """Each runtime's per-tier model id resolves to a pricing row (priced).
+
+    The cross-vendor metering floor: a juror spawn on any of the three runtimes
+    must price honestly, so every model the resolver can emit is a pricing-table
+    key. Covers the whole role x effort grid for the runtime.
+    """
+    for role in AgentSessionRole:
+        for effort in EffortBucket:
+            model = model_for_runtime(role, effort, runtime)
+            assert lookup_pricing(model) is not None, (runtime, model)
+
+
+def test_model_for_runtime_unknown_runtime_raises() -> None:
+    """Error path: an unknown runtime spelling raises ValueError."""
+    with pytest.raises(ValueError, match="unknown runtime"):
+        model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.M, "gemini")
+
+
+def test_model_for_runtime_forwards_override_table_tier() -> None:
+    """An operator override table re-tiers the resolution for every vendor.
+
+    The override pins XS-executor to the Opus (top) tier; the per-runtime
+    resolver must then return each vendor's top-tier model for that pair.
+    """
+    override = {
+        (AgentSessionRole.EXECUTOR, EffortBucket.XS): RoutingDecision(
+            model="claude-opus-4-8", runtime="claude"
+        )
+    }
+    assert (
+        model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "codex", table=override)
+        == "gpt-5-codex"
+    )
+    assert (
+        model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "opencode", table=override)
+        == "anthropic/claude-opus-4-8"
+    )
+
+
+def test_model_for_runtime_off_tier_override_falls_back_to_mid_tier() -> None:
+    """A sparse override whose model is off the tier ladder degrades to mid.
+
+    Error-adjacent boundary: an override carrying a model id the tier index
+    does not know resolves to the runtime's mid (sonnet-equivalent) tier rather
+    than raising, so the resolver still returns a priced row.
+    """
+    override = {
+        (AgentSessionRole.EXECUTOR, EffortBucket.S): RoutingDecision(
+            model="some-unranked-model", runtime="codex"
+        )
+    }
+    model = model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.S, "codex", table=override)
+    assert model == "gpt-5"
+    assert lookup_pricing(model) is not None
 
 
 # --- dispatch.routing config leaf --------------------------------------------

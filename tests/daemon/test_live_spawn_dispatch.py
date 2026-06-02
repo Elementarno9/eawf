@@ -450,6 +450,119 @@ def test_dispatch_spawn_resolves_model_from_routing_when_unset(
     assert adapter.models == ["claude-opus-4-8"]
 
 
+def _write_state_with_runtime(tmp_path: Path, *, runtime: str, effort_bucket: str) -> Path:
+    """Serialise a state whose only wave pins ``runtime_preference=[runtime]``."""
+    from eawf.kernel.state.models import State
+
+    payload = _state_payload(agent_role="executor", effort_bucket=effort_bucket)
+    payload["waves"][_WAVE_ID]["runtime_preference"] = [runtime]
+    state = State.model_validate(payload)
+    state_dir = tmp_path / ".ea"
+    state_dir.mkdir()
+    path = state_dir / "state.json"
+    path.write_text(state.model_dump_json(), encoding="utf-8")
+    return path
+
+
+class _VendorStubAdapter(_StubAdapter):
+    """A stub adapter bound to a specific runtime id (codex / opencode).
+
+    Inherits the claude stub's spawn machinery but stamps its own ``id`` +
+    ``runtime`` so the live path resolves it as the foreign vendor and the
+    resulting :class:`SpawnResult` carries that runtime. ``resolved_model`` is
+    left ``None`` so the metering writer prices against the requested model the
+    routing resolved (the assertion target).
+    """
+
+    def __init__(self, runtime_id: str) -> None:
+        super().__init__()
+        self.id = runtime_id
+
+    async def spawn_session(self, prompt: str, *, model: str, **kwargs: Any) -> SpawnResult:  # type: ignore[override]
+        self.spawn_calls += 1
+        self.prompts.append(prompt)
+        self.models.append(model)
+        on_spawn = kwargs.get("on_spawn")
+        if on_spawn is not None:
+            on_spawn(_STUB_PID)
+        return SpawnResult(
+            session_id=f"sess-{self.id}",
+            runtime=self.id,
+            model=model,
+            resolved_model=None,
+            subprocess_pid=_STUB_PID,
+            exit_status=0,
+            text="the executor answer text",
+            input_tokens=100,
+            output_tokens=42,
+            cache_creation_input_tokens=80,
+            cache_creation_5m_input_tokens=50,
+            cache_creation_1h_input_tokens=30,
+            cache_read_input_tokens=200,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+
+
+@pytest.mark.parametrize(
+    ("runtime", "effort_bucket", "expected_model"),
+    [
+        ("codex", "L", "gpt-5-codex"),
+        ("codex", "XS", "gpt-5-mini"),
+        ("opencode", "L", "anthropic/claude-opus-4-8"),
+        ("opencode", "XS", "anthropic/claude-haiku-4-5"),
+    ],
+)
+def test_dispatch_spawn_resolves_per_vendor_model_for_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: str,
+    effort_bucket: str,
+    expected_model: str,
+) -> None:
+    """A codex / opencode spawn is driven with ITS OWN vendor model id.
+
+    The cross-vendor reachability fix: when the wave pins a non-claude runtime,
+    the live path resolves that runtime's own per-tier model (a bare OpenAI id
+    for codex, a ``provider/model`` id for opencode) rather than a claude id the
+    foreign CLI would reject.
+    """
+    state_path = _write_state_with_runtime(tmp_path, runtime=runtime, effort_bucket=effort_bucket)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    adapter = _VendorStubAdapter(runtime)
+    _patch_adapter(monkeypatch, adapter)
+    ctx = _ctx(state_path, event_path=event_path)
+
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert adapter.models == [expected_model]
+
+
+def test_dispatch_spawn_codex_priced_cost_is_nonzero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A codex spawn prices its own model to a real non-zero dispatch_cost.
+
+    Proves the pricing lane: the codex per-tier model resolves to a pricing row
+    so the emitted ``dispatch_cost`` carries a real cost, not the $0 the
+    unpriced fallback would have produced before W15.
+    """
+    state_path = _write_state_with_runtime(tmp_path, runtime="codex", effort_bucket="L")
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    _patch_adapter(monkeypatch, _VendorStubAdapter("codex"))
+    ctx = _ctx(state_path, event_path=event_path)
+
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    pricing = lookup_pricing("gpt-5-codex")
+    assert pricing is not None
+    costs = _dispatch_cost_payloads(event_path)
+    assert len(costs) == 1
+    assert Decimal(costs[0]["cost_usd"]) > Decimal("0")
+    assert costs[0]["runtime"] == "codex"
+    assert costs[0]["model"] == "gpt-5-codex"
+
+
 def test_dispatch_spawn_flips_wave_to_in_progress(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

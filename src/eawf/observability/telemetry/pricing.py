@@ -47,7 +47,13 @@ __all__ = [
 
 
 class ModelPricing(BaseModel):
-    """Per-token USD prices for a Claude model.
+    """Per-token USD prices for one model id.
+
+    Covers the claude family at published rates plus the cross-vendor codex /
+    opencode model ids the dispatch routing table emits: codex tier ids are
+    placeholder rates (no OpenAI rate is embedded in this Anthropic-sourced
+    snapshot), opencode ``provider/model`` ids price at the real anthropic
+    rates (the OAuth-Claude opencode lane).
 
     All values in USD per token (NOT per million). Decimal-quantised to
     avoid float drift on long-horizon ledger sums.
@@ -229,6 +235,80 @@ PRICING: dict[str, ModelPricing] = {
     # authoritative. Cache rates are the standard 0.1x / 1.25x / 2x of input
     # so check_pricing_currency stays green.
     "codex": ModelPricing(
+        input_per_token=Decimal("5e-6"),
+        output_per_token=Decimal("25e-6"),
+        cache_read_per_token=Decimal("0.5e-6"),
+        cache_write_5m_per_token=Decimal("6.25e-6"),
+        cache_write_1h_per_token=Decimal("10e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # Codex per-tier model ids the dispatch routing table emits for the codex
+    # runtime (cheapest -> most capable). PLACEHOLDER RATES, same provenance as
+    # the bare ``codex`` row above: no published OpenAI rate is embedded in this
+    # Anthropic-sourced snapshot, so each tier prices to a non-zero,
+    # currency-consistent stand-in (the matching claude tier's input/output
+    # rate) so a codex juror spawn prices honestly (priced=True) instead of
+    # silently $0. The exact OpenAI rates need operator confirmation before
+    # these are treated as authoritative. A dated/suffixed variant (e.g.
+    # ``gpt-5-codex-preview``) longest-prefix-matches the tier row.
+    "gpt-5-mini": ModelPricing(
+        input_per_token=Decimal("1e-6"),
+        output_per_token=Decimal("5e-6"),
+        cache_read_per_token=Decimal("0.1e-6"),
+        cache_write_5m_per_token=Decimal("1.25e-6"),
+        cache_write_1h_per_token=Decimal("2e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # ``gpt-5-codex`` is listed before ``gpt-5`` only for readability; the
+    # longest-prefix resolver always prefers ``gpt-5-codex`` for that id
+    # regardless of dict order, and ``gpt-5`` never shadows it.
+    "gpt-5-codex": ModelPricing(
+        input_per_token=Decimal("5e-6"),
+        output_per_token=Decimal("25e-6"),
+        cache_read_per_token=Decimal("0.5e-6"),
+        cache_write_5m_per_token=Decimal("6.25e-6"),
+        cache_write_1h_per_token=Decimal("10e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "gpt-5": ModelPricing(
+        input_per_token=Decimal("3e-6"),
+        output_per_token=Decimal("15e-6"),
+        cache_read_per_token=Decimal("0.3e-6"),
+        cache_write_5m_per_token=Decimal("3.75e-6"),
+        cache_write_1h_per_token=Decimal("6e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # OpenCode per-tier model ids the dispatch routing table emits for the
+    # opencode runtime. OpenCode addresses models in ``provider/model`` form;
+    # the routing table routes the anthropic provider (the OAuth-Claude
+    # opencode lane), so these ids price at the REAL anthropic rates (not a
+    # placeholder) -- an opencode-via-anthropic spawn bills the same as the
+    # native claude lane. The ``provider/`` prefix keeps these keys disjoint
+    # from the bare claude ids, and a dated suffix longest-prefix-matches the
+    # tier row.
+    "anthropic/claude-haiku-4-5": ModelPricing(
+        input_per_token=Decimal("1e-6"),
+        output_per_token=Decimal("5e-6"),
+        cache_read_per_token=Decimal("0.1e-6"),
+        cache_write_5m_per_token=Decimal("1.25e-6"),
+        cache_write_1h_per_token=Decimal("2e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "anthropic/claude-sonnet-4-6": ModelPricing(
+        input_per_token=Decimal("3e-6"),
+        output_per_token=Decimal("15e-6"),
+        cache_read_per_token=Decimal("0.3e-6"),
+        cache_write_5m_per_token=Decimal("3.75e-6"),
+        cache_write_1h_per_token=Decimal("6e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "anthropic/claude-opus-4-8": ModelPricing(
         input_per_token=Decimal("5e-6"),
         output_per_token=Decimal("25e-6"),
         cache_read_per_token=Decimal("0.5e-6"),
