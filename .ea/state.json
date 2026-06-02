@@ -1907,6 +1907,18 @@
       "scope_id": "P29-I04-W14",
       "status": "done",
       "updated_at": "2026-06-02T03:51:06.768472Z"
+    },
+    "P29-I04-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I04-W15",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I04-W15",
+      "scope_id": "P29-I04-W15",
+      "status": "done",
+      "updated_at": "2026-06-02T16:00:55.746984Z"
     }
   },
   "agent_sessions": {
@@ -9039,6 +9051,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I04-W14",
       "updated_at": "2026-06-02T03:50:19.694951Z"
+    },
+    "P29-I04-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I04-W15-bucket-20260602T160045Z",
+      "display": "3.5 EU · exp ~105m · pess ~378m",
+      "expected_eu": 3.5,
+      "expected_minutes": 105.0,
+      "id": "EST-P29-I04-W15",
+      "pessimistic_eu": 12.6,
+      "pessimistic_minutes": 378.0,
+      "reference_class": "bucket:XL",
+      "scope_id": "P29-I04-W15",
+      "updated_at": "2026-06-02T16:00:45.892369Z"
     }
   },
   "goals": {
@@ -11040,7 +11065,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T15:33:16.666028Z",
+  "updated_at": "2026-06-02T16:00:55.747326Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -32365,10 +32390,10 @@
     "P29-I04-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i04",
+      "claimed_at": "2026-06-02T16:00:45.892363Z",
+      "closed_at": "2026-06-02T16:00:55.746984Z",
+      "commit": "5ad85e1fcb60e50b3aa89fe2eb1f7e1e2c361ee9",
       "deps": [],
       "description": "WIDE remediation per A47 audit: un-idle the cross-vendor verdict stack and wire it into the enforcing close gate + EviBound resolver. Folds B080 (opencode floor) B082 (jury wiring) B085 (rung-3/live-rounds) B086 (reachability) B087 (pricing) B088 (integ-test).",
       "dispatch_history": [],
@@ -32387,10 +32412,10 @@
       "intent": null,
       "iter_id": "P29-I04",
       "opened_at": "2026-06-02T13:55:23.287997Z",
-      "outcome": null,
+      "outcome": "WIDE cross-vendor remediation: opencode safety floor (B080); per-vendor model+pricing (B086/B087); cross-vendor jury convened at the wave close gate behind verify.cross_vendor_jury (B082); rung-2->3 chain + live-round dispatch assemblers (B085, prod-wiring deferred B091); daemon-level cross-vendor spawn integ test (B088); B084/B090 polish",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a daemon-level integration test proves codex and opencode juror SpawnResults flow through the spawn path then metering then report with jail and scrub markers; the opencode unjailed-fallback branch is removed (B088)"
       ],
