@@ -2476,6 +2476,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-02-A47-P29-i04-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I04/ART-A47-P29-i04"
     },
+    "ART-A48-P29-i05": {
+      "created_at": "2026-06-02T22:08:00.350673Z",
+      "id": "ART-A48-P29-i05",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-03-A48-P29-i05-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I05/ART-A48-P29-i05"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -3296,6 +3306,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A47-P29-i04",
       "scope_id": "P29-I04",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A48-P29-i05": {
+      "check_results": [],
+      "created_at": "2026-06-02T22:08:00.979651Z",
+      "id": "A48-P29-i05",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A48-P29-i05",
+      "scope_id": "P29-I05",
       "status": "complete",
       "verdict": "minor"
     },
@@ -4725,7 +4746,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I05",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -10676,15 +10697,15 @@
       ]
     },
     "P29-I05": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A48-P29-i05",
+      "closed_at": "2026-06-02T22:08:10.671452Z",
       "description": "Late iter, data-gated: the reputation engine (Brier + EB-Beta shrink + Wilson LB), the C->B->A trust-tier ladder, jury reliability weighting, and the verdict-agreement cost A/B. Gated on a verdict cohort accruing in I04 (binding constraint is data N, not design).",
       "estimate_id": null,
       "id": "P29-I05",
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247760Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Trust and measure: reputation engine, tier ladder, cost A/B",
       "trigger": "none",
       "wave_ids": [
@@ -10822,6 +10843,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I04-close-A47-P29-i04",
       "summary": "iter P29-I04 closed with audit A47-P29-i04; waves closed=15; outcomes P29-I04-W01: live wave-executor spawn via adapter.spawn_session behind the floor; EXECUTOR AgentSession re... | P29-I04-W02: per-wave sandbox deny-list threaded into spawn argv via vendor-neutral denied_tools seam; cla... | P29-I04-W03: bounded spawn retry loop + tiered failure notice over the CLI failure taxonomy (RETRY_SAME/SW...",
+      "tier": "working"
+    },
+    "MEM-P29-I05-close-A48-P29-i05": {
+      "confidence": "high",
+      "id": "MEM-P29-I05-close-A48-P29-i05",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-02T22:08:10.671452Z",
+      "scope_id": "P29-I05",
+      "status": "active",
+      "store_record_id": "MEM-P29-I05-close-A48-P29-i05",
+      "summary": "iter P29-I05 closed with audit A48-P29-i05; waves closed=14; outcomes P29-I05-W01: VerdictOutcome model + build_verdict_outcomes pure reducer (observability/eval/reputation.py)... | P29-I05-W02: Brier scorer + Murphy REL/RES decomposition + EB-Beta shrink + Wilson/posterior LB (display) ... | P29-I05-W03: ReputationTier C/B/A ladder (distinct from output-quality TrustTier): map_reliability_to_tier...",
       "tier": "working"
     }
   },
@@ -11482,7 +11514,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T21:56:54.168600Z",
+  "updated_at": "2026-06-02T22:08:10.671827Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
