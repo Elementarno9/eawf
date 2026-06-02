@@ -36,6 +36,20 @@ beyond the module-level ``logger``. The CLI handlers in
 
 from __future__ import annotations
 
+from eawf.workflow.dispatch.cost_ab import (
+    DEFAULT_FLIP_THRESHOLD,
+    DEFAULT_PASS_REGRESSION_THRESHOLD,
+    MIN_COST_AB_N,
+    CostABReport,
+    CostABRow,
+    CostABStatus,
+    CostObservation,
+    TierRecommendation,
+    VerdictObservation,
+    compute_cost_ab,
+    recommend_tier,
+    summarize_cost_ab,
+)
 from eawf.workflow.dispatch.llm_assist import (
     DEFAULT_MAX_ATTEMPTS,
     LLMAssistError,
@@ -61,16 +75,26 @@ from eawf.workflow.dispatch.retry import (
 )
 from eawf.workflow.dispatch.routing import (
     DEFAULT_ROUTING_TABLE,
+    TOP_TIER_INDEX,
     RoutingDecision,
     model_for_runtime,
     resolve_routing,
+    tier_for_model,
 )
 from eawf.workflow.dispatch.seed import seed_interim_verdict
 
 __all__ = [
+    "DEFAULT_FLIP_THRESHOLD",
     "DEFAULT_MAX_ATTEMPTS",
+    "DEFAULT_PASS_REGRESSION_THRESHOLD",
     "DEFAULT_ROUTING_TABLE",
     "DISPATCH_RUNTIMES",
+    "MIN_COST_AB_N",
+    "TOP_TIER_INDEX",
+    "CostABReport",
+    "CostABRow",
+    "CostABStatus",
+    "CostObservation",
     "DispatchEnvelope",
     "FailureNotice",
     "FailureTier",
@@ -80,14 +104,20 @@ __all__ = [
     "RoutingDecision",
     "SchemaAttemptFailure",
     "SpawnAttemptFailure",
+    "TierRecommendation",
+    "VerdictObservation",
     "assist_with_schema",
     "build_role_contract",
     "build_subagent_spec",
+    "compute_cost_ab",
     "failure_tier_for_action",
     "model_for_runtime",
+    "recommend_tier",
     "render_dispatch_envelope",
     "render_wave_prompt",
     "resolve_routing",
     "seed_interim_verdict",
     "spawn_with_retry",
+    "summarize_cost_ab",
+    "tier_for_model",
 ]

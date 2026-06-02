@@ -81,6 +81,22 @@ _RUNTIME_TIER_MODEL: dict[str, tuple[str, str, str]] = {
     ),
 }
 
+#: Index of the most-capable (and costliest) tier on the ordered ladder. The
+#: cost A/B treats this tier as the opus-everywhere baseline a cheaper tier is
+#: compared against.
+TOP_TIER_INDEX: int = 2
+
+#: Flat ``model id -> tier index`` map across every runtime ladder, built once
+#: at import so :func:`tier_for_model` is a dict lookup. Each per-runtime ladder
+#: contributes its ``(cheap, mid, top)`` ids at indices ``0/1/2``; the codex and
+#: opencode vendor ids land alongside the bare claude ids so a routed model from
+#: any runtime classifies onto the same tier scale.
+_MODEL_TIER_INDEX: dict[str, int] = {
+    model: tier
+    for tier_models in _RUNTIME_TIER_MODEL.values()
+    for tier, model in enumerate(tier_models)
+}
+
 
 @dataclass(frozen=True)
 class RoutingDecision:
@@ -273,9 +289,47 @@ def model_for_runtime(
     return model
 
 
+def tier_for_model(model: str) -> int | None:
+    """Classify a routed *model* id onto its capability-tier index.
+
+    Pure function -- no I/O, no hidden state. Returns the tier index
+    (``0`` cheapest, :data:`TOP_TIER_INDEX` most capable) the model sits at
+    across every per-runtime ladder in :data:`_RUNTIME_TIER_MODEL`, so a
+    claude, codex, or opencode id all classify onto one scale. Resolution is
+    exact match first, then longest-prefix fallback (so a dated / suffixed
+    variant like ``gpt-5-codex-preview`` still classifies as the tier its
+    ``gpt-5-codex`` prefix names), mirroring
+    :func:`eawf.observability.telemetry.pricing.lookup_pricing`.
+
+    This is the seam the verdict-agreement cost A/B keys its cheaper-vs-opus
+    comparison on: a verdict / cost observation priced against a model is
+    bucketed by the tier this resolves, and the top tier is the
+    opus-everywhere baseline.
+
+    Args:
+        model: Model id the cost / verdict was priced against.
+
+    Returns:
+        The tier index, or ``None`` when *model* matches no ladder id (so a
+        caller can drop an unclassifiable observation rather than mis-bucket
+        it).
+    """
+    exact = _MODEL_TIER_INDEX.get(model)
+    if exact is not None:
+        return exact
+    matches = sorted(
+        ((known, tier) for known, tier in _MODEL_TIER_INDEX.items() if model.startswith(known)),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+    return matches[0][1] if matches else None
+
+
 __all__ = [
     "DEFAULT_ROUTING_TABLE",
+    "TOP_TIER_INDEX",
     "RoutingDecision",
     "model_for_runtime",
     "resolve_routing",
+    "tier_for_model",
 ]
