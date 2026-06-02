@@ -366,12 +366,15 @@ class ReputationConfig(BaseModel):
         ci_width_gate: Suppress the estimate while the posterior credible
             interval is wider than this. A wide interval means the held-rate
             is not yet pinned down, so the display LB would be noise.
-        tier_thresholds: Display-LB -> tier label ("C" / "B" / "A") mapping.
-            Held here for the NEXT wave (W03) that adds the tier enum + the
-            ``RoleReliability.tier`` field; this wave only carries the field.
-        loss_weight: Bounded (~3x) asymmetric demote weight used by the next
-            wave's tier transitions -- a demotion costs more than a promotion
-            so a regressed role drops fast. Held here, unused this wave.
+        tier_thresholds: Display-LB floor per tier label ("C" / "B" / "A")
+            override. When non-empty it overrides :data:`DEFAULT_TIER_THRESHOLDS`
+            in :func:`map_reliability_to_tier`; when empty (the default) the
+            static defaults apply.
+        loss_weight: Bounded (~3x) asymmetric demote weight RESERVED for the
+            deferred stateful graduate / demote transition -- a demotion costs
+            more than a promotion so a regressed role drops fast. NOT applied
+            by the static :func:`map_reliability_to_tier` mapping; held here so
+            a future wave wires the hysteresis in without a config change.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -416,6 +419,13 @@ class RoleReliability(BaseModel):
             seed) on the held-rate, in ``[0.0, 1.0]``, kept SEPARATE from the
             display LB so under-observed roles can still be explored. ``None``
             when the group refused to score.
+        tier: The earned-autonomy :class:`ReputationTier` (C / B / A) the
+            display :attr:`posterior_lower_bound` maps onto, set only on a
+            SCORED row. ``None`` exactly when :attr:`status` is
+            :attr:`ReliabilityStatus.INSUFFICIENT` -- the honest-empty surface,
+            since an unscored group has no display LB to ladder. Distinct from
+            the output-quality ``TrustTier`` in
+            :mod:`eawf.workflow.estimation.trust_scorecard`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -429,6 +439,7 @@ class RoleReliability(BaseModel):
     resolution: float | None = None
     posterior_lower_bound: float | None = Field(default=None, ge=0.0, le=1.0)
     routing_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    tier: ReputationTier | None = None
 
 
 def _forecast_probability(outcome: VerdictOutcome) -> float:
@@ -657,6 +668,7 @@ def compute_role_reliability(
                 resolution=resolution,
                 posterior_lower_bound=lower,
                 routing_score=upper,
+                tier=map_reliability_to_tier(lower, config),
             )
         )
 
@@ -667,12 +679,112 @@ def compute_role_reliability(
     return reliabilities
 
 
+# --- trust-tier ladder (P29-I05-W03) --------------------------------------
+#
+# The ladder maps the conservative DISPLAY score (the Wilson / Beta-posterior
+# ``posterior_lower_bound`` the scoring layer computes) onto a C -> B -> A
+# earned-autonomy tier. It is a pure, static threshold lookup: a SCORED row
+# gets the highest tier whose display-LB floor it meets, an INSUFFICIENT row
+# gets no tier at all.
+#
+# Honest-negative by construction: no RoleReliability reaches SCORED today (the
+# verdict-outcome substrate is empty, so every group refuses to score), so the
+# tier is ``None`` for every role right now. The ladder is correct but idle
+# until scored rows accrue -- no graduate / demote transition logic ships
+# before rows exist. The stateful asymmetric graduate/demote transition (where
+# a demotion costs more than a promotion, weighted by
+# :attr:`ReputationConfig.loss_weight`) is a deferred follow-up; this wave
+# ships only the static LB -> tier mapping so the field is wired the instant a
+# group scores.
+
+#: Display-LB floor per tier, used when :attr:`ReputationConfig.tier_thresholds`
+#: is empty. The floors are deliberately conservative: an A tier
+#: (earned-autonomy) needs a held-rate lower bound of at least 0.85, a B tier
+#: (trusted for routine) at least 0.6, and C (probationary / unproven) is the
+#: floorless catch-all at 0.0 so every scored role lands on at least C. These
+#: are starting points an operator overrides via the ``trust.tier_thresholds``
+#: config leaf once live held-rates inform a better cut.
+DEFAULT_TIER_THRESHOLDS: dict[str, float] = {"C": 0.0, "B": 0.6, "A": 0.85}
+
+
+class ReputationTier(StrEnum):
+    """Earned-autonomy tier a role's display score maps onto: C -> B -> A.
+
+    Distinct from the output-quality ``TrustTier`` in
+    :mod:`eawf.workflow.estimation.trust_scorecard` -- that one answers "was
+    this artifact verified?" (a property of one deliverable). This ladder
+    answers "has this agent earned autonomy?" (a property of an agent's track
+    record), so the two never share a value space and must not be conflated.
+
+    The order is ascending trust:
+
+    :attr:`C`
+        Probationary / unproven -- the floor every scored role lands on before
+        its held-rate lower bound clears a higher tier.
+    :attr:`B`
+        Trusted for routine work -- the display LB cleared the mid floor.
+    :attr:`A`
+        Earned autonomy -- the display LB cleared the top floor.
+    """
+
+    C = "C"
+    B = "B"
+    A = "A"
+
+
+def map_reliability_to_tier(
+    posterior_lower_bound: float,
+    config: ReputationConfig,
+) -> ReputationTier:
+    """Map a conservative display-LB score onto its earned-autonomy tier.
+
+    A pure, static threshold lookup: *posterior_lower_bound* (the Wilson /
+    Beta-posterior lower bound the scoring layer computes -- the conservative
+    DISPLAY score) is mapped to the highest tier whose floor it meets. The
+    floors come from *config*'s :attr:`~ReputationConfig.tier_thresholds` when
+    that mapping is non-empty, else from :data:`DEFAULT_TIER_THRESHOLDS`.
+
+    The comparison is inclusive (``>=``): a score sitting exactly on a tier's
+    floor earns that tier. With the default floors ``A=0.85`` / ``B=0.6`` /
+    ``C=0.0`` an LB of exactly ``0.85`` maps to :attr:`ReputationTier.A` and
+    exactly ``0.6`` to :attr:`ReputationTier.B`.
+
+    :attr:`ReputationConfig.loss_weight` is RESERVED for the deferred stateful
+    asymmetric graduate / demote transition (a demotion costs more than a
+    promotion so a regressed role drops fast) and is deliberately NOT applied
+    in this static mapping -- a future wave wires that hysteresis in without an
+    API change to this function.
+
+    Args:
+        posterior_lower_bound: The conservative display-LB held-rate score in
+            ``[0.0, 1.0]`` (a SCORED row's
+            :attr:`RoleReliability.posterior_lower_bound`).
+        config: The :class:`ReputationConfig` whose
+            :attr:`~ReputationConfig.tier_thresholds` override the default
+            floors when non-empty.
+
+    Returns:
+        The highest :class:`ReputationTier` whose floor *posterior_lower_bound*
+        meets. Always at least :attr:`ReputationTier.C` (its default floor is
+        ``0.0``).
+    """
+    thresholds = config.tier_thresholds or DEFAULT_TIER_THRESHOLDS
+    if posterior_lower_bound >= thresholds[ReputationTier.A.value]:
+        return ReputationTier.A
+    if posterior_lower_bound >= thresholds[ReputationTier.B.value]:
+        return ReputationTier.B
+    return ReputationTier.C
+
+
 __all__ = [
+    "DEFAULT_TIER_THRESHOLDS",
     "ReliabilityStatus",
     "ReputationConfig",
+    "ReputationTier",
     "RoleReliability",
     "VerdictOutcome",
     "build_verdict_outcomes",
     "compute_role_reliability",
     "confidence_to_float",
+    "map_reliability_to_tier",
 ]

@@ -17,6 +17,7 @@ reputation/Brier scorer has data to score. These tests pin:
 
 from __future__ import annotations
 
+import typing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -44,15 +45,19 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.observability.eval import (
+    DEFAULT_TIER_THRESHOLDS,
     ReliabilityStatus,
     ReputationConfig,
+    ReputationTier,
     RoleReliability,
     VerdictOutcome,
     build_verdict_outcomes,
     compute_role_reliability,
     confidence_to_float,
+    map_reliability_to_tier,
 )
 from eawf.observability.eval.reputation import _CONFIDENCE_TO_FLOAT
+from eawf.workflow.estimation.trust_scorecard import TrustTier
 
 _T0 = datetime(2026, 5, 1, tzinfo=UTC)
 
@@ -709,12 +714,124 @@ def test_role_reliability_rejects_out_of_range_lower_bound() -> None:
 
 
 def test_role_reliability_rejects_extra_field() -> None:
-    """An unexpected field fails ``extra='forbid'`` (e.g. the W03 tier field)."""
+    """An unexpected field fails ``extra='forbid'``."""
     with pytest.raises(ValidationError):
         RoleReliability(
             agent_role=AgentSessionRole.EXECUTOR,
             runtime="claude",
             n=20,
             status=ReliabilityStatus.SCORED,
-            tier="A",
+            unexpected="boom",
         )
+
+
+# --- trust-tier ladder (P29-I05-W03) --------------------------------------
+
+
+def test_map_reliability_to_tier_high_lb_maps_to_a() -> None:
+    """A display LB of 0.9 clears the default A floor (0.85) -> tier A."""
+    assert map_reliability_to_tier(0.9, ReputationConfig()) is ReputationTier.A
+
+
+def test_map_reliability_to_tier_mid_lb_maps_to_b() -> None:
+    """A display LB of 0.7 clears B (0.6) but not A (0.85) -> tier B."""
+    assert map_reliability_to_tier(0.7, ReputationConfig()) is ReputationTier.B
+
+
+def test_map_reliability_to_tier_low_lb_maps_to_c() -> None:
+    """A display LB of 0.3 clears only the C floor (0.0) -> tier C."""
+    assert map_reliability_to_tier(0.3, ReputationConfig()) is ReputationTier.C
+
+
+def test_map_reliability_to_tier_zero_lb_maps_to_c() -> None:
+    """A display LB of 0.0 sits on the C floor -> tier C (never below C)."""
+    assert map_reliability_to_tier(0.0, ReputationConfig()) is ReputationTier.C
+
+
+def test_map_reliability_to_tier_b_floor_is_inclusive() -> None:
+    """An LB exactly on the B floor maps to B (the >= convention)."""
+    b_floor = DEFAULT_TIER_THRESHOLDS["B"]
+
+    assert map_reliability_to_tier(b_floor, ReputationConfig()) is ReputationTier.B
+
+
+def test_map_reliability_to_tier_a_floor_is_inclusive() -> None:
+    """An LB exactly on the A floor maps to A (the >= convention)."""
+    a_floor = DEFAULT_TIER_THRESHOLDS["A"]
+
+    assert map_reliability_to_tier(a_floor, ReputationConfig()) is ReputationTier.A
+
+
+def test_map_reliability_to_tier_just_below_a_floor_maps_to_b() -> None:
+    """An LB a hair below the A floor falls back to B, not A."""
+    a_floor = DEFAULT_TIER_THRESHOLDS["A"]
+
+    assert map_reliability_to_tier(a_floor - 1e-9, ReputationConfig()) is ReputationTier.B
+
+
+def test_map_reliability_to_tier_custom_thresholds_override_defaults() -> None:
+    """A non-empty config.tier_thresholds overrides DEFAULT_TIER_THRESHOLDS.
+
+    With a stricter A floor of 0.95, an LB of 0.9 that would be A under the
+    defaults drops to B -- proving the override is honoured, not the default.
+    """
+    config = ReputationConfig(tier_thresholds={"C": 0.0, "B": 0.5, "A": 0.95})
+
+    assert map_reliability_to_tier(0.9, config) is ReputationTier.B
+    assert map_reliability_to_tier(0.96, config) is ReputationTier.A
+    # 0.4 is below the custom B floor (0.5) -> C.
+    assert map_reliability_to_tier(0.4, config) is ReputationTier.C
+
+
+def test_compute_role_reliability_scored_row_carries_tier() -> None:
+    """A SCORED RoleReliability carries a non-None tier off its display LB.
+
+    A large, unanimous held group clears both gates and earns a display LB,
+    so the ladder assigns it a tier -- the wired-in path the moment a group
+    scores.
+    """
+    config = ReputationConfig(min_n=10, ci_width_gate=0.3)
+    outcomes = _held_group(n=40, held_count=40, confidence=0.9)
+
+    reliability = compute_role_reliability(outcomes, config, {})[0]
+
+    assert reliability.status is ReliabilityStatus.SCORED
+    assert reliability.tier is not None
+    assert reliability.posterior_lower_bound is not None
+    # The tier matches a direct map of the row's own display LB.
+    assert reliability.tier is map_reliability_to_tier(reliability.posterior_lower_bound, config)
+
+
+def test_compute_role_reliability_insufficient_row_has_no_tier() -> None:
+    """An INSUFFICIENT RoleReliability has tier None -- today's real result.
+
+    No verdict-outcome row is SCORED today (the substrate is empty), so every
+    role is INSUFFICIENT and its tier stays None: the honest-empty surface, not
+    a fabricated C.
+    """
+    config = ReputationConfig(min_n=20)
+    outcomes = _held_group(n=5, held_count=5)
+
+    reliability = compute_role_reliability(outcomes, config, {})[0]
+
+    assert reliability.status is ReliabilityStatus.INSUFFICIENT
+    assert reliability.tier is None
+
+
+def test_reputation_tier_values_are_c_b_a() -> None:
+    """ReputationTier exposes exactly the C / B / A value space."""
+    assert {tier.value for tier in ReputationTier} == {"C", "B", "A"}
+
+
+def test_reputation_tier_distinct_from_output_quality_trust_tier() -> None:
+    """The reputation ladder shares no value with the output-quality TrustTier.
+
+    A regression guard against conflating the agent-reputation ladder
+    (ReputationTier: does this agent earn autonomy) with the output-quality
+    tier (TrustTier: was this artifact verified). The two are different
+    concepts and must not share a value space.
+    """
+    reputation_values = {tier.value for tier in ReputationTier}
+    output_quality_values = set(typing.get_args(TrustTier))
+
+    assert reputation_values.isdisjoint(output_quality_values)

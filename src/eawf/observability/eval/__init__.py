@@ -33,13 +33,16 @@ from eawf.observability.eval.jury import (
 )
 from eawf.observability.eval.models import EvalScore
 from eawf.observability.eval.reputation import (
+    DEFAULT_TIER_THRESHOLDS,
     ReliabilityStatus,
     ReputationConfig,
+    ReputationTier,
     RoleReliability,
     VerdictOutcome,
     build_verdict_outcomes,
     compute_role_reliability,
     confidence_to_float,
+    map_reliability_to_tier,
 )
 from eawf.observability.eval.rule_adherence import (
     RULE_IDS,
@@ -63,6 +66,7 @@ from eawf.observability.eval.self_eval import (
 
 __all__ = [
     "CONSENSUS_SPREAD",
+    "DEFAULT_TIER_THRESHOLDS",
     "FAIL_SCORE_THRESHOLD",
     "JURY_QUORUM",
     "JURY_RUNTIME_FAMILIES",
@@ -78,6 +82,7 @@ __all__ = [
     "RecordedWaveCase",
     "ReliabilityStatus",
     "ReputationConfig",
+    "ReputationTier",
     "RoleReliability",
     "RuleAdherenceBaseline",
     "RuleAdherenceReport",
@@ -92,6 +97,7 @@ __all__ = [
     "confidence_to_float",
     "convene_cross_vendor_jury",
     "load_recorded_wave_cases",
+    "map_reliability_to_tier",
     "score_envelope",
     "score_recorded_wave_corpus",
     "score_rule_adherence",
