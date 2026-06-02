@@ -521,3 +521,140 @@ def test_gather_doctor_health_no_state_is_total(tmp_path: Path) -> None:
     assert health.drift_count == 0
     events_row = next(r for r in health.rows if r.name == "recent_events")
     assert events_row.detail == "no recent events"
+
+
+# --------------------------------------------------------------------------
+# Worker offload -- the gather runs off the UI thread (the hang fix)
+# --------------------------------------------------------------------------
+
+
+def _sentinel_health(detail: str) -> DoctorHealth:
+    """Build a one-row :class:`DoctorHealth` carrying a sentinel detail."""
+    return DoctorHealth(rows=[HealthRow("sentinel_probe", "ok", detail)], overall="ok")
+
+
+def test_doctor_mode_paints_health_via_worker_without_hanging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor mode mounts, the gather worker completes, and real health paints.
+
+    The regression guard for the operator-reported hang: the gather runs
+    blocking subprocesses (doctor tool-probes + a per-wave ``git log`` drift
+    scan) that, on the UI thread, freeze the whole app. Here the gather is
+    stubbed to a sentinel so the assertion is deterministic, but the point
+    is structural: ``run_test`` (a real event loop) must reach the painted
+    frame -- if the gather still ran on the UI thread the worker drain +
+    settle would never resolve. After ``wait_for_complete()`` the pane shows
+    the folded health, NOT the mount-time placeholder.
+    """
+    import eawf.surfaces.tui.modes.doctor as doctor_mod
+
+    def _fake_gather(*, workspace: object, state_path: object) -> DoctorHealth:
+        return _sentinel_health("SENTINEL-WORKER-OK")
+
+    monkeypatch.setattr(doctor_mod, "gather_doctor_health", _fake_gather)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("5")
+            await pilot.app.workers.wait_for_complete()
+            await settle_screen(pilot)
+            assert isinstance(app.screen, DoctorModeScreen)
+            frame = normalize_snapshot(capture_screen_text(app))
+            # The real folded health replaced the placeholder after the
+            # worker resolved -- the hang would never have reached this row.
+            assert "SENTINEL-WORKER-OK" in frame
+            assert "gathering health" not in frame
+
+    asyncio.run(body())
+
+
+def test_doctor_mode_shows_placeholder_before_worker_resolves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The instant ``gathering health...`` placeholder paints before the gather returns.
+
+    The worker is parked on a :class:`threading.Event` so the gather has
+    NOT resolved when the frame is sampled: the pane must already show the
+    honest placeholder (proving the pane paints instantly, never frozen).
+    Releasing the gate then draining the worker replaces it with the real
+    health -- so the placeholder is a transient, not the terminal state.
+    """
+    import threading
+
+    import eawf.surfaces.tui.modes.doctor as doctor_mod
+
+    gate = threading.Event()
+
+    def _blocking_gather(*, workspace: object, state_path: object) -> DoctorHealth:
+        # Park the worker (it runs off-thread via asyncio.to_thread) until
+        # the test releases the gate, so the placeholder frame is observable.
+        gate.wait(timeout=5.0)
+        return _sentinel_health("SENTINEL-AFTER-GATE")
+
+    monkeypatch.setattr(doctor_mod, "gather_doctor_health", _blocking_gather)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("5")
+            # Pump the loop WITHOUT draining workers -- the gather is parked,
+            # so the pane shows the mount-time placeholder, not real health.
+            await pilot.pause()
+            frame_before = normalize_snapshot(capture_screen_text(app))
+            assert "gathering health" in frame_before
+            assert "SENTINEL-AFTER-GATE" not in frame_before
+            # Release the gate; the worker resolves and the real health paints.
+            gate.set()
+            await pilot.app.workers.wait_for_complete()
+            await settle_screen(pilot)
+            frame_after = normalize_snapshot(capture_screen_text(app))
+            assert "SENTINEL-AFTER-GATE" in frame_after
+            assert "gathering health" not in frame_after
+
+    asyncio.run(body())
+
+
+def test_doctor_mode_force_refresh_re_kicks_the_gather_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``F5`` re-gathers via a fresh worker and repaints the pane.
+
+    The first gather paints one sentinel; a force-refresh (``F5``) re-kicks
+    the worker (``exclusive`` within the gather group) and the pane repaints
+    from the second gather -- proving the force-refresh path runs through
+    the worker offload, not a blocking UI-thread call.
+    """
+    import itertools
+
+    import eawf.surfaces.tui.modes.doctor as doctor_mod
+
+    counter = itertools.count(1)
+
+    def _counting_gather(*, workspace: object, state_path: object) -> DoctorHealth:
+        return _sentinel_health(f"SENTINEL-GATHER-{next(counter)}")
+
+    monkeypatch.setattr(doctor_mod, "gather_doctor_health", _counting_gather)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("5")
+            await pilot.app.workers.wait_for_complete()
+            await settle_screen(pilot)
+            assert isinstance(app.screen, DoctorModeScreen)
+            first = normalize_snapshot(capture_screen_text(app))
+            assert "SENTINEL-GATHER-1" in first
+            # Force-refresh -> the gather worker re-kicks and repaints.
+            await pilot.press("f5")
+            await pilot.app.workers.wait_for_complete()
+            await settle_screen(pilot)
+            second = normalize_snapshot(capture_screen_text(app))
+            assert "SENTINEL-GATHER-2" in second
+            assert "SENTINEL-GATHER-1" not in second
+
+    asyncio.run(body())

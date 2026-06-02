@@ -1,6 +1,6 @@
 """``DoctorModeScreen`` -- the Doctor-mode health view (P29-I02-W21, TUI-3).
 
-The Doctor mode (digit ``3``) folds the same health signals ``eawf doctor``
+The Doctor mode (digit ``5``) folds the same health signals ``eawf doctor``
 reports into ONE in-TUI health view, so an operator reads install / state
 health without dropping to the CLI. It is a **renderer over the existing
 doctor check library** -- it reuses the check functions verbatim and never
@@ -41,6 +41,7 @@ explanatory note (the doctor library's own no-double-flip stance).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -87,6 +88,17 @@ _DRIFT_ROW_CAP: int = 8
 #: tail when summarising the error count. Matches the ``/events`` overlay
 #: ring so both surfaces read the same window.
 _EVENT_SAMPLE: int = 50
+
+#: Placeholder painted the instant the pane mounts, before the health
+#: gather worker resolves. The gather runs blocking subprocesses (the
+#: doctor tool-probes and a per-wave ``git log`` drift scan), so it is
+#: offloaded to a worker; this honest line shows immediately so the pane
+#: never appears frozen while the worker runs off the UI thread.
+_GATHERING_PLACEHOLDER: str = "[$accent]Health:[/] gathering health..."
+
+#: Worker group for the health gather, so a force-refresh re-kick cancels
+#: any in-flight gather (``exclusive=True``) rather than stacking workers.
+_GATHER_GROUP: str = "doctor-health"
 
 #: Footer hints for the Doctor mode -- the always-live chassis affordances
 #: (mode digits, scope switch, palette, help, quit). The pane is read-only
@@ -432,10 +444,22 @@ class DoctorModeScreen(ScopeScreen):
 
     Composes a single scrollable health pane inside the shared chassis
     (Header + Footer inherited from :class:`ScopeScreen`). On mount it
-    gathers every doctor signal -- the doctor check library, the git/state
-    drift reconciler, and the recent event-store tail -- and renders the
-    folded :class:`DoctorHealth`. Read-only this wave: the pane reflects the
-    health at mount; a force-refresh re-gathers via :meth:`refresh_health`.
+    paints an immediate ``gathering health...`` placeholder, then kicks a
+    worker that gathers every doctor signal -- the doctor check library,
+    the git/state drift reconciler, and the recent event-store tail -- and
+    repaints with the folded :class:`DoctorHealth` when the worker returns.
+
+    The gather is offloaded to a worker (mirroring
+    :class:`~eawf.surfaces.tui.widgets.git_pane.GitPane`) because
+    :func:`gather_doctor_health` runs blocking subprocesses: the doctor
+    tool-probes and a per-wave ``git log`` drift scan that, over a state
+    with hundreds of closed waves, would otherwise freeze the whole event
+    loop. The worker keeps the UI responsive while the gather runs.
+
+    Read-only this wave: the pane reflects the health at mount; a
+    force-refresh re-gathers via :meth:`refresh_health`. The worker is
+    ``exclusive`` within :data:`_GATHER_GROUP`, so a force-refresh cancels
+    any in-flight gather and re-kicks rather than stacking workers.
     """
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _DOCTOR_HINTS
@@ -456,22 +480,52 @@ class DoctorModeScreen(ScopeScreen):
             yield Static("", id="doctor-health-text")
 
     def on_mount(self) -> None:
-        """Apply the footer hints, then gather + render the health view."""
+        """Apply the footer hints, paint a placeholder, then kick the gather."""
         super().on_mount()
+        self._paint_placeholder()
         self.refresh_health()
 
     def refresh_health(self) -> None:
-        """Re-gather every doctor signal and repaint the pane.
+        """Kick the health gather off the UI thread and repaint when it returns.
 
-        Resolves the workspace + state path off the host app, gathers the
-        folded health via :func:`gather_doctor_health`, and updates the
-        pane text. Total -- the gather never raises -- so a force-refresh
-        cannot tear the render loop.
+        :func:`gather_doctor_health` runs blocking subprocesses (the doctor
+        tool-probes and a per-wave ``git log`` drift scan), so running it on
+        the event loop would freeze the whole app over a many-wave state.
+        Running it in a worker keeps the UI responsive; the pane repaints
+        with the folded health when the worker resolves. ``exclusive``
+        within :data:`_GATHER_GROUP` drops any in-flight gather so a
+        force-refresh re-kick coalesces rather than stacking workers.
+        """
+        self.run_worker(self._gather_health(), group=_GATHER_GROUP, exclusive=True)
+
+    async def _gather_health(self) -> None:
+        """Worker body: gather the health off-thread, then repaint on the loop.
+
+        :func:`gather_doctor_health` is a synchronous blocking call, so it
+        runs inside :func:`asyncio.to_thread` (the same mechanism
+        :class:`~eawf.surfaces.tui.widgets.git_pane.GitPane` uses to wrap
+        its sync ``git`` probe) -- the event loop is never blocked. The
+        repaint runs after the ``await`` on the worker's own coroutine,
+        which lives on the event loop, so the pane mutation is loop-safe
+        without an explicit ``call_from_thread``.
         """
         state_path = getattr(self.app, "_state_path", None)
         workspace = state_path.parent.parent if state_path is not None else None
-        health = gather_doctor_health(workspace=workspace, state_path=state_path)
+        health = await asyncio.to_thread(
+            gather_doctor_health, workspace=workspace, state_path=state_path
+        )
         self._paint_health(health)
+
+    def _paint_placeholder(self) -> None:
+        """Paint the instant ``gathering health...`` line before the worker resolves.
+
+        Shows the pane immediately on mount so it never appears frozen
+        while the gather worker runs off the UI thread; the real folded
+        health replaces it via :meth:`_paint_health` when the worker
+        returns.
+        """
+        text = self.query_one("#doctor-health-text", Static)
+        text.update(_GATHERING_PLACEHOLDER)
 
     def _paint_health(self, health: DoctorHealth) -> None:
         """Update the pane text from a folded :class:`DoctorHealth`.
