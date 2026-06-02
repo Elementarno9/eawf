@@ -91,7 +91,7 @@ from eawf.surfaces.tui.widgets.header import (
 )
 
 if TYPE_CHECKING:
-    from eawf.surfaces.tui.modes.feed import FeedModeScreen
+    from eawf.surfaces.tui.modes.feed import FeedListener
 
 logger = logging.getLogger(__name__)
 
@@ -369,12 +369,16 @@ class EaApp(App[None]):
         # ``run_coroutine_threadsafe``), so no extra lock is needed. Bounded
         # at LIVE_EVENT_BUFFER_MAX so an idle session never grows unbounded.
         self._live_event_buffer: deque[Envelope] = deque(maxlen=LIVE_EVENT_BUFFER_MAX)
-        # Mounted Feed panes that want each live envelope pushed to them as it
-        # arrives. A pane registers on mount + seeds from the buffer, and
-        # unregisters on unmount, so the fan-out never targets a torn-down
-        # screen. List (not set) because FeedModeScreen is not hashable-stable
-        # across Textual's screen lifecycle; the membership churn is tiny.
-        self._feed_listeners: list[FeedModeScreen] = []
+        # Mounted panes that want each live envelope pushed to them as it
+        # arrives -- the live Feed pane and the agent-watch zoom (which
+        # filters the same stream to one session). Each registers on mount +
+        # seeds from the buffer, and unregisters on unmount, so the fan-out
+        # never targets a torn-down screen. Typed against the structural
+        # FeedListener protocol so a second consumer registers through the
+        # same seam without a concrete-class union. List (not set) because the
+        # screens are not hashable-stable across Textual's lifecycle; the
+        # membership churn is tiny.
+        self._feed_listeners: list[FeedListener] = []
         self._last_state: State | None = None
         self._last_open_pause_count = 0
         # Session-level dismissed attention rows: the explicit acknowledge
@@ -541,29 +545,32 @@ class EaApp(App[None]):
         """
         return self._nav.position
 
-    def register_feed_listener(self, listener: FeedModeScreen) -> None:
+    def register_feed_listener(self, listener: FeedListener) -> None:
         """Register *listener* to receive each live envelope on arrival.
 
         Idempotent: a double-register (e.g. a remount) does not duplicate
-        the fan-out target. Called from
-        :meth:`~eawf.surfaces.tui.modes.feed.FeedModeScreen.on_mount`.
+        the fan-out target. Called from the live Feed pane
+        (:meth:`~eawf.surfaces.tui.modes.feed.FeedModeScreen.on_mount`) and the
+        agent-watch zoom, both of which satisfy the structural
+        :class:`~eawf.surfaces.tui.modes.feed.FeedListener` contract.
 
         Args:
-            listener: The Feed pane to push live envelopes to.
+            listener: The pane to push live envelopes to.
         """
         if listener not in self._feed_listeners:
             self._feed_listeners.append(listener)
             logger.debug(f"register_feed_listener count={len(self._feed_listeners)}")
 
-    def unregister_feed_listener(self, listener: FeedModeScreen) -> None:
+    def unregister_feed_listener(self, listener: FeedListener) -> None:
         """Unregister *listener* so the fan-out skips a torn-down pane.
 
         A no-op when the listener was never registered (defensive against a
-        double-unmount). Called from
-        :meth:`~eawf.surfaces.tui.modes.feed.FeedModeScreen.on_unmount`.
+        double-unmount). Called from the live Feed pane
+        (:meth:`~eawf.surfaces.tui.modes.feed.FeedModeScreen.on_unmount`) and the
+        agent-watch zoom on unmount.
 
         Args:
-            listener: The Feed pane to stop pushing live envelopes to.
+            listener: The pane to stop pushing live envelopes to.
         """
         if listener in self._feed_listeners:
             self._feed_listeners.remove(listener)

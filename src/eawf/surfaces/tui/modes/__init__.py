@@ -2,8 +2,8 @@
 
 The TUI runs on Textual's native :attr:`textual.app.App.MODES` +
 ``switch_mode``: a **mode** is a content surface (Home / Trust / Doctor /
-Evidence / Feed / Config / Research) switched with digit keys ``1``..``7``,
-each owning an independent screen stack.
+Evidence / Feed / Config / Research / Watch) switched with digit keys
+``1``..``8``, each owning an independent screen stack.
 :mod:`eawf.surfaces.tui.modes.registry`
 is the single seam the mode set is declared in, so the per-pane waves add
 their mode with one registration line (the recipe in the registry module
@@ -16,6 +16,7 @@ screen.
 
 from __future__ import annotations
 
+from eawf.surfaces.tui.modes.agent_watch import AgentWatchModeScreen
 from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
 from eawf.surfaces.tui.modes.feed import FeedModeScreen
 from eawf.surfaces.tui.modes.nav import (
@@ -42,6 +43,7 @@ __all__ = [
     "DEFAULT_MODE",
     "MODE_REGISTRY",
     "NAV_SCOPES",
+    "AgentWatchModeScreen",
     "EvidenceModeScreen",
     "FeedModeScreen",
     "ModeSpec",

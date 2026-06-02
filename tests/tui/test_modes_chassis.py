@@ -2,15 +2,15 @@
 
 The TUI runs on Textual's native :attr:`textual.app.App.MODES` +
 ``switch_mode``: a **mode** is a content surface (Home / Trust / Doctor /
-Evidence / Feed / Config) switched with digit keys ``1``..``6``, declared
-once in :mod:`eawf.surfaces.tui.modes.registry` -- the one seam the nine
-per-pane waves extend. These tests pin the chassis the pane waves build
-on:
+Evidence / Feed / Config / Research / Watch) switched with digit keys
+``1``..``8``, declared once in :mod:`eawf.surfaces.tui.modes.registry` -- the
+one seam the per-pane waves extend. These tests pin the chassis the pane
+waves build on:
 
 * the registry composes ``App.MODES``, the digit bindings, and the
   ``/<mode>`` palette verbs from one declarative source (the pure-unit
   half, testable without Textual);
-* the app boots into the default (Home) mode; digit ``1``..``6`` switch
+* the app boots into the default (Home) mode; digit ``1``..``8`` switch
   modes; ``switch_mode`` no-ops when already in the mode; a palette verb
   switches mode;
 * the breadcrumb leads with the active mode title and keeps the ``Eae``
@@ -20,7 +20,7 @@ on:
 * switching mode away from a zoomed workspace and back preserves the zoom
   (the W15 guard stays intact through the mode-switch suspend);
 * a placeholder mode renders an honest-empty ``<title> - coming soon``
-  body so all six digit keys work before the pane waves land.
+  body so every digit key works before the pane waves land.
 
 Determinism follows the project Pilot-worker rule: each Pilot body drains
 workers via :func:`~eawf.surfaces.tui.snapshot.settle_screen` (``pilot.pause()``
@@ -74,6 +74,7 @@ _EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
     ("feed", "5", "Feed"),
     ("config", "6", "Config"),
     ("research_board", "7", "Research"),
+    ("agent_watch", "8", "Watch"),
 )
 
 

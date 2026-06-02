@@ -38,7 +38,7 @@ screen is a thin scrollable view over it.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
@@ -50,6 +50,38 @@ if TYPE_CHECKING:
     from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class FeedListener(Protocol):
+    """Structural contract for a pane fed by the App's live-event seam.
+
+    The App (:class:`~eawf.surfaces.tui.app.EaApp`) consumes the daemon
+    ``event.subscribe`` push stream once and fans each decoded envelope out
+    to every registered listener via
+    :meth:`~eawf.surfaces.tui.app.EaApp.register_feed_listener`. Both the
+    :class:`FeedModeScreen` (the full live feed) and the agent-watch zoom
+    (which filters the same stream to one session) satisfy this contract, so
+    the App fan-out is typed against the structural protocol rather than one
+    concrete screen -- a second consumer registers through the same seam
+    without widening a concrete-class union.
+
+    Attributes:
+        is_mounted: Textual ``Widget.is_mounted`` -- the fan-out skips a
+            listener whose pane has been torn down between the push being
+            scheduled and this running.
+    """
+
+    is_mounted: bool
+
+    def append_event(self, envelope: Envelope) -> None:
+        """Receive one live event *envelope* from the App fan-out."""
+        ...
+
+    def refresh_empty_notice(self) -> None:
+        """Refresh the honest-empty / honest-degraded notice on a state flip."""
+        ...
+
 
 #: Id of the scrollable feed list container.
 FEED_LIST_ID: str = "feed-list"
@@ -232,6 +264,7 @@ __all__ = [
     "FEED_EMPTY_LIVE",
     "FEED_LIST_ID",
     "FEED_ROW_CLASS",
+    "FeedListener",
     "FeedModeScreen",
     "format_event_row",
 ]

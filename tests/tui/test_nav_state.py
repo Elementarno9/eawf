@@ -3,8 +3,8 @@
 The TUI runs two orthogonal axes -- a **scope** (``repo`` / ``workspace`` /
 ``user``, switched with ``w`` / ``r`` / ``u``) and a **mode** (``home`` /
 ``trust`` / ``doctor`` / ``evidence`` / ``feed`` / ``config`` /
-``research_board``, switched with digit keys ``1``..``7``). W16 left every
-``(scope, mode)`` pair reachable;
+``research_board`` / ``agent_watch``, switched with digit keys ``1``..``8``).
+W16 left every ``(scope, mode)`` pair reachable;
 this wave bounds the genuinely-legal subset and rejects the rest **at the
 boundary** so a switch never lands in a sourceless view. These tests pin:
 
@@ -54,7 +54,7 @@ _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 
 #: The modes whose pane reads a single scope's state -- illegal at the
 #: cross-repo ``user`` portfolio scope (no single repo state to read).
-_SCOPE_BOUND = ("trust", "evidence", "feed", "research_board")
+_SCOPE_BOUND = ("trust", "evidence", "feed", "research_board", "agent_watch")
 #: The scope-agnostic modes -- legal at every scope.
 _SCOPE_FREE = ("home", "doctor", "config")
 

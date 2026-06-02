@@ -9,7 +9,7 @@ multi-repo / QoL) can build in parallel without colliding on a central
 dict in ``app.py``.
 
 Mode vs scope are orthogonal axes. A **mode** is a content surface
-(Home / Trust / Doctor / ...), switched with digit keys ``1``..``7``. The
+(Home / Trust / Doctor / ...), switched with digit keys ``1``..``8``. The
 **scope** (repo / workspace / user, switched with ``w`` / ``r`` / ``u``)
 stays an in-mode operation: the Home mode renders the resolved scope
 screen, and the scope switch swaps that screen within the Home mode's own
@@ -74,7 +74,7 @@ class ModeSpec:
             :attr:`textual.app.App.MODES` and the value
             ``switch_mode`` is called with. Also the breadcrumb segment
             and the ``/<name>`` palette-verb stem.
-        digit: The digit key (``"1"``..``"7"``) that switches to this
+        digit: The digit key (``"1"``..``"8"``) that switches to this
             mode. Digits are the mode axis only; arrows stay primary
             intra-pane per the keymap convention.
         title: The human-readable mode title shown in the breadcrumb and
@@ -232,6 +232,29 @@ def _research_board_factory(_app: EaApp) -> Screen[None]:
     return ResearchBoardModeScreen()
 
 
+def _agent_watch_factory(_app: EaApp) -> Screen[None]:
+    """Build the agent-watch zoom pane for the Watch mode (digit 8).
+
+    Lazy-imports
+    :class:`~eawf.surfaces.tui.modes.agent_watch.AgentWatchModeScreen` (which
+    imports the scope chassis) so the registry stays import-cycle-free, the
+    same deferral :func:`_feed_factory` / :func:`_research_board_factory` use.
+    The pane registers on the App's live-event seam + resolves its watch
+    target from ``app.state`` on mount, so it needs no per-instance launch
+    state and ignores the app argument.
+
+    Args:
+        _app: The live app (unused; the screen subscribes + reads ``self.app``
+            on mount).
+
+    Returns:
+        A fresh :class:`AgentWatchModeScreen` for the Watch mode's screen stack.
+    """
+    from eawf.surfaces.tui.modes.agent_watch import AgentWatchModeScreen
+
+    return AgentWatchModeScreen()
+
+
 def _doctor_factory(app: EaApp) -> Screen[None]:
     """Build the Doctor-mode health screen (lazy import to avoid a cycle).
 
@@ -254,15 +277,17 @@ def _doctor_factory(app: EaApp) -> Screen[None]:
 
 
 #: The default mode layout seeded on the chassis. Digit order is the switch
-#: order (``1``..``7``). ``home`` (the launch default, :data:`DEFAULT_MODE`)
+#: order (``1``..``8``). ``home`` (the launch default, :data:`DEFAULT_MODE`)
 #: renders the resolved scope screen; ``trust`` renders the estimation trust
 #: scorecard; ``doctor`` folds the install / state / drift health view;
 #: ``evidence`` renders the agent-report rollup (honest-empty until reports
 #: exist); ``feed`` renders the live event feed; ``research_board`` renders
 #: the research-campaign overview (campaigns / claims / open questions,
-#: honest-empty until a campaign is staged). The remaining modes ship as
-#: honest-empty placeholders that their per-pane waves replace via the
-#: one-line registration recipe (module docstring).
+#: honest-empty until a campaign is staged); ``agent_watch`` zooms one
+#: dispatched session's live stream with a cancel control (honest-empty until
+#: a session is dispatched). The remaining modes ship as honest-empty
+#: placeholders that their per-pane waves replace via the one-line
+#: registration recipe (module docstring).
 MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("home", "1", "Home", _home_screen),
     ModeSpec("trust", "2", "Trust", _trust_factory),
@@ -271,6 +296,7 @@ MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("feed", "5", "Feed", _feed_factory),
     ModeSpec("config", "6", "Config", _placeholder_factory("Config")),
     ModeSpec("research_board", "7", "Research", _research_board_factory),
+    ModeSpec("agent_watch", "8", "Watch", _agent_watch_factory),
 )
 
 #: The launch mode -- the chassis boots into Home (the scope-bearing
