@@ -32,6 +32,11 @@ from eawf.observability.eval.jury import (
     aggregate_jury,
 )
 from eawf.observability.eval.models import EvalScore
+from eawf.observability.eval.reputation import (
+    VerdictOutcome,
+    build_verdict_outcomes,
+    confidence_to_float,
+)
 from eawf.observability.eval.rule_adherence import (
     RULE_IDS,
     RecordedWaveCase,
@@ -72,8 +77,11 @@ __all__ = [
     "SelfEvalStatus",
     "SelfEvalSurface",
     "SpawnFactory",
+    "VerdictOutcome",
     "aggregate_jury",
+    "build_verdict_outcomes",
     "compute_self_eval",
+    "confidence_to_float",
     "convene_cross_vendor_jury",
     "load_recorded_wave_cases",
     "score_envelope",
