@@ -44,8 +44,12 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.observability.eval import (
+    ReliabilityStatus,
+    ReputationConfig,
+    RoleReliability,
     VerdictOutcome,
     build_verdict_outcomes,
+    compute_role_reliability,
     confidence_to_float,
 )
 from eawf.observability.eval.reputation import _CONFIDENCE_TO_FLOAT
@@ -434,4 +438,283 @@ def test_verdict_outcome_rejects_extra_field() -> None:
             verdict=AgentReportVerdict.PASS,
             confidence=0.9,
             unexpected="boom",
+        )
+
+
+# --- reliability scoring layer (P29-I05-W02) ------------------------------
+
+
+def _outcome(
+    *,
+    held: bool | None,
+    verdict: AgentReportVerdict = AgentReportVerdict.PASS,
+    confidence: float = 0.9,
+    agent_role: AgentSessionRole = AgentSessionRole.EXECUTOR,
+    runtime: str = "claude",
+) -> VerdictOutcome:
+    """Build one observed (or in-flight) VerdictOutcome for scorer tests."""
+    return VerdictOutcome(
+        base_id="P01-I01-W01",
+        agent_role=agent_role,
+        runtime=runtime,
+        verdict=verdict,
+        confidence=confidence,
+        held=held,
+        outcome_source=None if held is None else ("clean" if held else "reactive"),
+    )
+
+
+def _held_group(
+    *,
+    n: int,
+    held_count: int,
+    confidence: float = 0.9,
+    agent_role: AgentSessionRole = AgentSessionRole.EXECUTOR,
+    runtime: str = "claude",
+) -> list[VerdictOutcome]:
+    """Build *n* PASS outcomes, *held_count* of which held, the rest refuted."""
+    rows: list[VerdictOutcome] = []
+    for i in range(n):
+        rows.append(
+            _outcome(
+                held=i < held_count,
+                verdict=AgentReportVerdict.PASS,
+                confidence=confidence,
+                agent_role=agent_role,
+                runtime=runtime,
+            )
+        )
+    return rows
+
+
+# --- compute_role_reliability: honest-empty + refuse-to-score -------------
+
+
+def test_compute_role_reliability_empty_outcomes_returns_empty() -> None:
+    """Empty outcomes yield ``[]`` -- the honest-empty path (today's reality).
+
+    The verdict-outcome substrate is empty today, so the scorer has nothing to
+    score and must return an empty list rather than fabricate a reliability.
+    """
+    assert compute_role_reliability([], ReputationConfig(), {}) == []
+
+
+def test_compute_role_reliability_only_unobservable_rows_returns_empty() -> None:
+    """A group of only in-flight (``held is None``) rows scores nothing."""
+    outcomes = [_outcome(held=None), _outcome(held=None)]
+
+    assert compute_role_reliability(outcomes, ReputationConfig(), {}) == []
+
+
+def test_compute_role_reliability_below_min_n_is_insufficient() -> None:
+    """A group with ``n < min_n`` refuses to score -- the refuse-to-score path.
+
+    This is the real today state once a handful of verdicts accrue but the
+    cohort is still under the honesty floor: status INSUFFICIENT with every
+    numeric field ``None``, never a fabricated or zero held-rate.
+    """
+    config = ReputationConfig(min_n=20)
+    outcomes = _held_group(n=5, held_count=5)
+
+    result = compute_role_reliability(outcomes, config, {})
+
+    assert len(result) == 1
+    reliability = result[0]
+    assert reliability.n == 5
+    assert reliability.status is ReliabilityStatus.INSUFFICIENT
+    assert reliability.brier is None
+    assert reliability.reliability is None
+    assert reliability.resolution is None
+    assert reliability.posterior_lower_bound is None
+    assert reliability.routing_score is None
+
+
+def test_compute_role_reliability_unobservable_rows_do_not_count_toward_min_n() -> None:
+    """In-flight rows are dropped before the min-N gate is applied."""
+    config = ReputationConfig(min_n=20)
+    # 5 observed + 30 in-flight: only the 5 observed count, so still under N.
+    outcomes = _held_group(n=5, held_count=5) + [_outcome(held=None) for _ in range(30)]
+
+    result = compute_role_reliability(outcomes, config, {})
+
+    assert len(result) == 1
+    assert result[0].n == 5
+    assert result[0].status is ReliabilityStatus.INSUFFICIENT
+
+
+# --- compute_role_reliability: scored path --------------------------------
+
+
+def test_compute_role_reliability_above_min_n_narrow_ci_is_scored() -> None:
+    """A large, near-unanimous group clears both gates and scores real values."""
+    config = ReputationConfig(min_n=10, ci_width_gate=0.3)
+    outcomes = _held_group(n=40, held_count=40, confidence=0.9)
+
+    result = compute_role_reliability(outcomes, config, {})
+
+    assert len(result) == 1
+    reliability = result[0]
+    assert reliability.status is ReliabilityStatus.SCORED
+    assert reliability.n == 40
+    assert reliability.brier is not None
+    assert 0.0 <= reliability.brier <= 1.0
+    assert reliability.posterior_lower_bound is not None
+    assert 0.0 <= reliability.posterior_lower_bound <= 1.0
+    assert reliability.routing_score is not None
+    assert 0.0 <= reliability.routing_score <= 1.0
+    assert reliability.reliability is not None
+    assert reliability.resolution is not None
+
+
+def test_compute_role_reliability_routing_score_above_display_lb() -> None:
+    """The optimistic routing upper bound is >= the conservative display LB."""
+    config = ReputationConfig(min_n=10, ci_width_gate=0.5)
+    outcomes = _held_group(n=40, held_count=36, confidence=0.9)
+
+    reliability = compute_role_reliability(outcomes, config, {})[0]
+
+    assert reliability.status is ReliabilityStatus.SCORED
+    assert reliability.posterior_lower_bound is not None
+    assert reliability.routing_score is not None
+    assert reliability.routing_score >= reliability.posterior_lower_bound
+
+
+def test_compute_role_reliability_groups_by_role_and_runtime() -> None:
+    """Distinct (role, runtime) pairs are scored as separate groups, sorted."""
+    config = ReputationConfig(min_n=10, ci_width_gate=0.5)
+    outcomes = (
+        _held_group(n=20, held_count=20, agent_role=AgentSessionRole.EXECUTOR, runtime="claude")
+        + _held_group(n=20, held_count=20, agent_role=AgentSessionRole.EXECUTOR, runtime="codex")
+        + _held_group(n=20, held_count=20, agent_role=AgentSessionRole.AUDITOR, runtime="claude")
+    )
+
+    result = compute_role_reliability(outcomes, config, {})
+
+    keys = [(r.agent_role, r.runtime) for r in result]
+    assert keys == [
+        (AgentSessionRole.AUDITOR, "claude"),
+        (AgentSessionRole.EXECUTOR, "claude"),
+        (AgentSessionRole.EXECUTOR, "codex"),
+    ]
+
+
+# --- compute_role_reliability: Brier ordering -----------------------------
+
+
+def test_compute_role_reliability_calibrated_held_beats_confident_wrong() -> None:
+    """A confident-and-right group has a far lower Brier than confident-wrong.
+
+    A PASS verdict at confidence 0.9 forecasts p(hold)=0.9; when every wave
+    actually held the Brier is small, and when every wave was refuted the Brier
+    is large. The scorer must rank the calibrated group below the wrong one.
+    """
+    config = ReputationConfig(min_n=10, ci_width_gate=1.0)
+    calibrated = _held_group(n=30, held_count=30, confidence=0.9)
+    confident_wrong = _held_group(n=30, held_count=0, confidence=0.9)
+
+    good = compute_role_reliability(calibrated, config, {})[0]
+    bad = compute_role_reliability(confident_wrong, config, {})[0]
+
+    assert good.brier is not None
+    assert bad.brier is not None
+    # p(hold)=0.9 vs outcome 1.0 -> (0.1)^2 = 0.01; vs outcome 0.0 -> 0.81.
+    assert good.brier == pytest.approx(0.01)
+    assert bad.brier == pytest.approx(0.81)
+    assert good.brier < bad.brier
+
+
+# --- compute_role_reliability: CI-width gate ------------------------------
+
+
+def test_compute_role_reliability_wide_ci_is_insufficient_despite_count() -> None:
+    """A group past the count floor but with a wide posterior CI refuses.
+
+    A 50/50 split at the count floor keeps the posterior near 0.5 where its
+    credible interval is widest, so the held-rate is not yet pinned down and
+    the display LB would be noise -- status INSUFFICIENT even though n >= min_n.
+    """
+    config = ReputationConfig(min_n=20, ci_width_gate=0.3)
+    # n == min_n but a 50/50 split -> widest posterior CI (> 0.3).
+    outcomes = _held_group(n=20, held_count=10, confidence=0.9)
+
+    reliability = compute_role_reliability(outcomes, config, {})[0]
+
+    assert reliability.n == 20
+    assert reliability.status is ReliabilityStatus.INSUFFICIENT
+    assert reliability.posterior_lower_bound is None
+
+
+def test_compute_role_reliability_sibling_prior_shrinks_estimate() -> None:
+    """A lower sibling prior shrinks the held-rate LB down vs a higher prior.
+
+    Empirical-Bayes folds the sibling prior in as synthetic trials, so the same
+    observed group scored against a low prior yields a lower display LB than
+    against a high prior -- the shrink is toward the prior.
+    """
+    config = ReputationConfig(min_n=10, ci_width_gate=1.0)
+    outcomes = _held_group(n=20, held_count=18, confidence=0.9)
+
+    low = compute_role_reliability(outcomes, config, {AgentSessionRole.EXECUTOR: 0.1})[0]
+    high = compute_role_reliability(outcomes, config, {AgentSessionRole.EXECUTOR: 0.9})[0]
+
+    assert low.posterior_lower_bound is not None
+    assert high.posterior_lower_bound is not None
+    assert low.posterior_lower_bound < high.posterior_lower_bound
+
+
+# --- ReputationConfig validation ------------------------------------------
+
+
+def test_reputation_config_rejects_min_n_below_one() -> None:
+    """``min_n=0`` fails the ``ge=1`` bound -- a zero floor defeats the gate."""
+    with pytest.raises(ValidationError):
+        ReputationConfig(min_n=0)
+
+
+def test_reputation_config_rejects_extra_field() -> None:
+    """An unexpected config key fails ``extra='forbid'``."""
+    with pytest.raises(ValidationError):
+        ReputationConfig(unexpected="boom")
+
+
+def test_reputation_config_rejects_loss_weight_out_of_range() -> None:
+    """``loss_weight`` above its 5.0 ceiling fails the bound."""
+    with pytest.raises(ValidationError):
+        ReputationConfig(loss_weight=6.0)
+
+
+def test_reputation_config_defaults() -> None:
+    """The trust.* leaf defaults match the ratified reputation-engine design."""
+    config = ReputationConfig()
+
+    assert config.min_n == 20
+    assert config.ci_width_gate == pytest.approx(0.3)
+    assert config.tier_thresholds == {}
+    assert config.loss_weight == pytest.approx(3.0)
+
+
+# --- RoleReliability model error paths ------------------------------------
+
+
+def test_role_reliability_rejects_out_of_range_lower_bound() -> None:
+    """A posterior_lower_bound above 1.0 fails the [0.0, 1.0] bound."""
+    with pytest.raises(ValidationError):
+        RoleReliability(
+            agent_role=AgentSessionRole.EXECUTOR,
+            runtime="claude",
+            n=20,
+            status=ReliabilityStatus.SCORED,
+            posterior_lower_bound=1.5,
+        )
+
+
+def test_role_reliability_rejects_extra_field() -> None:
+    """An unexpected field fails ``extra='forbid'`` (e.g. the W03 tier field)."""
+    with pytest.raises(ValidationError):
+        RoleReliability(
+            agent_role=AgentSessionRole.EXECUTOR,
+            runtime="claude",
+            n=20,
+            status=ReliabilityStatus.SCORED,
+            tier="A",
         )

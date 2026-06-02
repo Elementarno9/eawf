@@ -33,8 +33,12 @@ from eawf.observability.eval.jury import (
 )
 from eawf.observability.eval.models import EvalScore
 from eawf.observability.eval.reputation import (
+    ReliabilityStatus,
+    ReputationConfig,
+    RoleReliability,
     VerdictOutcome,
     build_verdict_outcomes,
+    compute_role_reliability,
     confidence_to_float,
 )
 from eawf.observability.eval.rule_adherence import (
@@ -72,6 +76,9 @@ __all__ = [
     "JuryAggregate",
     "JuryAggregateOutcome",
     "RecordedWaveCase",
+    "ReliabilityStatus",
+    "ReputationConfig",
+    "RoleReliability",
     "RuleAdherenceBaseline",
     "RuleAdherenceReport",
     "SelfEvalStatus",
@@ -80,6 +87,7 @@ __all__ = [
     "VerdictOutcome",
     "aggregate_jury",
     "build_verdict_outcomes",
+    "compute_role_reliability",
     "compute_self_eval",
     "confidence_to_float",
     "convene_cross_vendor_jury",
