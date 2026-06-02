@@ -36,5 +36,5 @@
 │                                                          ││                                                          │
 │                                                          ││                                                          │
 └──────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────┘
- ↑↓ move  ·  ←→ collapse  ·  Enter open  ·  w/r/u scope  ·  c config  ·  / palette  ·  ? help  ·  q quit
- weekly burn: — no data                                                                                               •
+ ↑↓ move  ·  ←→ collapse  ·  Enter open  ·  w/r/u scope  ·  c config  ·  / palette  ·  ? help  ·weekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
