@@ -10316,7 +10316,12 @@
         "P29-I05-W05",
         "P29-I05-W02",
         "P29-I05-W03",
-        "P29-I05-W04"
+        "P29-I05-W04",
+        "P29-I05-W06",
+        "P29-I05-W07",
+        "P29-I05-W08",
+        "P29-I05-W09",
+        "P29-I05-W10"
       ]
     },
     "P29-I06": {
@@ -11097,7 +11102,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T16:02:11.688953Z",
+  "updated_at": "2026-06-02T16:10:42.025171Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -32625,6 +32630,194 @@
         "verdict-agreement cost A/B across model tiers using metered cost (SP-3) + the verdict producer + codex leg"
       ],
       "title": "Run verdict-agreement cost A/B across model tiers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I05-W07",
+        "P29-I05-W08",
+        "P29-I05-W09",
+        "P29-I05-W10"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Restores the 2026-05-30 tui-chassis brief digit map dropped at the P29 propose (see incident 2026-06-02-tui-brief-criteria-drift). Pure registry reorder + golden regen; autopilot/research modes already exist (I04-W12/W13).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/**",
+        "src/eawf/surfaces/tui/app.py",
+        "tests/tui/**",
+        "tests/snapshots/tui/**"
+      ],
+      "id": "P29-I05-W06",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T16:09:54.980049Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "MODE_REGISTRY reordered to 1 home / 2 autopilot / 3 research / 4 trust / 5 doctor / 6 evidence with feed=7 and watch=8 and the Config placeholder mode retired (config stays the c modal)",
+        "all digit-coupled tests and snapshot goldens regenerated and green",
+        "D-TUI-MODES Decision row landed recording the ratified map and the tui-chassis brief promoted to .ea/artifacts/research/"
+      ],
+      "title": "Renumber MODE_REGISTRY to the brief digit map and land D-TUI-MODES",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I05-W06"
+      ],
+      "description": "Restores the tui-chassis brief autopilot intervention keymap dropped at propose (incident 2026-06-02-tui-brief-criteria-drift). Prereqs exist: budget HALT (I03-W05), cancel_process_group (I01-W25), live spawn (I04-W01).",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "tests/tui/test_modes_autopilot.py"
+      ],
+      "id": "P29-I05-W07",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T16:10:11.984189Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "autopilot pane binds H=halt (flow.stop_after + budget HALT terminate_with_grace) / S=skip / K=kill (cancel_process_group SIGKILL) / space=pause-resume / a=arm-dispatch",
+        "destructive keys gated by a confirm modal per ui.confirm_destructive",
+        "daemon-down path surfaces SPAWN_UNAVAILABLE honestly with no faked action",
+        "boundary and error-path tests cover each intervention key"
+      ],
+      "title": "Wire autopilot intervention keys H/S/K/space/a to live flow controls",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I05-W06"
+      ],
+      "description": "Restores the tui-chassis brief 3-pane research orchestrator; current research_board is a read-only shell (I04-W13). Campaign engine exists (I04-W09). Incident 2026-06-02-tui-brief-criteria-drift. May split at /prep if over XL.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "tests/tui/**"
+      ],
+      "id": "P29-I05-W08",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T16:10:12.489852Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "research mode renders three panes (topic-tree | claims-evidence | progress-budget) plus a checkpoint drawer",
+        "keys enter=peek / a=approve / p=park / r=follow-up / s=snapshot wired over the ResearchCampaign engine",
+        "live rounds drive the panes reusing the fleet-table widget",
+        "honest-empty preserved when no campaign exists"
+      ],
+      "title": "Build the research mode 3-pane orchestrator over the campaign engine",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I05-W10"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I05-W06"
+      ],
+      "description": "Fixes 4 of 5 tui-chassis brief section-K defects dropped at propose (incident 2026-06-02-tui-brief-criteria-drift); the 5th (breadcrumb) is W10.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
+        "src/eawf/surfaces/tui/widgets/backlog_table.py",
+        "src/eawf/surfaces/tui/widgets/multichoice_checklist.py",
+        "tests/tui/**"
+      ],
+      "id": "P29-I05-W09",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T16:10:41.486420Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "roadmap tree preserves cursor and scroll_y and the expanded-node set across _rebuild",
+        "backlog sort bound to an in-pane key with an active-sort header glyph",
+        "priority column label trimmed to width 3",
+        "multichoice renders the field-and-type meta once as a header row and option rows drop the per-row prefix"
+      ],
+      "title": "Fix section-K TUI defects: scroll, sort, priority, multichoice",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I05-W06",
+        "P29-I05-W09"
+      ],
+      "description": "Restores tui-chassis brief section-K item (e); breadcrumb currently stops at phase + the runtime cell is a stub (incident 2026-06-02-tui-brief-criteria-drift).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/header.py",
+        "tests/tui/**"
+      ],
+      "id": "P29-I05-W10",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T16:10:42.025028Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "breadcrumb extends to scope > code > phase > iter > mode (plus entity on drill)",
+        "each segment is a clickable nav target via content-markup click handler",
+        "runtime cell shows the real runtime id and running-wave count with no idle/active stub"
+      ],
+      "title": "Add full-location clickable breadcrumb and a real runtime cell",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
