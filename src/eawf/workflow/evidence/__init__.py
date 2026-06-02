@@ -13,6 +13,10 @@ truth for verdict-bearing rules and is invoked at write time via
 
 from __future__ import annotations
 
+from eawf.workflow.evidence.chain import (
+    NumericClaimError,
+    drive_text_claim_chain,
+)
 from eawf.workflow.evidence.evibound import (
     BriefPromotionGate,
     BriefRefOutcome,
@@ -78,6 +82,7 @@ __all__ = [
     "EntailmentScorer",
     "EviBoundVerdict",
     "LexicalEntailmentScorer",
+    "NumericClaimError",
     "ResolveCheck",
     "ResolveResult",
     "ResolveStatus",
@@ -92,6 +97,7 @@ __all__ = [
     "convene_entailment_jury",
     "criterion_verdict_to_status",
     "dominant_verdict",
+    "drive_text_claim_chain",
     "escalate_to_rung3",
     "jury_outcome_to_verdict",
     "load_default_scorer",
