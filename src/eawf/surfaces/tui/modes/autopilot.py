@@ -33,6 +33,30 @@ or the spawn path rejects / errors, the action surfaces that honestly rather
 than faking a dispatch -- a live spawn that did not happen is never reported as
 one.
 
+Intervention controls (the cockpit keys)
+----------------------------------------
+Beyond dispatch the pane offers the ratified autopilot-cockpit intervention
+keys, all routed through the same daemon-client seam so the TUI never mutates
+out of band:
+
+* ``K`` (kill) and ``H`` (halt) ask the daemon to stop the selected wave's
+  spawned child through the real ``agent.kill`` RPC -- ``K`` with a
+  SIGKILL-class signal (``"kill"``), ``H`` with a graceful SIGTERM signal
+  (``"term"``), the daemon owning the SIGTERM-grace-SIGKILL ladder. Both are
+  destructive, so each is gated behind a
+  :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` (always
+  confirm -- no ``ui.confirm_destructive`` knob exists yet). ``agent.kill`` is
+  still a daemon-side placeholder returning ``killed=false`` until the real
+  signalling ladder lands, so the surfaced result reports that honest verdict
+  rather than faking a kill; the keys go fully live for free once the kill wave
+  lands (the idle-contract pattern).
+* ``S`` (skip), ``space`` (pause / resume), and ``a`` (arm / launch-flow) have
+  **no daemon RPC yet**. They are bound for muscle-memory + discoverability and
+  routed through the daemon-client seam to their intended method names, but the
+  daemon answers method-not-found, so each surfaces an honest "not yet wired"
+  line and never implies the action happened -- exactly the pre-spawn
+  honest-unavailable path. They go live for free when their RPCs land.
+
 Honest-empty is the COMMON path: a scope whose wave graph has no claim-ready
 wave (every wave CLOSED, or the next waves still blocked on open deps) renders
 the muted :data:`EMPTY_NOTICE` banner instead of an empty table that reads as a
@@ -61,7 +85,10 @@ from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from eawf.kernel.state.models import State, Wave
+    from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 
 logger = logging.getLogger(__name__)
 
@@ -97,10 +124,53 @@ DISPATCH_NO_DAEMON: str = "dispatch: daemon unavailable -- request not issued"
 #: Result line when there is no ready wave to dispatch.
 DISPATCH_NO_TARGET: str = "dispatch: no ready wave to dispatch"
 
-#: Footer hints for the Autopilot pane (full key names, arrows primary).
+#: Daemon JSON-RPC method the kill / halt keys route through. ``agent.kill``
+#: is the real (placeholder) kill seam; the daemon owns the
+#: SIGTERM-grace-SIGKILL ladder and the signal param selects the entry point.
+_KILL_METHOD: str = "agent.kill"
+
+#: SIGKILL-class signal the ``K`` (kill) key sends -- the hard stop.
+_SIGNAL_KILL: str = "kill"
+
+#: Graceful SIGTERM signal the ``H`` (halt) key sends -- the soft entry to the
+#: same daemon-owned ladder.
+_SIGNAL_TERM: str = "term"
+
+#: Intended daemon methods the not-yet-wired intervention keys route through.
+#: No such RPC exists yet (full registry checked) -- the daemon answers
+#: method-not-found, so the action surfaces the honest "not yet wired" line.
+#: Wiring the keys to the real method names now is the idle-contract pattern:
+#: they go live for free once the matching RPC lands.
+_SKIP_METHOD: str = "agent.skip"
+_PAUSE_METHOD: str = "agent.pause"
+_ARM_METHOD: str = "agent.arm"
+
+#: Result line when a destructive intervention has nothing to act on.
+KILL_NO_TARGET: str = "kill: no wave to kill"
+HALT_NO_TARGET: str = "halt: no wave to halt"
+
+#: Result line when an intervention request could not reach the daemon.
+KILL_NO_DAEMON: str = "kill: daemon unavailable -- request not issued"
+HALT_NO_DAEMON: str = "halt: daemon unavailable -- request not issued"
+
+#: Honest "not yet wired" line for the keys whose daemon RPC does not exist
+#: yet (skip / pause / arm). Formatted with the verb so each key reads clearly.
+_NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- daemon has no {method} RPC"
+
+#: Result line when a not-yet-wired intervention cannot even reach the daemon.
+_UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
+
+#: Footer hints for the Autopilot pane (full key names, arrows primary). The
+#: intervention keys ride after dispatch so they are discoverable; the
+#: destructive ones (H / K) are flagged so the operator reads them as gated.
 _AUTOPILOT_HINTS: tuple[str, ...] = (
     "up/down select",
     "d dispatch",
+    "H halt",
+    "S skip",
+    "K kill",
+    "space pause",
+    "a arm",
     "1-9 mode",
     "w/r/u scope",
     "/ palette",
@@ -249,6 +319,15 @@ class AutopilotModeScreen(ScopeScreen):
     client seam and surfaces the typed result honestly. When no wave is
     claim-ready the pane renders the honest-empty :data:`EMPTY_NOTICE` banner.
 
+    The intervention keys add the ratified cockpit controls over that frontier:
+    ``K`` (kill) / ``H`` (halt) route through the real ``agent.kill`` RPC -- a
+    SIGKILL-class signal vs a graceful SIGTERM -- each gated behind a
+    :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`; while
+    ``S`` (skip) / ``space`` (pause) / ``a`` (arm) route through the seam to
+    their intended (not-yet-existing) methods and surface an honest "not yet
+    wired" line until those RPCs land. Every intervention surfaces its typed
+    outcome honestly and never fakes an action that did not happen.
+
     The screen self-binds to the host
     :class:`~eawf.surfaces.tui.app.EaApp` reactive ``state``: it seeds from
     ``app.state`` on mount and rebuilds when a daemon-pushed revision lands, so
@@ -284,14 +363,23 @@ class AutopilotModeScreen(ScopeScreen):
     """
 
     #: ``up`` / ``down`` move the selection through the ready frontier; ``d``
-    #: issues the dispatch. The chrome bindings (palette / help / quit / scope
-    #: / mode digits) come from the shared chassis + app-wide bindings. ``d``
-    #: is the dispatch verb here -- arrows stay primary for selection, so the
-    #: pane offers no j/k vim aliases and ``d`` is free to mean "dispatch".
+    #: issues the dispatch. The intervention keys -- ``H`` halt, ``S`` skip,
+    #: ``K`` kill, ``space`` pause/resume, ``a`` arm -- ride on top: the
+    #: uppercase letters are the brief's canonical intervention keys (distinct
+    #: from the lowercase app-wide vim cursor aliases, so no collision), and
+    #: ``space`` / ``a`` are free at the app level. The chrome bindings
+    #: (palette / help / quit / scope / mode digits) come from the shared
+    #: chassis + app-wide bindings. Arrows stay primary for selection, so the
+    #: pane offers no j/k vim aliases here.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "select_prev", "up", show=False),
         Binding("down", "select_next", "down", show=False),
         Binding("d", "dispatch_selected", "dispatch", show=False),
+        Binding("H", "halt_selected", "halt", show=False),
+        Binding("S", "skip_selected", "skip", show=False),
+        Binding("K", "kill_selected", "kill", show=False),
+        Binding("space", "toggle_pause", "pause", show=False),
+        Binding("a", "arm_flow", "arm", show=False),
     ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _AUTOPILOT_HINTS
@@ -418,6 +506,270 @@ class AutopilotModeScreen(ScopeScreen):
             f"runtime={escape_markup(runtime)} pid={pid}[/]"
         )
 
+    def action_kill_selected(self) -> None:
+        """Kill the selected wave's spawned child (destructive -- confirm-gated).
+
+        Pushes a :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
+        naming the SIGKILL-class stop; on confirm it issues the real
+        ``agent.kill`` RPC with a SIGKILL-class signal for the selected wave +
+        its attempt and surfaces the typed (today: placeholder ``killed=false``)
+        outcome. With no selected wave there is nothing running to kill, so the
+        action surfaces that honestly without opening the modal.
+        """
+        target = self._selected_row()
+        if target is None:
+            self._set_result(f"[$warn]{KILL_NO_TARGET}[/]")
+            return
+        self._confirm_then_kill(
+            target,
+            prompt=f"Kill {target.wave_id}? SIGKILL the process group.",
+            signal=_SIGNAL_KILL,
+            verb="kill",
+            no_daemon=KILL_NO_DAEMON,
+        )
+
+    def action_halt_selected(self) -> None:
+        """Halt the selected wave gracefully (destructive -- confirm-gated).
+
+        Pushes a :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
+        naming the graceful stop; on confirm it issues the real ``agent.kill``
+        RPC with a graceful SIGTERM signal -- halt is the soft entry to the same
+        daemon-owned SIGTERM-grace-SIGKILL ladder -- and surfaces the typed
+        (today: placeholder ``killed=false``) outcome. With no selected wave
+        there is nothing to halt, surfaced honestly without opening the modal.
+        """
+        target = self._selected_row()
+        if target is None:
+            self._set_result(f"[$warn]{HALT_NO_TARGET}[/]")
+            return
+        self._confirm_then_kill(
+            target,
+            prompt=f"Halt {target.wave_id}? graceful stop (SIGTERM ladder).",
+            signal=_SIGNAL_TERM,
+            verb="halt",
+            no_daemon=HALT_NO_DAEMON,
+        )
+
+    def action_skip_selected(self) -> None:
+        """Skip the selected wave (no daemon RPC yet -- honest-unavailable).
+
+        Routes through the daemon-client seam to the intended ``agent.skip``
+        method. Skip is non-destructive (no confirm). The daemon answers
+        method-not-found until the RPC lands, so the action surfaces the honest
+        "not yet wired" line and never implies the wave was skipped.
+        """
+        self._issue_unwired(verb="skip", method=_SKIP_METHOD)
+
+    def action_toggle_pause(self) -> None:
+        """Pause / resume the flow (no daemon RPC yet -- honest-unavailable).
+
+        Routes through the daemon-client seam to the intended ``agent.pause``
+        method. Pause is non-destructive (no confirm). The daemon answers
+        method-not-found until the RPC lands, so the action surfaces the honest
+        "not yet wired" line and never implies the flow paused.
+        """
+        self._issue_unwired(verb="pause", method=_PAUSE_METHOD)
+
+    def action_arm_flow(self) -> None:
+        """Arm / launch the flow (no daemon RPC yet -- honest-unavailable).
+
+        Routes through the daemon-client seam to the intended ``agent.arm``
+        method. Arm is non-destructive (no confirm). The daemon answers
+        method-not-found until the RPC lands, so the action surfaces the honest
+        "not yet wired" line and never implies the flow armed.
+        """
+        self._issue_unwired(verb="arm", method=_ARM_METHOD)
+
+    def _confirm_then_kill(
+        self,
+        target: ReadyWaveRow,
+        *,
+        prompt: str,
+        signal: str,
+        verb: str,
+        no_daemon: str,
+    ) -> None:
+        """Gate a destructive kill / halt behind a confirm, then issue it.
+
+        Pushes a :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
+        carrying *prompt*; the callback issues the real ``agent.kill`` RPC for
+        *target* with *signal* only when the operator confirms (``True``), so a
+        dismissed / cancelled modal issues no RPC. No ``ui.confirm_destructive``
+        knob exists yet, so the confirm is always shown for the destructive
+        keys. Routes the push through the App's cap-aware ``push_modal`` when
+        available, falling back to a plain ``push_screen`` under a bare harness.
+
+        Args:
+            target: The selected ready wave to act on.
+            prompt: The confirm prompt naming the destructive action.
+            signal: The ``agent.kill`` signal -- SIGKILL-class for kill, a
+                graceful SIGTERM for halt.
+            verb: The action verb (``"kill"`` / ``"halt"``) for the result
+                line + logs.
+            no_daemon: The honest line shown when the daemon is unreachable.
+        """
+        from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+
+        def _on_confirm(confirmed: bool | None) -> None:
+            if not confirmed:
+                logger.debug(f"_confirm_then_kill cancelled verb={verb} wave={target.wave_id}")
+                return
+            result_line = self._issue_kill(target, signal=signal, verb=verb, no_daemon=no_daemon)
+            self._set_result(result_line)
+            logger.info(
+                f"_confirm_then_kill verb={verb} wave={target.wave_id} "
+                f"signal={signal!r} result={result_line!r}"
+            )
+
+        self._push_confirm(ConfirmModal(prompt), _on_confirm)
+
+    def _push_confirm(self, modal: ConfirmModal, callback: Callable[[bool | None], None]) -> None:
+        """Push a confirm *modal* with *callback*, cap-aware when possible.
+
+        Routes through the App's ``push_modal`` (the single modal-stack gate,
+        depth-capped) when the App exposes it, falling back to a plain
+        ``push_screen`` under a bare harness that lacks the helper so the
+        confirm path never raises.
+
+        Args:
+            modal: The :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
+                to push.
+            callback: Invoked with the modal's dismiss value when it closes.
+        """
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal, callback=callback)
+            return
+        self.app.push_screen(modal, callback)
+
+    def _issue_kill(self, target: ReadyWaveRow, *, signal: str, verb: str, no_daemon: str) -> str:
+        """Issue the ``agent.kill`` RPC for *target* and return a result line.
+
+        Calls the daemon ``agent.kill`` method with *target*'s wave + resolved
+        attempt + *signal* through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI mutates through, when a daemon socket is available. The returned
+        line reports the daemon's typed ``killed`` verdict + delivered signal; a
+        daemon that is unreachable, rejecting, or timing out yields the honest
+        unavailable / rejected line rather than a faked kill. ``agent.kill`` is
+        still a daemon-side placeholder returning ``killed=false``, so the
+        not-killed verdict is reported honestly (it goes live for free once the
+        kill wave lands -- the idle-contract pattern).
+
+        Args:
+            target: The selected ready wave to act on.
+            signal: The ``agent.kill`` signal to deliver.
+            verb: The action verb (``"kill"`` / ``"halt"``) for the result line.
+            no_daemon: The honest line shown when the daemon is unreachable.
+
+        Returns:
+            A content-markup result line describing the kill / halt outcome.
+        """
+        if not self._daemon_available():
+            return f"[$warn]{no_daemon}[/]"
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        attempt = self._latest_attempt(target.wave_id)
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                result = client.call(
+                    _KILL_METHOD,
+                    {"wave_id": target.wave_id, "attempt": attempt, "signal": signal},
+                )
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_kill daemon_rejected verb={verb} message={exc.message!r}")
+            return f"[$warn]{verb}: daemon rejected request[/]"
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_kill daemon_fallback verb={verb} cause={exc!r}")
+            return f"[$warn]{no_daemon}[/]"
+        killed = bool(result.get("killed"))
+        delivered = str(result.get("signal", signal))
+        if killed:
+            return f"[$ok]{verb}: killed[/] [$muted]signal={escape_markup(delivered)}[/]"
+        # ``agent.kill`` is still a placeholder returning killed=false; report
+        # the request was issued + the daemon's verdict honestly.
+        return (
+            f"[$warn]{verb}: not killed[/] [$muted]signal={escape_markup(delivered)} "
+            "(daemon kill not yet live)[/]"
+        )
+
+    def _issue_unwired(self, *, verb: str, method: str) -> None:
+        """Route a not-yet-wired intervention through the seam, honestly.
+
+        Issues *method* through the daemon-client seam for muscle-memory +
+        discoverability. No such RPC exists yet (skip / pause / arm), so the
+        daemon answers method-not-found, which the action surfaces as the honest
+        "not yet wired" line; a daemon that is simply unreachable surfaces the
+        honest unavailable line instead. Either way the action never fakes the
+        intervention -- it goes live for free once the matching RPC lands (the
+        idle-contract pattern).
+
+        Args:
+            verb: The action verb (``"skip"`` / ``"pause"`` / ``"arm"``) for the
+                result line + logs.
+            method: The intended daemon JSON-RPC method name.
+        """
+        result_line = self._call_unwired(verb=verb, method=method)
+        self._set_result(result_line)
+        logger.info(f"_issue_unwired verb={verb} method={method!r} result={result_line!r}")
+
+    def _call_unwired(self, *, verb: str, method: str) -> str:
+        """Call a not-yet-existing *method* and return the honest result line.
+
+        Args:
+            verb: The action verb for the result line.
+            method: The intended daemon JSON-RPC method name (does not exist
+                yet).
+
+        Returns:
+            A content-markup line: the honest "not yet wired" line when the
+            daemon answers method-not-found, or the honest unavailable line when
+            the daemon cannot be reached.
+        """
+        not_wired = _NOT_WIRED_TEMPLATE.format(verb=verb, method=method)
+        unavailable = _UNAVAILABLE_TEMPLATE.format(verb=verb)
+        if not self._daemon_available():
+            return f"[$warn]{unavailable}[/]"
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                client.call(method, {})
+        except DaemonRpcError as exc:
+            # A real daemon answers method-not-found for these as-yet-unwired
+            # methods; surface that honestly as "not yet wired". Any other RPC
+            # error is also surfaced as not-wired -- the method does not exist.
+            logger.debug(f"_call_unwired method_absent verb={verb} code={exc.code}")
+            return f"[$warn]{not_wired}[/]"
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_call_unwired daemon_fallback verb={verb} cause={exc!r}")
+            return f"[$warn]{unavailable}[/]"
+        # A success result is impossible today (no such RPC). If a future daemon
+        # implements the method, report it landed so the honest path inverts the
+        # moment the RPC exists.
+        return f"[$ok]{verb}: issued[/]"
+
+    def _latest_attempt(self, wave_id: str) -> int:
+        """Return the highest recorded attempt for *wave_id*, defaulting to ``1``.
+
+        The kill / halt path needs a wave attempt number for the ``agent.kill``
+        params. A ready (claim-ready, PENDING) wave has no session table yet, so
+        this defaults to attempt ``1`` so the request is well-formed; a wave
+        that has already been dispatched (re-surfacing on the frontier) resolves
+        its highest recorded attempt.
+
+        Args:
+            wave_id: The wave whose attempt number is resolved.
+
+        Returns:
+            The highest recorded attempt, or ``1`` when none is recorded.
+        """
+        state = self._current_state()
+        wave = state.waves.get(wave_id) if state is not None else None
+        if wave is None or not wave.sessions:
+            return 1
+        return max(wave.sessions)
+
     def _rebuild(self) -> None:
         """Recompute the ready frontier from state and repaint the list.
 
@@ -539,6 +891,10 @@ __all__ = [
     "FRONTIER_HEADER_ID",
     "FRONTIER_LIST_ID",
     "FRONTIER_ROW_CLASS",
+    "HALT_NO_DAEMON",
+    "HALT_NO_TARGET",
+    "KILL_NO_DAEMON",
+    "KILL_NO_TARGET",
     "SELECTED_ROW_CLASS",
     "AutopilotModeScreen",
     "ReadyWaveRow",

@@ -54,6 +54,10 @@ from eawf.surfaces.tui.modes.autopilot import (
     DISPATCH_RESULT_ID,
     EMPTY_NOTICE,
     FRONTIER_ROW_CLASS,
+    HALT_NO_DAEMON,
+    HALT_NO_TARGET,
+    KILL_NO_DAEMON,
+    KILL_NO_TARGET,
     AutopilotModeScreen,
     ReadyWaveRow,
     build_frontier_items,
@@ -61,6 +65,7 @@ from eawf.surfaces.tui.modes.autopilot import (
     render_frontier_header,
     render_ready_row,
 )
+from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
@@ -522,5 +527,407 @@ def test_autopilot_pane_keeps_chassis_brand(tmp_path: Path) -> None:
             header_row = frame.splitlines()[0]
             assert BRAND in header_row
             assert "Autopilot" in header_row
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Intervention keys -- bindings, confirm gating, honest-unavailable lines
+# --------------------------------------------------------------------------
+
+
+class _RecordingClient:
+    """Fake :class:`DaemonClient` that records its calls + returns a canned dict.
+
+    Mirrors the daemon's placeholder ``agent.kill`` response (``killed=false``)
+    so the kill / halt path surfaces the honest not-killed verdict, and records
+    every ``(method, params)`` pair so a test can assert the wire shape.
+    """
+
+    #: Shared call log -- one row per ``call`` across all instances of a test's
+    #: client (the seam re-instantiates the client per RPC).
+    calls: list[tuple[str, dict[str, object]]]
+
+    def __init__(self, *_a: object, **_k: object) -> None:
+        return None
+
+    def __enter__(self) -> _RecordingClient:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+        type(self).calls.append((method, params))
+        return {"killed": False, "signal": params.get("signal", "term")}
+
+
+def _make_recording_client(sink: list[tuple[str, dict[str, object]]]) -> type[_RecordingClient]:
+    """Build a recording-client class whose ``calls`` log is *sink*."""
+    return type("_BoundRecordingClient", (_RecordingClient,), {"calls": sink})
+
+
+def test_autopilot_intervention_bindings_exist() -> None:
+    """The Autopilot pane binds H / S / K / space / a to their actions."""
+    keys = {
+        binding.key: binding.action
+        for binding in AutopilotModeScreen.BINDINGS
+        if hasattr(binding, "key")
+    }
+    assert keys.get("H") == "halt_selected"
+    assert keys.get("S") == "skip_selected"
+    assert keys.get("K") == "kill_selected"
+    assert keys.get("space") == "toggle_pause"
+    assert keys.get("a") == "arm_flow"
+    # The dispatch + selection bindings stay unchanged.
+    assert keys.get("d") == "dispatch_selected"
+    assert keys.get("up") == "select_prev"
+    assert keys.get("down") == "select_next"
+
+
+def test_autopilot_intervention_keys_in_footer_hints() -> None:
+    """The intervention keys are advertised in the footer hints (discoverable)."""
+    hints = " ".join(AutopilotModeScreen.FOOTER_HINTS)
+    assert "H halt" in hints
+    assert "S skip" in hints
+    assert "K kill" in hints
+    assert "space pause" in hints
+    assert "a arm" in hints
+
+
+def test_autopilot_kill_pushes_confirm_modal(tmp_path: Path) -> None:
+    """Pressing ``K`` opens a ConfirmModal naming the SIGKILL stop (gated)."""
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("K")  # destructive -> confirm modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+
+    asyncio.run(body())
+
+
+def test_autopilot_halt_pushes_confirm_modal(tmp_path: Path) -> None:
+    """Pressing ``H`` opens a ConfirmModal naming the graceful stop (gated)."""
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("H")  # destructive -> confirm modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+
+    asyncio.run(body())
+
+
+def test_autopilot_kill_dismissed_issues_no_rpc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancelling the kill confirm (``Esc``) issues no ``agent.kill`` RPC.
+
+    The destructive gate must not fire the kill when the operator backs out:
+    pressing ``Esc`` on the confirm modal dismisses it as ``No``, so the
+    daemon is never reached.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _make_recording_client(calls))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("K")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("escape")  # cancel == No
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert calls == []  # the cancelled kill never reached the daemon
+
+
+def test_autopilot_kill_confirmed_issues_kill_rpc_with_kill_signal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Confirming the kill issues ``agent.kill`` with a SIGKILL-class signal.
+
+    The action reaches the daemon with the selected ready wave's id + attempt
+    and the SIGKILL-class signal, and surfaces the daemon's honest (placeholder)
+    not-killed verdict rather than faking success.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _make_recording_client(calls))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("K")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("right")  # highlight Yes
+            await pilot.press("enter")  # confirm
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "not killed" in rendered  # honest placeholder verdict
+            assert "kill" in rendered
+
+    asyncio.run(body())
+    # The confirmed kill reached the daemon with the first ready wave + SIGKILL.
+    assert calls and calls[0][0] == "agent.kill"
+    assert calls[0][1]["wave_id"] == "P01-I01-W02"
+    assert calls[0][1]["attempt"] == 1
+    assert calls[0][1]["signal"] == "kill"
+
+
+def test_autopilot_halt_confirmed_issues_kill_rpc_with_term_signal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Confirming the halt issues ``agent.kill`` with the graceful SIGTERM signal.
+
+    Halt is the soft entry to the same daemon-owned ladder, so it routes through
+    ``agent.kill`` with the ``term`` signal (not a separate RPC).
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _make_recording_client(calls))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("H")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("right")  # highlight Yes
+            await pilot.press("enter")  # confirm
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert calls and calls[0][0] == "agent.kill"
+    assert calls[0][1]["wave_id"] == "P01-I01-W02"
+    assert calls[0][1]["signal"] == "term"
+
+
+def test_autopilot_kill_no_daemon_surfaces_honest_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no daemon the confirmed kill surfaces the honest unavailable line.
+
+    The kill must never fake a stop: with the daemon socket unavailable the
+    confirmed kill reports the request was not issued.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("K")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("right")
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert KILL_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_halt_no_daemon_surfaces_honest_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no daemon the confirmed halt surfaces the honest unavailable line."""
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("H")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("right")
+            await pilot.press("enter")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert HALT_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_kill_no_target_surfaces_honest_line(tmp_path: Path) -> None:
+    """With no ready wave, ``K`` surfaces the honest nothing-to-kill line.
+
+    An honest-empty frontier has no selected wave, so the kill must report there
+    is nothing to kill and never open the confirm modal.
+    """
+    state_path = _write_state(tmp_path, _state())  # empty frontier
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("K")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)  # no modal opened
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert KILL_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_halt_no_target_surfaces_honest_line(tmp_path: Path) -> None:
+    """With no ready wave, ``H`` surfaces the honest nothing-to-halt line."""
+    state_path = _write_state(tmp_path, _state())  # empty frontier
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("H")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)  # no modal opened
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert HALT_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+@pytest.mark.parametrize(
+    ("key", "verb", "method"),
+    [
+        ("S", "skip", "agent.skip"),
+        ("space", "pause", "agent.pause"),
+        ("a", "arm", "agent.arm"),
+    ],
+)
+def test_autopilot_unwired_keys_surface_not_yet_wired(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    verb: str,
+    method: str,
+) -> None:
+    """skip / pause / arm surface the honest "not yet wired" line.
+
+    Their daemon RPCs do not exist, so with a reachable daemon stubbed to answer
+    method-not-found the action surfaces that the method is not wired and never
+    fakes the intervention.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    class _MethodNotFoundClient:
+        def __enter__(self) -> _MethodNotFoundClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, _method: str, _params: dict[str, object]) -> dict[str, object]:
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+            raise DaemonRpcError(code=-32601, message="method not found")
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", lambda *a, **k: _MethodNotFoundClient())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press(key)  # non-destructive -> no confirm modal
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)  # no modal opened
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "not yet wired" in rendered
+            assert method in rendered
+            assert verb in rendered
+
+    asyncio.run(body())
+
+
+@pytest.mark.parametrize("key", ["S", "space", "a"])
+def test_autopilot_unwired_keys_no_daemon_surface_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+) -> None:
+    """With no daemon, skip / pause / arm surface the honest unavailable line.
+
+    No fake success: when the daemon socket is unavailable each non-destructive
+    intervention reports the request was not issued.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press(key)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert "unavailable" in str(result.render())  # type: ignore[attr-defined]
 
     asyncio.run(body())
