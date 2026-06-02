@@ -1740,6 +1740,18 @@
       "status": "done",
       "updated_at": "2026-06-01T22:57:03.245609Z"
     },
+    "P29-I04-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I04-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I04-W01",
+      "scope_id": "P29-I04-W01",
+      "status": "done",
+      "updated_at": "2026-06-02T00:47:25.575544Z"
+    },
     "P29-I04-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8546,6 +8558,19 @@
       "scope_id": "P29-I03-W05",
       "updated_at": "2026-06-01T22:46:39.847564Z"
     },
+    "P29-I04-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I04-W01-bucket-20260602T003258Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I04-W01",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I04-W01",
+      "updated_at": "2026-06-02T00:32:58.317679Z"
+    },
     "P29-I04-W04": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I04-W04-bucket-20260602T002025Z",
@@ -10557,7 +10582,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T00:28:07.976043Z",
+  "updated_at": "2026-06-02T00:47:25.575847Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -31392,10 +31417,10 @@
         "P29-I04-W11",
         "P29-I04-W12"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29i04",
+      "claimed_at": "2026-06-02T00:32:58.317674Z",
+      "closed_at": "2026-06-02T00:47:25.575544Z",
+      "commit": "26e4057e6e33dad21b6dadb7db33fb8ebd1deca0",
       "deps": [
         "P29-I01-W23",
         "P29-I03-W04"
@@ -31411,10 +31436,10 @@
       "intent": null,
       "iter_id": "P29-I04",
       "opened_at": "2026-06-01T00:19:14.274717Z",
-      "outcome": null,
+      "outcome": "live wave-executor spawn via adapter.spawn_session behind the floor; EXECUTOR AgentSession registered; session_id threaded into run_dispatch un-idling emit_agent_end_report; opt-in spawn flag keeps back-compat",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the daemon spawns the wave executor for real behind the floor and registers an AgentSession",
         "passes the session_id that agent.dispatch never passed, un-idling the dispatch_runner emit"
