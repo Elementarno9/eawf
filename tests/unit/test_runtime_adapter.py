@@ -275,22 +275,9 @@ def test_claude_continue_session_returns_attempt() -> None:
 
 
 # ---------------------------------------------------------------------------
-# spawn_session — codex / opencode stubs raise until the real bodies land
+# spawn_session — all three adapters carry a live body (codex wired in W05,
+# opencode in W06); the Protocol declares the vendor-neutral deny-list seam
 # ---------------------------------------------------------------------------
-
-
-def test_codex_spawn_session_raises_not_implemented() -> None:
-    """Codex spawn seam is a conforming stub that raises until it is wired."""
-    a = CodexAdapter()
-    with pytest.raises(NotImplementedError):
-        asyncio.run(a.spawn_session(prompt="x", model="m"))
-
-
-def test_opencode_spawn_session_raises_not_implemented() -> None:
-    """OpenCode spawn seam is a conforming stub that raises until it is wired."""
-    a = OpenCodeAdapter()
-    with pytest.raises(NotImplementedError):
-        asyncio.run(a.spawn_session(prompt="x", model="m"))
 
 
 def test_protocol_spawn_session_accepts_denied_tools() -> None:
@@ -302,24 +289,6 @@ def test_protocol_spawn_session_accepts_denied_tools() -> None:
     # Additive default keeps the seam back-compatible with deny-free callers.
     assert sig.parameters["denied_tools"].default == ()
     assert sig.parameters["denied_tools"].kind is inspect.Parameter.KEYWORD_ONLY
-
-
-@pytest.mark.parametrize(
-    "adapter_cls",
-    [CodexAdapter, OpenCodeAdapter],
-    ids=["codex", "opencode"],
-)
-def test_stub_spawn_session_accepts_denied_tools(adapter_cls: type) -> None:
-    """The codex/opencode stubs conform to the deny-list seam and still raise.
-
-    The body stays a stub (W05/W06 map ``denied_tools`` to the per-runtime
-    deny flag when they implement the live fork), so calling it with a
-    deny-list raises ``NotImplementedError`` rather than a ``TypeError`` for
-    an unknown keyword.
-    """
-    a = adapter_cls()
-    with pytest.raises(NotImplementedError):
-        asyncio.run(a.spawn_session(prompt="x", model="m", denied_tools=["Bash", "Edit"]))
 
 
 # ---------------------------------------------------------------------------
