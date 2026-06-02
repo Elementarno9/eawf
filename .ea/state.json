@@ -1895,6 +1895,18 @@
       "scope_id": "P29-I04-W13",
       "status": "done",
       "updated_at": "2026-06-02T02:47:50.192677Z"
+    },
+    "P29-I04-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I04-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I04-W14",
+      "scope_id": "P29-I04-W14",
+      "status": "done",
+      "updated_at": "2026-06-02T03:51:06.768472Z"
     }
   },
   "agent_sessions": {
@@ -4293,6 +4305,19 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "Wire cross-vendor jury (W08) into the close gate for high-risk waves"
+    },
+    "B083": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T03:50:06.870106Z",
+      "description": "surfaces/tui/app.py is 1491 LOC (over the 1400 EAWF010 advisory cap), grandfathered in the exclude list. Was already over-cap before P29-I04; I04 live-view waves touched it (un-grandfather-on-touch). Extract cohesive collaborators (mode wiring / feed-listener seam / scope plumbing) into modules to drop it under cap and off the exclude.",
+      "id": "B083",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Extract-module split of surfaces/tui/app.py (EAWF010 over-cap)"
     },
     "B70": {
       "closed_at": null,
@@ -8897,6 +8922,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P29-I04-W13",
       "updated_at": "2026-06-02T02:28:51.300897Z"
+    },
+    "P29-I04-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I04-W14-bucket-20260602T035019Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I04-W14",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I04-W14",
+      "updated_at": "2026-06-02T03:50:19.694951Z"
     }
   },
   "goals": {
@@ -10106,7 +10144,8 @@
         "P29-I04-W11",
         "P29-I04-W12",
         "P29-I04-W08",
-        "P29-I04-W10"
+        "P29-I04-W10",
+        "P29-I04-W14"
       ]
     },
     "P29-I05": {
@@ -10896,7 +10935,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T03:28:40.843155Z",
+  "updated_at": "2026-06-02T03:51:06.768869Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -32185,6 +32224,35 @@
         "research_board mode shell over the ResearchCampaign store; TUI owns the shell, research owns store/reducers"
       ],
       "title": "Add research_board mode shell over the campaign store",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p29i04",
+      "claimed_at": "2026-06-02T03:50:19.694942Z",
+      "closed_at": "2026-06-02T03:51:06.768472Z",
+      "commit": "d643e4c7cc68031292c07e3ce60246d2210af401",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "pyproject.toml",
+        "tests/snapshots/tui/golden/**"
+      ],
+      "id": "P29-I04-W14",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-02T03:50:19.217013Z",
+      "outcome": "I04 integration fixes surfaced by the full-suite run: regenerated help-overlay golden for the 3 new TUI modes (7/8/9); excluded already-over-cap surfaces/tui/app.py from EAWF010 per un-grandfather-on-touch (B083 extract-module followup)",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Regen help-overlay golden and exclude oversized tui app from EAWF010",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
