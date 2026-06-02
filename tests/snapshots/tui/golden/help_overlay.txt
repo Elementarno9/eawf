@@ -14,8 +14,8 @@
       │    c          open config (any scope)                                                                    │
       │    i          open needs_user inbox (by urgency)                                                         │
       │    F5         force refresh                                                                              │
-      │    ?          open help                                                                                  │
-      │    /          open palette                                                                           ▅▅  │
+      │    ?          open help                                                                              ▅▅  │
+      │    /          open palette                                                                               │
       │    Tab        next pane                                                                                  │
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
@@ -26,13 +26,13 @@
       │    4          switch to Evidence mode                                                                    │
       │    5          switch to Feed mode                                                                        │
       │    6          switch to Config mode                                                                      │
+      │    7          switch to Research mode                                                                    │
+      │    8          switch to Watch mode                                                                       │
+      │    9          switch to Autopilot mode                                                                   │
       │                                                                                                          │
       │  Pane navigation (vim alias)                                                                             │
       │    ↑          line up  (k)                                                                               │
       │    ↓          line down  (j)                                                                             │
       │    ←          collapse row / scroll left  (h)                                                            │
-      │    →          expand row / scroll right  (l)                                                             │
-      │    PageUp     half-page up  (Ctrl-u)                                                                     │
-      │    PageDown   half-page down  (Ctrl-d)                                                                   │
       │                                                                                                          │
       └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
