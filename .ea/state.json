@@ -10598,7 +10598,8 @@
         "P29-I05-W08",
         "P29-I05-W09",
         "P29-I05-W10",
-        "P29-I05-W11"
+        "P29-I05-W11",
+        "P29-I05-W12"
       ]
     },
     "P29-I06": {
@@ -11379,7 +11380,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T20:28:44.501431Z",
+  "updated_at": "2026-06-02T20:48:03.767516Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33129,7 +33130,40 @@
       "success_criteria": [
         "autopilot.py stale digit-9/1-9 refs corrected to digit-2/1-8; stale mode-leads prose in mode tests updated to mode-trails; naming/docstring/error-phrasing drift across the I05 diff swept; no behavior change; gauntlet green"
       ],
-      "title": "Polish I05 doc-drift: autopilot digit refs + mode-order test prose",
+      "title": "Repair doctor mode hang via worker-offload of the health gather",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py",
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "tests/tui/**"
+      ],
+      "id": "P29-I05-W12",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T20:48:03.767343Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "footer renders an always-visible mode row (1 home-2 autopilot-...-8 watch from MODE_REGISTRY",
+        "active highlighted) on row 2 with status merged to row 1; autopilot stale 1-9/digit-9 hint+docstring removed; mode-leads breadcrumb test prose updated to mode-trails; goldens regen; gauntlet green"
+      ],
+      "title": "Add always-on footer mode row and clear stale mode hints",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
