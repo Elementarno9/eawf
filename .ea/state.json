@@ -1776,6 +1776,30 @@
       "status": "done",
       "updated_at": "2026-06-02T00:28:07.975777Z"
     },
+    "P29-I04-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I04-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I04-W05",
+      "scope_id": "P29-I04-W05",
+      "status": "done",
+      "updated_at": "2026-06-02T01:50:59.350755Z"
+    },
+    "P29-I04-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I04-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I04-W06",
+      "scope_id": "P29-I04-W06",
+      "status": "done",
+      "updated_at": "2026-06-02T01:50:59.958104Z"
+    },
     "P29-I04-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4146,6 +4170,32 @@
       "scope_id": "P29",
       "status": "open",
       "title": "Exclude or refactor oversized surfaces/tui/app.py for EAWF010"
+    },
+    "B080": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T01:52:00.701314Z",
+      "description": "W02 denied_tools seam: claude maps to --disallowedTools; codex (allowlist only) + opencode (permission frontmatter) have no per-call deny flag, so denied_tools is logged but not enforced at the CLI for those runtimes. FS-jail floor still confines writes. Decide per-runtime deny mechanism or document accepted gap.",
+      "id": "B080",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "codex/opencode have no per-call CLI tool-deny flag for denied_tools"
+    },
+    "B081": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T01:52:17.287899Z",
+      "description": "W02 denied_tools seam: claude maps to --disallowedTools; codex (allowlist only) + opencode (permission frontmatter) have no per-call deny flag, so denied_tools is logged not CLI-enforced for those runtimes. FS-jail still confines writes. Decide per-runtime deny mechanism or document accepted gap.",
+      "id": "B081",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "codex/opencode lack per-call CLI tool-deny flag for denied_tools"
     },
     "B70": {
       "closed_at": null,
@@ -8621,6 +8671,32 @@
       "scope_id": "P29-I04-W04",
       "updated_at": "2026-06-02T00:20:25.284135Z"
     },
+    "P29-I04-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I04-W05-bucket-20260602T013020Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I04-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I04-W05",
+      "updated_at": "2026-06-02T01:30:20.941973Z"
+    },
+    "P29-I04-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I04-W06-bucket-20260602T013021Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I04-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I04-W06",
+      "updated_at": "2026-06-02T01:30:21.424946Z"
+    },
     "P29-I04-W07": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I04-W07-bucket-20260602T005050Z",
@@ -10632,7 +10708,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T01:26:42.799607Z",
+  "updated_at": "2026-06-02T01:52:17.287899Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -31605,10 +31681,10 @@
         "P29-I04-W08",
         "P29-I05-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29i04",
+      "claimed_at": "2026-06-02T01:30:20.941968Z",
+      "closed_at": "2026-06-02T01:50:59.350755Z",
+      "commit": "5195f4ba0bf917f91fbcf48d26d4cbc3d239a414",
       "deps": [
         "P29-I03-W04",
         "P29-I01-W23"
@@ -31625,10 +31701,10 @@
       "intent": null,
       "iter_id": "P29-I04",
       "opened_at": "2026-06-01T00:19:14.275080Z",
-      "outcome": null,
+      "outcome": "live CodexAdapter.spawn_session + _parse_codex_result (NDJSON codex exec --json; reasoning key model_reasoning_effort); 24 mocked tests green; live probe floor-blocked (scrubbed PATH excludes /opt/homebrew/bin + seatbelt exit65) -- parse validated vs real codex output; codex has no per-call deny flag (logged gap). Followups: floor lane PATH + codex seatbelt profile",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "CodexAdapter.spawn_session forks codex exec + _parse_codex_result; the codex juror lane (G1)",
         "pre-claim spike confirms the model_reasoning_effort exact -c key via a live codex exec probe"
@@ -31643,10 +31719,10 @@
       "blocks": [
         "P29-I04-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29i04",
+      "claimed_at": "2026-06-02T01:30:21.424941Z",
+      "closed_at": "2026-06-02T01:50:59.958104Z",
+      "commit": "74ff64a1e605afa0037efe24d19dd24623a0b19e",
       "deps": [
         "P29-I03-W04",
         "P29-I01-W23"
@@ -31663,10 +31739,10 @@
       "intent": null,
       "iter_id": "P29-I04",
       "opened_at": "2026-06-01T00:19:14.275452Z",
-      "outcome": null,
+      "outcome": "live OpenCodeAdapter.spawn_session + _parse_opencode_result (opencode run --format json NDJSON); 23 mocked tests green; live probe OK (metered priced SpawnResult via litellm gateway). Floor gap: env_scrub/jail lack opencode lane -> opencode child env-scrubbed (local) but NOT FS-jailed; opencode has no per-call deny flag. Followups: register opencode lane in jail.py+env_scrub.py",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "opencode adapter spawn_session; the 3rd disjoint-family juror lane",
         "acceptance = metered priced sandboxed SessionResult on opencode"
