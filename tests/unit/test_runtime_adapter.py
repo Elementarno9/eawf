@@ -106,6 +106,21 @@ def test_protocol_rejects_partial_class() -> None:
     assert not isinstance(Incomplete(), RuntimeAdapter)
 
 
+def test_protocol_declares_spawn_session() -> None:
+    """The vendor-neutral spawn seam is declared on the Protocol itself."""
+    assert hasattr(RuntimeAdapter, "spawn_session")
+
+
+@pytest.mark.parametrize(
+    "adapter_cls",
+    [ClaudeAdapter, CodexAdapter, OpenCodeAdapter],
+    ids=["claude-code", "codex", "opencode"],
+)
+def test_adapter_has_spawn_session(adapter_cls: type) -> None:
+    """All 3 concrete adapters expose the ``spawn_session`` seam."""
+    assert hasattr(adapter_cls(), "spawn_session")
+
+
 # ---------------------------------------------------------------------------
 # Per-runtime identity + capability flags
 # ---------------------------------------------------------------------------
@@ -257,6 +272,25 @@ def test_claude_continue_session_returns_attempt() -> None:
     out = asyncio.run(a.continue_session("s-prior", "hello"))
     assert out.session_id == "s-prior"
     assert out.runtime == "claude-code"
+
+
+# ---------------------------------------------------------------------------
+# spawn_session — codex / opencode stubs raise until the real bodies land
+# ---------------------------------------------------------------------------
+
+
+def test_codex_spawn_session_raises_not_implemented() -> None:
+    """Codex spawn seam is a conforming stub that raises until it is wired."""
+    a = CodexAdapter()
+    with pytest.raises(NotImplementedError):
+        asyncio.run(a.spawn_session(prompt="x", model="m"))
+
+
+def test_opencode_spawn_session_raises_not_implemented() -> None:
+    """OpenCode spawn seam is a conforming stub that raises until it is wired."""
+    a = OpenCodeAdapter()
+    with pytest.raises(NotImplementedError):
+        asyncio.run(a.spawn_session(prompt="x", model="m"))
 
 
 # ---------------------------------------------------------------------------

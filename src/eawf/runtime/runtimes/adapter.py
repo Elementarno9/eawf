@@ -41,6 +41,7 @@ in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_checkable
 
@@ -204,8 +205,10 @@ class RuntimeAdapter(Protocol):
     """Per-runtime dispatcher contract.
 
     Every concrete adapter implementation declares the five
-    class-level attributes + the four methods + :meth:`parse_error`
-    + :meth:`supports_continue`. The Protocol is decorated
+    class-level attributes + the session methods
+    (:meth:`open_session`, :meth:`spawn_session`,
+    :meth:`continue_session`, :meth:`session_log_handle`) +
+    :meth:`parse_error` + :meth:`supports_continue`. The Protocol is decorated
     ``@runtime_checkable`` so the daemon can validate third-party
     adapters with ``isinstance(adapter, RuntimeAdapter)`` at load
     time.
@@ -261,6 +264,56 @@ class RuntimeAdapter(Protocol):
         callers that have not yet plumbed the contract through; the
         live subprocess spawn that consumes the contract lands in
         P26-SURFACES.
+        """
+
+    async def spawn_session(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        cwd: str | None = None,
+        extra_args: Sequence[str] = (),
+        timeout: float | None = None,
+        on_spawn: Callable[[int], None] | None = None,
+    ) -> SpawnResult:
+        """Spawn a live runtime subprocess for ``prompt`` against ``model``.
+
+        The vendor-neutral live-spawn seam: every adapter forks its own
+        CLI binary headlessly (Claude ``claude -p``, Codex ``codex exec``,
+        OpenCode ``opencode run``), captures the runtime's result envelope,
+        and parses it into a transient
+        :class:`SpawnResult` (raw answer text + the per-call token classes +
+        the child pid + the exit status). The result is NOT state-resident:
+        a later wave validates + meters + persists a typed body from it
+        before stamping the lean
+        :class:`~eawf.kernel.state.models.SessionAttempt` (rule 16 keeps the
+        raw text out of ``state.json``).
+
+        The optional *on_spawn* callback fires with the child PID the moment
+        the subprocess exists -- before output is awaited -- so a cancel path
+        can register the pid and halt a still-running call mid-flight.
+
+        Args:
+            prompt: Rendered prompt passed to the runtime CLI.
+            model: Model alias/id the spawn is requested with. No hardcoded
+                floor -- the caller resolves it (the routing decision feeds
+                this).
+            cwd: Working directory for the subprocess; ``None`` inherits the
+                parent's.
+            extra_args: Extra CLI args appended verbatim (the routing /
+                structured-output escape hatch).
+            timeout: Wall-clock ceiling in seconds; ``None`` waits
+                indefinitely. On expiry the child is killed and a typed
+                error is raised.
+            on_spawn: Optional callback invoked with the child PID right
+                after spawn (before output is awaited).
+
+        Returns:
+            The validated :class:`SpawnResult` for the completed call.
+
+        Raises:
+            RuntimeSpawnError: the spawn timed out, exited non-zero, or
+                returned an unparseable / error result envelope.
         """
 
     async def continue_session(

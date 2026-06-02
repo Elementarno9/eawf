@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,7 @@ from eawf.runtime.runtimes.adapter import (
     ErrorClass,
     RuntimeAdapter,
     SessionResumeFailedError,
+    SpawnResult,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
@@ -115,6 +117,31 @@ class CodexAdapter:
             session_log_handle=self.session_log_handle(session_id),
             started_at=datetime.now(UTC),
         )
+
+    async def spawn_session(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        cwd: str | None = None,
+        extra_args: Sequence[str] = (),
+        timeout: float | None = None,
+        on_spawn: Callable[[int], None] | None = None,
+    ) -> SpawnResult:
+        """Live ``codex exec`` spawn -- not yet wired.
+
+        Conforms to the vendor-neutral
+        :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
+        seam so the static + runtime-checkable Protocol gate passes; the
+        real ``codex exec`` subprocess fork + result parse lands in a
+        follow-up wave.
+
+        Raises:
+            NotImplementedError: the codex live spawn body is not yet
+                implemented.
+        """
+
+        raise NotImplementedError(f"codex spawn_session not yet wired: model={model!r}")
 
     async def continue_session(
         self,
