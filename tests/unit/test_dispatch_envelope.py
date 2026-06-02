@@ -288,10 +288,14 @@ def test_render_dispatch_envelope_unknown_runtime_lists_supported_in_message() -
     state = _empty_state()
     _seed_single_wave(state)
     with pytest.raises(ValueError) as excinfo:
-        render_dispatch_envelope(state, "P01-I01-W01", "opencode")
+        render_dispatch_envelope(state, "P01-I01-W01", "bogus")
     msg = str(excinfo.value)
     assert "claude-code" in msg
     assert "claude-agent-sdk" in msg
+    # codex + opencode are supported CLI runtimes too (P29-I04-W15), so the
+    # unknown-runtime message enumerates them as valid choices.
+    assert "codex" in msg
+    assert "opencode" in msg
 
 
 def test_render_dispatch_envelope_unknown_wave_raises_key_error() -> None:
