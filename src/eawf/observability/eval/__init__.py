@@ -14,6 +14,14 @@ check parameterised over the same six skill cases.
 
 from __future__ import annotations
 
+from eawf.observability.eval.cross_vendor_jury import (
+    JURY_QUORUM,
+    JURY_RUNTIME_FAMILIES,
+    CrossVendorJuryResult,
+    JurorOutcome,
+    SpawnFactory,
+    convene_cross_vendor_jury,
+)
 from eawf.observability.eval.jury import (
     CONSENSUS_SPREAD,
     FAIL_SCORE_THRESHOLD,
@@ -47,11 +55,15 @@ from eawf.observability.eval.self_eval import (
 __all__ = [
     "CONSENSUS_SPREAD",
     "FAIL_SCORE_THRESHOLD",
+    "JURY_QUORUM",
+    "JURY_RUNTIME_FAMILIES",
     "MIN_SELF_EVAL_N",
     "PASS_SCORE_THRESHOLD",
     "RULE_IDS",
+    "CrossVendorJuryResult",
     "EvalScore",
     "JurorBallot",
+    "JurorOutcome",
     "JuryAggregate",
     "JuryAggregateOutcome",
     "RecordedWaveCase",
@@ -59,8 +71,10 @@ __all__ = [
     "RuleAdherenceReport",
     "SelfEvalStatus",
     "SelfEvalSurface",
+    "SpawnFactory",
     "aggregate_jury",
     "compute_self_eval",
+    "convene_cross_vendor_jury",
     "load_recorded_wave_cases",
     "score_envelope",
     "score_recorded_wave_corpus",
