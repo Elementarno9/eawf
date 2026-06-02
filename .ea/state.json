@@ -10597,7 +10597,8 @@
         "P29-I05-W07",
         "P29-I05-W08",
         "P29-I05-W09",
-        "P29-I05-W10"
+        "P29-I05-W10",
+        "P29-I05-W11"
       ]
     },
     "P29-I06": {
@@ -11378,7 +11379,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T20:15:17.458378Z",
+  "updated_at": "2026-06-02T20:28:44.501431Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33096,6 +33097,41 @@
       "title": "Add full-location clickable breadcrumb and a real runtime cell",
       "token_budget": null,
       "tokens_consumed": 187019,
+      "worktree_id": null
+    },
+    "P29-I05-W11": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**",
+        "src/eawf/observability/eval/**",
+        "src/eawf/workflow/dispatch/**",
+        "tests/tui/**",
+        "tests/eval/**",
+        "tests/workflow/dispatch/**"
+      ],
+      "id": "P29-I05-W11",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T20:28:44.501241Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "autopilot.py stale digit-9/1-9 refs corrected to digit-2/1-8; stale mode-leads prose in mode tests updated to mode-trails; naming/docstring/error-phrasing drift across the I05 diff swept; no behavior change; gauntlet green"
+      ],
+      "title": "Polish I05 doc-drift: autopilot digit refs + mode-order test prose",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     },
     "P29-I06-W01": {
