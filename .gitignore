@@ -39,6 +39,7 @@ site/
 #    is the committed agent contract.
 CLAUDE.md
 .claude/
+.codex/
 .opencode/
 
 # .ea/ — state.json + config.yaml + store/*.jsonl are committed; locks +

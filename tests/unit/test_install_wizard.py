@@ -112,6 +112,16 @@ def test_wizard_writes_managed_gitignore_block(tmp_path: Path) -> None:
         assert pattern in text
 
 
+def test_gitignore_patterns_cover_agent_runtime_configs() -> None:
+    """Fresh ``eawf init`` must ignore the machine-specific MCP / opencode configs."""
+    assert ".mcp.json" in GITIGNORE_PATTERNS
+    assert "opencode.json" in GITIGNORE_PATTERNS
+    # The agent-tool dirs were already covered; guard against a regression.
+    assert ".codex/" in GITIGNORE_PATTERNS
+    assert ".opencode/" in GITIGNORE_PATTERNS
+    assert ".claude/" in GITIGNORE_PATTERNS
+
+
 def test_wizard_result_carries_subagent_spec_preview(tmp_path: Path) -> None:
     target = tmp_path / "proj"
     target.mkdir()
