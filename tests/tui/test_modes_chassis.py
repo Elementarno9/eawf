@@ -63,7 +63,7 @@ _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 #: The single repo code seeded in the workspace fixture's repo index.
 _FIXTURE_REPO = "QR"
 
-#: The expected default six-mode layout (name, digit, title) seeded on the
+#: The expected default mode layout (name, digit, title) seeded on the
 #: chassis. Pinned here so a registry reshape that breaks the digit axis or
 #: the launch default is caught loudly.
 _EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
@@ -73,6 +73,7 @@ _EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
     ("evidence", "4", "Evidence"),
     ("feed", "5", "Feed"),
     ("config", "6", "Config"),
+    ("research_board", "7", "Research"),
 )
 
 
@@ -107,8 +108,8 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_mode_registry_seeds_the_default_six_mode_layout() -> None:
-    """The registry declares the six (name, digit, title) modes in order."""
+def test_mode_registry_seeds_the_default_mode_layout() -> None:
+    """The registry declares the (name, digit, title) modes in order."""
     got = tuple((spec.name, spec.digit, spec.title) for spec in MODE_REGISTRY)
     assert got == _EXPECTED_MODES
 

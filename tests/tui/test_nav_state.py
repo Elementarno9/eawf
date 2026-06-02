@@ -2,8 +2,9 @@
 
 The TUI runs two orthogonal axes -- a **scope** (``repo`` / ``workspace`` /
 ``user``, switched with ``w`` / ``r`` / ``u``) and a **mode** (``home`` /
-``trust`` / ``doctor`` / ``evidence`` / ``feed`` / ``config``, switched with
-digit keys ``1``..``6``). W16 left every ``(scope, mode)`` pair reachable;
+``trust`` / ``doctor`` / ``evidence`` / ``feed`` / ``config`` /
+``research_board``, switched with digit keys ``1``..``7``). W16 left every
+``(scope, mode)`` pair reachable;
 this wave bounds the genuinely-legal subset and rejects the rest **at the
 boundary** so a switch never lands in a sourceless view. These tests pin:
 
@@ -51,9 +52,9 @@ _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 
-#: The three modes whose pane reads a single scope's state -- illegal at the
+#: The modes whose pane reads a single scope's state -- illegal at the
 #: cross-repo ``user`` portfolio scope (no single repo state to read).
-_SCOPE_BOUND = ("trust", "evidence", "feed")
+_SCOPE_BOUND = ("trust", "evidence", "feed", "research_board")
 #: The scope-agnostic modes -- legal at every scope.
 _SCOPE_FREE = ("home", "doctor", "config")
 
@@ -108,7 +109,7 @@ def test_is_legal_position_rejects_scope_bound_modes_at_user() -> None:
 
 
 def test_is_legal_position_covers_every_registered_mode() -> None:
-    """Every registered mode is either scope-free or one of the bound three."""
+    """Every registered mode is either scope-free or one of the scope-bound."""
     registered = {spec.name for spec in MODE_REGISTRY}
     assert registered == set(_SCOPE_FREE) | set(_SCOPE_BOUND)
 

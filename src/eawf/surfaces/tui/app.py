@@ -934,8 +934,9 @@ class EaApp(App[None]):
         bound :class:`~eawf.surfaces.tui.modes.NavState` before the mode
         flips. When the target ``(current_scope, mode)`` pair is illegal --
         the user portfolio scope crossed with a single-scope data mode
-        (``trust`` / ``evidence`` / ``feed``) -- the switch is rejected: the
-        app toasts the reason, logs it, and no-ops (returns a no-op
+        (``trust`` / ``evidence`` / ``feed`` / ``research_board``) -- the
+        switch is rejected: the app toasts the reason, logs it, and no-ops
+        (returns a no-op
         :class:`~textual.widget.AwaitMount` for the current screen) rather
         than landing the operator in a sourceless view. An accepted switch
         advances the nav position, then delegates to the native
@@ -966,9 +967,10 @@ class EaApp(App[None]):
         The switch is gated by the bound :class:`~eawf.surfaces.tui.modes.NavState`:
         when the target ``(scope, current_mode)`` pair is illegal -- the
         user portfolio scope crossed with a single-scope data mode
-        (``trust`` / ``evidence`` / ``feed``) -- the switch is rejected (the
-        app toasts the reason, logs it, and no-ops) rather than landing in a
-        sourceless view. An accepted switch advances the nav position.
+        (``trust`` / ``evidence`` / ``feed`` / ``research_board``) -- the
+        switch is rejected (the app toasts the reason, logs it, and no-ops)
+        rather than landing in a sourceless view. An accepted switch advances
+        the nav position.
 
         Every scope rebinds :attr:`state` before the screen swap so the
         target screen never renders against a stale binding. Switching to

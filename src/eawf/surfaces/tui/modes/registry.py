@@ -9,7 +9,7 @@ multi-repo / QoL) can build in parallel without colliding on a central
 dict in ``app.py``.
 
 Mode vs scope are orthogonal axes. A **mode** is a content surface
-(Home / Trust / Doctor / ...), switched with digit keys ``1``..``6``. The
+(Home / Trust / Doctor / ...), switched with digit keys ``1``..``7``. The
 **scope** (repo / workspace / user, switched with ``w`` / ``r`` / ``u``)
 stays an in-mode operation: the Home mode renders the resolved scope
 screen, and the scope switch swaps that screen within the Home mode's own
@@ -74,7 +74,7 @@ class ModeSpec:
             :attr:`textual.app.App.MODES` and the value
             ``switch_mode`` is called with. Also the breadcrumb segment
             and the ``/<name>`` palette-verb stem.
-        digit: The digit key (``"1"``..``"6"``) that switches to this
+        digit: The digit key (``"1"``..``"7"``) that switches to this
             mode. Digits are the mode axis only; arrows stay primary
             intra-pane per the keymap convention.
         title: The human-readable mode title shown in the breadcrumb and
@@ -211,6 +211,27 @@ def _feed_factory(_app: EaApp) -> Screen[None]:
     return FeedModeScreen()
 
 
+def _research_board_factory(_app: EaApp) -> Screen[None]:
+    """Build the Research mode pane over the ResearchCampaign store (digit 7).
+
+    Lazy-imports
+    :class:`~eawf.surfaces.tui.modes.research_board.ResearchBoardModeScreen`
+    (which imports the scope chassis) so the registry stays import-cycle-free,
+    the same deferral :func:`_trust_factory` / :func:`_feed_factory` use. The
+    pane self-binds to ``app.state`` + ``app._state_path`` on mount, so it
+    needs no per-instance launch state and ignores the app argument.
+
+    Args:
+        _app: The live app (unused; the screen reads ``self.app`` on mount).
+
+    Returns:
+        A fresh :class:`ResearchBoardModeScreen` for the Research mode stack.
+    """
+    from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
+
+    return ResearchBoardModeScreen()
+
+
 def _doctor_factory(app: EaApp) -> Screen[None]:
     """Build the Doctor-mode health screen (lazy import to avoid a cycle).
 
@@ -232,14 +253,16 @@ def _doctor_factory(app: EaApp) -> Screen[None]:
     return doctor_mode_factory(app)
 
 
-#: The default six-mode layout seeded on the chassis. Digit order is the
-#: switch order (``1``..``6``). ``home`` (the launch default,
-#: :data:`DEFAULT_MODE`) renders the resolved scope screen; ``trust`` renders
-#: the estimation trust scorecard; ``doctor`` folds the install / state /
-#: drift health view; ``evidence`` renders the agent-report rollup
-#: (honest-empty until reports exist); ``feed`` renders the live event feed.
-#: The remaining modes ship as honest-empty placeholders that their per-pane
-#: waves replace via the one-line registration recipe (module docstring).
+#: The default mode layout seeded on the chassis. Digit order is the switch
+#: order (``1``..``7``). ``home`` (the launch default, :data:`DEFAULT_MODE`)
+#: renders the resolved scope screen; ``trust`` renders the estimation trust
+#: scorecard; ``doctor`` folds the install / state / drift health view;
+#: ``evidence`` renders the agent-report rollup (honest-empty until reports
+#: exist); ``feed`` renders the live event feed; ``research_board`` renders
+#: the research-campaign overview (campaigns / claims / open questions,
+#: honest-empty until a campaign is staged). The remaining modes ship as
+#: honest-empty placeholders that their per-pane waves replace via the
+#: one-line registration recipe (module docstring).
 MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("home", "1", "Home", _home_screen),
     ModeSpec("trust", "2", "Trust", _trust_factory),
@@ -247,6 +270,7 @@ MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("evidence", "4", "Evidence", _evidence_factory),
     ModeSpec("feed", "5", "Feed", _feed_factory),
     ModeSpec("config", "6", "Config", _placeholder_factory("Config")),
+    ModeSpec("research_board", "7", "Research", _research_board_factory),
 )
 
 #: The launch mode -- the chassis boots into Home (the scope-bearing

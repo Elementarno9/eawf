@@ -2,11 +2,12 @@
 
 The TUI runs two orthogonal axes: a **scope** (``repo`` / ``workspace`` /
 ``user``, switched with ``w`` / ``r`` / ``u``) and a **mode** (``home`` /
-``trust`` / ``doctor`` / ``evidence`` / ``feed`` / ``config``, switched with
-digit keys ``1``..``6``). The W16 chassis left every ``(scope, mode)`` pair
-reachable; this module pins the **bounded** subset that is genuinely legal
-and refuses the rest at the boundary, so a switch never lands the operator
-in a view that has no honest data source.
+``trust`` / ``doctor`` / ``evidence`` / ``feed`` / ``config`` /
+``research_board``, switched with digit keys ``1``..``7``). The W16 chassis
+left every ``(scope, mode)`` pair reachable; this module pins the
+**bounded** subset that is genuinely legal and refuses the rest at the
+boundary, so a switch never lands the operator in a view that has no honest
+data source.
 
 CLI-is-dispatch analogue
 ------------------------
@@ -29,6 +30,7 @@ config            yes   yes        yes
 trust             yes   yes        no
 evidence          yes   yes        no
 feed              yes   yes        no
+research_board    yes   yes        no
 ================  ====  =========  ====
 
 * ``home`` is the scope-bearing mode -- it *renders* the resolved scope
@@ -38,21 +40,23 @@ feed              yes   yes        no
   :func:`~eawf.surfaces.tui.modes.doctor.doctor_mode_factory`), and
   ``config`` opens the registry-driven config window (scope-agnostic), so
   both stay legal everywhere.
-* ``trust`` / ``evidence`` / ``feed`` read a **single scope's**
-  ``state.json`` + its per-scope stores under ``<state_dir>/store/``. The
+* ``trust`` / ``evidence`` / ``feed`` / ``research_board`` read a **single
+  scope's** ``state.json`` + its per-scope stores under
+  ``<state_dir>/store/`` (the trust scorecard, the agent-report rollup, the
+  event feed, and the research-campaign / claim / open-question board). The
   **user** scope is the cross-repo portfolio aggregate -- it has no single
   repo's ``state.json`` (its state is synthesized from the registry with
-  ``project=None`` and no ``phases``), so those three data-bound modes have
-  no honest single-scope source there. They would render honest-empty, but
-  honest-empty at the portfolio scope reads as "no reports / no trust data
-  exist" when the truth is "this is not a report-bearing scope" -- a
-  misleading view. So the portfolio scope is excluded for the three
+  ``project=None`` and no ``phases``), so those data-bound modes have no
+  honest single-scope source there. They would render honest-empty, but
+  honest-empty at the portfolio scope reads as "no reports / no trust /
+  no campaign data exist" when the truth is "this is not a report-bearing
+  scope" -- a misleading view. So the portfolio scope is excluded for the
   data-bound modes; ``repo`` and ``workspace`` (which each anchor on one
   real ``state.json``) keep them.
 
 Everywhere the matrix is unconstrained the W16 orthogonality holds: scope
 and mode switch independently. The bound only bites the genuinely-invalid
-corner (user x {trust, evidence, feed}).
+corner (user x {trust, evidence, feed, research_board}).
 """
 
 from __future__ import annotations
@@ -68,9 +72,12 @@ NAV_SCOPES: tuple[str, ...] = ("repo", "workspace", "user")
 
 #: The modes whose pane reads a single scope's ``state.json`` + per-scope
 #: stores, so they are illegal at the cross-repo ``user`` portfolio scope
-#: (which has no single repo's state). Every other mode is scope-agnostic
-#: and legal at every scope.
-_SCOPE_BOUND_MODES: frozenset[str] = frozenset({"trust", "evidence", "feed"})
+#: (which has no single repo's state). ``research_board`` joins the set: it
+#: reads a single scope's claim / open-question ledgers plus the per-scope
+#: ``research_campaign`` store, so the portfolio aggregate has no honest
+#: single-scope source. Every other mode is scope-agnostic and legal at
+#: every scope.
+_SCOPE_BOUND_MODES: frozenset[str] = frozenset({"trust", "evidence", "feed", "research_board"})
 
 #: The scopes the scope-bound modes are illegal at -- the cross-repo
 #: portfolio aggregate, which carries no single repo's ``state.json``.
