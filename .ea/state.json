@@ -1764,6 +1764,18 @@
       "status": "done",
       "updated_at": "2026-06-02T01:26:42.799318Z"
     },
+    "P29-I04-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I04-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I04-W03",
+      "scope_id": "P29-I04-W03",
+      "status": "done",
+      "updated_at": "2026-06-02T02:13:58.123850Z"
+    },
     "P29-I04-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -1811,6 +1823,18 @@
       "scope_id": "P29-I04-W07",
       "status": "done",
       "updated_at": "2026-06-02T01:15:37.362166Z"
+    },
+    "P29-I04-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I04-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I04-W09",
+      "scope_id": "P29-I04-W09",
+      "status": "done",
+      "updated_at": "2026-06-02T02:13:58.732294Z"
     }
   },
   "agent_sessions": {
@@ -8658,6 +8682,19 @@
       "scope_id": "P29-I04-W02",
       "updated_at": "2026-06-02T01:16:45.148135Z"
     },
+    "P29-I04-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I04-W03-bucket-20260602T021256Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I04-W03",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I04-W03",
+      "updated_at": "2026-06-02T02:12:56.499714Z"
+    },
     "P29-I04-W04": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I04-W04-bucket-20260602T002025Z",
@@ -8709,6 +8746,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P29-I04-W07",
       "updated_at": "2026-06-02T00:50:50.659119Z"
+    },
+    "P29-I04-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I04-W09-bucket-20260602T021257Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I04-W09",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I04-W09",
+      "updated_at": "2026-06-02T02:12:57.070510Z"
     }
   },
   "goals": {
@@ -10708,7 +10758,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T01:52:17.287899Z",
+  "updated_at": "2026-06-02T02:13:58.732643Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -31611,10 +31661,10 @@
     "P29-I04-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29i04",
+      "claimed_at": "2026-06-02T02:12:56.499707Z",
+      "closed_at": "2026-06-02T02:13:58.123850Z",
+      "commit": "97392f3693e01bf031bdce31504d62f9c55c58ea",
       "deps": [
         "P29-I04-W01",
         "P29-I03-W05"
@@ -31630,10 +31680,10 @@
       "intent": null,
       "iter_id": "P29-I04",
       "opened_at": "2026-06-01T00:19:14.276190Z",
-      "outcome": null,
+      "outcome": "bounded spawn retry loop + tiered failure notice over the CLI failure taxonomy (RETRY_SAME/SWITCH_RUNTIME/HALT); RuntimeSpawnError enriched w/ exit_status+stderr so classifier maps via parse_error; deterministic (no backoff timer); typed RetryExhaustedError; wired into _spawn_and_dispatch",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "bounded retry loop + a tiered failure notice over the agent-CLI failure taxonomy"
       ],
@@ -31835,10 +31885,10 @@
       "blocks": [
         "P29-I04-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29i04",
+      "claimed_at": "2026-06-02T02:12:57.070503Z",
+      "closed_at": "2026-06-02T02:13:58.732294Z",
+      "commit": "bbe2324f538b04b04a92e24c1ac595d43292863b",
       "deps": [
         "P29-I03-W04",
         "P29-I01-W09",
@@ -31856,10 +31906,10 @@
       "intent": null,
       "iter_id": "P29-I04",
       "opened_at": "2026-06-01T00:19:14.276924Z",
-      "outcome": null,
+      "outcome": "EviBound rung-3 spawned entailment jury (escalation tail; fires only on ambiguous rung-2 ESCALATE verdict; aggregate_jury -> NEEDS_USER surfaced) + live cockpit Level-3 research rounds via run_round_loop; injected/testable, no schema change",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "EviBound rung-3 reuses the TRUST-7 juror spawn for ambiguous claim-entailment; live research rounds (cockpit Level 3+) wired over RO-11"
       ],
