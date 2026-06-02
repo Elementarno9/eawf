@@ -4319,6 +4319,97 @@
       "status": "open",
       "title": "Extract-module split of surfaces/tui/app.py (EAWF010 over-cap)"
     },
+    "B084": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T13:51:03.184161Z",
+      "description": "produce_wave_verdict computes a memory=False contract (verdict.py:653) and logs it (verdict.py:682) but never threads it to the spawn; SpawnFn=Callable[[str],...] (llm_assist.py:68) takes prompt only. W07 auditor path is wired+enforcing, so the dropped override is a fresh-context-leak risk. Thread memory=False to the spawn or drop the dead override and reword the criterion. No test asserts contract.memory.",
+      "id": "B084",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Thread fresh-context memory=False into the auditor verdict spawn"
+    },
+    "B085": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T13:51:14.833125Z",
+      "description": "escalate_to_rung3/convene_entailment_jury (rung3.py:393,298) and run_live_rounds (live_rounds.py:127) have zero production callers (only __init__ re-exports + tests). The EviBound resolver never chains a rung-2 ESCALATE into rung-3. W09 (==RO-15, the designated wiring wave) built the modules but left them idle. Criterion C6 unmet. Chain rung-2 ESCALATE->rung3 and wire run_live_rounds to a Level3+ round runner.",
+      "id": "B085",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Wire EviBound rung-3 escalation and live-rounds into prod paths"
+    },
+    "B086": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T13:51:15.470043Z",
+      "description": "routing.py emits claude-only (_DEFAULT_RUNTIME=claude, routing.py:129); convene_cross_vendor_jury has zero src/ callers. codex+opencode adapters conform+tested but are never convened on any production path -- 'cross-vendor' is built-but-idle. Make routing/selection resolve codex/opencode runtime+model for the juror spawn behind the I03 floor.",
+      "id": "B086",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Make cross-vendor spawn reachable on the prod dispatch path"
+    },
+    "B087": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T13:51:16.095177Z",
+      "description": "lookup_pricing misses codex/opencode model ids (e.g. anthropic/claude-x, gpt-5.5) -> price_spawn_result returns priced=False,cost=0 (metering.py:205-220). _resolve_spawn_model hands codex a claude-opus id (wrong vendor model). codex pricing row is a self-declared placeholder (pricing.py:224-231). Resolve real or explicitly-flagged vendor rows and hand each runtime its own model id.",
+      "id": "B087",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Resolve vendor-model pricing for codex and opencode spawns"
+    },
+    "B088": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T13:51:25.560098Z",
+      "description": "agent.dispatch spawn=True tests stub the adapter (test_live_spawn_dispatch.py:312 _StubAdapter); real codex/opencode adapters are only unit-tested with _maybe_jail_argv and _build_child_env patched away. No integration test proves a codex/opencode SpawnResult flows through _spawn_and_dispatch -> metering -> report. opencode unjailed-fallback branch (opencode/adapter.py:279) is also untested at the adapter layer.",
+      "id": "B088",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Add daemon-level integration test for cross-vendor live spawn"
+    },
+    "B089": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T13:51:26.193388Z",
+      "description": "The exact codex -c model_reasoning_effort key (codex/adapter.py:161-165) rests on a docstring assertion + a fixture comment claiming a live codex 0.134.0 probe; no spike brief under .ea/local/research/ records the probe verdict, and the existing brief explicitly flagged the exact key as unverified. Record the probe artifact or add a live-probe test.",
+      "id": "B089",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Record codex model_reasoning_effort key probe as a spike brief"
+    },
+    "B090": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T13:51:26.795876Z",
+      "description": "agent_watch.py:486 uses WATCH_WAITING.format(target=...) against rule 9 (f-strings only). Reused module-level template with precedent in scrub.py, passed pre-commit; informational. Convert to an f-string.",
+      "id": "B090",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Replace agent_watch .format() template with an f-string"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -10145,7 +10236,8 @@
         "P29-I04-W12",
         "P29-I04-W08",
         "P29-I04-W10",
-        "P29-I04-W14"
+        "P29-I04-W14",
+        "P29-I04-W15"
       ]
     },
     "P29-I05": {
@@ -10935,7 +11027,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T03:51:06.768869Z",
+  "updated_at": "2026-06-02T13:55:23.288164Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -32253,6 +32345,43 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Regen help-overlay golden and exclude oversized tui app from EAWF010",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I04-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "WIDE remediation per A47 audit: un-idle the cross-vendor verdict stack and wire it into the enforcing close gate + EviBound resolver. Folds B080 (opencode floor) B082 (jury wiring) B085 (rung-3/live-rounds) B086 (reachability) B087 (pricing) B088 (integ-test).",
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/**",
+        "src/eawf/workflow/dispatch/**",
+        "src/eawf/workflow/evidence/**",
+        "src/eawf/kernel/spec/**",
+        "src/eawf/observability/eval/**",
+        "src/eawf/observability/telemetry/**",
+        "src/eawf/runtime/sandbox/**",
+        "src/eawf/runtime/runtimes/**"
+      ],
+      "id": "P29-I04-W15",
+      "intent": null,
+      "iter_id": "P29-I04",
+      "opened_at": "2026-06-02T13:55:23.287997Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a daemon-level integration test proves codex and opencode juror SpawnResults flow through the spawn path then metering then report with jail and scrub markers; the opencode unjailed-fallback branch is removed (B088)"
+      ],
+      "title": "Convene the cross-vendor verdict jury at the wave close gate",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
