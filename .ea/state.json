@@ -11514,7 +11514,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T22:08:10.671827Z",
+  "updated_at": "2026-06-02T23:35:18.570387Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33417,7 +33417,8 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/platform/install/**",
-        "src/eawf/surfaces/render/skills/**"
+        "src/eawf/surfaces/render/skills/**",
+        "src/eawf/runtime/runtimes/**"
       ],
       "id": "P29-I06-W02",
       "intent": null,
@@ -33450,7 +33451,8 @@
       "effort_bucket": "XS",
       "file_scopes": [
         "src/eawf/platform/install/**",
-        "src/eawf/surfaces/render/skills/**"
+        "src/eawf/surfaces/render/skills/**",
+        "src/eawf/runtime/runtimes/**"
       ],
       "id": "P29-I06-W03",
       "intent": null,
@@ -33517,7 +33519,10 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/platform/install/**",
-        "src/eawf/surfaces/render/skills/**"
+        "src/eawf/surfaces/render/skills/**",
+        "src/eawf/runtime/runtimes/**",
+        ".claude-plugin/**",
+        ".agents/**"
       ],
       "id": "P29-I06-W05",
       "intent": null,
@@ -33721,7 +33726,8 @@
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/platform/lint/**",
-        "src/eawf/surfaces/render/**"
+        "src/eawf/surfaces/render/**",
+        "src/eawf/kernel/state/models.py"
       ],
       "id": "P29-I07-W02",
       "intent": null,
@@ -33758,7 +33764,8 @@
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/platform/lint/**",
-        "src/eawf/runtime/hooks/**"
+        "src/eawf/runtime/hooks/**",
+        "src/eawf/surfaces/cli/commands/hook.py"
       ],
       "id": "P29-I07-W03",
       "intent": null,
@@ -33964,7 +33971,9 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/kernel/spec/**",
-        "src/eawf/platform/lint/**"
+        "src/eawf/platform/lint/**",
+        "src/eawf/kernel/state/enums.py",
+        "src/eawf/kernel/state/urn.py"
       ],
       "id": "P29-I07-W09",
       "intent": null,
