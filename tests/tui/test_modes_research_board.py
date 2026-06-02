@@ -11,7 +11,7 @@ pin the two halves:
   and :func:`render_checkpoint` -- tested against directly-built rows / on-disk
   stores so the composition is verified without mounting Textual; and
 * the mounted pane under a Pilot: digit ``3`` switches to the mode and the
-  breadcrumb leads with the ``Research`` segment; an honest-empty scope (no
+  breadcrumb trails with the ``Research`` segment; an honest-empty scope (no
   campaign, no claim, no question) renders the "no active research campaign"
   banner (the load-bearing regression guard); a seeded scope (a staged
   campaign plus claims + open questions) mounts the three panes + the drawer
@@ -430,7 +430,7 @@ def test_render_checkpoint_populated_surfaces_prompt_and_options() -> None:
 
 
 def test_research_board_mode_registers_on_digit_three(tmp_path: Path) -> None:
-    """Digit ``3`` switches to the Research mode and leads the breadcrumb."""
+    """Digit ``3`` switches to the Research mode and trails the breadcrumb."""
     state_path = _write_state(tmp_path, _project_state())
 
     async def body() -> None:

@@ -1,6 +1,6 @@
-"""``AutopilotModeScreen`` -- the ready-wave frontier + dispatch pane (mode digit 9).
+"""``AutopilotModeScreen`` -- the ready-wave frontier + dispatch pane (mode digit 2).
 
-The Autopilot mode (digit ``9``) renders the **dependency frontier** of the
+The Autopilot mode (digit ``2``) renders the **dependency frontier** of the
 active scope's wave graph -- the PENDING waves that are claim-ready right now
 (every dep CLOSED + no lower-numbered ready sibling under the same iter) -- in
 claim order, and offers **dispatch controls** that ask the daemon to claim +
@@ -163,6 +163,9 @@ _UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 #: Footer hints for the Autopilot pane (full key names, arrows primary). The
 #: intervention keys ride after dispatch so they are discoverable; the
 #: destructive ones (H / K) are flagged so the operator reads them as gated.
+#: The mode-switch digits are no longer advertised here -- the always-visible
+#: footer mode row (row 2) lists every mode with its digit, so the redundant
+#: ``1-9 mode`` hint was dropped.
 _AUTOPILOT_HINTS: tuple[str, ...] = (
     "up/down select",
     "d dispatch",
@@ -171,7 +174,6 @@ _AUTOPILOT_HINTS: tuple[str, ...] = (
     "K kill",
     "space pause",
     "a arm",
-    "1-9 mode",
     "w/r/u scope",
     "/ palette",
     "? help",

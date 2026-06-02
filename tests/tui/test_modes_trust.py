@@ -494,7 +494,8 @@ def test_trust_pane_starved_then_keeps_chassis_brand(tmp_path: Path) -> None:
             await pilot.press("4")  # -> trust
             await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
-            # Brand outside-left of the breadcrumb; the Trust mode title leads.
+            # Brand outside-left of the breadcrumb; the Trust mode title trails
+            # (the breadcrumb is scope > code > phase > iter > mode).
             header_row = frame.splitlines()[0]
             assert BRAND in header_row
             assert "Trust" in header_row

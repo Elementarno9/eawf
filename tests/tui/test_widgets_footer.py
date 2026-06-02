@@ -2,9 +2,17 @@
 
 Covers the pure hint formatter (:func:`format_hints`), the Footer's
 default + overridden hint strip, the weekly-burn line builder + its
-empty-state fallback, the embedded Heartbeat pulse glyph + degraded-colour
-class flip (D22), and a Pilot-driven paint confirming the footer hints +
-heartbeat dot render under the real palette.
+empty-state fallback, the always-visible mode row
+(:func:`build_mode_row` + the mounted Footer's active-mode highlight),
+the embedded Heartbeat pulse glyph + degraded-colour class flip (D22),
+and a Pilot-driven paint confirming the footer hints + heartbeat dot
+render under the real palette.
+
+The footer is **two rows** (the operator-chosen layout): row 1 merges
+the key-hint strip (left) with the status cells (weekly-burn + needs_user
+badge + heartbeat, right); row 2 is the always-visible mode row derived
+from ``MODE_REGISTRY`` with the active mode highlighted. The footer stays
+height 2.
 """
 
 from __future__ import annotations
@@ -18,6 +26,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.state.models import ActualSummary, State
+from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
 from eawf.surfaces.tui.widgets import eu_bar
 from eawf.surfaces.tui.widgets.footer import (
     DEFAULT_HINTS,
@@ -25,6 +34,7 @@ from eawf.surfaces.tui.widgets.footer import (
     WEEKLY_BURN_EMPTY,
     Footer,
     Heartbeat,
+    build_mode_row,
     build_weekly_burn_line,
     format_hints,
 )
@@ -354,7 +364,7 @@ def test_weekly_burn_empty_is_canonical_eu_bar_sentinel() -> None:
 
 
 # --------------------------------------------------------------------------
-# Two-row footer — hints (row 1) never clip at 120 cols (the W15 fix)
+# Two-row footer — hints + status share row 1, mode row is row 2, height 2
 # --------------------------------------------------------------------------
 
 
@@ -364,40 +374,34 @@ def test_footer_is_two_rows_tall() -> None:
         async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
             footer = app.query_one("#ftr", Footer)
-            # The two-row layout: the footer occupies two terminal rows so
-            # the full-width hint strip never shares a row with the burn cell.
+            # The operator-chosen layout: the footer occupies two terminal
+            # rows -- the merged hints+status row and the always-visible mode
+            # row -- and stays height 2 (it does NOT grow to 3 rows).
             assert footer.size.height == 2
 
     asyncio.run(body())
 
 
-def _hint_cell_width(app: App[None]) -> int:
-    """Return the rendered content width of the footer hint Static."""
-    return app.query_one(".footer-hints", Static).content_size.width
-
-
-def test_footer_hints_fit_repo_set_uncliped_at_120() -> None:
+def test_footer_hints_carry_repo_set_at_120() -> None:
     async def body() -> None:
         from eawf.surfaces.tui.scopes.repo import _REPO_HINTS
 
         app = _Harness()
-        # The repo hint set (103 cells) is the longest; on a single-row
-        # footer it lost ~94 cells to the burn cell and clipped ``q quit``.
         async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
             footer = app.query_one("#ftr", Footer)
             footer.set_hints(_REPO_HINTS)
             await pilot.pause()
-            rendered = format_hints(_REPO_HINTS)
-            # The hint lane spans the full inner width, so the whole strip
-            # (incl. the trailing ``q quit``) fits without truncation.
-            assert _hint_cell_width(app) >= len(rendered)
+            # The hint lane shares row 1 with the auto-width status cells, so
+            # the whole repo hint set (incl. ``q quit``) lives in the hint
+            # Static's content (Textual clips at paint time, not in the
+            # renderable, so the tail is never lost from the source string).
             assert "q quit" in str(footer.query_one(".footer-hints", Static).render())
 
     asyncio.run(body())
 
 
-def test_footer_hints_fit_workspace_set_uncliped_at_120() -> None:
+def test_footer_hints_carry_workspace_set_at_120() -> None:
     async def body() -> None:
         from eawf.surfaces.tui.scopes.workspace import _WORKSPACE_HINTS
 
@@ -407,14 +411,12 @@ def test_footer_hints_fit_workspace_set_uncliped_at_120() -> None:
             footer = app.query_one("#ftr", Footer)
             footer.set_hints(_WORKSPACE_HINTS)
             await pilot.pause()
-            rendered = format_hints(_WORKSPACE_HINTS)
-            assert _hint_cell_width(app) >= len(rendered)
             assert "q quit" in str(footer.query_one(".footer-hints", Static).render())
 
     asyncio.run(body())
 
 
-def test_footer_burn_and_heartbeat_share_second_row() -> None:
+def test_footer_hints_and_status_share_first_row() -> None:
     async def body() -> None:
         app = _Harness()
         async with app.run_test(size=(120, 6)) as pilot:
@@ -422,12 +424,182 @@ def test_footer_burn_and_heartbeat_share_second_row() -> None:
             footer = app.query_one("#ftr", Footer)
             footer.state = _state(weekly_eu_target=10.0, actual_eu=3.5)
             await pilot.pause()
-            # The burn cell + heartbeat live below the hint strip, so the
-            # full hint row stays intact while the status line still renders.
+            # The operator merged the status cell onto row 1: the hints, the
+            # burn cell, and the heartbeat all sit on the same row, with the
+            # mode row alone on row 2 below them.
             hints = app.query_one(".footer-hints", Static)
             burn = app.query_one(".footer-burn", Static)
-            assert burn.region.y > hints.region.y
+            modes = app.query_one(".footer-modes", Static)
+            assert burn.region.y == hints.region.y
+            assert modes.region.y > hints.region.y
             assert "/ 10 EU" in str(burn.render())
             assert footer.query(Heartbeat)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# build_mode_row — every mode, digit + lowercased title, active highlighted
+# --------------------------------------------------------------------------
+
+
+def _mode_row_plain(markup: str) -> str:
+    """Strip content-markup tags from a mode-row string for token assertions."""
+    import re
+
+    return re.sub(r"\[[^\]]*\]", "", markup).replace("\\[", "[")
+
+
+def test_build_mode_row_lists_all_modes_in_registry_order() -> None:
+    # Every registered mode renders as ``<digit> <title-lowercased>`` in
+    # registry (digit) order, joined by the bullet separator.
+    plain = _mode_row_plain(build_mode_row(None))
+    tokens = [tok.strip() for tok in plain.split("·")]
+    expected = [f"{spec.digit} {spec.title.lower()}" for spec in MODE_REGISTRY]
+    assert tokens == expected
+    # The operator example lead/tail tokens are present + lowercased.
+    assert tokens[0] == "1 home"
+    assert "2 autopilot" in tokens
+
+
+def test_build_mode_row_highlights_active_mode_only() -> None:
+    # The active mode's token carries the bold accent span; the others are
+    # muted. Pick a non-first mode so the assertion is not order-trivial.
+    active = MODE_REGISTRY[1]  # autopilot
+    markup = build_mode_row(active.name)
+    active_token = f"{active.digit} {active.title.lower()}"
+    assert f"[$accent][b]{active_token}[/b][/]" in markup
+    # A different, non-active mode renders muted (no accent/bold span).
+    other = MODE_REGISTRY[0]
+    other_token = f"{other.digit} {other.title.lower()}"
+    assert f"[$muted]{other_token}[/]" in markup
+    assert f"[$accent][b]{other_token}[/b][/]" not in markup
+
+
+def test_build_mode_row_none_highlights_nothing() -> None:
+    # No active mode (or a name matching no mode) leaves every token muted.
+    markup = build_mode_row(None)
+    assert "[$accent][b]" not in markup
+    # Every registered mode still appears, muted.
+    for spec in MODE_REGISTRY:
+        assert f"[$muted]{spec.digit} {spec.title.lower()}[/]" in markup
+
+
+def test_build_mode_row_unknown_active_highlights_nothing() -> None:
+    # A current_mode that names no registered mode (e.g. Textual's bare
+    # "_default") highlights nothing rather than raising.
+    markup = build_mode_row("_default")
+    assert "[$accent][b]" not in markup
+
+
+# --------------------------------------------------------------------------
+# Mounted Footer mode row — row 2, active highlight seeds + updates
+# --------------------------------------------------------------------------
+
+
+def test_footer_mounts_mode_row_on_second_row() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            hints = app.query_one(".footer-hints", Static)
+            modes = app.query_one(".footer-modes", Static)
+            # The mode row sits on row 2 (below the merged hints+status row)
+            # and lists every mode token; the footer stays height 2.
+            assert modes.region.y > hints.region.y
+            assert footer.size.height == 2
+            rendered = _mode_row_plain(str(modes.render()))
+            for spec in MODE_REGISTRY:
+                assert f"{spec.digit} {spec.title.lower()}" in rendered
+
+    asyncio.run(body())
+
+
+def _token_styles(modes: Static, token: str) -> set[str]:
+    """Collect the content-markup styles applied to *token*'s text range.
+
+    The mounted Static renders a Textual ``Content`` whose ``str()`` strips
+    the markup, so a markup-substring assertion does not work; instead this
+    locates *token* in the rendered plain text and returns the set of span
+    styles (e.g. ``{"$accent", "b"}`` for the highlighted active token,
+    ``{"$muted"}`` for a muted one) that cover it.
+    """
+    content = modes.render()
+    plain = content.plain  # type: ignore[attr-defined]
+    start = plain.index(token)
+    end = start + len(token)
+    return {
+        span.style  # type: ignore[attr-defined]
+        for span in content.spans  # type: ignore[attr-defined]
+        if span.start <= start and span.end >= end
+    }
+
+
+def test_footer_mode_row_highlight_updates_on_active_mode_change() -> None:
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            # Drive the active mode directly (the standalone-test seam), the
+            # same way the other footer tests drive ``state`` /
+            # ``pending_pauses``.
+            first = MODE_REGISTRY[1]  # autopilot
+            footer.active_mode = first.name
+            await pilot.pause()
+            modes = app.query_one(".footer-modes", Static)
+            first_token = f"{first.digit} {first.title.lower()}"
+            # The active token carries the accent + bold spans; a different
+            # mode stays muted.
+            assert {"$accent", "b"} <= _token_styles(modes, first_token)
+            other_token = f"{MODE_REGISTRY[3].digit} {MODE_REGISTRY[3].title.lower()}"
+            assert "$accent" not in _token_styles(modes, other_token)
+            # A change repaints the highlight onto the new active mode.
+            second = MODE_REGISTRY[3]  # trust
+            footer.active_mode = second.name
+            await pilot.pause()
+            modes = app.query_one(".footer-modes", Static)
+            second_token = f"{second.digit} {second.title.lower()}"
+            assert {"$accent", "b"} <= _token_styles(modes, second_token)
+            # The previously-active mode is no longer highlighted.
+            assert "$accent" not in _token_styles(modes, first_token)
+
+    asyncio.run(body())
+
+
+def test_footer_mode_row_seeds_highlight_from_app_current_mode() -> None:
+    """A host exposing ``current_mode`` seeds the mode-row highlight on mount.
+
+    Mirrors the live path: each mode owns its own scope screen, so the footer
+    mounts fresh on a mode switch and reads ``app.current_mode``. A bare
+    harness whose host exposes a registry mode name highlights that mode
+    without a manual ``active_mode`` assignment.
+    """
+
+    class _ModeHarness(PaletteHarnessApp):
+        CSS_PATH = str(_THEME)
+
+        def __init__(self, current_mode: str) -> None:
+            super().__init__()
+            self._seed_mode = current_mode
+
+        @property
+        def current_mode(self) -> str:  # type: ignore[override]
+            return self._seed_mode
+
+        def compose(self) -> ComposeResult:
+            yield Footer(id="ftr")
+
+    async def body() -> None:
+        target = MODE_REGISTRY[3]  # trust
+        app = _ModeHarness(target.name)
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            assert footer.active_mode == target.name
+            modes = app.query_one(".footer-modes", Static)
+            token = f"{target.digit} {target.title.lower()}"
+            assert {"$accent", "b"} <= _token_styles(modes, token)
 
     asyncio.run(body())

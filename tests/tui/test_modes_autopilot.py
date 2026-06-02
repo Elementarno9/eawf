@@ -16,7 +16,7 @@ live-spawn the selected ready wave via the ``agent.dispatch`` RPC
   Textual, including that the listed order matches
   :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier`; and
 * the mounted pane under a Pilot: digit ``2`` switches to the mode and the
-  breadcrumb leads with the ``Autopilot`` segment; an honest-empty scope (no
+  breadcrumb trails with the ``Autopilot`` segment; an honest-empty scope (no
   claim-ready wave) renders the "no ready waves" banner; a seeded scope whose
   waves form a ready frontier lists the ready waves in claim order; and the
   dispatch key binding exists + the dispatch action issues an ``agent.dispatch``
@@ -283,12 +283,13 @@ def test_render_ready_row_surfaces_wave_id_iter_and_title() -> None:
 
 
 def test_autopilot_mode_registers_on_digit_two(tmp_path: Path) -> None:
-    """Digit ``2`` switches to the Autopilot mode and leads the breadcrumb.
+    """Digit ``2`` switches to the Autopilot mode and trails the breadcrumb.
 
     Pins the registry wiring: the ModeSpec row registers the mode under
     digit ``2`` (its brief-assigned slot), so the digit key switches to an
-    :class:`AutopilotModeScreen` and the header breadcrumb leads with the
-    ``Autopilot`` segment derived from the registry title.
+    :class:`AutopilotModeScreen` and the header breadcrumb trails with the
+    ``Autopilot`` segment derived from the registry title (the breadcrumb is
+    ``scope > code > phase > iter > mode``, so the mode trails).
     """
     state_path = _write_state(tmp_path, _state())
 
@@ -593,6 +594,18 @@ def test_autopilot_intervention_keys_in_footer_hints() -> None:
     assert "K kill" in hints
     assert "space pause" in hints
     assert "a arm" in hints
+
+
+def test_autopilot_footer_hints_drop_mode_digit_hint() -> None:
+    """The redundant ``1-9 mode`` hint is gone (the footer mode row replaces it).
+
+    The always-visible footer mode row (row 2) lists every mode with its
+    digit, so the Autopilot pane no longer advertises the mode-switch digits
+    in its own hint strip.
+    """
+    hints = " ".join(AutopilotModeScreen.FOOTER_HINTS)
+    assert "1-9 mode" not in hints
+    assert "mode" not in hints
 
 
 def test_autopilot_kill_pushes_confirm_modal(tmp_path: Path) -> None:

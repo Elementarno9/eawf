@@ -15,7 +15,7 @@ the two halves:
   against directly-built rows so the logic is verified without mounting
   Textual; and
 * the mounted pane under a Pilot: digit ``8`` switches to the mode and the
-  breadcrumb leads with the ``Watch`` segment; an honest-empty scope (no
+  breadcrumb trails with the ``Watch`` segment; an honest-empty scope (no
   dispatched executor session) renders the "no active dispatched session"
   banner; a seeded scope (an ACTIVE executor session + buffered events)
   streams the session's events filtered to its wave; and the cancel key
@@ -326,12 +326,13 @@ def test_render_watch_header_target_surfaces_wave_runtime_status() -> None:
 
 
 def test_agent_watch_mode_registers_on_digit_eight(tmp_path: Path) -> None:
-    """Digit ``8`` switches to the Watch mode and leads the breadcrumb.
+    """Digit ``8`` switches to the Watch mode and trails the breadcrumb.
 
     Pins the registry wiring: the new ModeSpec row registers the mode under
     digit ``8`` (the next free digit), so the digit key switches to an
-    :class:`AgentWatchModeScreen` and the header breadcrumb leads with the
-    ``Watch`` segment derived from the registry title.
+    :class:`AgentWatchModeScreen` and the header breadcrumb trails with the
+    ``Watch`` segment derived from the registry title (the breadcrumb is
+    ``scope > code > phase > iter > mode``, so the mode trails).
     """
     state_path = _write_state(tmp_path, _state())
 
