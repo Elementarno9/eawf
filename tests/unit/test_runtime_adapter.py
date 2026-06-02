@@ -293,6 +293,35 @@ def test_opencode_spawn_session_raises_not_implemented() -> None:
         asyncio.run(a.spawn_session(prompt="x", model="m"))
 
 
+def test_protocol_spawn_session_accepts_denied_tools() -> None:
+    """The vendor-neutral spawn seam declares the ``denied_tools`` keyword."""
+    import inspect
+
+    sig = inspect.signature(RuntimeAdapter.spawn_session)
+    assert "denied_tools" in sig.parameters
+    # Additive default keeps the seam back-compatible with deny-free callers.
+    assert sig.parameters["denied_tools"].default == ()
+    assert sig.parameters["denied_tools"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+@pytest.mark.parametrize(
+    "adapter_cls",
+    [CodexAdapter, OpenCodeAdapter],
+    ids=["codex", "opencode"],
+)
+def test_stub_spawn_session_accepts_denied_tools(adapter_cls: type) -> None:
+    """The codex/opencode stubs conform to the deny-list seam and still raise.
+
+    The body stays a stub (W05/W06 map ``denied_tools`` to the per-runtime
+    deny flag when they implement the live fork), so calling it with a
+    deny-list raises ``NotImplementedError`` rather than a ``TypeError`` for
+    an unknown keyword.
+    """
+    a = adapter_cls()
+    with pytest.raises(NotImplementedError):
+        asyncio.run(a.spawn_session(prompt="x", model="m", denied_tools=["Bash", "Edit"]))
+
+
 # ---------------------------------------------------------------------------
 # session_log_handle — opaque URN, no on-disk path leak (rule 16)
 # ---------------------------------------------------------------------------

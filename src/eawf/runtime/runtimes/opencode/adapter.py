@@ -136,6 +136,7 @@ class OpenCodeAdapter:
         model: str,
         cwd: str | None = None,
         extra_args: Sequence[str] = (),
+        denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
     ) -> SpawnResult:
@@ -145,7 +146,22 @@ class OpenCodeAdapter:
         :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
         seam so the static + runtime-checkable Protocol gate passes; the
         real ``opencode run`` subprocess fork + result parse lands in a
-        follow-up wave.
+        follow-up wave. That follow-up maps *denied_tools* to the opencode
+        deny flag; today the body raises before consuming it.
+
+        Args:
+            prompt: Rendered prompt passed to ``opencode run``.
+            model: Model alias/id the spawn is requested with.
+            cwd: Working directory for the subprocess; ``None`` inherits the
+                parent's.
+            extra_args: Extra CLI args appended verbatim.
+            denied_tools: Per-wave sandbox deny-list (tool names) the live
+                fork will map to the opencode deny flag; empty (the default)
+                adds no flag.
+            timeout: Wall-clock ceiling in seconds; ``None`` waits
+                indefinitely.
+            on_spawn: Optional callback invoked with the child PID right
+                after spawn.
 
         Raises:
             NotImplementedError: the opencode live spawn body is not yet

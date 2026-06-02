@@ -273,6 +273,7 @@ class RuntimeAdapter(Protocol):
         model: str,
         cwd: str | None = None,
         extra_args: Sequence[str] = (),
+        denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
     ) -> SpawnResult:
@@ -289,6 +290,16 @@ class RuntimeAdapter(Protocol):
         :class:`~eawf.kernel.state.models.SessionAttempt` (rule 16 keeps the
         raw text out of ``state.json``).
 
+        The *denied_tools* keyword is the per-wave sandbox deny-list the
+        daemon resolves from ``state.sandbox_policies`` via
+        :func:`eawf.runtime.sandbox.policy.resolve_denied_tools`. Each adapter
+        maps it to its own runtime's deny flag so a spawned child CLI is
+        actually launched with those tools disabled per the wave policy
+        (Claude ``--disallowedTools``); an empty deny-list adds no flag,
+        keeping the spawn byte-equivalent to a deny-free dispatch. The
+        vendor flag spelling stays inside the adapter -- the daemon caller
+        passes only the tool names, never a CLI flag.
+
         The optional *on_spawn* callback fires with the child PID the moment
         the subprocess exists -- before output is awaited -- so a cancel path
         can register the pid and halt a still-running call mid-flight.
@@ -302,6 +313,9 @@ class RuntimeAdapter(Protocol):
                 parent's.
             extra_args: Extra CLI args appended verbatim (the routing /
                 structured-output escape hatch).
+            denied_tools: Per-wave sandbox deny-list (tool names). Each
+                adapter maps it to its runtime's deny flag; empty (the
+                default) adds no flag.
             timeout: Wall-clock ceiling in seconds; ``None`` waits
                 indefinitely. On expiry the child is killed and a typed
                 error is raised.

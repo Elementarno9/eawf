@@ -346,6 +346,7 @@ class ClaudeAdapter:
         model: str,
         cwd: str | None = None,
         extra_args: Sequence[str] = (),
+        denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
     ) -> SpawnResult:
@@ -375,6 +376,16 @@ class ClaudeAdapter:
         cancellation, and the schema-forced re-ask loop are separate waves
         and are deliberately NOT wired here.
 
+        When *denied_tools* is non-empty the argv gains
+        ``--disallowedTools <space-joined-sorted>`` so the spawned child is
+        launched with those tools disabled per the wave's sandbox policy.
+        The deny flag is built BEFORE the jail wrapper is applied, so the
+        jail confines the full child argv including the deny flag; the tool
+        names are sorted for a deterministic argv. The deny flag is inserted
+        ahead of *extra_args* so the verbatim escape hatch stays at the argv
+        tail; an empty deny-list adds no flag (byte-equivalent to a deny-free
+        spawn).
+
         The optional *on_spawn* callback fires with the child PID the
         moment the subprocess exists — before output is awaited — so a
         later cancel path can register the pid and halt a still-running
@@ -388,6 +399,10 @@ class ClaudeAdapter:
                 the parent's.
             extra_args: Extra CLI args appended verbatim (the routing /
                 structured-output escape hatch).
+            denied_tools: Per-wave sandbox deny-list (tool names). When
+                non-empty the argv gains ``--disallowedTools`` with the
+                sorted names space-joined into one token; empty (the
+                default) adds no flag.
             timeout: Wall-clock ceiling in seconds; ``None`` waits
                 indefinitely. On expiry the child is killed and a typed
                 error is raised.
@@ -402,6 +417,12 @@ class ClaudeAdapter:
                 returned an unparseable / error result envelope.
         """
 
+        deny_flag: list[str] = []
+        if denied_tools:
+            # Map the per-wave deny-list to the claude deny flag. Sorted +
+            # space-joined into one token so the argv is deterministic and
+            # the vendor flag spelling stays inside the adapter.
+            deny_flag = ["--disallowedTools", " ".join(sorted(denied_tools))]
         argv = [
             self.cli_binary,
             "-p",
@@ -410,6 +431,7 @@ class ClaudeAdapter:
             "json",
             "--model",
             model,
+            *deny_flag,
             *extra_args,
         ]
         # Prefix the OS filesystem jail (bubblewrap / seatbelt) when the

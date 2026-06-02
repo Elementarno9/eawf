@@ -74,6 +74,7 @@ from eawf.runtime.runtimes.manifest import RuntimeId
 from eawf.runtime.runtimes.metering import price_spawn_result
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.runtime.runtimes.selector import select_adapter
+from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.runtime.session.store import SessionConflict, start_session
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope
 from eawf.workflow.dispatch.routing import resolve_routing
@@ -657,15 +658,18 @@ async def _spawn_and_dispatch(
        (:func:`_register_executor_session`).
     2. Render the dispatch prompt
        (:func:`eawf.workflow.dispatch.renderer.render_dispatch_envelope`).
-    3. Resolve the runtime adapter instance
+    3. Resolve the per-wave sandbox deny-list
+       (:func:`eawf.runtime.sandbox.policy.resolve_denied_tools`) so the
+       spawned child is launched with those tools disabled.
+    4. Resolve the runtime adapter instance
        (:func:`eawf.runtime.runtimes.selector.select_adapter`).
-    4. ``await`` the adapter's
+    5. ``await`` the adapter's
        :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
-       (jailed argv + scrubbed env -- the safety floor), capturing the
-       child pid via the ``on_spawn`` callback.
-    5. Price the spawn via
+       (jailed argv + scrubbed env + the deny-list -- the safety floor),
+       capturing the child pid via the ``on_spawn`` callback.
+    6. Price the spawn via
        :func:`eawf.runtime.runtimes.metering.price_spawn_result`.
-    6. Drive :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch`
+    7. Drive :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch`
        with the registered session id so the ``agent_end`` report emit
        fires.
 
@@ -704,21 +708,30 @@ async def _spawn_and_dispatch(
     state = load_state(state_path)
     envelope = render_dispatch_envelope(state, wave_id, runtime, repo_root=state_path.parent.parent)
 
-    # 3. Resolve the concrete adapter instance for the runtime id.
+    # 3. Resolve the per-wave sandbox deny-list (wave-scoped + global
+    # policies) so the spawned child is launched with those tools disabled.
+    # The caller passes only the tool names; the adapter owns the vendor
+    # flag spelling.
+    denied = resolve_denied_tools(state.sandbox_policies, wave_id=wave_id)
+    logger.info(f"_spawn_and_dispatch wave={wave_id} denied_tools={len(denied)}")
+
+    # 4. Resolve the concrete adapter instance for the runtime id.
     adapter = select_adapter(runtime)
 
-    # 4. Spawn for real behind the floor (the adapter jails the argv +
-    # scrubs the child env), capturing the child pid via on_spawn.
+    # 5. Spawn for real behind the floor (the adapter jails the argv +
+    # scrubs the child env + applies the deny-list), capturing the child pid
+    # via on_spawn.
     captured_pid: list[int] = []
     spawn_result = await adapter.spawn_session(
         envelope.prompt,
         model=model,
         cwd=str(state_path.parent.parent),
+        denied_tools=sorted(denied),
         on_spawn=captured_pid.append,
     )
     pid = captured_pid[0] if captured_pid else spawn_result.subprocess_pid
 
-    # 5. Price the spawn from its token classes.
+    # 6. Price the spawn from its token classes.
     metered = price_spawn_result(spawn_result)
     tokens = DispatchTokens(
         input_tokens=metered.input_tokens,
@@ -727,7 +740,7 @@ async def _spawn_and_dispatch(
         cache_read_input_tokens=metered.cache_read_input_tokens,
     )
 
-    # 6. Drive the runner with the registered session id so the
+    # 7. Drive the runner with the registered session id so the
     # ``agent_end`` executor-report emit fires (no fallback in this path).
     runtime_triple = _runtime_triple(runtime)
     result: DispatchResult = run_dispatch(

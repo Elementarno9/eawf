@@ -412,6 +412,108 @@ def test_spawn_session_appends_extra_args_verbatim(monkeypatch: pytest.MonkeyPat
     assert argv[-3:] == ["--verbose", "--max-turns", "3"]
 
 
+def test_spawn_session_denied_tools_appends_disallowed_tools_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-empty deny-list adds ``--disallowedTools <space-joined-sorted>``."""
+    proc = _FakeProcess(stdout=_envelope_bytes(), stderr=b"", returncode=0)
+    calls = _patch_factory(monkeypatch, proc)
+
+    import asyncio
+
+    adapter = ClaudeAdapter()
+    # Pass out-of-order to prove the adapter sorts the tools for a
+    # deterministic argv.
+    asyncio.run(adapter.spawn_session("do it", model="opus", denied_tools=["Edit", "Bash"]))
+
+    argv = calls[0]
+    assert "--disallowedTools" in argv
+    # The flag's value is the SORTED tool names joined by a single space.
+    assert argv[argv.index("--disallowedTools") + 1] == "Bash Edit"
+
+
+def test_spawn_session_denied_tools_empty_adds_no_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty deny-list adds no deny flag (byte-equivalent to deny-free)."""
+    proc = _FakeProcess(stdout=_envelope_bytes(), stderr=b"", returncode=0)
+    calls_with = _patch_factory(monkeypatch, proc)
+
+    import asyncio
+
+    adapter = ClaudeAdapter()
+    asyncio.run(adapter.spawn_session("x", model="opus", denied_tools=()))
+    asyncio.run(adapter.spawn_session("x", model="opus"))
+
+    # The explicit empty deny-list and the default are byte-identical, and
+    # neither carries the deny flag.
+    assert "--disallowedTools" not in calls_with[0]
+    assert calls_with[0] == calls_with[1]
+
+
+def test_spawn_session_denied_tools_precede_extra_args(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The deny flag sits ahead of extra_args so the escape hatch stays at the tail."""
+    proc = _FakeProcess(stdout=_envelope_bytes(), stderr=b"", returncode=0)
+    calls = _patch_factory(monkeypatch, proc)
+
+    import asyncio
+
+    adapter = ClaudeAdapter()
+    asyncio.run(
+        adapter.spawn_session(
+            "do it",
+            model="opus",
+            denied_tools=["Bash"],
+            extra_args=("--verbose", "--max-turns", "3"),
+        )
+    )
+    argv = calls[0]
+    # extra_args remain the final three tokens (unchanged escape-hatch contract).
+    assert argv[-3:] == ["--verbose", "--max-turns", "3"]
+    # The deny flag appears before the first extra_args token.
+    assert argv.index("--disallowedTools") < argv.index("--verbose")
+
+
+def test_spawn_session_denied_tools_built_before_jail_wrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The deny flag is part of the argv handed to the jail wrapper.
+
+    The deny flag must be appended BEFORE ``_maybe_jail_argv`` runs so the
+    OS jail confines the full child argv including the deny flag. This test
+    records the argv passed into the jail seam (rather than neutralising it
+    to a passthrough) and asserts the deny flag is present there.
+    """
+    proc = _FakeProcess(stdout=_envelope_bytes(), stderr=b"", returncode=0)
+    calls: list[list[str]] = []
+
+    async def _fake_exec(*argv: str, **_kwargs: object) -> _FakeProcess:
+        calls.append(list(argv))
+        return proc
+
+    seen_by_jail: list[list[str]] = []
+
+    def _recording_jail(argv: list[str], *, runtime: str, cwd: str | None) -> list[str]:
+        # Record the argv the jail seam receives, then prefix a sentinel so
+        # the test can prove the jail actually wrapped this exact argv.
+        seen_by_jail.append(list(argv))
+        return ["JAIL", *argv]
+
+    monkeypatch.setattr(claude_adapter.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", _recording_jail)
+
+    import asyncio
+
+    adapter = ClaudeAdapter()
+    asyncio.run(adapter.spawn_session("x", model="opus", denied_tools=["Bash", "Edit"]))
+
+    # The argv handed to the jail carries the deny flag (built before jail).
+    assert len(seen_by_jail) == 1
+    assert "--disallowedTools" in seen_by_jail[0]
+    assert seen_by_jail[0][seen_by_jail[0].index("--disallowedTools") + 1] == "Bash Edit"
+    # The spawned argv is the jail-wrapped form of that same argv.
+    assert calls[0][0] == "JAIL"
+    assert calls[0][1:] == seen_by_jail[0]
+
+
 def test_spawn_session_invokes_on_spawn_with_pid(monkeypatch: pytest.MonkeyPatch) -> None:
     """on_spawn fires with the child pid before output is collected."""
     proc = _FakeProcess(stdout=_envelope_bytes(), stderr=b"", returncode=0, pid=7777)

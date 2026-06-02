@@ -87,6 +87,7 @@ class _StubAdapter:
         model: str,
         cwd: str | None = None,
         extra_args: Sequence[str] = (),
+        denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
     ) -> SpawnResult:
