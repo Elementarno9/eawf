@@ -1,4 +1,4 @@
- Eä  Feed ❯ repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
+ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Feed    runtime: 1 running    HH:MM UTC
  Live feed -- waiting for events...
 
 

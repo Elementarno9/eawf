@@ -1,4 +1,4 @@
- Eä  Home ❯ workspace ❯ EAWF    runtime: idle    HH:MM UTC
+ Eä  workspace ❯ EAWF ❯ Home    runtime: idle    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
 │ nothing needs you                                                                                                    │

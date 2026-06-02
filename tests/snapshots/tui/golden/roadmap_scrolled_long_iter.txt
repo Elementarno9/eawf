@@ -1,4 +1,4 @@
- Eä  Home ❯ repo ❯ QR ❯ P01    runtime: active    HH:MM UTC
+ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Home    runtime: 1 running    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
 │ > normal  P01-I01-W01 wave 1 title  ready to claim                                                                   │
