@@ -46,6 +46,7 @@ completion bar's plain renderer already does).
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -353,6 +354,33 @@ def _wave_time_budget_minutes(state: State, wave: Wave) -> float | None:
     return minutes if minutes > 0 else None
 
 
+@dataclass(slots=True)
+class _ViewSnapshot:
+    """Captured cursor / scroll / expansion state across an in-place rebuild.
+
+    A daemon-pushed (or mtime-poll) state revision rebuilds the tree in
+    place by clearing every node and repopulating, which would otherwise
+    drop the operator's cursor, scroll position, and the set of branches
+    they had expanded. This snapshot is taken before the clear and replayed
+    after the repopulate so a background refresh never re-collapses an
+    expanded iter or jumps the cursor.
+
+    Attributes:
+        cursor_data_id: The ``data`` payload (phase / iter / wave id) of the
+            row the cursor was on, or ``None`` when the tree was empty or
+            had no cursor (the signal to fall back to the active-phase
+            auto-scroll).
+        scroll_y: The vertical scroll offset (in lines) at snapshot time.
+        expanded_ids: The ``data`` payloads of every branch node the
+            operator had expanded, so they re-expand after the rebuild
+            regardless of their lifecycle status.
+    """
+
+    cursor_data_id: str | None
+    scroll_y: float
+    expanded_ids: set[str] = field(default_factory=set)
+
+
 class RoadmapTree(Tree[str]):
     """Collapsible phase → iter → wave tree with V12 status glyphs.
 
@@ -414,6 +442,12 @@ class RoadmapTree(Tree[str]):
         self._phase_id_width: int = 3
         self._iter_id_width: int = 6
         self._wave_id_width: int = 10
+        # The set of branch data-ids to re-expand during the current
+        # rebuild, seeded from the pre-clear snapshot so a background refresh
+        # keeps the operator's expanded branches open. Empty outside a
+        # rebuild and on the first (snapshot-less) populate, where the
+        # status-default expansion governs instead.
+        self._restore_expanded: set[str] = set()
 
     def on_mount(self) -> None:
         """Seed from the app's reactive state and watch for revisions.
@@ -520,9 +554,19 @@ class RoadmapTree(Tree[str]):
         unreadable workspace renders an empty tree rather than
         crashing.
 
+        The rebuild is in place (the node tree is cleared and
+        repopulated), so it snapshots the cursor / scroll / expanded-set
+        before clearing and replays them after repopulating: a
+        daemon-pushed refresh keeps the operator's cursor, scroll
+        position, and expanded branches instead of silently re-collapsing
+        them. The active-phase auto-scroll is the fallback only when there
+        was no prior cursor (a first populate or a refresh of an empty
+        tree).
+
         Args:
             state: The state to render, or ``None`` to clear.
         """
+        snapshot = self._snapshot_view()
         self.root.remove_children()
         if state is None:
             self._phase_id_width = 0
@@ -539,12 +583,123 @@ class RoadmapTree(Tree[str]):
         self._phase_id_width = max((len(pid) for pid in state.phases), default=3)
         self._iter_id_width = max((len(iid) for iid in state.iters), default=6)
         self._wave_id_width = max((len(wid) for wid in state.waves), default=10)
-        for row in build_roadmap_rows(state):
-            phase = state.phases.get(row.id)
-            if phase is None:
-                continue
-            self._add_phase(state, phase)
-        self._scroll_to_active_phase(state)
+        self._restore_expanded = snapshot.expanded_ids
+        try:
+            for row in build_roadmap_rows(state):
+                phase = state.phases.get(row.id)
+                if phase is None:
+                    continue
+                self._add_phase(state, phase)
+        finally:
+            self._restore_expanded = set()
+        # Textual's Tree recomputes ``cursor_line`` after the add/remove
+        # batch flushes, clobbering a cursor move issued mid-rebuild, so the
+        # cursor + scroll restore is deferred to after the refresh settles.
+        # The expanded-set replay already happened synchronously above (via
+        # ``_expand_for``), so only the cursor / scroll wait.
+        self.call_after_refresh(self._restore_view, state, snapshot)
+
+    def _snapshot_view(self) -> _ViewSnapshot:
+        """Capture the cursor / scroll / expanded-set before an in-place clear.
+
+        Walks the current node tree (before it is cleared) and records the
+        cursor row's data-id, the vertical scroll offset, and every expanded
+        branch's data-id. A tree with no children yields an empty snapshot
+        whose ``None`` cursor signals the active-phase fallback on the next
+        populate.
+
+        Returns:
+            The :class:`_ViewSnapshot` to replay after the repopulate.
+        """
+        cursor = self.cursor_node
+        cursor_data_id = cursor.data if cursor is not None else None
+        expanded: set[str] = set()
+
+        def walk(node: TreeNode[str]) -> None:
+            for child in node.children:
+                if child.allow_expand and child.is_expanded and child.data is not None:
+                    expanded.add(child.data)
+                walk(child)
+
+        walk(self.root)
+        return _ViewSnapshot(
+            cursor_data_id=cursor_data_id,
+            scroll_y=self.scroll_offset.y,
+            expanded_ids=expanded,
+        )
+
+    def _restore_view(self, state: State, snapshot: _ViewSnapshot) -> None:
+        """Replay the pre-clear cursor / scroll after a repopulate.
+
+        Restores the cursor to the row whose data-id matches the snapshot
+        (so a background refresh keeps the operator's selection); when that
+        id is gone (the wave / iter it pointed at was removed) or there was
+        no prior cursor, falls back to the active-phase auto-scroll. The
+        expanded set is replayed during the populate itself (see
+        :meth:`_expand_for`), so this only re-pins the cursor + scroll.
+
+        Args:
+            state: The freshly rendered state (its ``current.phase_id``
+                drives the active-phase fallback).
+            snapshot: The :class:`_ViewSnapshot` captured before the clear.
+        """
+        if snapshot.cursor_data_id is None:
+            self._scroll_to_active_phase(state)
+            return
+        node = self._find_node(snapshot.cursor_data_id)
+        if node is None:
+            self._scroll_to_active_phase(state)
+            return
+        self.move_cursor(node)
+        # ``move_cursor`` scrolls the cursor into view; re-pin the prior
+        # scroll so a refresh keeps the exact viewport the operator had.
+        self.scroll_to(y=snapshot.scroll_y, animate=False)
+
+    def _find_node(self, data_id: str) -> TreeNode[str] | None:
+        """Return the first node whose ``data`` payload equals *data_id*.
+
+        Args:
+            data_id: The phase / iter / wave id to resolve.
+
+        Returns:
+            The matching node, or ``None`` when no node carries the id (it
+            was removed since the snapshot).
+        """
+        found: TreeNode[str] | None = None
+
+        def walk(node: TreeNode[str]) -> None:
+            nonlocal found
+            for child in node.children:
+                if found is not None:
+                    return
+                if child.data == data_id:
+                    found = child
+                    return
+                walk(child)
+
+        walk(self.root)
+        return found
+
+    def _expand_for(self, data_id: str, *, status_default: bool) -> bool:
+        """Return whether a branch node should mount expanded.
+
+        During an in-place rebuild a branch re-expands when the operator had
+        it expanded in the pre-clear snapshot, regardless of its lifecycle
+        status, so a background refresh never re-collapses a branch the
+        operator opened. On the first (snapshot-less) populate the
+        status-default governs (active phase / iter auto-expand).
+
+        Args:
+            data_id: The branch's data payload (phase / iter id).
+            status_default: The status-driven default (``True`` for an
+                ACTIVE phase / iter).
+
+        Returns:
+            ``True`` to mount the node expanded.
+        """
+        if data_id in self._restore_expanded:
+            return True
+        return status_default
 
     def _scroll_to_active_phase(self, state: State) -> None:
         """Move the cursor to the current phase's node so it starts in view.
@@ -590,7 +745,11 @@ class RoadmapTree(Tree[str]):
             budget=self._body_budget(depth=0),
             glyph_colour=_status_colour(phase.status),
         )
-        node = self.root.add(label, data=phase.id, expand=phase.status is PhaseStatus.ACTIVE)
+        node = self.root.add(
+            label,
+            data=phase.id,
+            expand=self._expand_for(phase.id, status_default=phase.status is PhaseStatus.ACTIVE),
+        )
         for iter_id in phase.iter_ids:
             iter_obj = state.iters.get(iter_id)
             if iter_obj is not None:
@@ -622,7 +781,9 @@ class RoadmapTree(Tree[str]):
         node = parent.add(
             label,
             data=iter_obj.id,
-            expand=iter_obj.status is IterStatus.ACTIVE,
+            expand=self._expand_for(
+                iter_obj.id, status_default=iter_obj.status is IterStatus.ACTIVE
+            ),
         )
         for wave_id in iter_obj.wave_ids:
             wave = state.waves.get(wave_id)

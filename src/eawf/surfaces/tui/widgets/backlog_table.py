@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from rich.text import Text
 from textual.binding import Binding, BindingType
 from textual.message import Message
 from textual.reactive import reactive
@@ -68,6 +69,19 @@ _CLOSED_STATUSES: frozenset[BacklogStatus] = frozenset({BacklogStatus.CLOSED})
 #: width and the title takes the remaining budget.
 _COLUMNS: tuple[str, ...] = ("id", "priority", "status", "title")
 
+#: Display label per column key. The ``priority`` column's values are the
+#: 2-char ``P0``..``P3`` codes, so the 8-char ``"priority"`` header wasted
+#: horizontal space (the header drove the column's fixed width); the short
+#: ``"pri"`` label (width 3) keeps the meaning while reclaiming the cells.
+#: The column *key* stays ``"priority"`` so the sort + cell lookups are
+#: unchanged. Columns absent from this map render under their key verbatim.
+_COLUMN_LABELS: dict[str, str] = {"priority": "pri"}
+
+#: Glyph appended to the active sort column's header so the operator can see
+#: (and, via the ``s`` key, change) which key the rows are ordered by. ``v``
+#: reads as a downward marker and is ASCII-stable for the ``--plain`` path.
+_SORT_GLYPH: str = "v"
+
 #: The non-title columns whose rendered width is subtracted from the
 #: content area to size the ``title`` budget. Kept in sync with
 #: :data:`_COLUMNS` (every column except the trailing free-text one).
@@ -86,6 +100,30 @@ _ELLIPSIS: str = "…"
 def _priority_rank(priority: BacklogPriority) -> int:
     """Return the numeric rank for *priority* (``P0`` lowest = first)."""
     return _PRIORITY_RANK.get(priority, len(_PRIORITY_RANK))
+
+
+def column_label(column_key: str, sort_key: str) -> str:
+    """Return the rendered header label for *column_key* under *sort_key*.
+
+    The label is the column's display name (``"pri"`` for the ``priority``
+    key, the key itself otherwise), with a trailing space + :data:`_SORT_GLYPH`
+    appended when the column is the one the rows are currently sorted by: the
+    discoverability affordance that makes the (previously invisible) sort
+    state visible and signals the ``s`` cycle key.
+
+    Args:
+        column_key: The column's stable key (one of :data:`_COLUMNS`).
+        sort_key: The active sort key (one of :data:`SORT_KEYS`); the sort
+            keys share the column keys, so a column is the active one when
+            its key equals *sort_key*.
+
+    Returns:
+        The header label, glyph-suffixed only on the active sort column.
+    """
+    base = _COLUMN_LABELS.get(column_key, column_key)
+    if column_key == sort_key:
+        return f"{base} {_SORT_GLYPH}"
+    return base
 
 
 def _truncate(text: str, max_width: int) -> str:
@@ -229,24 +267,34 @@ def filter_items(items: list[BacklogItem], needle: str) -> list[BacklogItem]:
     return [it for it in items if trimmed in it.id.lower() or trimmed in it.title.lower()]
 
 
-def _fixed_columns_width(items: list[BacklogItem]) -> int:
+def _fixed_columns_width(items: list[BacklogItem], sort_key: str = SORT_KEYS[0]) -> int:
     """Return the combined text width of the id / priority / status columns.
 
-    Each fixed column auto-sizes to the wider of its header label and its
-    widest cell value across *items*. Summing these gives the width the
-    three fixed columns claim, which is subtracted from the content area to
-    size the trailing ``title`` column.
+    Each fixed column auto-sizes to the wider of its **rendered** header
+    label and its widest cell value across *items*. The header label is the
+    short display name (``"pri"`` for the priority key) plus the sort glyph
+    on the active sort column, so the width tracks what the header actually
+    renders (the short ``"pri"`` reclaims the space the 8-char ``"priority"``
+    label used to waste). Summing the three gives the width the fixed columns
+    claim, subtracted from the content area to size the trailing ``title``
+    column.
 
     Args:
         items: The rows whose id / priority / status values drive the
             per-column max (empty falls back to the header-label widths).
+        sort_key: The active sort key, so the glyph-suffixed active column's
+            header width is counted.
 
     Returns:
         The total text width claimed by the fixed columns.
     """
-    id_width = max([len("id"), *(len(it.id) for it in items)])
-    priority_width = max([len("priority"), *(len(it.priority.value) for it in items)])
-    status_width = max([len("status"), *(len(it.status.value) for it in items)])
+    id_width = max([len(column_label("id", sort_key)), *(len(it.id) for it in items)])
+    priority_width = max(
+        [len(column_label("priority", sort_key)), *(len(it.priority.value) for it in items)]
+    )
+    status_width = max(
+        [len(column_label("status", sort_key)), *(len(it.status.value) for it in items)]
+    )
     return id_width + priority_width + status_width
 
 
@@ -284,6 +332,7 @@ class BacklogTable(DataTable[str]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("c", "toggle_show_closed", "Show closed", show=False),
         Binding("x", "clear_filter", "Clear filter", show=False),
+        Binding("s", "cycle_sort", "Sort", show=False),
     ]
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -337,7 +386,7 @@ class BacklogTable(DataTable[str]):
     def on_mount(self) -> None:
         """Add columns, seed from app state, and watch for revisions."""
         for column in _COLUMNS:
-            self.add_column(column, key=column)
+            self.add_column(column_label(column, self.sort_key), key=column)
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
@@ -354,8 +403,25 @@ class BacklogTable(DataTable[str]):
         self._rebuild()
 
     def watch_sort_key(self) -> None:
-        """Rebuild rows when the sort key changes."""
+        """Move the header sort glyph + rebuild rows when the sort key changes."""
+        self._refresh_headers()
         self._rebuild()
+
+    def _refresh_headers(self) -> None:
+        """Re-label each column header so the sort glyph marks the active key.
+
+        Mutates each :class:`~textual.widgets._data_table.Column`'s rendered
+        ``label`` to :func:`column_label` for the current sort key, then
+        invalidates the table's render caches so the header redraws with the
+        glyph on the now-active column (and clears it from the prior one). A
+        no-op before the columns are added (pre-mount).
+        """
+        if not self.columns:
+            return
+        for column in self.columns.values():
+            column.label = Text(column_label(str(column.key.value), self.sort_key))
+        self._clear_caches()
+        self.refresh()
 
     def watch_filter_text(self) -> None:
         """Rebuild rows when the filter changes."""
@@ -368,6 +434,16 @@ class BacklogTable(DataTable[str]):
     def action_toggle_show_closed(self) -> None:
         """Flip the :attr:`show_closed` toggle (bound to the ``c`` key)."""
         self.show_closed = not self.show_closed
+
+    def action_cycle_sort(self) -> None:
+        """Advance the sort key to the next member (bound to the ``s`` key).
+
+        The table-local discoverability affordance: ``s`` cycles
+        priority -> id -> status -> priority, and the header glyph
+        (:data:`_SORT_GLYPH`) moves onto the newly active column so the
+        operator can both see and change the sort without the palette.
+        """
+        self.cycle_sort()
 
     def action_clear_filter(self) -> None:
         """Clear the active substring filter (bound to the ``x`` key).
@@ -484,7 +560,7 @@ class BacklogTable(DataTable[str]):
         content_width = self.content_size.width
         if content_width <= 0:
             return _TITLE_MIN_WIDTH
-        fixed_width = _fixed_columns_width(items)
+        fixed_width = _fixed_columns_width(items, self.sort_key)
         return title_budget(
             content_width=content_width,
             fixed_columns_width=fixed_width,
@@ -507,6 +583,7 @@ class BacklogTable(DataTable[str]):
 __all__ = [
     "SORT_KEYS",
     "BacklogTable",
+    "column_label",
     "filter_items",
     "hide_closed",
     "next_sort_key",

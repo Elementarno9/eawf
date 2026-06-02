@@ -268,6 +268,20 @@ def _node_by_data(tree: RoadmapTree, data: str) -> object:
     return found[0]
 
 
+def _find_data(tree: RoadmapTree, data: str) -> object | None:
+    """Return the first node whose ``data`` equals *data*, or ``None`` if absent."""
+    found: list[object] = []
+
+    def walk(node: object) -> None:
+        for child in node.children:  # type: ignore[attr-defined]
+            if child.data == data:  # type: ignore[attr-defined]
+                found.append(child)
+            walk(child)
+
+    walk(tree.root)
+    return found[0] if found else None
+
+
 # --------------------------------------------------------------------------
 # Glyph maps — V12 schema completeness (pure)
 # --------------------------------------------------------------------------
@@ -1373,5 +1387,201 @@ def test_mixed_bucket_size_bars_align_in_column() -> None:
             # the XL row's glyph run one cell left.
             assert len(wave_m) == len(wave_xl)
             assert _bar_glyph_start(wave_m) == _bar_glyph_start(wave_xl)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# In-place refresh preserves cursor / scroll / expanded-set (W09 fix a)
+# --------------------------------------------------------------------------
+
+
+def _multi_phase_state(*, active_phase: str = "P03") -> State:
+    """Return a 3-phase state (P01/P02 closed, P03 active), each with waves.
+
+    Enough phases + waves that the tree outgrows a short pane (so a scroll
+    offset is meaningful) and the active-phase auto-scroll has somewhere to
+    move. ``current.phase_id`` points at *active_phase*.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    phases: dict[str, object] = {}
+    iters: dict[str, object] = {}
+    waves: dict[str, object] = {}
+    for n in (1, 2, 3):
+        pid = f"P0{n}"
+        iid = f"{pid}-I01"
+        status = "active" if pid == active_phase else "closed"
+        wave_ids = [f"{iid}-W{w:02d}" for w in range(1, 7)]
+        phases[pid] = {
+            "audit_id": None,
+            "closed_at": None,
+            "id": pid,
+            "iter_ids": [iid],
+            "opened_at": "2026-05-08T00:00:00Z",
+            "outcome_ids": [],
+            "scope_id": "QR",
+            "status": status,
+            "title": f"Phase {n}",
+        }
+        iters[iid] = {
+            "audit_id": None,
+            "closed_at": None,
+            "estimate_id": None,
+            "id": iid,
+            "opened_at": "2026-05-08T00:00:00Z",
+            "phase_id": pid,
+            "status": status,
+            "title": f"Iter {n}",
+            "wave_ids": wave_ids,
+        }
+        for w, wid in enumerate(wave_ids, start=1):
+            waves[wid] = _make_wave(wid, iid, "closed", title=f"wave {n}.{w}")
+    payload["phases"] = phases
+    payload["iters"] = iters
+    payload["waves"] = waves
+    payload["current"]["phase_id"] = active_phase
+    payload["current"]["iter_id"] = f"{active_phase}-I01"
+    payload["current"]["active_wave_ids"] = []
+    return State.model_validate(payload)
+
+
+def test_refresh_preserves_expanded_cursor_and_scroll() -> None:
+    """A daemon-push refresh keeps the operator's expanded set, cursor, scroll."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _multi_phase_state()
+            await pilot.pause()
+            tree.focus()
+            # Operator expands a NON-active phase + its iter (status default
+            # would leave both collapsed) and lands the cursor on the iter.
+            phase1 = _node_by_data(tree, "P01")
+            phase1.expand()  # type: ignore[attr-defined]
+            await pilot.pause()
+            iter1 = _node_by_data(tree, "P01-I01")
+            iter1.expand()  # type: ignore[attr-defined]
+            tree.move_cursor(iter1)  # type: ignore[arg-type]
+            await pilot.pause()
+            tree.scroll_to(y=2, animate=False)
+            await pilot.pause()
+            saved_scroll = tree.scroll_offset.y
+            assert tree.cursor_node is not None and tree.cursor_node.data == "P01-I01"
+            assert phase1.is_expanded and iter1.is_expanded  # type: ignore[attr-defined]
+
+            # Daemon push: same logical state, fresh model object -> _rebuild.
+            tree.state = _multi_phase_state()
+            await pilot.pause()
+
+            # Cursor, expanded set, and scroll all survive the rebuild.
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P01-I01"
+            assert _node_by_data(tree, "P01").is_expanded  # type: ignore[attr-defined]
+            assert _node_by_data(tree, "P01-I01").is_expanded  # type: ignore[attr-defined]
+            assert tree.scroll_offset.y == saved_scroll
+
+    asyncio.run(body())
+
+
+def test_refresh_does_not_recollapse_user_expanded_branch() -> None:
+    """A branch the operator expanded stays open after a background refresh.
+
+    Regression for the force-collapse defect: ``_add_phase`` / ``_add_iter``
+    mounted every non-active branch collapsed, so a daemon push silently
+    re-collapsed an iter the operator had opened.
+    """
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _multi_phase_state()
+            await pilot.pause()
+            # P02 is CLOSED -> status default is collapsed. Expand it.
+            phase2 = _node_by_data(tree, "P02")
+            assert not phase2.is_expanded  # type: ignore[attr-defined]
+            phase2.expand()  # type: ignore[attr-defined]
+            await pilot.pause()
+            assert phase2.is_expanded  # type: ignore[attr-defined]
+            # Refresh: the expanded P02 must NOT snap back to collapsed.
+            tree.state = _multi_phase_state()
+            await pilot.pause()
+            assert _node_by_data(tree, "P02").is_expanded  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_refresh_falls_back_when_cursor_node_disappears() -> None:
+    """When the cursor's node is gone after a refresh, the active phase wins."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _multi_phase_state()
+            await pilot.pause()
+            tree.focus()
+            # Expand + park the cursor on a wave that the next state drops.
+            phase1 = _node_by_data(tree, "P01")
+            phase1.expand()  # type: ignore[attr-defined]
+            await pilot.pause()
+            iter1 = _node_by_data(tree, "P01-I01")
+            iter1.expand()  # type: ignore[attr-defined]
+            await pilot.pause()
+            doomed = _node_by_data(tree, "P01-I01-W06")
+            tree.move_cursor(doomed)  # type: ignore[arg-type]
+            await pilot.pause()
+            assert tree.cursor_node is not None and tree.cursor_node.data == "P01-I01-W06"
+
+            # Refresh with a state whose P01 iter has fewer waves -> W06 gone.
+            shrunk = _multi_phase_state()
+            shrunk.iters["P01-I01"].wave_ids = ["P01-I01-W01", "P01-I01-W02"]
+            tree.state = shrunk
+            await pilot.pause()
+
+            # W06 is gone, so the cursor falls back to the active phase node.
+            assert _find_data(tree, "P01-I01-W06") is None
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P03"  # active-phase fallback
+
+    asyncio.run(body())
+
+
+def test_first_populate_scrolls_to_active_phase() -> None:
+    """With no prior cursor the active-phase auto-scroll still fires (fallback)."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            # First populate: snapshot has no cursor -> active-phase fallback.
+            tree.state = _multi_phase_state(active_phase="P03")
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P03"  # cursor on the active phase
+
+    asyncio.run(body())
+
+
+def test_refresh_from_empty_uses_active_phase_fallback() -> None:
+    """A refresh of a previously-empty tree takes the active-phase fallback."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = None  # empty tree -> snapshot cursor is None
+            await pilot.pause()
+            assert _labels(tree) == []
+            tree.state = _multi_phase_state(active_phase="P02")
+            await pilot.pause()
+            assert tree.cursor_node is not None
+            assert tree.cursor_node.data == "P02"  # fallback to the active phase
 
     asyncio.run(body())

@@ -17,12 +17,15 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.models import BacklogItem, State
 from eawf.surfaces.tui.widgets.backlog_table import (
+    _COLUMN_LABELS,
     _ELLIPSIS,
+    _SORT_GLYPH,
     _TITLE_MIN_WIDTH,
     SORT_KEYS,
     BacklogTable,
     _fixed_columns_width,
     _truncate,
+    column_label,
     filter_items,
     next_sort_key,
     sort_items,
@@ -358,15 +361,28 @@ def test_title_budget_zero_padding() -> None:
 
 
 def test_fixed_columns_width_uses_header_floor_when_empty() -> None:
-    # With no rows the fixed columns size to their header labels.
-    assert _fixed_columns_width([]) == len("id") + len("priority") + len("status")
+    # With no rows the fixed columns size to their rendered header labels. The
+    # priority label is the short "pri" (W09 fix c), and the default sort
+    # (priority) adds the sort glyph to that column ("pri v").
+    expected = len("id") + len("pri v") + len("status")
+    assert _fixed_columns_width([]) == expected
 
 
 def test_fixed_columns_width_grows_with_widest_cell() -> None:
     items = [_item("BL-LONG-0001", "P0", "in_progress", "t")]
     width = _fixed_columns_width(items)
-    # id widens to the 12-char id; status widens to "in_progress" (11).
-    assert width == len("BL-LONG-0001") + len("priority") + len("in_progress")
+    # id widens to the 12-char id; status widens to "in_progress" (11); the
+    # priority column floors at the glyph-suffixed "pri v" header (5).
+    assert width == len("BL-LONG-0001") + len("pri v") + len("in_progress")
+
+
+def test_fixed_columns_width_priority_label_short_when_not_sorted() -> None:
+    """Sorting by a non-priority key drops the glyph -> the bare ``pri`` floor."""
+    # With id as the active sort, the id column carries the glyph ("id v") and
+    # the priority column floors at the bare short label ("pri", width 3) --
+    # the reclaimed space the 8-char "priority" header used to waste.
+    width = _fixed_columns_width([], "id")
+    assert width == len("id v") + len("pri") + len("status")
 
 
 # --------------------------------------------------------------------------
@@ -430,5 +446,130 @@ def test_table_resize_narrower_re_truncates_title() -> None:
             assert narrow_budget < wide_budget
             assert len(narrow) < len(wide)
             assert narrow.endswith(_ELLIPSIS)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# column_label - short priority label + active-sort glyph (W09 b + c)
+# --------------------------------------------------------------------------
+
+
+def test_column_label_priority_uses_short_pri_label() -> None:
+    """The priority column's display label is the short ``pri`` (fix c)."""
+    assert _COLUMN_LABELS["priority"] == "pri"
+    # Sorted by a different key -> bare short label, no glyph.
+    assert column_label("priority", "id") == "pri"
+
+
+def test_column_label_active_column_carries_sort_glyph() -> None:
+    """The active sort column's header gets the ``_SORT_GLYPH`` suffix."""
+    assert column_label("priority", "priority") == f"pri {_SORT_GLYPH}"
+    assert column_label("id", "id") == f"id {_SORT_GLYPH}"
+    assert column_label("status", "status") == f"status {_SORT_GLYPH}"
+
+
+def test_column_label_inactive_column_has_no_glyph() -> None:
+    """A column that is not the active sort renders without the glyph."""
+    assert column_label("id", "priority") == "id"
+    assert column_label("status", "priority") == "status"
+    assert _SORT_GLYPH not in column_label("status", "id")
+
+
+def _header_label(table: BacklogTable, column_key: str) -> str:
+    """Return the rendered header text for *column_key* (the ``Column.label``)."""
+    for column in table.columns.values():
+        if str(column.key.value) == column_key:
+            return str(column.label)
+    raise AssertionError(f"no column {column_key!r}")
+
+
+def test_table_priority_header_renders_short_label() -> None:
+    """The mounted table's priority header shows ``pri`` (width 3), not ``priority``.
+
+    Fix (c): the 8-char ``priority`` header drove the priority column's fixed
+    width even though its values are the 2-char ``P0``..``P3`` codes. The
+    short ``pri`` label reclaims that space; the column *key* stays
+    ``priority`` so the sort + cell lookups are unchanged.
+    """
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(_items())
+            # Sort off priority so the header carries no glyph -> bare "pri".
+            table.sort_key = "id"
+            await pilot.pause()
+            header = _header_label(table, "priority")
+            assert header == "pri"  # short label, width 3
+            assert "priority" not in header
+            # The column key is unchanged, so sorting by priority still works.
+            table.sort_key = "priority"
+            await pilot.pause()
+            assert [it.id for it in table.visible_items()] == ["BL-001", "BL-003"]
+
+    asyncio.run(body())
+
+
+def test_table_active_sort_header_glyph_on_right_column() -> None:
+    """The active sort renders the header glyph on the sorted column, and only it."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(_items())
+            await pilot.pause()
+            # Default sort is priority -> the glyph sits on the priority header.
+            assert _header_label(table, "priority") == f"pri {_SORT_GLYPH}"
+            assert _SORT_GLYPH not in _header_label(table, "id")
+            assert _SORT_GLYPH not in _header_label(table, "status")
+
+    asyncio.run(body())
+
+
+def test_table_s_key_cycles_sort_through_all_keys() -> None:
+    """The bound ``s`` key advances the sort key through the full cycle + wraps."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(_items())
+            await pilot.pause()
+            table.focus()
+            assert table.sort_key == SORT_KEYS[0]
+            seen = [table.sort_key]
+            for _ in range(len(SORT_KEYS)):
+                await pilot.press("s")
+                await pilot.pause()
+                seen.append(table.sort_key)
+            # Pressing N times steps through every key and wraps to the start.
+            assert seen == [*SORT_KEYS, SORT_KEYS[0]]
+
+    asyncio.run(body())
+
+
+def test_table_s_key_moves_header_glyph_to_new_column() -> None:
+    """Cycling the sort with ``s`` moves the header glyph onto the new column."""
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(_items())
+            await pilot.pause()
+            table.focus()
+            # priority -> id: the glyph leaves priority and lands on id.
+            await pilot.press("s")
+            await pilot.pause()
+            assert table.sort_key == "id"
+            assert _header_label(table, "id") == f"id {_SORT_GLYPH}"
+            assert _SORT_GLYPH not in _header_label(table, "priority")
 
     asyncio.run(body())

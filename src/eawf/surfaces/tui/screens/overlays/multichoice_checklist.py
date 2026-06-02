@@ -109,8 +109,10 @@ class MultichoiceChecklist(Static):
         Args:
             choices: The key's declared choices, in render order.
             selected: The currently-selected subset (seeds the ``[X]`` marks).
-            prefix: Leading pad reused from :meth:`ConfigModal._meta_line`'s
-                key column so each line aligns under the static value cell.
+            prefix: The :meth:`ConfigModal._meta_line` meta row (field key +
+                ``[type]`` pad). Rendered once as the checklist header; its
+                width sets the indent each option line aligns under, so the
+                marks land in the static value column.
             **kwargs: Forwarded to :class:`~textual.widgets.Static` (e.g.
                 ``id=`` / ``classes=``).
         """
@@ -129,12 +131,21 @@ class MultichoiceChecklist(Static):
         return [choice for choice in self._choices if choice in self._selected]
 
     def _repaint(self) -> None:
-        """Repaint every checklist line (cursor caret + ``[X]`` / ``[ ]`` mark)."""
-        lines: list[str] = []
+        """Repaint the meta header + every checklist line.
+
+        The ``_prefix`` meta line (field key + ``[type]`` pad, reused from the
+        config modal) renders **once** as a header row above the checklist,
+        not on every option line. Repeating it per row turned a 7-choice
+        field into seven ``ui.dashboard_panes [multichoice]`` echoes. Each
+        option line (caret + ``[X]`` / ``[ ]`` + choice) is indented by the
+        prefix width so it aligns under the value column the header sets up.
+        """
+        indent = " " * len(self._prefix)
+        lines: list[str] = [self._prefix.rstrip()]
         for index, choice in enumerate(self._choices):
             caret = ">" if index == self.line_index else " "
             mark = "X" if choice in self._selected else " "
-            lines.append(f"{self._prefix}{caret} [{mark}] {choice}")
+            lines.append(f"{indent}{caret} [{mark}] {choice}")
         self.update("\n".join(lines))
 
     def watch_line_index(self) -> None:
