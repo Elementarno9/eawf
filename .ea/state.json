@@ -2298,6 +2298,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-02-A46-P29-i03-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I03/ART-A46-P29-i03"
     },
+    "ART-A47-P29-i04": {
+      "created_at": "2026-06-02T16:01:38.277719Z",
+      "id": "ART-A47-P29-i04",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "c44870a2e825fb64deb54343282f81e6ad4aec27a814f86f84ed4e57c239ea21",
+      "size_bytes": 8590,
+      "uri": "repo:.ea/artifacts/audits/2026-06-02-A47-P29-i04-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I04/ART-A47-P29-i04"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -3097,6 +3107,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A46-P29-i03",
       "scope_id": "P29-I03",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A47-P29-i04": {
+      "check_results": [],
+      "created_at": "2026-06-02T16:01:38.860521Z",
+      "id": "A47-P29-i04",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A47-P29-i04",
+      "scope_id": "P29-I04",
       "status": "complete",
       "verdict": "minor"
     },
@@ -4280,16 +4301,16 @@
       "title": "Exclude or refactor oversized surfaces/tui/app.py for EAWF010"
     },
     "B080": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:55.018737Z",
+      "commit": "5bbdbffa",
       "created_at": "2026-06-02T01:52:00.701314Z",
       "description": "W02 denied_tools seam: claude maps to --disallowedTools; codex (allowlist only) + opencode (permission frontmatter) have no per-call deny flag, so denied_tools is logged but not enforced at the CLI for those runtimes. FS-jail floor still confines writes. Decide per-runtime deny mechanism or document accepted gap.",
       "id": "B080",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "opencode auth lane registered in shared jail.py + env_scrub.py; child FS-jailed (no unjailed degrade)",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "codex/opencode have no per-call CLI tool-deny flag for denied_tools"
     },
     "B081": {
@@ -4306,16 +4327,16 @@
       "title": "codex/opencode lack per-call CLI tool-deny flag for denied_tools"
     },
     "B082": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:55.598370Z",
+      "commit": "3e38b1d5",
       "created_at": "2026-06-02T02:27:33.994968Z",
       "description": "W08 built convene_cross_vendor_jury (importable, tested) but did not wire it into the daemon close gate (state.py/_enforce_wave_verdict_gate uses W07 single-auditor). Wiring spawns 3 live vendors per high-risk close, so gate on B080 (codex/opencode floor) + profile.verify.enforce before activating. Map jury NEEDS_USER->operator pause, FAIL->close reject.",
       "id": "B082",
       "intent": null,
       "priority": "P1",
-      "resolution": null,
+      "resolution": "convene_cross_vendor_jury wired into _enforce_wave_close_gate behind verify.cross_vendor_jury; degrade-safe",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Wire cross-vendor jury (W08) into the close gate for high-risk waves"
     },
     "B083": {
@@ -4332,68 +4353,68 @@
       "title": "Extract-module split of surfaces/tui/app.py (EAWF010 over-cap)"
     },
     "B084": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:56.184348Z",
+      "commit": "5ad85e1f",
       "created_at": "2026-06-02T13:51:03.184161Z",
       "description": "produce_wave_verdict computes a memory=False contract (verdict.py:653) and logs it (verdict.py:682) but never threads it to the spawn; SpawnFn=Callable[[str],...] (llm_assist.py:68) takes prompt only. W07 auditor path is wired+enforcing, so the dropped override is a fresh-context-leak risk. Thread memory=False to the spawn or drop the dead override and reword the criterion. No test asserts contract.memory.",
       "id": "B084",
       "intent": null,
       "priority": "P1",
-      "resolution": null,
+      "resolution": "dead memory=False override removed; fresh-context documented as structural (fresh session + diff-only prompt)",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Thread fresh-context memory=False into the auditor verdict spawn"
     },
     "B085": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:56.763402Z",
+      "commit": "73af873c",
       "created_at": "2026-06-02T13:51:14.833125Z",
       "description": "escalate_to_rung3/convene_entailment_jury (rung3.py:393,298) and run_live_rounds (live_rounds.py:127) have zero production callers (only __init__ re-exports + tests). The EviBound resolver never chains a rung-2 ESCALATE into rung-3. W09 (==RO-15, the designated wiring wave) built the modules but left them idle. Criterion C6 unmet. Chain rung-2 ESCALATE->rung3 and wire run_live_rounds to a Level3+ round runner.",
       "id": "B085",
       "intent": null,
       "priority": "P1",
-      "resolution": null,
+      "resolution": "rung-2->3 chain + live-round dispatch assemblers built + tested (modules no longer idle); prod entry-point wiring tracked as B091",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Wire EviBound rung-3 escalation and live-rounds into prod paths"
     },
     "B086": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:57.350509Z",
+      "commit": "b0e5f643",
       "created_at": "2026-06-02T13:51:15.470043Z",
       "description": "routing.py emits claude-only (_DEFAULT_RUNTIME=claude, routing.py:129); convene_cross_vendor_jury has zero src/ callers. codex+opencode adapters conform+tested but are never convened on any production path -- 'cross-vendor' is built-but-idle. Make routing/selection resolve codex/opencode runtime+model for the juror spawn behind the I03 floor.",
       "id": "B086",
       "intent": null,
       "priority": "P1",
-      "resolution": null,
+      "resolution": "per-vendor model resolution + jury convening make codex/opencode reachable as jurors on the close-gate path",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Make cross-vendor spawn reachable on the prod dispatch path"
     },
     "B087": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:57.949980Z",
+      "commit": "b0e5f643",
       "created_at": "2026-06-02T13:51:16.095177Z",
       "description": "lookup_pricing misses codex/opencode model ids (e.g. anthropic/claude-x, gpt-5.5) -> price_spawn_result returns priced=False,cost=0 (metering.py:205-220). _resolve_spawn_model hands codex a claude-opus id (wrong vendor model). codex pricing row is a self-declared placeholder (pricing.py:224-231). Resolve real or explicitly-flagged vendor rows and hand each runtime its own model id.",
       "id": "B087",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "lookup_pricing resolves codex+opencode model ids; juror SpawnResults price honestly",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Resolve vendor-model pricing for codex and opencode spawns"
     },
     "B088": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:58.542862Z",
+      "commit": "a6a057c6",
       "created_at": "2026-06-02T13:51:25.560098Z",
       "description": "agent.dispatch spawn=True tests stub the adapter (test_live_spawn_dispatch.py:312 _StubAdapter); real codex/opencode adapters are only unit-tested with _maybe_jail_argv and _build_child_env patched away. No integration test proves a codex/opencode SpawnResult flows through _spawn_and_dispatch -> metering -> report. opencode unjailed-fallback branch (opencode/adapter.py:279) is also untested at the adapter layer.",
       "id": "B088",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "daemon-level integ test drives codex+opencode through the real adapter parse+jail+metering path",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Add daemon-level integration test for cross-vendor live spawn"
     },
     "B089": {
@@ -4410,16 +4431,16 @@
       "title": "Record codex model_reasoning_effort key probe as a spike brief"
     },
     "B090": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-02T16:01:59.131561Z",
+      "commit": "5ad85e1f",
       "created_at": "2026-06-02T13:51:26.795876Z",
       "description": "agent_watch.py:486 uses WATCH_WAITING.format(target=...) against rule 9 (f-strings only). Reused module-level template with precedent in scrub.py, passed pre-commit; informational. Convert to an f-string.",
       "id": "B090",
       "intent": null,
       "priority": "P3",
-      "resolution": null,
+      "resolution": "agent_watch WATCH_WAITING .format() converted to f-string",
       "scope_id": "EAWF",
-      "status": "open",
+      "status": "closed",
       "title": "Replace agent_watch .format() template with an f-string"
     },
     "B091": {
@@ -11065,7 +11086,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T16:00:55.747326Z",
+  "updated_at": "2026-06-02T16:01:59.131561Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
