@@ -965,6 +965,29 @@ class EaApp(App[None]):
         self._nav = replace(self._nav, position=transition.position)
         return super().switch_mode(mode)
 
+    async def action_switch_mode(self, mode: str) -> None:
+        """Switch the active content mode (breadcrumb / palette click target).
+
+        Overrides Textual's native ``action_switch_mode`` (kept ``async`` to
+        match the supertype signature) so an unknown mode name resolves to a
+        no-op rather than raising ``UnknownModeError`` out of the action
+        handler. The native action delegates straight to ``switch_mode``, and
+        this app's overridden ``switch_mode`` accepts any nav-legal pair before
+        handing the name to the native ``switch_mode``, which raises on a name
+        absent from the mode registry. A breadcrumb
+        ``[@click=app.switch_mode('<name>')]`` link can carry a stale name
+        (e.g. after a mode rename), so this guard drops the switch when the
+        target is not a registered mode -- the legality gate (portfolio scope
+        x single-scope mode) still lives in ``switch_mode``.
+
+        Args:
+            mode: The requested target mode name.
+        """
+        if mode not in self._modes:
+            logger.warning(f"action_switch_mode unknown mode={mode!r}")
+            return
+        self.switch_mode(mode)
+
     def action_switch_scope(self, scope: str) -> None:
         """Switch the active scope screen (raw ``w`` / ``r`` / ``u``).
 

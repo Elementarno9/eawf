@@ -20,6 +20,7 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
+from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.widgets.header import (
     BRAND,
     CRUMB_SEP,
@@ -170,7 +171,7 @@ def test_build_breadcrumb_none_state_mode_trails_default_code() -> None:
 
 
 # --------------------------------------------------------------------------
-# build_breadcrumb — clickable @click wiring (existing actions only)
+# build_breadcrumb — clickable @click wiring (app.-namespaced existing actions)
 # --------------------------------------------------------------------------
 
 
@@ -180,19 +181,21 @@ def test_build_breadcrumb_plain_by_default_has_no_click_markup() -> None:
 
 
 def test_build_breadcrumb_clickable_wires_scope_to_switch_scope() -> None:
+    # The action is app.-namespaced so Textual resolves it against the host
+    # App (which defines action_switch_scope), not the Static owning the link.
     crumb = build_breadcrumb(_load(_EMPTY_REPO), "repo", clickable=True)
-    assert "[@click=switch_scope('repo')]repo[/]" in crumb
+    assert "[@click=app.switch_scope('repo')]repo[/]" in crumb
 
 
 def test_build_breadcrumb_clickable_wires_code_to_home_mode() -> None:
     crumb = build_breadcrumb(_load(_EMPTY_REPO), clickable=True)
-    assert f"[@click=switch_mode('home')]{_CODE}[/]" in crumb
+    assert f"[@click=app.switch_mode('home')]{_CODE}[/]" in crumb
 
 
 def test_build_breadcrumb_clickable_wires_phase_and_iter_to_ref_actions() -> None:
     crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), clickable=True)
-    assert f"[@click=open_phase_ref('{_PHASE}')]{_PHASE}[/]" in crumb
-    assert f"[@click=open_iter_ref('{_ITER}')]{_ITER}[/]" in crumb
+    assert f"[@click=app.open_phase_ref('{_PHASE}')]{_PHASE}[/]" in crumb
+    assert f"[@click=app.open_iter_ref('{_ITER}')]{_ITER}[/]" in crumb
 
 
 def test_build_breadcrumb_clickable_wires_mode_by_name_not_title() -> None:
@@ -200,13 +203,35 @@ def test_build_breadcrumb_clickable_wires_mode_by_name_not_title() -> None:
     crumb = build_breadcrumb(
         _load(_PHASE_ITER_WAVE), mode="Research", mode_name="research_board", clickable=True
     )
-    assert "[@click=switch_mode('research_board')]Research[/]" in crumb
+    assert "[@click=app.switch_mode('research_board')]Research[/]" in crumb
+
+
+def test_build_breadcrumb_clickable_namespaces_every_action_to_app() -> None:
+    # Regression guard for the no-op-click bug: a bare markup-link action
+    # resolves against the Static owning the link (which defines none of
+    # these), silently no-opping the click. Every clickable action MUST be
+    # app.-prefixed so it resolves against the host App that owns the action
+    # methods. This pins all four breadcrumb action verbs in one assertion.
+    crumb = build_breadcrumb(
+        _load(_PHASE_ITER_WAVE),
+        "repo",
+        mode="Research",
+        mode_name="research_board",
+        clickable=True,
+    )
+    assert "@click=app.switch_scope" in crumb
+    assert "@click=app.switch_mode" in crumb
+    assert "@click=app.open_phase_ref" in crumb
+    assert "@click=app.open_iter_ref" in crumb
+    # And no bare (non-namespaced) action leaks through -- every @click is app.-scoped.
+    for verb in ("switch_scope", "switch_mode", "open_phase_ref", "open_iter_ref"):
+        assert f"@click={verb}" not in crumb
 
 
 def test_build_breadcrumb_clickable_mode_plain_without_name() -> None:
     # No mode_name => the mode segment stays plain text (no dangling action).
-    # (The code segment still links to switch_mode('home'); only the trailing
-    # mode segment must be plain.)
+    # (The code segment still links to app.switch_mode('home'); only the
+    # trailing mode segment must be plain.)
     crumb = build_breadcrumb(_load(_PHASE_ITER_WAVE), mode="Home", clickable=True)
     last_segment = crumb.rsplit(CRUMB_SEP, 1)[-1]
     assert last_segment == "Home"
@@ -286,8 +311,8 @@ def test_render_header_populated_has_brand_left_of_breadcrumb() -> None:
 
 def test_render_header_carries_clickable_segments() -> None:
     rendered = render_header(_load(_PHASE_ITER_WAVE), "repo", "Home", mode_name="home")
-    assert "[@click=switch_scope('repo')]repo[/]" in rendered
-    assert f"[@click=open_phase_ref('{_PHASE}')]" in rendered
+    assert "[@click=app.switch_scope('repo')]repo[/]" in rendered
+    assert f"[@click=app.open_phase_ref('{_PHASE}')]" in rendered
 
 
 def test_render_header_shows_runtime_cell_with_count() -> None:
@@ -352,5 +377,84 @@ def test_header_render_returns_brand_after_assignment() -> None:
             header.state = _load(_EMPTY_REPO)
             await pilot.pause()
             assert ScopeKind.REPO.value in str(header.render())
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# breadcrumb @click actions resolve against the host EaApp (the live half)
+# --------------------------------------------------------------------------
+#
+# The build_breadcrumb tests above pin the *string* the markup emits; these
+# pin that the App actually owns the action methods those strings name, so a
+# click resolves + fires instead of silently no-opping. ``run_action`` is
+# Textual's own dispatcher: it parses the ``app.`` namespace, checks the
+# action exists, and fires it -- returning ``True`` only when handled.
+
+_REF_FIXTURE = _PHASE_ITER_WAVE
+
+
+def test_app_resolves_breadcrumb_switch_scope_action() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REF_FIXTURE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            assert await app.run_action("app.switch_scope('repo')") is True
+
+    asyncio.run(body())
+
+
+def test_app_resolves_breadcrumb_switch_mode_action() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REF_FIXTURE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # The code segment links here (return to Home); home is a real mode.
+            assert await app.run_action("app.switch_mode('home')") is True
+
+    asyncio.run(body())
+
+
+def test_app_resolves_breadcrumb_phase_and_iter_ref_actions() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REF_FIXTURE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            assert await app.run_action(f"app.open_phase_ref('{_PHASE}')") is True
+            await pilot.pause()
+            assert await app.run_action(f"app.open_iter_ref('{_ITER}')") is True
+
+    asyncio.run(body())
+
+
+def test_app_bare_breadcrumb_action_against_header_does_not_resolve() -> None:
+    # The bug being fixed: a *bare* action resolved against the Header (a
+    # Static, which defines none of these) does NOT resolve -> the click was a
+    # silent no-op. The app.-namespaced form (asserted above) is what fixes it.
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REF_FIXTURE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            header = app.query(Header).first()
+            handled = await app.run_action("switch_mode('home')", default_namespace=header)
+            assert handled is False
+
+    asyncio.run(body())
+
+
+def test_action_switch_mode_guards_against_stale_mode_name() -> None:
+    # A breadcrumb link can carry a stale mode name (e.g. after a rename);
+    # action_switch_mode must drop it (no UnknownModeError) and leave the
+    # current mode untouched, while a real mode still switches.
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REF_FIXTURE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            start_mode = app.current_mode
+            await app.action_switch_mode("definitely_not_a_registered_mode")
+            await pilot.pause()
+            assert app.current_mode == start_mode
+
+    asyncio.run(body())
 
     asyncio.run(body())

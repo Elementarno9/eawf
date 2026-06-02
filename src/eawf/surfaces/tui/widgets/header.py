@@ -86,7 +86,9 @@ def _link(label: str, action: str | None) -> str:
     Args:
         label: The segment display text.
         action: The Textual action string to fire on click (e.g.
-            ``"switch_scope('repo')"``), or ``None`` for a plain segment.
+            ``"app.switch_scope('repo')"`` -- ``app.``-namespaced so it
+            resolves against the host App, not the Static owning the link),
+            or ``None`` for a plain segment.
 
     Returns:
         The content-markup for the segment.
@@ -123,13 +125,18 @@ def build_breadcrumb(
     trails everything when a peek/detail is open.
 
     When *clickable* is set, each segment that maps to an **existing** app
-    action becomes a Textual ``[@click=...]`` link:
+    action becomes a Textual ``[@click=...]`` link. The actions are
+    ``app.``-namespaced so Textual resolves them against the host
+    :class:`~eawf.surfaces.tui.app.EaApp` (which defines them) rather than
+    against the :class:`~textual.widgets.Static` that owns the markup link
+    (a bare action would resolve against the Static, find nothing, and
+    silently no-op the click):
 
-    * scope -> ``switch_scope('<scope>')`` (the raw scope-switch action);
-    * code  -> ``switch_mode('home')`` (return to the Home mode);
-    * phase -> ``open_phase_ref('<phase>')`` (the phase reference card);
-    * iter  -> ``open_iter_ref('<iter>')`` (the iter reference card);
-    * mode  -> ``switch_mode('<mode_name>')`` when *mode_name* is given
+    * scope -> ``app.switch_scope('<scope>')`` (the raw scope-switch action);
+    * code  -> ``app.switch_mode('home')`` (return to the Home mode);
+    * phase -> ``app.open_phase_ref('<phase>')`` (the phase reference card);
+    * iter  -> ``app.open_iter_ref('<iter>')`` (the iter reference card);
+    * mode  -> ``app.switch_mode('<mode_name>')`` when *mode_name* is given
       (the mode segment displays the *mode* title but links by name).
 
     The *entity* segment has no generic nav action, so it always renders
@@ -148,8 +155,8 @@ def build_breadcrumb(
         mode: The active mode **title** to trail the breadcrumb with, or
             ``None`` to omit the mode segment.
         mode_name: The active mode **name** (registry key) the mode
-            segment links to via ``switch_mode``; ``None`` leaves the mode
-            segment plain text even when *clickable* is set.
+            segment links to via ``app.switch_mode``; ``None`` leaves the
+            mode segment plain text even when *clickable* is set.
         entity: An optional trailing entity label (an open peek/detail),
             or ``None`` to omit it.
         clickable: Emit ``[@click=...]`` markup for the wired segments when
@@ -165,17 +172,19 @@ def build_breadcrumb(
     else:
         code = state.project.code if state.project is not None else DEFAULT_PROJECT_CODE
         scope_label = scope if scope is not None else state.scope_kind.value
-        parts.append(_link(scope_label, f"switch_scope({scope_label!r})" if clickable else None))
-        parts.append(_link(code, f"switch_mode({_HOME_MODE_NAME!r})" if clickable else None))
+        parts.append(
+            _link(scope_label, f"app.switch_scope({scope_label!r})" if clickable else None)
+        )
+        parts.append(_link(code, f"app.switch_mode({_HOME_MODE_NAME!r})" if clickable else None))
         if state.current.phase_id is not None:
             phase = state.current.phase_id
-            parts.append(_link(phase, f"open_phase_ref({phase!r})" if clickable else None))
+            parts.append(_link(phase, f"app.open_phase_ref({phase!r})" if clickable else None))
         if state.current.iter_id is not None:
             iter_id = state.current.iter_id
-            parts.append(_link(iter_id, f"open_iter_ref({iter_id!r})" if clickable else None))
+            parts.append(_link(iter_id, f"app.open_iter_ref({iter_id!r})" if clickable else None))
     if mode is not None:
         link_mode = clickable and mode_name is not None
-        mode_action = f"switch_mode({mode_name!r})" if link_mode else None
+        mode_action = f"app.switch_mode({mode_name!r})" if link_mode else None
         parts.append(_link(mode, mode_action))
     if entity is not None:
         parts.append(_link(entity, None))
@@ -343,7 +352,8 @@ class Header(Static):
         the nav state machine owns -- rather than the bound state's
         ``scope_kind`` (which reads ``workspace`` for the user scope's
         synthesized portfolio). The mode segment is passed both its title
-        (for display) and its name (for the ``switch_mode`` click target).
+        (for display) and its name (for the ``app.switch_mode`` click
+        target).
         A bare harness without ``nav_position`` falls back to the separate
         ``_scope`` / ``current_mode`` fields, and one without those falls
         back gracefully (no mode segment, ``state.scope_kind`` for the
