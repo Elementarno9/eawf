@@ -10649,7 +10649,9 @@
         "P29-I05-W09",
         "P29-I05-W10",
         "P29-I05-W11",
-        "P29-I05-W12"
+        "P29-I05-W12",
+        "P29-I05-W13",
+        "P29-I05-W14"
       ]
     },
     "P29-I06": {
@@ -11430,7 +11432,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T21:10:10.024041Z",
+  "updated_at": "2026-06-02T21:56:30.675605Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33216,6 +33218,70 @@
       "title": "Add always-on footer mode row and clear stale mode hints",
       "token_budget": null,
       "tokens_consumed": 215823,
+      "worktree_id": null
+    },
+    "P29-I05-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/header.py",
+        "src/eawf/surfaces/tui/app.py",
+        "tests/tui/**"
+      ],
+      "id": "P29-I05-W13",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T21:56:30.096213Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "breadcrumb @click actions namespaced app.* so clicks resolve against EaApp (not the Static); action_switch_mode guarded for stale names; clickable nav fires; no golden drift"
+      ],
+      "title": "Fix breadcrumb @click no-op by namespacing actions to the app",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I05-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/state_binding.py",
+        "tests/tui/**"
+      ],
+      "id": "P29-I05-W14",
+      "intent": null,
+      "iter_id": "P29-I05",
+      "opened_at": "2026-06-02T21:56:30.675403Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "always-on mtime-poll backstop alongside daemon push (mtime-gated",
+        "no redundant refresh); lifecycle changes visible without restart; degraded flag decoupled; regression test"
+      ],
+      "title": "Keep a state-refresh backstop so the live roadmap stays current",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     },
     "P29-I06-W01": {
