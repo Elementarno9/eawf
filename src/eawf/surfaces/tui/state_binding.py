@@ -1,15 +1,25 @@
 """Read-only bridge from ``state.json`` into the TUI's reactive data.
 
 The operator surface binds the daemon ``state.json`` into the
-:class:`~eawf.surfaces.tui.app.EaApp` reactive layer. The long-term shape is
-*daemon-push primary + mtime-poll fallback*: the TUI subscribes to the
-daemon ``event.subscribe`` stream when the daemon is up and falls back
-to a 2 s mtime poll when it is not (the daemonless carve-out). This
-module ships the **fallback leg**
-that works today — a direct, read-only load of ``state.json`` plus an
-mtime-poll loop — and exposes the seams (``connect`` / ``disconnect``,
-the ``on_state`` / ``on_degraded`` callbacks) the daemon-push leg slots
-into in a later wave.
+:class:`~eawf.surfaces.tui.app.EaApp` reactive layer. The shape is
+*daemon-push primary + always-on mtime-poll backstop*: the TUI
+subscribes to the daemon ``state.subscribe`` stream when the daemon is
+up (the fast path — a refresh lands within one frame of the event
+append) and ALSO runs a slow mtime-poll loop that stays alive even
+while push is connected. The backstop guarantees eventual consistency:
+if the push stream goes silent for any reason — the stream stalls, the
+daemon emits no frame for a given append, or a ``scope_id`` filter
+drops the envelope on the daemon side — the next poll tick still
+re-reads ``state.json`` and re-delivers fresh state, so a wave or iter
+added or closed becomes visible within the poll interval without an app
+restart. The poll loop is mtime-gated, so when push is healthy it adds
+no redundant ``on_state`` deliveries (the mtime has not advanced since
+the push-driven refresh already bumped it).
+
+The degraded banner is independent of the backstop: ``on_degraded`` is
+driven purely by the daemon-socket probe crossing its failure
+threshold, not by whether the poll task is running. The backstop is a
+silent safety net, not a degraded-mode signal.
 
 Why a callback rather than a Textual ``reactive`` on this class: a
 ``reactive`` descriptor only fires watchers on a ``DOMNode`` (App /
@@ -165,7 +175,14 @@ class StateBinding:
         self._last_mtime = 0.0
 
     async def connect(self) -> None:
-        """Load initial state, then prefer daemon push with poll fallback."""
+        """Load initial state, then run daemon push + an always-on poll backstop.
+
+        Push is the fast path; the mtime-poll loop is started here as a
+        backstop and stays alive even once the push stream connects, so a
+        stalled / silent push stream cannot leave the bound state stale
+        until a restart (the poll is mtime-gated, so it adds no redundant
+        refreshes while push is healthy).
+        """
         initial = load_state(self._state_path)
         if initial is not None:
             self._scope_id = initial.urn
@@ -173,6 +190,7 @@ class StateBinding:
         if self._state_path is not None and self._state_path.is_file():
             with contextlib.suppress(OSError):
                 self._last_mtime = self._state_path.stat().st_mtime
+        self._start_poll_backstop()
         await self._process_daemon_probe()
         await self._start_probe_loop()
 
@@ -231,11 +249,22 @@ class StateBinding:
                 return
             await self._process_daemon_probe()
 
-    async def _start_poll_fallback(self) -> None:
-        """Mark degraded and start the mtime-poll loop once."""
-        await self._set_degraded(True)
+    def _start_poll_backstop(self) -> None:
+        """Start the mtime-poll loop once as an always-on backstop.
+
+        Unlike :meth:`_start_poll_fallback`, this does NOT touch the
+        degraded flag — the poll runs as a silent safety net alongside
+        the push stream so a stalled / silent push cannot strand the
+        bound state. Idempotent: a second call while the task is live is
+        a no-op.
+        """
         if self._poll_task is None or self._poll_task.done():
             self._poll_task = asyncio.create_task(self._poll_loop())
+
+    async def _start_poll_fallback(self) -> None:
+        """Mark degraded and ensure the mtime-poll loop is running."""
+        await self._set_degraded(True)
+        self._start_poll_backstop()
 
     async def _stop_poll_loop(self) -> None:
         if self._poll_task is None:
@@ -279,7 +308,6 @@ class StateBinding:
         else:
             if not self._stopping:
                 self._consecutive_failures = 0
-                await self._stop_poll_loop()
 
     def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
         """Subscribe to ``state.subscribe`` with ``DaemonClient``."""
@@ -303,8 +331,15 @@ class StateBinding:
                 self._handle_push_line(loop, line)
 
     async def _on_subscription_connected(self) -> None:
+        """Clear failures + degraded once push connects; keep the backstop.
+
+        The mtime-poll loop is intentionally left running as a backstop
+        (see :meth:`_start_poll_backstop`) — push is the fast path but
+        the poll guarantees eventual consistency if the stream later goes
+        silent. The poll is mtime-gated, so it adds no redundant refresh
+        while push keeps the bound state current.
+        """
         self._consecutive_failures = 0
-        await self._stop_poll_loop()
         await self._set_degraded(False)
 
     def _handle_push_line(self, loop: asyncio.AbstractEventLoop, line: bytes) -> None:

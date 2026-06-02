@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
+import threading
+import time
 from pathlib import Path
 
 import orjson
@@ -82,6 +85,48 @@ class _FakeDaemonClient:
         self._calls = calls
 
     def __enter__(self) -> _FakeDaemonClient:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+        self._calls.append((method, params))
+        return {"ok": True}
+
+
+class _SilentStreamReader:
+    """Reader that models a connected-but-silent push stream.
+
+    ``readline`` never returns an ``event.push`` frame and never returns
+    EOF — it yields a non-push heartbeat line forever (with a tiny sleep
+    so the off-thread subscribe loop does not busy-spin). This keeps the
+    subscription "connected" (no error, no stream-end) while delivering
+    zero state refreshes, exactly the stalled-push case the backstop
+    poll must cover.
+    """
+
+    def __init__(self, stop: threading.Event) -> None:
+        self._stop = stop
+        self._heartbeat = orjson.dumps({"jsonrpc": "2.0", "method": "noop", "params": {}}) + b"\n"
+
+    def readline(self) -> bytes:
+        # Return EOF once the test is tearing down so the subscribe
+        # thread can exit cleanly instead of looping forever.
+        if self._stop.is_set():
+            return b""
+        time.sleep(0.005)
+        return self._heartbeat
+
+
+class _SilentDaemonClient:
+    """Daemon client whose subscribe call connects but never pushes state."""
+
+    def __init__(self, calls: list[tuple[str, dict[str, object]]], stop: threading.Event) -> None:
+        self._reader = _SilentStreamReader(stop)
+        self._calls = calls
+
+    def __enter__(self) -> _SilentDaemonClient:
         return self
 
     def __exit__(self, *_args: object) -> None:
@@ -399,6 +444,78 @@ def test_state_binding_reconnects_when_push_stream_ends(
     assert any(v is True for v in seen_degraded)
     assert any(v is False for v in seen_degraded)
     assert len(seen_state) >= 3
+
+
+def test_state_binding_poll_backstop_refreshes_when_push_stream_is_silent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A silent push stream still picks up an mtime advance via the backstop.
+
+    Regression for the stale-roadmap bug: in push mode the binder used to
+    stop the mtime-poll loop the moment the subscription connected, so a
+    push stream that connected but then delivered no frame (a stall, an
+    un-pushed change, or a daemon-side ``scope_id`` filter drop) left the
+    bound state frozen until the operator restarted the TUI. The fix keeps
+    a slow mtime-poll loop running as a backstop even while push is
+    connected; this test drives a connected-but-silent stream, advances
+    ``state.json`` on disk, and asserts a fresh ``on_state`` is still
+    delivered within the backstop interval -- with the daemon never
+    flagged degraded (the backstop is silent, not a degraded signal).
+    """
+    state_file = tmp_path / "state.json"
+    state_file.write_bytes(_EMPTY_REPO.read_bytes())
+    seen_state: list[State] = []
+    seen_degraded: list[bool] = []
+    calls: list[tuple[str, dict[str, object]]] = []
+    stop = threading.Event()
+
+    async def on_state(s: State) -> None:
+        seen_state.append(s)
+
+    async def on_degraded(d: bool) -> None:
+        seen_degraded.append(d)
+
+    async def body() -> None:
+        binder = StateBinding(
+            state_path=state_file,
+            callbacks=StateBindingCallbacks(on_state=on_state, on_degraded=on_degraded),
+            daemon_client_factory=lambda: _SilentDaemonClient(calls, stop),  # type: ignore[arg-type]
+            poll_interval_s=0.01,
+            daemon_failure_threshold=10,
+            daemon_probe_interval_s=0.01,
+        )
+        monkeypatch.setattr(binder, "_daemon_socket_available", lambda: True)
+        await binder.connect()
+        # Push connected (subscribe issued) but the stream is silent: only
+        # the initial connect() load has landed so far.
+        await asyncio.sleep(0.05)
+        assert calls and calls[0][0] == "state.subscribe"
+        baseline = len(seen_state)
+
+        # A lifecycle change lands on disk (new wave/iter) -> mtime advances.
+        # The push stream stays silent, so only the backstop can pick it up.
+        bumped = orjson.loads(state_file.read_bytes())
+        bumped["updated_at"] = "2026-05-28T00:00:00Z"
+        state_file.write_bytes(orjson.dumps(bumped))
+        future = state_file.stat().st_mtime + 5.0
+        os.utime(state_file, (future, future))
+
+        # Within a few backstop ticks the refreshed state is delivered.
+        deadline = time.monotonic() + 2.0
+        while len(seen_state) <= baseline and time.monotonic() < deadline:
+            await asyncio.sleep(0.02)
+
+        stop.set()
+        await binder.disconnect()
+
+    asyncio.run(body())
+    assert len(seen_state) >= 2  # initial connect load + the backstop refresh
+    assert seen_state[-1].updated_at.year == 2026
+    assert seen_state[-1].updated_at.month == 5
+    assert seen_state[-1].updated_at.day == 28
+    # The backstop is a silent safety net, never a degraded-mode signal.
+    assert seen_degraded == []
 
 
 def test_state_binding_process_daemon_probe_debounces_degraded_transition(
