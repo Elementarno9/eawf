@@ -1968,6 +1968,18 @@
       "status": "done",
       "updated_at": "2026-06-02T19:36:19.549295Z"
     },
+    "P29-I05-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 169626,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I05-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I05-W05",
+      "scope_id": "P29-I05-W05",
+      "status": "done",
+      "updated_at": "2026-06-02T20:15:16.764111Z"
+    },
     "P29-I05-W06": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 160241,
@@ -2015,6 +2027,18 @@
       "scope_id": "P29-I05-W09",
       "status": "done",
       "updated_at": "2026-06-02T19:36:20.351779Z"
+    },
+    "P29-I05-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 187019,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I05-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I05-W10",
+      "scope_id": "P29-I05-W10",
+      "status": "done",
+      "updated_at": "2026-06-02T20:15:17.457898Z"
     }
   },
   "agent_sessions": {
@@ -9260,6 +9284,19 @@
       "scope_id": "P29-I05-W04",
       "updated_at": "2026-06-02T19:36:18.284569Z"
     },
+    "P29-I05-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I05-W05-bucket-20260602T201515Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I05-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I05-W05",
+      "updated_at": "2026-06-02T20:15:15.665228Z"
+    },
     "P29-I05-W06": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I05-W06-bucket-20260602T173111Z",
@@ -9311,6 +9348,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I05-W09",
       "updated_at": "2026-06-02T19:36:18.861130Z"
+    },
+    "P29-I05-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I05-W10-bucket-20260602T201516Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I05-W10",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I05-W10",
+      "updated_at": "2026-06-02T20:15:16.159062Z"
     }
   },
   "goals": {
@@ -11328,7 +11378,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T19:36:20.352120Z",
+  "updated_at": "2026-06-02T20:15:17.458378Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -32828,10 +32878,10 @@
     "P29-I05-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29i05",
+      "claimed_at": "2026-06-02T20:15:15.665225Z",
+      "closed_at": "2026-06-02T20:15:16.764111Z",
+      "commit": "686c475a415f52d4c0ca1dcc1c0d55fceb874684",
       "deps": [
         "P29-I01-W22",
         "P29-I04-W07",
@@ -32848,16 +32898,16 @@
       "intent": null,
       "iter_id": "P29-I05",
       "opened_at": "2026-06-01T00:19:14.279130Z",
-      "outcome": null,
+      "outcome": "Verdict-agreement cost A/B (workflow/dispatch/cost_ab.py): per (agent_role, runtime) verdict-flip rate + audit-pass-first-try + $/closed-wave with a keep/bump decision rule, under MIN_COST_AB_N honesty gate; codex leg via runtime grouping + tier_for_model; honest INSUFFICIENT_DATA over today's empty ledger; subscription-first ($ governs API-key fallback only); 28 tests.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "verdict-agreement cost A/B across model tiers using metered cost (SP-3) + the verdict producer + codex leg"
       ],
       "title": "Run verdict-agreement cost A/B across model tiers",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 169626,
       "worktree_id": null
     },
     "P29-I05-W06": {
@@ -33015,10 +33065,10 @@
     "P29-I05-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29i05",
+      "claimed_at": "2026-06-02T20:15:16.159059Z",
+      "closed_at": "2026-06-02T20:15:17.457898Z",
+      "commit": "61d9cf3bd2eb2aadc8edc05e73b6c4e2511cae63",
       "deps": [
         "P29-I05-W06",
         "P29-I05-W09"
@@ -33034,10 +33084,10 @@
       "intent": null,
       "iter_id": "P29-I05",
       "opened_at": "2026-06-02T16:10:42.025028Z",
-      "outcome": null,
+      "outcome": "Full-location clickable breadcrumb scope>code>phase>iter>mode[>entity] (@click to existing switch_scope/switch_mode/open_phase_ref/open_iter_ref actions) + real runtime cell (runtime id + running count, idle when none, UTC clock kept); 1291 tui tests; 9 header goldens regen (commit 15af30b7).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "breadcrumb extends to scope > code > phase > iter > mode (plus entity on drill)",
         "each segment is a clickable nav target via content-markup click handler",
@@ -33045,7 +33095,7 @@
       ],
       "title": "Add full-location clickable breadcrumb and a real runtime cell",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 187019,
       "worktree_id": null
     },
     "P29-I06-W01": {
