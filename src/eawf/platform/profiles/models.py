@@ -160,6 +160,16 @@ class VerifyBlock(BaseModel):
         enforce: Whether close readiness is a hard gate. Defaults
             ``False`` so existing profiles keep the advisory close
             behavior until they opt in.
+        cross_vendor_jury: Opt-in upgrade of the high-risk (``"always"``)
+            wave-close verdict gate from a single fresh-context auditor to a
+            three-vendor disjoint-family jury
+            (:func:`eawf.observability.eval.cross_vendor_jury.convene_cross_vendor_jury`).
+            Only meaningful when :attr:`enforce` is ``True``. Defaults
+            ``False`` so existing enforcing profiles keep the single-auditor
+            gate; when ``True`` the close path convenes the jury for the
+            ``"always"`` subset and a split (no quorum) routes to the
+            operator. The path degrades to the single-auditor gate when the
+            cross-vendor CLI lanes are unavailable on the host.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -171,6 +181,7 @@ class VerifyBlock(BaseModel):
     )
     waiver_mode: Literal["A", "B", "C"] = "B"
     enforce: bool = False
+    cross_vendor_jury: bool = False
 
 
 class InstrumentReq(BaseModel):

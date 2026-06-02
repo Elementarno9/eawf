@@ -605,16 +605,21 @@ def _compute_wave_close_readiness(
     state_path: Path,
     repo_root: Path,
 ) -> CloseReadiness | None:
-    """Return the pre-close readiness view for a wave-close mutation.
+    """Return the enforcing pre-close readiness view for a wave-close mutation.
+
+    Returns ``None`` when no active profile enforces verify (the advisory
+    paths recompute their own view); otherwise the rolled-up
+    :class:`~eawf.workflow.verify.models.CloseReadiness`. The verdict gate
+    (single-auditor or cross-vendor jury) runs in the separate async step
+    :func:`_enforce_wave_close_gate` so this helper stays a pure, sync
+    readiness compute.
 
     Raises:
-        LifecycleError: When verify enforcement is active and the wave's
-            fresh-context auditor verdict gate
-            (:func:`eawf.workflow.dispatch.verdict.verify_wave_verdict_gate`)
-            blocks -- a high-risk or sampled wave whose freshest auditor
-            verdict is absent or FAIL / BLOCKED cannot close. The daemon
-            maps this onto ``validation_failed`` like every other
-            wave-close lifecycle rejection.
+        LifecycleError: When ``profile.verify.enforce`` is active and the
+            rolled-up readiness is not ready (criteria floor /
+            evidence-row rollup). The daemon maps this onto
+            ``validation_failed`` like every other wave-close lifecycle
+            rejection.
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.verify import compute as compute_readiness
@@ -631,7 +636,6 @@ def _compute_wave_close_readiness(
     )
     if verify_block is None or not verify_block.enforce:
         return None
-    _enforce_wave_verdict_gate(state.waves[wave_id], state_path=state_path)
     return compute_readiness(
         wave_id,
         state=state,
@@ -642,16 +646,17 @@ def _compute_wave_close_readiness(
 
 
 def _enforce_wave_verdict_gate(wave: Wave, *, state_path: Path) -> None:
-    """Raise when the wave's fresh-auditor verdict gate blocks close.
+    """Raise when the wave's single fresh-auditor verdict gate blocks close.
 
-    The single additive daemon-side hook into the dispatch-layer verdict
-    producer (P29-I04-W07). It runs only on the enforcing close path (the
-    caller has already confirmed ``verify_block.enforce``), so the
-    advisory-only close paths -- and every wave-close test that does not
-    enable enforcement -- are unaffected. The gate blocks only the required
-    subset: a high-risk (``"always"``) or sampled wave whose freshest
-    auditor verdict is absent or not close-ready raises; a ``"skip"``
-    mechanical wave never blocks.
+    The daemon-side hook into the dispatch-layer verdict producer
+    (P29-I04-W07). It is the DEFAULT enforcing gate and the degrade target
+    when the cross-vendor jury (P29-I04-W15) is unavailable or not opted in.
+    The caller (:func:`_enforce_wave_close_gate`) has already confirmed
+    ``verify_block.enforce``, so the advisory-only close paths -- and every
+    wave-close test that does not enable enforcement -- are unaffected. The
+    gate blocks only the required subset: a high-risk (``"always"``) or
+    sampled wave whose freshest auditor verdict is absent or not close-ready
+    raises; a ``"skip"`` mechanical wave never blocks.
 
     Args:
         wave: The wave being closed.
@@ -674,6 +679,237 @@ def _enforce_wave_verdict_gate(wave: Wave, *, state_path: Path) -> None:
     raise LifecycleError(
         f"wave {wave.id!r} verdict gate blocked close (requirement={gate.requirement}): {reasons}"
     )
+
+
+#: The three disjoint juror runtime families the cross-vendor jury convenes
+#: one auditor from each of (plugin-manifest spelling). Mirrored here so the
+#: lane-availability pre-check + the per-runtime spawn factory read the same
+#: source as :data:`eawf.observability.eval.cross_vendor_jury.JURY_RUNTIME_FAMILIES`.
+_JURY_RUNTIME_TRIPLE: dict[str, str] = {
+    "claude-code": "claude",
+    "codex": "codex",
+    "opencode": "opencode",
+}
+
+
+def _cross_vendor_lanes_ready(*, quorum: int) -> bool:
+    """Return whether enough juror CLI binaries resolve on PATH to convene.
+
+    A real cross-vendor jury needs at least *quorum* of the three disjoint
+    vendor CLIs installed on the host; a box with only the claude CLI cannot
+    cast independent cross-vendor ballots, so the close path degrades to the
+    single-auditor gate rather than forcing every enforcing close to the
+    operator. Reads only binary presence (:func:`shutil.which`) -- never a
+    credential -- so it does not weaken the env-scrub / jail floor.
+
+    Args:
+        quorum: Minimum number of juror lanes whose CLI must resolve.
+
+    Returns:
+        ``True`` when at least *quorum* of the juror CLI binaries resolve.
+    """
+    import shutil
+
+    from eawf.runtime.runtimes.selector import select_adapter
+
+    available = 0
+    for runtime in _JURY_RUNTIME_TRIPLE:
+        try:
+            binary = select_adapter(runtime).cli_binary
+        except ValueError:
+            continue
+        if shutil.which(binary) is not None:
+            available += 1
+    ready = available >= quorum
+    logger.info(f"_cross_vendor_lanes_ready available={available} quorum={quorum} ready={ready}")
+    return ready
+
+
+def _jury_spawn_factory(state: State, wave: Wave, *, repo_root: Path) -> Any:
+    """Return the production per-runtime spawn factory for the jury convener.
+
+    Binds, per juror runtime, that vendor's
+    :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session` with the
+    runtime's OWN per-tier model (resolved via
+    :func:`eawf.workflow.dispatch.routing.model_for_runtime`) + the wave's
+    sandbox deny-list, so each juror spawns its own vendor's CLI behind the
+    safety floor. Tests monkeypatch this factory builder to return recording
+    stubs so no real subprocess runs.
+
+    Args:
+        state: Validated state -- read for the wave's sandbox deny-list + role.
+        wave: The wave under audit (supplies role + effort for model routing).
+        repo_root: Repository root the juror spawns run in.
+
+    Returns:
+        A :data:`~eawf.observability.eval.cross_vendor_jury.SpawnFactory` -- a
+        ``runtime -> SpawnFn`` callable.
+    """
+    from eawf.kernel.state.enums import AgentSessionRole as _Role
+    from eawf.kernel.state.enums import EffortBucket as _Effort
+    from eawf.runtime.runtimes.adapter import SpawnResult
+    from eawf.runtime.runtimes.selector import select_adapter
+    from eawf.runtime.sandbox.policy import resolve_denied_tools
+    from eawf.workflow.dispatch.llm_assist import SpawnFn
+    from eawf.workflow.dispatch.routing import model_for_runtime
+
+    role = wave.agent_role if wave.agent_role is not None else _Role.AUDITOR
+    effort = wave.effort_bucket if wave.effort_bucket is not None else _Effort.M
+    denied = sorted(resolve_denied_tools(state.sandbox_policies, wave_id=wave.id))
+    cwd = str(repo_root)
+
+    def _factory(runtime: str) -> SpawnFn:
+        triple = _JURY_RUNTIME_TRIPLE.get(runtime, "claude")
+        model = model_for_runtime(role, effort, triple)
+        adapter = select_adapter(runtime)
+
+        async def _spawn(prompt: str) -> SpawnResult:
+            return await adapter.spawn_session(
+                prompt,
+                model=model,
+                cwd=cwd,
+                denied_tools=denied,
+            )
+
+        return _spawn
+
+    return _factory
+
+
+async def _enforce_cross_vendor_jury_gate(
+    state: State,
+    wave: Wave,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> None:
+    """Convene the cross-vendor jury for a high-risk wave + map its outcome.
+
+    Runs only for the ``"always"`` (high-risk) subset: a mechanical
+    (``"sampled"`` / ``"skip"``) wave degrades to the single-auditor gate
+    (:func:`_enforce_wave_verdict_gate`), since the jury exists to harden the
+    high-blast-radius close. For an ``"always"`` wave it convenes the three
+    disjoint-family jurors via
+    :func:`eawf.observability.eval.cross_vendor_jury.convene_cross_vendor_jury`
+    (each juror spawning its own vendor through :func:`_jury_spawn_factory`)
+    and reduces the ballots through the TRUST-3 reducer. A clean ``PASS``
+    lets close proceed; a minority-veto ``FAIL`` or a split / sub-quorum
+    ``NEEDS_USER`` raises :class:`LifecycleError` so the daemon routes the
+    unresolved verdict to the operator.
+
+    Args:
+        state: Validated state -- mutated in place by each juror's auditor
+            session registration; the close path persists it.
+        wave: The wave being closed.
+        state_path: Path to ``state.json``; the juror report stores + the
+            session-start events resolve under its sibling ``store/``.
+        repo_root: Repository root forwarded to each juror's diff-base
+            derivation + spawn cwd.
+
+    Raises:
+        LifecycleError: When the jury vetoes (FAIL) or cannot reach a trusted
+            consensus (NEEDS_USER).
+    """
+    from eawf.observability.eval.cross_vendor_jury import convene_cross_vendor_jury
+    from eawf.observability.eval.jury import JuryAggregateOutcome
+    from eawf.workflow.dispatch.verdict import verdict_requirement
+
+    if verdict_requirement(wave) != "always":
+        # The jury hardens only the high-risk subset; a sampled / skip
+        # mechanical wave keeps the single-auditor gate (which passes a skip
+        # wave unconditionally).
+        _enforce_wave_verdict_gate(wave, state_path=state_path)
+        return
+
+    events_path = store_path(state_path, StoreKind.EVENT)
+    spawn_factory = _jury_spawn_factory(state, wave, repo_root=repo_root)
+    result = await convene_cross_vendor_jury(
+        state=state,
+        state_path=state_path,
+        events_path=events_path,
+        wave=wave,
+        spawn_factory=spawn_factory,
+        repo_root=repo_root,
+    )
+    if result.outcome is JuryAggregateOutcome.PASS:
+        logger.info(
+            f"_enforce_cross_vendor_jury_gate wave={wave.id} outcome=pass "
+            f"voted={result.voted_count} abstained={result.abstained_count}"
+        )
+        return
+    reasons = "; ".join(result.reasons) if result.reasons else "no reasons recorded"
+    logger.warning(
+        f"_enforce_cross_vendor_jury_gate wave={wave.id} outcome={result.outcome.value} "
+        f"voted={result.voted_count} abstained={result.abstained_count} reasons=[{reasons}]"
+    )
+    raise LifecycleError(
+        f"wave {wave.id!r} cross-vendor jury blocked close "
+        f"(outcome={result.outcome.value}): {reasons}"
+    )
+
+
+async def _enforce_wave_close_gate(
+    state: State,
+    mutation: Mutation,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> None:
+    """Run the enforcing wave-close verdict gate (single-auditor or jury).
+
+    The async daemon-side hook the close path awaits before applying a
+    wave-close mutation. It loads the active verify block and runs the gate
+    ONLY when an enabled profile sets ``verify.enforce`` -- so the
+    advisory-only close paths (and every wave-close test that does not enable
+    enforcement) are byte-unchanged. The gate flavour is opt-in:
+
+    * ``verify.cross_vendor_jury`` is ``True`` AND enough juror CLI lanes
+      resolve on the host (:func:`_cross_vendor_lanes_ready`) -> the
+      cross-vendor jury (:func:`_enforce_cross_vendor_jury_gate`).
+    * otherwise -> the single fresh-context auditor gate
+      (:func:`_enforce_wave_verdict_gate`), the pre-W15 behaviour, so a host
+      without the cross-vendor CLIs degrades cleanly rather than forcing
+      every enforcing close to the operator.
+
+    Args:
+        state: Validated state -- mutated in place when a jury registers its
+            auditor sessions; the close path persists it.
+        mutation: The wave-close mutation; its ``wave_id`` param names the
+            wave under the gate.
+        state_path: Path to ``state.json``; report stores + events resolve
+            under its sibling ``store/``.
+        repo_root: Repository root for the verify-block config anchor + the
+            juror diff-base / spawn cwd.
+
+    Raises:
+        LifecycleError: When the resolved gate refuses close.
+    """
+    from eawf.observability.eval.cross_vendor_jury import JURY_QUORUM
+    from eawf.workflow.verify.readiness import load_active_verify_block
+
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id or wave_id not in state.waves:
+        return
+    verify_block = load_active_verify_block(
+        wave_id,
+        state,
+        repo_root=repo_root,
+        config_root=_config_root_for_state_path(state_path),
+    )
+    if verify_block is None or not verify_block.enforce:
+        return
+    wave = state.waves[wave_id]
+    if verify_block.cross_vendor_jury and _cross_vendor_lanes_ready(quorum=JURY_QUORUM):
+        await _enforce_cross_vendor_jury_gate(
+            state, wave, state_path=state_path, repo_root=repo_root
+        )
+        return
+    if verify_block.cross_vendor_jury:
+        logger.info(
+            f"_enforce_wave_close_gate wave={wave_id} jury=requested "
+            "lanes=unavailable degrade=single-auditor"
+        )
+    _enforce_wave_verdict_gate(wave, state_path=state_path)
 
 
 def _compute_wave_close_extras(
@@ -1637,6 +1873,18 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
             try:
                 if mutation.kind == MutationKind.WAVE_CLOSE:
+                    # The enforcing verdict gate (single-auditor or, when the
+                    # active profile opts in via ``verify.cross_vendor_jury``,
+                    # the three-vendor jury) runs BEFORE any apply so a blocked
+                    # close aborts the whole mutation. Advisory close paths are
+                    # unaffected -- the gate returns early when no profile
+                    # enforces verify.
+                    await _enforce_wave_close_gate(
+                        state,
+                        mutation,
+                        state_path=state_path,
+                        repo_root=repo_anchor,
+                    )
                     wave_close_readiness = _compute_wave_close_readiness(
                         state,
                         mutation,

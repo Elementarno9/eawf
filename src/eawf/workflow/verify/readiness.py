@@ -492,6 +492,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     has_timeout_overrides = False
     waiver_mode: Literal["A", "B", "C"] = "B"
     enforce = False
+    cross_vendor_jury = False
     for block in blocks:
         floor_checks.extend(block.floor_checks)
         for argv_head in block.argv_allowlist:
@@ -504,12 +505,14 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
             timeout_class_seconds.update(block.timeout_class_seconds)
         waiver_mode = block.waiver_mode
         enforce = enforce or block.enforce
+        cross_vendor_jury = cross_vendor_jury or block.cross_vendor_jury
     return VerifyBlock(
         floor_checks=floor_checks,
         argv_allowlist=argv_allowlist,
         timeout_class_seconds=timeout_class_seconds if has_timeout_overrides else None,
         waiver_mode=waiver_mode,
         enforce=enforce,
+        cross_vendor_jury=cross_vendor_jury,
     )
 
 
