@@ -4410,6 +4410,19 @@
       "status": "open",
       "title": "Replace agent_watch .format() template with an f-string"
     },
+    "B091": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-02T15:33:16.666028Z",
+      "description": "W15 added drive_text_claim_chain + drive_campaign so escalate_to_rung3 + run_live_rounds have tested callers, but the assemblers have no production entry point. check_brief_promotable runs rung-1 deterministic only; routing textual refs through rung-2->3 needs an async EntailmentScorer + production BallotFn + ref-modality discriminator. The campaign-execution layer has no production driver. Build both entry points.",
+      "id": "B091",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Wire EviBound rung-2-3 chain + campaign driver to production paths"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -11027,7 +11040,7 @@
   "schema_version": "1.3",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T13:55:23.288164Z",
+  "updated_at": "2026-06-02T15:33:16.666028Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
