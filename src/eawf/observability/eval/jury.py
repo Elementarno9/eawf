@@ -29,19 +29,38 @@ Absent a veto, both the binary side and the graded side must independently
 resolve to pass for the aggregate to pass; any indeterminacy on either axis
 routes to ``NEEDS_USER``.
 
+**Reliability weighting (P29-I05-W04).** The graded mean optionally weights
+each juror by its measured reliability, fed from the reputation engine
+(:mod:`eawf.observability.eval.reputation`). When :func:`aggregate_jury`
+receives a *reliability* map, the graded outcome uses a weighted mean
+``sum(w_i * s_i) / sum(w_i)`` -- a juror with a higher conservative held-rate
+lower bound pulls the mean toward its score. A juror whose reliability is
+unavailable (no matching row, an ``INSUFFICIENT`` row, or a ballot carrying no
+``(agent_role, runtime)`` to match on) falls back to a neutral
+:data:`NEUTRAL_JUROR_WEIGHT`. When every weight is neutral -- including the
+honest-negative case today, where the reputation engine scores no role -- the
+weighted mean is identical to the plain :func:`~statistics.fmean`, so the
+weighting is behavior-preserving until SCORED reliability accrues. The
+**binary minority-veto is never down-weighted**: a single credible ``fail`` /
+``blocked`` ballot still vetoes regardless of that juror's weight, because one
+credible refutation is the conservative close-gate signal.
+
 The reducer is **pure** — no live agent spawn, no I/O. A later live-jury
 caller (TRUST-7) convenes real jurors and feeds their ballots in unchanged.
 """
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from enum import StrEnum
 from statistics import fmean
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.common import CriterionAcceptanceStyle
-from eawf.kernel.state.enums import AgentReportVerdict
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole
+from eawf.observability.eval.reputation import ReliabilityStatus, RoleReliability
 
 #: Mean at or above this clears a graded vote to ``PASS`` (when the spread
 #: is within :data:`CONSENSUS_SPREAD`). Mirrors the ``0.85`` floor the
@@ -65,6 +84,14 @@ CONSENSUS_SPREAD: float = 0.5
 _VETO_VERDICTS: frozenset[AgentReportVerdict] = frozenset(
     {AgentReportVerdict.FAIL, AgentReportVerdict.BLOCKED}
 )
+
+#: Weight given to a juror whose reliability is unavailable -- no matching
+#: :class:`~eawf.observability.eval.reputation.RoleReliability` row, an
+#: ``INSUFFICIENT`` row, or a ballot carrying no ``(agent_role, runtime)`` to
+#: match on. A uniform neutral weight makes the weighted mean collapse to the
+#: plain mean when every juror is neutral (the honest-negative case today), so
+#: reliability weighting is behavior-preserving until SCORED rows accrue.
+NEUTRAL_JUROR_WEIGHT: float = 1.0
 
 
 class JuryAggregateOutcome(StrEnum):
@@ -103,6 +130,15 @@ class JurorBallot(BaseModel):
             graded ballot.
         score: The juror's score in ``[0.0, 1.0]`` for a graded ballot;
             ``None`` for a binary ballot.
+        agent_role: Role of the agent that cast the ballot, used to match the
+            ballot to its
+            :class:`~eawf.observability.eval.reputation.RoleReliability` row for
+            reliability weighting. ``None`` (the default) means the ballot is
+            not matched to a reliability row and is given the neutral weight, so
+            every existing construction site is unaffected.
+        runtime: Runtime adapter id that cast the ballot, the second half of the
+            ``(agent_role, runtime)`` reliability join key. ``None`` (the
+            default) means the ballot is given the neutral weight.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -111,6 +147,8 @@ class JurorBallot(BaseModel):
     acceptance_style: CriterionAcceptanceStyle
     verdict: AgentReportVerdict | None = None
     score: float | None = Field(default=None, ge=0.0, le=1.0)
+    agent_role: AgentSessionRole | None = None
+    runtime: str | None = None
 
     @model_validator(mode="after")
     def _check_style_payload(self) -> JurorBallot:
@@ -164,6 +202,48 @@ class JuryAggregate(BaseModel):
     reasons: tuple[str, ...] = ()
 
 
+def juror_weight(
+    ballot: JurorBallot,
+    reliability: Mapping[tuple[AgentSessionRole, str], RoleReliability] | None,
+) -> float:
+    """Return the reliability weight for one juror's ballot.
+
+    The natural juror weight is the conservative DISPLAY held-rate of its
+    matching :class:`~eawf.observability.eval.reputation.RoleReliability` --
+    :attr:`~eawf.observability.eval.reputation.RoleReliability.posterior_lower_bound`,
+    which never overstates a role that got lucky on a tiny sample. The weight is
+    that lower bound exactly when the ballot carries an ``(agent_role, runtime)``
+    pair, *reliability* holds a row for that pair, the row is
+    :attr:`~eawf.observability.eval.reputation.ReliabilityStatus.SCORED`, and its
+    lower bound is not ``None``. Every other case falls back to
+    :data:`NEUTRAL_JUROR_WEIGHT`:
+
+    - *reliability* is ``None`` (no map supplied);
+    - the ballot carries no ``agent_role`` or no ``runtime`` to match on;
+    - no row exists for the ballot's ``(agent_role, runtime)`` pair;
+    - the matching row is ``INSUFFICIENT`` (the honest-negative surface today --
+      the reputation engine scores no role yet) or has a ``None`` lower bound.
+
+    Args:
+        ballot: The juror ballot to weight.
+        reliability: Map from ``(agent_role, runtime)`` to the role's
+            :class:`~eawf.observability.eval.reputation.RoleReliability`, or
+            ``None`` to weight every juror neutrally.
+
+    Returns:
+        The juror's weight: the SCORED row's ``posterior_lower_bound`` when
+        available, else :data:`NEUTRAL_JUROR_WEIGHT`.
+    """
+    if reliability is None or ballot.agent_role is None or ballot.runtime is None:
+        return NEUTRAL_JUROR_WEIGHT
+    row = reliability.get((ballot.agent_role, ballot.runtime))
+    if row is None or row.status is not ReliabilityStatus.SCORED:
+        return NEUTRAL_JUROR_WEIGHT
+    if row.posterior_lower_bound is None:
+        return NEUTRAL_JUROR_WEIGHT
+    return row.posterior_lower_bound
+
+
 def _resolve_binary(
     verdicts: tuple[AgentReportVerdict, ...],
 ) -> tuple[JuryAggregateOutcome, tuple[str, ...]]:
@@ -182,15 +262,36 @@ def _resolve_binary(
     return JuryAggregateOutcome.NEEDS_USER, ("binary split with no veto: no clean consensus",)
 
 
+def _weighted_mean(scores: tuple[float, ...], weights: tuple[float, ...]) -> float:
+    """Return the reliability-weighted mean of *scores*.
+
+    The weighted mean is ``sum(w_i * s_i) / sum(w_i)``. When every weight is
+    equal (the neutral-weight case, including the honest-negative path today)
+    this is exactly the plain :func:`~statistics.fmean`. A degenerate all-zero
+    weight vector cannot down-weight every juror to nothing, so it falls back to
+    the unweighted mean rather than dividing by zero.
+    """
+    total_weight = math.fsum(weights)
+    if total_weight <= 0.0:
+        return fmean(scores)
+    return math.fsum(w * s for w, s in zip(weights, scores, strict=True)) / total_weight
+
+
 def _resolve_graded(
     scores: tuple[float, ...],
+    weights: tuple[float, ...],
 ) -> tuple[JuryAggregateOutcome, float, float, tuple[str, ...]]:
     """Resolve the graded (mean) side of a vote.
 
-    Returns the outcome, the mean, the spread, and the reasons. A spread above
-    :data:`CONSENSUS_SPREAD` signals no consensus regardless of the mean.
+    Returns the outcome, the mean, the spread, and the reasons. The mean is the
+    reliability-weighted mean of *scores* (see :func:`_weighted_mean`); with all
+    weights neutral it equals the plain :func:`~statistics.fmean`. The spread
+    stays the raw ``max - min`` of the scores -- weighting tunes the central
+    estimate, but disagreement among jurors is the consensus signal and must not
+    be diluted by a juror's weight. A spread above :data:`CONSENSUS_SPREAD`
+    signals no consensus regardless of the mean.
     """
-    mean = fmean(scores)
+    mean = _weighted_mean(scores, weights)
     spread = max(scores) - min(scores)
     if spread > CONSENSUS_SPREAD:
         return (
@@ -235,7 +336,10 @@ def _combine_mixed(
     return JuryAggregateOutcome.NEEDS_USER
 
 
-def aggregate_jury(ballots: tuple[JurorBallot, ...]) -> JuryAggregate:
+def aggregate_jury(
+    ballots: tuple[JurorBallot, ...],
+    reliability: Mapping[tuple[AgentSessionRole, str], RoleReliability] | None = None,
+) -> JuryAggregate:
     """Reduce juror ballots into a single :class:`JuryAggregate`.
 
     Minority-veto for binary verdicts, mean for graded scores. A genuine
@@ -243,12 +347,28 @@ def aggregate_jury(ballots: tuple[JurorBallot, ...]) -> JuryAggregate:
     graded mid-band / high-variance vote) routes to
     :attr:`JuryAggregateOutcome.NEEDS_USER`.
 
+    When *reliability* is supplied, the graded mean is reliability-weighted:
+    each graded ballot is weighted by :func:`juror_weight` (its matching SCORED
+    role's conservative held-rate lower bound, else
+    :data:`NEUTRAL_JUROR_WEIGHT`), so a more reliable juror pulls the mean toward
+    its score. With *reliability* omitted, or when every weight is neutral (the
+    honest-negative case today -- the reputation engine scores no role yet), the
+    weighted mean is identical to the plain mean, so the reducer is
+    behavior-preserving until SCORED reliability accrues. The binary
+    minority-veto is **never** down-weighted: a single credible veto still sinks
+    the vote regardless of that juror's weight -- one credible refutation is the
+    conservative close-gate signal.
+
     Pure: no live agent spawn, no I/O. A later live-jury caller convenes real
     jurors and passes their ballots in unchanged.
 
     Args:
         ballots: One or more :class:`JurorBallot` rows. Binary and graded
             ballots may be mixed; the reducer keeps minority-veto dominant.
+        reliability: Optional map from ``(agent_role, runtime)`` to the role's
+            :class:`~eawf.observability.eval.reputation.RoleReliability`, used to
+            weight the graded mean. ``None`` (the default) weights every juror
+            neutrally, leaving the graded mean equal to the unweighted mean.
 
     Returns:
         The reduced :class:`JuryAggregate`.
@@ -262,6 +382,7 @@ def aggregate_jury(ballots: tuple[JurorBallot, ...]) -> JuryAggregate:
 
     verdicts = tuple(b.verdict for b in ballots if b.verdict is not None)
     scores = tuple(b.score for b in ballots if b.score is not None)
+    weights = tuple(juror_weight(b, reliability) for b in ballots if b.score is not None)
     veto_count = sum(1 for v in verdicts if v in _VETO_VERDICTS)
 
     has_binary = bool(verdicts)
@@ -278,7 +399,7 @@ def aggregate_jury(ballots: tuple[JurorBallot, ...]) -> JuryAggregate:
         )
 
     if has_graded and not has_binary:
-        outcome, mean, spread, reasons = _resolve_graded(scores)
+        outcome, mean, spread, reasons = _resolve_graded(scores, weights)
         return JuryAggregate(
             outcome=outcome,
             acceptance_style="graded",
@@ -291,7 +412,7 @@ def aggregate_jury(ballots: tuple[JurorBallot, ...]) -> JuryAggregate:
 
     # Mixed binary + graded ballots.
     binary_outcome, binary_reasons = _resolve_binary(verdicts)
-    graded_outcome, mean, spread, graded_reasons = _resolve_graded(scores)
+    graded_outcome, mean, spread, graded_reasons = _resolve_graded(scores, weights)
     combined = _combine_mixed(binary_outcome, graded_outcome)
     reasons = ("mixed binary+graded vote", *binary_reasons, *graded_reasons)
     return JuryAggregate(
@@ -308,9 +429,11 @@ def aggregate_jury(ballots: tuple[JurorBallot, ...]) -> JuryAggregate:
 __all__ = [
     "CONSENSUS_SPREAD",
     "FAIL_SCORE_THRESHOLD",
+    "NEUTRAL_JUROR_WEIGHT",
     "PASS_SCORE_THRESHOLD",
     "JurorBallot",
     "JuryAggregate",
     "JuryAggregateOutcome",
     "aggregate_jury",
+    "juror_weight",
 ]

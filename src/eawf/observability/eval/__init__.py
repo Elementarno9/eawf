@@ -25,11 +25,13 @@ from eawf.observability.eval.cross_vendor_jury import (
 from eawf.observability.eval.jury import (
     CONSENSUS_SPREAD,
     FAIL_SCORE_THRESHOLD,
+    NEUTRAL_JUROR_WEIGHT,
     PASS_SCORE_THRESHOLD,
     JurorBallot,
     JuryAggregate,
     JuryAggregateOutcome,
     aggregate_jury,
+    juror_weight,
 )
 from eawf.observability.eval.models import EvalScore
 from eawf.observability.eval.reputation import (
@@ -71,6 +73,7 @@ __all__ = [
     "JURY_QUORUM",
     "JURY_RUNTIME_FAMILIES",
     "MIN_SELF_EVAL_N",
+    "NEUTRAL_JUROR_WEIGHT",
     "PASS_SCORE_THRESHOLD",
     "RULE_IDS",
     "CrossVendorJuryResult",
@@ -96,6 +99,7 @@ __all__ = [
     "compute_self_eval",
     "confidence_to_float",
     "convene_cross_vendor_jury",
+    "juror_weight",
     "load_recorded_wave_cases",
     "map_reliability_to_tier",
     "score_envelope",
