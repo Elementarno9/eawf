@@ -58,6 +58,13 @@ _URN_TAIL = r"[^\s\]\[()<>,'\"`]+"
 _PROJECT_CODE = r"[A-Z][A-Z0-9_-]{1,15}"
 _LIFECYCLE = r"P\d{2,}(?:-I\d{2,}(?:-W\d{2,})?)?"
 
+#: Bare inline dense-citation marker (``[N]``) to rewrite into an anchor link.
+#: The guards keep three near-shapes untouched: image alt-text (``![N]``), an
+#: already-linkified marker (``[\[N\]]`` -- the inner ``[`` is preceded by a
+#: backslash), and a markdown link whose text is ``N`` (``[N](url)`` -- ``[N]``
+#: followed by ``(``).
+_CITATION_MARKER_RE = re.compile(r"(?<!\!)(?<!\\)\[(?P<n>[1-9][0-9]*)\](?!\()")
+
 
 @dataclass(frozen=True)
 class LinkPattern:
@@ -252,6 +259,35 @@ def linkify_text(text: str) -> str:
     return "".join(chunks)
 
 
+def _citation_link(match: re.Match[str]) -> str:
+    """Return the anchor-link replacement for a bare ``[N]`` marker."""
+    n = match.group("n")
+    return rf"[\[{n}\]](#ref-{n})"
+
+
+def linkify_citations(text: str) -> str:
+    """Rewrite inline ``[N]`` citation markers to ``#ref-N`` anchor links.
+
+    Turns each bare ``[N]`` dense-citation marker in *text* into
+    ``[\\[N\\]](#ref-N)`` -- a link whose visible text is the literal
+    ``[N]`` and whose target is the row anchor
+    :func:`eawf.surfaces.render.artifact_chassis.render_references` emits, so
+    a reader can fast-travel from any inline marker to its reference row. The
+    rewrite is idempotent and leaves image alt-text (``![N]``), an
+    already-linkified marker, and a ``[N](url)`` markdown link untouched. The
+    widened citation-marker grammar in
+    :data:`eawf.platform.artifacts.references._CITATION_REF_RE` counts the
+    rewritten form, so dense-citation validation passes on the output.
+
+    Args:
+        text: The markdown prose whose inline citation markers are linked.
+
+    Returns:
+        *text* with each bare ``[N]`` marker rewritten to an anchor link.
+    """
+    return _CITATION_MARKER_RE.sub(_citation_link, text)
+
+
 def tooltip_summary(text: str, *, max_refs: int = 3) -> str | None:
     """Return a generic hover tooltip for refs in *text*."""
     refs = iter_refs(text)
@@ -271,6 +307,7 @@ __all__ = [
     "ReferenceKind",
     "action_markup",
     "iter_refs",
+    "linkify_citations",
     "linkify_text",
     "tooltip_summary",
 ]

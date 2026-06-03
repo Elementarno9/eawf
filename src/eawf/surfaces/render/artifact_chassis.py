@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from eawf.platform.artifacts.references import Citation
+from eawf.surfaces.render.link_wrap import linkify_citations
 
 
 def reference_anchor(n: int) -> str:
@@ -52,6 +53,25 @@ def render_references(references: Iterable[Citation]) -> list[str]:
         self_link = rf"[\[{citation.n}\]](#{anchor})"
         lines.append(f'{citation.n}. <a id="{anchor}"></a>{self_link} {citation.ref}{title}{note}')
     return lines
+
+
+def link_inline_citations(prose: str) -> str:
+    """Link inline ``[N]`` citation markers in an artifact prose block.
+
+    The chassis entry point for the inline-citation linkifier: it delegates to
+    :func:`eawf.surfaces.render.link_wrap.linkify_citations` so a caller that
+    assembles chassis prose has one place to turn its bare ``[N]`` markers into
+    ``#ref-N`` anchor links that target the rows
+    :func:`render_references` emits. The rewrite is idempotent and leaves the
+    self-links inside an already-rendered ``## References`` block untouched.
+
+    Args:
+        prose: The assembled artifact prose (markers + reference rows).
+
+    Returns:
+        *prose* with each bare inline ``[N]`` marker linked to its row anchor.
+    """
+    return linkify_citations(prose)
 
 
 def render_provenance(*, kind: str, record_id: str, scope_id: str | None) -> list[str]:

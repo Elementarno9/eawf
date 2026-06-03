@@ -13,7 +13,17 @@ from eawf.kernel.state.urn import parse as parse_urn
 
 CitationKind = Literal["repo", "url", "urn"]
 
-_CITATION_REF_RE = re.compile(r"(?<!\!)\[(?P<n>[1-9][0-9]*)\]")
+#: Inline dense-citation marker grammar. Matches the bare ``[N]`` marker and
+#: the render-time linkified ``[\[N\]](#ref-N)`` form
+#: (:func:`eawf.surfaces.render.link_wrap.linkify_citations`) so the same
+#: marker is counted once whether or not it has been turned into an anchor
+#: link. The ``(?<!\!)`` guard keeps image alt-text (``![1](img.png)``) from
+#: counting as a citation.
+_CITATION_REF_RE = re.compile(
+    r"(?<!\!)"
+    r"(?:\[\\\[(?P<n_link>[1-9][0-9]*)\\\]\]\(#ref-\d+\)"
+    r"|\[(?P<n>[1-9][0-9]*)\])"
+)
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
 
 
@@ -92,8 +102,22 @@ def validate_dense_citations(citations: list[Citation]) -> None:
 
 
 def citation_numbers_in_text(text: str) -> list[int]:
-    """Return citation numbers referenced as ``[N]`` in markdown prose."""
-    return [int(match.group("n")) for match in _CITATION_REF_RE.finditer(text)]
+    """Return citation numbers referenced in markdown prose.
+
+    Counts both the bare ``[N]`` marker and the render-time linkified
+    ``[\\[N\\]](#ref-N)`` form, so dense-citation validation passes equally
+    on a pre-render body and on one whose markers have been turned into
+    anchor links.
+
+    Args:
+        text: The markdown prose to scan.
+
+    Returns:
+        The cited numbers in document order (one entry per marker).
+    """
+    return [
+        int(match.group("n") or match.group("n_link")) for match in _CITATION_REF_RE.finditer(text)
+    ]
 
 
 def validate_dense_citation_refs(text: str, citations: list[Citation]) -> None:

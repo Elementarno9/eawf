@@ -17,7 +17,11 @@ from eawf.platform.artifacts.validation import (
     validate_markdown_artifact,
 )
 from eawf.platform.scrub.scan import rewrite_text, scan_text
-from eawf.surfaces.render.artifact_chassis import reference_anchor, render_references
+from eawf.surfaces.render.artifact_chassis import (
+    link_inline_citations,
+    reference_anchor,
+    render_references,
+)
 
 
 def _artifact_body(
@@ -248,3 +252,22 @@ def test_validate_markdown_artifact_accepts_new_anchored_reference_rows() -> Non
         )
     )
     assert report.ok, report.errors
+
+
+# ---- chassis inline-citation linkify (W14) ----------------------------------
+
+
+def test_link_inline_citations_links_prose_and_preserves_reference_self_links() -> None:
+    rendered = render_references([Citation(n=1, ref="src/eawf/a.py:10")])
+    body = _artifact_body(
+        summary="Loader is strict [1].",
+        references="\n".join(rendered[2:]),
+    )
+    linked = link_inline_citations(body)
+    # The inline prose marker becomes an anchor link.
+    assert r"strict [\[1\]](#ref-1)" in linked
+    # The already-rendered reference self-link is not double-rewritten.
+    assert r"[\[1\]](#ref-1) src/eawf/a.py:10" in linked
+    assert "(#ref-1)(#ref-1)" not in linked
+    # The linked body still validates as an artifact.
+    assert validate_markdown_artifact(linked).ok
