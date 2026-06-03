@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.runtime.runtimes.codex import package_plugin
+from eawf.runtime.runtimes.codex import PublishSource, package_plugin
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
 from eawf.surfaces.render.skills import SKILL_REGISTRY
 
@@ -37,7 +37,12 @@ def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
 
 def test_marketplace_json_has_required_codex_schema_fields(tmp_path: Path) -> None:
     """Per Codex marketplace schema: name, interface.displayName, plugins[]
-    with name/source/policy/category per plugin."""
+    with name/source/policy/category per plugin.
+
+    The default ``package_plugin`` call keeps the ``local`` source so the
+    dev ``codex plugin marketplace add ./path`` flow is unchanged — the
+    published ``git-subdir`` form is opt-in via ``publish_source``.
+    """
     target = tmp_path / "pkg"
     package_plugin(target)
     body = json.loads(
@@ -52,6 +57,41 @@ def test_marketplace_json_has_required_codex_schema_fields(tmp_path: Path) -> No
     assert plugin_entry["policy"]["installation"] in {"AVAILABLE", "INSTALLED_BY_DEFAULT"}
     assert plugin_entry["policy"]["authentication"] in {"ON_INSTALL", "ON_FIRST_USE"}
     assert plugin_entry["category"]
+
+
+def test_marketplace_published_emits_git_subdir_source(tmp_path: Path) -> None:
+    """``publish_source=GIT_SUBDIR`` emits the self-hosted pointer: a
+    git-subdir source carrying url (from pyproject), path, and a moving ref."""
+    target = tmp_path / "pkg"
+    package_plugin(target, publish_source=PublishSource.GIT_SUBDIR)
+    body = json.loads(
+        (target / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
+    )
+    source = body["plugins"][0]["source"]
+    assert source["source"] == "git-subdir"
+    assert source["path"] == "./plugins/eawf"
+    assert source["ref"] == "plugins-dist"
+    # ref XOR sha — the packager pins ref (a branch tip), never both.
+    assert "sha" not in source
+    # url is pulled from pyproject [project.urls].Repository, never invented.
+    assert source["url"].startswith("https://")
+    assert source["url"].endswith("/eawf")
+
+
+def test_marketplace_git_subdir_url_from_pyproject() -> None:
+    """The git-subdir url resolves to the committed pyproject Repository URL."""
+    from eawf.runtime.runtimes.codex.plugin_package import _eawf_repository_url
+
+    assert _eawf_repository_url() == "https://github.com/Elementarno9/eawf"
+
+
+def test_marketplace_published_pointer_has_no_pii(tmp_path: Path) -> None:
+    """Published git-subdir pointer carries no machine path or email."""
+    target = tmp_path / "pkg"
+    package_plugin(target, publish_source=PublishSource.GIT_SUBDIR)
+    serialised = (target / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
+    assert "@" not in serialised
+    assert "/Users/" not in serialised  # pragma: allowlist secret
 
 
 def test_plugin_manifest_matches_install_renderer(tmp_path: Path) -> None:

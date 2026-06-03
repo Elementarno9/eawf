@@ -27,13 +27,18 @@ from eawf.runtime.runtimes.codex.plugin_install import (
     expected_paths,
     install_plugin,
 )
-from eawf.runtime.runtimes.codex.plugin_package import PackageResult, package_plugin
+from eawf.runtime.runtimes.codex.plugin_package import (
+    PackageResult,
+    PublishSource,
+    package_plugin,
+)
 
 __all__ = [
     "CodexUserPluginConflict",
     "DoctorReport",
     "InstallResult",
     "PackageResult",
+    "PublishSource",
     "Scope",
     "detect_user_install",
     "doctor_plugin",

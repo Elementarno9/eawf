@@ -17,9 +17,14 @@ lighter import path should reach into the relevant submodule directly.
 
 from __future__ import annotations
 
-from eawf.runtime.runtimes.claude.plugin_package import PackageResult, package_plugin
+from eawf.runtime.runtimes.claude.plugin_package import (
+    PackageResult,
+    PublishSource,
+    package_plugin,
+)
 
 __all__ = [
     "PackageResult",
+    "PublishSource",
     "package_plugin",
 ]

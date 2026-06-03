@@ -15,7 +15,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
-from eawf.runtime.runtimes.claude.plugin_package import package_plugin
+from eawf.runtime.runtimes.claude.plugin_package import PublishSource, package_plugin
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.exit_codes import STATE_CONFLICT, USER_ERROR
 from eawf.surfaces.render.skills import SKILL_REGISTRY
@@ -62,6 +62,8 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert "/Users/" not in serialised  # pragma: allowlist secret
     marketplace = json.loads((target / ".claude-plugin" / "marketplace.json").read_text())
     assert marketplace["name"] == "eawf-local"
+    # Default publish_source keeps the relative dev source so
+    # ``/plugin marketplace add <path>`` is unchanged; npm is opt-in.
     assert marketplace["plugins"][0]["source"] == "./"
     assert (target / "skills" / "research" / "SKILL.md").exists()
     assert (target / "skills" / "flow" / "SKILL.md").exists()
@@ -181,6 +183,26 @@ def test_package_skips_marketplace_when_disabled(tmp_path: Path) -> None:
     package_plugin(target, include_marketplace=False)
     assert (target / ".claude-plugin" / "plugin.json").exists()
     assert not (target / ".claude-plugin" / "marketplace.json").exists()
+
+
+def test_package_published_emits_npm_source(tmp_path: Path) -> None:
+    """``publish_source=NPM`` rewrites the plugin source to the npm pointer."""
+    target = tmp_path / "eawf-plugin"
+    package_plugin(target, publish_source=PublishSource.NPM)
+    marketplace = json.loads((target / ".claude-plugin" / "marketplace.json").read_text())
+    # Marketplace identity is unchanged; only the plugin source kind flips.
+    assert marketplace["name"] == "eawf-local"
+    source = marketplace["plugins"][0]["source"]
+    assert source == {"source": "npm", "package": "eawf"}
+
+
+def test_package_published_npm_has_no_pii(tmp_path: Path) -> None:
+    """The npm published marketplace carries no machine path or email."""
+    target = tmp_path / "eawf-plugin"
+    package_plugin(target, publish_source=PublishSource.NPM)
+    serialised = (target / ".claude-plugin" / "marketplace.json").read_text()
+    assert "@" not in serialised
+    assert "/Users/" not in serialised  # pragma: allowlist secret
 
 
 def test_package_skips_readme_when_disabled(tmp_path: Path) -> None:

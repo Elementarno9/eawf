@@ -42,6 +42,18 @@ CLAUDE.md
 .codex/
 .opencode/
 
+# Self-hosted marketplace catalog pointers ARE committed — small declarative
+# manifests (NOT rendered plugin trees) that publish the install source for
+# each runtime. Re-included with explicit negations so an operator's global
+# ignore of a bare `.agents` / `.claude-plugin` dir cannot drop them. A
+# directory negation must precede the nested-file negation (git cannot
+# re-include a file under an excluded directory).
+!.claude-plugin/
+!.claude-plugin/marketplace.json
+!.agents/
+!.agents/plugins/
+!.agents/plugins/marketplace.json
+
 # .ea/ — state.json + config.yaml + store/*.jsonl are committed; locks +
 # local scratch + manifest cache + instrument-probe cache + worktrees +
 # state migration backups are not.

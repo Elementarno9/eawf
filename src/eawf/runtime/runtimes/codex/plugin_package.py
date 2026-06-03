@@ -47,10 +47,13 @@ Public API mirrors the Claude package adapter:
 
 from __future__ import annotations
 
+import enum
 import json
 import logging
 import os
+import tomllib
 from dataclasses import dataclass, field
+from importlib.resources import files
 from pathlib import Path
 
 from eawf.runtime.runtimes.codex.hook_map import codex_hook_name
@@ -75,6 +78,68 @@ _MANIFEST_DIR: str = ".codex-plugin"
 _MANIFEST_FILE: str = "plugin.json"
 _MARKETPLACE_SUBDIR: tuple[str, ...] = (".agents", "plugins")
 _MARKETPLACE_FILE: str = "marketplace.json"
+
+#: Sub-directory the published ``git-subdir`` pointer references inside the
+#: ``plugins-dist`` branch — mirrors the ``plugins/eawf`` layout this packager
+#: emits under any local target.
+_PUBLISHED_SUBDIR: str = f"./plugins/{_PLUGIN_NAME}"
+#: Branch the self-hosted CI publish step pushes the rendered tree onto. The
+#: pointer references it declaratively; the branch itself lands in a later wave.
+_PUBLISHED_REF: str = "plugins-dist"
+#: Fallback repo URL when pyproject metadata cannot be located (wheel install).
+#: Kept in sync with ``pyproject.toml [project.urls].Repository``.
+_FALLBACK_REPOSITORY: str = "https://github.com/Elementarno9/eawf"
+
+_MAX_PYPROJECT_WALK_LEVELS: int = 2
+
+
+class PublishSource(enum.StrEnum):
+    """Marketplace ``source`` shape the packager emits.
+
+    ``LOCAL`` is the dev default — a relative-path source the operator
+    registers with ``codex plugin marketplace add ./path``. ``GIT_SUBDIR``
+    is the self-hosted published form that points Codex at the rendered tree
+    on the ``plugins-dist`` branch of the canonical repo (the tree need not
+    live in the marketplace repo per the Codex ``git-subdir`` source kind).
+    """
+
+    LOCAL = "local"
+    GIT_SUBDIR = "git-subdir"
+
+
+def _eawf_repository_url() -> str:
+    """Return the canonical repo URL from eawf's own ``pyproject.toml``.
+
+    Anchors on the :mod:`eawf` package so a wheel install nested inside an
+    unrelated host project cannot pick up the host's pyproject. Walks up at
+    most :data:`_MAX_PYPROJECT_WALK_LEVELS` levels and requires
+    ``[project].name == "eawf"`` before trusting the file. Falls back to
+    :data:`_FALLBACK_REPOSITORY` when no eawf pyproject is found (wheel
+    install) so the published pointer never carries a host project's URL.
+    """
+    package_root = Path(str(files("eawf"))).resolve()
+    candidates = [package_root, *package_root.parents][: _MAX_PYPROJECT_WALK_LEVELS + 1]
+    for candidate in candidates:
+        pyproject_path = candidate / "pyproject.toml"
+        if not pyproject_path.is_file():
+            continue
+        try:
+            with pyproject_path.open("rb") as fh:
+                data = tomllib.load(fh)
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            logger.debug(f"_eawf_repository_url skip-unreadable path={pyproject_path} error={exc}")
+            continue
+        project = data.get("project", {})
+        if project.get("name") != "eawf":
+            # First pyproject found is a host project's; stop walking.
+            break
+        urls = project.get("urls") or {}
+        repository = urls.get("Repository") or urls.get("repository")
+        if isinstance(repository, str) and repository:
+            return repository
+        break
+    logger.debug("_eawf_repository_url pyproject-not-located; using fallback repository URL")
+    return _FALLBACK_REPOSITORY
 
 
 @dataclass(frozen=True)
@@ -109,14 +174,37 @@ def _plugin_root(target: Path) -> Path:
     return target / "plugins" / _PLUGIN_NAME
 
 
-def _render_marketplace() -> bytes:
+def _render_source(publish_source: PublishSource) -> dict[str, str]:
+    """Return the ``plugins[].source`` object for *publish_source*.
+
+    ``LOCAL`` emits the relative-path dev source the operator registers via
+    ``codex plugin marketplace add ./path``. ``GIT_SUBDIR`` emits the
+    self-hosted published pointer: ``url`` from the canonical pyproject
+    Repository, ``path`` the rendered sub-tree, and ``ref`` the publish
+    branch. Per the Codex ``git-subdir`` source kind ``ref`` and ``sha`` are
+    mutually exclusive; this packager pins ``ref`` (a moving branch tip).
+    """
+    if publish_source is PublishSource.GIT_SUBDIR:
+        return {
+            "source": "git-subdir",
+            "url": _eawf_repository_url(),
+            "path": _PUBLISHED_SUBDIR,
+            "ref": _PUBLISHED_REF,
+        }
+    return {"source": "local", "path": _PUBLISHED_SUBDIR}
+
+
+def _render_marketplace(publish_source: PublishSource = PublishSource.LOCAL) -> bytes:
     """Render ``marketplace.json`` using the Codex marketplace schema.
 
     Required fields (from Codex Build-plugin reference):
     ``name``, ``interface.displayName``, ``plugins`` array with each
-    entry carrying ``name``, ``source.source = "local"``,
-    ``source.path``, ``policy.installation``, ``policy.authentication``,
-    and ``category``.
+    entry carrying ``name``, ``source`` (shape per :func:`_render_source`),
+    ``policy.installation``, ``policy.authentication``, and ``category``.
+
+    Args:
+        publish_source: ``LOCAL`` (dev default) or ``GIT_SUBDIR`` (the
+            self-hosted published pointer form).
     """
     body: dict[str, object] = {
         "name": _MARKETPLACE_NAME,
@@ -124,7 +212,7 @@ def _render_marketplace() -> bytes:
         "plugins": [
             {
                 "name": _PLUGIN_NAME,
-                "source": {"source": "local", "path": f"./plugins/{_PLUGIN_NAME}"},
+                "source": _render_source(publish_source),
                 "policy": {
                     "installation": "AVAILABLE",
                     "authentication": "ON_INSTALL",
@@ -179,6 +267,7 @@ def package_plugin(
     *,
     force: bool = False,
     dry_run: bool = False,
+    publish_source: PublishSource = PublishSource.LOCAL,
 ) -> PackageResult:
     """Render the Codex marketplace tree at *target*.
 
@@ -190,6 +279,10 @@ def package_plugin(
             renderer always rewrites the full tree).
         dry_run: When ``True``, returns the :class:`PackageResult`
             describing what would be written but writes nothing.
+        publish_source: Marketplace ``source`` shape. ``LOCAL`` (default)
+            keeps the relative-path dev source for ``marketplace add
+            ./path``; ``GIT_SUBDIR`` emits the self-hosted published
+            pointer at the canonical repo's ``plugins-dist`` branch.
 
     Raises:
         ValueError: when *target* is non-empty and not a previous eawf
@@ -233,7 +326,7 @@ def package_plugin(
     manifest_delta = FileDelta(path=manifest_path, action=manifest_action)
 
     marketplace_path = _marketplace_path(target)
-    marketplace_payload = _render_marketplace()
+    marketplace_payload = _render_marketplace(publish_source)
     marketplace_action = _classify(marketplace_path, marketplace_payload)
     if not dry_run:
         _ensure_dir(marketplace_path.parent)
@@ -247,7 +340,7 @@ def package_plugin(
         f"package_plugin runtime=codex target={target} "
         f"skills={len(skill_deltas)} hooks={len(hook_deltas)} "
         f"manifest={manifest_action} marketplace={marketplace_action} "
-        f"dry_run={dry_run}"
+        f"publish_source={publish_source.value} dry_run={dry_run}"
     )
     return PackageResult(
         target=target,
@@ -263,5 +356,6 @@ __all__ = [
     "FileDelta",
     "IntegrityViolation",
     "PackageResult",
+    "PublishSource",
     "package_plugin",
 ]

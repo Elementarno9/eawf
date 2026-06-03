@@ -38,6 +38,7 @@ Public API::
 
 from __future__ import annotations
 
+import enum
 import json
 import logging
 import os
@@ -77,10 +78,28 @@ _README_TEMPLATE: str = "plugin-readme.md.j2"
 
 _PLUGIN_NAME: str = "eawf"
 
+#: npm package the published Claude marketplace pointer references. The
+#: rendered Claude plugin ships as this npm artifact (analogous to the PyPI
+#: wheel); the name tracks the project / plugin name.
+_NPM_PACKAGE: str = _PLUGIN_NAME
+
 # File mode for hook wrapper scripts — POSIX rwxr-xr-x. Mirrors
 # :data:`eawf.runtime.runtimes.claude.plugin_install._HOOK_FILE_MODE` so the
 # packaged tree behaves like the repo-install tree once mounted.
 _HOOK_FILE_MODE: int = 0o755
+
+
+class PublishSource(enum.StrEnum):
+    """Marketplace ``source`` shape the Claude packager emits.
+
+    ``LOCAL`` is the dev default — the relative ``"./"`` source the operator
+    registers via ``/plugin marketplace add <path>``. ``NPM`` is the
+    self-hosted published form pointing Claude Code at the npm-published
+    plugin artifact.
+    """
+
+    LOCAL = "local"
+    NPM = "npm"
 
 
 # --------------------------------------------------------------------------- #
@@ -271,12 +290,31 @@ def render_plugin_manifest(
     return canonical
 
 
-def _render_marketplace(*, author_name: str) -> str:
-    """Render ``marketplace.json`` text (sorted-keys canonical form)."""
+def _render_marketplace(
+    *,
+    author_name: str,
+    publish_source: PublishSource = PublishSource.LOCAL,
+) -> str:
+    """Render ``marketplace.json`` text (sorted-keys canonical form).
+
+    The bundled template emits the dev ``"source": "./"`` form. When
+    *publish_source* is ``NPM`` the plugin entry's ``source`` is rewritten
+    to the npm pointer ``{"source": "npm", "package": ...}`` post-parse so
+    the dev default stays byte-identical to the template.
+
+    Args:
+        author_name: Marketplace owner display name.
+        publish_source: ``LOCAL`` (dev default) or ``NPM`` (published
+            pointer form).
+    """
     env = _load_environment()
     template = env.get_template(_MARKETPLACE_TEMPLATE)
     rendered = template.render(author_name=author_name)
     parsed = json.loads(rendered)
+    if publish_source is PublishSource.NPM:
+        for plugin in parsed.get("plugins", []):
+            if plugin.get("name") == _PLUGIN_NAME:
+                plugin["source"] = {"source": "npm", "package": _NPM_PACKAGE}
     canonical = json.dumps(parsed, sort_keys=True, indent=2) + "\n"
     return canonical
 
@@ -390,6 +428,7 @@ def package_plugin(
     include_hooks: bool = True,
     force: bool = False,
     dry_run: bool = False,
+    publish_source: PublishSource = PublishSource.LOCAL,
 ) -> PackageResult:
     """Emit an installable Claude Code plugin tree under *target_dir*.
 
@@ -399,6 +438,9 @@ def package_plugin(
             already holds an eawf plugin output, or ``force=True``.
         include_marketplace: Emit ``.claude-plugin/marketplace.json``
             so the directory works as a single-plugin local marketplace.
+        publish_source: Marketplace ``source`` shape. ``LOCAL`` (default)
+            keeps the relative ``"./"`` dev source; ``NPM`` emits the
+            self-hosted published pointer at the npm artifact.
         include_readme: Emit ``README.md`` describing install steps.
         include_hooks: Emit ``hooks.json`` at the plugin root plus
             ``hooks/<event>.sh`` wrappers for the six session-level
@@ -439,7 +481,11 @@ def package_plugin(
         homepage=homepage,
         repository=repository,
     )
-    marketplace = _render_marketplace(author_name=author_name) if include_marketplace else None
+    marketplace = (
+        _render_marketplace(author_name=author_name, publish_source=publish_source)
+        if include_marketplace
+        else None
+    )
     readme = _render_readme() if include_readme else None
 
     skill_outputs: list[tuple[Path, str]] = []
@@ -537,6 +583,7 @@ def package_plugin(
 
 __all__ = [
     "PackageResult",
+    "PublishSource",
     "package_plugin",
     "render_plugin_manifest",
 ]
