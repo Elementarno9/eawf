@@ -17,10 +17,13 @@ The three defects and their direct (non-jury) probes:
 * **stale-feed** -- after a fresh ``on_state`` delivery carrying a new
   attention signal the band's :meth:`AttentionFeed.items` does NOT change
   under the flag (stale), but DOES refresh without it.
-* **hard near-miss** -- the breadcrumb ``code`` segment renders as PLAIN
-  (no ``[@click=`` markup) under the flag yet its
-  ``app.switch_mode('home')`` action still RESOLVES (de-linked look, live
-  behaviour); without the flag the segment carries the ``[@click=`` link.
+* **hard near-miss** -- post-W12 the breadcrumb de-links scope, code, AND the
+  trailing mode (leaf) to plain text, so the shipped surface wires no home
+  shortcut. Under the flag the de-link regresses: the LEAF segment STILL wires
+  ``app.switch_mode('home')`` (the home shortcut stays clickable from the
+  breadcrumb despite the de-link decision) and the action still RESOLVES;
+  without the flag NO home ``[@click=`` survives anywhere (the genuine,
+  complete de-link). The code segment is plain in BOTH builds.
 
 Each test monkeypatches the env var (set + delete) so the default-OFF path
 is asserted alongside the armed-ON path, keeping the cases isolated.
@@ -201,33 +204,64 @@ def test_feed_refreshes_without_flag(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --------------------------------------------------------------------------
-# Defect (c) -- hard near-miss: code segment de-linked but action still resolves
+# Defect (c) -- hard near-miss: breadcrumb still wires home despite the de-link
 # --------------------------------------------------------------------------
+#
+# Post-W12 the breadcrumb de-links scope, code, AND the trailing mode (leaf)
+# to plain text -- the home shortcut is gone from the SHIPPED (flag-off)
+# surface. The near-miss the PoC plants is the de-link regression: under the
+# flag the LEAF segment STILL wires app.switch_mode('home'), so the home action
+# remains clickable from the breadcrumb even though the operator decided to
+# de-link it. The code (project) segment is plain in BOTH builds (the genuine
+# de-link), so the near-miss now rides the leaf home link, not the code link.
 
 
-#: The fully-wrapped code (project) segment when it is a live link. The
-#: project code in the fixture is ``QR``; the trailing mode segment also
-#: links to ``app.switch_mode('home')``, so the near-miss is asserted
-#: against this code-segment-specific markup, not the bare action string.
+#: The fully-wrapped LEAF (trailing mode) segment when it still wires the home
+#: shortcut. The fixture's active mode is ``Home`` (mode_name ``home``), so the
+#: leaf reads ``[@click=app.switch_mode('home')]Home[/]`` when the de-link
+#: regression leaves it live; it is gone (plain ``Home``) when de-linked.
+_LEAF_HOME_LINK_MARKUP = f"[@click={_HOME_ACTION}]Home[/]"
+
+#: The fully-wrapped code (project) segment markup IF the code segment were a
+#: live home link. Post-de-link the code segment is plain in every build, so
+#: this never appears -- pinned to assert the code de-link holds under the flag.
 _CODE_LINK_MARKUP = f"[@click={_HOME_ACTION}]QR[/]"
 
 
 def test_near_miss_code_segment_is_plain_under_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     # Armed: the clickable breadcrumb renders the code (project) segment as
-    # PLAIN text -- the [@click=...]QR[/] wrapper is gone from the markup,
-    # so the segment looks de-linked.
+    # PLAIN text -- the [@click=...]QR[/] wrapper is gone from the markup, so
+    # the segment looks de-linked. The regression lives on the LEAF (still
+    # wiring home), not the code segment.
     monkeypatch.setenv(POC_DEFECTS_ENV, "1")
     crumb = build_breadcrumb(_base_state(), "repo", "Home", mode_name="home", clickable=True)
     assert "QR" in crumb  # the segment still renders...
     assert _CODE_LINK_MARKUP not in crumb  # ...but de-linked (looks right)
+    # ...while the leaf STILL wires home under the flag (the planted regression).
+    assert _LEAF_HOME_LINK_MARKUP in crumb
 
 
-def test_near_miss_code_segment_is_linked_without_flag(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Default: the code segment is a genuine [@click=app.switch_mode('home')]
-    # link -- the real, correct behaviour.
+def test_near_miss_leaf_still_wires_home_under_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Armed: the de-link regression -- the trailing leaf segment STILL carries
+    # the [@click=app.switch_mode('home')]Home[/] link, so the breadcrumb keeps
+    # the home shortcut clickable despite the operator decision to de-link it.
+    monkeypatch.setenv(POC_DEFECTS_ENV, "1")
+    crumb = build_breadcrumb(_base_state(), "repo", "Home", mode_name="home", clickable=True)
+    assert _LEAF_HOME_LINK_MARKUP in crumb
+
+
+def test_near_miss_breadcrumb_fully_de_linked_without_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Default (the shipped surface): the breadcrumb wires NO home shortcut at
+    # all -- neither the code segment nor the leaf carries app.switch_mode('home')
+    # -- the genuine, complete de-link. (The code segment was never a link
+    # post-W12; the leaf is plain too without the flag.)
     monkeypatch.delenv(POC_DEFECTS_ENV, raising=False)
     crumb = build_breadcrumb(_base_state(), "repo", "Home", mode_name="home", clickable=True)
-    assert _CODE_LINK_MARKUP in crumb
+    assert _CODE_LINK_MARKUP not in crumb
+    assert _LEAF_HOME_LINK_MARKUP not in crumb
+    assert _HOME_ACTION not in crumb  # no home @click anywhere -> genuine de-link
 
 
 def test_near_miss_action_still_resolves_under_flag(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -256,8 +290,10 @@ def test_near_miss_action_still_resolves_under_flag(monkeypatch: pytest.MonkeyPa
 
 
 def test_all_defects_inert_without_flag(monkeypatch: pytest.MonkeyPatch) -> None:
-    # One body asserting the default surface is the real one on every site:
-    # the dead-click is unresolved, the feed refreshes, the code segment links.
+    # One body asserting the default surface is the real one on every site: the
+    # dead-click is unresolved, the feed refreshes, and the breadcrumb wires no
+    # home shortcut (the genuine, complete de-link -- the near-miss regression
+    # is absent).
     monkeypatch.delenv(POC_DEFECTS_ENV, raising=False)
 
     async def body() -> tuple[bool, int, bool]:
@@ -270,10 +306,10 @@ def test_all_defects_inert_without_flag(monkeypatch: pytest.MonkeyPatch) -> None
             await settle_screen(pilot)
             feed_count = len(feed.items())
         crumb = build_breadcrumb(app.state, "repo", "Home", mode_name="home", clickable=True)
-        code_linked = _CODE_LINK_MARKUP in crumb
-        return dead_click_resolved, feed_count, code_linked
+        home_wired = _HOME_ACTION in crumb
+        return dead_click_resolved, feed_count, home_wired
 
-    dead_click_resolved, feed_count, code_linked = asyncio.run(body())
+    dead_click_resolved, feed_count, home_wired = asyncio.run(body())
     assert dead_click_resolved is False  # dead-click absent
     assert feed_count == 1  # feed refreshed
-    assert code_linked is True  # code segment linked
+    assert home_wired is False  # breadcrumb de-linked: no home @click survives

@@ -14,9 +14,10 @@ asserts:
 * **broken build** (``EAWF_POC_DEFECTS=1``) -> wave ``FAIL`` whose failed items
   cite the dead-click + the stale-feed (+ the near-miss);
 * **correct build** (flag OFF, the SAME probe set) -> wave ``PASS``;
-* **hard near-miss** (the de-linked-but-resolving breadcrumb segment under the
-  flag) -> ``FAIL`` -- the subtle case a golden frame and a run-action-only
-  transcript both miss;
+* **hard near-miss** (under the flag the breadcrumb leaf STILL wires the home
+  shortcut despite the de-link decision, and the action still resolves) ->
+  ``FAIL`` -- the subtle case a golden frame and a run-action-only transcript
+  both miss;
 * re-running either build yields the same verdict (determinism).
 
 The gate is the DETERMINISTIC derived-transcript path above. The live
@@ -89,12 +90,19 @@ _RUBRIC: tuple[str, str, str] = (_ITEM_DEAD_CLICK, _ITEM_STALE_FEED, _ITEM_NEAR_
 #: The dead-click action string the behaviour probe drives.
 _DEAD_CLICK_ACTION = "app.poc_dead_click()"
 #: The near-miss segment's underlying action -- resolvable whether or not the
-#: breadcrumb code segment renders as a link.
+#: breadcrumb wires a click to it.
 _HOME_ACTION = "app.switch_mode('home')"
-#: The fully-wrapped code (project) segment markup when it is a live link. The
-#: fixture's project code is ``QR``; the trailing mode segment ALSO links to
-#: app.switch_mode('home'), so the near-miss is asserted against this
-#: code-segment-specific markup, never the bare action string.
+#: The fully-wrapped LEAF (trailing mode) segment markup when the de-link
+#: regression leaves it live. Post-W12 the breadcrumb de-links scope, code, AND
+#: the leaf to plain text; under the flag the leaf STILL wires
+#: app.switch_mode('home'), so the home shortcut stays clickable from the
+#: breadcrumb despite the de-link decision. The fixture's active mode is
+#: ``Home`` (mode_name ``home``), so the live leaf reads this markup; it is gone
+#: (plain ``Home``) when genuinely de-linked.
+_LEAF_HOME_LINK_MARKUP = f"[@click={_HOME_ACTION}]Home[/]"
+#: The fully-wrapped code (project) segment markup IF the code segment were a
+#: live home link. Post-de-link the code segment is plain in EVERY build, so
+#: this never appears -- kept to document that the code de-link always holds.
 _CODE_LINK_MARKUP = f"[@click={_HOME_ACTION}]QR[/]"
 
 
@@ -251,36 +259,43 @@ async def _observe_stale_feed(app: EaApp, pilot: object) -> _DefectObservation:
 def _observe_near_miss(crumb: str) -> _DefectObservation:
     """Derive the near-miss observation from the rendered breadcrumb markup.
 
-    The subtle de-link: a correct build wraps the code segment in a real
-    ``[@click=app.switch_mode('home')]QR[/]`` link; the broken build renders the
-    segment as PLAIN text (the link wrapper is gone) even though the underlying
-    action STILL resolves. A run-action-only transcript would classify the
-    action ``observable`` (it really switches mode) and so PASS the item -- the
-    lie this render-derived observation defeats. The vote passes ONLY when the
-    code segment carries its link markup.
+    The subtle de-link (post-W12): the correct build de-links scope, code, AND
+    the trailing mode (leaf) to plain text, so the breadcrumb wires NO home
+    shortcut at all. The broken build regresses the de-link -- the leaf segment
+    STILL wraps a live ``[@click=app.switch_mode('home')]Home[/]`` link, so the
+    home shortcut stays clickable from the breadcrumb even though the operator
+    decided to de-link it, and the underlying action of course still resolves. A
+    run-action-only transcript would classify ``switch_mode('home')``
+    ``observable`` (it really switches mode) and so PASS the item -- the lie this
+    render-derived observation defeats by reading whether the breadcrumb still
+    wires the shortcut. The vote passes ONLY when NO home link survives in the
+    breadcrumb (the genuine, complete de-link).
 
     Args:
         crumb: The rendered breadcrumb markup from
             :func:`~eawf.surfaces.tui.widgets.header.build_breadcrumb`.
 
     Returns:
-        The near-miss :class:`_DefectObservation`. ``cross_check`` re-derives the
-        same link-present check on the same markup (the action-still-resolves
-        half is asserted separately, in the cross-check test).
+        The near-miss :class:`_DefectObservation`. ``observed_ok`` is whether the
+        breadcrumb is genuinely de-linked (no home @click); ``cross_check``
+        re-derives the same home-link-absent check on the same markup (the
+        action-still-resolves half is asserted separately, in the cross-check
+        test).
     """
-    link_present = _CODE_LINK_MARKUP in crumb
+    home_link_wired = _HOME_ACTION in crumb
+    de_linked = not home_link_wired
     code_rendered = "QR" in crumb
     evidence = (
-        "near-miss defect: the breadcrumb code segment renders as PLAIN text "
-        f"(code rendered={code_rendered}, link markup present={link_present}) "
-        "yet app.switch_mode('home') still resolves -- the de-link a golden "
-        "frame and a run-action transcript both miss"
+        "near-miss defect: the breadcrumb still wires the home shortcut "
+        f"(code rendered={code_rendered}, leaf home link present={home_link_wired}) "
+        "despite the de-link decision -- app.switch_mode('home') stays clickable, "
+        "the de-link a golden frame and a run-action transcript both miss"
     )
     return _DefectObservation(
         item_id=_ITEM_NEAR_MISS,
-        observed_ok=link_present,
+        observed_ok=de_linked,
         evidence=evidence,
-        cross_check=link_present,
+        cross_check=de_linked,
     )
 
 
@@ -446,8 +461,8 @@ def test_near_miss_item_fails_under_flag(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_near_miss_item_passes_without_flag(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Flag OFF: the code segment is a genuine link, so the near-miss item passes
-    # -- the correct surface is not falsely flagged.
+    # Flag OFF: the breadcrumb is genuinely de-linked (no home shortcut wired),
+    # so the near-miss item passes -- the correct surface is not falsely flagged.
     observations = _observe_all(armed=False, monkeypatch=monkeypatch)
     result = _reduce_observations(observations)
     assert _ITEM_NEAR_MISS not in result.failed_item_ids
@@ -456,30 +471,33 @@ def test_near_miss_item_passes_without_flag(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_near_miss_action_resolves_despite_de_link(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The trap the near-miss models: under the flag the segment LOOKS de-linked
-    # yet app.switch_mode('home') STILL resolves. A run-action-only transcript
-    # would read this 'observable' and PASS it; the render-derived observation
-    # is what catches the de-link. This pins the live behaviour the near-miss
-    # rests on.
+    # The trap the near-miss models: under the flag the breadcrumb STILL wires
+    # the home shortcut on the leaf (the de-link regression) AND
+    # app.switch_mode('home') resolves. A run-action-only transcript would read
+    # the action 'observable' and PASS it; the render-derived observation is what
+    # catches that the breadcrumb still wires a shortcut the operator de-linked.
+    # The code segment is plain in both builds (the genuine code de-link holds).
     monkeypatch.setenv(POC_DEFECTS_ENV, "1")
 
-    async def body() -> tuple[bool, bool]:
+    async def body() -> tuple[bool, bool, bool]:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=_SIZE) as pilot:
             await settle_screen(pilot)
             crumb = build_breadcrumb(app.state, "repo", "Home", mode_name="home", clickable=True)
-            link_present = _CODE_LINK_MARKUP in crumb
+            code_de_linked = _CODE_LINK_MARKUP not in crumb
+            leaf_home_wired = _LEAF_HOME_LINK_MARKUP in crumb
             # Move off home first so the home switch is a real transition.
             await app.run_action("app.switch_mode('doctor')")
             await settle_screen(pilot)
             resolved = await app.run_action(_HOME_ACTION)
             await settle_screen(pilot)
             on_home = app.current_mode == "home"
-        return link_present, (resolved and on_home)
+        return code_de_linked, leaf_home_wired, (resolved and on_home)
 
-    link_present, action_live = asyncio.run(body())
-    assert link_present is False  # the segment looks de-linked...
-    assert action_live is True  # ...but the action is still live
+    code_de_linked, leaf_home_wired, action_live = asyncio.run(body())
+    assert code_de_linked is True  # the code segment looks de-linked...
+    assert leaf_home_wired is True  # ...but the leaf still wires home (regression)...
+    assert action_live is True  # ...and the action is still live
 
 
 # --------------------------------------------------------------------------- #

@@ -11,9 +11,10 @@ with **no per-scope duplication**. It renders, left to right:
   derived from the bound :class:`~eawf.kernel.state.models.State`
   (rendered with the angle-ornament separator :data:`CRUMB_SEP`), with an
   optional trailing ``> <entity>`` segment when a peek/detail is open.
-  Each segment that maps to an existing app action is a Textual
-  ``[@click=...]`` nav link to that target; see :func:`build_breadcrumb`
-  for the per-segment wiring;
+  Only the ``phase`` + ``iter`` segments are Textual ``[@click=...]`` nav
+  links (to their reference cards); the ``scope``, ``code``, ``mode``, and
+  ``entity`` segments render as plain (non-clickable) text — see
+  :func:`build_breadcrumb` for the per-segment wiring;
 * a runtime cell — ``runtime: idle`` muted when nothing is dispatched,
   flipping to ``runtime: <runtime> - <n> running`` (the active runtime id
   + the running-wave count) when one or more waves are active;
@@ -65,12 +66,6 @@ CRUMB_SEP: str = " ❯ "  # noqa: RUF001
 #: Idle runtime-cell text shown when no wave is dispatched — the cell
 #: stays visible and muted so the operator sees the field exists.
 RUNTIME_IDLE: str = "idle"
-
-#: The Home mode name (a key of the mode registry). The ``code`` segment
-#: links here so a click on the project code returns the operator to the
-#: scope-bearing Home mode. Kept as a literal so the breadcrumb builder
-#: stays a pure function with no registry import (avoids an import cycle).
-_HOME_MODE_NAME: str = "home"
 
 
 def _link(label: str, action: str | None) -> str:
@@ -124,24 +119,27 @@ def build_breadcrumb(
     so the mode trails the in-mode location. An optional *entity* segment
     trails everything when a peek/detail is open.
 
-    When *clickable* is set, each segment that maps to an **existing** app
-    action becomes a Textual ``[@click=...]`` link. The actions are
-    ``app.``-namespaced so Textual resolves them against the host
+    When *clickable* is set, ONLY the *phase* + *iter* segments become
+    Textual ``[@click=...]`` links. The actions are ``app.``-namespaced so
+    Textual resolves them against the host
     :class:`~eawf.surfaces.tui.app.EaApp` (which defines them) rather than
     against the :class:`~textual.widgets.Static` that owns the markup link
     (a bare action would resolve against the Static, find nothing, and
     silently no-op the click):
 
-    * scope -> ``app.switch_scope('<scope>')`` (the raw scope-switch action);
-    * code  -> ``app.switch_mode('home')`` (return to the Home mode);
     * phase -> ``app.open_phase_ref('<phase>')`` (the phase reference card);
-    * iter  -> ``app.open_iter_ref('<iter>')`` (the iter reference card);
-    * mode  -> ``app.switch_mode('<mode_name>')`` when *mode_name* is given
-      (the mode segment displays the *mode* title but links by name).
+    * iter  -> ``app.open_iter_ref('<iter>')`` (the iter reference card).
 
-    The *entity* segment has no generic nav action, so it always renders
-    as plain (non-clickable) text. When *clickable* is unset every segment
-    is plain escaped text — the contract the non-TTY status frame relies on.
+    The *scope*, *code*, *mode*, and *entity* segments render as plain
+    (non-clickable) escaped text even on the clickable path: a click on a
+    plain segment carries no ``[@click=...]`` action, so it fires no
+    navigation (a genuine de-link, not a styled-but-live near-miss). The
+    *scope* segment had a ``app.switch_scope`` link and the *code* segment a
+    return-to-Home ``app.switch_mode('home')`` link before the de-link; both
+    are gone — the App still owns those actions (reachable by keybinding),
+    the breadcrumb just no longer wires a click to them. When *clickable* is
+    unset every segment is plain escaped text — the contract the non-TTY
+    status frame relies on.
 
     Falls back to :data:`DEFAULT_PROJECT_CODE` when no state is loaded so
     the header stays informative during the daemon cold-spawn window; the
@@ -172,21 +170,12 @@ def build_breadcrumb(
     else:
         code = state.project.code if state.project is not None else DEFAULT_PROJECT_CODE
         scope_label = scope if scope is not None else state.scope_kind.value
-        parts.append(
-            _link(scope_label, f"app.switch_scope({scope_label!r})" if clickable else None)
-        )
-        # Planted near-miss defect (a W10 PoC fixture for the W11 jury): when
-        # the POC_DEFECTS_ENV build flag is armed the code segment renders as
-        # PLAIN (de-linked) text even on the clickable path, while its
-        # app.switch_mode('home') action stays resolvable -- looks de-linked,
-        # behaves live (the subtle de-link regression a golden frame cannot
-        # see). With the flag unset (the default) the segment is a real link.
-        from eawf.surfaces.tui.poc_defects import poc_defects_enabled
-
-        code_clickable = clickable and not poc_defects_enabled()
-        parts.append(
-            _link(code, f"app.switch_mode({_HOME_MODE_NAME!r})" if code_clickable else None)
-        )
+        # scope + code are de-linked plain text on every path (the operator
+        # decision: the scope screen-switch and the code return-to-Home
+        # shortcuts move off the breadcrumb). The App still owns the
+        # underlying actions; the breadcrumb just no longer wires a click.
+        parts.append(_link(scope_label, None))
+        parts.append(_link(code, None))
         if state.current.phase_id is not None:
             phase = state.current.phase_id
             parts.append(_link(phase, f"app.open_phase_ref({phase!r})" if clickable else None))
@@ -194,7 +183,15 @@ def build_breadcrumb(
             iter_id = state.current.iter_id
             parts.append(_link(iter_id, f"app.open_iter_ref({iter_id!r})" if clickable else None))
     if mode is not None:
-        link_mode = clickable and mode_name is not None
+        # The trailing mode (leaf) segment is de-linked plain text -- EXCEPT
+        # under the POC_DEFECTS_ENV build flag, which leaves its
+        # app.switch_mode('<mode_name>') link live: the planted W10 near-miss
+        # where the leaf still navigates despite the de-link decision (the
+        # subtle regression a plain-rendered breadcrumb hides from a frame).
+        # With the flag unset (the default) the leaf is genuinely de-linked.
+        from eawf.surfaces.tui.poc_defects import poc_defects_enabled
+
+        link_mode = clickable and mode_name is not None and poc_defects_enabled()
         mode_action = f"app.switch_mode({mode_name!r})" if link_mode else None
         parts.append(_link(mode, mode_action))
     if entity is not None:
