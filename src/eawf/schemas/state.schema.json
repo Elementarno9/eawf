@@ -701,7 +701,7 @@
     },
     "Decision": {
       "additionalProperties": false,
-      "description": "Architectural / process decision.",
+      "description": "Architectural / process decision.\n\nThe optional ``description`` carries a clarity floor when present (see\n:class:`_DescribedEntity`): grandfathered when ``None``, else floored at\na useful length and rejected when it merely restates the title.",
       "properties": {
         "alternatives": {
           "items": {
@@ -1393,7 +1393,7 @@
     },
     "Iter": {
       "additionalProperties": false,
-      "description": "Lifecycle iteration.\n\n``trigger`` records *why* the iter was opened so the planned-vs-reactive\nmetric can classify its waves by intent rather than by the ``I##`` id\nsuffix. It defaults to :attr:`IterTrigger.NONE` so the field is additive\n(pre-trigger states and in-code constructors stay valid); the lifecycle\nsurface that opens iters sets the real value, and :class:`IterTrigger`\ndocuments how each value lands in the metric denominator.\n\n``candidate_tag`` carries a proposed ``vMAJOR.MINOR.PATCH`` release tag\nfor the iter -- the version an operator pencils in for the iter's\ndeliverable before the phase-close release pre-flight pins it. It is\nstrictly optional (default ``None``) so adding it is additive: an iter\nwithout a candidate tag loads unchanged and a pre-1.4 ``state.json``\nstays valid under ``extra=\"forbid\"`` because the missing key takes the\ndefault.",
+      "description": "Lifecycle iteration.\n\n``trigger`` records *why* the iter was opened so the planned-vs-reactive\nmetric can classify its waves by intent rather than by the ``I##`` id\nsuffix. It defaults to :attr:`IterTrigger.NONE` so the field is additive\n(pre-trigger states and in-code constructors stay valid); the lifecycle\nsurface that opens iters sets the real value, and :class:`IterTrigger`\ndocuments how each value lands in the metric denominator.\n\n``candidate_tag`` carries a proposed ``vMAJOR.MINOR.PATCH`` release tag\nfor the iter -- the version an operator pencils in for the iter's\ndeliverable before the phase-close release pre-flight pins it. It is\nstrictly optional (default ``None``) so adding it is additive: an iter\nwithout a candidate tag loads unchanged and a pre-1.4 ``state.json``\nstays valid under ``extra=\"forbid\"`` because the missing key takes the\ndefault.\n\nThe optional ``description`` carries a clarity floor when present (see\n:class:`_DescribedEntity`): grandfathered when ``None``, else floored at\na useful length and rejected when it merely restates the title.",
       "properties": {
         "audit_id": {
           "anyOf": [
@@ -1941,7 +1941,7 @@
     },
     "Phase": {
       "additionalProperties": false,
-      "description": "Lifecycle phase.\n\nThe ``release`` field bands the phase under a ``vMAJOR.MINOR.PATCH``\nrelease version in the rendered roadmap. It is strictly optional\n(default ``None``) so adding it is additive -- a phase without a\nrelease loads unchanged and renders under the \"Unreleased\" band,\nand an old ``state.json`` that predates the field stays valid under\n``extra=\"forbid\"`` because the missing key takes the default.",
+      "description": "Lifecycle phase.\n\nThe ``release`` field bands the phase under a ``vMAJOR.MINOR.PATCH``\nrelease version in the rendered roadmap. It is strictly optional\n(default ``None``) so adding it is additive -- a phase without a\nrelease loads unchanged and renders under the \"Unreleased\" band,\nand an old ``state.json`` that predates the field stays valid under\n``extra=\"forbid\"`` because the missing key takes the default.\n\nThe optional ``description`` carries a clarity floor when present (see\n:class:`_DescribedEntity`): grandfathered when ``None``, else floored at\na useful length and rejected when it merely restates the title.",
       "properties": {
         "audit_id": {
           "anyOf": [
@@ -2520,7 +2520,7 @@
     },
     "Wave": {
       "additionalProperties": false,
-      "description": "Atomic execution unit under an iter.\n\n``opened_at`` records *plan/creation* time (stamped when the wave row\nis inserted), while ``claimed_at`` records *work-start* time (stamped\non the first claim). The two diverge under plan-all-then-execute,\nwhere creation can precede the claim by hours, so elapsed-clock\nconsumers anchor on ``claimed_at`` (not ``opened_at``) and render no\nclock at all while ``claimed_at`` is ``None`` -- a wave that has not\nbeen claimed has no work-start fact to elapse from. The field is\nadditive + optional so on-disk state written before the v1.3 schema\nbump re-validates unchanged.",
+      "description": "Atomic execution unit under an iter.\n\n``opened_at`` records *plan/creation* time (stamped when the wave row\nis inserted), while ``claimed_at`` records *work-start* time (stamped\non the first claim). The two diverge under plan-all-then-execute,\nwhere creation can precede the claim by hours, so elapsed-clock\nconsumers anchor on ``claimed_at`` (not ``opened_at``) and render no\nclock at all while ``claimed_at`` is ``None`` -- a wave that has not\nbeen claimed has no work-start fact to elapse from. The field is\nadditive + optional so on-disk state written before the v1.3 schema\nbump re-validates unchanged.\n\nThe optional ``description`` carries a clarity floor when present (see\n:class:`_DescribedEntity`): grandfathered when ``None``, else floored at\na useful length and rejected when it merely restates the title.",
       "properties": {
         "agent_role": {
           "anyOf": [

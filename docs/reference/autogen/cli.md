@@ -251,6 +251,7 @@ Dispatch hook events through the Eä hook runner.
 | `eawf013-bracket-position` | Reject detached or post-punctuation numeric citation brackets. |
 | `eawf014-no-manual-wrap` | Reject manually wrapped rendered Markdown paragraphs. |
 | `eawf015-ears-advisory` | Warn on requirement-like prose outside EARS shape without blocking. |
+| `eawf016-title-clarity` | Reject unclear entity titles added to the staged ``state.json`` delta. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
