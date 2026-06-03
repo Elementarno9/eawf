@@ -145,6 +145,12 @@ class _ConfigSchema(BaseModel):
     # catalog + PreferencesConfig; the composed schema only needs to accept
     # the section so a default-bearing merge does not trip extra="forbid".
     preferences: dict[str, Any] = Field(default_factory=dict)
+    # ``prose`` carries the doc-clarity prose-lint knobs (level,
+    # clarity_judge, block_on_lint). Value-shape validation + the
+    # tighten-only authority guard live in the leaf catalog + ProseConfig;
+    # the composed schema only needs to accept the section so a
+    # default-bearing merge does not trip extra="forbid".
+    prose: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Sub-app construction ---------------------------------------------------

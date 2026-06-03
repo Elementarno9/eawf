@@ -212,6 +212,18 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "scope_size": "M",
         "auto_choose": "off",
     },
+    # Doc-clarity prose-lint stack knobs (see ``ProseConfig`` in
+    # :mod:`eawf.kernel.config.schema`). ``level`` is the strictness floor a
+    # local layer may only tighten, never loosen, below the baseline the
+    # active profile sets (agent-driven = strict, managed = loose); the
+    # built-in baseline is ``standard``. ``clarity_judge`` / ``block_on_lint``
+    # default ``null`` so each defers to the level until a layer opts a single
+    # gate on or off within the level's floor.
+    "prose": {
+        "level": "standard",
+        "clarity_judge": None,
+        "block_on_lint": None,
+    },
     "estimation": {
         "enabled": True,
         "eu_minutes": 30,

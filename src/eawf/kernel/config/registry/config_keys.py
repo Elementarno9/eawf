@@ -281,6 +281,19 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=("simple", "balanced", "thorough"),
     ),
     ConfigKey(
+        tab="prose",
+        key="prose.level",
+        label="Doc-clarity prose-lint strictness",
+        type="choice",
+        default="standard",
+        description=(
+            "loose = advisory only (managed default); standard = deterministic "
+            "lints block; strict = every lint blocks + clarity judge on "
+            "(agent-driven default). A local layer may only tighten this."
+        ),
+        choices=("loose", "standard", "strict"),
+    ),
+    ConfigKey(
         tab="research",
         key="research.agent_count",
         label="Default subagent count for /research",

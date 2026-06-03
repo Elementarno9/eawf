@@ -617,6 +617,36 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         description="Whether AskUserQuestion auto-picks the recommended option.",
         choices=("off", "recommended", "always"),
     ),
+    # --- prose (doc-clarity) -----------------------------------------------
+    # A durable local layer may write these (the authority guard enforces
+    # tighten-only against the profile baseline at validation time, not the
+    # writability gate). ``clarity_judge`` / ``block_on_lint`` are tri-state
+    # (true / false / null-defers-to-level) so they use the ``any`` shape.
+    LeafKey(
+        key="prose.level",
+        domain="prose",
+        type="literal",
+        default="standard",
+        writable_layers=_WRITABLE_ALL_DURABLE,
+        description="Doc-clarity prose-lint strictness floor (local may only tighten).",
+        choices=("loose", "standard", "strict"),
+    ),
+    LeafKey(
+        key="prose.clarity_judge",
+        domain="prose",
+        type="any",
+        default=None,
+        writable_layers=_WRITABLE_ALL_DURABLE,
+        description="Run the LLM clarity-judge gate; null defers to prose.level.",
+    ),
+    LeafKey(
+        key="prose.block_on_lint",
+        domain="prose",
+        type="any",
+        default=None,
+        writable_layers=_WRITABLE_ALL_DURABLE,
+        description="Block on deterministic prose lints; null defers to prose.level.",
+    ),
     # --- estimation --------------------------------------------------------
     LeafKey(
         key="estimation.enabled",

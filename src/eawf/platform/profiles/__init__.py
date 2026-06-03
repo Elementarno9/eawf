@@ -39,6 +39,17 @@ Public API:
 
 from __future__ import annotations
 
+from eawf.platform.profiles.clarity import (
+    APPROVED_TERMS,
+    COMMIT_SUBJECT_PREFIX_EXEMPT,
+    INTERNAL_CODE_BLOCKLIST,
+    NEWCOMER_TEST,
+    NEWCOMER_TEST_DIMENSIONS,
+    ClarityDimension,
+    InternalCodePattern,
+    internal_codes_in,
+    is_approved_term,
+)
 from eawf.platform.profiles.compose import (
     STRICTEST_KEYS,
     ConflictResolution,
@@ -61,17 +72,26 @@ from eawf.platform.profiles.models import (
 )
 
 __all__ = [
+    "APPROVED_TERMS",
+    "COMMIT_SUBJECT_PREFIX_EXEMPT",
+    "INTERNAL_CODE_BLOCKLIST",
+    "NEWCOMER_TEST",
+    "NEWCOMER_TEST_DIMENSIONS",
     "STRICTEST_KEYS",
+    "ClarityDimension",
     "ComposedProfile",
     "ConflictResolution",
     "FloorCheck",
     "InstrumentReq",
+    "InternalCodePattern",
     "ProfileBody",
     "ProfileConflict",
     "RenderBlock",
     "StateExtensions",
     "VerifyBlock",
     "compose",
+    "internal_codes_in",
+    "is_approved_term",
     "list_profiles",
     "load_composed_profile",
     "load_profile",
