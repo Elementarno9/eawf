@@ -2244,6 +2244,18 @@
       "status": "done",
       "updated_at": "2026-06-03T04:30:58.096112Z"
     },
+    "P29-I07-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I07-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I07-W04",
+      "scope_id": "P29-I07-W04",
+      "status": "done",
+      "updated_at": "2026-06-03T05:09:54.343300Z"
+    },
     "P29-I07-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5006,9 +5018,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P29-I07-W04"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P29-I07",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -12105,7 +12115,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T05:00:13.667642Z",
+  "updated_at": "2026-06-03T05:09:54.343631Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -34418,8 +34428,8 @@
       "blocks": [],
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T04:45:22.231863Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-03T05:09:54.343300Z",
+      "commit": "9ea6ed9837ad21c82839608dc49718b51a0ad179",
       "deps": [
         "P29-I07-W03"
       ],
@@ -34428,16 +34438,19 @@
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/platform/lint/**",
-        "src/eawf/surfaces/render/**"
+        "src/eawf/surfaces/render/**",
+        "src/eawf/surfaces/cli/commands/hook.py",
+        ".github/workflows/**",
+        ".pre-commit-config.yaml"
       ],
       "id": "P29-I07-W04",
       "intent": null,
       "iter_id": "P29-I07",
       "opened_at": "2026-06-01T00:19:14.268889Z",
-      "outcome": null,
+      "outcome": "validate_prose chokepoint composing Vale+EAWF017+013/014; generation-time fail-open + strict CI gate (fail-closed); deterministic legs block even when vale absent",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "validate_prose chokepoint added; strict CI gate at generation-time + CI"
       ],
