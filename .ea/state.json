@@ -2483,6 +2483,42 @@
       "scope_id": "P29-I08-W11",
       "status": "done",
       "updated_at": "2026-06-03T15:33:07.340955Z"
+    },
+    "P29-I08-W26": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W26",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W26",
+      "scope_id": "P29-I08-W26",
+      "status": "done",
+      "updated_at": "2026-06-03T15:51:03.149819Z"
+    },
+    "P29-I08-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W27",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W27",
+      "scope_id": "P29-I08-W27",
+      "status": "done",
+      "updated_at": "2026-06-03T15:51:04.552771Z"
+    },
+    "P29-I08-W28": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W28",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W28",
+      "scope_id": "P29-I08-W28",
+      "status": "done",
+      "updated_at": "2026-06-03T15:51:06.102228Z"
     }
   },
   "agent_sessions": {
@@ -10379,6 +10415,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W11",
       "updated_at": "2026-06-03T15:21:46.426814Z"
+    },
+    "P29-I08-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W26-bucket-20260603T153314Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W26",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W26",
+      "updated_at": "2026-06-03T15:33:14.010765Z"
+    },
+    "P29-I08-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W27-bucket-20260603T155103Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W27",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W27",
+      "updated_at": "2026-06-03T15:51:03.819353Z"
+    },
+    "P29-I08-W28": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W28-bucket-20260603T155105Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W28",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W28",
+      "updated_at": "2026-06-03T15:51:05.377968Z"
     }
   },
   "goals": {
@@ -12527,7 +12602,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T15:33:07.341293Z",
+  "updated_at": "2026-06-03T15:51:06.102608Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35994,10 +36069,10 @@
         "P29-I08-W27",
         "P29-I08-W28"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T15:33:14.010760Z",
+      "closed_at": "2026-06-03T15:51:03.149819Z",
+      "commit": "ec38148babc6f2894f94feb88fc347eda4f24898",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36010,10 +36085,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:28.103895Z",
-      "outcome": null,
+      "outcome": "coverage-gap accounting test: 141-key gap bucketed locked=4/structural=31/cli_only=106, partition asserted + snapshot pinned",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the 141-key gap between LEAF_KEY_REGISTRY and CONFIG_REGISTRY is bucketed by exactly one of locked or structural or intentionally-CLI-only and a count snapshot guards growth"
       ],
@@ -36027,10 +36102,10 @@
       "blocks": [
         "P29-I08-W29"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T15:51:03.819345Z",
+      "closed_at": "2026-06-03T15:51:04.552771Z",
+      "commit": "b502227bff89ed2c148c5ece0969ddd79fde74e6",
       "deps": [
         "P29-I08-W26"
       ],
@@ -36045,10 +36120,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:28.689878Z",
-      "outcome": null,
+      "outcome": "8 curated flow.* scalar config keys surfaced, each round-trips coerce_and_validate vs leaf row; gap snapshot 141->133",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "each newly-surfaced ConfigKey round-trips through coerce_and_validate against its LEAF_KEY_REGISTRY row in a parametrized test"
       ],
@@ -36062,10 +36137,10 @@
       "blocks": [
         "P29-I08-W29"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T15:51:05.377961Z",
+      "closed_at": "2026-06-03T15:51:06.102228Z",
+      "commit": "0cf27deb35df740e53cdd8a26c2537ccd2fee47e",
       "deps": [
         "P29-I08-W26"
       ],
@@ -36080,10 +36155,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:29.298659Z",
-      "outcome": null,
+      "outcome": "SECURITY: set_layer_value mirrors set_wave_value writable_layers check (locked key now raises); modal lock-filters; security.* edits gated behind ConfirmModal naming key+value",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "set_layer_value raises on a locked key mirroring set_wave_value and the modal omits locked keys and a security edit without the ConfirmModal no-ops"
       ],
