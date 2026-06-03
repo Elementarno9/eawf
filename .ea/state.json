@@ -2160,6 +2160,18 @@
       "status": "done",
       "updated_at": "2026-06-03T00:40:12.651636Z"
     },
+    "P29-I06-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W07",
+      "scope_id": "P29-I06-W07",
+      "status": "done",
+      "updated_at": "2026-06-03T00:43:21.046084Z"
+    },
     "P29-I06-W08": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -9657,6 +9669,19 @@
       "scope_id": "P29-I06-W06",
       "updated_at": "2026-06-03T00:33:16.112378Z"
     },
+    "P29-I06-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W07-bucket-20260603T004016Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I06-W07",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I06-W07",
+      "updated_at": "2026-06-03T00:40:16.684601Z"
+    },
     "P29-I06-W08": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I06-W08-bucket-20260602T234004Z",
@@ -11757,7 +11782,7 @@
   "schema_version": "1.4",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T00:40:12.651931Z",
+  "updated_at": "2026-06-03T00:43:21.046378Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33821,10 +33846,10 @@
     "P29-I06-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-03T00:40:16.684596Z",
+      "closed_at": "2026-06-03T00:43:21.046084Z",
+      "commit": "c881e11bc84c4467c78b523e63ae7946be5dd3ce",
       "deps": [
         "P29-I06-W05",
         "P29-I06-W06"
@@ -33840,10 +33865,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.274008Z",
-      "outcome": null,
+      "outcome": "CHANGELOG [0.5.0] section + schema 1.3->1.4 migration note + Claude/Codex install-from-marketplace docs",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "v0.5.0 plugin CHANGELOG section + install docs added"
       ],
