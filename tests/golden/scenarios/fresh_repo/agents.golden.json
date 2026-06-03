@@ -1,14 +1,15 @@
 {
   "region_byte_lengths": {
     "agent-report-contract": 660,
-    "agent-tool-discipline": 579,
-    "anti-patterns": 795,
+    "agent-tool-discipline": 567,
+    "anti-patterns": 785,
     "architecture-cli-dispatch": 220,
     "artifact-chassis": 1101,
     "branch-currency": 543,
     "branch-naming": 276,
-    "commit-prefix": 3007,
-    "deletion-rule": 699,
+    "clarity-contract": 1287,
+    "commit-prefix": 2965,
+    "deletion-rule": 681,
     "ea-directory-commit-policy": 216,
     "engineering-practice": 1200,
     "engineering-principles": 1075,
@@ -16,11 +17,11 @@
     "iter-phase-close-timing": 1251,
     "markdown-no-manual-wrap": 738,
     "naming-conventions": 3650,
-    "non-negotiable-rules": 3478,
-    "planned-scope-revisability": 1039,
+    "non-negotiable-rules": 3380,
+    "planned-scope-revisability": 1025,
     "pr-template": 177,
     "prep-plan-mode": 1475,
-    "release-process": 1155,
+    "release-process": 1137,
     "roadmap-procedure": 1078,
     "secrets-hygiene": 916,
     "ship-process": 2036,
@@ -28,7 +29,7 @@
     "state-vs-specs": 355,
     "symbol-conventions": 439,
     "verify-before-claim": 1027,
-    "workflow-lifecycle": 755,
+    "workflow-lifecycle": 745,
     "worktree-discipline": 813
   },
   "region_ids": [
@@ -60,6 +61,7 @@
     "agent-report-contract",
     "workflow-lifecycle",
     "pr-template",
+    "clarity-contract",
     "agent-tool-discipline",
     "anti-patterns"
   ]
