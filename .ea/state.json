@@ -2519,6 +2519,42 @@
       "scope_id": "P29-I08-W28",
       "status": "done",
       "updated_at": "2026-06-03T15:51:06.102228Z"
+    },
+    "P29-I08-W30": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W30",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W30",
+      "scope_id": "P29-I08-W30",
+      "status": "done",
+      "updated_at": "2026-06-03T16:16:59.418154Z"
+    },
+    "P29-I08-W31": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W31",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W31",
+      "scope_id": "P29-I08-W31",
+      "status": "done",
+      "updated_at": "2026-06-03T16:17:00.639940Z"
+    },
+    "P29-I08-W32": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W32",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W32",
+      "scope_id": "P29-I08-W32",
+      "status": "done",
+      "updated_at": "2026-06-03T16:17:01.865863Z"
     }
   },
   "agent_sessions": {
@@ -10454,6 +10490,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W28",
       "updated_at": "2026-06-03T15:51:05.377968Z"
+    },
+    "P29-I08-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W30-bucket-20260603T161658Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W30",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W30",
+      "updated_at": "2026-06-03T16:16:58.797246Z"
+    },
+    "P29-I08-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W31-bucket-20260603T161700Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W31",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W31",
+      "updated_at": "2026-06-03T16:17:00.013631Z"
+    },
+    "P29-I08-W32": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W32-bucket-20260603T161701Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W32",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W32",
+      "updated_at": "2026-06-03T16:17:01.212587Z"
     }
   },
   "goals": {
@@ -12602,7 +12677,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T15:51:06.102608Z",
+  "updated_at": "2026-06-03T16:17:01.866203Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36207,10 +36282,10 @@
       "blocks": [
         "P29-I08-W31"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T16:16:58.797242Z",
+      "closed_at": "2026-06-03T16:16:59.418154Z",
+      "commit": "d55ad24d0e54595ca5b07bbc35c1da5e23dd71c2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36222,10 +36297,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:30.652433Z",
-      "outcome": null,
+      "outcome": "eawf status gains read-only recent_decisions + open_backlog projections (--json + text); byte-read-only proven via sha256 before/after",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf status json gains recent_decisions and open_backlog as read-only projections with state.json byte-equal before and after and the text golden updated"
       ],
@@ -36239,10 +36314,10 @@
       "blocks": [
         "P29-I08-W32"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T16:17:00.013624Z",
+      "closed_at": "2026-06-03T16:17:00.639940Z",
+      "commit": "f7cf9e8cfb8a78f951b4f723abf7393b44ef4a7c",
       "deps": [
         "P29-I08-W30"
       ],
@@ -36256,10 +36331,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:31.289207Z",
-      "outcome": null,
+      "outcome": "eawf memory digest [--md|--json]: pure projection (phase+iter+last iter-close+recent decisions); --md passes validate_prose strict + clarity gloss hard gate; state/memory/event byte-read-only",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf memory digest is a pure projection with state.json and memory.jsonl and event.jsonl byte-equal before and after and the clarity prose-lint passes as a hard gate"
       ],
@@ -36271,10 +36346,10 @@
     "P29-I08-W32": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T16:17:01.212582Z",
+      "closed_at": "2026-06-03T16:17:01.865863Z",
+      "commit": "eed44c56b54281d3d07510b5fbe0a9f556f44210",
       "deps": [
         "P29-I08-W31"
       ],
@@ -36289,10 +36364,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:31.870234Z",
-      "outcome": null,
+      "outcome": "memory-hygiene convention (durable-vs-derivable; status queried not memorized) added to core.yaml + AGENTS.md regen; second render byte-stable (idempotent sync)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the durable-vs-derivable memory-hygiene rule naming both memory systems is sourced from core.yaml so a second eawf sync produces no diff"
       ],
