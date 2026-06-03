@@ -2195,6 +2195,18 @@
       "scope_id": "P29-I06-W09",
       "status": "done",
       "updated_at": "2026-06-03T00:19:50.052382Z"
+    },
+    "P29-I06-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W10",
+      "scope_id": "P29-I06-W10",
+      "status": "done",
+      "updated_at": "2026-06-03T01:29:07.808650Z"
     }
   },
   "agent_sessions": {
@@ -4853,9 +4865,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P29-I06-W10"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P29-I06",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -11798,7 +11808,7 @@
   "schema_version": "1.4",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T01:11:04.041441Z",
+  "updated_at": "2026-06-03T01:29:07.808965Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33962,8 +33972,8 @@
       "blocks": [],
       "claim_session_id": "op-flow-p29-i06",
       "claimed_at": "2026-06-03T01:11:04.040984Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-03T01:29:07.808650Z",
+      "commit": "814e544a957e1b116d5b340426a52ba71f8d0c00",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -33982,10 +33992,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-03T01:11:03.535356Z",
-      "outcome": null,
+      "outcome": "EAWF003 noqa waiver + ruff external for EAWF codes; settings test tracks __version__; registry.py EAWF010 exclude; bundled schema 1.4 regen; CHANGELOG wording. Fixes 3 full-suite failures + audit EAWF003 follow-up",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "bundled state.schema.json regenerated to match generated (1.4); settings managed-version test tracks __version__; registry.py excluded from EAWF010 cap; EAWF003 honors noqa waiver for root-logger config sites; CHANGELOG orphan-kind wording corrected"
       ],
