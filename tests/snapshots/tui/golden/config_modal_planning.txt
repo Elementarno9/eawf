@@ -6,8 +6,8 @@
       │  Configuration                                                                                           │
       │  save layer: repo  (L cycles: global local)                                                              │
       │                                                                                                          │
-      │   audit  daemon  estimation  planning  preferences  prose  research  runtime  ship  telemetry  ui  vcs   │
-      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+      │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  telemetry  ui  │
+      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  planning.approval                      [choice]       ask                                            │
       │     planning.auto_plan                     [bool]         false                                          │
       │     planning.max_parallel_waves            [int]          4                                              │

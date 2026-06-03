@@ -7,15 +7,15 @@
       │  save layer: repo  (L cycles: global local)                                                              │
       │                                                                                                          │
       │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  telemetry  ui  │
-      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  preferences.auto_choose   [choice]       off                                                         │
-      │     preferences.scope_size    [choice]       M                                                           │
-      │     preferences.solution_bias [choice]       balanced                                                    │
-      │                                                                                                          │
-      │                                                                                                          │
-      │                                                                                                          │
-      │                                                                                                          │
-      │                                                                                                          │
+      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+      │  >  flow.ask_on_decisions     [bool]         true                                                        │
+      │     flow.auto_accept.audit    [bool]         false                                                       │
+      │     flow.auto_accept.polish   [bool]         false                                                       │
+      │     flow.auto_accept.prep     [bool]         false                                                       │
+      │     flow.auto_accept.research [bool]         false                                                       │
+      │     flow.auto_accept.review   [bool]         false                                                       │
+      │     flow.auto_accept.ship     [bool]         false                                                       │
+      │     flow.budget.enforce       [choice]       soft                                                        │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

@@ -6,7 +6,7 @@
       │  Configuration                                                                                           │
       │  save layer: repo  (L cycles: global local)                                                              │
       │                                                                                                          │
-      │  mon  estimation  planning  preferences  prose  research  runtime  ship  telemetry  ui  vcs  worktrees   │
+      │  stimation  flow  planning  preferences  prose  research  runtime  ship  telemetry  ui  vcs  worktrees   │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  runtime.default          [choice]       claude                                                       │
       │                                                                                                          │

@@ -50,6 +50,11 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.doctor import DoctorHealth, DoctorModeScreen, HealthRow
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
+from eawf.surfaces.tui.screens.overlays.config_modal_logic import (
+    editable_keys_for_tab,
+    is_editable_key,
+    writable_layers_for,
+)
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.screens.overlays.cross_repo_pr import CrossRepoGroup, CrossRepoPrModal
 from eawf.surfaces.tui.screens.overlays.detail import DetailModal, resolve_detail
@@ -661,6 +666,86 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
             assert_screen_snapshot(app, _GOLDEN / "config_modal_inline_int.txt")
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Config-modal curated + lock-filtered shape (P29-I08-W29)
+#
+# These pin the T6 contract from
+# ``.ea/local/research/2026-06-03-i08-uiux-validation-specs.md``: the curated
+# scalar keys are surfaced and the W28 lock-filter drops any key the daemon
+# would refuse to persist. The deterministic gates (the per-tab snapshot
+# goldens + the cross-tab lock-filter assertion) are the load-bearing value.
+#
+# Jury residual (ARMED-but-IDLE): modal scannability / newcomer-findability --
+# whether the curated rows read as a discoverable, well-grouped surface rather
+# than a wall of keys -- is the T6 jury residual (ISO interaction-capability +
+# security). A deterministic test pins the rows and proves no locked key leaks,
+# but not that the layout reads well to a newcomer. The cross-vendor band jury
+# that would score it is built (W04/W05) and proven to discriminate (W08/W11)
+# but DORMANT: the ``quality`` profile that enables the band is opt-in and not
+# in the default enabled set, and the live ballot fn is idle. So these tests
+# ship the deterministic gates and leave the scannability judgement to the
+# armed-but-idle jury rather than invoking a live ballot.
+# --------------------------------------------------------------------------
+
+
+def test_config_modal_flow_tab_snapshot() -> None:
+    """The W27 ``flow`` tab renders its curated keys, lock-filtered (W28).
+
+    W27 surfaced the curated ``flow.*`` keys (``ask_on_decisions`` + the six
+    ``auto_accept.*`` toggles + ``budget.enforce``), which added this tab to
+    the config modal. The golden pins that curated set; the W28 lock-filter
+    drops any key not writable from a targetable layer, so a locked / CLI-only
+    key (e.g. the non-curated ``flow.budget.multiplier``) never reaches a row.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            modal = _open_config(app)
+            await settle_screen(pilot)
+            modal.query_one("#config-tabs").active = modal._tab_pane_id("flow")  # type: ignore[attr-defined]
+            modal.set_focus(None)
+            modal.field_index = 0
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GOLDEN / "config_modal_flow.txt")
+
+    asyncio.run(body())
+
+
+def test_config_modal_every_surfaced_field_is_lock_filtered() -> None:
+    """Every surfaced config-modal field is writable (the W28 lock-filter holds).
+
+    A deterministic scannability + security check spanning every tab: the
+    modal's surfaced field list (``editable_keys_for_tab``) only contains keys
+    that pass :func:`is_editable_key`, so a locked leaf (``writable_layers
+    == ()``) -- the key the ``set_layer_value`` RPC would refuse -- can never
+    appear as an editable row. The flow tab is asserted to specifically omit
+    the non-curated ``flow.budget.multiplier`` while keeping the curated
+    ``flow.budget.enforce``.
+    """
+    # The modal's targetable layers for a workspace-less repo modal -- the
+    # same set ``_open_config`` resolves (repo anchor, no workspace).
+    layers = writable_layers_for(None, Path("/repo"))
+    tabs = ("audit", "daemon", "estimation", "flow", "planning", "preferences", "research")
+    for tab in tabs:
+        fields = editable_keys_for_tab(tab, layers)
+        # The tab surfaces at least one field (a regression dropping a whole
+        # tab's curated set is caught)...
+        assert fields, f"config tab {tab!r} surfaced no fields"
+        # ...and every surfaced field passes the lock-filter (no locked key
+        # leaks into a row that the daemon would then refuse to persist).
+        for entry in fields:
+            assert is_editable_key(entry, layers), (
+                f"locked key {entry.key!r} leaked into tab {tab!r}'s surfaced rows"
+            )
+    flow_keys = {entry.key for entry in editable_keys_for_tab("flow", layers)}
+    # The curated, writable flow key is surfaced; the non-curated multiplier
+    # (CLI-only) is absent from the modal's editable rows.
+    assert "flow.budget.enforce" in flow_keys
+    assert "flow.budget.multiplier" not in flow_keys
 
 
 def test_edit_field_modal_int_snapshot() -> None:
