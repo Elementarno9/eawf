@@ -28,6 +28,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+import pytest
 from textual.widgets import Input, Static, TabbedContent
 
 from eawf.kernel.config.registry import (
@@ -614,6 +615,97 @@ def test_curated_keys_stay_subset_of_leaf_catalog() -> None:
     the modal shows a deliberate subset, never every leaf.
     """
     for key in (*_PREFERENCES_KEYS, *_RESEARCH_KEYS):
+        assert key in LEAF_KEY_REGISTRY, key
+        assert registry_lookup(key) is not None, key
+    assert len(CONFIG_REGISTRY) < len(LEAF_KEY_REGISTRY)
+
+
+# ---------------------------------------------------------------------------
+# Curated scalar flow.* coverage (W27)
+# ---------------------------------------------------------------------------
+
+#: The ``flow.*`` scalar keys curated into ``CONFIG_REGISTRY`` so the
+#: workflow auto-accept / decision / budget toggles surface under a ``flow``
+#: tab. Each is a writable scalar leaf (bool, or the soft/hard budget enum
+#: surfaced as a ``choice``) -- never a locked, security, or structural key.
+_FLOW_KEYS: tuple[str, ...] = (
+    "flow.ask_on_decisions",
+    "flow.auto_accept.audit",
+    "flow.auto_accept.polish",
+    "flow.auto_accept.prep",
+    "flow.auto_accept.research",
+    "flow.auto_accept.review",
+    "flow.auto_accept.ship",
+    "flow.budget.enforce",
+)
+
+
+def test_flow_keys_all_have_curated_rows() -> None:
+    """Every curated ``flow.*`` key has a ``CONFIG_REGISTRY`` row."""
+    keys = {entry.key for entry in CONFIG_REGISTRY}
+    missing = [key for key in _FLOW_KEYS if key not in keys]
+    assert not missing, missing
+
+
+def test_flow_keys_grouped_under_flow_tab() -> None:
+    """The curated ``flow.*`` rows land under the ``flow`` tab."""
+    tab_keys = {entry.key for entry in keys_for_tab("flow")}
+    for key in _FLOW_KEYS:
+        assert key in tab_keys, key
+
+
+def test_flow_keys_are_safe_to_edit() -> None:
+    """Each curated ``flow.*`` key is a writable scalar leaf (not locked/structural).
+
+    The curated set is deliberately limited to keys safe to edit from the
+    TUI: writable from at least one layer, of a scalar shape the single-row
+    editor handles, and outside the ``security.*`` confirm-gated family.
+    """
+    non_scalar = {"list_str", "list_any", "mapping", "any"}
+    for key in _FLOW_KEYS:
+        leaf = LEAF_KEY_REGISTRY[key]
+        assert leaf.writable_layers != (), key  # not locked
+        assert leaf.type not in non_scalar, (key, leaf.type)  # scalar, not structural
+        assert not key.startswith("security."), key
+
+
+@pytest.mark.parametrize("key", _FLOW_KEYS)
+def test_flow_key_round_trips_through_coerce_and_validate(key: str) -> None:
+    """Each newly-surfaced ``flow.*`` ConfigKey round-trips through its leaf row.
+
+    The curated default coerces under the ConfigKey's declared type, and a
+    declared choice / leaf default lands back unchanged -- the curated row's
+    type + choices stay leaf-consistent so an edit validated in the modal is
+    one the daemon's leaf catalog also accepts.
+    """
+    entry = registry_lookup(key)
+    leaf = LEAF_KEY_REGISTRY[key]
+    assert entry is not None, key
+    # The curated default mirrors the leaf default.
+    assert entry.default == leaf.default, (key, entry.default, leaf.default)
+    # The default round-trips through coerce_and_validate under its declared type.
+    coerced_default = coerce_and_validate(entry, entry.default)
+    if entry.type == "bool":
+        assert isinstance(coerced_default, bool)
+        # The opposite boolean (string form) also coerces cleanly.
+        assert coerce_and_validate(entry, "false") is False
+        assert coerce_and_validate(entry, "true") is True
+    elif entry.type == "choice":
+        assert entry.choices is not None and len(entry.choices) >= 2, key
+        # A choice key's choices mirror the leaf catalog's choices exactly.
+        if leaf.choices is not None:
+            assert set(entry.choices) == set(leaf.choices), key
+        # Every declared choice round-trips unchanged through the leaf row.
+        for choice in entry.choices:
+            assert coerce_and_validate(entry, choice) == choice
+        # An undeclared value is rejected.
+        with pytest.raises(UserError):
+            coerce_and_validate(entry, "not-a-declared-choice")
+
+
+def test_flow_keys_stay_subset_of_leaf_catalog() -> None:
+    """The curated ``flow.*`` rows ride the curated registry, not a full-leaf dump."""
+    for key in _FLOW_KEYS:
         assert key in LEAF_KEY_REGISTRY, key
         assert registry_lookup(key) is not None, key
     assert len(CONFIG_REGISTRY) < len(LEAF_KEY_REGISTRY)
