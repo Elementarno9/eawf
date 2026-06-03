@@ -2772,6 +2772,18 @@
       "status": "done",
       "updated_at": "2026-06-03T22:22:04.637946Z"
     },
+    "P29-I09-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W03",
+      "scope_id": "P29-I09-W03",
+      "status": "done",
+      "updated_at": "2026-06-03T23:44:28.103095Z"
+    },
     "P29-I09-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -11039,6 +11051,19 @@
       "scope_id": "P29-I09-W02",
       "updated_at": "2026-06-03T22:07:45.625916Z"
     },
+    "P29-I09-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W03-bucket-20260603T222558Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I09-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I09-W03",
+      "updated_at": "2026-06-03T22:25:58.048560Z"
+    },
     "P29-I09-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I09-W05-bucket-20260603T211617Z",
@@ -13249,7 +13274,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T22:22:04.638281Z",
+  "updated_at": "2026-06-03T23:44:28.103418Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37048,10 +37073,10 @@
       "blocks": [
         "P29-I09-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-03T22:25:58.048555Z",
+      "closed_at": "2026-06-03T23:44:28.103095Z",
+      "commit": "836c38b5cde0452530e4fb009b7b12d6b0b53712",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37059,16 +37084,25 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/footer.py",
         "src/eawf/surfaces/tui/modes/autopilot.py",
-        "src/eawf/surfaces/tui/scopes/repo.py"
+        "src/eawf/surfaces/tui/scopes/repo.py",
+        "src/eawf/surfaces/tui/scopes/workspace.py",
+        "src/eawf/surfaces/tui/scopes/user.py",
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/modes/trust.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/modes/feed.py",
+        "src/eawf/surfaces/tui/modes/evidence.py",
+        "src/eawf/surfaces/tui/modes/doctor.py",
+        "src/eawf/surfaces/tui/modes/placeholder.py"
       ],
       "id": "P29-I09-W03",
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:48.600406Z",
-      "outcome": null,
+      "outcome": "CANONICAL_HINT_ACTIONS map (arrow=select, Enter=open, Esc=back, <-> =collapse, w/r/u=scope, F5=refresh, /=palette, ?=help, q=quit, c=config); render_hint_label raises on drifted shared-token action; all footer surfaces unified; 14 goldens regenerated",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the up and down arrow hint reads select and each shared token carries one canonical action from CANONICAL_HINT_ACTIONS across all ten footer surfaces"
       ],
