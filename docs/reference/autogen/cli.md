@@ -327,6 +327,7 @@ Manage curated durable memory entries.
 |---|---|
 | `add` | Write a new memory entry to ``memory.jsonl`` + ``state.memory_index``. |
 | `compact` | Compact ``memory.jsonl`` (dedup by content; idempotent). |
+| `digest` | Emit a state-derived standup: current focus, recent closes, decisions. |
 | `gc` | Archive matched memory entries by flipping their ``tier`` to ARCHIVAL. |
 | `list` | List memory entries from ``state.memory_index`` (the cache). |
 | `promote` | Promote a record. ``--to memory`` (default) or ``--to artifact``. |

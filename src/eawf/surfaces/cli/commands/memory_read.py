@@ -12,11 +12,14 @@ command-tree build path stays off the import-budget heavy graph.
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
 from eawf.surfaces.cli import errors as cli_errors
+
+if TYPE_CHECKING:
+    from eawf.platform.memory.digest import DigestEntry
 from eawf.surfaces.cli.commands.memory import (
     _DEFAULT_BUDGET,
     _load_state,
@@ -213,6 +216,90 @@ def memory_view(
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
         cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
+
+
+@memory_app.command("digest")
+def memory_digest(
+    ctx: typer.Context,
+    fmt: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="Output format: 'md' (default Markdown standup) or 'json'.",
+        ),
+    ] = "md",
+    md: Annotated[
+        bool,
+        typer.Option("--md", help="Shorthand for --format md (the default)."),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Shorthand for --format json."),
+    ] = False,
+) -> None:
+    """Emit a state-derived standup: current focus, recent closes, decisions.
+
+    A pure projection of ``state.json`` — it writes nothing, so the state
+    document and the stores are byte-equal before and after the command. The
+    Markdown branch is one line per paragraph and glosses every lifecycle id
+    so it reads as a glance-clear newcomer standup.
+    """
+    from eawf.platform.memory.digest import build_digest, render_digest_md
+
+    flags: GlobalFlags = ctx.obj
+    fmt_norm = fmt.strip().lower()
+    # --md / --json are shorthands for --format; --json (or the root --json
+    # flag) wins so a machine caller always gets the structured surface.
+    if json_output or flags.json_output:
+        fmt_norm = "json"
+    elif md:
+        fmt_norm = "md"
+    if fmt_norm not in {"md", "json"}:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"--format must be md|json; got {fmt!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = resolve_state_path(flags.workspace)
+        state = _load_state(state_path)
+        digest = build_digest(state)
+        text = render_digest_md(digest)
+        payload: dict[str, object] = {
+            "format": fmt_norm,
+            "phase": _entry_payload(digest.phase),
+            "iter": _entry_payload(digest.iter),
+            "recently_closed": [_entry_payload(e) for e in digest.recently_closed],
+            "recent_decisions": [_entry_payload(e) for e in digest.recent_decisions],
+        }
+        if fmt_norm == "md":
+            payload["text"] = text
+        effective_flags = GlobalFlags(
+            json_output=fmt_norm == "json",
+            plain_output=flags.plain_output,
+            no_input=flags.no_input,
+            workspace=flags.workspace,
+        )
+        emit_json_or_text(payload=payload, text=text, flags=effective_flags)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+    except FileNotFoundError as err:
+        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
+
+
+def _entry_payload(entry: DigestEntry | None) -> dict[str, str] | None:
+    """Project a :class:`~eawf.platform.memory.digest.DigestEntry` into a JSON dict.
+
+    Returns ``None`` for a ``None`` entry (an absent phase / iter pointer) so
+    the JSON surface mirrors the typed digest's optional fields.
+    """
+    if entry is None:
+        return None
+    return {
+        "ref_id": entry.ref_id,
+        "title": entry.title,
+        "detail": entry.detail,
+    }
 
 
 @memory_app.command("stale")
