@@ -2459,6 +2459,18 @@
       "scope_id": "P29-I08-W09",
       "status": "done",
       "updated_at": "2026-06-03T15:11:54.190970Z"
+    },
+    "P29-I08-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W10",
+      "scope_id": "P29-I08-W10",
+      "status": "done",
+      "updated_at": "2026-06-03T15:21:39.039899Z"
     }
   },
   "agent_sessions": {
@@ -10329,6 +10341,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W09",
       "updated_at": "2026-06-03T15:01:30.842218Z"
+    },
+    "P29-I08-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W10-bucket-20260603T151200Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W10",
+      "updated_at": "2026-06-03T15:12:00.953462Z"
     }
   },
   "goals": {
@@ -12477,7 +12502,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T15:11:54.191359Z",
+  "updated_at": "2026-06-03T15:21:39.040261Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35414,10 +35439,10 @@
       "blocks": [
         "P29-I08-W11"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T15:12:00.953457Z",
+      "closed_at": "2026-06-03T15:21:39.039899Z",
+      "commit": "832ec878ae65d718fce9bf14e9c359ea2cf41156",
       "deps": [
         "P29-I08-W09"
       ],
@@ -35432,10 +35457,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:18.510156Z",
-      "outcome": null,
+      "outcome": "EAWF_POC_DEFECTS flag plants 3 real defects (dead-click action_poc_dead_click, stale watch_state, plain-text-but-resolving code breadcrumb); flag-off byte-unchanged; 12 direct + 126+64 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a build flag injects a click no-op and a never-refreshing feed and a plain-text segment whose run_action still resolves and a direct assertion confirms each defect is live"
       ],
