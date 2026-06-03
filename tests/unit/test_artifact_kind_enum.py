@@ -64,6 +64,7 @@ def test_enum_covers_b059_vocabulary() -> None:
         "research_brief",
         "plan_spec",
         "agent_report",
+        "math_explainer",
     }
     assert {k.value for k in ArtifactKind} == expected
 
