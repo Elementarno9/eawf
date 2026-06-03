@@ -2544,6 +2544,18 @@
       "status": "done",
       "updated_at": "2026-06-03T17:14:33.308744Z"
     },
+    "P29-I08-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W17",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W17",
+      "scope_id": "P29-I08-W17",
+      "status": "done",
+      "updated_at": "2026-06-03T18:47:33.315963Z"
+    },
     "P29-I08-W18": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10649,6 +10661,19 @@
       "scope_id": "P29-I08-W16",
       "updated_at": "2026-06-03T17:14:32.568550Z"
     },
+    "P29-I08-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W17-bucket-20260603T184732Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I08-W17",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I08-W17",
+      "updated_at": "2026-06-03T18:47:32.694452Z"
+    },
     "P29-I08-W18": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I08-W18-bucket-20260603T173729Z",
@@ -12952,7 +12977,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T18:09:46.483196Z",
+  "updated_at": "2026-06-03T18:47:33.316295Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36120,10 +36145,10 @@
     "P29-I08-W17": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T18:47:32.694447Z",
+      "closed_at": "2026-06-03T18:47:33.315963Z",
+      "commit": "9217808f88f00b865f4133b75b1ce83ad338746b",
       "deps": [
         "P29-I08-W16"
       ],
@@ -36138,10 +36163,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:22.603627Z",
-      "outcome": null,
+      "outcome": "Markdown.LinkClicked routed on brief viewer: #ref-N scrolls target row near top (numeric scroll-Y; row located by [N] self-link text since HTML anchors stripped), entity href opens typed card, [N] never opens a card; brief_viewer.py extracted; 1385 tui green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "after a bracket-N click the target row scroll-Y lands near the anchor and an entity href opens the typed card and a bracket-N href never opens a card"
       ],
