@@ -19,6 +19,8 @@ from eawf.surfaces.tui.snapshot.asciinema import (
     CAST_HEIGHT,
     CAST_WIDTH,
     DEFAULT_FRAME_MS,
+    PROVENANCE_KEY,
+    read_cast_provenance,
     record_cast,
     write_cast,
 )
@@ -143,3 +145,63 @@ def test_write_cast_creates_parent_dirs(tmp_path: Path) -> None:
     out = tmp_path / "nested" / "deep" / "demo.cast"
     write_cast([(0.0, "x")], out)
     assert out.is_file()
+
+
+# --------------------------------------------------------------------------
+# provenance stamp — round-trip, back-compat, byte-stability
+# --------------------------------------------------------------------------
+
+
+def test_write_cast_stamps_provenance_under_namespaced_key(tmp_path: Path) -> None:
+    out = tmp_path / "demo.cast"
+    write_cast([(0.0, "x")], out, source_commit="abc1234", fixture_id="repo-active")
+
+    header = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
+    assert header[PROVENANCE_KEY] == {
+        "source_commit": "abc1234",
+        "fixture_id": "repo-active",
+    }
+
+
+def test_read_cast_provenance_round_trips_source_commit_and_fixture(tmp_path: Path) -> None:
+    out = tmp_path / "demo.cast"
+    write_cast([(0.0, "x")], out, source_commit="deadbee", fixture_id="repo-active")
+
+    source_commit, fixture_id = read_cast_provenance(out)
+    assert source_commit == "deadbee"
+    assert fixture_id == "repo-active"
+
+
+def test_read_cast_provenance_returns_none_without_stamp(tmp_path: Path) -> None:
+    # Back-compat: a cast written the pre-provenance way reads back as (None, None).
+    out = tmp_path / "demo.cast"
+    write_cast([(0.0, "x")], out)
+
+    assert read_cast_provenance(out) == (None, None)
+
+
+def test_write_cast_without_provenance_is_byte_identical_to_legacy(tmp_path: Path) -> None:
+    # Omitting both provenance fields must not add the namespaced header key,
+    # so already-committed goldens do not churn.
+    frames = [(0.0, "a"), (0.05, "b")]
+    out = tmp_path / "demo.cast"
+    write_cast(frames, out)
+
+    header = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
+    assert PROVENANCE_KEY not in header
+
+
+def test_read_cast_provenance_handles_partial_stamp(tmp_path: Path) -> None:
+    # Only source_commit set -> fixture_id reads back None.
+    out = tmp_path / "demo.cast"
+    write_cast([(0.0, "x")], out, source_commit="abc1234")
+
+    assert read_cast_provenance(out) == ("abc1234", None)
+
+
+def test_read_cast_provenance_rejects_empty_header(tmp_path: Path) -> None:
+    out = tmp_path / "empty.cast"
+    out.write_text("", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="empty cast header"):
+        read_cast_provenance(out)
