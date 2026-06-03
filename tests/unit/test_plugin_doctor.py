@@ -1,6 +1,6 @@
-"""Unit tests for :mod:`eawf.runtime.runtimes.plugin_doctor` — 4 drift kinds.
+"""Unit tests for :mod:`eawf.runtime.runtimes.plugin_doctor` — 5 drift kinds.
 
-The top-level doctor enumerates four drift kinds per C07a §5.9 / F14:
+The top-level doctor enumerates five drift kinds:
 
 1. ``manifest-vs-disk`` — :class:`PluginManifest` ``managed.source_files``
    paths resolve on disk.
@@ -10,10 +10,13 @@ The top-level doctor enumerates four drift kinds per C07a §5.9 / F14:
    probe results (delegates to W13).
 4. ``helper-LOC-overflow`` — KISS-004 budget enforcement on
    :mod:`eawf.runtime.runtimes.helpers`.
+5. ``orphan-disk-vs-registry`` — the reverse walk: on-disk
+   ``.claude/skills/<name>/`` directories with no ``SKILL_REGISTRY`` row.
 
 These tests cover boundary cases (no manifests / clean tree / empty
-helpers / no probes) AND drift detection (broken source files, hand
-edits, drift probe rows, oversize helpers).
+helpers / no probes / no skills tree / all-registered) AND drift
+detection (broken source files, hand edits, drift probe rows, oversize
+helpers, orphan skill directories).
 """
 
 from __future__ import annotations
@@ -35,23 +38,26 @@ from eawf.runtime.runtimes.plugin_doctor import (
     check_capability_vs_probe,
     check_helper_loc_overflow,
     check_manifest_vs_disk,
+    check_orphan_disk_vs_registry,
     check_registry_vs_disk,
     run_doctor,
 )
+from eawf.surfaces.render.skills.registry import SKILL_REGISTRY
 
 # ---------------------------------------------------------------------------
 # Constants — boundary checks
 # ---------------------------------------------------------------------------
 
 
-def test_drift_kinds_enumerates_exactly_four() -> None:
-    """The cluster brief commits to four kinds — guardrail against drift."""
-    assert len(DRIFT_KINDS) == 4
+def test_drift_kinds_enumerates_exactly_five() -> None:
+    """The doctor commits to five kinds — guardrail against silent drift."""
+    assert len(DRIFT_KINDS) == 5
     assert set(DRIFT_KINDS) == {
         "manifest-vs-disk",
         "registry-vs-disk",
         "capability-vs-probe",
         "helper-LOC-overflow",
+        "orphan-disk-vs-registry",
     }
 
 
@@ -258,17 +264,110 @@ def test_check_helper_loc_overflow_fires_when_budget_exceeded(tmp_path: Path) ->
 
 
 # ---------------------------------------------------------------------------
+# Kind 5 — orphan-disk-vs-registry
+# ---------------------------------------------------------------------------
+
+
+def test_check_orphan_skipped_when_no_skills_tree(tmp_path: Path) -> None:
+    """No .claude/skills/ tree (zero skills on disk) → kind is skipped."""
+    report = check_orphan_disk_vs_registry(tmp_path)
+    assert report.kind == "orphan-disk-vs-registry"
+    assert report.skipped is True
+    assert report.clean is True
+    assert report.findings == []
+
+
+def test_check_orphan_clean_when_all_registered(tmp_path: Path) -> None:
+    """Fresh install renders only registered skills → no orphan finding."""
+    install_plugin(tmp_path)
+    report = check_orphan_disk_vs_registry(tmp_path)
+    assert report.kind == "orphan-disk-vs-registry"
+    assert report.skipped is False
+    assert report.clean is True
+    assert report.findings == []
+
+
+def test_check_orphan_clean_when_skills_dir_empty(tmp_path: Path) -> None:
+    """Skills tree present but empty (no child dirs) → clean, not skipped."""
+    (tmp_path / ".claude" / "skills").mkdir(parents=True)
+    report = check_orphan_disk_vs_registry(tmp_path)
+    assert report.skipped is False
+    assert report.clean is True
+    assert report.findings == []
+
+
+def test_check_orphan_detects_unregistered_skill_dir(tmp_path: Path) -> None:
+    """A synthetic skills/<fake>/ dir with no registry row fires a finding."""
+    install_plugin(tmp_path)
+    orphan = tmp_path / ".claude" / "skills" / "totally-made-up-skill"
+    orphan.mkdir()
+    (orphan / "SKILL.md").write_text("# orphan\n", encoding="utf-8")
+    report = check_orphan_disk_vs_registry(tmp_path)
+    assert report.clean is False
+    assert len(report.findings) == 1
+    finding = report.findings[0]
+    assert finding.runtime == "claude-code"
+    assert finding.location == ".claude/skills/totally-made-up-skill"
+    assert "no SKILL_REGISTRY row" in finding.detail
+
+
+def test_check_orphan_ignores_loose_files_in_skills_root(tmp_path: Path) -> None:
+    """A loose file (not a directory) under skills/ is not an orphan."""
+    skills_root = tmp_path / ".claude" / "skills"
+    skills_root.mkdir(parents=True)
+    (skills_root / "README.txt").write_text("not a skill dir", encoding="utf-8")
+    report = check_orphan_disk_vs_registry(tmp_path)
+    assert report.clean is True
+    assert report.findings == []
+
+
+def test_check_orphan_does_not_register_the_orphan(tmp_path: Path) -> None:
+    """Flagging an orphan must NOT mutate SKILL_REGISTRY (explicit-only)."""
+    install_plugin(tmp_path)
+    before = {spec.skill_name for spec in SKILL_REGISTRY}
+    orphan = tmp_path / ".claude" / "skills" / "sneaky-orphan"
+    orphan.mkdir()
+    check_orphan_disk_vs_registry(tmp_path)
+    after = {spec.skill_name for spec in SKILL_REGISTRY}
+    assert after == before
+    assert "sneaky-orphan" not in after
+
+
+def test_run_doctor_orphan_drives_non_clean_and_drift_exit(tmp_path: Path) -> None:
+    """An orphan dir makes the aggregate report non-clean.
+
+    The non-clean aggregate is what drives the ``eawf plugin doctor``
+    CLI to ``raise typer.Exit(exit_codes.STATE_CONFLICT)`` — the
+    canonical drift exit code. ``STATE_CONFLICT`` is the doctor's drift
+    exit; the legacy ``INTEGRITY_VIOLATION`` (== 8 in the pre-P28 0..9
+    scheme) was collapsed into ``STATE_CONFLICT`` when the exit-code
+    surface was canonicalised to 0..5.
+    """
+    from eawf.surfaces.cli import exit_codes
+
+    install_plugin(tmp_path)
+    (tmp_path / ".claude" / "skills" / "ghost-skill").mkdir()
+    report = run_doctor(tmp_path, runtimes=("claude-code",))
+    assert report.clean is False
+    dirty = [k for k in report.kinds if not k.clean]
+    assert [k.kind for k in dirty] == ["orphan-disk-vs-registry"]
+    # The CLI maps a non-clean report onto STATE_CONFLICT (the drift
+    # exit); assert the constant the handler raises.
+    assert exit_codes.STATE_CONFLICT == 3
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
 
-def test_run_doctor_aggregates_four_kinds(tmp_path: Path) -> None:
-    """``run_doctor`` returns exactly four kind reports in canonical order."""
+def test_run_doctor_aggregates_five_kinds(tmp_path: Path) -> None:
+    """``run_doctor`` returns exactly five kind reports in canonical order."""
     install_plugin(tmp_path)
     report = run_doctor(tmp_path, runtimes=("claude-code",))
     assert isinstance(report, PluginDoctorReport)
     assert report.runtimes == ("claude-code",)
-    assert len(report.kinds) == 4
+    assert len(report.kinds) == 5
     assert [k.kind for k in report.kinds] == list(DRIFT_KINDS)
 
 

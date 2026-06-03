@@ -1,10 +1,10 @@
-"""Top-level plugin doctor — enumerates 4 drift kinds.
+"""Top-level plugin doctor — enumerates 5 drift kinds.
 
 The per-runtime plugin doctors at
 :mod:`eawf.runtime.runtimes.{claude,codex,opencode}.plugin_doctor` answer
 "does the rendered tree on disk still match what the installer would
 emit?". This module composes them into a single multi-runtime sweep
-plus three additional drift kinds:
+plus four additional drift kinds:
 
 1. ``manifest-vs-disk`` — :class:`PluginManifest` source files are
    declared on the manifest's ``managed.source_files`` list; this
@@ -24,6 +24,17 @@ plus three additional drift kinds:
    stay under 300 LOC combined (see
    :mod:`eawf.runtime.runtimes.helpers` module docstring). Drift fires
    when the total exceeds the cap.
+5. ``orphan-disk-vs-registry`` — the reverse of ``registry-vs-disk``.
+   The first four kinds walk expected(registry) -> disk; this kind
+   walks the on-disk ``.claude/skills/<name>/`` directories of an
+   installed Claude plugin tree and flags any skill directory with no
+   corresponding :class:`~eawf.surfaces.render.skills.render.SkillSpec`
+   row in :data:`~eawf.surfaces.render.skills.registry.SKILL_REGISTRY`
+   (an *orphan* — a skill rendered or hand-dropped on disk that the
+   registry no longer knows about). The kind FLAGS orphans only; it
+   never auto-registers or imports them, honouring the
+   explicit-registry-only policy (the registry grows solely via
+   explicit registration).
 
 Each kind is an isolated check function that returns a typed
 :class:`DriftKindReport`. The aggregate :class:`PluginDoctorReport`
@@ -62,6 +73,7 @@ from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin as claude_d
 from eawf.runtime.runtimes.codex.plugin_doctor import doctor_plugin as codex_doctor_plugin
 from eawf.runtime.runtimes.manifest import PluginManifest, RuntimeId
 from eawf.runtime.runtimes.opencode.plugin_doctor import doctor_plugin as opencode_doctor_plugin
+from eawf.surfaces.render.skills.registry import SKILL_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +83,7 @@ DriftKind = Literal[
     "registry-vs-disk",
     "capability-vs-probe",
     "helper-LOC-overflow",
+    "orphan-disk-vs-registry",
 ]
 """Closed set of drift kinds the top-level doctor enumerates."""
 
@@ -79,6 +92,7 @@ DRIFT_KINDS: Final[tuple[DriftKind, ...]] = (
     "registry-vs-disk",
     "capability-vs-probe",
     "helper-LOC-overflow",
+    "orphan-disk-vs-registry",
 )
 """Canonical ordering used when rendering the consolidated report."""
 
@@ -122,7 +136,7 @@ class DriftKindReport:
     """Per-kind report for the top-level doctor.
 
     Attributes:
-        kind: One of the four :data:`DriftKind` literals.
+        kind: One of the five :data:`DriftKind` literals.
         clean: ``True`` when no findings recorded.
         findings: List of :class:`DriftFinding` rows.
         skipped: ``True`` when the check was skipped (e.g. manifest
@@ -448,6 +462,73 @@ def check_helper_loc_overflow(
 
 
 # ---------------------------------------------------------------------------
+# Kind 5: orphan-disk-vs-registry
+# ---------------------------------------------------------------------------
+
+
+_CLAUDE_SKILLS_SUBPATH: Final[tuple[str, str]] = (".claude", "skills")
+"""Relative segments from the target dir to the rendered Claude skills tree."""
+
+
+def check_orphan_disk_vs_registry(target_dir: Path) -> DriftKindReport:
+    """Flag on-disk skill directories with no registry row (orphans).
+
+    The reverse of :func:`check_registry_vs_disk`: instead of walking
+    expected(registry) -> disk, this walks the rendered Claude plugin
+    tree's ``.claude/skills/<name>/`` directories and flags any whose
+    name has no matching
+    :class:`~eawf.surfaces.render.skills.render.SkillSpec` in
+    :data:`~eawf.surfaces.render.skills.registry.SKILL_REGISTRY`. Such a
+    directory is an *orphan* — a skill rendered (or hand-dropped) on
+    disk that the registry no longer declares.
+
+    The check FLAGS orphans only. It never auto-registers or imports a
+    discovered skill: per the explicit-registry-only policy the registry
+    grows solely via explicit registration, so reconciliation is an
+    operator decision the doctor surfaces rather than performs.
+
+    Args:
+        target_dir: Workspace root holding the installed
+            ``.claude/skills/`` tree.
+
+    Returns:
+        :class:`DriftKindReport` with one finding per orphan directory.
+        ``skipped=True`` when the skills tree is absent (the plugin was
+        never installed here, so there is nothing to reconcile against).
+    """
+    skills_root = target_dir.joinpath(*_CLAUDE_SKILLS_SUBPATH)
+    if not skills_root.is_dir():
+        return DriftKindReport(
+            kind="orphan-disk-vs-registry",
+            clean=True,
+            skipped=True,
+        )
+    registered = {spec.skill_name for spec in SKILL_REGISTRY}
+    findings: list[DriftFinding] = []
+    for child in sorted(skills_root.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name in registered:
+            continue
+        findings.append(
+            DriftFinding(
+                runtime="claude-code",
+                location=f".claude/skills/{child.name}",
+                detail=(
+                    f"on-disk skill directory has no SKILL_REGISTRY row: "
+                    f"{child.name!r} (flagged only — register it explicitly "
+                    f"or remove the directory)"
+                ),
+            )
+        )
+    return DriftKindReport(
+        kind="orphan-disk-vs-registry",
+        clean=not findings,
+        findings=findings,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -459,7 +540,7 @@ def run_doctor(
     probes: dict[RuntimeId, ProbeResult] | None = None,
     helpers_dir: Path | None = None,
 ) -> PluginDoctorReport:
-    """Run all four drift kinds and aggregate the result.
+    """Run all five drift kinds and aggregate the result.
 
     Args:
         target_dir: Workspace root.
@@ -478,6 +559,7 @@ def run_doctor(
         check_registry_vs_disk(resolved_target, runtimes=runtimes),
         check_capability_vs_probe(runtimes=runtimes, probes=probes),
         check_helper_loc_overflow(helpers_dir),
+        check_orphan_disk_vs_registry(resolved_target),
     ]
     logger.info(
         f"run_doctor target={resolved_target} runtimes={len(runtimes)} "
@@ -500,6 +582,7 @@ __all__ = [
     "check_capability_vs_probe",
     "check_helper_loc_overflow",
     "check_manifest_vs_disk",
+    "check_orphan_disk_vs_registry",
     "check_registry_vs_disk",
     "run_doctor",
 ]
