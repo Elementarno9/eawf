@@ -45,6 +45,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+from eawf.kernel.spec.heuristics import is_ui_scope
 from eawf.kernel.spec.rubric import rubric_items
 from eawf.kernel.spec.wave import WaveSpec
 from eawf.kernel.state.enums import (
@@ -138,21 +139,32 @@ class SpecJuryResult:
 def wave_in_uiux_band(wave: Wave, *, bands: list[str] | tuple[str, ...] | None) -> bool:
     """Return whether *wave* is UI/UX-banded for the spec-jury gate.
 
-    A wave is banded when any token in *bands* appears (case-insensitively)
-    as a substring of the wave id or title. The band list is the active
-    profile's :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`;
-    an empty or ``None`` list bands no wave -- the v0.5 default until the
-    band-population wave ships the real token set. The list is a parameter
-    (not read from config here) so the predicate stays pure + overridable:
-    an integration test forces a band wave by passing an explicit token.
+    A wave is banded when EITHER arm fires (the band is the UNION):
+
+    * **Structural** -- the wave's ``file_scopes`` are UI surface per
+      :func:`eawf.kernel.spec.heuristics.is_ui_scope` (any scope under
+      ``src/eawf/surfaces/tui/`` or ``src/eawf/surfaces/render/``). A wave
+      that touches the UI tree is UI/UX-risky regardless of its title, so
+      this arm bands UI waves with no per-profile config.
+    * **Token** -- any token in *bands* appears (case-insensitively) as a
+      substring of the wave id or title. The band list is the active
+      profile's :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`;
+      an empty or ``None`` list disables this arm. The list is a parameter
+      (not read from config here) so the predicate stays pure + overridable:
+      an integration test forces a band wave by passing an explicit token.
 
     Args:
         wave: The wave being closed. Read-only.
-        bands: The UI/UX band tokens. ``None`` or empty bands nothing.
+        bands: The UI/UX band tokens for the token arm. ``None`` or empty
+            disables the token arm; the structural ``file_scopes`` arm still
+            applies.
 
     Returns:
-        ``True`` when a band token matches the wave id or title.
+        ``True`` when the wave's file_scopes are UI surface OR a band token
+        matches the wave id or title.
     """
+    if is_ui_scope(wave.file_scopes):
+        return True
     if not bands:
         return False
     corpus = f"{wave.id}\n{wave.title}".lower()

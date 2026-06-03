@@ -200,6 +200,38 @@ def test_wave_in_uiux_band_matches_id_or_title_case_insensitive() -> None:
     assert wave_in_uiux_band(by_id, bands=["p29-i05"]) is True
 
 
+def _wave_with_scopes(file_scopes: list[str]) -> Wave:
+    """Build a Wave whose title / id carry no band token, only file_scopes vary."""
+    return Wave.model_validate(
+        {
+            "id": "P29-I08-W06",
+            "iter_id": "P29-I08",
+            "title": "band-scoped verify resolution",
+            "status": "claimed",
+            "file_scopes": file_scopes,
+            "success_criteria": ["c1"],
+            "opened_at": "2026-06-03T00:00:00Z",
+            "claimed_at": "2026-06-03T00:00:00Z",
+        }
+    )
+
+
+def test_wave_in_uiux_band_ui_file_scopes_band_even_with_empty_bands() -> None:
+    """A UI-surface file_scope bands the wave via the structural arm (no token needed)."""
+    tui = _wave_with_scopes(["src/eawf/surfaces/tui/widgets/footer.py"])
+    assert wave_in_uiux_band(tui, bands=[]) is True
+    assert wave_in_uiux_band(tui, bands=None) is True
+    render = _wave_with_scopes(["src/eawf/surfaces/render/envelope.py"])
+    assert wave_in_uiux_band(render, bands=[]) is True
+
+
+def test_wave_in_uiux_band_non_ui_file_scopes_not_banded() -> None:
+    """A non-UI file_scope with no matching token bands nothing."""
+    backend = _wave_with_scopes(["src/eawf/kernel/spec/wave.py"])
+    assert wave_in_uiux_band(backend, bands=[]) is False
+    assert wave_in_uiux_band(backend, bands=["tui"]) is False
+
+
 # --------------------------------------------------------------------------- #
 # produce_spec_jury_verdict -- idle contract (no ballot fn).
 # --------------------------------------------------------------------------- #

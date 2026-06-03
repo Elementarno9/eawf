@@ -623,16 +623,26 @@ def _compute_wave_close_readiness(
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.verify import compute as compute_readiness
-    from eawf.workflow.verify.readiness import load_active_verify_block
+    from eawf.workflow.verify.readiness import (
+        load_active_verify_block,
+        resolve_wave_verify_block,
+    )
 
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id or wave_id not in state.waves:
         return None
-    verify_block = load_active_verify_block(
-        wave_id,
-        state,
-        repo_root=repo_root,
-        config_root=_config_root_for_state_path(state_path),
+    # Band-conditional enforcement: the merged block records the fleet
+    # intent; the wave-aware resolver narrows ``enforce`` to the UI/UX band
+    # so a non-band wave keeps the advisory close path even when a
+    # band-scoped profile is enabled.
+    verify_block = resolve_wave_verify_block(
+        load_active_verify_block(
+            wave_id,
+            state,
+            repo_root=repo_root,
+            config_root=_config_root_for_state_path(state_path),
+        ),
+        state.waves[wave_id],
     )
     if verify_block is None or not verify_block.enforce:
         return None
@@ -1050,20 +1060,30 @@ async def _enforce_wave_close_gate(
     """
     from eawf.observability.eval.cross_vendor_jury import JURY_QUORUM
     from eawf.workflow.dispatch.spec_jury import wave_in_uiux_band
-    from eawf.workflow.verify.readiness import load_active_verify_block
+    from eawf.workflow.verify.readiness import (
+        load_active_verify_block,
+        resolve_wave_verify_block,
+    )
 
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id or wave_id not in state.waves:
         return
-    verify_block = load_active_verify_block(
-        wave_id,
-        state,
-        repo_root=repo_root,
-        config_root=_config_root_for_state_path(state_path),
+    wave = state.waves[wave_id]
+    # Band-conditional enforcement: the merged block records the fleet
+    # intent; the wave-aware resolver narrows ``enforce`` +
+    # ``cross_vendor_jury`` to the UI/UX band so the gate fires for a band
+    # wave and a non-band wave returns early on the advisory path.
+    verify_block = resolve_wave_verify_block(
+        load_active_verify_block(
+            wave_id,
+            state,
+            repo_root=repo_root,
+            config_root=_config_root_for_state_path(state_path),
+        ),
+        wave,
     )
     if verify_block is None or not verify_block.enforce:
         return
-    wave = state.waves[wave_id]
     # UI/UX-banded waves route through the per-rubric-item spec jury first.
     # The producer is idle (no live ballot fn) by default, so a banded close
     # degrades to the default gate below until the band-population wave binds

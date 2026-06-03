@@ -173,12 +173,32 @@ class VerifyBlock(BaseModel):
         uiux_bands: Substring tokens that mark a wave as UI/UX-banded for
             the spec-jury close gate
             (:func:`eawf.workflow.dispatch.spec_jury.wave_in_uiux_band`). A
-            wave whose id or title contains any token routes its close
-            through the per-rubric-item spec jury rather than (only) the
-            single-auditor gate. Defaults to an empty list so no wave is
-            banded until a profile opts in — the band-population wave (W06)
-            ships the real token set. Only meaningful when :attr:`enforce`
-            is ``True``.
+            wave is banded when its ``file_scopes`` are UI surface (per
+            :func:`eawf.kernel.spec.heuristics.is_ui_scope`) OR any token here
+            matches its id / title. The UI-surface ``file_scopes`` arm is the
+            structural band definition — a wave touching ``surfaces/tui/`` or
+            ``surfaces/render/`` is UI/UX-risky regardless of its title —
+            while the token list is the override for waves a profile wants
+            banded by name. Defaults to an empty list so no wave is banded by
+            *token* until a profile opts in; the ``file_scopes`` arm bands UI
+            waves with no config. Band membership drives band-conditional
+            enforcement
+            (:func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`),
+            so this is meaningful even when the merged ``enforce`` bit is
+            ``False`` — the resolver turns enforcement ON for a band wave and
+            OFF for a non-band wave rather than flipping it fleet-wide.
+        jury_vendors: The disjoint-vendor panel the band-scoped spec jury
+            convenes one juror from each of. Declared as config so the panel
+            is auditable from the profile (defaults to the full cross-vendor
+            triple ``["claude", "codex", "opencode"]``, all three of whose
+            spawn runtimes are live). The LIVE multi-vendor invocation stays
+            IDLE in v0.5: the daemon close path's per-item ballot fn
+            (:func:`eawf.runtime.daemon.methods.state._spec_jury_ballot_fn`)
+            returns ``None`` so no juror is spawned from this list — wiring
+            the live panel is a deferred calibration note, and the
+            deterministic canned-ballot gate (W08) is what proves the gate
+            discriminates. Recording the panel here keeps the intent typed
+            and ready for the live binding without enabling a spawn.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -192,6 +212,7 @@ class VerifyBlock(BaseModel):
     enforce: bool = False
     cross_vendor_jury: bool = False
     uiux_bands: list[str] = Field(default_factory=list)
+    jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
 
 
 class InstrumentReq(BaseModel):

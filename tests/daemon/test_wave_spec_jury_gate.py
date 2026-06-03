@@ -393,26 +393,32 @@ def test_band_wave_veto_blocks_close(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_non_band_wave_does_not_convene_spec_jury(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A wave whose title matches no band token never routes through the spec jury.
+    """A non-band wave under a band-scoped enforcing profile closes advisory-only.
 
-    With no band match the close falls to the single-auditor gate, which blocks
-    an always-wave (effort L) with no fresh auditor verdict -- the pre-W05
-    behaviour -- and the spec-jury ballot fn is never convened.
+    Enforcement is band-conditional (P29-I08-W06): the band-scoped profile
+    declares ``enforce: true`` at the fleet level, but
+    :func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block` narrows
+    it to OFF for a non-band wave (no UI file_scopes, no matching token). So
+    the close runs neither the spec jury nor the single-auditor gate -- it
+    proceeds exactly as a close in a repo with no enforcing profile. The
+    spec-jury ballot fn is never convened.
     """
     counter = _patch_ballot_fn(
         monkeypatch,
         votes_by_juror={"claude-code": {"B1": (True, None), "B2": (True, None)}},
     )
-    # The wave title matches no band token (band list lists 'tui', title is plain).
+    # The wave title matches no band token (band list lists 'tui', title is plain)
+    # and the fixture wave carries no UI file_scopes, so the structural arm
+    # does not band it either.
     state_path, ctx, mutation = _setup(
         tmp_path, uiux_bands=[_BAND_TOKEN], wave_title="backend telemetry rollup"
     )
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="verdict gate blocked"):
-            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_BAND_WAVE]["status"] == "claimed"
+        # Band-conditional enforce-off -> the close lands (no gate fired).
+        assert payload["waves"][_BAND_WAVE]["status"] == "closed"
 
     _run(body)
     assert counter["calls"] == 0
@@ -486,7 +492,13 @@ def test_band_wave_missing_spec_degrades_to_default_gate(
 def test_empty_band_list_never_engages_spec_jury(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An empty uiux_bands list bands no wave -> default gate, no spec jury."""
+    """An empty uiux_bands profile is NOT band-scoped -> default gate, no spec jury.
+
+    A profile that declares no ``uiux_bands`` is a whole-fleet enforce profile
+    (not band-scoped), so band-conditional narrowing does not apply: the close
+    falls to the single-auditor gate (which blocks an always-wave with no
+    fresh verdict) and the spec-jury ballot fn is never convened.
+    """
     counter = _patch_ballot_fn(
         monkeypatch,
         votes_by_juror={"claude-code": {"B1": (True, None), "B2": (True, None)}},

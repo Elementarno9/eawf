@@ -482,7 +482,17 @@ def _config_root_for_readiness(config_root: Path | None, repo_root: Path) -> Pat
 
 
 def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
-    """Merge active profile verify blocks into one effective block."""
+    """Merge active profile verify blocks into one effective block.
+
+    Union-merges the list-valued fields (``floor_checks`` concatenated;
+    ``argv_allowlist`` / ``uiux_bands`` / ``jury_vendors`` deduplicated,
+    first-occurrence order preserved), OR-folds the boolean gating bits
+    (``enforce`` / ``cross_vendor_jury``), and takes the last contributor's
+    ``waiver_mode`` + ``timeout_class_seconds`` overrides. The merged
+    ``enforce`` is the *fleet* opt-in; band-conditional resolution
+    (:func:`resolve_wave_verify_block`) narrows it per wave at the close
+    seam so a single enforcing profile does not gate every wave.
+    """
     if not blocks:
         return None
     floor_checks = []
@@ -490,6 +500,8 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     seen_argv: set[str] = set()
     uiux_bands: list[str] = []
     seen_bands: set[str] = set()
+    jury_vendors: list[str] = []
+    seen_vendors: set[str] = set()
     timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] = {}
     has_timeout_overrides = False
     waiver_mode: Literal["A", "B", "C"] = "B"
@@ -507,6 +519,11 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
                 continue
             uiux_bands.append(band)
             seen_bands.add(band)
+        for vendor in block.jury_vendors:
+            if vendor in seen_vendors:
+                continue
+            jury_vendors.append(vendor)
+            seen_vendors.add(vendor)
         if block.timeout_class_seconds is not None:
             has_timeout_overrides = True
             timeout_class_seconds.update(block.timeout_class_seconds)
@@ -521,6 +538,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         enforce=enforce,
         cross_vendor_jury=cross_vendor_jury,
         uiux_bands=uiux_bands,
+        jury_vendors=jury_vendors,
     )
 
 
@@ -610,6 +628,64 @@ def load_active_verify_block(
         repo_root=repo_root,
         config_root=config_root,
     )
+
+
+def resolve_wave_verify_block(
+    verify_block: VerifyBlock | None,
+    wave: Wave,
+) -> VerifyBlock | None:
+    """Resolve the merged verify block to its band-conditional form for *wave*.
+
+    A profile opts into **band-scoped** enforcement by declaring a non-empty
+    :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`. For such a
+    block, verify enforcement is conditional on the wave's UI/UX band rather
+    than a fleet-wide flip: the merged block records the *intent*
+    (``enforce: true`` + ``cross_vendor_jury: true``), and this resolver
+    turns it on or off per wave:
+
+    * a **band** wave (UI-surface ``file_scopes`` OR a ``uiux_bands`` token
+      match, per :func:`eawf.workflow.dispatch.spec_jury.wave_in_uiux_band`)
+      keeps the merged block's enforcement bits as authored -- so a
+      band-scoped profile resolves to ``enforce=True`` +
+      ``cross_vendor_jury=True`` and the close routes through the gate;
+    * a **non-band** wave resolves to ``enforce=False`` (and, consequently,
+      no jury) -- it closes exactly as it does today, advisory-only.
+
+    A block that does NOT declare ``uiux_bands`` is a whole-fleet enforce
+    profile (the pre-W06 shape) and is returned untouched: its operator
+    deliberately gates every wave, so there is no band to narrow to. A
+    ``None`` input (no active profile contributes a verify block) and a
+    fleet-advisory block (``enforce=False``) likewise pass through unchanged.
+
+    The list-valued config (``uiux_bands`` / ``jury_vendors`` /
+    ``floor_checks`` / ``argv_allowlist``) and the ``waiver_mode`` /
+    ``timeout_class_seconds`` overrides are carried through untouched; only
+    the two gating booleans are wave-conditional.
+
+    Args:
+        verify_block: The fleet-merged active verify block, or ``None``.
+        wave: The wave being closed -- read for ``file_scopes`` / ``id`` /
+            ``title`` band membership only.
+
+    Returns:
+        The band-conditional :class:`VerifyBlock` for *wave*, or ``None``
+        when the input was ``None``.
+    """
+    from eawf.workflow.dispatch.spec_jury import wave_in_uiux_band
+
+    if verify_block is None or not verify_block.enforce:
+        return verify_block
+    if not verify_block.uiux_bands:
+        # Not band-scoped -- a whole-fleet enforce profile gates every wave.
+        return verify_block
+    if wave_in_uiux_band(wave, bands=verify_block.uiux_bands):
+        return verify_block
+    narrowed = verify_block.model_copy(update={"enforce": False, "cross_vendor_jury": False})
+    logger.debug(
+        f"resolve_wave_verify_block wave={wave.id!r} band=False "
+        f"enforce={narrowed.enforce} cross_vendor_jury={narrowed.cross_vendor_jury}"
+    )
+    return narrowed
 
 
 def _build_floor_views(
@@ -893,4 +969,5 @@ def _is_ready(criteria: list[CriterionView]) -> bool:
 __all__ = [
     "compute",
     "load_active_verify_block",
+    "resolve_wave_verify_block",
 ]

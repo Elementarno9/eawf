@@ -96,7 +96,29 @@ render_blocks:
       ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs
       the explicit-return contract via full type hints.
 
+# Band-scoped verify enforcement. ``enforce`` + ``cross_vendor_jury`` declare
+# the QC intent at the fleet level, but the wave-aware resolver
+# (``resolve_wave_verify_block``) narrows them to the UI/UX band: a wave whose
+# file_scopes touch ``surfaces/tui/`` or ``surfaces/render/`` (or whose id /
+# title matches a ``uiux_bands`` token) closes through the spec-jury gate,
+# while every non-band wave keeps the advisory close path. This is a per-wave
+# gate, NOT a fleet-wide flip.
+#
+# ``jury_vendors`` records the disjoint cross-vendor panel for the band spec
+# jury (all three spawn runtimes are live). The LIVE multi-vendor invocation
+# stays IDLE in v0.5: the daemon's per-item ballot fn returns None so no juror
+# is spawned from this list -- wiring the live panel is a deferred calibration
+# note, and the deterministic canned-ballot gate is what proves discrimination.
 verify:
+  enforce: true
+  cross_vendor_jury: true
+  uiux_bands:
+    - tui
+    - render
+  jury_vendors:
+    - claude
+    - codex
+    - opencode
   argv_allowlist:
     - uv
     - run

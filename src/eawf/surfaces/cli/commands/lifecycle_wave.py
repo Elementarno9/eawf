@@ -42,6 +42,7 @@ from eawf.surfaces.cli.flags import GlobalFlags
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
+    from eawf.platform.profiles.models import VerifyBlock
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,50 @@ logger = logging.getLogger(__name__)
 def _config_root_for_state_path(state_path: Path) -> Path:
     """Return the root that owns ``.ea/config.yaml`` for *state_path*."""
     return state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
+
+
+def _resolve_close_verify_block(
+    wave_id: str,
+    state: State,
+    *,
+    repo_root: Path,
+    config_root: Path,
+) -> VerifyBlock | None:
+    """Load + band-narrow the active verify block for a closing wave.
+
+    Wraps :func:`~eawf.workflow.verify.readiness.load_active_verify_block`
+    with the band-conditional resolver
+    (:func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block`) so the
+    CLI direct-write fallback matches the daemon close gate: a band-scoped
+    profile gates only the wave's UI/UX band, and a non-band wave stays
+    advisory. A wave id absent from *state* leaves the merged block
+    un-narrowed (the readiness compute then surfaces the missing wave).
+
+    Args:
+        wave_id: The closing wave id.
+        state: Loaded state -- read for the wave's band membership.
+        repo_root: Anchor for SHA derivation + profile discovery.
+        config_root: Anchor that owns ``.ea/config.yaml``.
+
+    Returns:
+        The band-conditional :class:`VerifyBlock`, or ``None`` when no active
+        profile contributes one.
+    """
+    from eawf.workflow.verify.readiness import (
+        load_active_verify_block,
+        resolve_wave_verify_block,
+    )
+
+    verify_block = load_active_verify_block(
+        wave_id,
+        state,
+        repo_root=repo_root,
+        config_root=config_root,
+    )
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return verify_block
+    return resolve_wave_verify_block(verify_block, wave)
 
 
 def _wrap_no_return(_value: object) -> None:
@@ -550,7 +595,6 @@ def wave_close_cmd(
     from eawf.workflow.lifecycle.transitions import close_wave
     from eawf.workflow.verify import compute as compute_readiness
     from eawf.workflow.verify.models import CloseReadiness
-    from eawf.workflow.verify.readiness import load_active_verify_block
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -642,7 +686,11 @@ def wave_close_cmd(
         config_root = _config_root_for_state_path(state_path)
         repo_root = _resolve_repo_root_for_drift(flags.workspace)
         anchor_for_sha = repo_root if repo_root is not None else config_root
-        verify_block = load_active_verify_block(
+        # Band-conditional enforcement: the helper loads + band-narrows the
+        # active verify block so the direct-write fallback matches the daemon
+        # close gate (a non-band wave stays advisory under a band-scoped
+        # profile).
+        verify_block = _resolve_close_verify_block(
             wave_id,
             state,
             repo_root=anchor_for_sha,

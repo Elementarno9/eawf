@@ -20,10 +20,11 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.spec.audit import AUDIT_CADENCE_VALUES
+from eawf.kernel.state.models import Wave
 from eawf.platform.profiles import FloorCheck, ProfileBody, VerifyBlock, list_profiles, load_profile
 from eawf.workflow.lifecycle.waivers import DEFAULT_WAIVER_MODE, resolve_waiver_mode
 from eawf.workflow.verify.compile import compile_floor_pack
-from eawf.workflow.verify.readiness import _merge_verify_blocks
+from eawf.workflow.verify.readiness import _merge_verify_blocks, resolve_wave_verify_block
 
 # ---- AuditCadence 5-value enum ---------------------------------------------
 
@@ -293,6 +294,143 @@ def test_merge_verify_blocks_empty_returns_none() -> None:
     assert _merge_verify_blocks([]) is None
 
 
+# ---- jury_vendors: default + union-merge ------------------------------------
+
+
+def test_verify_block_jury_vendors_defaults_to_full_panel() -> None:
+    """A freshly-constructed :class:`VerifyBlock` defaults to the cross-vendor triple."""
+    assert VerifyBlock().jury_vendors == ["claude", "codex", "opencode"]
+
+
+def test_merge_verify_blocks_unions_jury_vendors() -> None:
+    """``jury_vendors`` union-merges (dedup, first-occurrence order)."""
+    merged = _merge_verify_blocks(
+        [
+            VerifyBlock(jury_vendors=["claude", "codex"]),
+            VerifyBlock(jury_vendors=["codex", "opencode"]),
+        ]
+    )
+    assert merged is not None
+    assert merged.jury_vendors == ["claude", "codex", "opencode"]
+
+
+# ---- resolve_wave_verify_block: band-conditional enforcement ----------------
+
+
+def _wave(*, wave_id: str, title: str, file_scopes: list[str]) -> Wave:
+    """Build a minimal claimed :class:`Wave` for band-resolution tests."""
+    return Wave.model_validate(
+        {
+            "id": wave_id,
+            "iter_id": "P29-I08",
+            "title": title,
+            "status": "claimed",
+            "file_scopes": file_scopes,
+            "success_criteria": ["c1"],
+            "opened_at": "2026-06-03T00:00:00Z",
+            "claimed_at": "2026-06-03T00:00:00Z",
+        }
+    )
+
+
+def _band_scoped_block() -> VerifyBlock:
+    """The shipped band-scoped intent: enforce + jury on at the fleet level."""
+    return VerifyBlock(
+        enforce=True,
+        cross_vendor_jury=True,
+        uiux_bands=["tui", "render"],
+        jury_vendors=["claude", "codex", "opencode"],
+    )
+
+
+def test_resolve_wave_verify_block_band_wave_keeps_enforce_and_jury() -> None:
+    """A UI-surface-file_scopes wave resolves to enforce=True AND cross_vendor_jury=True.
+
+    This is the acceptance criterion's positive direction: band-scoped intent
+    stays ON for a UI/UX-band wave (here banded by its ``surfaces/tui/``
+    file_scopes, the structural arm of ``wave_in_uiux_band``).
+    """
+    wave = _wave(
+        wave_id="P29-I08-W06",
+        title="footer widget",
+        file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
+    )
+    resolved = resolve_wave_verify_block(_band_scoped_block(), wave)
+    assert resolved is not None
+    assert resolved.enforce is True
+    assert resolved.cross_vendor_jury is True
+    # The configured panel survives the resolution untouched.
+    assert resolved.jury_vendors == ["claude", "codex", "opencode"]
+
+
+def test_resolve_wave_verify_block_non_band_wave_disables_enforce() -> None:
+    """A non-UI-file_scopes wave resolves to enforce=False (and no jury).
+
+    This is the acceptance criterion's negative direction: the band-scoped
+    intent does NOT gate a non-band wave. Enforcement is narrowed per wave,
+    not flipped fleet-wide.
+    """
+    wave = _wave(
+        wave_id="P29-I08-W06",
+        title="band-scoped verify resolution",
+        file_scopes=["src/eawf/kernel/spec/wave.py"],
+    )
+    resolved = resolve_wave_verify_block(_band_scoped_block(), wave)
+    assert resolved is not None
+    assert resolved.enforce is False
+    assert resolved.cross_vendor_jury is False
+
+
+def test_resolve_wave_verify_block_band_by_token_keeps_enforce() -> None:
+    """A wave banded only by a ``uiux_bands`` token (not file_scopes) still enforces."""
+    wave = _wave(
+        wave_id="P29-I05-W11",
+        title="native tui modes chassis",
+        file_scopes=["src/eawf/observability/poll.py"],
+    )
+    resolved = resolve_wave_verify_block(_band_scoped_block(), wave)
+    assert resolved is not None
+    assert resolved.enforce is True
+    assert resolved.cross_vendor_jury is True
+
+
+def test_resolve_wave_verify_block_plain_enforce_not_narrowed() -> None:
+    """A whole-fleet enforce block (no ``uiux_bands``) gates every wave unchanged.
+
+    Only a band-scoped block (non-empty ``uiux_bands``) is narrowed per wave;
+    a plain ``enforce: true`` profile deliberately gates all waves, so a
+    non-band wave under it keeps ``enforce=True`` (the pre-W06 shape).
+    """
+    block = VerifyBlock(enforce=True)
+    wave = _wave(
+        wave_id="P29-I08-W06",
+        title="backend rollup",
+        file_scopes=["src/eawf/kernel/spec/wave.py"],
+    )
+    resolved = resolve_wave_verify_block(block, wave)
+    assert resolved is block
+    assert resolved.enforce is True
+
+
+def test_resolve_wave_verify_block_passes_through_none() -> None:
+    """A ``None`` merged block (no active verify) passes through unchanged."""
+    wave = _wave(wave_id="P29-I08-W06", title="x", file_scopes=["src/eawf/kernel/spec/wave.py"])
+    assert resolve_wave_verify_block(None, wave) is None
+
+
+def test_resolve_wave_verify_block_advisory_block_untouched() -> None:
+    """A fleet-advisory block (enforce=False) is returned untouched for any wave."""
+    block = VerifyBlock(enforce=False, uiux_bands=["tui"])
+    wave = _wave(
+        wave_id="P29-I08-W06",
+        title="footer",
+        file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
+    )
+    resolved = resolve_wave_verify_block(block, wave)
+    assert resolved is block
+    assert resolved.enforce is False
+
+
 # ---- 14-profile reconcile sweep --------------------------------------------
 
 
@@ -304,33 +442,55 @@ def test_every_shipped_profile_loads_and_validates() -> None:
     ``ProfileBody`` ingestion boundary here. Profiles that carry a
     ``verify:`` leaf must produce a strict :class:`VerifyBlock`; profiles
     without one keep ``verify=None`` (advisory, no floor pack).
+
+    The only shipped profile that declares fleet-level ``enforce: true`` is
+    ``quality``, and it does so under the band-conditional contract (P29-I08-
+    W06): the bit is narrowed per wave by
+    :func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block`, so it
+    gates only the UI/UX band, not every wave. Every OTHER shipped profile
+    keeps ``enforce=False``.
     """
+    band_scoped = {"quality"}
     for profile_id in list_profiles():
         body = load_profile(profile_id)
         assert body.name, f"profile {profile_id!r} has an empty name"
         if body.verify is not None:
             assert isinstance(body.verify, VerifyBlock)
-            # enforce defaults False on every shipped profile; none flip
-            # to gating (gating is exercised via test fixtures only).
-            assert body.verify.enforce is False, (
-                f"shipped profile {profile_id!r} unexpectedly sets verify.enforce=true"
-            )
+            if profile_id not in band_scoped:
+                assert body.verify.enforce is False, (
+                    f"shipped profile {profile_id!r} unexpectedly sets verify.enforce=true"
+                )
 
 
-def test_no_shipped_profile_enables_enforce() -> None:
-    """No bundled profile ships ``verify.enforce: true`` — gating stays dormant.
+def test_only_quality_ships_band_scoped_enforce() -> None:
+    """``quality`` is the sole bundled profile that opts into band-scoped gating.
 
-    The advisory->gating flip is a mechanism, not a default any shipped
-    profile turns on. Operators opt a workspace profile into gating
-    deliberately; the bundled set stays advisory so existing repos keep
-    their non-blocking close behaviour after an upgrade.
+    Pre-W06 the invariant was "no bundled profile sets ``enforce: true``"
+    because a fleet-wide flip would block every close on upgrade. W06 makes
+    enforcement band-conditional, so ``quality`` may ship ``enforce: true`` +
+    ``cross_vendor_jury: true``: the wave-aware resolver
+    (:func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block`)
+    narrows the bits to the UI/UX band, leaving non-band closes advisory.
+    ``quality`` is also opt-in (NOT in the default enabled set, which ships
+    just ``core``), so an existing repo is unaffected until it enables it.
+    Every other bundled profile stays advisory.
     """
     enforcing = [
         profile_id
         for profile_id in list_profiles()
         if (block := load_profile(profile_id).verify) is not None and block.enforce
     ]
-    assert enforcing == []
+    assert enforcing == ["quality"]
+    quality = load_profile("quality").verify
+    assert quality is not None
+    assert quality.enforce is True
+    assert quality.cross_vendor_jury is True
+    # The configured cross-vendor panel is the full disjoint triple.
+    assert quality.jury_vendors == ["claude", "codex", "opencode"]
+    # The band tokens cover the UI/UX surfaces by name alongside the
+    # structural file_scopes arm baked into ``wave_in_uiux_band``.
+    assert "tui" in quality.uiux_bands
+    assert "render" in quality.uiux_bands
 
 
 def test_robotics_floor_check_carries_hil_flags() -> None:
