@@ -2735,6 +2735,18 @@
       "scope_id": "P29-I08-W32",
       "status": "done",
       "updated_at": "2026-06-03T16:17:01.865863Z"
+    },
+    "P29-I08-W33": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W33",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W33",
+      "scope_id": "P29-I08-W33",
+      "status": "done",
+      "updated_at": "2026-06-03T19:25:54.879095Z"
     }
   },
   "agent_sessions": {
@@ -10904,6 +10916,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I08-W32",
       "updated_at": "2026-06-03T16:17:01.212587Z"
+    },
+    "P29-I08-W33": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W33-bucket-20260603T192342Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I08-W33",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I08-W33",
+      "updated_at": "2026-06-03T19:23:42.742052Z"
     }
   },
   "goals": {
@@ -12287,7 +12312,8 @@
         "P29-I08-W29",
         "P29-I08-W30",
         "P29-I08-W31",
-        "P29-I08-W32"
+        "P29-I08-W32",
+        "P29-I08-W33"
       ]
     }
   },
@@ -13052,7 +13078,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T19:05:09.651017Z",
+  "updated_at": "2026-06-03T19:25:54.879412Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36747,6 +36773,37 @@
         "the durable-vs-derivable memory-hygiene rule naming both memory systems is sourced from core.yaml so a second eawf sync produces no diff"
       ],
       "title": "Add the memory-hygiene convention to AGENTS.md from core.yaml",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W33": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T19:23:42.742045Z",
+      "closed_at": "2026-06-03T19:25:54.879095Z",
+      "commit": "138ce9480e1011ebaf6a445d951b99bfe1094b1e",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/golden/scenarios/fresh_repo/agents.golden.json",
+        "tests/integration/test_cli_artifact_chassis.py"
+      ],
+      "id": "P29-I08-W33",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T19:23:42.178496Z",
+      "outcome": "repaired 2 full-suite golden drifts (W13 reference shape assertion + W32 AGENTS.md scenario golden); suite green except known env-only zsh completion test",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "agents.golden.json regen for the memory-hygiene block and the research-render reference assertion updated to the numbered-anchored shape; full suite green except the known env-only zsh completion test"
+      ],
+      "title": "Repair full-suite golden drift from references and AGENTS.md changes",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
