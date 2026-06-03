@@ -261,6 +261,7 @@ Dispatch hook events through the Eä hook runner.
 | `eawf015-ears-advisory` | Warn on requirement-like prose outside EARS shape without blocking. |
 | `eawf016-title-clarity` | Reject unclear entity titles added to the staged ``state.json`` delta. |
 | `eawf017-inline-refs` | Reject inline bare URLs and inline ``path:line`` reference soup. |
+| `eawf019-math-facets` | Reject math-explainer claims missing a facet, an unresolved citation, or a dead gate. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
