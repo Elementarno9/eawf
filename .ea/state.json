@@ -2759,6 +2759,18 @@
       "scope_id": "P29-I09-W05",
       "status": "done",
       "updated_at": "2026-06-03T21:33:35.173487Z"
+    },
+    "P29-I09-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W07",
+      "scope_id": "P29-I09-W07",
+      "status": "done",
+      "updated_at": "2026-06-03T21:50:29.980244Z"
     }
   },
   "agent_sessions": {
@@ -10989,6 +11001,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I09-W05",
       "updated_at": "2026-06-03T21:16:17.886071Z"
+    },
+    "P29-I09-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W07-bucket-20260603T213907Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I09-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I09-W07",
+      "updated_at": "2026-06-03T21:39:07.998125Z"
     }
   },
   "goals": {
@@ -13174,7 +13199,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T21:33:35.173860Z",
+  "updated_at": "2026-06-03T21:50:29.980595Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37110,10 +37135,10 @@
     "P29-I09-W07": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-03T21:39:07.998117Z",
+      "closed_at": "2026-06-03T21:50:29.980244Z",
+      "commit": "b49921e9ccd6e8dd81e1d6112a6265ba12003f38",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37121,16 +37146,17 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/commands/research.py",
         "src/eawf/runtime/daemon/methods/research.py",
-        "src/eawf/runtime/daemon/methods/__init__.py"
+        "src/eawf/runtime/daemon/methods/__init__.py",
+        "src/eawf/runtime/daemon/server.py"
       ],
       "id": "P29-I09-W07",
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:51.000224Z",
-      "outcome": null,
+      "outcome": "eawf research campaign new stages via stage_campaign + persists ResearchCampaignPayload through new daemon research.create_campaign RPC (shared persist_campaign helper, daemon-proxy-then-direct-append fallback); board surfaces the row as a CAMPAIGN topic node",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf research campaign new stages via stage_campaign and persists a ResearchCampaignPayload through a daemon research.create_campaign method and the row surfaces in the TUI board"
       ],
