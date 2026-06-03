@@ -15,11 +15,23 @@ from pathlib import Path
 
 import pytest
 
+from eawf.platform.lint.eawf014_no_manual_wrap import check_source
 from eawf.platform.profiles import compose, load_profile
 from eawf.surfaces.render.agents_md import render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "agents_md"
+
+# The always-on tier-0 set tagged in ``core.yaml`` (P29-I07-W06).
+_EXPECTED_TIER0_BLOCK_IDS = {
+    "non-negotiable-rules",
+    "state-vs-specs",
+    "worktree-discipline",
+    "planned-scope-revisability",
+    "prep-plan-mode",
+    "iter-phase-close-timing",
+    "agent-report-contract",
+}
 
 
 @pytest.mark.golden
@@ -77,3 +89,48 @@ def test_render_agents_md_two_renders_byte_stable(
     second = target.read_bytes()
 
     assert first == second
+
+
+@pytest.mark.golden
+@pytest.mark.parametrize(
+    "profile_combo",
+    [
+        ("core",),
+        ("core", "python", "research"),
+    ],
+    ids=["core_only", "core_python_research"],
+)
+def test_rendered_agents_md_is_eawf014_clean(
+    profile_combo: tuple[str, ...],
+    tmp_path: Path,
+) -> None:
+    """The rendered AGENTS.md carries no manually wrapped paragraphs.
+
+    The source profile bodies are authored one line per paragraph
+    (P29-I07-W06), so the verbatim render must pass the EAWF014
+    no-manual-wrap lint over the whole file. A regression here means a
+    profile body re-introduced an intra-paragraph hard wrap.
+    """
+    composed = compose([load_profile(p) for p in profile_combo])
+    target = tmp_path / "AGENTS.md"
+    render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    violations = check_source(target.read_text(encoding="utf-8"), candidate_lines=None)
+
+    assert violations == [], "\n".join(v.render() for v in violations)
+
+
+def test_core_profile_tags_expected_tier0_blocks() -> None:
+    """The always-on tier-0 set is tagged on the core profile blocks.
+
+    Only the load-bearing always-on blocks opt into ``tier0``; every
+    other block stays at the ``reference`` default so the AGENTS.md
+    budget gate accounts for the always-on layer alone.
+    """
+    core = load_profile("core")
+    tier0_ids = {b.id for b in core.render_blocks if b.tier == "tier0"}
+
+    assert tier0_ids == _EXPECTED_TIER0_BLOCK_IDS
+    # Hook-enforced / duplicated reference blocks stay off tier-0.
+    reference_ids = {b.id for b in core.render_blocks if b.tier == "reference"}
+    assert reference_ids >= {"commit-prefix", "secrets-hygiene", "markdown-no-manual-wrap"}

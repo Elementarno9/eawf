@@ -16,12 +16,7 @@ render_blocks:
     body_template: |
       ## Research workflow (research profile)
 
-      Hypotheses, audits, and decisions are first-class state-resident entities.
-      Every claim about behaviour, performance, or correctness MUST be backed
-      by an audit-recorded artifact (notebook, log, dataset). Hypotheses use
-      the ``H<NN>-<NN>`` symbol; audits link to the hypothesis, the claim, and
-      the supporting artifact id. Decisions reference the audit that justifies
-      them so the evidence chain is reconstructible from ``state.json`` alone.
+      Hypotheses, audits, and decisions are first-class state-resident entities. Every claim about behaviour, performance, or correctness MUST be backed by an audit-recorded artifact (notebook, log, dataset). Hypotheses use the ``H<NN>-<NN>`` symbol; audits link to the hypothesis, the claim, and the supporting artifact id. Decisions reference the audit that justifies them so the evidence chain is reconstructible from ``state.json`` alone.
 
 skills_referenced: []
 hooks_referenced: []

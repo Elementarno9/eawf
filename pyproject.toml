@@ -286,10 +286,18 @@ exclude = [
 max-complexity = 56
 
 [tool.eawf.agents_md_budget]
-# Tier-0 render blocks are the short, always-visible AGENTS.md rule layer.
-# Every existing profile block defaults to ``reference``; future tier-0
-# blocks must keep their combined body below this ratchet.
-max-tier0-tokens = 1200
+# Tier-0 render blocks are the always-on, load-bearing AGENTS.md rule
+# layer that an agent must internalise before touching a wave. The
+# tagged set is the seven blocks that cannot be safely paged out:
+# non-negotiable-rules (the rule index incl. the daemon-sole-writer
+# rule), state-vs-specs, worktree-discipline, planned-scope-revisability,
+# prep-plan-mode, iter-phase-close-timing, and agent-report-contract.
+# Their combined weight is ~1224 tokens once the always-on rule index is
+# included, so the ratchet sits at 3000 to give the always-on layer
+# headroom while still rejecting a runaway tier-0 growth (e.g. demoting
+# a hook-enforced reference block back to tier-0). Every other profile
+# block defaults to ``reference`` and is excluded from this budget.
+max-tier0-tokens = 3000
 
 [tool.mutmut]
 # Mutation-testing config for the four load-bearing "core" packages
