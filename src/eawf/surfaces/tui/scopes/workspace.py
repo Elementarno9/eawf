@@ -41,21 +41,25 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.registry_pane import RegistryPane
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
 logger = logging.getLogger(__name__)
 
-#: Footer hints for the table-browse mode (arrows primary; Enter zooms).
+#: Footer hints for the table-browse mode (arrows primary; Enter zooms). Every
+#: label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _WORKSPACE_HINTS: tuple[str, ...] = (
-    "↑↓ row",
-    "Enter zoom",
-    "w/r/u scope",
-    "c config",
-    "F5 refresh",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "row"),
+    render_hint_label("Enter", "zoom"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("c", "config"),
+    render_hint_label("F5", "refresh"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 

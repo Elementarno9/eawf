@@ -705,7 +705,8 @@ def test_research_board_action_bindings_exist() -> None:
 def test_research_board_action_keys_in_footer_hints() -> None:
     """The action keys are advertised in the footer hints (discoverable)."""
     hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
-    assert "enter peek" in hints
+    # ``Enter`` is the canonical capitalized full key name (W22 canon).
+    assert "Enter peek" in hints
     assert "a approve" in hints
     assert "p park" in hints
     assert "r follow-up" in hints

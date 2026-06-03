@@ -82,6 +82,7 @@ from eawf.kernel.spec.auq_bridge import (
     compute_ready_frontier,
 )
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
 if TYPE_CHECKING:
@@ -165,19 +166,21 @@ _UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 #: destructive ones (H / K) are flagged so the operator reads them as gated.
 #: The mode-switch digits are no longer advertised here -- the always-visible
 #: footer mode row (row 2) lists every mode with its digit, so the redundant
-#: ``1-9 mode`` hint was dropped.
+#: ``1-9 mode`` hint was dropped. Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _AUTOPILOT_HINTS: tuple[str, ...] = (
-    "up/down select",
-    "d dispatch",
-    "H halt",
-    "S skip",
-    "K kill",
-    "space pause",
-    "a arm",
-    "w/r/u scope",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "select"),
+    render_hint_label("d", "dispatch"),
+    render_hint_label("H", "halt"),
+    render_hint_label("S", "skip"),
+    render_hint_label("K", "kill"),
+    render_hint_label("space", "pause"),
+    render_hint_label("a", "arm"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 

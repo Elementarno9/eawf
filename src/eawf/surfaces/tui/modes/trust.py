@@ -41,6 +41,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.workflow.estimation.trust_scorecard import (
     TrustScorecard,
     compute_trust_scorecard,
@@ -67,14 +68,17 @@ _MAX_LABEL_ROWS: int = 12
 #: Cap on evidence refs shown inline per output label.
 _MAX_REFS_PER_LABEL: int = 3
 
-#: Footer hints for the Trust pane (full key names, arrows primary).
+#: Footer hints for the Trust pane (arrows primary). The mode digits are
+#: surfaced by the always-visible mode row, not duplicated in the hint strip.
+#: Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _TRUST_HINTS: tuple[str, ...] = (
-    "up/down scroll",
-    "1-6 mode",
-    "w/r/u scope",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "scroll"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 #: Trust-scorecard refresh cadence in seconds (matches the metrics surface

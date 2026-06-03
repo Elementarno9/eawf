@@ -74,6 +74,7 @@ from eawf.surfaces.render.artifact_chassis import (
     render_references,
 )
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
 if TYPE_CHECKING:
@@ -176,21 +177,25 @@ _NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- no {method} RPC"
 #: Honest line when a not-yet-wired action cannot even reach the daemon.
 _UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 
-#: Footer hints for the Research pane (full key names, arrows primary). The
-#: action keys ride after the tree-nav keys so they are discoverable.
+#: Footer hints for the Research pane (arrows primary). The action keys ride
+#: after the tree-nav keys so they are discoverable. The mode digits are
+#: surfaced by the always-visible mode row, not duplicated in the hint strip.
+#: Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary -- which also fixes the
+#: historical ``w/u scope`` typo that dropped the repo letter.
 _RESEARCH_HINTS: tuple[str, ...] = (
-    "up/down tree",
-    "enter peek",
-    "d brief",
-    "a approve",
-    "p park",
-    "r follow-up",
-    "s snapshot",
-    "1-8 mode",
-    "w/u scope",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "tree"),
+    render_hint_label("Enter", "peek"),
+    render_hint_label("d", "brief"),
+    render_hint_label("a", "approve"),
+    render_hint_label("p", "park"),
+    render_hint_label("r", "follow-up"),
+    render_hint_label("s", "snapshot"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 #: Research-board refresh cadence in seconds (matches the trust / metrics

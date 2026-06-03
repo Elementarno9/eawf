@@ -37,20 +37,23 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.git_pane import GitPane
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
 from eawf.surfaces.tui.widgets.status_pane import StatusPane
 
-#: Footer hints tuned for the repo quadrant (full key names).
+#: Footer hints tuned for the repo quadrant. Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _REPO_HINTS: tuple[str, ...] = (
-    "↑↓ move",
-    "←→ collapse",
-    "Enter open",
-    "w/r/u scope",
-    "c config",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "move"),
+    render_hint_label("←→", "collapse"),
+    render_hint_label("Enter", "open"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("c", "config"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 

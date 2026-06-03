@@ -60,6 +60,7 @@ from textual.widgets import Static
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
 if TYPE_CHECKING:
@@ -292,14 +293,17 @@ class AgentWatchModeScreen(ScopeScreen):
         Binding("k", "cancel_session", "cancel", show=False),
     ]
 
+    #: Footer hints for the agent-watch zoom. The mode digits are surfaced by
+    #: the always-visible mode row, not duplicated here. Every label is produced
+    #: through :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the
+    #: key tokens stay pinned to the canonical vocabulary.
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = (
-        "up/down scroll",
-        "k cancel",
-        "1-8 mode",
-        "w/r/u scope",
-        "/ palette",
-        "? help",
-        "q quit",
+        render_hint_label("↑↓", "scroll"),
+        render_hint_label("k", "cancel"),
+        render_hint_label("w/r/u", "scope"),
+        render_hint_label("/", "palette"),
+        render_hint_label("?", "help"),
+        render_hint_label("q", "quit"),
     )
 
     #: The session being watched, resolved on mount from the bound state.

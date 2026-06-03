@@ -27,7 +27,10 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import ActualStatus
 from eawf.kernel.state.models import ActualSummary, State
-from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
+from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.modes.registry import MODE_REGISTRY, build_modes
+from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
+from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.widgets import eu_bar
 from eawf.surfaces.tui.widgets.footer import (
     CANONICAL_HINT_TOKENS,
@@ -240,6 +243,103 @@ def test_canonical_hint_tokens_excludes_digit_ranges() -> None:
     assert "1-8" not in CANONICAL_HINT_TOKENS
     # And the canonical arrow glyph / full key names / three-letter scope are in.
     assert {"↑↓", "←→", "Enter", "Esc", "F5", "w/r/u"} <= CANONICAL_HINT_TOKENS
+
+
+# --------------------------------------------------------------------------
+# Every mode + scope footer-hint tuple parses to canon (W22 enumeration)
+# --------------------------------------------------------------------------
+
+_REPO_FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "states"
+    / "valid"
+    / "03-phase-iter-wave-active.json"
+)
+
+#: Scope-screen name (what the Home mode factory returns) -> the screen class
+#: that owns the matching ``FOOTER_HINTS``.
+_SCOPE_SCREEN_CLASSES = {
+    "repo": RepoScreen,
+    "workspace": WorkspaceScreen,
+    "user": UserScreen,
+}
+
+
+def _hint_token(label: str) -> str:
+    """Return the leading key token of a hint label (text before the first space)."""
+    return label.split(" ", 1)[0]
+
+
+def _all_surface_hint_tuples() -> dict[str, tuple[str, ...]]:
+    """Collect the FOOTER_HINTS of every registered mode + the 3 scope screens.
+
+    Resolves each :data:`MODE_REGISTRY` factory against a live app (the Home
+    factory returns a scope-screen *name*, which maps to its screen class), and
+    adds the three scope screens directly, so the assertion spans every footer
+    hint tuple the operator can see -- exactly the W22 surface set.
+    """
+    surfaces: dict[str, tuple[str, ...]] = {}
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_FIXTURE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            modes = build_modes(app)
+            for spec in MODE_REGISTRY:
+                built = modes[spec.name]()
+                if isinstance(built, str):
+                    surfaces[f"mode:{spec.name}"] = _SCOPE_SCREEN_CLASSES[built].FOOTER_HINTS
+                else:
+                    surfaces[f"mode:{spec.name}"] = type(built).FOOTER_HINTS
+
+    asyncio.run(body())
+    for scope, cls in _SCOPE_SCREEN_CLASSES.items():
+        surfaces[f"scope:{scope}"] = cls.FOOTER_HINTS
+    return surfaces
+
+
+def test_every_mode_and_scope_hint_parses_to_canon() -> None:
+    # The load-bearing W22 gate: every hint label on every mode + scope screen
+    # has a leading key token drawn from the frozen canonical vocabulary, so a
+    # newly-authored per-mode tuple cannot reintroduce a drifted token.
+    surfaces = _all_surface_hint_tuples()
+    # The surface set actually spans every registered mode + all three scopes
+    # (a regression that drops a mode/scope from the sweep is caught here).
+    assert len(surfaces) == len(MODE_REGISTRY) + len(_SCOPE_SCREEN_CLASSES)
+    for surface, hints in surfaces.items():
+        for label in hints:
+            token = _hint_token(label)
+            assert token in CANONICAL_HINT_TOKENS, (
+                f"{surface} hint {label!r} has non-canonical token {token!r}"
+            )
+
+
+def test_no_surface_hint_carries_a_drifted_fragment() -> None:
+    # The exact historical drift forms are absent from EVERY surface: the
+    # spelled-out arrow word, the lowercase ``enter``, the truncated ``w/u``
+    # scope token, and the stale ``1-6``/``1-8 mode`` digit fragment.
+    surfaces = _all_surface_hint_tuples()
+    forbidden_tokens = {"up/down", "enter", "w/u", "1-6", "1-8"}
+    for surface, hints in surfaces.items():
+        tokens = {_hint_token(label) for label in hints}
+        leaked = tokens & forbidden_tokens
+        assert not leaked, f"{surface} carries drifted token(s) {leaked}"
+        # The digit-range fragment never appears as a whole label either
+        # (defends against a ``1-6 mode`` authored with a leading space etc.).
+        joined = " ".join(hints)
+        assert "1-6 mode" not in joined
+        assert "1-8 mode" not in joined
+
+
+def test_research_board_scope_hint_uses_all_three_letters() -> None:
+    # The specific research_board.py typo fix: ``w/u scope`` -> ``w/r/u scope``
+    # (all three of workspace / repo / user).
+    from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
+
+    hints = ResearchBoardModeScreen.FOOTER_HINTS
+    assert "w/r/u scope" in hints
+    assert "w/u scope" not in hints
 
 
 # --------------------------------------------------------------------------

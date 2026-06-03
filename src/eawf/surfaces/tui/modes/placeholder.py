@@ -30,17 +30,20 @@ from textual.containers import Vertical
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 
 logger = logging.getLogger(__name__)
 
 #: Footer hints for a placeholder mode -- only the always-live chassis
-#: affordances (mode digits, palette, help, quit); a real pane wave
-#: overrides these with its own pane-specific hints.
+#: affordances (palette, help, quit); a real pane wave overrides these with its
+#: own pane-specific hints. The mode digits are surfaced by the always-visible
+#: mode row, not duplicated in the hint strip. Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _PLACEHOLDER_HINTS: tuple[str, ...] = (
-    "1-6 mode",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 

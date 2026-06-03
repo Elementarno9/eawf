@@ -45,6 +45,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 
 if TYPE_CHECKING:
     from eawf.kernel.store.envelope import Envelope
@@ -108,16 +109,18 @@ FEED_EMPTY_DEGRADED: str = (
 #: (24); pad to that so even the widest kind keeps one trailing space.
 _KIND_WIDTH: int = 24
 
-#: Footer hints for the Feed pane (full key names; arrows primary per the
-#: keymap convention). The scroll affordances plus the always-live chassis
-#: keys (mode digits, palette, help, quit).
+#: Footer hints for the Feed pane (arrows primary per the keymap convention).
+#: The scroll affordances plus the always-live chassis keys (palette, help,
+#: quit). The mode digits are surfaced by the always-visible mode row, not
+#: duplicated here. Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _FEED_HINTS: tuple[str, ...] = (
-    "up/down scroll",
-    "1-6 mode",
-    "w/r/u scope",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "scroll"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 

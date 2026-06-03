@@ -45,6 +45,7 @@ from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
 logger = logging.getLogger(__name__)
@@ -141,17 +142,20 @@ def user_scope_init_needed(state: State | None) -> bool:
 
 
 #: Footer hints tuned for the user portfolio screen (arrows primary; the
-#: user scope zooms the focused repo on Enter, like the workspace).
+#: user scope zooms the focused repo on Enter, like the workspace). Every label
+#: is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _USER_HINTS: tuple[str, ...] = (
-    "↑↓ row",
-    "Enter zoom",
-    "Esc back",
-    "w/r/u scope",
-    "c config",
-    "F5 refresh",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "row"),
+    render_hint_label("Enter", "zoom"),
+    render_hint_label("Esc", "back"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("c", "config"),
+    render_hint_label("F5", "refresh"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 

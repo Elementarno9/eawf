@@ -36,6 +36,7 @@ from textual.widgets import DataTable, Static
 
 from eawf.kernel.state.ids import natural_key
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
 
 if TYPE_CHECKING:
@@ -53,14 +54,17 @@ EMPTY_NOTICE: str = "no agent reports yet"
 #: block below the table.
 _COLUMNS: tuple[str, ...] = ("role", "verdict", "wave", "attempt", "followups")
 
-#: Footer hints for the Evidence mode (full key names; arrows primary).
+#: Footer hints for the Evidence mode (arrows primary). The mode digits are
+#: surfaced by the always-visible mode row, not duplicated in the hint strip.
+#: Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
+#: tokens stay pinned to the canonical vocabulary.
 _EVIDENCE_HINTS: tuple[str, ...] = (
-    "up/down move",
-    "1-6 mode",
-    "w/r/u scope",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "move"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 
