@@ -2496,6 +2496,54 @@
       "status": "done",
       "updated_at": "2026-06-03T16:48:58.409180Z"
     },
+    "P29-I08-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W13",
+      "scope_id": "P29-I08-W13",
+      "status": "done",
+      "updated_at": "2026-06-03T17:14:28.883260Z"
+    },
+    "P29-I08-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W14",
+      "scope_id": "P29-I08-W14",
+      "status": "done",
+      "updated_at": "2026-06-03T17:14:30.388593Z"
+    },
+    "P29-I08-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W15",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W15",
+      "scope_id": "P29-I08-W15",
+      "status": "done",
+      "updated_at": "2026-06-03T17:14:31.834068Z"
+    },
+    "P29-I08-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W16",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W16",
+      "scope_id": "P29-I08-W16",
+      "status": "done",
+      "updated_at": "2026-06-03T17:14:33.308744Z"
+    },
     "P29-I08-W26": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10477,6 +10525,58 @@
       "scope_id": "P29-I08-W12",
       "updated_at": "2026-06-03T16:17:45.733775Z"
     },
+    "P29-I08-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W13-bucket-20260603T171428Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W13",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W13",
+      "updated_at": "2026-06-03T17:14:28.114552Z"
+    },
+    "P29-I08-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W14-bucket-20260603T171429Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W14",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W14",
+      "updated_at": "2026-06-03T17:14:29.643584Z"
+    },
+    "P29-I08-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W15-bucket-20260603T171431Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W15",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W15",
+      "updated_at": "2026-06-03T17:14:31.057564Z"
+    },
+    "P29-I08-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W16-bucket-20260603T171432Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W16",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W16",
+      "updated_at": "2026-06-03T17:14:32.568550Z"
+    },
     "P29-I08-W26": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I08-W26-bucket-20260603T153314Z",
@@ -12702,7 +12802,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T16:48:58.409451Z",
+  "updated_at": "2026-06-03T17:14:33.309049Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35740,10 +35840,10 @@
         "P29-I08-W15",
         "P29-I08-W16"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T17:14:28.114539Z",
+      "closed_at": "2026-06-03T17:14:28.883260Z",
+      "commit": "d0f258fdf6072587c746fc28dade536d4189a85a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -35756,10 +35856,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:20.231019Z",
-      "outcome": null,
+      "outcome": "numbered anchored references + validator widened (new + legacy rows round-trip)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "render_references emits an ordered list with each row carrying a ref-N anchor and self-link and _REFERENCE_ROW_RE parses it plus legacy bare-bracket rows"
       ],
@@ -35771,10 +35871,10 @@
     "P29-I08-W14": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T17:14:29.643578Z",
+      "closed_at": "2026-06-03T17:14:30.388593Z",
+      "commit": "f5a727b868cfdd38b60471362980b3b09f184fae",
       "deps": [
         "P29-I08-W13"
       ],
@@ -35789,10 +35889,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:20.823033Z",
-      "outcome": null,
+      "outcome": "linkify inline [N] to #ref-N at render; dense-citation validation passes",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "inline bracket-N is rewritten to a link to ref-N at render time and dense-citation validation still passes on the rewritten body"
       ],
@@ -35804,10 +35904,10 @@
     "P29-I08-W15": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T17:14:31.057555Z",
+      "closed_at": "2026-06-03T17:14:31.834068Z",
+      "commit": "e0f67e4c86c2b94fd4afde2a345ea01c7a8eef85",
       "deps": [
         "P29-I08-W13"
       ],
@@ -35821,10 +35921,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:21.410473Z",
-      "outcome": null,
+      "outcome": "release-notes references routed through render_references (shared shape)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "release_notes routes references through render_references with no hand-rolled block and its golden updates to the shared shape"
       ],
@@ -35838,10 +35938,10 @@
       "blocks": [
         "P29-I08-W17"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T17:14:32.568540Z",
+      "closed_at": "2026-06-03T17:14:33.308744Z",
+      "commit": "796801d1818168d3b05e255be75024d4ca0dff9d",
       "deps": [
         "P29-I08-W13"
       ],
@@ -35855,10 +35955,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:22.010694Z",
-      "outcome": null,
+      "outcome": "brief d-tab mounts MarkdownViewer with TOC; numbered References render (Pilot)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the TUI brief surface mounts MarkdownViewer and a Pilot test asserts the numbered References list and a TOC render"
       ],
