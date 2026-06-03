@@ -11,6 +11,7 @@ an Eä skill the runtime can install as a slash command.
 | `/blitz` | yes | `[--residual-unknowns=<n>]` | Auto-chained research follow-up skill with recursion guard for residual unknowns. |
 | `/coauthor` | yes | `[--mode=runtime\|project\|disabled]` | Resolve the Co-Authored-By trailer policy for the active repo. |
 | `/compress` | yes | `[--tokens-before=<n>] [--tokens-after=<n>] [--runtime=<id>]` | Compress the session conversation when context approaches the limit. |
+| `/design` | yes | `<surface-slug> [--final] [--from-brief <path>]` | Read-only design pass for an interactive surface: produces a statechart + action x context matrix + journey scenarios backed by an 11-rule lint contract. No state mutations. |
 | `/differentiate` | yes | `<candidate-id>` | Recommend the cheapest experiment that discriminates between two or more candidate paths. |
 | `/extract-function` | no | `—` | Model-only refactoring playbook for pulling a coherent block out of a long function into a named helper. |
 | `/extract-module` | no | `—` | Model-only refactoring playbook for splitting a multi-concern file into layered modules. |
@@ -27,5 +28,6 @@ an Eä skill the runtime can install as a slash command.
 | `/roadmap` | yes | `propose\|revise\|apply\|drop\|show <phase-id> [flags]` | Plan / revise / apply / drop / show PLANNED-scope phases on the eawf roadmap queue. Mutates state.json via the lifecycle transitions; one phase at a time. |
 | `/security-review` | yes | `--spec=<path> [--cwd=<dir>]` | Run the security-audit DSL against a closed scope and emit findings. |
 | `/ship` | yes | `<phase-id> [--dry-run]` | Close out a phase by running the full local CI surface, opening the phase PR, and (after merge) advancing state. |
+| `/spike` | yes | `<spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>]` | Read-only multi-axis direction investigation that unblocks /roadmap propose or /design: N rounds x M axis picks, optional postmortem + scope deltas. No state mutations. |
 | `/wave-spec` | yes | `init\|validate <wave-id> [--mockup-waiver-reason=<text>]` | Scaffold or validate a WaveSpec deliverable for a claimed wave. |
 | `/write-adr` | no | `—` | Model-only playbook for drafting an architecture decision record companion to a typed decision row. |
