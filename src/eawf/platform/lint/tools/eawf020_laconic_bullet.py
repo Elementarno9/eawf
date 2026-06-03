@@ -1,4 +1,10 @@
-"""EAWF016 — reject generic or verbose release changelog bullets."""
+"""EAWF020 — reject generic or verbose release changelog bullets.
+
+Renumbered from EAWF016 (P29-I07-W02): the title-clarity lint now owns
+EAWF016 per the doc-clarity code map (016=title, 017=prose, 018=structure,
+019=math), so this changelog-bullet rule moved to the next free code,
+EAWF020. The rule logic is unchanged.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-RULE_CODE = "EAWF016"
+RULE_CODE = "EAWF020"
 MAX_BULLET_CHARS = 140
 
 _GENERIC_WORDS = {
@@ -49,7 +55,7 @@ _WORD_RE = re.compile(r"[a-z0-9][a-z0-9+_-]*")
 
 @dataclass(frozen=True)
 class LaconicBulletViolation:
-    """One EAWF016 finding."""
+    """One EAWF020 finding."""
 
     lineno: int
     col_offset: int
@@ -117,7 +123,7 @@ def _bullet_violation(lineno: int, line: str) -> LaconicBulletViolation | None:
 
 
 def check_source(source: str) -> list[LaconicBulletViolation]:
-    """Return EAWF016 violations for ``CHANGELOG.md`` ``[Unreleased]`` bullets."""
+    """Return EAWF020 violations for ``CHANGELOG.md`` ``[Unreleased]`` bullets."""
     lines = source.splitlines()
     bounds = _unreleased_bounds(lines)
     if bounds is None:
@@ -156,7 +162,7 @@ def check_source(source: str) -> list[LaconicBulletViolation]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point for the EAWF016 gate."""
+    """CLI entry point for the EAWF020 gate."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", type=Path, default=[Path("CHANGELOG.md")])
     args = parser.parse_args(argv)
@@ -168,15 +174,15 @@ def main(argv: list[str] | None = None) -> int:
         except FileNotFoundError:
             continue
         except OSError as exc:
-            print(f"eawf016-laconic-bullet: cannot read {path}: {exc}", file=sys.stderr)
+            print(f"eawf020-laconic-bullet: cannot read {path}: {exc}", file=sys.stderr)
             return 1
         scanned += 1
         rows.extend(f"  {path}:{violation.render()}" for violation in check_source(source))
     if rows:
-        print(f"eawf016-laconic-bullet: {len(rows)} violation(s) across {scanned} file(s)")
+        print(f"eawf020-laconic-bullet: {len(rows)} violation(s) across {scanned} file(s)")
         print("\n".join(rows))
         return 1
-    print(f"eawf016-laconic-bullet: clean ({scanned} file(s) scanned)")
+    print(f"eawf020-laconic-bullet: clean ({scanned} file(s) scanned)")
     return 0
 
 

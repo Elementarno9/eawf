@@ -54,14 +54,14 @@ def test_plan_roadmap_stages_waves_in_dependency_order() -> None:
                     "waves": [
                         {
                             "id": "P31-I01-W02",
-                            "title": "feat: second",
+                            "title": "Second wave",
                             "file_scopes": ["src/b"],
                             "deps": ["P31-I01-W01"],
                             "effort_bucket": "S",
                         },
                         {
                             "id": "P31-I01-W01",
-                            "title": "feat: first",
+                            "title": "First wave",
                             "file_scopes": ["src/a"],
                             "effort_bucket": "XS",
                         },

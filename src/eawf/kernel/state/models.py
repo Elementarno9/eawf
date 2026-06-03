@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
@@ -105,6 +105,93 @@ class _StrictModel(BaseModel):
     """Base model: forbids unknown keys."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+#: Minimum useful length for a present entity ``description``. A description
+#: shorter than this carries no signal beyond the title it accompanies; the
+#: floor (Layer 1 of the doc-clarity stack) refuses it at the model boundary.
+#: A title-only entity passes ``description=None`` and is grandfathered.
+_DESCRIPTION_FLOOR: int = 12
+
+
+def _is_title_restatement(description: str, title: str) -> bool:
+    """Return whether *description* is a near-pure restatement of *title*.
+
+    Both arguments are already case-folded and stripped. The check targets the
+    "no signal" description the doc-clarity brief condemns — a description that
+    is the title typed again with at most trivial trailing punctuation — while
+    deliberately *not* flagging two legitimate shapes:
+
+    - a description that opens with the title and then adds the *why*
+      (``"<title> because <reason>"``), which carries new content; and
+    - the migration-preserved original of a truncated over-length title (the
+      ``v1.0 -> v1.1`` step truncates ``title`` to the 72-char cap and keeps
+      the full original in ``description``), which is information-preserving.
+
+    The rule therefore fires only when *description* equals *title*, or equals
+    *title* followed solely by whitespace / punctuation (no further word
+    characters). A one-character title (``"i"``) cannot match a longer first
+    word (``"iter ..."``) because the boundary check requires the title to be
+    the whole leading token.
+    """
+    if description == title:
+        return True
+    if not description.startswith(title):
+        return False
+    remainder = description[len(title) :]
+    # A genuine restatement adds nothing of substance: the tail after the title
+    # is only separators / punctuation. Any alphanumeric char in the tail means
+    # the description carries new content and is not a pure restatement.
+    return not remainder[:1].isalnum() and not any(ch.isalnum() for ch in remainder)
+
+
+class _DescribedEntity(_StrictModel):
+    """Strict base whose optional ``description`` carries a clarity floor.
+
+    The doc-clarity standard (see
+    ``.ea/local/research/2026-05-29-doc-clarity.md``) found that most lifecycle
+    and decision entities either carry no description or merely restate the
+    title. A field-level ``min_length`` would be a flag-day validation storm on
+    the hundreds of already-persisted empty descriptions, so the floor is a
+    ``model_validator`` that fires **only when a description is present**:
+
+    - ``description is None`` is grandfathered (a title-only entity is valid).
+    - A present description must be at least :data:`_DESCRIPTION_FLOOR`
+      non-whitespace characters — shorter is "no signal".
+    - A present description must not be a near-pure restatement of the title
+      (the title typed again with at most trivial trailing punctuation). A
+      description that adds the *why* after the title, or the migration's
+      preserved full original of a truncated over-length title, both carry new
+      content and pass — see :func:`_is_title_restatement`.
+
+    The base declares **no fields** so a subclass keeps full control of its
+    own field declaration order (the validator reads ``self.title`` and
+    ``self.description`` by name at validation time). ``Phase`` / ``Iter`` /
+    ``Wave`` / ``Decision`` inherit this base; each still declares its own
+    ``title`` and ``description`` fields in place. (``BacklogItem`` keeps its
+    own field-level ``min_length=1`` floor — it predates this rule and its
+    empty case was already closed.)
+    """
+
+    @model_validator(mode="after")
+    def _description_quality(self) -> _DescribedEntity:
+        """Reject a too-short or title-duplicating description; grandfather ``None``.
+
+        Raises:
+            ValueError: when ``description`` is present and is either shorter
+                than :data:`_DESCRIPTION_FLOOR` non-whitespace characters or a
+                near-pure restatement of ``title``.
+        """
+        description: str | None = getattr(self, "description", None)
+        if description is None:
+            return self
+        stripped = description.strip()
+        if len(stripped) < _DESCRIPTION_FLOOR:
+            raise ValueError(f"description too short to be useful: {description!r}")
+        title_stem = str(getattr(self, "title", "")).rstrip(". ").casefold()
+        if title_stem and _is_title_restatement(stripped.casefold(), title_stem):
+            raise ValueError("description merely repeats the title; describe the why")
+        return self
 
 
 # ---- Core records -----------------------------------------------------------
@@ -203,7 +290,7 @@ class Outcome(_StrictModel):
     updated_at: UtcDatetime
 
 
-class Phase(_StrictModel):
+class Phase(_DescribedEntity):
     """Lifecycle phase.
 
     The ``release`` field bands the phase under a ``vMAJOR.MINOR.PATCH``
@@ -212,6 +299,10 @@ class Phase(_StrictModel):
     release loads unchanged and renders under the "Unreleased" band,
     and an old ``state.json`` that predates the field stays valid under
     ``extra="forbid"`` because the missing key takes the default.
+
+    The optional ``description`` carries a clarity floor when present (see
+    :class:`_DescribedEntity`): grandfathered when ``None``, else floored at
+    a useful length and rejected when it merely restates the title.
     """
 
     id: PhaseIdStr
@@ -231,7 +322,7 @@ class Phase(_StrictModel):
     intent: IntentBrief | None = None
 
 
-class Iter(_StrictModel):
+class Iter(_DescribedEntity):
     """Lifecycle iteration.
 
     ``trigger`` records *why* the iter was opened so the planned-vs-reactive
@@ -248,6 +339,10 @@ class Iter(_StrictModel):
     without a candidate tag loads unchanged and a pre-1.4 ``state.json``
     stays valid under ``extra="forbid"`` because the missing key takes the
     default.
+
+    The optional ``description`` carries a clarity floor when present (see
+    :class:`_DescribedEntity`): grandfathered when ``None``, else floored at
+    a useful length and rejected when it merely restates the title.
     """
 
     id: IterIdStr
@@ -340,7 +435,7 @@ class DispatchAnnotation(_StrictModel):
     reason: str | None = None
 
 
-class Wave(_StrictModel):
+class Wave(_DescribedEntity):
     """Atomic execution unit under an iter.
 
     ``opened_at`` records *plan/creation* time (stamped when the wave row
@@ -352,6 +447,10 @@ class Wave(_StrictModel):
     been claimed has no work-start fact to elapse from. The field is
     additive + optional so on-disk state written before the v1.3 schema
     bump re-validates unchanged.
+
+    The optional ``description`` carries a clarity floor when present (see
+    :class:`_DescribedEntity`): grandfathered when ``None``, else floored at
+    a useful length and rejected when it merely restates the title.
     """
 
     id: WaveIdStr
@@ -536,8 +635,13 @@ class Artifact(_StrictModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class Decision(_StrictModel):
-    """Architectural / process decision."""
+class Decision(_DescribedEntity):
+    """Architectural / process decision.
+
+    The optional ``description`` carries a clarity floor when present (see
+    :class:`_DescribedEntity`): grandfathered when ``None``, else floored at
+    a useful length and rejected when it merely restates the title.
+    """
 
     id: IdStr
     scope_id: str

@@ -1784,8 +1784,8 @@ def test_edit_iter_plan_persists_description() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")
     plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
-    it = edit_iter_plan(state, iter_id="P01-I01", description="new desc")
-    assert it.description == "new desc"
+    it = edit_iter_plan(state, iter_id="P01-I01", description="new scope summary")
+    assert it.description == "new scope summary"
     # Title untouched when omitted.
     assert it.title == "i"
 
@@ -1794,18 +1794,20 @@ def test_edit_iter_plan_description_only_keeps_title() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")
     plan_iter(state, iter_id="P01-I01", phase_id="P01", title="orig")
-    edit_iter_plan(state, iter_id="P01-I01", description="annotated")
+    edit_iter_plan(state, iter_id="P01-I01", description="annotated scope note")
     assert state.iters["P01-I01"].title == "orig"
-    assert state.iters["P01-I01"].description == "annotated"
+    assert state.iters["P01-I01"].description == "annotated scope note"
 
 
 def test_edit_iter_plan_title_only_keeps_description() -> None:
     state = _empty_state()
     plan_phase(state, phase_id="P01", title="t")
-    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="orig", description="kept")
+    plan_iter(
+        state, iter_id="P01-I01", phase_id="P01", title="orig", description="kept description"
+    )
     edit_iter_plan(state, iter_id="P01-I01", title="renamed")
     assert state.iters["P01-I01"].title == "renamed"
-    assert state.iters["P01-I01"].description == "kept"
+    assert state.iters["P01-I01"].description == "kept description"
 
 
 def test_edit_iter_plan_description_over_cap_raises() -> None:

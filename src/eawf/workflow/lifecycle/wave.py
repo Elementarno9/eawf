@@ -24,7 +24,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import ActualSummary, State, Wave
 from eawf.workflow.estimation.buckets import default_estimate_summary
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,9 @@ def plan_wave(
     # remains unprocessed -> cycle. Self-dep is already rejected above.
     if _would_create_cycle(state, new_id=wave_id, new_deps=deps_list):
         raise LifecycleError(f"adding wave {wave_id!r} with deps={deps_list} would create a cycle")
+    # Title-clarity is the final author-facing gate before persistence, so the
+    # structural DAG guards (dup id, self-dep, unknown dep, cycle) report first.
+    check_title_clarity(title, entity_kind="wave", entity_id=wave_id)
     wave = Wave(
         id=wave_id,
         iter_id=iter_id,

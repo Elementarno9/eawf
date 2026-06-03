@@ -29,7 +29,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State, Wave
 from eawf.kernel.state.mutations import Mutation, MutationKind, apply_memory_add
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,7 @@ def open_iter(
         raise LifecycleError(f"phase {phase_id!r} is not open (status={phase.status.value!r})")
     if iter_id in state.iters:
         raise LifecycleError(f"iter {iter_id!r} already exists")
+    check_title_clarity(title, entity_kind="iter", entity_id=iter_id)
     it = Iter(
         id=iter_id,
         phase_id=phase_id,
@@ -224,6 +225,7 @@ def plan_iter(
         raise LifecycleError(f"phase {phase_id!r} is not open (status={phase.status.value!r})")
     if iter_id in state.iters:
         raise LifecycleError(f"iter {iter_id!r} already exists")
+    check_title_clarity(title, entity_kind="iter", entity_id=iter_id)
     it = Iter(
         id=iter_id,
         phase_id=phase_id,

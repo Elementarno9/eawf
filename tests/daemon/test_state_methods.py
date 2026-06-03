@@ -85,7 +85,7 @@ def _build_state_payload(
                 "id": phase_id,
                 "scope_id": "ABC",
                 "subproject_id": None,
-                "title": "P24",
+                "title": "Plan import",
                 "status": "active",
                 "iter_ids": [iter_id],
                 "outcome_ids": [],
@@ -98,7 +98,7 @@ def _build_state_payload(
             iter_id: {
                 "id": iter_id,
                 "phase_id": phase_id,
-                "title": "I01",
+                "title": "First iter",
                 "status": "active",
                 "wave_ids": [wave_id],
                 "estimate_id": None,
@@ -176,7 +176,7 @@ def _build_planned_phase_payload(
             iter_id: {
                 "id": iter_id,
                 "phase_id": phase_id,
-                "title": "I01",
+                "title": "First iter",
                 "status": iter_status,
                 "wave_ids": list(wave_map),
                 "estimate_id": None,
@@ -1203,7 +1203,7 @@ def test_mutate_roadmap_revise_add_wave_inserts_pending_wave(tmp_path: Path) -> 
             "op": "add_wave",
             "wave_id": "P50-I01-W01",
             "iter_id": "P50-I01",
-            "title": "feat: new wave",
+            "title": "New wave",
             "file_scopes": ["src/eawf/x.py"],
             "success_criteria": ["does x"],
             "effort_bucket": "S",
@@ -1273,13 +1273,13 @@ def test_mutate_roadmap_revise_retitle_rewrites_title(tmp_path: Path) -> None:
         kind=MutationKind.ROADMAP_REVISE,
         scope_id="P50",
         mutation_id=uuid.uuid4().hex,
-        params={"op": "retitle", "wave_id": "P50-I01-W01", "title": "fix: retitled"},
+        params={"op": "retitle", "wave_id": "P50-I01-W01", "title": "Retitled wave"},
     )
 
     async def body() -> None:
         await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         new_state = orjson.loads(state_path.read_bytes())
-        assert new_state["waves"]["P50-I01-W01"]["title"] == "fix: retitled"
+        assert new_state["waves"]["P50-I01-W01"]["title"] == "Retitled wave"
 
     _run(body)
 
@@ -1792,7 +1792,7 @@ def test_mutate_phase_open_carries_description(tmp_path: Path) -> None:
         mutation_id=uuid.uuid4().hex,
         params={
             "phase_id": "P51",
-            "title": "P51",
+            "title": "Plan import",
             "description": "fresh phase narrative for the operator surface",
         },
     )
@@ -1818,7 +1818,7 @@ def test_mutate_roadmap_revise_add_wave_carries_description(tmp_path: Path) -> N
             "op": "add_wave",
             "wave_id": "P50-I01-W01",
             "iter_id": "P50-I01",
-            "title": "feat: new wave",
+            "title": "New wave",
             "file_scopes": ["src/eawf/x.py"],
             "description": "long-form rationale for what this wave does",
             "effort_bucket": "S",
@@ -1846,7 +1846,7 @@ def test_mutate_roadmap_revise_retitle_wave_carries_description(tmp_path: Path) 
         params={
             "op": "retitle",
             "wave_id": "P50-I01-W01",
-            "title": "fix: retitled wave",
+            "title": "Retitled wave",
             "description": "post-edit description landing on the wave",
         },
     )
@@ -1855,7 +1855,7 @@ def test_mutate_roadmap_revise_retitle_wave_carries_description(tmp_path: Path) 
         await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         new_state = orjson.loads(state_path.read_bytes())
         wave_row = new_state["waves"]["P50-I01-W01"]
-        assert wave_row["title"] == "fix: retitled wave"
+        assert wave_row["title"] == "Retitled wave"
         assert wave_row["description"] == "post-edit description landing on the wave"
 
     _run(body)
@@ -1900,7 +1900,7 @@ def test_mutate_roadmap_revise_description_over_cap_rejected(tmp_path: Path) -> 
             "op": "add_wave",
             "wave_id": "P50-I01-W01",
             "iter_id": "P50-I01",
-            "title": "feat: over-cap-desc",
+            "title": "Over-cap desc wave",
             "file_scopes": ["src/x.py"],
             "description": "z" * 501,
             "effort_bucket": "S",
@@ -1926,7 +1926,7 @@ def test_mutate_phase_open_then_state_read_roundtrips_description(tmp_path: Path
         mutation_id=uuid.uuid4().hex,
         params={
             "phase_id": "P52",
-            "title": "P52",
+            "title": "Plan import",
             "description": "phase open round-trip description",
         },
     )

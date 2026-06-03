@@ -25,7 +25,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Phase, State
-from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
 
 if TYPE_CHECKING:
     from eawf.workflow.verify.models import CloseReadiness, CriterionView
@@ -88,6 +88,7 @@ def open_phase(
     """
     if phase_id in state.phases:
         raise LifecycleError(f"phase {phase_id!r} already exists")
+    check_title_clarity(title, entity_kind="phase", entity_id=phase_id)
     project_code = state.project.code if state.project is not None else None
     effective_scope = scope_id or project_code or "unknown"
     phase = Phase(
@@ -531,6 +532,7 @@ def plan_phase(
     """
     if phase_id in state.phases:
         raise LifecycleError(f"phase {phase_id!r} already exists")
+    check_title_clarity(title, entity_kind="phase", entity_id=phase_id)
     deps_list = list(depends_on or [])
     if phase_id in deps_list:
         raise LifecycleError(f"phase {phase_id!r} cannot depend on itself")

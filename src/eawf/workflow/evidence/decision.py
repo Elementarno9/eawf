@@ -12,10 +12,29 @@ from datetime import UTC, datetime
 from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.models import Decision, State
 from eawf.kernel.store.envelope import Envelope
+from eawf.platform.lint.eawf016_title_clarity import assert_title_clarity
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 
 logger = logging.getLogger(__name__)
+
+
+def _check_decision_title_clarity(summary: str, *, decision_id: str) -> None:
+    """Run the EAWF016 title-clarity gate on a new decision *summary* (its title).
+
+    A decision's ``summary`` becomes its :attr:`Decision.title`, so the same
+    label-clarity rules apply at the add-decision mutation boundary. The lint
+    raises :class:`ValueError`; the decision area surfaces input errors as
+    :class:`UserError`, so the message is re-wrapped.
+
+    Raises:
+        UserError: ``kind="InvalidInput"`` when *summary* fails one or more
+            title-clarity rules.
+    """
+    try:
+        assert_title_clarity(summary, entity_kind="decision", entity_id=decision_id)
+    except ValueError as exc:
+        raise UserError(str(exc), kind="InvalidInput") from exc
 
 
 def add_decision(
@@ -49,6 +68,7 @@ def add_decision(
         raise UserError(
             f"decision {decision_id!r} must include a non-empty rationale", kind="InvalidInput"
         )
+    _check_decision_title_clarity(summary, decision_id=decision_id)
     if supersedes is not None:
         if supersedes == decision_id:
             raise UserError(

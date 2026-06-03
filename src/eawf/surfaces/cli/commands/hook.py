@@ -1147,6 +1147,90 @@ def eawf015_ears_advisory(
     )
 
 
+def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
+    """Return ``(1-based new lineno, text)`` for lines the staged diff added.
+
+    Companion of :func:`_staged_added_line_candidates`, but returns the line
+    *text* alongside the number so a content lint (EAWF016 title-clarity) can
+    inspect only the freshly-authored ``state.json`` lines. The leading ``+``
+    of each added diff line is stripped.
+    """
+    proc = subprocess.run(
+        ["git", "diff", "--cached", "--unified=0", "--", rel],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        return []
+    added: list[tuple[int, str]] = []
+    new_lineno: int | None = None
+    for line in proc.stdout.splitlines():
+        hunk = _DIFF_HUNK_RE.match(line)
+        if hunk is not None:
+            new_lineno = int(hunk.group("start"))
+            continue
+        if new_lineno is None or line.startswith(("diff --git", "index ", "--- ", "+++ ")):
+            continue
+        if line.startswith("+"):
+            added.append((new_lineno, line[1:]))
+            new_lineno += 1
+            continue
+        if line.startswith("-") or line.startswith("\\"):
+            continue
+        new_lineno += 1
+    return added
+
+
+@hook_app.command(name="eawf016-title-clarity")
+def eawf016_title_clarity(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject unclear entity titles added to the staged ``state.json`` delta.
+
+    The diff-scoped backstop behind the mutation-boundary gate (the lifecycle
+    ``plan_wave`` / open / plan transitions). It parses only the **added**
+    ``"title": "..."`` lines of the staged ``.ea/state.json`` diff and runs
+    the EAWF016 title-clarity rules (over-cap, trailing period,
+    conventional-commit prefix, ``+``-join cluster soup, bare-id-only) on each
+    new title. Because only added lines are scanned, the hundreds of unchanged
+    legacy titles are grandfathered and never re-flagged. ``pre-commit
+    run --all-files`` (nothing staged) is a clean no-op. Exits 1 on a
+    violation, 0 when clean.
+    """
+    from eawf.platform.lint.eawf016_title_clarity import check_state_title_lines
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    # The title-clarity surface is state.json only; an explicit file list (a
+    # test) wins, else scan just the staged state.json delta.
+    targets = files if files else [".ea/state.json"]
+    rows: list[str] = []
+    scanned = 0
+    for rel in targets:
+        norm = rel.replace("\\", "/")
+        if not norm.endswith("state.json"):
+            continue
+        if not (cwd / rel).exists():
+            continue
+        scanned += 1
+        added = _staged_added_lines(rel, cwd=cwd)
+        rows.extend(
+            f"  {rel}:{violation.render()}" for violation in check_state_title_lines(added)
+        )
+    _emit_static_lint_result(
+        hook_name="eawf016-title-clarity",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
 @hook_app.command(name="eawf002-log-key")
 def eawf002_log_key(
     ctx: typer.Context,

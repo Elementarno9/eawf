@@ -165,7 +165,7 @@ iters:
     description: iter narrative
     waves:
       - id: P22-I01-W02
-        title: "feat: second"
+        title: "Second wave"
         file_scopes:
           - src/b
         deps:
@@ -174,7 +174,7 @@ iters:
           - second criterion
         effort_bucket: S
       - id: P22-I01-W01
-        title: "feat: first"
+        title: "First wave"
         file_scopes:
           - src/a
         agent_role: executor
@@ -257,7 +257,7 @@ def test_roadmap_revise_add_wave(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--success",
@@ -271,7 +271,7 @@ def test_roadmap_revise_add_wave(workspace: Path) -> None:
     assert res.exit_code == 0, res.output
     state = _read_state(workspace)
     assert "P21-I01-W01" in state["waves"]
-    assert state["waves"]["P21-I01-W01"]["title"] == "feat: foo"
+    assert state["waves"]["P21-I01-W01"]["title"] == "Foo handling"
     assert state["waves"]["P21-I01-W01"]["success_criteria"] == ["criterion1", "criterion2"]
 
 
@@ -287,7 +287,7 @@ def test_roadmap_revise_set_deps(workspace: Path) -> None:
                 "--add-wave",
                 wid,
                 "--title",
-                f"feat: {wid}",
+                f"Wave {wid}",
                 "--files",
                 "src/",
                 "--effort-bucket",
@@ -314,7 +314,7 @@ def test_roadmap_revise_remove_wave(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: a",
+            "First wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -369,7 +369,7 @@ def _propose_with_wave(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -383,11 +383,11 @@ def test_roadmap_revise_planned_phase_still_allows_pending_wave(workspace: Path)
     _propose_with_wave(workspace)
     res = runner.invoke(
         app,
-        ["roadmap", "revise", "P21", "--retitle", "W01=feat: updated"],
+        ["roadmap", "revise", "P21", "--retitle", "W01=Updated wave"],
     )
     assert res.exit_code == 0, res.output
     state = _read_state(workspace)
-    assert state["waves"]["P21-I01-W01"]["title"] == "feat: updated"
+    assert state["waves"]["P21-I01-W01"]["title"] == "Updated wave"
     assert state["phases"]["P21"]["status"] == "planned"
 
 
@@ -402,7 +402,7 @@ def test_roadmap_revise_retitle_iter_routes_to_iter(workspace: Path) -> None:
     state = _read_state(workspace)
     assert state["iters"]["P21-I01"]["title"] == "TUI richer views"
     # the wave title is untouched — the retitle hit the iter, not the wave
-    assert state["waves"]["P21-I01-W01"]["title"] == "feat: foo"
+    assert state["waves"]["P21-I01-W01"]["title"] == "Foo handling"
 
 
 def test_roadmap_revise_retitle_iter_status_agnostic_on_active(workspace: Path) -> None:
@@ -463,11 +463,11 @@ def test_roadmap_revise_active_phase_allows_pending_wave(workspace: Path) -> Non
     _set_phase_status(workspace, "P21", "active")
     res = runner.invoke(
         app,
-        ["roadmap", "revise", "P21", "--retitle", "W01=feat: revised in flight"],
+        ["roadmap", "revise", "P21", "--retitle", "W01=Revised in flight"],
     )
     assert res.exit_code == 0, res.output
     state = _read_state(workspace)
-    assert state["waves"]["P21-I01-W01"]["title"] == "feat: revised in flight"
+    assert state["waves"]["P21-I01-W01"]["title"] == "Revised in flight"
     assert state["phases"]["P21"]["status"] == "active"
 
 
@@ -484,7 +484,7 @@ def test_roadmap_revise_active_phase_add_wave_allowed(workspace: Path) -> None:
             "--add-wave",
             "W02",
             "--title",
-            "feat: extra",
+            "Extra wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -544,7 +544,7 @@ def test_roadmap_apply_requires_wave(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: a",
+            "First wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -567,7 +567,7 @@ def test_roadmap_apply_renders_wave_dag_and_gates_with_needs_user(workspace: Pat
             "--add-wave",
             "W01",
             "--title",
-            "feat: a",
+            "First wave",
             "--files",
             "src/a",
             "--effort-bucket",
@@ -583,7 +583,7 @@ def test_roadmap_apply_renders_wave_dag_and_gates_with_needs_user(workspace: Pat
             "--add-wave",
             "W02",
             "--title",
-            "feat: b",
+            "Second wave",
             "--files",
             "src/b",
             "--deps",
@@ -668,7 +668,7 @@ def test_roadmap_drop_cascades_pending_waves_to_abandoned(workspace: Path) -> No
             "--add-wave",
             "W01",
             "--title",
-            "feat: a",
+            "First wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -729,7 +729,7 @@ def test_roadmap_show_rich_renders_phases_iters_waves(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: alpha",
+            "Alpha wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -761,7 +761,7 @@ def test_roadmap_show_plain_fallback(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: alpha",
+            "Alpha wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -803,7 +803,7 @@ def test_roadmap_show_active_phase_not_stale(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: alpha",
+            "Alpha wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -837,7 +837,7 @@ def test_roadmap_show_dormant_iter_marked(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: alpha",
+            "Alpha wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -921,7 +921,7 @@ def test_phase_activate_planned_phase(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -956,7 +956,7 @@ def test_phase_activate_dirty_worktree_rejected(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -990,7 +990,7 @@ def test_phase_activate_behind_upstream_rejected(workspace: Path, tmp_path: Path
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1024,7 +1024,7 @@ def test_phase_activate_allow_stale_bypasses_currency_gate(workspace: Path, tmp_
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1052,7 +1052,7 @@ def test_phase_activate_local_only_branch_skips_currency_check(workspace: Path) 
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1099,7 +1099,7 @@ def test_roadmap_revise_emits_event(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1130,7 +1130,7 @@ def test_wave_show_commit_returns_sha_when_present(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1158,7 +1158,7 @@ def test_wave_show_dispatch_prompt_returns_prompt(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1170,7 +1170,7 @@ def test_wave_show_dispatch_prompt_returns_prompt(workspace: Path) -> None:
 
     assert res.exit_code == 0, res.output
     assert "P21-I01-W01" in res.stdout
-    assert "feat: foo" in res.stdout
+    assert "Foo handling" in res.stdout
     assert "## Wave tags" in res.stdout
 
 
@@ -1187,7 +1187,7 @@ def test_wave_claim_out_of_order_flag_overrides_monotonic_gate(workspace: Path) 
                 "--add-wave",
                 wid,
                 "--title",
-                f"feat: {wid}",
+                f"Wave {wid}",
                 "--files",
                 "src/",
                 "--effort-bucket",
@@ -1217,7 +1217,7 @@ def test_iter_activate_planned_iter(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1244,7 +1244,7 @@ def test_roadmap_propose_persists_description(workspace: Path) -> None:
             "--phase",
             "P21",
             "--title",
-            "P21",
+            "Plan import",
             "--description",
             "long-form phase narrative captured at propose time",
         ],
@@ -1266,16 +1266,16 @@ def test_roadmap_propose_iter_description(workspace: Path) -> None:
             "--phase",
             "P21",
             "--title",
-            "P21",
+            "Plan import",
             "--description",
-            "phase desc",
+            "phase scope summary",
             "--iter-description",
-            "iter desc",
+            "iter scope summary",
         ],
     )
     assert res.exit_code == 0, res.output
     state = _read_state(workspace)
-    assert state["iters"]["P21-I01"]["description"] == "iter desc"
+    assert state["iters"]["P21-I01"]["description"] == "iter scope summary"
 
 
 def test_roadmap_propose_description_over_cap_rejected(workspace: Path) -> None:
@@ -1288,7 +1288,7 @@ def test_roadmap_propose_description_over_cap_rejected(workspace: Path) -> None:
             "--phase",
             "P21",
             "--title",
-            "P21",
+            "Plan import",
             "--description",
             "z" * 501,
         ],
@@ -1311,7 +1311,7 @@ def test_roadmap_revise_add_wave_persists_description(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: w",
+            "Worker wave",
             "--files",
             "src/",
             "--description",
@@ -1337,7 +1337,7 @@ def test_roadmap_revise_retitle_wave_with_description(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: w",
+            "Worker wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1351,14 +1351,14 @@ def test_roadmap_revise_retitle_wave_with_description(workspace: Path) -> None:
             "revise",
             "P21",
             "--retitle",
-            "W01=feat: renamed",
+            "W01=Renamed wave",
             "--description",
             "annotation added post-plan",
         ],
     )
     assert res.exit_code == 0, res.output
     state = _read_state(workspace)
-    assert state["waves"]["P21-I01-W01"]["title"] == "feat: renamed"
+    assert state["waves"]["P21-I01-W01"]["title"] == "Renamed wave"
     assert state["waves"]["P21-I01-W01"]["description"] == "annotation added post-plan"
 
 
@@ -1460,7 +1460,7 @@ def test_wave_plan_persists_description(workspace: Path) -> None:
             "--id",
             "P22-I01-W01",
             "--title",
-            "feat: w",
+            "Worker wave",
             "--files",
             "src/",
             "--description",
@@ -1488,7 +1488,7 @@ def test_roadmap_revise_add_wave_description_over_cap_rejected(workspace: Path) 
             "--add-wave",
             "W01",
             "--title",
-            "feat: w",
+            "Worker wave",
             "--files",
             "src/",
             "--description",
@@ -1526,7 +1526,7 @@ def test_roadmap_revise_add_wave_iter_targets_named_iter(workspace: Path) -> Non
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1555,7 +1555,7 @@ def test_roadmap_revise_add_wave_bare_iter_suffix_accepted(workspace: Path) -> N
             "--add-wave",
             "W03",
             "--title",
-            "feat: bar",
+            "Bar handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1579,7 +1579,7 @@ def test_roadmap_revise_omitted_iter_keeps_i01_default(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: default",
+            "Default wave",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1606,7 +1606,7 @@ def test_roadmap_revise_unknown_iter_rejected(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1634,7 +1634,7 @@ def test_roadmap_revise_iter_under_other_phase_rejected(workspace: Path) -> None
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
@@ -1660,7 +1660,7 @@ def test_roadmap_revise_invalid_iter_id_rejected(workspace: Path) -> None:
             "--add-wave",
             "W01",
             "--title",
-            "feat: foo",
+            "Foo handling",
             "--files",
             "src/",
             "--effort-bucket",
