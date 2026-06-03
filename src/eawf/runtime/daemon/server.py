@@ -39,6 +39,7 @@ import eawf.runtime.daemon.methods.event
 import eawf.runtime.daemon.methods.evidence  # registers evidence.append (P28-I01-W04)
 import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,resolve,park}
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
+import eawf.runtime.daemon.methods.research  # registers research.create_campaign (P29-I09-W07)
 import eawf.runtime.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.runtime.daemon.methods.state  # registers state.read / state.mutate / state.digest
 import eawf.runtime.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe

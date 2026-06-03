@@ -354,6 +354,32 @@ def test_build_tree_nodes_open_question_is_a_leaf() -> None:
     assert nodes[0].label == "Which curve model fits the short tenor"
 
 
+def test_persisted_campaign_surfaces_as_board_topic_node(tmp_path: Path) -> None:
+    """A campaign persisted via the shared helper surfaces in the topic tree.
+
+    Exercises the P29-I09-W07 deliverable end to end: the same
+    ``persist_campaign`` helper the ``research.create_campaign`` RPC + the
+    ``eawf research campaign new`` offline fallback share writes the campaign
+    row, and the board's ``read_campaign_rows`` + ``build_tree_nodes`` lift it
+    into a campaign node with its staged-domain topic children.
+    """
+    from eawf.runtime.daemon.methods.research import persist_campaign
+
+    state_path = _write_state(tmp_path, _project_state())
+    persist_campaign(state_path, _campaign_payload("campaign-board"))
+
+    rows = read_campaign_rows(state_path)
+    assert len(rows) == 1
+    assert rows[0].campaign_id == "campaign-board"
+
+    nodes = build_tree_nodes(rows, ())
+    campaign_nodes = [node for node in nodes if node.kind is NodeKind.CAMPAIGN]
+    assert len(campaign_nodes) == 1
+    assert campaign_nodes[0].label == "Survey the options-pricing landscape"
+    topic_labels = [node.label for node in nodes if node.kind is NodeKind.TOPIC]
+    assert topic_labels == ["market-structure", "pricing-models"]
+
+
 # --------------------------------------------------------------------------
 # Pure render helpers -- empty renders honest-negative, populated surfaces rows
 # --------------------------------------------------------------------------
