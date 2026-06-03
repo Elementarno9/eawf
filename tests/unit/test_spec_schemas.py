@@ -24,7 +24,8 @@ from eawf.kernel.spec.phase import (
     PhaseShipCriterion,
     PhaseSpec,
 )
-from eawf.kernel.spec.wave import WaveBehavior, WaveMockup, WaveSpec
+from eawf.kernel.spec.rubric import rubric_items
+from eawf.kernel.spec.wave import QualityDimension, WaveBehavior, WaveMockup, WaveSpec
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
 # ---- Common building blocks -------------------------------------------------
@@ -723,3 +724,65 @@ def test_package_reexports() -> None:
     # Ensure each name actually resolves on the module.
     for name in expected:
         assert hasattr(spec, name)
+
+
+# --- W01: rubric (quality_dimension + jury_scorable) ---------------------------
+
+
+def test_wave_behavior_jury_scorable_with_dimension() -> None:
+    behavior = WaveBehavior(
+        id="B1",
+        text="footer hint strip reads coherently at the captured width",
+        jury_scorable=True,
+        quality_dimension=QualityDimension.INTERACTION_CAPABILITY,
+    )
+    assert behavior.jury_scorable is True
+    assert behavior.quality_dimension is QualityDimension.INTERACTION_CAPABILITY
+
+
+def test_wave_behavior_jury_scorable_without_dimension_rejected() -> None:
+    with pytest.raises(ValidationError, match="quality_dimension"):
+        WaveBehavior(
+            id="B1",
+            text="scorable behaviour missing its quality dimension axis",
+            jury_scorable=True,
+        )
+
+
+def test_wave_behavior_defaults_not_scorable() -> None:
+    behavior = WaveBehavior(
+        id="B1",
+        text="non-scorable behaviour with the default rubric flags",
+    )
+    assert behavior.jury_scorable is False
+    assert behavior.quality_dimension is None
+
+
+def test_rubric_items_returns_scorable_in_spec_order() -> None:
+    spec = _wave_spec_factory(
+        behaviors=[
+            WaveBehavior(
+                id="B1",
+                text="first scorable behaviour on the interaction axis here",
+                jury_scorable=True,
+                quality_dimension=QualityDimension.INTERACTION_CAPABILITY,
+            ),
+            WaveBehavior(
+                id="B2",
+                text="deterministic behaviour the jury does not score at all",
+            ),
+            WaveBehavior(
+                id="B3",
+                text="second scorable behaviour on the security axis here",
+                jury_scorable=True,
+                quality_dimension=QualityDimension.SECURITY,
+            ),
+        ],
+    )
+    items = rubric_items(spec)
+    assert [b.id for b in items] == ["B1", "B3"]
+
+
+def test_rubric_items_empty_when_none_scorable() -> None:
+    spec = _wave_spec_factory()
+    assert rubric_items(spec) == ()

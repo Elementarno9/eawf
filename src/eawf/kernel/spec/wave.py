@@ -20,6 +20,7 @@ loader and CLI validators because they need disk + state-tree lookups.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
@@ -34,6 +35,25 @@ from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 from eawf.kernel.state.models import IterIdStr, PhaseIdStr, WaveIdStr
 
 
+class QualityDimension(StrEnum):
+    """ISO-25010-flavoured quality dimension a jury-scorable behaviour targets.
+
+    A jury-scorable :class:`WaveBehavior` names the quality dimension
+    the spec-jury scores it against — the typed-criterion idea folded
+    into the rubric, so a rubric item IS a measurable criterion tagged
+    with the axis it lives on. The closed value set is the subset of
+    ISO-25010 product-quality characteristics that matter for the
+    UI/UX behaviour this gate scores.
+    """
+
+    INTERACTION_CAPABILITY = "interaction_capability"
+    OPERABILITY = "operability"
+    RELIABILITY = "reliability"
+    SECURITY = "security"
+    FUNCTIONAL_SUITABILITY = "functional_suitability"
+    PERFORMANCE_EFFICIENCY = "performance_efficiency"
+
+
 class WaveBehavior(_StrictModel):
     """One observable behaviour the wave delivers (B1..Bn).
 
@@ -41,12 +61,36 @@ class WaveBehavior(_StrictModel):
     audit reports; ``latency_budget_ms`` (optional) records the wall-
     clock budget for the behaviour when it has a measurable runtime
     cost.
+
+    ``jury_scorable`` marks the behaviour as a rubric item the
+    spec-jury scores; when set, ``quality_dimension`` MUST name the
+    ISO-25010 axis the score is taken on (the rubric item IS a typed
+    measurable criterion). Both fields default off so existing specs
+    validate unchanged.
     """
 
     id: Annotated[str, Field(pattern=r"^B\d+$")]
     text: str = Field(min_length=20, max_length=1000)
     latency_budget_ms: int | None = Field(default=None, ge=0)
     test_refs: list[TestRef] = Field(default_factory=list)
+    quality_dimension: QualityDimension | None = None
+    jury_scorable: bool = False
+
+    @model_validator(mode="after")
+    def _jury_scorable_needs_dimension(self) -> WaveBehavior:
+        """Require a quality_dimension on every jury-scorable behaviour.
+
+        A rubric item the jury scores has to declare the axis the
+        score lives on; a scorable behaviour with no dimension is an
+        authoring bug the jury cannot act on.
+
+        Raises:
+            ValueError: when ``jury_scorable`` is True but
+                ``quality_dimension`` is None.
+        """
+        if self.jury_scorable and self.quality_dimension is None:
+            raise ValueError(f"jury-scorable behavior requires a quality_dimension: id={self.id!r}")
+        return self
 
 
 class WaveMockup(_StrictModel):
