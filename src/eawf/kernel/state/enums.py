@@ -506,6 +506,7 @@ class ArtifactKind(StrEnum):
     RESEARCH_BRIEF = "research_brief"
     PLAN_SPEC = "plan_spec"
     AGENT_REPORT = "agent_report"
+    MATH_EXPLAINER = "math_explainer"
 
 
 class SpecStatus(StrEnum):

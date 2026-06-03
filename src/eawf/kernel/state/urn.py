@@ -18,7 +18,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, quote, unquote
+
+if TYPE_CHECKING:
+    from eawf.kernel.state.enums import ArtifactKind
 
 URN_KINDS = frozenset(
     {
@@ -150,3 +154,45 @@ def build_from(parsed: Urn) -> str:
     if query:
         return f"{base}?={query}{fragment}"
     return f"{base}{fragment}"
+
+
+#: Every recognised :class:`~eawf.kernel.state.enums.ArtifactKind` routes onto
+#: the single ``artifact`` URN kind: an artifact's typed *kind* (research
+#: brief, plan spec, math explainer, ...) is a property of the row, while its
+#: addressable identity is always ``urn:eawf:v1:artifact:<scope>/<id>``. The
+#: ``ArtifactKind`` docstring requires that adding a member also document its
+#: URN routing rule — :func:`artifact_kind_urn_kind` is that documented rule,
+#: and it refuses a value that is not an ``ArtifactKind`` member so a kind
+#: added to the enum without a route is caught rather than silently emitting a
+#: malformed URN.
+ARTIFACT_URN_KIND = "artifact"
+
+
+def artifact_kind_urn_kind(kind: ArtifactKind) -> str:
+    """Return the URN kind an :class:`ArtifactKind` routes onto.
+
+    Every artifact kind — including a newly registered member such as
+    :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER` — maps onto
+    the single :data:`ARTIFACT_URN_KIND` (``"artifact"``); the typed kind
+    lives on the artifact row, not in the URN. This is the documented routing
+    rule the ``ArtifactKind`` docstring references, so a kind added to the
+    enum without a route fails this guard rather than producing a malformed
+    URN downstream.
+
+    Args:
+        kind: The artifact kind to route. Must be an
+            :class:`ArtifactKind` member.
+
+    Returns:
+        The canonical URN kind token (always :data:`ARTIFACT_URN_KIND`).
+
+    Raises:
+        ValueError: When *kind* is not an :class:`ArtifactKind` member.
+    """
+    # Local import keeps this widely-imported leaf module free of an
+    # eawf-internal import at module top (enums pulls the full StrEnum graph).
+    from eawf.kernel.state.enums import ArtifactKind
+
+    if not isinstance(kind, ArtifactKind):
+        raise ValueError(f"not an ArtifactKind: {kind!r}")
+    return ARTIFACT_URN_KIND

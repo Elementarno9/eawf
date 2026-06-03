@@ -25,6 +25,10 @@ Public surface:
   to the verdict (V/D/R/H) it implements
 - :class:`~eawf.kernel.spec.common.EvidenceRef` — one row of a hypothesis
   evidence chain
+- :class:`~eawf.kernel.spec.math.MathClaim` — one verification-grounded math
+  claim (four facets: intuition + runnable example gate + regime + citation);
+  :class:`~eawf.kernel.spec.math.MathExplainer` folds claims into a doc-type
+  promotable iff every claim is grounded
 - :data:`~eawf.kernel.spec.common.TestRef`,
   :data:`~eawf.kernel.spec.common.FileScopeRef` — annotated path types
 
@@ -94,6 +98,9 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "IterAuditCadence": ("iter", "IterAuditCadence"),
     "IterSpec": ("iter", "IterSpec"),
     "IterWaveGroup": ("iter", "IterWaveGroup"),
+    "MathAssurance": ("math", "MathAssurance"),
+    "MathClaim": ("math", "MathClaim"),
+    "MathExplainer": ("math", "MathExplainer"),
     "MissingRoundRunnerError": ("campaign_driver", "MissingRoundRunnerError"),
     "OperatorInput": ("operator_input", "OperatorInput"),
     "OperatorInputChannel": ("operator_input", "OperatorInputChannel"),

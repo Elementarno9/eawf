@@ -10,9 +10,13 @@ edge (v1.2 -> v1.3) adds ``Wave.claimed_at`` and backfills each wave's
 work-start timestamp from its ``wave_claimed`` event in the sibling event
 store. The fourth edge (v1.3 -> v1.4) adds the optional
 ``Iter.candidate_tag`` release tag and backfills every iter to ``None``
-(additive, replay-safe). The live :class:`eawf.kernel.state.models.State`
-model accepts ``"1.0"``, ``"1.1"``, ``"1.2"``, ``"1.3"``, and ``"1.4"``,
-so a migrated state re-loads under the live model. The suite exercises:
+(additive, replay-safe). The fifth edge (v1.4 -> v1.5) registers the
+``ArtifactKind.MATH_EXPLAINER`` artifact kind — a purely additive enum value
+no state row references — so the transform is a bare ``schema_version`` bump
+with no field backfill. The live :class:`eawf.kernel.state.models.State`
+model accepts ``"1.0"``, ``"1.1"``, ``"1.2"``, ``"1.3"``, ``"1.4"``, and
+``"1.5"``, so a migrated state re-loads under the live model. The suite
+exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
 * a full v1.0 state migrating to a re-loadable v1.1 state;
@@ -67,6 +71,7 @@ from eawf.kernel.migrations.v1_0_to_v1_1 import (
 from eawf.kernel.migrations.v1_1_to_v1_2 import MigrationV11ToV12
 from eawf.kernel.migrations.v1_2_to_v1_3 import MigrationV12ToV13, read_claim_anchors
 from eawf.kernel.migrations.v1_3_to_v1_4 import MigrationV13ToV14
+from eawf.kernel.migrations.v1_4_to_v1_5 import MigrationV14ToV15
 from eawf.kernel.state.enums import IterTrigger, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
@@ -729,7 +734,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.4"
+    assert model_supported_max_version() == "1.5"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -757,9 +762,14 @@ def test_guard_target_supported_permits_v1_4_now_model_advanced() -> None:
     guard_target_supported("1.4")
 
 
+def test_guard_target_supported_permits_v1_5_now_model_advanced() -> None:
+    """The guard permits 1.5 now the live model accepts it (the MATH_EXPLAINER bump)."""
+    guard_target_supported("1.5")
+
+
 def test_guard_target_supported_rejects_target_above_max() -> None:
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        guard_target_supported("1.5")
+        guard_target_supported("1.6")
 
 
 def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> None:
@@ -770,11 +780,11 @@ def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> N
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.5")
+        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.6")
 
     # The on-disk state is byte-for-byte unchanged and no backup was taken.
     assert state_path.read_bytes() == before
-    backup = backup_path_for(state_path, from_version="1.0", to_version="1.5")
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.6")
     assert not backup.exists()
 
 
@@ -815,7 +825,7 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
-    result = CliRunner().invoke(app, ["migrate", "--to", "1.5"])
+    result = CliRunner().invoke(app, ["migrate", "--to", "1.6"])
 
     assert result.exit_code != 0
     assert "exceeds model-supported max" in result.stdout
@@ -823,14 +833,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_4(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_5(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.4) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.5) walks the full chain + re-loads.
 
-    The default target advanced to 1.4 with the ``Iter.candidate_tag`` bump, so a
-    bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 and lands a
-    re-loadable v1.4 state.
+    The default target advanced to 1.5 with the ``MATH_EXPLAINER`` artifact-kind
+    bump, so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4
+    -> 1.5 and lands a re-loadable v1.5 state.
     """
     from typer.testing import CliRunner
 
@@ -845,7 +855,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_4(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.4"
+    assert reloaded.schema_version == "1.5"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -1940,3 +1950,130 @@ def test_run_chain_full_v1_0_to_v1_4_reloads(tmp_path: Path) -> None:
 
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
     assert reloaded.schema_version == "1.4"
+
+
+# --- v1.4 -> v1.5: ArtifactKind.MATH_EXPLAINER registration ----------------
+#
+# The v1.5 edge registers the ``MATH_EXPLAINER`` artifact kind -- a purely
+# additive enum value. No existing state row references it (``Artifact.kind``
+# is free-form and no historical artifact carries ``"math_explainer"``), so
+# the transform is a bare ``schema_version`` bump with no field backfill: the
+# round-trip below asserts every pre-existing row survives byte-for-byte.
+
+
+def _minimal_state_v1_4() -> dict[str, Any]:
+    """Return a full v1.4 state payload that re-loads under the live model."""
+    payload = _minimal_state_v1_0()
+    payload["schema_version"] = "1.4"
+    return payload
+
+
+def _state_v1_4_with_artifact() -> dict[str, Any]:
+    """Return a v1.4 state carrying one pre-existing artifact row.
+
+    The artifact carries the pre-existing ``research_brief`` kind so the
+    no-row-change invariant of the additive ``MATH_EXPLAINER`` enum bump is
+    exercised: the migration must leave the artifact untouched and re-load it
+    after the canonical-writer round-trip.
+    """
+    payload = _minimal_state_v1_4()
+    payload["artifacts"] = {
+        "ART-research-demo": {
+            "id": "ART-research-demo",
+            "kind": "research_brief",
+            "uri": ".ea/artifacts/research-demo.md",
+            "urn": "urn:eawf:v1:artifact:QR/ART-research-demo",
+            "created_at": "2026-05-08T00:00:00Z",
+        }
+    }
+    return payload
+
+
+def test_build_migration_chain_v1_4_to_v1_5_single_step() -> None:
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.4", to_version="1.5")
+    assert len(chain) == 1
+    assert chain[0].from_version == "1.4"
+    assert chain[0].to_version == "1.5"
+
+
+def test_v1_4_to_v1_5_apply_bumps_version() -> None:
+    step = MigrationV14ToV15()
+    out = step.apply(_minimal_state_v1_4())
+    assert out["schema_version"] == "1.5"
+
+
+def test_v1_4_to_v1_5_apply_does_not_mutate_input() -> None:
+    step = MigrationV14ToV15()
+    src = _minimal_state_v1_4()
+    step.apply(src)
+    assert src["schema_version"] == "1.4"
+
+
+def test_v1_4_to_v1_5_apply_is_pure_version_bump() -> None:
+    """Boundary: the only delta is the version marker -- every row is preserved."""
+    step = MigrationV14ToV15()
+    src = _state_v1_4_with_artifact()
+    out = step.apply(src)
+    expected = copy.deepcopy(src)
+    expected["schema_version"] = "1.5"
+    assert out == expected
+
+
+def test_v1_4_to_v1_5_apply_preserves_existing_artifact_rows() -> None:
+    """The additive enum bump leaves every pre-existing artifact row unchanged."""
+    step = MigrationV14ToV15()
+    out = step.apply(_state_v1_4_with_artifact())
+    assert out["artifacts"]["ART-research-demo"]["kind"] == "research_brief"
+
+
+def test_v1_4_to_v1_5_apply_is_idempotent() -> None:
+    """Re-applying to the already-migrated 1.5 result (version reset) is stable."""
+    step = MigrationV14ToV15()
+    once = step.apply(_state_v1_4_with_artifact())
+    replay = copy.deepcopy(once)
+    replay["schema_version"] = "1.4"
+    twice = step.apply(replay)
+    assert twice == once
+
+
+def test_v1_4_to_v1_5_check_pre_rejects_wrong_version() -> None:
+    step = MigrationV14ToV15()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_pre({"schema_version": "1.3"})
+
+
+def test_v1_4_to_v1_5_check_post_rejects_unbumped_version() -> None:
+    step = MigrationV14ToV15()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_post({"schema_version": "1.4"})
+
+
+def test_run_chain_v1_4_to_v1_5_reloads_with_no_row_loss(tmp_path: Path) -> None:
+    """End-to-end: a v1.4 state migrates to a re-loadable v1.5 with no row loss.
+
+    The pre-existing artifact row survives the full canonical-writer round-trip
+    and the migrated state re-loads under the live ``State`` model.
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_state_v1_4_with_artifact(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.4", to_version="1.5")
+    run_chain(state_path, chain=chain, from_version="1.4", to_version="1.5")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.5"
+    assert reloaded.artifacts["ART-research-demo"].kind == "research_brief"
+    assert reloaded.artifacts["ART-research-demo"].uri == ".ea/artifacts/research-demo.md"
+
+
+def test_run_chain_full_v1_0_to_v1_5_reloads(tmp_path: Path) -> None:
+    """A v1.0 state walks the full 1.0 -> 1.5 chain to a re-loadable v1.5."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_minimal_state_v1_0(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.5")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.5")
+
+    reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    assert reloaded.schema_version == "1.5"
