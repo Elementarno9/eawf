@@ -63,10 +63,13 @@ _READ_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
 # (no state mutation) yet stay model-barred because they are
 # operator-driven multi-round ``AskUserQuestion`` passes, not
 # model-autoinvocable probes. ``design`` triangulates an interactive
-# surface (statechart + matrix + journeys) across operator AUQ rounds.
+# surface (statechart + matrix + journeys) across operator AUQ rounds;
+# ``math-explainer`` authors a verification-grounded math doc through an
+# operator-driven facet + clarity loop over typed MathClaim rows.
 _READ_ONLY_MODEL_BARRED_SKILL_NAMES: frozenset[str] = frozenset(
     {
         "design",
+        "math-explainer",
     }
 )
 

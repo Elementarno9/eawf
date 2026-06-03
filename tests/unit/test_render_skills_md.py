@@ -34,6 +34,7 @@ _EXPECTED_SKILL_NAMES: set[str] = {
     "mockup",
     "design",
     "spike",
+    "math-explainer",
     "flow",
     "blitz",
     "coauthor",

@@ -200,12 +200,12 @@ def test_skill_list_json_payload_carries_status_and_schema(
     assert "skills" in payload
     skills = cast(list[dict[str, object]], payload["skills"])
     # 17 execution-backed canonical skills plus the six model-only
-    # code-quality playbooks and the three advisory design-surface skills
-    # (``/mockup``, ``/design``, ``/spike``). The latter nine ship as
-    # builtin SKILL.md files (so ``skill list`` discovers them) but carry
-    # no execution body, so they surface with ``status="user"`` and
-    # ``body_schema=None``.
-    assert len(skills) == 26
+    # code-quality playbooks and the four advisory design-surface skills
+    # (``/mockup``, ``/design``, ``/spike``, ``/math-explainer``). The
+    # latter ten ship as builtin SKILL.md files (so ``skill list``
+    # discovers them) but carry no execution body, so they surface with
+    # ``status="user"`` and ``body_schema=None``.
+    assert len(skills) == 27
     by_name = {cast(str, s["name"]): s for s in skills}
     research = by_name["/research"]
     assert research["status"] == "installed"
