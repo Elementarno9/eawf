@@ -521,5 +521,8 @@ service_templates = [
 # 2026-05-28 to 2 MiB (2097152) so headroom returns to ~19 % while still
 # catching a large regression (e.g. accidentally bundling all three plugin
 # trees or the rendered docs subset). Recalibrate down once the plugin
-# trees move behind install extras.
-wheel_max_bytes = 2097152
+# trees move behind install extras. P29 (v0.5) added the EAWF016-019 lint
+# suite, the math doc-type, the plugin skill bodies, and the 1.5 schema —
+# all pure src code (verified: no .vale / golden / plugin-tree bundling) —
+# pushing the wheel to ~2.06 MiB; recalibrate to 2.5 MiB (~21 % headroom).
+wheel_max_bytes = 2621440
