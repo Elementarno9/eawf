@@ -216,9 +216,9 @@ def test_mid_word_detector_flags_a_planted_cut() -> None:
     # truncation could not slip past the gate above.
     full = format_hints(_REPO_HINTS)
     # A clip that ends inside "collapse" is mid-word...
-    assert _truncates_mid_word("↑↓ move  ·  ←→ colla", full) is True
+    assert _truncates_mid_word("↑↓ select  ·  ←→ colla", full) is True
     # ...a clip ending at a whole word boundary is not...
-    assert _truncates_mid_word("↑↓ move  ·  ←→ collapse", full) is False
+    assert _truncates_mid_word("↑↓ select  ·  ←→ collapse", full) is False
     # ...and an empty (fully-clipped) strip is not a mid-word cut.
     assert _truncates_mid_word("", full) is False
 

@@ -298,7 +298,7 @@ class AgentWatchModeScreen(ScopeScreen):
     #: through :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the
     #: key tokens stay pinned to the canonical vocabulary.
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = (
-        render_hint_label("↑↓", "scroll"),
+        render_hint_label("↑↓", "select"),
         render_hint_label("k", "cancel"),
         render_hint_label("w/r/u", "scope"),
         render_hint_label("/", "palette"),

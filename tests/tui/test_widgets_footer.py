@@ -33,6 +33,7 @@ from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.widgets import eu_bar
 from eawf.surfaces.tui.widgets.footer import (
+    CANONICAL_HINT_ACTIONS,
     CANONICAL_HINT_TOKENS,
     DEFAULT_HINTS,
     HEARTBEAT_GLYPH,
@@ -190,18 +191,23 @@ def test_format_hints_many_joined_with_bullet() -> None:
 
 
 def test_render_hint_label_joins_canonical_token_and_action() -> None:
-    # A canonical token + free action phrase renders ``<token> <action>``.
-    assert render_hint_label("↑↓", "move") == "↑↓ move"
+    # A canonical token + its canonical action renders ``<token> <action>``.
+    assert render_hint_label("↑↓", "select") == "↑↓ select"
     assert render_hint_label("Enter", "open") == "Enter open"
     assert render_hint_label("w/r/u", "scope") == "w/r/u scope"
     assert render_hint_label("q", "quit") == "q quit"
+    # A mode-specific token (absent from the action canon) still joins with
+    # free action text -- per-mode verbs are not pinned.
+    assert render_hint_label("d", "dispatch") == "d dispatch"
 
 
 def test_render_hint_label_accepts_every_canonical_token() -> None:
     # Every frozen token renders without raising (the full vocabulary is
-    # exercised so a removed member is caught).
+    # exercised so a removed member is caught). Shared tokens are passed their
+    # canonical action; mode-specific tokens take free text.
     for token in CANONICAL_HINT_TOKENS:
-        assert render_hint_label(token, "act") == f"{token} act"
+        action = CANONICAL_HINT_ACTIONS.get(token, "act")
+        assert render_hint_label(token, action) == f"{token} {action}"
 
 
 def test_render_hint_label_rejects_unknown_token() -> None:
@@ -243,6 +249,66 @@ def test_canonical_hint_tokens_excludes_digit_ranges() -> None:
     assert "1-8" not in CANONICAL_HINT_TOKENS
     # And the canonical arrow glyph / full key names / three-letter scope are in.
     assert {"↑↓", "←→", "Enter", "Esc", "F5", "w/r/u"} <= CANONICAL_HINT_TOKENS
+
+
+# --------------------------------------------------------------------------
+# render_hint_label — shared-token action canon (W03 regression guard)
+# --------------------------------------------------------------------------
+
+
+def test_canonical_hint_actions_pins_each_shared_token() -> None:
+    # The action canon maps exactly the cross-surface shared tokens, each to
+    # ONE canonical action word -- ``↑↓`` is the criterion-mandated ``select``.
+    assert CANONICAL_HINT_ACTIONS == {
+        "↑↓": "select",
+        "←→": "collapse",
+        "Enter": "open",
+        "Esc": "back",
+        "w/r/u": "scope",
+        "F5": "refresh",
+        "/": "palette",
+        "?": "help",
+        "q": "quit",
+        "c": "config",
+    }
+    # The arrow hint specifically reads ``select`` (the criterion).
+    assert CANONICAL_HINT_ACTIONS["↑↓"] == "select"
+    # Every key of the action canon is itself a canonical token.
+    assert set(CANONICAL_HINT_ACTIONS) <= CANONICAL_HINT_TOKENS
+    # Mode-specific tokens are NOT pinned (they keep free per-mode action text).
+    for mode_token in ("a", "d", "H", "k", "K", "p", "s", "S", "space"):
+        assert mode_token not in CANONICAL_HINT_ACTIONS
+
+
+def test_render_hint_label_accepts_canonical_shared_action() -> None:
+    # Each shared token paired with its canonical action renders cleanly.
+    for token, action in CANONICAL_HINT_ACTIONS.items():
+        assert render_hint_label(token, action) == f"{token} {action}"
+
+
+def test_render_hint_label_rejects_noncanonical_shared_action() -> None:
+    # The historical per-surface drift forms each raise now that the action
+    # half is pinned: ``↑↓ move`` / ``↑↓ scroll`` / ``↑↓ row`` / ``↑↓ tree``
+    # (every variant of the arrow that was NOT ``select``), and ``Enter zoom``
+    # / ``Enter peek``. The message names the offending token + the canon.
+    for bad in ("move", "scroll", "row", "tree"):
+        with pytest.raises(ValueError, match=r"non-canonical action for '↑↓'"):
+            render_hint_label("↑↓", bad)
+    with pytest.raises(ValueError, match="canonical: 'select'"):
+        render_hint_label("↑↓", "move")
+    for bad in ("zoom", "peek"):
+        with pytest.raises(ValueError, match=r"non-canonical action for 'Enter'"):
+            render_hint_label("Enter", bad)
+
+
+def test_render_hint_label_keeps_mode_specific_action_free() -> None:
+    # A mode-specific token (absent from the action canon) accepts arbitrary
+    # free action text -- the per-mode verb is not governed by the canon.
+    assert render_hint_label("d", "dispatch") == "d dispatch"
+    assert render_hint_label("d", "brief") == "d brief"
+    assert render_hint_label("H", "halt") == "H halt"
+    assert render_hint_label("r", "follow-up") == "r follow-up"
+    assert render_hint_label("s", "snapshot") == "s snapshot"
 
 
 # --------------------------------------------------------------------------
@@ -330,6 +396,39 @@ def test_no_surface_hint_carries_a_drifted_fragment() -> None:
         joined = " ".join(hints)
         assert "1-6 mode" not in joined
         assert "1-8 mode" not in joined
+
+
+def test_every_surface_arrow_hint_reads_select() -> None:
+    # The W03 criterion: the up/down arrow hint reads ``select`` on EVERY
+    # footer surface that advertises an arrow hint -- no surface keeps the old
+    # ``move`` / ``row`` / ``scroll`` / ``tree`` wording. (Surfaces without an
+    # arrow hint -- e.g. doctor / placeholder -- are simply skipped.)
+    surfaces = _all_surface_hint_tuples()
+    saw_arrow = False
+    for surface, hints in surfaces.items():
+        arrow_labels = [label for label in hints if _hint_token(label) == "↑↓"]
+        for label in arrow_labels:
+            saw_arrow = True
+            assert label == "↑↓ select", f"{surface} arrow hint reads {label!r}, not '↑↓ select'"
+    # The sweep actually exercised at least one arrow-advertising surface (a
+    # regression that drops every arrow hint would otherwise pass vacuously).
+    assert saw_arrow
+
+
+def test_every_shared_token_carries_its_canonical_action_across_surfaces() -> None:
+    # Each shared token that appears on any surface carries the ONE canonical
+    # action from CANONICAL_HINT_ACTIONS -- the full cross-surface invariant
+    # the criterion states (every shared token, all ten surfaces). Mode-specific
+    # tokens are not asserted (their action text is free).
+    surfaces = _all_surface_hint_tuples()
+    for surface, hints in surfaces.items():
+        for label in hints:
+            token = _hint_token(label)
+            if token in CANONICAL_HINT_ACTIONS:
+                expected = f"{token} {CANONICAL_HINT_ACTIONS[token]}"
+                assert label == expected, (
+                    f"{surface} shared-token hint {label!r} drifts from {expected!r}"
+                )
 
 
 def test_research_board_scope_hint_uses_all_three_letters() -> None:

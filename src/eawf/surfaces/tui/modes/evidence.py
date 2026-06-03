@@ -60,7 +60,7 @@ _COLUMNS: tuple[str, ...] = ("role", "verdict", "wave", "attempt", "followups")
 #: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
 #: tokens stay pinned to the canonical vocabulary.
 _EVIDENCE_HINTS: tuple[str, ...] = (
-    render_hint_label("↑↓", "move"),
+    render_hint_label("↑↓", "select"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
     render_hint_label("?", "help"),

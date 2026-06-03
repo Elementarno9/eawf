@@ -2,5 +2,5 @@
 
 
 
- ↑↓ row  ·  Enter zoom  ·  Esc back  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·weekly burn: — no data•
+ ↑↓ select  ·  Enter open  ·  Esc back  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / paletteweekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch

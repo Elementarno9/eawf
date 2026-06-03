@@ -47,13 +47,13 @@ from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
 
 logger = logging.getLogger(__name__)
 
-#: Footer hints for the table-browse mode (arrows primary; Enter zooms). Every
-#: label is produced through
+#: Footer hints for the table-browse mode (arrows primary; Enter opens the
+#: focused repo). Every label is produced through
 #: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
-#: tokens stay pinned to the canonical vocabulary.
+#: tokens AND the shared-token actions stay pinned to the canonical vocabulary.
 _WORKSPACE_HINTS: tuple[str, ...] = (
-    render_hint_label("↑↓", "row"),
-    render_hint_label("Enter", "zoom"),
+    render_hint_label("↑↓", "select"),
+    render_hint_label("Enter", "open"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("c", "config"),
     render_hint_label("F5", "refresh"),

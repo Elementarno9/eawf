@@ -110,34 +110,86 @@ CANONICAL_HINT_TOKENS: Final[frozenset[str]] = frozenset(
 )
 
 
+#: The frozen canonical *action* phrase each cross-surface (shared) key token
+#: must carry. Token freezing (above) stopped the key half from drifting, but
+#: the action half still varied across the ten footer surfaces -- the same
+#: ``↑↓`` key read ``move`` on one screen, ``row`` on another, ``scroll`` on a
+#: third, and ``tree`` / ``select`` elsewhere; ``Enter`` split between ``open``
+#: / ``zoom`` / ``peek``. A key that does the same thing everywhere must read
+#: the same everywhere, so the shared tokens are pinned to ONE action word and
+#: a drifted action becomes a hard :class:`ValueError` at authoring time (the
+#: same regression-guard shape :data:`CANONICAL_HINT_TOKENS` gives the key
+#: half). The members are exactly the tokens that appear on more than one
+#: surface:
+#:
+#: * **Navigation** -- ``↑↓`` -> ``select`` (the one cross-surface row-cursor
+#:   verb), ``←→`` -> ``collapse``, ``Enter`` -> ``open``, ``Esc`` -> ``back``.
+#: * **Global affordances** -- ``w/r/u`` -> ``scope``, ``F5`` -> ``refresh``,
+#:   ``/`` -> ``palette``, ``?`` -> ``help``, ``q`` -> ``quit``,
+#:   ``c`` -> ``config``.
+#:
+#: Mode-specific tokens (``a`` / ``d`` / ``H`` / ``k`` / ``K`` / ``p`` / ``s``
+#: / ``S`` / ``space`` and ``r`` where it binds a per-mode verb) are DELIBERATELY
+#: absent: a key that means something different per mode keeps its own free
+#: action text, so this map only governs the genuinely shared vocabulary.
+CANONICAL_HINT_ACTIONS: Final[dict[str, str]] = {
+    # Navigation.
+    "↑↓": "select",
+    "←→": "collapse",
+    "Enter": "open",
+    "Esc": "back",
+    # Global affordances.
+    "w/r/u": "scope",
+    "F5": "refresh",
+    "/": "palette",
+    "?": "help",
+    "q": "quit",
+    "c": "config",
+}
+
+
 def render_hint_label(token: str, action: str) -> str:
     """Render one footer hint label from the frozen canonical vocabulary.
 
     The single chokepoint every footer hint fragment is authored through, so
-    the key token can never drift from :data:`CANONICAL_HINT_TOKENS`. A hint
-    label is a *key token* paired with a short *action* phrase -- e.g.
-    ``render_hint_label("↑↓", "move")`` -> ``"↑↓ move"``. The action phrase
-    is free text (the verb the key performs in this pane); only the *token*
-    is validated, because the token is the part that drifts (``up/down`` vs
-    ``↑↓``, ``enter`` vs ``Enter``, ``w/u`` vs ``w/r/u``).
+    neither half of a label can drift. A hint label is a *key token* paired
+    with a short *action* phrase -- e.g. ``render_hint_label("↑↓", "select")``
+    -> ``"↑↓ select"``. Two guards apply:
+
+    * The *token* MUST be a member of :data:`CANONICAL_HINT_TOKENS` (catches a
+      drifted key token: ``up/down`` vs ``↑↓``, ``enter`` vs ``Enter``,
+      ``w/u`` vs ``w/r/u``).
+    * When the token is a cross-surface *shared* one (a key of
+      :data:`CANONICAL_HINT_ACTIONS`), the *action* MUST equal that token's
+      one canonical phrase (catches a drifted action: the same ``↑↓`` reading
+      ``move`` on one surface and ``scroll`` on another). A mode-specific
+      token -- one absent from :data:`CANONICAL_HINT_ACTIONS` -- keeps free
+      action text (the verb the key performs in that pane).
 
     Args:
         token: The key token; MUST be a member of
             :data:`CANONICAL_HINT_TOKENS`.
-        action: The short action phrase the key performs (free text, e.g.
-            ``"move"`` / ``"scope"`` / ``"quit"``).
+        action: The short action phrase the key performs. Free text for a
+            mode-specific token; for a shared token (a key of
+            :data:`CANONICAL_HINT_ACTIONS`) it MUST equal the canonical phrase.
 
     Returns:
         The joined ``"<token> <action>"`` hint label.
 
     Raises:
-        ValueError: When *token* is not in :data:`CANONICAL_HINT_TOKENS` --
-            the regression guard that catches a drifted key token (``up/down``
-            / ``enter`` / ``w/u`` / a ``1-6 mode`` digit fragment) at
-            authoring time.
+        ValueError: When *token* is not in :data:`CANONICAL_HINT_TOKENS` (a
+            drifted key token), or when *token* is a shared token whose
+            *action* does not equal :data:`CANONICAL_HINT_ACTIONS`\\ ``[token]``
+            (a drifted shared-token action). Both are authoring-time
+            regression guards.
     """
     if token not in CANONICAL_HINT_TOKENS:
         raise ValueError(f"non-canonical hint token: {token!r}")
+    canonical = CANONICAL_HINT_ACTIONS.get(token)
+    if canonical is not None and action != canonical:
+        raise ValueError(
+            f"non-canonical action for {token!r}: {action!r} (canonical: {canonical!r})"
+        )
     return f"{token} {action}"
 
 
@@ -148,7 +200,7 @@ def render_hint_label(token: str, action: str) -> str:
 #: produced through :func:`render_hint_label` so the key tokens stay pinned
 #: to :data:`CANONICAL_HINT_TOKENS`.
 DEFAULT_HINTS: tuple[str, ...] = (
-    render_hint_label("↑↓", "move"),
+    render_hint_label("↑↓", "select"),
     render_hint_label("Enter", "open"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("F5", "refresh"),
@@ -215,7 +267,7 @@ def format_hints(hints: tuple[str, ...]) -> str:
         hints: The ordered key-hint fragments (full key names).
 
     Returns:
-        The joined hint string, e.g. ``↑↓ move · Enter open · q quit``.
+        The joined hint string, e.g. ``↑↓ select · Enter open · q quit``.
     """
     return "  ·  ".join(hints)
 
@@ -510,6 +562,7 @@ class Footer(Static):
 
 
 __all__ = [
+    "CANONICAL_HINT_ACTIONS",
     "CANONICAL_HINT_TOKENS",
     "DEFAULT_HINTS",
     "HEARTBEAT_GLYPH",

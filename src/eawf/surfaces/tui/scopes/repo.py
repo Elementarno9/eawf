@@ -46,7 +46,7 @@ from eawf.surfaces.tui.widgets.status_pane import StatusPane
 #: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
 #: tokens stay pinned to the canonical vocabulary.
 _REPO_HINTS: tuple[str, ...] = (
-    render_hint_label("↑↓", "move"),
+    render_hint_label("↑↓", "select"),
     render_hint_label("←→", "collapse"),
     render_hint_label("Enter", "open"),
     render_hint_label("w/r/u", "scope"),

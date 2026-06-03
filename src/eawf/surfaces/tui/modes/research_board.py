@@ -172,11 +172,12 @@ _UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 #: surfaced by the always-visible mode row, not duplicated in the hint strip.
 #: Every label is produced through
 #: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
-#: tokens stay pinned to the canonical vocabulary -- which also fixes the
-#: historical ``w/u scope`` typo that dropped the repo letter.
+#: tokens AND the shared-token actions stay pinned to the canonical vocabulary
+#: -- which also fixes the historical ``w/u scope`` typo that dropped the repo
+#: letter.
 _RESEARCH_HINTS: tuple[str, ...] = (
-    render_hint_label("↑↓", "tree"),
-    render_hint_label("Enter", "peek"),
+    render_hint_label("↑↓", "select"),
+    render_hint_label("Enter", "open"),
     render_hint_label("d", "brief"),
     render_hint_label("a", "approve"),
     render_hint_label("p", "park"),

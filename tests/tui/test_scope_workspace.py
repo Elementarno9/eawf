@@ -535,7 +535,9 @@ def test_workspace_screen_footer_hints_applied() -> None:
             await app.workers.wait_for_complete()
             footer = app.screen.query_one(Footer)
             assert footer.hints == WorkspaceScreen.FOOTER_HINTS
-            assert "zoom" in app.export_screenshot()
+            # The Enter affordance now reads the canonical shared-token action
+            # ``open`` (W03 action canon) -- confirm the hint strip painted.
+            assert "open" in app.export_screenshot()
 
     asyncio.run(body())
 
