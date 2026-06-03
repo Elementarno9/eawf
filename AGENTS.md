@@ -439,3 +439,13 @@ Every newcomer-facing artifact — commit subject + body, PR body, research / au
 The approved-term glossary, the internal-code blocklist, and the six scored dimensions are the typed source the prose lints read: :mod:`eawf.platform.profiles.clarity`.
 
 <!-- END EAWF:managed id=clarity-contract -->
+<!-- BEGIN EAWF:managed id=memory-hygiene version=1.0 hash=fbb8eed0a60153be -->
+### Memory hygiene: remember durable facts, query status
+
+Curated memory holds **durable facts** — decisions that outlive a session, operator preferences, hard-won gotchas, conventions. It is the wrong place for **status**, which changes every time a wave closes: the current phase and iter, what just closed, the latest verdicts, the open backlog. Memorizing status guarantees drift, because the remembered copy goes stale the moment the real state moves.
+
+The rule: a fact is worth remembering only when it stays true across sessions. Status is **derivable** from state, so it is queried on demand, never memorized. Run ``eawf status`` for the current pointers, recent decisions, and open backlog, and ``eawf memory digest`` for a glance-clear standup of what is in flight, what just closed, and what was recently decided. Both read straight from state, so the answer is always current and costs nothing to keep so.
+
+Before writing a memory entry, ask whether a query already answers it. If ``eawf status`` or ``eawf memory digest`` surfaces the fact, do not duplicate it into memory — link to the query instead.
+
+<!-- END EAWF:managed id=memory-hygiene -->

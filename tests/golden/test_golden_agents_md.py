@@ -120,6 +120,37 @@ def test_rendered_agents_md_is_eawf014_clean(
     assert violations == [], "\n".join(v.render() for v in violations)
 
 
+def test_core_profile_carries_memory_hygiene_convention() -> None:
+    """The memory-hygiene convention is sourced from the core profile (core.yaml).
+
+    The convention (durable facts are remembered; status is queried via
+    ``eawf status`` / ``eawf memory digest``, not memorized) lives in the
+    profile source so a re-render reproduces it; a future edit that drops the
+    block is caught here. The block is reference-tier so it stays off the
+    tier-0 AGENTS.md token budget.
+    """
+    core = load_profile("core")
+    block = next((b for b in core.render_blocks if b.id == "memory-hygiene"), None)
+    assert block is not None, "core.yaml must declare the memory-hygiene render block"
+    assert block.target == "AGENTS.md"
+    assert block.tier == "reference"
+    assert "eawf status" in block.body_template
+    assert "eawf memory digest" in block.body_template
+    assert "derivable" in block.body_template
+
+
+def test_memory_hygiene_lands_in_rendered_agents_md(tmp_path: Path) -> None:
+    """The memory-hygiene block renders into AGENTS.md and the re-render is stable."""
+    composed = compose([load_profile("core")])
+    target = tmp_path / "AGENTS.md"
+    _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
+    first = target.read_text(encoding="utf-8")
+    assert "### Memory hygiene: remember durable facts, query status" in first
+    # Idempotent: a second render produces byte-identical output.
+    render_agents_md(composed, target, manifest)
+    assert target.read_text(encoding="utf-8") == first
+
+
 def test_core_profile_tags_expected_tier0_blocks() -> None:
     """The always-on tier-0 set is tagged on the core profile blocks.
 

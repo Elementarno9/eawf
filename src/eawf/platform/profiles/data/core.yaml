@@ -460,6 +460,18 @@ render_blocks:
       - Do not use ``Read`` to verify a file you just wrote with ``Write``/``Edit``: the edit tool errors on conflict, the harness tracks file state, and re-reads waste tokens.
       - Prefer dedicated tools over ``Bash`` when one fits (``Read``, ``Edit``, ``Write``); reserve ``Bash`` for shell-only operations.
 
+  - id: memory-hygiene
+    target: AGENTS.md
+    version: "1.0"
+    body_template: |
+      ### Memory hygiene: remember durable facts, query status
+
+      Curated memory holds **durable facts** — decisions that outlive a session, operator preferences, hard-won gotchas, conventions. It is the wrong place for **status**, which changes every time a wave closes: the current phase and iter, what just closed, the latest verdicts, the open backlog. Memorizing status guarantees drift, because the remembered copy goes stale the moment the real state moves.
+
+      The rule: a fact is worth remembering only when it stays true across sessions. Status is **derivable** from state, so it is queried on demand, never memorized. Run ``eawf status`` for the current pointers, recent decisions, and open backlog, and ``eawf memory digest`` for a glance-clear standup of what is in flight, what just closed, and what was recently decided. Both read straight from state, so the answer is always current and costs nothing to keep so.
+
+      Before writing a memory entry, ask whether a query already answers it. If ``eawf status`` or ``eawf memory digest`` surfaces the fact, do not duplicate it into memory — link to the query instead.
+
   - id: anti-patterns
     target: AGENTS.md
     version: "1.2"
