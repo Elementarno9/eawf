@@ -14,9 +14,12 @@ Output payload (JSON envelope, all keys always present):
       "active_waves": [<Wave>...],
       "active_sessions": [<AgentSession>...],
       "last_closed_waves": ["P01-I01-W01", ...],
+      "recent_decisions": [{"id", "title", "status"}, ...],
+      "open_backlog": [{"id", "title", "priority", "status"}, ...],
       "git": {"head": "<sha>" | null,
               "branch": "<name>" | null,
               "dirty": true | false | null},
+      "drift": {"count": <int>, "tier": "ok"|"warn"},
       "blockers": ["<short-text>", ...]
     }
 
@@ -42,7 +45,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 import orjson
 import typer
 
-from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.enums import BacklogStatus, WaveStatus
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -217,6 +220,63 @@ def _last_closed_waves(state: State, limit: int = 10) -> list[str]:
     return [wave_id for _, wave_id in pairs[:limit]]
 
 
+def _recent_decisions(state: State, limit: int = 5) -> list[dict[str, str]]:
+    """Return up to *limit* most-recent decisions, newest first by ``created_at``.
+
+    A read-only projection of :attr:`~eawf.kernel.state.models.State.decisions`
+    so the operator sees the latest architectural / process verdicts without
+    opening ``state.json``. The full rationale + alternatives stay in the
+    Decision record; the status line carries only the id, the bounded title,
+    and the lifecycle status (so a superseded decision is visibly historical).
+
+    Decisions are sorted by ``created_at`` descending with the id as a stable
+    tiebreaker so two decisions stamped in the same instant order
+    deterministically across renders.
+    """
+    pairs: list[tuple[datetime, str, dict[str, str]]] = [
+        (
+            d.created_at,
+            d.id,
+            {"id": d.id, "title": d.title, "status": d.status.value},
+        )
+        for d in state.decisions.values()
+    ]
+    pairs.sort(key=lambda p: (p[0], p[1]), reverse=True)
+    return [projection for _, _, projection in pairs[:limit]]
+
+
+def _open_backlog(state: State, limit: int = 10) -> list[dict[str, str]]:
+    """Return up to *limit* open backlog items, highest priority first.
+
+    "Open" means status :attr:`~eawf.kernel.state.enums.BacklogStatus.OPEN` or
+    :attr:`~eawf.kernel.state.enums.BacklogStatus.IN_PROGRESS` — a closed or
+    deferred item is not live work and is filtered out. The projection is a
+    pure read of :attr:`~eawf.kernel.state.models.State.backlog` (``None`` when
+    the optional field is unset, treated as an empty mapping).
+
+    Items are ordered by priority (``P0`` before ``P3``) with the id as a
+    stable tiebreaker so the ordering is deterministic across renders. The
+    ``priority`` enum value sorts lexicographically in the desired order
+    (``"P0" < "P1" < "P2" < "P3"``).
+    """
+    pool = state.backlog or {}
+    live = [
+        item
+        for item in pool.values()
+        if item.status in (BacklogStatus.OPEN, BacklogStatus.IN_PROGRESS)
+    ]
+    live.sort(key=lambda item: (item.priority.value, item.id))
+    return [
+        {
+            "id": item.id,
+            "title": item.title,
+            "priority": item.priority.value,
+            "status": item.status.value,
+        }
+        for item in live[:limit]
+    ]
+
+
 def _blockers(state: State) -> list[str]:
     """Surface short human-readable blockers from the loaded state.
 
@@ -326,6 +386,8 @@ def status(
         "active_waves": _active_waves(state),
         "active_sessions": _active_sessions(state),
         "last_closed_waves": _last_closed_waves(state),
+        "recent_decisions": _recent_decisions(state),
+        "open_backlog": _open_backlog(state),
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
         "drift": _drift_summary(state, repo_root=_find_git_root(state_path.parent)),
         "blockers": _blockers(state),
@@ -376,6 +438,20 @@ def _format_text(payload: dict[str, Any]) -> str:
     git_line = f"git: head={(git['head'] or '<unknown>')[:12]} branch={branch}"
     drift = payload.get("drift") or {"count": 0, "tier": "ok"}
     drift_line = f"drift: {drift['count']} ({drift['tier']})"
+    decisions = payload.get("recent_decisions") or []
+    decisions_line = (
+        f"recent decisions: {', '.join(d['id'] for d in decisions)}"
+        if decisions
+        else "recent decisions: none"
+    )
+    backlog = payload.get("open_backlog") or []
+    backlog_line = (
+        f"open backlog: {len(backlog)} ({', '.join(b['id'] for b in backlog)})"
+        if backlog
+        else "open backlog: none"
+    )
     blockers = payload["blockers"]
     blockers_line = f"blockers: {', '.join(blockers) if blockers else 'none'}"
-    return "\n".join([proj_line, cur_line, git_line, drift_line, blockers_line])
+    return "\n".join(
+        [proj_line, cur_line, git_line, drift_line, decisions_line, backlog_line, blockers_line]
+    )

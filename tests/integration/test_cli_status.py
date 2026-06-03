@@ -131,6 +131,8 @@ def test_status_json_envelope_round_trips(
     assert payload["git"] == {"head": None, "branch": None, "dirty": None}
     assert payload["blockers"] == []
     assert payload["last_closed_waves"] == []
+    assert payload["recent_decisions"] == []
+    assert payload["open_backlog"] == []
 
 
 def test_status_text_envelope(
@@ -252,8 +254,137 @@ def test_status_payload_keys_documented_set(
         "active_waves",
         "active_sessions",
         "last_closed_waves",
+        "recent_decisions",
+        "open_backlog",
         "git",
         "drift",
         "blockers",
     }
     assert set(payload.keys()) == expected_keys
+
+
+def _state_with_decisions_and_backlog() -> dict[str, Any]:
+    """Deep-copy the base fixture and stamp two decisions + three backlog items."""
+    state = json.loads(json.dumps(_VALID_STATE))
+    state["decisions"] = {
+        "D01": {
+            "id": "D01",
+            "scope_id": "QR",
+            "title": "Pick portalocker for cross-platform file locks",
+            "rationale": "portalocker is the only maintained cross-platform advisory lock.",
+            "alternatives": ["fcntl-only"],
+            "status": "active",
+            "created_at": "2026-05-08T00:00:00Z",
+        },
+        "D02": {
+            "id": "D02",
+            "scope_id": "QR",
+            "title": "Adopt Pydantic v2 strict models at every boundary",
+            "rationale": "strict validation at ingestion keeps downstream code typed.",
+            "alternatives": [],
+            "status": "active",
+            "created_at": "2026-05-09T00:00:00Z",
+        },
+    }
+    state["backlog"] = {
+        "B01": {
+            "id": "B01",
+            "scope_id": "QR",
+            "title": "Wire telemetry capture into wave close",
+            "priority": "P1",
+            "status": "open",
+            "created_at": "2026-05-08T00:00:00Z",
+        },
+        "B02": {
+            "id": "B02",
+            "scope_id": "QR",
+            "title": "Backfill estimate reference classes",
+            "priority": "P0",
+            "status": "in_progress",
+            "created_at": "2026-05-08T00:00:00Z",
+        },
+        "B03": {
+            "id": "B03",
+            "scope_id": "QR",
+            "title": "Old idea that already shipped",
+            "priority": "P2",
+            "status": "closed",
+            "created_at": "2026-05-08T00:00:00Z",
+            "closed_at": "2026-05-09T00:00:00Z",
+        },
+    }
+    return state
+
+
+def test_status_recent_decisions_newest_first(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``recent_decisions`` lists decisions newest-first with a compact projection."""
+    state_path = _seed(tmp_path, _state_with_decisions_and_backlog())
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    decisions = payload["recent_decisions"]
+    assert [d["id"] for d in decisions] == ["D02", "D01"]
+    assert decisions[0] == {
+        "id": "D02",
+        "title": "Adopt Pydantic v2 strict models at every boundary",
+        "status": "active",
+    }
+
+
+def test_status_open_backlog_filters_closed_and_sorts_by_priority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``open_backlog`` drops closed items and sorts P0 before P1."""
+    state_path = _seed(tmp_path, _state_with_decisions_and_backlog())
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    backlog = payload["open_backlog"]
+    assert [b["id"] for b in backlog] == ["B02", "B01"]  # P0 before P1; B03 closed → absent
+    assert backlog[0]["priority"] == "P0"
+    assert backlog[0]["status"] == "in_progress"
+
+
+def test_status_is_byte_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``eawf status`` mutates nothing: state.json is byte-equal before and after.
+
+    The whole status surface is a pure projection (AGENTS rule: the digest /
+    status projections are PURE). This test hashes state.json before and after
+    the command and asserts the digest is unchanged, so a future regression
+    that writes through the status path is caught.
+    """
+    import hashlib
+
+    state_path = _seed(tmp_path, _state_with_decisions_and_backlog())
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    before = hashlib.sha256(state_path.read_bytes()).hexdigest()
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    after = hashlib.sha256(state_path.read_bytes()).hexdigest()
+    assert before == after
+
+
+def test_status_text_branch_surfaces_decisions_and_backlog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The text branch shows compact recent-decisions + open-backlog lines."""
+    state_path = _seed(tmp_path, _state_with_decisions_and_backlog())
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == 0, result.output
+    assert "recent decisions: D02, D01" in result.stdout
+    assert "open backlog: 2 (B02, B01)" in result.stdout
