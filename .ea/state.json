@@ -12349,6 +12349,30 @@
         "P29-I08-W32",
         "P29-I08-W33"
       ]
+    },
+    "P29-I09": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P29-I09",
+      "intent": null,
+      "opened_at": "2026-06-03T20:05:23.151431Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "UI/UX review follow-ups: modal, footer, pause, campaign, help",
+      "trigger": "none",
+      "wave_ids": [
+        "P29-I09-W01",
+        "P29-I09-W02",
+        "P29-I09-W03",
+        "P29-I09-W04",
+        "P29-I09-W05",
+        "P29-I09-W06",
+        "P29-I09-W07",
+        "P29-I09-W08"
+      ]
     }
   },
   "mcp_grants": null,
@@ -13064,7 +13088,8 @@
         "P29-I05",
         "P29-I06",
         "P29-I07",
-        "P29-I08"
+        "P29-I08",
+        "P29-I09"
       ],
       "opened_at": "2026-06-01T00:19:14.247409Z",
       "outcome_ids": [],
@@ -13112,7 +13137,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T19:39:05.207410Z",
+  "updated_at": "2026-06-03T20:05:51.566451Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36838,6 +36863,267 @@
         "agents.golden.json regen for the memory-hygiene block and the research-render reference assertion updated to the numbered-anchored shape; full suite green except the known env-only zsh completion test"
       ],
       "title": "Repair full-suite golden drift from references and AGENTS.md changes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W01": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/modes/brief_viewer.py"
+      ],
+      "id": "P29-I09-W01",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:47.381899Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "modal_depth counts only counts_toward_depth modals with the brief viewer exempt and MAX_MODAL_DEPTH raised to 6 so a brief plus five reference drills never hits the cap toast"
+      ],
+      "title": "Exempt viewer overlays from modal-depth count and raise drill cap to 6",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W02": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/scopes/__init__.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail.py"
+      ],
+      "id": "P29-I09-W02",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:47.972777Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "re-choosing the entity already on the modal top is a no-op on every push path via a dedup at the push_modal chokepoint fixing the choose-P29-in-modal stacking"
+      ],
+      "title": "Dedup re-choosing the modal-top entity at the push_modal chokepoint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W03": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I09-W04"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py",
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "src/eawf/surfaces/tui/scopes/repo.py"
+      ],
+      "id": "P29-I09-W03",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:48.600406Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the up and down arrow hint reads select and each shared token carries one canonical action from CANONICAL_HINT_ACTIONS across all ten footer surfaces"
+      ],
+      "title": "Unify footer arrow label to select plus canonical shared-token actions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W04": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I09-W03"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py",
+        "src/eawf/surfaces/tui/scopes/__init__.py",
+        "tests/tui/test_widgets_footer.py"
+      ],
+      "id": "P29-I09-W04",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:49.210298Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a frozen HINT_KEY_PRIORITY plus order_hints chokepoint orders every surface identically with c config and F5 refresh present on every surface and an enumeration test pins canon order and shared-key positions"
+      ],
+      "title": "Add central footer hint ordering canon with c and F5 on every surface",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I09-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/surfaces/tui/modes/autopilot.py"
+      ],
+      "id": "P29-I09-W05",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:49.790650Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "agent.pause and agent.resume persist a dispatch_paused flag and the autopilot space key toggles a real paused or resumed verdict and a paused gate blocks the next dispatch"
+      ],
+      "title": "Add agent.pause + agent.resume cooperative dispatch-gate flag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W06": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I09-W05"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/runtime/daemon/methods/agent.py"
+      ],
+      "id": "P29-I09-W06",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:50.398425Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "no autopilot or agent-watch control routes through a not-yet-wired stub with skip real where cheap and kill and arm honestly labeled as deferred not faked"
+      ],
+      "title": "Make autopilot and agent-watch controls honest (no not-yet-wired stub)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W07": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/research.py",
+        "src/eawf/runtime/daemon/methods/research.py",
+        "src/eawf/runtime/daemon/methods/__init__.py"
+      ],
+      "id": "P29-I09-W07",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:51.000224Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf research campaign new stages via stage_campaign and persists a ResearchCampaignPayload through a daemon research.create_campaign method and the row surfaces in the TUI board"
+      ],
+      "title": "Add eawf research campaign new + research.create_campaign daemon RPC",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W08": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/help.py"
+      ],
+      "id": "P29-I09-W08",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-03T20:05:51.566277Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "HelpScreen auto-derives a per-mode action-key section from each mode BINDINGS plus alt-left and alt-right reference nav and a test asserts every binding has a help row"
+      ],
+      "title": "Auto-derive per-mode action keys in HelpScreen from BINDINGS + ref-nav",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
