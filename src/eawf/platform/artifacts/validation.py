@@ -27,7 +27,21 @@ REQUIRED_CHASSIS_HEADINGS: tuple[str, ...] = (
     "## Scrub",
 )
 _SECTION_HEADING_RE = re.compile(r"^## (?P<title>[^\n#]+)\s*$", re.MULTILINE)
-_REFERENCE_ROW_RE = re.compile(r"^\[(?P<n>[1-9][0-9]*)\]\s+(?P<ref>\S+)")
+#: Reference-row parser. Round-trips two shapes in lockstep with
+#: :func:`eawf.surfaces.render.artifact_chassis.render_references`:
+#: the numbered/anchored form
+#: ``N. <a id="ref-N"></a>[\[N\]](#ref-N) <ref> ...`` and the legacy
+#: bare-``[N] <ref>`` form. The citation number comes from the anchor id
+#: (new shape) or the leading marker (legacy); the ref is the first token
+#: after the marker.
+_REFERENCE_ROW_RE = re.compile(
+    r"^(?:"
+    r'\d+\.\s+<a id="ref-(?P<n_new>[1-9][0-9]*)"></a>'
+    r"\s*\[\\\[\d+\\\]\]\(#ref-\d+\)\s+(?P<ref_new>\S+)"
+    r"|"
+    r"\[(?P<n_legacy>[1-9][0-9]*)\]\s+(?P<ref_legacy>\S+)"
+    r")"
+)
 _SCRUB_CLEAN_RE = re.compile(r"^\s*-?\s*status:\s*clean\s*$", re.IGNORECASE | re.MULTILINE)
 
 
@@ -81,7 +95,9 @@ def _reference_rows(section: str) -> list[Citation]:
         match = _REFERENCE_ROW_RE.match(line.strip())
         if match is None:
             continue
-        rows.append(Citation.from_legacy_source(int(match.group("n")), match.group("ref")))
+        number = match.group("n_new") or match.group("n_legacy")
+        ref = match.group("ref_new") or match.group("ref_legacy")
+        rows.append(Citation.from_legacy_source(int(number), ref))
     return rows
 
 

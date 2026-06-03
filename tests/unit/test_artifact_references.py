@@ -12,8 +12,12 @@ from eawf.platform.artifacts.references import (
     validate_dense_citation_refs,
     validate_dense_citations,
 )
-from eawf.platform.artifacts.validation import validate_markdown_artifact
+from eawf.platform.artifacts.validation import (
+    _reference_rows,
+    validate_markdown_artifact,
+)
 from eawf.platform.scrub.scan import rewrite_text, scan_text
+from eawf.surfaces.render.artifact_chassis import reference_anchor, render_references
 
 
 def _artifact_body(
@@ -171,3 +175,76 @@ def test_validate_markdown_artifact_rejects_unportable_markdown_reference_row() 
         )
     )
     assert any("repo-relative" in error for error in report.errors)
+
+
+# ---- numbered + anchored references render (W13) ----------------------------
+
+
+def test_render_references_empty_renders_none() -> None:
+    assert render_references([]) == ["## References", "", "(none)"]
+
+
+def test_render_references_emits_ordered_list_with_anchors_and_self_links() -> None:
+    rows = render_references(
+        [
+            Citation(n=1, ref="src/eawf/a.py:10", title="loader", note="why"),
+            Citation(n=2, ref="https://example.org/spec", kind="url"),
+        ]
+    )
+    assert rows[0] == "## References"
+    body = rows[2:]
+    # Ordered-list markers in number order.
+    assert body[0].startswith("1. ")
+    assert body[1].startswith("2. ")
+    # Each row carries its stable anchor + a [N] self-link to that anchor.
+    assert '<a id="ref-1"></a>' in body[0]
+    assert r"[\[1\]](#ref-1)" in body[0]
+    assert '<a id="ref-2"></a>' in body[1]
+    assert r"[\[2\]](#ref-2)" in body[1]
+    # The ref, title, and note still render after the marker.
+    assert "src/eawf/a.py:10" in body[0]
+    assert "— loader" in body[0]
+    assert "(why)" in body[0]
+
+
+def test_reference_anchor_is_stable_per_number() -> None:
+    assert reference_anchor(3) == "ref-3"
+
+
+def test_reference_rows_round_trips_new_anchored_shape() -> None:
+    cits = [
+        Citation(n=1, ref="src/eawf/a.py:10", title="loader"),
+        Citation(n=2, ref="https://example.org/spec", kind="url"),
+        Citation(n=3, ref="urn:eawf:v1:store:research/BR-001", kind="urn"),
+    ]
+    rendered = render_references(cits)
+    section = "\n".join(rendered[2:])
+    parsed = _reference_rows(section)
+    assert [c.n for c in parsed] == [1, 2, 3]
+    assert parsed[0].ref == "src/eawf/a.py:10"
+    assert parsed[1].ref == "https://example.org/spec"
+    assert parsed[2].ref == "urn:eawf:v1:store:research/BR-001"
+
+
+def test_reference_rows_still_parses_legacy_bare_rows() -> None:
+    section = "\n".join(
+        [
+            "[1] src/eawf/a.py:10 — loader (why)",
+            "[2] docs/b.md",
+        ]
+    )
+    parsed = _reference_rows(section)
+    assert [c.n for c in parsed] == [1, 2]
+    assert parsed[0].ref == "src/eawf/a.py:10"
+    assert parsed[1].ref == "docs/b.md"
+
+
+def test_validate_markdown_artifact_accepts_new_anchored_reference_rows() -> None:
+    rendered = render_references([Citation(n=1, ref="src/eawf/surfaces/render/research.py:1")])
+    report = validate_markdown_artifact(
+        _artifact_body(
+            summary="Renderer uses typed rows [1].",
+            references="\n".join(rendered[2:]),
+        )
+    )
+    assert report.ok, report.errors
