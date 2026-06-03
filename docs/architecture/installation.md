@@ -321,6 +321,25 @@ Outcomes:
 The probe MUST NOT run when `--user-scope` is absent, so the default
 `eawf doctor` invocation stays cheap.
 
+### Install from the committed marketplace
+
+Instead of cloning and running `eawf plugin install`, an operator can install the runtime plugin straight from the repo's committed marketplace pointers. The canonical repo is `https://github.com/Elementarno9/eawf`; each runtime reads its own pointer file (`.claude-plugin/marketplace.json` for Claude Code, `.agents/plugins/marketplace.json` for Codex), and the tag-triggered `plugin-release.yaml` workflow keeps the published artifacts current.
+
+Claude Code — add the marketplace by repo slug, then install from it:
+
+```text
+/plugin marketplace add Elementarno9/eawf
+/plugin install eawf@eawf-local
+```
+
+Codex — point `plugin marketplace add` at the repo; `marketplace add` registers the `eawf-local-codex` marketplace and auto-installs its plugin (Codex has no separate `plugin install`):
+
+```bash
+codex plugin marketplace add https://github.com/Elementarno9/eawf
+```
+
+See `docs/architecture/plugins.md` for the marketplace-pointer schemas and how the `plugin-release.yaml` workflow publishes each runtime's artifact.
+
 ## Migration into existing workflow projects
 
 Migration automation is **deferred beyond v0.1**. Experience with fresh

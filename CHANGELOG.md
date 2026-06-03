@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Added
+- **Self-hosted plugin marketplace.** Both runtimes now ship committed catalog pointers so operators can install Eä straight from the repo. `.claude-plugin/marketplace.json` declares the Claude Code marketplace (`eawf-local`) backed by the `eawf` npm package; `.agents/plugins/marketplace.json` declares the Codex marketplace (`eawf-local-codex`) backed by a `git-subdir` source at `./plugins/eawf` on the `plugins-dist` branch ref. A tag-triggered `.github/workflows/plugin-release.yaml` packages both runtimes, runs a blocking validate gate over the emitted trees, then publishes the Claude plugin to npm and pushes the Codex plugin to the `plugins-dist` branch.
+- **`/design` and `/spike` registered as first-class plugin skills.** The two skills now render into the packaged plugin trees alongside the existing skill set instead of living only as local conveniences.
+- **`eawf iter candidate-tag` command.** Reads (or, with a value, sets) the proposed `vMAJOR.MINOR.PATCH` release tag carried on the active iter via the new `Iter.candidate_tag` field.
+
+### Changed
+- **Plugin doctor gained a disk-to-registry orphan drift kind.** The `plugin doctor` walk now reports plugin files present on disk but absent from the managed-hash registry as an `orphan` drift kind, so an operator can prune stray artifacts per the AGENTS.md deletion rule.
+- **Plugin version derives from `eawf.__version__` across all three runtimes.** The Claude, Codex, and OpenCode adapters now stamp the packaged plugin version from the single `eawf.__version__` source instead of hard-coding it per runtime, so a version bump propagates everywhere automatically.
+
+### Fixed
+- **Four previously-idle EAWF lints wired as blocking pre-commit hooks.** `eawf002`, `eawf003`, `eawf010`, and `eawf011` were implemented but unwired; they now run as blocking pre-commit hooks.
+
+### Migration
+- **`state.json` `schema_version` advanced 1.3 -> 1.4.** The bump is additive: it introduces the optional `Iter.candidate_tag` field and is replay-safe via the `v1_3_to_v1_4` migration. Run `eawf migrate` to advance an existing repo; a state document written under 1.3 loads unchanged once migrated, and no field is removed or renamed.
+
 ## [0.4.1] - 2026-05-29
 
 ### Fixed
