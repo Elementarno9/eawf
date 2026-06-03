@@ -216,6 +216,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("telemetry", "eawf.surfaces.cli.commands.telemetry", "telemetry_app"),
     GroupRow("snapshot", "eawf.surfaces.cli.commands.snapshot", "snapshot_app"),
     GroupRow("migrate", "eawf.surfaces.cli.commands.migrate", "migrate_app"),
+    # Generalized entity-title backfill (all five lifecycle / decision kinds).
+    GroupRow("backfill", "eawf.surfaces.cli.commands.backfill", "backfill_app"),
     GroupRow("backup", "eawf.surfaces.cli.commands.backup", "backup_app"),
     GroupRow("calibrate", "eawf.surfaces.cli.commands.calibrate", "calibrate_app"),
     # Completion + prose help topics.

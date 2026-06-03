@@ -68,6 +68,14 @@ Manage audits (add / run / integrity / show / list).
 | `set-verdict` | Stamp a verdict on an existing audit. |
 | `show` | Show metadata for one audit. |
 
+### `eawf backfill`
+
+Backfill entity titles/descriptions across all five kinds.
+
+| Verb | Summary |
+|---|---|
+| `titles` | Sweep + normalize entity titles across all five kinds. |
+
 ### `eawf backlog`
 
 Manage backlog items (add / close).

@@ -62,6 +62,7 @@ PANEL_ORDER: tuple[str, ...] = tabs_sorted()
 COMMAND_PANELS: dict[str, str] = {
     # audit: validation, audit checks, doctor diagnostics, doc-drift checks.
     "audit": "audit",
+    "backfill": "audit",
     "backup": "audit",
     "doc": "audit",
     "doctor": "audit",
