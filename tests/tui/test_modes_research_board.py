@@ -35,7 +35,7 @@ from pathlib import Path
 
 import pytest
 from textual.widgets import MarkdownViewer
-from textual.widgets.markdown import MarkdownTableOfContents
+from textual.widgets.markdown import Markdown, MarkdownBlock, MarkdownTableOfContents
 
 from eawf.kernel.spec.research import ResearchDepth
 from eawf.kernel.spec.research_campaign import (
@@ -60,12 +60,18 @@ from eawf.kernel.state.models import (
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
+from eawf.platform.artifacts.references import Citation
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.modes.brief_viewer import (
+    BRIEF_EMPTY_MARKDOWN,
+    BRIEF_VIEWER_ID,
+    BriefMarkdownViewer,
+    BriefViewerScreen,
+    build_brief_preview_markdown,
+)
 from eawf.surfaces.tui.modes.research_board import (
     ACTION_RESULT_ID,
     APPROVE_NO_CHECKPOINT,
-    BRIEF_EMPTY_MARKDOWN,
-    BRIEF_VIEWER_ID,
     CENTER_PANE_ID,
     CENTER_TABS,
     CHECKPOINT_IDLE,
@@ -77,11 +83,9 @@ from eawf.surfaces.tui.modes.research_board import (
     PEEK_RESULT_ID,
     PROGRESS_PANE_ID,
     TREE_PANE_ID,
-    BriefViewerScreen,
     CampaignRow,
     NodeKind,
     ResearchBoardModeScreen,
-    build_brief_preview_markdown,
     build_tree_nodes,
     has_research_signal,
     read_campaign_rows,
@@ -538,6 +542,238 @@ def test_research_board_d_key_in_footer_hints() -> None:
     """The brief key is advertised in the footer hints (discoverable)."""
     hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
     assert "d brief" in hints
+
+
+# --------------------------------------------------------------------------
+# BriefMarkdownViewer -- Markdown.LinkClicked routing (W17)
+#
+# The deterministic gates for the references capstone: a #ref-N click scrolls
+# the target reference row near the viewport top (asserted on scroll_y +
+# on-screen offset numerically, so a coincidental overshoot fails), an entity
+# href opens the typed reference card, and a #ref-N href never opens a card.
+# The "fast-travel landing feel" residual the brief lists for this part is the
+# (idle) band-jury's job, not a deterministic gate, so it is not asserted here.
+# Worker discipline follows the project rule: settle_screen drains workers
+# before each assertion so the scroll position is deterministic.
+# --------------------------------------------------------------------------
+
+#: A reference anchor on a list row that the viewer's custom scroll must reach
+#: -- it is NOT a heading slug, so Textual's ``goto_anchor`` cannot resolve it,
+#: which is exactly the gap W17 closes.
+_REF_ANCHOR = "#ref-1"
+
+#: An entity reference href the link catalog resolves whole to one decision ref.
+_ENTITY_HREF = "urn:eawf:v1:decision:QR/D01"
+
+
+def _tall_brief_markdown() -> str:
+    """Build a brief whose references sit mid-document, below the first fold.
+
+    Mirrors the real brief render shape (an inline-``[N]`` summary, then a
+    numbered/anchored ``## References`` block via
+    :func:`render_references` + :func:`link_inline_citations`) but pads filler
+    before AND after the references so ``ref-1`` starts below the viewport top
+    yet is not pinned to the document bottom -- so a top-scroll lands the row at
+    the exact viewport top rather than clamping against ``max_scroll_y``.
+    """
+    from eawf.surfaces.render.artifact_chassis import (
+        link_inline_citations,
+        render_references,
+    )
+
+    pre = "\n\n".join(f"Pre filler paragraph {i} with several words of body." for i in range(40))
+    post = "\n\n".join(f"Post filler paragraph {i} with several words of body." for i in range(40))
+    citations = [
+        Citation(n=1, ref=".ea/state.json", title="state ledger"),
+        Citation(n=2, ref=".ea/store/research_campaign.jsonl", title="campaign store"),
+    ]
+    lines = [
+        "# Brief preview",
+        "",
+        "## Summary",
+        "",
+        "intro marker [1] and second marker [2].",
+        "",
+        pre,
+        "",
+        *render_references(citations),
+        "",
+        post,
+        "",
+    ]
+    return link_inline_citations("\n".join(lines))
+
+
+def _reference_row_block(viewer: BriefMarkdownViewer, number: str) -> MarkdownBlock:
+    """Return the rendered reference-row block whose ``[N]`` matches *number*."""
+    block = viewer._reference_row_block(number)
+    assert block is not None, f"reference row [{number}] not found in rendered document"
+    return block
+
+
+def test_brief_viewer_ref_click_scrolls_row_near_top(tmp_path: Path) -> None:
+    """A ``#ref-1`` click scrolls the target row near the viewport top.
+
+    The numeric load-bearing gate: posting ``Markdown.LinkClicked('#ref-1')``
+    (the message a rendered inline ``[1]`` / row self-link click delivers) must
+    leave the reference row's on-screen top within a small tolerance of the
+    viewer's content top, AND must have moved the scroll toward the row (a
+    strictly larger ``scroll_y`` than the initial top-of-document ``0``) -- the
+    "moved toward the row" check kills an overshoot that lands the row near the
+    top only by coincidence.
+    """
+    state_path = _write_state(tmp_path, _project_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(BriefViewerScreen(_tall_brief_markdown()))
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, BriefViewerScreen)
+            viewer = screen.query_one(f"#{BRIEF_VIEWER_ID}", BriefMarkdownViewer)
+            # The document opens at the top; ref-1 sits below the fold.
+            assert viewer.scroll_y == pytest.approx(0.0)
+            target = _reference_row_block(viewer, "1")
+            assert target.region.y > viewer.content_region.y + 1  # below the fold
+            # Deliver the click message the rendered self-link / inline marker fires.
+            viewer.post_message(Markdown.LinkClicked(viewer.document, _REF_ANCHOR))
+            await settle_screen(pilot)
+            # Moved toward the row (not a coincidental landing at scroll_y 0).
+            assert viewer.scroll_y > 0.0
+            # The row's top now lands within a small band of the viewport top.
+            offset = target.region.y - viewer.content_region.y
+            assert 0 <= offset <= 2, f"ref-1 landed {offset} rows from the top, not near it"
+
+    asyncio.run(body())
+
+
+def test_brief_viewer_ref_click_never_opens_card(tmp_path: Path) -> None:
+    """A ``#ref-N`` click scrolls but never opens a reference card.
+
+    The screen stack stays at the brief viewer (no ``ReferenceModal`` pushed) --
+    only the scroll position changes -- so the de-link contract that a citation
+    jump is navigation-free holds.
+    """
+    from eawf.surfaces.tui.screens.overlays.reference import ReferenceModal
+
+    state_path = _write_state(tmp_path, _project_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(BriefViewerScreen(_tall_brief_markdown()))
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, BriefViewerScreen)
+            depth_before = len(app.screen_stack)
+            viewer = screen.query_one(f"#{BRIEF_VIEWER_ID}", BriefMarkdownViewer)
+            viewer.post_message(Markdown.LinkClicked(viewer.document, _REF_ANCHOR))
+            await settle_screen(pilot)
+            # No card mounted; the brief viewer is still the active screen.
+            assert isinstance(app.screen, BriefViewerScreen)
+            assert len(app.screen_stack) == depth_before
+            assert not app.query(ReferenceModal)
+
+    asyncio.run(body())
+
+
+def test_brief_viewer_entity_href_opens_typed_card(tmp_path: Path) -> None:
+    """An entity-reference href routes through ``action_open_ref`` to its card.
+
+    A click whose href is one whole EAWF reference (a decision URN here) must
+    open the typed reference card: the host app's ``action_open_ref`` fires with
+    the catalog-resolved ``(kind, target)`` and a ``ReferenceModal`` mounts on
+    top of the brief viewer.
+    """
+    from eawf.surfaces.tui.screens.overlays.reference import ReferenceModal
+
+    state_path = _write_state(tmp_path, _project_state())
+    routed: list[tuple[str, str]] = []
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        original = EaApp.action_open_ref
+
+        def _spy(self: EaApp, kind: str, target: str) -> None:
+            routed.append((kind, target))
+            original(self, kind, target)
+
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(EaApp, "action_open_ref", _spy)
+        try:
+            async with app.run_test(size=(80, 24)) as pilot:
+                await settle_screen(pilot)
+                await app.push_screen(BriefViewerScreen(_tall_brief_markdown()))
+                await settle_screen(pilot)
+                screen = app.screen
+                assert isinstance(screen, BriefViewerScreen)
+                viewer = screen.query_one(f"#{BRIEF_VIEWER_ID}", BriefMarkdownViewer)
+                viewer.post_message(Markdown.LinkClicked(viewer.document, _ENTITY_HREF))
+                await settle_screen(pilot)
+                # The typed card opened on top of the brief viewer.
+                assert isinstance(app.screen, ReferenceModal)
+        finally:
+            monkey.undo()
+
+    asyncio.run(body())
+    # The catalog resolved the href to a decision ref and routed it once.
+    assert routed == [("decision", _ENTITY_HREF)]
+
+
+def test_brief_viewer_external_href_is_safe_noop(tmp_path: Path) -> None:
+    """A plain external href is neither a row scroll nor an entity card.
+
+    An href the link catalog does not resolve whole (an external URL here) is a
+    logged no-op: it opens no card, does not move the scroll, and -- crucially
+    -- does not fall through to the base viewer's file-load branch (which would
+    crash trying to read the href as a path), so a stray brief link is inert
+    rather than fatal.
+    """
+    from eawf.surfaces.tui.screens.overlays.reference import ReferenceModal
+
+    state_path = _write_state(tmp_path, _project_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(BriefViewerScreen(_tall_brief_markdown()))
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, BriefViewerScreen)
+            viewer = screen.query_one(f"#{BRIEF_VIEWER_ID}", BriefMarkdownViewer)
+            viewer.post_message(Markdown.LinkClicked(viewer.document, "https://example.com"))
+            await settle_screen(pilot)
+            # No card; still the brief viewer; the scroll did not move.
+            assert isinstance(app.screen, BriefViewerScreen)
+            assert not app.query(ReferenceModal)
+            assert viewer.scroll_y == pytest.approx(0.0)
+
+    asyncio.run(body())
+
+
+def test_brief_viewer_scroll_to_reference_unknown_anchor_is_noop(tmp_path: Path) -> None:
+    """An unparseable / absent reference anchor scrolls nothing (no raise)."""
+    state_path = _write_state(tmp_path, _project_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(BriefViewerScreen(_tall_brief_markdown()))
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, BriefViewerScreen)
+            viewer = screen.query_one(f"#{BRIEF_VIEWER_ID}", BriefMarkdownViewer)
+            # A non-numeric anchor and an out-of-range row both report no-match.
+            assert viewer.scroll_to_reference("ref-nope") is False
+            assert viewer.scroll_to_reference("ref-99") is False
+            assert viewer.scroll_y == pytest.approx(0.0)
+
+    asyncio.run(body())
 
 
 # --------------------------------------------------------------------------
