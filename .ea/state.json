@@ -2411,6 +2411,18 @@
       "scope_id": "P29-I08-W05",
       "status": "done",
       "updated_at": "2026-06-03T14:26:13.771069Z"
+    },
+    "P29-I08-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W06",
+      "scope_id": "P29-I08-W06",
+      "status": "done",
+      "updated_at": "2026-06-03T14:45:55.011933Z"
     }
   },
   "agent_sessions": {
@@ -10229,6 +10241,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P29-I08-W05",
       "updated_at": "2026-06-03T14:11:48.441488Z"
+    },
+    "P29-I08-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W06-bucket-20260603T142619Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W06",
+      "updated_at": "2026-06-03T14:26:19.154173Z"
     }
   },
   "goals": {
@@ -12377,7 +12402,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T14:26:13.771720Z",
+  "updated_at": "2026-06-03T14:45:55.012251Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35176,10 +35201,10 @@
         "P29-I08-W23",
         "P29-I08-W29"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T14:26:19.154169Z",
+      "closed_at": "2026-06-03T14:45:55.011933Z",
+      "commit": "7ea9a5a4889e996007791a1bf6c74b6f99271a7b",
       "deps": [
         "P29-I08-W05"
       ],
@@ -35194,10 +35219,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:16.322195Z",
-      "outcome": null,
+      "outcome": "resolve_wave_verify_block band-conditional (enforce True for UI file_scopes, False non-band); VerifyBlock.jury_vendors=[claude,codex,opencode] declared live-idle; band config on opt-in quality.yaml; 1020 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a profile sets verify.enforce and cross_vendor_jury true for the UI/UX band only and load_active_verify_block returns enforce True for a band wave and False for a non-band wave"
       ],
