@@ -2580,6 +2580,18 @@
       "status": "done",
       "updated_at": "2026-06-03T17:37:31.766921Z"
     },
+    "P29-I08-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W20",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W20",
+      "scope_id": "P29-I08-W20",
+      "status": "done",
+      "updated_at": "2026-06-03T19:05:07.188565Z"
+    },
     "P29-I08-W21": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2603,6 +2615,18 @@
       "scope_id": "P29-I08-W22",
       "status": "done",
       "updated_at": "2026-06-03T18:09:43.818889Z"
+    },
+    "P29-I08-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W23",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W23",
+      "scope_id": "P29-I08-W23",
+      "status": "done",
+      "updated_at": "2026-06-03T19:05:08.396179Z"
     },
     "P29-I08-W24": {
       "actual_cost_usd": 0.0,
@@ -2663,6 +2687,18 @@
       "scope_id": "P29-I08-W28",
       "status": "done",
       "updated_at": "2026-06-03T15:51:06.102228Z"
+    },
+    "P29-I08-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W29",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W29",
+      "scope_id": "P29-I08-W29",
+      "status": "done",
+      "updated_at": "2026-06-03T19:05:09.650678Z"
     },
     "P29-I08-W30": {
       "actual_cost_usd": 0.0,
@@ -10700,6 +10736,19 @@
       "scope_id": "P29-I08-W19",
       "updated_at": "2026-06-03T17:37:31.091554Z"
     },
+    "P29-I08-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W20-bucket-20260603T190506Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W20",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W20",
+      "updated_at": "2026-06-03T19:05:06.554882Z"
+    },
     "P29-I08-W21": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I08-W21-bucket-20260603T180941Z",
@@ -10725,6 +10774,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W22",
       "updated_at": "2026-06-03T18:09:43.143871Z"
+    },
+    "P29-I08-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W23-bucket-20260603T190507Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W23",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W23",
+      "updated_at": "2026-06-03T19:05:07.788942Z"
     },
     "P29-I08-W24": {
       "confidence": "low",
@@ -10790,6 +10852,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W28",
       "updated_at": "2026-06-03T15:51:05.377968Z"
+    },
+    "P29-I08-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W29-bucket-20260603T190508Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W29",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W29",
+      "updated_at": "2026-06-03T19:05:08.939804Z"
     },
     "P29-I08-W30": {
       "confidence": "low",
@@ -12977,7 +13052,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T18:47:33.316295Z",
+  "updated_at": "2026-06-03T19:05:09.651017Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36245,10 +36320,10 @@
     "P29-I08-W20": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T19:05:06.554877Z",
+      "closed_at": "2026-06-03T19:05:07.188565Z",
+      "commit": "15cef41436492a5d601c70fdd68774b0a7bc17d1",
       "deps": [
         "P29-I08-W18",
         "P29-I08-W03"
@@ -36264,10 +36339,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:24.340268Z",
-      "outcome": null,
+      "outcome": "cold-launch cast golden + no-churn gate: populated first frame + every frame populated + no populate-then-clear churn; provenance-stamped; refute-first churn detector",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a provenance-pinned cold-launch cast shows no flash-of-stale-empty and no populate-then-clear churn with the jury residual armed for the band"
       ],
@@ -36346,10 +36421,10 @@
     "P29-I08-W23": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T19:05:07.788938Z",
+      "closed_at": "2026-06-03T19:05:08.396179Z",
+      "commit": "28a5d7acde3e97b319d21182d27442c886152f2c",
       "deps": [
         "P29-I08-W22",
         "P29-I08-W06"
@@ -36365,10 +36440,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:26.374826Z",
-      "outcome": null,
+      "outcome": "footer width-stress goldens (w120+w80): no hint fragment truncates mid-word (clip at token boundary); W22 canon; jury legibility residual armed-idle",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "no footer fragment truncates mid-word at the captured and a narrow width with provenance-pinned goldens and the jury legibility residual armed"
       ],
@@ -36545,10 +36620,10 @@
     "P29-I08-W29": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T19:05:08.939801Z",
+      "closed_at": "2026-06-03T19:05:09.650678Z",
+      "commit": "81361e0f4a33a75ceac9abb27c0e19e1bc0b55de",
       "deps": [
         "P29-I08-W27",
         "P29-I08-W28",
@@ -36565,10 +36640,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:29.871036Z",
-      "outcome": null,
+      "outcome": "config-modal snapshots green 10/10 (was 7 failing); flow tab + 8 curated keys; locked flow.budget.multiplier absent; UX scannability residual armed-idle",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "provenance-pinned per-tab config-modal snapshots refresh and the jury scannability residual passes over at least three fixtures with a refute-first wall-of-rows tab failing"
       ],
