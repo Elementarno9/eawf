@@ -2747,6 +2747,18 @@
       "scope_id": "P29-I08-W33",
       "status": "done",
       "updated_at": "2026-06-03T19:25:54.879095Z"
+    },
+    "P29-I09-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W05",
+      "scope_id": "P29-I09-W05",
+      "status": "done",
+      "updated_at": "2026-06-03T21:33:35.173487Z"
     }
   },
   "agent_sessions": {
@@ -5495,7 +5507,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I09",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6075,6 +6087,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -10963,6 +10976,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I08-W33",
       "updated_at": "2026-06-03T19:23:42.742052Z"
+    },
+    "P29-I09-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W05-bucket-20260603T211617Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I09-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I09-W05",
+      "updated_at": "2026-06-03T21:16:17.886071Z"
     }
   },
   "goals": {
@@ -12360,7 +12386,7 @@
       "intent": null,
       "opened_at": "2026-06-03T20:05:23.151431Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "UI/UX review follow-ups: modal, footer, pause, campaign, help",
       "trigger": "none",
       "wave_ids": [
@@ -13148,7 +13174,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T21:06:00.582231Z",
+  "updated_at": "2026-06-03T21:33:35.173860Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37014,10 +37040,10 @@
       "blocks": [
         "P29-I09-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-03T21:16:17.886067Z",
+      "closed_at": "2026-06-03T21:33:35.173487Z",
+      "commit": "09b645961d32ab3d97f3757ce2c08f4dcb6c49c1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37025,16 +37051,20 @@
       "file_scopes": [
         "src/eawf/runtime/daemon/methods/agent.py",
         "src/eawf/kernel/state/models.py",
-        "src/eawf/surfaces/tui/modes/autopilot.py"
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/kernel/migrations/v1_5_to_v1_6.py",
+        "src/eawf/kernel/migrations/__init__.py",
+        "src/eawf/schemas/state.schema.json"
       ],
       "id": "P29-I09-W05",
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:49.790650Z",
-      "outcome": null,
+      "outcome": "agent.pause/agent.resume RPCs persist State.dispatch_paused via canonical writer; claim_wave cooperative gate blocks dispatch when paused (regardless of out_of_order); autopilot space key toggles real paused/resumed verdict; schema 1.5->1.6 additive (dispatch_paused) + v1_5_to_v1_6 migration",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "agent.pause and agent.resume persist a dispatch_paused flag and the autopilot space key toggles a real paused or resumed verdict and a paused gate blocks the next dispatch"
       ],
