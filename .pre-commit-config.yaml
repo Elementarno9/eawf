@@ -239,6 +239,22 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         verbose: true
+      - id: validate-prose
+        name: validate-prose
+        entry: uv run eawf hook validate-prose
+        language: system
+        # The Layer-2 prose chokepoint: composes EAWF013 (bracket position),
+        # EAWF014 (no-manual-wrap), EAWF017 (inline-reference tabulation), and
+        # the Vale wrapper over the staged .md delta. Fail-OPEN locally (no
+        # --strict): findings are advisory and the gate exits 0, so the operator
+        # is never blocked at commit time. The strict, blocking pass is the CI
+        # `validate-prose (strict)` job, which passes --strict. The Vale leg
+        # fails open when the binary is absent; the deterministic legs run
+        # regardless.
+        files: '\.md$'
+        pass_filenames: false
+        stages: [pre-commit]
+        verbose: true
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift

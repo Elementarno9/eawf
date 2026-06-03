@@ -180,6 +180,46 @@ jobs:
       - name: Snapshot pairing gate
         run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
 
+  prose-gate:
+    name: Layer-2 prose gate (strict)
+    # The fail-closed half of the validate_prose chokepoint (doc-clarity
+    # Layer 2): runs `eawf hook validate-prose --strict` over the Markdown
+    # changed on the PR. Locally the same chokepoint is fail-open (advisory);
+    # here any EAWF013/014/017 finding reds the PR. Vale is installed + synced
+    # so its prose leg participates, but the deterministic legs block even if
+    # the Vale leg fails open. PR-only: the gate scans the PR's changed .md.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Install Vale + sync styles
+        # The strict gate installs Vale so its prose leg participates. The
+        # chokepoint still fails open on the Vale leg if this step is skipped
+        # or sync fails (an unsynced StylesPath is an E100 fail-open), so the
+        # deterministic EAWF013/014/017 legs remain the blocking floor.
+        run: |
+          uv tool install vale || pipx install vale || true
+          vale sync || true
+
+      - name: Validate prose (strict)
+        # Diff base is the PR base SHA so the conditional scan sees exactly the
+        # Markdown the PR adds/changes; --strict makes any composed finding
+        # exit non-zero and block the PR.
+        run: uv run eawf hook validate-prose --strict --base "${{ github.event.pull_request.base.sha }}"
+
   mutation-core:
     name: Mutation testing (core, publish-not-block)
     # Publish-not-block per success criterion: the campaign runs on PRs,

@@ -29,6 +29,7 @@ from eawf.surfaces.render.skills.registry import SKILL_REGISTRY
 from eawf.surfaces.render.skills.render import (
     SkillSpec,
     SkillTemplateContext,
+    prose_check_rendered,
     render_skill_md,
     render_skill_md_from_spec,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "SKILL_REGISTRY",
     "SkillSpec",
     "SkillTemplateContext",
+    "prose_check_rendered",
     "render_skill_md",
     "render_skill_md_from_spec",
 ]

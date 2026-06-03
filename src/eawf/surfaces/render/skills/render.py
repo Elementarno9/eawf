@@ -14,8 +14,12 @@ import logging
 import re
 from dataclasses import dataclass, field
 from importlib.resources import files
+from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+if TYPE_CHECKING:
+    from eawf.platform.lint.validate_prose import ProseReport
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +163,37 @@ def _unwrap_skill_body(body: str) -> str:
     return "\n".join(output)
 
 
+def prose_check_rendered(text: str) -> ProseReport:
+    """Run the Layer-2 prose chokepoint over rendered Markdown, fail-open.
+
+    The generation-time half of the ``validate_prose`` chokepoint: the
+    skill-render path calls this on a freshly-rendered artifact so a clarity
+    finding surfaces *before* emit. It runs the in-process deterministic legs
+    (EAWF013 / EAWF014 / EAWF017) in **fail-open** mode (``strict=False``) — a
+    finding is logged as an advisory warning and the report is returned, but the
+    render is never blocked. The strict, blocking enforcement is the CI gate
+    (``eawf hook validate-prose --strict``); generation-time is advisory by
+    design so a draft is never silently dropped at author time.
+
+    Args:
+        text: The rendered Markdown artifact (e.g. a ``SKILL.md``).
+
+    Returns:
+        The fail-open :class:`~eawf.platform.lint.validate_prose.ProseReport`.
+        :meth:`~eawf.platform.lint.validate_prose.ProseReport.exit_code` is
+        always ``0`` here; callers read ``has_findings`` to surface advisories.
+    """
+    from eawf.platform.lint.validate_prose import validate_prose
+
+    report = validate_prose(text, strict=False)
+    if report.has_findings:
+        codes = ",".join(sorted(report.codes()))
+        logger.warning(
+            f"prose_check_rendered findings={len(report.findings)} codes={codes!r} (advisory)"
+        )
+    return report
+
+
 def render_skill_md(ctx: SkillTemplateContext) -> str:
     """Render a Claude Code ``SKILL.md`` from *ctx*.
 
@@ -171,7 +206,10 @@ def render_skill_md(ctx: SkillTemplateContext) -> str:
     Returns:
         The rendered markdown text. The frontmatter shape mirrors the
         hand-written placeholder files; the body block is *ctx.body*
-        with hard-wrapped prose collapsed.
+        with hard-wrapped prose collapsed. The rendered text is passed
+        through :func:`prose_check_rendered` (the generation-time Layer-2
+        chokepoint) before return — advisory only, so a clarity finding is
+        logged but never blocks the emit.
     """
     env = _load_environment()
     template = env.get_template(_TEMPLATE_NAME)
@@ -185,6 +223,7 @@ def render_skill_md(ctx: SkillTemplateContext) -> str:
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"
+    prose_check_rendered(rendered)
     return rendered
 
 
@@ -212,6 +251,7 @@ def render_skill_md_from_spec(spec: SkillSpec) -> str:
 __all__ = [
     "SkillSpec",
     "SkillTemplateContext",
+    "prose_check_rendered",
     "render_skill_md",
     "render_skill_md_from_spec",
 ]

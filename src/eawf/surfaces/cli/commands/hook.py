@@ -1538,6 +1538,94 @@ def vale_prose(
     )
 
 
+def _collect_vale_rows(
+    targets: list[Path], *, cwd: Path, rel_for: dict[str, str]
+) -> tuple[str, ...]:
+    """Run the Vale subprocess over *targets* and return rendered rows, fail-open.
+
+    The Vale leg of the ``validate-prose`` chokepoint. Vale is a subprocess that
+    fails open: when the binary is absent, or it emits its error-object JSON (an
+    unsynced ``StylesPath``), this returns an empty tuple so the deterministic
+    EAWF013/014/017 legs still run. The returned rows are the same
+    ``  label:line:col: sev Check Message`` shape :func:`_vale_findings_to_rows`
+    emits, ready to fold into :func:`~eawf.platform.lint.validate_prose.validate_prose`.
+    """
+    import shutil
+
+    if shutil.which("vale") is None or not targets:
+        return ()
+    try:
+        payload = _run_vale_json(targets, cwd=cwd)
+    except _ValeRunError:
+        return ()
+    return tuple(_vale_findings_to_rows(payload, rel_for=rel_for))
+
+
+@hook_app.command(name="validate-prose")
+def validate_prose_gate(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict",
+            help="Fail-closed CI mode: exit non-zero on any finding. Omit for "
+            "the fail-open local/in-skill mode (advisory, exit 0).",
+        ),
+    ] = False,
+) -> None:
+    """Compose every Layer-2 prose check over changed Markdown — the chokepoint.
+
+    The single enforcement entry point for the doc-clarity Layer-2 stack. It
+    runs :func:`~eawf.platform.lint.validate_prose.validate_prose` (which
+    composes EAWF013 citation-bracket position, EAWF014 no-manual-wrap, and
+    EAWF017 inline-reference tabulation in-process) and folds in the Vale
+    subprocess leg, over the given ``.md`` files — or, when none are given, the
+    staged ``.md`` delta per the conditional scan.
+
+    Two modes implement the stability contract:
+
+    - **fail-open** (default) — a local pre-commit / in-skill run. Findings are
+      emitted as advisory and the gate exits 0, never blocking the operator.
+    - **fail-closed** (``--strict``) — the CI gate. Any finding from the
+      composed deterministic lints exits 1, blocking the PR.
+
+    The Vale leg always fails open (an absent binary or an unsynced
+    ``StylesPath`` yields no Vale rows), so ``--strict`` still rejects a
+    known-bad artifact on a machine without Vale — the deterministic
+    EAWF013/014/017 legs run regardless.
+    """
+    from eawf.platform.lint.validate_prose import validate_prose
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="validate-prose", base=base, cwd=cwd)
+    md_paths = [rel for rel in paths if rel.endswith(".md") and (cwd / rel).exists()]
+    targets = [cwd / rel for rel in md_paths]
+    rel_for = {str(cwd / rel): rel for rel in md_paths}
+    vale_rows = _collect_vale_rows(targets, cwd=cwd, rel_for=rel_for)
+
+    rows: list[str] = []
+    for rel in md_paths:
+        try:
+            source = (cwd / rel).read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        # The Vale rows already carry their file label; pass them only to the
+        # report whose surface they belong to so a finding is attributed once.
+        per_file_vale = tuple(row for row in vale_rows if row.lstrip().startswith(f"{rel}:"))
+        report = validate_prose(source, strict=strict, vale_rows=per_file_vale)
+        rows.extend(f"  {rel}:{finding.render()}" for finding in report.findings)
+    _emit_static_lint_result(
+        hook_name="validate-prose",
+        rows=rows,
+        scanned=len(md_paths),
+        flags=flags,
+        blocking=strict,
+    )
+
+
 @hook_app.command(name="eawf002-log-key")
 def eawf002_log_key(
     ctx: typer.Context,
