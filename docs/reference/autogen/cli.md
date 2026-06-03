@@ -243,6 +243,10 @@ Dispatch hook events through the Eä hook runner.
 | Verb | Summary |
 |---|---|
 | `dispatch` | Seed an interim verdict cohort from an ``agent_end`` event read from stdin. |
+| `eawf002-log-key` | Reject ``_id``-suffixed wave/iter/phase keys in library log messages. |
+| `eawf003-logger-acquire` | Reject library ``getLogger`` calls that do not pass ``__name__``. |
+| `eawf010-module-length` | Reject Python modules over the physical line-count budget. |
+| `eawf011-cognitive-complexity` | Reject functions over the cognitive-complexity budget. |
 | `eawf012-design-provenance` | Reject design/audit/agent provenance breadcrumbs in source comments. |
 | `eawf013-bracket-position` | Reject detached or post-punctuation numeric citation brackets. |
 | `eawf014-no-manual-wrap` | Reject manually wrapped rendered Markdown paragraphs. |
@@ -282,6 +286,7 @@ Iteration lifecycle (open, close).
 | Verb | Summary |
 |---|---|
 | `activate` | Flip a PLANNED iter to ACTIVE. |
+| `candidate-tag` | Show or set an iter's proposed release tag. |
 | `close` | Close an active iter. Rejects when child waves are still open. |
 | `open` | Open an iter. Pass an iter ID or a phase id (auto-allocates iter). |
 | `plan` | Stage a PLANNED iter under an open phase without moving the current pointer. |
