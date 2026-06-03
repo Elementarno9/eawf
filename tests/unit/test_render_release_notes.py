@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from eawf.kernel.state.models import State
+from eawf.platform.artifacts.references import Citation
 from eawf.platform.artifacts.validation import validate_markdown_artifact
+from eawf.surfaces.render.artifact_chassis import render_references
 from eawf.surfaces.render.release_notes import build_release_notes, mine_unreleased_changelog
 
 
@@ -148,3 +150,34 @@ def test_build_release_notes_generates_changelog_when_unreleased_is_empty() -> N
     assert "- PR hardening." in body
     assert "- Changelog entries generated from narrative bundles [1]." in body
     assert validate_markdown_artifact(body).ok
+
+
+def test_build_release_notes_routes_references_through_render_references() -> None:
+    state = State.model_validate(_state_payload())
+    body = build_release_notes(
+        state,
+        from_phase="P17",
+        to_phase="P17",
+        changelog_text="# Changelog\n\n## [Unreleased]\n\n- PR hardening\n",
+    )
+    # The mined-changelog path cites both rows, so the references block is the
+    # shared render_references shape for state.json + CHANGELOG.md -- no
+    # hand-rolled divergence.
+    expected = render_references(
+        [Citation(n=1, ref=".ea/state.json"), Citation(n=2, ref="CHANGELOG.md")]
+    )
+    assert "\n".join(expected) in body
+
+
+def test_build_release_notes_references_block_drops_changelog_row_when_unmined() -> None:
+    state = State.model_validate(_state_payload())
+    body = build_release_notes(
+        state,
+        from_phase="P17",
+        to_phase="P17",
+        changelog_text="# Changelog\n\n## [Unreleased]\n\n",
+    )
+    # No mined changelog -> only the state.json row is cited (dense 1..1).
+    expected = render_references([Citation(n=1, ref=".ea/state.json")])
+    assert "\n".join(expected) in body
+    assert "CHANGELOG.md" not in body.split("## References", 1)[1]

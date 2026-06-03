@@ -6,7 +6,9 @@ import re
 
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import State
+from eawf.platform.artifacts.references import Citation
 from eawf.platform.artifacts.validation import validate_markdown_artifact
+from eawf.surfaces.render.artifact_chassis import render_references
 from eawf.surfaces.render.narrative import (
     NarrativeBundle,
     build_narrative,
@@ -121,9 +123,10 @@ def build_release_notes(
     elif generated_changelog:
         summary_rows.append("- Changelog entries generated from narrative bundles [1].")
     artifact_rows = _artifact_rows(state, phase_ids)
-    references = ["[1] .ea/state.json"]
+    citations = [Citation(n=1, ref=".ea/state.json")]
     if mined_changelog_lines:
-        references.append("[2] CHANGELOG.md")
+        citations.append(Citation(n=2, ref="CHANGELOG.md"))
+    reference_lines = render_references(citations)
     body = "\n".join(
         [
             "# Release Notes Draft",
@@ -156,9 +159,7 @@ def build_release_notes(
             "",
             *(changelog_lines or ["- No unreleased changelog entries found."]),
             "",
-            "## References",
-            "",
-            *references,
+            *reference_lines,
             "",
             "## Provenance",
             "",
