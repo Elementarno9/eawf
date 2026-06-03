@@ -2087,6 +2087,66 @@
       "scope_id": "P29-I05-W14",
       "status": "done",
       "updated_at": "2026-06-02T21:56:54.168235Z"
+    },
+    "P29-I06-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W01",
+      "scope_id": "P29-I06-W01",
+      "status": "done",
+      "updated_at": "2026-06-03T00:19:48.798504Z"
+    },
+    "P29-I06-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W03",
+      "scope_id": "P29-I06-W03",
+      "status": "done",
+      "updated_at": "2026-06-03T00:19:48.173757Z"
+    },
+    "P29-I06-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W04",
+      "scope_id": "P29-I06-W04",
+      "status": "done",
+      "updated_at": "2026-06-03T00:19:47.541750Z"
+    },
+    "P29-I06-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W08",
+      "scope_id": "P29-I06-W08",
+      "status": "done",
+      "updated_at": "2026-06-03T00:19:49.418221Z"
+    },
+    "P29-I06-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W09",
+      "scope_id": "P29-I06-W09",
+      "status": "done",
+      "updated_at": "2026-06-03T00:19:50.052382Z"
     }
   },
   "agent_sessions": {
@@ -4746,7 +4806,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I06",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -9482,6 +9542,71 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I05-W14",
       "updated_at": "2026-06-02T21:56:52.770027Z"
+    },
+    "P29-I06-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W01-bucket-20260602T234003Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I06-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I06-W01",
+      "updated_at": "2026-06-02T23:40:03.034079Z"
+    },
+    "P29-I06-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W03-bucket-20260602T234003Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I06-W03",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I06-W03",
+      "updated_at": "2026-06-02T23:40:03.522122Z"
+    },
+    "P29-I06-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W04-bucket-20260602T234004Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I06-W04",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I06-W04",
+      "updated_at": "2026-06-02T23:40:04.024431Z"
+    },
+    "P29-I06-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W08-bucket-20260602T234004Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I06-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I06-W08",
+      "updated_at": "2026-06-02T23:40:04.515614Z"
+    },
+    "P29-I06-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W09-bucket-20260602T234004Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I06-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I06-W09",
+      "updated_at": "2026-06-02T23:40:04.992497Z"
     }
   },
   "goals": {
@@ -9503,6 +9628,7 @@
   "iters": {
     "P08-I01": {
       "audit_id": "A09-P08",
+      "candidate_tag": null,
       "closed_at": "2026-05-10T23:05:32.718237Z",
       "description": null,
       "estimate_id": null,
@@ -9524,6 +9650,7 @@
     },
     "P09-I01": {
       "audit_id": "A10-P09",
+      "candidate_tag": null,
       "closed_at": "2026-05-11T08:36:31.584978Z",
       "description": null,
       "estimate_id": null,
@@ -9543,6 +9670,7 @@
     },
     "P10-I01": {
       "audit_id": "A11-P10",
+      "candidate_tag": null,
       "closed_at": "2026-05-11T10:50:23.234293Z",
       "description": null,
       "estimate_id": null,
@@ -9562,6 +9690,7 @@
     },
     "P11-I01": {
       "audit_id": "A12-P11",
+      "candidate_tag": null,
       "closed_at": "2026-05-11T11:50:52.416700Z",
       "description": null,
       "estimate_id": null,
@@ -9580,6 +9709,7 @@
     },
     "P12-I01": {
       "audit_id": "A13-P12",
+      "candidate_tag": null,
       "closed_at": "2026-05-11T13:28:30.252719Z",
       "description": null,
       "estimate_id": null,
@@ -9602,6 +9732,7 @@
     },
     "P13-I01": {
       "audit_id": "A14-P13",
+      "candidate_tag": null,
       "closed_at": "2026-05-11T15:09:13.455671Z",
       "description": null,
       "estimate_id": null,
@@ -9624,6 +9755,7 @@
     },
     "P14-I01": {
       "audit_id": "A15-P14",
+      "candidate_tag": null,
       "closed_at": "2026-05-11T23:03:25.522292Z",
       "description": null,
       "estimate_id": null,
@@ -9650,6 +9782,7 @@
     },
     "P14-I02": {
       "audit_id": "A17-P14",
+      "candidate_tag": null,
       "closed_at": "2026-05-12T18:29:03.334894Z",
       "description": null,
       "estimate_id": null,
@@ -9666,6 +9799,7 @@
     },
     "P14-I03": {
       "audit_id": "A18-P14",
+      "candidate_tag": null,
       "closed_at": "2026-05-12T18:58:56.918261Z",
       "description": null,
       "estimate_id": null,
@@ -9682,6 +9816,7 @@
     },
     "P14-I04": {
       "audit_id": "A19-P14",
+      "candidate_tag": null,
       "closed_at": "2026-05-12T20:10:32.920710Z",
       "description": null,
       "estimate_id": null,
@@ -9701,6 +9836,7 @@
     },
     "P15-I01": {
       "audit_id": "A20-P15",
+      "candidate_tag": null,
       "closed_at": "2026-05-13T13:34:56.380307Z",
       "description": null,
       "estimate_id": null,
@@ -9720,6 +9856,7 @@
     },
     "P17-I01": {
       "audit_id": "A22-P17",
+      "candidate_tag": null,
       "closed_at": "2026-05-14T15:43:54.342127Z",
       "description": null,
       "estimate_id": null,
@@ -9744,6 +9881,7 @@
     },
     "P18-I01": {
       "audit_id": "A23-P18",
+      "candidate_tag": null,
       "closed_at": "2026-05-14T18:36:30.198916Z",
       "description": null,
       "estimate_id": null,
@@ -9772,6 +9910,7 @@
     },
     "P19-I01": {
       "audit_id": "A24-P19",
+      "candidate_tag": null,
       "closed_at": "2026-05-14T22:22:47.378263Z",
       "description": null,
       "estimate_id": null,
@@ -9797,6 +9936,7 @@
     },
     "P19-I02": {
       "audit_id": "A26-P19-I02",
+      "candidate_tag": null,
       "closed_at": "2026-05-15T15:38:36.719285Z",
       "description": null,
       "estimate_id": null,
@@ -9823,6 +9963,7 @@
     },
     "P20-I01": {
       "audit_id": "A27-P20",
+      "candidate_tag": null,
       "closed_at": "2026-05-15T19:46:11.396060Z",
       "description": null,
       "estimate_id": null,
@@ -9853,6 +9994,7 @@
     },
     "P20-I02": {
       "audit_id": "A27-P20",
+      "candidate_tag": null,
       "closed_at": "2026-05-15T20:10:05.115290Z",
       "description": null,
       "estimate_id": null,
@@ -9869,6 +10011,7 @@
     },
     "P20-I03": {
       "audit_id": "A27-P20",
+      "candidate_tag": null,
       "closed_at": "2026-05-15T21:05:54.106140Z",
       "description": null,
       "estimate_id": null,
@@ -9885,6 +10028,7 @@
     },
     "P21-I01": {
       "audit_id": null,
+      "candidate_tag": null,
       "closed_at": "2026-05-21T02:23:42.947114Z",
       "description": null,
       "estimate_id": null,
@@ -9916,6 +10060,7 @@
     },
     "P22-I01": {
       "audit_id": "A28-P22-ship-gate",
+      "candidate_tag": null,
       "closed_at": "2026-05-18T19:35:31.845484Z",
       "description": null,
       "estimate_id": null,
@@ -9938,6 +10083,7 @@
     },
     "P23-I01": {
       "audit_id": "A29-P23-ship-gate",
+      "candidate_tag": null,
       "closed_at": "2026-05-18T21:27:21.137353Z",
       "description": null,
       "estimate_id": null,
@@ -9956,6 +10102,7 @@
     },
     "P23-I02": {
       "audit_id": "A29-P23-ship-gate",
+      "candidate_tag": null,
       "closed_at": "2026-05-18T21:39:00.693202Z",
       "description": null,
       "estimate_id": null,
@@ -9972,6 +10119,7 @@
     },
     "P24-I01": {
       "audit_id": "A30-P24-ship-gate",
+      "candidate_tag": null,
       "closed_at": "2026-05-19T17:18:49.682691Z",
       "description": null,
       "estimate_id": null,
@@ -9997,6 +10145,7 @@
     },
     "P24-I02": {
       "audit_id": "A30-P24-ship-gate",
+      "candidate_tag": null,
       "closed_at": "2026-05-19T17:18:49.136479Z",
       "description": null,
       "estimate_id": null,
@@ -10013,6 +10162,7 @@
     },
     "P25-I01": {
       "audit_id": "A31-P25-ship-gate",
+      "candidate_tag": null,
       "closed_at": "2026-05-19T23:19:24.503228Z",
       "description": null,
       "estimate_id": null,
@@ -10047,6 +10197,7 @@
     },
     "P26-I01": {
       "audit_id": "A33-P26-tui-fixes",
+      "candidate_tag": null,
       "closed_at": "2026-05-22T00:00:34.608417Z",
       "description": null,
       "estimate_id": null,
@@ -10106,6 +10257,7 @@
     },
     "P26-I02": {
       "audit_id": "A34-P26-tui-qol",
+      "candidate_tag": null,
       "closed_at": "2026-05-22T13:53:29.379057Z",
       "description": null,
       "estimate_id": null,
@@ -10144,6 +10296,7 @@
     },
     "P27-I01": {
       "audit_id": "A35-P27-observ-ops",
+      "candidate_tag": null,
       "closed_at": "2026-05-22T19:55:54.714647Z",
       "description": null,
       "estimate_id": null,
@@ -10187,6 +10340,7 @@
     },
     "P27-I02": {
       "audit_id": "A36-P27-i02-fixes",
+      "candidate_tag": null,
       "closed_at": "2026-05-23T15:09:42.674690Z",
       "description": null,
       "estimate_id": null,
@@ -10242,6 +10396,7 @@
     },
     "P27-I03": {
       "audit_id": "A37-P27-i03",
+      "candidate_tag": null,
       "closed_at": "2026-05-24T00:58:00.386620Z",
       "description": null,
       "estimate_id": null,
@@ -10285,6 +10440,7 @@
     },
     "P27-I04": {
       "audit_id": "A38-P27-i04",
+      "candidate_tag": null,
       "closed_at": "2026-05-24T18:42:43.681440Z",
       "description": null,
       "estimate_id": null,
@@ -10331,6 +10487,7 @@
     },
     "P27-I05": {
       "audit_id": "A39-P27-i05-backlog",
+      "candidate_tag": null,
       "closed_at": "2026-05-25T21:22:12.807215Z",
       "description": null,
       "estimate_id": null,
@@ -10386,6 +10543,7 @@
     },
     "P27-I06": {
       "audit_id": "A40-P27-i06-cleanup",
+      "candidate_tag": null,
       "closed_at": "2026-05-25T22:57:29.196764Z",
       "description": null,
       "estimate_id": null,
@@ -10402,6 +10560,7 @@
     },
     "P28-I01": {
       "audit_id": "A41-P28-i01-verify-spine",
+      "candidate_tag": null,
       "closed_at": "2026-05-27T00:36:26.520754Z",
       "description": null,
       "estimate_id": null,
@@ -10432,6 +10591,7 @@
     },
     "P28-I02": {
       "audit_id": "A42-P28-i03-deep",
+      "candidate_tag": null,
       "closed_at": "2026-05-28T23:28:28.223485Z",
       "description": null,
       "estimate_id": null,
@@ -10477,6 +10637,7 @@
     },
     "P28-I03": {
       "audit_id": "A42-P28-i03-deep",
+      "candidate_tag": null,
       "closed_at": "2026-05-28T23:28:32.144907Z",
       "description": null,
       "estimate_id": null,
@@ -10557,6 +10718,7 @@
     },
     "P29-I01": {
       "audit_id": "A44-P29-i01",
+      "candidate_tag": null,
       "closed_at": "2026-06-01T14:10:38.912328Z",
       "description": "Spawn-free engine half of v0.5: reactive metric fix, telemetry capture-forward, the EviBound scorer + Claim/OpenQuestion ledger (Keystone B), the research-orchestrator core, and the rebuilt-from-spec spawn primitives (pricing, claude spawn, metering, routing, schema, cancel). Deterministic / plan-only; no live child agent.",
       "estimate_id": null,
@@ -10601,6 +10763,7 @@
     },
     "P29-I02": {
       "audit_id": "A45-P29-i02",
+      "candidate_tag": null,
       "closed_at": "2026-06-01T21:49:36.957824Z",
       "description": "Spawn-free surfaces + process half: roadmap/wave CLI flex, preferences, memory/profile hygiene, the autoland + verify-commits back-half, and the Textual MODES TUI chassis with its spawn-free panes (Home/Trust/Doctor/Evidence/multi-repo). No live child agent.",
       "estimate_id": null,
@@ -10648,6 +10811,7 @@
     },
     "P29-I03": {
       "audit_id": "A46-P29-i03",
+      "candidate_tag": null,
       "closed_at": "2026-06-01T23:43:09.036375Z",
       "description": "The spawn-gated safety floor that gates all live spawn. env-scrub allowlist + default-deny egress proxy + per-OS FS jail, plus the HALT interlock. Atomic floor audit: env-scrub + egress + jail + pgid-kill (SP-6) + HALT must all be green together before any I04 wave claims.",
       "estimate_id": null,
@@ -10668,6 +10832,7 @@
     },
     "P29-I04": {
       "audit_id": "A47-P29-i04",
+      "candidate_tag": null,
       "closed_at": "2026-06-02T16:02:11.688548Z",
       "description": "Spawn-gated: live wave-executor spawn, the per-wave verdict producer (Keystone A), cross-vendor CodexAdapter + opencode legs, the disjoint-family jury, live EviBound rung-3 + research rounds, and the live TUI agent-watch / autopilot / research_board modes. Gated on the I03 floor being green.",
       "estimate_id": null,
@@ -10698,6 +10863,7 @@
     },
     "P29-I05": {
       "audit_id": "A48-P29-i05",
+      "candidate_tag": null,
       "closed_at": "2026-06-02T22:08:10.671452Z",
       "description": "Late iter, data-gated: the reputation engine (Brier + EB-Beta shrink + Wilson LB), the C->B->A trust-tier ladder, jury reliability weighting, and the verdict-agreement cost A/B. Gated on a verdict cohort accruing in I04 (binding constraint is data N, not design).",
       "estimate_id": null,
@@ -10727,6 +10893,7 @@
     },
     "P29-I06": {
       "audit_id": null,
+      "candidate_tag": null,
       "closed_at": null,
       "description": "Spawn-free release iter: register the new skills, plugin doctor orphan-walk, version sync across both runtimes, self-hosted marketplace catalog, plugin-release CI on the v-tag, and the v0.5.0 plugin CHANGELOG. v0.5 MUST release the Claude + Codex plugins.",
       "estimate_id": null,
@@ -10734,7 +10901,7 @@
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247796Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "Release: plugin packaging, marketplace, CI publish, version-sync",
       "trigger": "none",
       "wave_ids": [
@@ -10751,6 +10918,7 @@
     },
     "P29-I07": {
       "audit_id": null,
+      "candidate_tag": null,
       "closed_at": null,
       "description": "Spawn-free cross-cut folded into P29 (operator decision 2026-05-31, not a separate P30). Reuses the EviBound gate built in I01. Clarity-contract profile, EAWF016-019 lints, Vale wrapper + chokepoint, AGENTS.md split, entity-title backfill (all 5 kinds), and the math doc-type.",
       "estimate_id": null,
@@ -11511,10 +11679,10 @@
       "scope_kind": "wave"
     }
   },
-  "schema_version": "1.3",
+  "schema_version": "1.4",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-02T23:35:18.570387Z",
+  "updated_at": "2026-06-03T00:19:50.052685Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33372,10 +33540,10 @@
         "P29-I06-W02",
         "P29-I06-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-02T23:40:03.034075Z",
+      "closed_at": "2026-06-03T00:19:48.798504Z",
+      "commit": "e5bf98257bb6fa47d02b9bf5cb00f825b4272b4d",
       "deps": [
         "P29-I02-W13"
       ],
@@ -33390,10 +33558,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.260895Z",
-      "outcome": null,
+      "outcome": "Registered /design (model-barred) + /spike (model-invocable) SkillSpec rows; stripped /smoke-test refs",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "/design + /spike + /mockup registered as SkillSpec rows in the registry"
       ],
@@ -33441,10 +33609,10 @@
       "blocks": [
         "P29-I06-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-02T23:40:03.522118Z",
+      "closed_at": "2026-06-03T00:19:48.173757Z",
+      "commit": "c495f7cb90d3678ba980aca4827c48e17d6e181b",
       "deps": [],
       "description": "[PLUG-3 | plugin-packaging T3 | SF] version-source single truth.",
       "dispatch_history": [],
@@ -33458,10 +33626,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.256744Z",
-      "outcome": null,
+      "outcome": "Derived _PLUGIN_VERSION from eawf.__version__ across codex+claude+opencode installers",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "plugin manifest versions synced to __version__ across the claude + codex runtimes"
       ],
@@ -33473,10 +33641,10 @@
     "P29-I06-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-02T23:40:04.024423Z",
+      "closed_at": "2026-06-03T00:19:47.541750Z",
+      "commit": "fcad07a5a8f83a4c793469b3733b3790952e8512",
       "deps": [],
       "description": "[PLUG-4 | plugin-packaging T2 | SF] gitignore hygiene; .claude/ already local-only.",
       "dispatch_history": [],
@@ -33488,10 +33656,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.257057Z",
-      "outcome": null,
+      "outcome": "Added .codex/ to repo .gitignore + .mcp.json/opencode.json to init GITIGNORE_PATTERNS",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         ".codex + .mcp.json + opencode.json added to gitignore (machine-local configs never committed)"
       ],
@@ -33612,10 +33780,10 @@
     "P29-I06-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-02T23:40:04.515609Z",
+      "closed_at": "2026-06-03T00:19:49.418221Z",
+      "commit": "ec77243d7121fee48c5f7a4efb19693a251fe3dc",
       "deps": [],
       "description": "[REF-1 | code-quality self-audit | SF] un-idle dead lints.",
       "dispatch_history": [],
@@ -33628,10 +33796,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.257358Z",
-      "outcome": null,
+      "outcome": "Wired EAWF002/003/010/011 as blocking hooks (eawf011 max-complexity=56); 4 EAWF003 root-logger FPs flagged for polish",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "idle EAWF lints wired into the pre-commit dispatchers so they actually run"
       ],
@@ -33643,26 +33811,28 @@
     "P29-I06-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-02T23:40:04.992493Z",
+      "closed_at": "2026-06-03T00:19:50.052382Z",
+      "commit": "97e274fbf255f72a913befeb0604a22557711c6e",
       "deps": [],
       "description": "[REF-2 | iter-candidate-tags | SF] parked candidate-tag proposal.",
       "dispatch_history": [],
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/surfaces/cli/**",
-        "src/eawf/workflow/lifecycle/**"
+        "src/eawf/workflow/lifecycle/**",
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/migrations/**"
       ],
       "id": "P29-I06-W09",
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.257672Z",
-      "outcome": null,
+      "outcome": "Added eawf iter candidate-tag + Iter.candidate_tag; schema 1.3->1.4 + migration; live state migrated",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "eawf iter candidate-tag command added (optional/parked exemplar)"
       ],
