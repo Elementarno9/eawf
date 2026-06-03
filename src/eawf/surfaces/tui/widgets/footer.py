@@ -36,7 +36,7 @@ widget so a Pilot test can drive a tick and assert the dot.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Final
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
@@ -54,18 +54,107 @@ if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
 
+#: The frozen canonical key-token vocabulary every footer hint label must
+#: draw from. The drift this guards against is real and recurring -- per-mode
+#: tuples authored ``up/down`` instead of the arrow glyph, lowercase ``enter``
+#: instead of ``Enter``, the ``w/u scope`` typo dropping the repo letter, and
+#: a stale ``1-6``/``1-8 mode`` fragment that duplicates the always-visible
+#: mode row. Freezing the token set turns each of those into a hard
+#: :class:`ValueError` at authoring time rather than a silent visual
+#: inconsistency. The members are:
+#:
+#: * **Arrow glyphs** -- ``↑↓`` / ``←→`` (never the spelled-out ``up/down``),
+#:   matching the operator keymap convention that arrows are the primary
+#:   navigation affordance.
+#: * **Capitalized full key names** -- ``Enter`` / ``Esc`` / ``F5`` (never
+#:   ``enter`` / ``PgUp``); the same full-key-name rule the mode row + the
+#:   global bindings follow.
+#: * **The three-letter scope switch** -- ``w/r/u`` (workspace / repo / user);
+#:   all three letters, never the truncated ``w/u``.
+#: * **Single-key action tokens** -- the literal letter / word a per-mode key
+#:   binds (``a`` / ``c`` / ``d`` / ``H`` / ``k`` / ``K`` / ``p`` / ``q`` /
+#:   ``r`` / ``s`` / ``S`` / ``space``) plus the palette / help glyphs
+#:   (``/`` / ``?``). These are the concrete keys a pane advertises.
+#:
+#: A digit-range token (``1-6`` / ``1-8``) is deliberately ABSENT: the
+#: always-visible mode row (row 2) already lists every mode with its digit, so
+#: a hint-strip digit fragment is stale duplication.
+CANONICAL_HINT_TOKENS: Final[frozenset[str]] = frozenset(
+    {
+        # Arrow glyphs (primary navigation).
+        "↑↓",
+        "←→",
+        # Capitalized full key names.
+        "Enter",
+        "Esc",
+        "F5",
+        # Three-letter scope switch (all three letters).
+        "w/r/u",
+        # Palette / help glyphs.
+        "/",
+        "?",
+        # Single-key action tokens advertised by the per-mode panes.
+        "a",
+        "c",
+        "d",
+        "H",
+        "k",
+        "K",
+        "p",
+        "q",
+        "r",
+        "s",
+        "S",
+        "space",
+    }
+)
+
+
+def render_hint_label(token: str, action: str) -> str:
+    """Render one footer hint label from the frozen canonical vocabulary.
+
+    The single chokepoint every footer hint fragment is authored through, so
+    the key token can never drift from :data:`CANONICAL_HINT_TOKENS`. A hint
+    label is a *key token* paired with a short *action* phrase -- e.g.
+    ``render_hint_label("↑↓", "move")`` -> ``"↑↓ move"``. The action phrase
+    is free text (the verb the key performs in this pane); only the *token*
+    is validated, because the token is the part that drifts (``up/down`` vs
+    ``↑↓``, ``enter`` vs ``Enter``, ``w/u`` vs ``w/r/u``).
+
+    Args:
+        token: The key token; MUST be a member of
+            :data:`CANONICAL_HINT_TOKENS`.
+        action: The short action phrase the key performs (free text, e.g.
+            ``"move"`` / ``"scope"`` / ``"quit"``).
+
+    Returns:
+        The joined ``"<token> <action>"`` hint label.
+
+    Raises:
+        ValueError: When *token* is not in :data:`CANONICAL_HINT_TOKENS` --
+            the regression guard that catches a drifted key token (``up/down``
+            / ``enter`` / ``w/u`` / a ``1-6 mode`` digit fragment) at
+            authoring time.
+    """
+    if token not in CANONICAL_HINT_TOKENS:
+        raise ValueError(f"non-canonical hint token: {token!r}")
+    return f"{token} {action}"
+
+
 #: Default footer key hints (full key names). Screens may pass a
 #: scope-specific override via :meth:`Footer.set_hints`; this is the base
 #: chrome shared by every scope. ``w/r/u`` scope-switch + ``F5`` refresh
-#: are surfaced so the operator sees the global affordances.
+#: are surfaced so the operator sees the global affordances. Each label is
+#: produced through :func:`render_hint_label` so the key tokens stay pinned
+#: to :data:`CANONICAL_HINT_TOKENS`.
 DEFAULT_HINTS: tuple[str, ...] = (
-    "↑↓ move",
-    "Enter open",
-    "w/r/u scope",
-    "F5 refresh",
-    "/ palette",
-    "? help",
-    "q quit",
+    render_hint_label("↑↓", "move"),
+    render_hint_label("Enter", "open"),
+    render_hint_label("w/r/u", "scope"),
+    render_hint_label("F5", "refresh"),
+    render_hint_label("/", "palette"),
+    render_hint_label("?", "help"),
+    render_hint_label("q", "quit"),
 )
 
 
@@ -421,6 +510,7 @@ class Footer(Static):
 
 
 __all__ = [
+    "CANONICAL_HINT_TOKENS",
     "DEFAULT_HINTS",
     "HEARTBEAT_GLYPH",
     "HEARTBEAT_INTERVAL_S",
@@ -434,4 +524,5 @@ __all__ = [
     "build_weekly_burn_line",
     "format_hints",
     "format_needs_user_badge",
+    "render_hint_label",
 ]

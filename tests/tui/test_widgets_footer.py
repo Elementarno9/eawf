@@ -21,6 +21,7 @@ import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 
@@ -29,6 +30,7 @@ from eawf.kernel.state.models import ActualSummary, State
 from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
 from eawf.surfaces.tui.widgets import eu_bar
 from eawf.surfaces.tui.widgets.footer import (
+    CANONICAL_HINT_TOKENS,
     DEFAULT_HINTS,
     HEARTBEAT_GLYPH,
     WEEKLY_BURN_EMPTY,
@@ -37,6 +39,7 @@ from eawf.surfaces.tui.widgets.footer import (
     build_mode_row,
     build_weekly_burn_line,
     format_hints,
+    render_hint_label,
 )
 
 from ._palette_harness import PaletteHarnessApp
@@ -176,6 +179,67 @@ def test_format_hints_many_joined_with_bullet() -> None:
     out = format_hints(("a", "b", "c"))
     assert out == "a  ·  b  ·  c"
     assert out.count("·") == 2
+
+
+# --------------------------------------------------------------------------
+# render_hint_label — canonical-vocabulary regression guard (W21)
+# --------------------------------------------------------------------------
+
+
+def test_render_hint_label_joins_canonical_token_and_action() -> None:
+    # A canonical token + free action phrase renders ``<token> <action>``.
+    assert render_hint_label("↑↓", "move") == "↑↓ move"
+    assert render_hint_label("Enter", "open") == "Enter open"
+    assert render_hint_label("w/r/u", "scope") == "w/r/u scope"
+    assert render_hint_label("q", "quit") == "q quit"
+
+
+def test_render_hint_label_accepts_every_canonical_token() -> None:
+    # Every frozen token renders without raising (the full vocabulary is
+    # exercised so a removed member is caught).
+    for token in CANONICAL_HINT_TOKENS:
+        assert render_hint_label(token, "act") == f"{token} act"
+
+
+def test_render_hint_label_rejects_unknown_token() -> None:
+    # An off-vocabulary token raises ValueError naming the offending token —
+    # the message substring is part of the regression-guard contract.
+    with pytest.raises(ValueError, match="non-canonical hint token"):
+        render_hint_label("xyzzy", "nope")
+
+
+def test_render_hint_label_rejects_drifted_arrow_word() -> None:
+    # The exact historical drift forms each raise: the spelled-out arrow word,
+    with pytest.raises(ValueError, match="up/down"):
+        render_hint_label("up/down", "scroll")
+
+
+def test_render_hint_label_rejects_lowercase_enter() -> None:
+    # the lowercase ``enter``,
+    with pytest.raises(ValueError, match="enter"):
+        render_hint_label("enter", "peek")
+
+
+def test_render_hint_label_rejects_truncated_scope_token() -> None:
+    # the ``w/u`` typo dropping the repo letter,
+    with pytest.raises(ValueError, match="w/u"):
+        render_hint_label("w/u", "scope")
+
+
+def test_render_hint_label_rejects_stale_mode_digit_fragment() -> None:
+    # and the stale mode-digit fragment the always-visible mode row supersedes.
+    with pytest.raises(ValueError, match="1-6"):
+        render_hint_label("1-6", "mode")
+    with pytest.raises(ValueError, match="1-8"):
+        render_hint_label("1-8", "mode")
+
+
+def test_canonical_hint_tokens_excludes_digit_ranges() -> None:
+    # The digit-range tokens are deliberately absent (the mode row owns them).
+    assert "1-6" not in CANONICAL_HINT_TOKENS
+    assert "1-8" not in CANONICAL_HINT_TOKENS
+    # And the canonical arrow glyph / full key names / three-letter scope are in.
+    assert {"↑↓", "←→", "Enter", "Esc", "F5", "w/r/u"} <= CANONICAL_HINT_TOKENS
 
 
 # --------------------------------------------------------------------------
