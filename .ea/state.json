@@ -2748,6 +2748,18 @@
       "status": "done",
       "updated_at": "2026-06-03T19:25:54.879095Z"
     },
+    "P29-I09-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W01",
+      "scope_id": "P29-I09-W01",
+      "status": "done",
+      "updated_at": "2026-06-03T22:05:38.932089Z"
+    },
     "P29-I09-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10989,6 +11001,19 @@
       "scope_id": "P29-I08-W33",
       "updated_at": "2026-06-03T19:23:42.742052Z"
     },
+    "P29-I09-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W01-bucket-20260603T215218Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I09-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I09-W01",
+      "updated_at": "2026-06-03T21:52:18.058932Z"
+    },
     "P29-I09-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I09-W05-bucket-20260603T211617Z",
@@ -13199,7 +13224,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T21:50:29.980595Z",
+  "updated_at": "2026-06-03T22:05:38.932400Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36932,10 +36957,10 @@
     "P29-I09-W01": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-03T21:52:18.058924Z",
+      "closed_at": "2026-06-03T22:05:38.932089Z",
+      "commit": "5c344dfd0071b95ff8a78a4c9c22797fbc7676e2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36948,10 +36973,10 @@
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:47.381899Z",
-      "outcome": null,
+      "outcome": "modal_depth counts only counts_toward_depth modals (brief viewer exempt via counts_toward_depth=False); MAX_MODAL_DEPTH 3->6; brief plus five reference drills no longer trips the cap toast; ReferenceModal + other overlays keep counting",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "modal_depth counts only counts_toward_depth modals with the brief viewer exempt and MAX_MODAL_DEPTH raised to 6 so a brief plus five reference drills never hits the cap toast"
       ],
