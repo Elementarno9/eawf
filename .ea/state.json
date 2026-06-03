@@ -2760,6 +2760,18 @@
       "status": "done",
       "updated_at": "2026-06-03T22:05:38.932089Z"
     },
+    "P29-I09-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W02",
+      "scope_id": "P29-I09-W02",
+      "status": "done",
+      "updated_at": "2026-06-03T22:22:04.637946Z"
+    },
     "P29-I09-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -11014,6 +11026,19 @@
       "scope_id": "P29-I09-W01",
       "updated_at": "2026-06-03T21:52:18.058932Z"
     },
+    "P29-I09-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W02-bucket-20260603T220745Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I09-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I09-W02",
+      "updated_at": "2026-06-03T22:07:45.625916Z"
+    },
     "P29-I09-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I09-W05-bucket-20260603T211617Z",
@@ -13224,7 +13249,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T22:05:38.932400Z",
+  "updated_at": "2026-06-03T22:22:04.638281Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36988,10 +37013,10 @@
     "P29-I09-W02": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-03T22:07:45.625911Z",
+      "closed_at": "2026-06-03T22:22:04.637946Z",
+      "commit": "d01d26d63c5ac3562df337bbe7ced948db10f171",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36999,16 +37024,17 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/app.py",
         "src/eawf/surfaces/tui/scopes/__init__.py",
-        "src/eawf/surfaces/tui/screens/overlays/detail.py"
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "src/eawf/surfaces/tui/palette/verbs.py"
       ],
       "id": "P29-I09-W02",
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:47.972777Z",
-      "outcome": null,
+      "outcome": "entity-dedup consolidated at the push_modal chokepoint via dedupe_key (top-only, no toast); DetailModal.dedupe_key=entity_id; W25 per-path pre-check removed; /find carries entity_id so re-choosing the modal-top entity is a no-op on row-drill, /find, and choose-in-modal paths",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "re-choosing the entity already on the modal top is a no-op on every push path via a dedup at the push_modal chokepoint fixing the choose-P29-in-modal stacking"
       ],
