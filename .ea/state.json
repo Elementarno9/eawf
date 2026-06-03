@@ -2471,6 +2471,18 @@
       "scope_id": "P29-I08-W10",
       "status": "done",
       "updated_at": "2026-06-03T15:21:39.039899Z"
+    },
+    "P29-I08-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W11",
+      "scope_id": "P29-I08-W11",
+      "status": "done",
+      "updated_at": "2026-06-03T15:33:07.340955Z"
     }
   },
   "agent_sessions": {
@@ -10354,6 +10366,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I08-W10",
       "updated_at": "2026-06-03T15:12:00.953462Z"
+    },
+    "P29-I08-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W11-bucket-20260603T152146Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W11",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W11",
+      "updated_at": "2026-06-03T15:21:46.426814Z"
     }
   },
   "goals": {
@@ -12502,7 +12527,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T15:21:39.040261Z",
+  "updated_at": "2026-06-03T15:33:07.341293Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35472,10 +35497,10 @@
     "P29-I08-W11": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T15:21:46.426806Z",
+      "closed_at": "2026-06-03T15:33:07.340955Z",
+      "commit": "b9afe6c17b155ea653f65c263190551dfc1a8b7c",
       "deps": [
         "P29-I08-W10",
         "P29-I08-W08"
@@ -35491,10 +35516,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:19.082160Z",
-      "outcome": null,
+      "outcome": "tests/e2e/test_spec_jury_poc.py proves end-to-end: broken build FAIL (cites dead-click+stale-feed+near-miss), correct PASS, near-miss FAIL; transcript cross-checked vs direct run_action defeats lying transcripts; live 3-vendor run kept calibration-only; 14 passed 1 skipped",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "over canned transcripts the producer fails broken and near-miss and passes correct and the transcript outcome is cross-checked against a direct run_action assertion"
       ],
