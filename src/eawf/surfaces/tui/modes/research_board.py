@@ -60,13 +60,19 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
-from textual.widgets import Static
+from textual.screen import ModalScreen
+from textual.widgets import MarkdownViewer, Static
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
+from eawf.platform.artifacts.references import Citation
+from eawf.surfaces.render.artifact_chassis import (
+    link_inline_citations,
+    render_references,
+)
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
@@ -112,6 +118,10 @@ PEEK_RESULT_ID: str = "research-peek"
 #: Id of the action-result line under the drawer (approve / park / follow-up /
 #: snapshot outcome -- honest about whether the request was issued).
 ACTION_RESULT_ID: str = "research-action"
+
+#: Id of the :class:`MarkdownViewer` the brief d-tab mounts (addressable so a
+#: Pilot test can target the viewer + its table-of-contents).
+BRIEF_VIEWER_ID: str = "research-brief-viewer"
 
 #: CSS class on each rendered topic-tree node row.
 TREE_NODE_CLASS: str = "research-tree-node"
@@ -171,6 +181,7 @@ _UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 _RESEARCH_HINTS: tuple[str, ...] = (
     "up/down tree",
     "enter peek",
+    "d brief",
     "a approve",
     "p park",
     "r follow-up",
@@ -542,6 +553,136 @@ def render_checkpoint(pause: OpenPause | None) -> str:
     )
 
 
+#: Repo-relative provenance sources the brief preview is projected from -- the
+#: real on-disk inputs the board reads, cited honestly so the preview's
+#: ``## References`` rows point at where its content came from (not fabricated
+#: citations).
+_BRIEF_STATE_REF: str = ".ea/state.json"
+_BRIEF_CAMPAIGN_STORE_REF: str = ".ea/store/research_campaign.jsonl"
+
+#: Brief-preview body shown when the scope carries no research signal.
+BRIEF_EMPTY_MARKDOWN: str = "\n".join(
+    [
+        "# Brief preview",
+        "",
+        "## Summary",
+        "",
+        f"_{EMPTY_NOTICE}_ -- no staged campaign, claim, or open question yet.",
+        "",
+    ]
+)
+
+
+def build_brief_preview_markdown(
+    campaigns: tuple[CampaignRow, ...],
+    claims: tuple[Claim, ...],
+    questions: tuple[OpenQuestion, ...],
+) -> str:
+    """Render the scope's research signal as a brief-preview markdown document.
+
+    Projects the staged campaign, the claim ledger, and the open questions into
+    a chassis-shaped brief preview: an H1, a ``## Summary`` of the campaign +
+    counts, a ``## Claims`` list, and a numbered ``## References`` block
+    (via :func:`eawf.surfaces.render.artifact_chassis.render_references`) whose
+    rows cite the real on-disk sources the preview was projected from. The
+    inline ``[N]`` summary markers are linkified to their ``#ref-N`` anchors
+    (:func:`link_inline_citations`) so the brief, mounted in a
+    :class:`MarkdownViewer`, fast-travels from a marker to its row. An empty
+    scope renders :data:`BRIEF_EMPTY_MARKDOWN`.
+
+    Args:
+        campaigns: The staged campaign rows for the scope.
+        claims: The state-resident claim ledger rows.
+        questions: The state-resident open-question rows.
+
+    Returns:
+        The brief-preview markdown body (a single document, headings + rows).
+    """
+    if not has_research_signal(campaigns, claims, questions):
+        return BRIEF_EMPTY_MARKDOWN
+    topic = campaigns[0].topic if campaigns else "research scope"
+    citations = [Citation(n=1, ref=_BRIEF_STATE_REF, title="state ledger")]
+    if campaigns:
+        citations.append(Citation(n=2, ref=_BRIEF_CAMPAIGN_STORE_REF, title="campaign store"))
+    summary = (
+        f"{len(claims)} claim(s) and {len(questions)} open question(s) in the scope ledger [1]"
+    )
+    if campaigns:
+        summary += f"; {len(campaigns)} staged campaign(s) [2]"
+    lines = [
+        f"# Brief preview: {topic}",
+        "",
+        "## Summary",
+        "",
+        f"{summary}.",
+        "",
+        "## Claims",
+        "",
+    ]
+    if claims:
+        lines.extend(f"- {claim.status.value}: {claim.title}" for claim in claims)
+    else:
+        lines.append(f"_{NONE_YET}_")
+    lines.append("")
+    lines.extend(render_references(citations))
+    lines.append("")
+    return link_inline_citations("\n".join(lines))
+
+
+class BriefViewerScreen(ModalScreen[None]):
+    """Modal that renders a research brief through a scrollable MarkdownViewer.
+
+    Mounts a Textual :class:`MarkdownViewer` (``show_table_of_contents=True``)
+    over a pre-built brief markdown body, so the brief reads with a heading
+    table-of-contents and the numbered ``## References`` list renders as an
+    ordered list. ``Esc`` closes. The host research board builds the brief body
+    from the active scope's signal (:func:`build_brief_preview_markdown`) and
+    pushes this screen, so the brief d-tab is a real rendered document rather
+    than a flat Static.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    BriefViewerScreen {
+        align: center middle;
+    }
+    BriefViewerScreen > #research-brief-viewer {
+        width: 90%;
+        max-width: 120;
+        height: 85%;
+        border: solid $accent;
+        background: $surface;
+    }
+    """
+
+    #: ``Esc`` closes the brief viewer; the arrow keys keep their native
+    #: MarkdownViewer scroll behaviour (deliberately not bound here).
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "close", "close", show=False),
+    ]
+
+    def __init__(self, brief_markdown: str) -> None:
+        """Construct the viewer over a pre-built brief markdown body.
+
+        Args:
+            brief_markdown: The brief document to render (headings + rows),
+                built by the host from the scope's research signal.
+        """
+        super().__init__()
+        self._brief_markdown = brief_markdown
+
+    def compose(self) -> ComposeResult:
+        """Yield the MarkdownViewer over the brief body (with a TOC)."""
+        yield MarkdownViewer(
+            self._brief_markdown,
+            show_table_of_contents=True,
+            id=BRIEF_VIEWER_ID,
+        )
+
+    def action_close(self) -> None:
+        """Dismiss the brief viewer."""
+        self.dismiss(None)
+
+
 def _claim_status_markup(status: str) -> str:
     """Return *status* wrapped in its palette-var colour span.
 
@@ -677,6 +818,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         Binding("up", "select_prev", "up", show=False),
         Binding("down", "select_next", "down", show=False),
         Binding("enter", "peek_selected", "peek", show=False),
+        Binding("d", "open_brief", "brief", show=False),
         Binding("a", "approve_checkpoint", "approve", show=False),
         Binding("p", "park_checkpoint", "park", show=False),
         Binding("r", "followup", "follow-up", show=False),
@@ -799,6 +941,24 @@ class ResearchBoardModeScreen(ScopeScreen):
         )
         self._set_peek(line)
         logger.info(f"action_peek_selected kind={node.kind.value} label={node.label!r}")
+
+    def action_open_brief(self) -> None:
+        """Open the scope's brief preview in a MarkdownViewer modal.
+
+        Builds the brief-preview markdown from the active scope's research
+        signal (:func:`build_brief_preview_markdown`) and pushes a
+        :class:`BriefViewerScreen`, which renders it through a
+        :class:`MarkdownViewer` so the brief reads with a heading
+        table-of-contents and a numbered ``## References`` list. An empty scope
+        still opens -- the viewer shows the honest empty-brief body.
+        """
+        campaigns, claims, questions = self._current_rows()
+        brief_markdown = build_brief_preview_markdown(campaigns, claims, questions)
+        self.app.push_screen(BriefViewerScreen(brief_markdown))
+        logger.info(
+            f"action_open_brief campaigns={len(campaigns)} claims={len(claims)} "
+            f"questions={len(questions)}"
+        )
 
     def action_approve_checkpoint(self) -> None:
         """Approve the active checkpoint via the real ``needs_user.resolve`` RPC.
@@ -1165,6 +1325,8 @@ __all__ = [
     "ACTION_IDLE",
     "APPROVE_NO_CHECKPOINT",
     "APPROVE_NO_DAEMON",
+    "BRIEF_EMPTY_MARKDOWN",
+    "BRIEF_VIEWER_ID",
     "CENTER_TABS",
     "CHECKPOINT_IDLE",
     "DRAWER_ID",
@@ -1173,10 +1335,12 @@ __all__ = [
     "PARK_NO_CHECKPOINT",
     "PARK_NO_DAEMON",
     "RESEARCH_REFRESH_S",
+    "BriefViewerScreen",
     "CampaignRow",
     "NodeKind",
     "ResearchBoardModeScreen",
     "TreeNode",
+    "build_brief_preview_markdown",
     "build_tree_nodes",
     "has_research_signal",
     "read_campaign_rows",

@@ -34,6 +34,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from textual.widgets import MarkdownViewer
+from textual.widgets.markdown import MarkdownTableOfContents
 
 from eawf.kernel.spec.research import ResearchDepth
 from eawf.kernel.spec.research_campaign import (
@@ -62,6 +64,8 @@ from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.research_board import (
     ACTION_RESULT_ID,
     APPROVE_NO_CHECKPOINT,
+    BRIEF_EMPTY_MARKDOWN,
+    BRIEF_VIEWER_ID,
     CENTER_PANE_ID,
     CENTER_TABS,
     CHECKPOINT_IDLE,
@@ -73,9 +77,11 @@ from eawf.surfaces.tui.modes.research_board import (
     PEEK_RESULT_ID,
     PROGRESS_PANE_ID,
     TREE_PANE_ID,
+    BriefViewerScreen,
     CampaignRow,
     NodeKind,
     ResearchBoardModeScreen,
+    build_brief_preview_markdown,
     build_tree_nodes,
     has_research_signal,
     read_campaign_rows,
@@ -422,6 +428,116 @@ def test_render_checkpoint_populated_surfaces_prompt_and_options() -> None:
     assert "discriminator task" in body
     assert "accept stronger" in body
     assert "park" in body
+
+
+# --------------------------------------------------------------------------
+# build_brief_preview_markdown -- the brief d-tab document projection (W16)
+# --------------------------------------------------------------------------
+
+
+def test_build_brief_preview_markdown_empty_renders_empty_body() -> None:
+    """A scope with no research signal renders the honest empty-brief body."""
+    assert build_brief_preview_markdown((), (), ()) == BRIEF_EMPTY_MARKDOWN
+
+
+def test_build_brief_preview_markdown_populated_has_numbered_references() -> None:
+    """A populated scope renders a numbered, anchored ``## References`` block."""
+    md = build_brief_preview_markdown(
+        (_campaign_row(),),
+        (_claim(status=ClaimStatus.SUPPORTED),),
+        (_question(),),
+    )
+    assert "## References" in md
+    # The references render as the shared numbered/anchored ordered-list shape.
+    assert '1. <a id="ref-1"></a>' in md
+    assert '2. <a id="ref-2"></a>' in md
+    # The claim title and the campaign topic surface in the brief body.
+    assert "Implied vol surface is downward sloping in strike" in md
+    assert "Survey the options-pricing landscape" in md
+
+
+def test_build_brief_preview_markdown_linkifies_inline_markers() -> None:
+    """The brief's inline ``[N]`` summary markers are linked to their anchors."""
+    md = build_brief_preview_markdown((_campaign_row(),), (_claim(),), ())
+    assert r"[\[1\]](#ref-1)" in md
+    assert r"[\[2\]](#ref-2)" in md
+
+
+# --------------------------------------------------------------------------
+# BriefViewerScreen -- MarkdownViewer + table-of-contents (W16)
+# --------------------------------------------------------------------------
+
+
+def test_brief_viewer_screen_mounts_markdown_viewer_with_toc(tmp_path: Path) -> None:
+    """The brief viewer mounts a MarkdownViewer whose TOC renders.
+
+    Directly pushes a :class:`BriefViewerScreen` over a populated brief body
+    and asserts (after draining workers) that the MarkdownViewer mounted, the
+    numbered ``## References`` list rendered into its Markdown document, and a
+    MarkdownTableOfContents widget rendered (the TOC the viewer gives).
+    """
+    state_path = _write_state(tmp_path, _project_state())
+    brief_markdown = build_brief_preview_markdown(
+        (_campaign_row(),),
+        (_claim(status=ClaimStatus.SUPPORTED),),
+        (_question(),),
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(BriefViewerScreen(brief_markdown))
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, BriefViewerScreen)
+            # The MarkdownViewer mounted under its addressable id.
+            viewer = screen.query_one(f"#{BRIEF_VIEWER_ID}", MarkdownViewer)
+            # The viewer gives a table-of-contents widget.
+            toc = screen.query_one(MarkdownTableOfContents)
+            assert toc is not None
+            # The TOC tracks the brief's headings (Summary + References).
+            heading_titles = {title for _level, title, _id in viewer.document._table_of_contents}
+            assert "References" in heading_titles
+            assert "Summary" in heading_titles
+            # The numbered references list rendered into the document source.
+            assert '1. <a id="ref-1"></a>' in viewer.document.source
+
+    asyncio.run(body())
+
+
+def test_research_board_d_key_opens_brief_viewer(tmp_path: Path) -> None:
+    """Pressing ``d`` on the research board opens the brief MarkdownViewer."""
+    state = _project_state(
+        claims={"CL-0001": _claim(status=ClaimStatus.SUPPORTED)},
+        open_questions={"OQ-0001": _question()},
+    )
+    state_path = _write_state(tmp_path, state)
+    _append_campaign(state_path, _campaign_payload())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")  # -> research_board
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press("d")  # open the brief viewer
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, BriefViewerScreen)
+            viewer = screen.query_one(f"#{BRIEF_VIEWER_ID}", MarkdownViewer)
+            assert screen.query_one(MarkdownTableOfContents) is not None
+            # The references numbered list rendered into the viewer document.
+            assert "## References" in viewer.document.source
+
+    asyncio.run(body())
+
+
+def test_research_board_d_key_in_footer_hints() -> None:
+    """The brief key is advertised in the footer hints (discoverable)."""
+    hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
+    assert "d brief" in hints
 
 
 # --------------------------------------------------------------------------
