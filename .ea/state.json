@@ -2568,6 +2568,54 @@
       "status": "done",
       "updated_at": "2026-06-03T17:37:31.766921Z"
     },
+    "P29-I08-W21": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W21",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W21",
+      "scope_id": "P29-I08-W21",
+      "status": "done",
+      "updated_at": "2026-06-03T18:09:42.485305Z"
+    },
+    "P29-I08-W22": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W22",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W22",
+      "scope_id": "P29-I08-W22",
+      "status": "done",
+      "updated_at": "2026-06-03T18:09:43.818889Z"
+    },
+    "P29-I08-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W24",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W24",
+      "scope_id": "P29-I08-W24",
+      "status": "done",
+      "updated_at": "2026-06-03T18:09:45.165925Z"
+    },
+    "P29-I08-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W25",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W25",
+      "scope_id": "P29-I08-W25",
+      "status": "done",
+      "updated_at": "2026-06-03T18:09:46.482825Z"
+    },
     "P29-I08-W26": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10627,6 +10675,58 @@
       "scope_id": "P29-I08-W19",
       "updated_at": "2026-06-03T17:37:31.091554Z"
     },
+    "P29-I08-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W21-bucket-20260603T180941Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W21",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W21",
+      "updated_at": "2026-06-03T18:09:41.762827Z"
+    },
+    "P29-I08-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W22-bucket-20260603T180943Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W22",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W22",
+      "updated_at": "2026-06-03T18:09:43.143871Z"
+    },
+    "P29-I08-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W24-bucket-20260603T180944Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W24",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W24",
+      "updated_at": "2026-06-03T18:09:44.461079Z"
+    },
+    "P29-I08-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W25-bucket-20260603T180945Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W25",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W25",
+      "updated_at": "2026-06-03T18:09:45.809577Z"
+    },
     "P29-I08-W26": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I08-W26-bucket-20260603T153314Z",
@@ -12852,7 +12952,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T17:37:31.767278Z",
+  "updated_at": "2026-06-03T18:09:46.483196Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36156,10 +36256,10 @@
       "blocks": [
         "P29-I08-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T18:09:41.762821Z",
+      "closed_at": "2026-06-03T18:09:42.485305Z",
+      "commit": "4fbd7a73d729c2e3fdd2bb4f9f6de8ac1f43401d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36171,10 +36271,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:24.943016Z",
-      "outcome": null,
+      "outcome": "render_hint_label + frozen canonical vocab (regression guard); DEFAULT_HINTS routed through it; unknown token raises",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "render_hint_label and a frozen vocab live in footer.py with DEFAULT_HINTS staying canonical and an unknown token raising ValueError"
       ],
@@ -36188,10 +36288,10 @@
       "blocks": [
         "P29-I08-W23"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T18:09:43.143864Z",
+      "closed_at": "2026-06-03T18:09:43.818889Z",
+      "commit": "163cafcfc5b364627a4901b25451fb231253e396",
       "deps": [
         "P29-I08-W21"
       ],
@@ -36206,10 +36306,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:25.671832Z",
-      "outcome": null,
+      "outcome": "all mode+scope hints routed through canon; w/u scope typo fixed to w/r/u; stale digit fragments dropped; enumeration test + 5 footer goldens",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "an enumeration test over MODE_REGISTRY and the three scope screens asserts every hint parses to canon and the w/u scope typo becomes w/r/u scope"
       ],
@@ -36255,10 +36355,10 @@
     "P29-I08-W24": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T18:09:44.461073Z",
+      "closed_at": "2026-06-03T18:09:45.165925Z",
+      "commit": "45b360dba25b0b1b792bcf7bb37a9fac1fdd8e3d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36270,10 +36370,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:26.951600Z",
-      "outcome": null,
+      "outcome": "reference history bounded to FIFO ring (REFERENCE_HISTORY_MAX=32 deque); Hypothesis property: never exceeds cap + back stops clean no resurrection",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a Hypothesis property test over a randomized trail asserts the ring never exceeds the cap and back at cap stops cleanly without resurrecting an evicted entry"
       ],
@@ -36285,10 +36385,10 @@
     "P29-I08-W25": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T18:09:45.809572Z",
+      "closed_at": "2026-06-03T18:09:46.482825Z",
+      "commit": "591ff56de29bae960f24065abb344463d86dd60c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36301,10 +36401,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:27.523088Z",
-      "outcome": null,
+      "outcome": "DetailModal dedup of entity already on modal top (stack identity+length unchanged no Toast logged); different entity stacks +1",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "re-opening the top entity leaves screen_stack identity and length unchanged and mounts no Toast while a different entity still stacks by one"
       ],
