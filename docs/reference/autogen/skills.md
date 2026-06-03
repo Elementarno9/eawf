@@ -18,6 +18,7 @@ an Eä skill the runtime can install as a slash command.
 | `/flow` | yes | `<task-slug> [--auto-accept=<stage>[,<stage>...]]` | Run /research → /prep → /audit → /polish → /ship sequentially; review folds into /ship as the PR-review pass. Short-circuit on any non-ok status. |
 | `/graduate-research-code` | no | `—` | Model-only playbook for promoting spike/research code into a typed, tested, maintained module. |
 | `/init` | yes | `[--profile=<id>]` | Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree. |
+| `/math-explainer` | yes | `<explainer-slug> [--final] [--from-brief <path>]` | Author a verification-grounded math-explainer over typed MathClaim/MathExplainer rows: each claim pins intuition + a runnable CI-checked example gate + assumptions/regime + a canonical citation, run through an in-skill clarity loop (vale-prose + EAWF019 + draft validate). No state mutations. |
 | `/memory` | yes | `save\|list\|forget [<name>] [--tier=working\|archival\|retrieval]` | Save, list, or forget curated durable memory entries. |
 | `/mockup` | yes | `<surface-slug>` | Author 2-4 UI mockups as ASCII layouts and surface them as side-by-side AskUserQuestion option previews to compare. |
 | `/polish` | yes | `[--scope=<dir\|file>]` | Repo-wide consistency sweep. Aligns naming, docstring style, log fields, error message phrasing, and removes dead code. |
