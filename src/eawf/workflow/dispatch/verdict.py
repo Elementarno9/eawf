@@ -51,7 +51,7 @@ diff cold.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -59,6 +59,7 @@ from typing import Literal
 
 from pydantic import TypeAdapter
 
+from eawf.kernel.spec.wave import WaveBehavior
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
@@ -372,42 +373,110 @@ def _criteria_block(success_criteria: Iterable[str]) -> str:
     return "\n".join(rows)
 
 
-def build_auditor_prompt(wave: Wave, *, diff_base: str) -> str:
+def _rubric_block(rubric: Sequence[WaveBehavior]) -> str:
+    """Render a refute-first instruction line per rubric item.
+
+    Each line is keyed by the behaviour ``id`` so a downstream ballot can
+    match a refutation per item, names the ``quality_dimension`` the score
+    is taken on, and instructs the auditor to actively try to DISPROVE the
+    item -- defaulting to fail when the evidence does not positively
+    support it. The disprove-first stance is the whole point of the block:
+    a verdict that cannot refute an item from the evidence is the only one
+    that passes it.
+
+    Args:
+        rubric: The ordered jury-scorable behaviours to score. Each is
+            expected to carry a ``quality_dimension`` (jury-scorable
+            behaviours always do, per the WaveBehavior validator); a
+            missing dimension renders as ``unspecified``.
+
+    Returns:
+        The newline-joined per-item instruction block.
+    """
+    rows: list[str] = []
+    for behavior in rubric:
+        dimension = (
+            behavior.quality_dimension.value if behavior.quality_dimension else "unspecified"
+        )
+        rows.append(
+            f"- {behavior.id} (quality dimension: {dimension}): actively try to "
+            f"DISPROVE this item. Cite the evidence above; default to FAIL unless "
+            f"the evidence positively supports it. Item under test: {behavior.text}"
+        )
+    return "\n".join(rows)
+
+
+def build_auditor_prompt(
+    wave: Wave,
+    *,
+    diff_base: str,
+    rubric: Sequence[WaveBehavior] | None = None,
+    evidence_block: str | None = None,
+    include_diff: bool = True,
+) -> str:
     """Return the fresh-context auditor prompt for *wave*.
 
-    The prompt is deliberately fresh-context: it carries ONLY the diff
-    range and the wave's ``success_criteria`` -- never the executor's prior
-    report or working narrative. The auditor re-reads the diff cold and
-    produces an :class:`~eawf.kernel.store.kinds.agent_report.AuditorReportBody`
-    verdict with one
+    The prompt is deliberately fresh-context: it carries the diff range and
+    the wave's ``success_criteria`` -- never the executor's prior report or
+    working narrative. The auditor re-reads the diff cold and produces an
+    :class:`~eawf.kernel.store.kinds.agent_report.AuditorReportBody` verdict
+    with one
     :class:`~eawf.kernel.store.kinds.agent_report.CriterionVerdict` row per
     criterion plus any refutations.
+
+    When *rubric* is non-empty the prompt grows a refute-first block: one
+    instruction line per jury-scorable behaviour, keyed by its ``id`` and
+    naming its ``quality_dimension``, telling the auditor to actively
+    DISPROVE the item and default to fail unless the evidence supports it.
+    When *evidence_block* is supplied the prompt carries it under an
+    ``## Evidence`` heading so the verdict grounds in provenance-pinned
+    evidence. Setting *include_diff* to ``False`` omits the diff section
+    entirely, which forces an evidence-grounded verdict (the diff is no
+    longer available to lean on).
 
     Args:
         wave: The wave under audit. Supplies the id + success criteria.
         diff_base: The git diff base ref the auditor diffs against
             (``git diff <diff_base>...HEAD`` scopes to the wave's delta).
+        rubric: Optional ordered jury-scorable behaviours to score
+            refute-first. ``None`` or empty omits the rubric block.
+        evidence_block: Optional provenance-pinned evidence text the
+            verdict must ground in. ``None`` omits the evidence section.
+        include_diff: When ``False`` the diff section is omitted entirely
+            (an evidence-grounded verdict cannot lean on the diff).
 
     Returns:
         The rendered Markdown auditor prompt.
     """
     criteria = _criteria_block(wave.success_criteria)
-    return (
+    sections: list[str] = [
         f"# Fresh-context audit: wave {wave.id}\n"
         "\n"
         "You are a fresh-context AUDITOR. You did not write this code. Re-read the\n"
         "wave's diff against its success criteria and produce an independent\n"
-        "verdict -- do not assume the implementation is correct.\n"
-        "\n"
-        "## Diff under audit\n"
-        "\n"
-        f"Diff the wave's delta with `git diff {diff_base}...HEAD`. Read every\n"
-        "changed file before judging.\n"
-        "\n"
-        "## Success criteria\n"
-        "\n"
-        f"{criteria}\n"
-        "\n"
+        "verdict -- do not assume the implementation is correct."
+    ]
+    if include_diff:
+        sections.append(
+            "## Diff under audit\n"
+            "\n"
+            f"Diff the wave's delta with `git diff {diff_base}...HEAD`. Read every\n"
+            "changed file before judging."
+        )
+    if evidence_block is not None:
+        sections.append("## Evidence\n\n" + evidence_block)
+    if rubric:
+        sections.append(
+            "## Rubric (refute-first)\n"
+            "\n"
+            "Score each rubric item below by trying to DISPROVE it. A passing\n"
+            "verdict is the one you could NOT refute from the evidence; when the\n"
+            "evidence does not positively support an item, default to fail.\n"
+            "\n"
+            f"{_rubric_block(rubric)}"
+        )
+    sections.append(f"## Success criteria\n\n{criteria}")
+    sections.append(
         "## Output contract\n"
         "\n"
         "Respond with ONLY a single JSON object that validates against the\n"
@@ -418,6 +487,7 @@ def build_auditor_prompt(wave: Wave, *, diff_base: str) -> str:
         "success criterion above, and any `refutations` you found. No prose, no\n"
         "code fences."
     )
+    return "\n\n".join(sections)
 
 
 def parse_auditor_report_body(raw: object) -> AuditorReportBody:

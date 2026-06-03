@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.spec.wave import QualityDimension, WaveBehavior
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
@@ -659,6 +660,108 @@ def test_build_auditor_prompt_no_criteria_renders_placeholder() -> None:
     prompt = build_auditor_prompt(wave, diff_base="abc123~1")
     assert "no explicit success criteria" in prompt
     assert "git diff abc123~1...HEAD" in prompt
+
+
+# --------------------------------------------------------------------------- #
+# K2 (P29-I08-W02): rubric + provenance-pinned evidence, refute-first stance.
+# --------------------------------------------------------------------------- #
+
+
+def _rubric_pair() -> list[WaveBehavior]:
+    """Two jury-scorable behaviours on distinct quality dimensions."""
+    return [
+        WaveBehavior(
+            id="B1",
+            text="renders the scope breadcrumb on the header line every frame",
+            quality_dimension=QualityDimension.INTERACTION_CAPABILITY,
+            jury_scorable=True,
+        ),
+        WaveBehavior(
+            id="B2",
+            text="refuses an egress call the sandbox deny-list forbids",
+            quality_dimension=QualityDimension.SECURITY,
+            jury_scorable=True,
+        ),
+    ]
+
+
+def test_build_auditor_prompt_rubric_emits_refute_line_per_item() -> None:
+    """Each rubric item gets a refute instruction keyed by id + dimension."""
+    wave = _make_wave(agent_role="executor", effort_bucket="L", success_criteria=["c1"])
+    prompt = build_auditor_prompt(wave, diff_base="abc123~1", rubric=_rubric_pair())
+    # Every behaviour id appears so a downstream ballot can match per item.
+    assert "B1" in prompt
+    assert "B2" in prompt
+    # Each behaviour names its own quality dimension.
+    assert "interaction_capability" in prompt
+    assert "security" in prompt
+    # The refute-first stance is explicit, per item.
+    assert prompt.count("DISPROVE") >= 2
+    assert "refute-first" in prompt.lower()
+
+
+def test_build_auditor_prompt_refute_first_stance_wording_present() -> None:
+    """The disprove-first / default-to-fail stance wording is present."""
+    wave = _make_wave(agent_role="executor", effort_bucket="L", success_criteria=["c1"])
+    prompt = build_auditor_prompt(wave, diff_base="abc123~1", rubric=_rubric_pair())
+    lowered = prompt.lower()
+    assert "disprove" in lowered
+    assert "refute" in lowered
+    assert "default to fail" in lowered
+
+
+def test_build_auditor_prompt_no_diff_omits_diff_keeps_evidence() -> None:
+    """include_diff=False drops the diff section but keeps the evidence block."""
+    wave = _make_wave(agent_role="executor", effort_bucket="L", success_criteria=["c1"])
+    evidence = "EVIDENCE-PIN-7f3a provenance-pinned ballot grounding line"
+    prompt = build_auditor_prompt(
+        wave,
+        diff_base="abc123~1",
+        rubric=_rubric_pair(),
+        evidence_block=evidence,
+        include_diff=False,
+    )
+    # The diff section (the git-diff instruction) is absent entirely.
+    assert "git diff" not in prompt
+    assert "## Diff under audit" not in prompt
+    # The provenance-pinned evidence is present under its own heading.
+    assert "## Evidence" in prompt
+    assert evidence in prompt
+
+
+def test_build_auditor_prompt_evidence_present_with_diff_default() -> None:
+    """An evidence block coexists with the diff section when include_diff stays True."""
+    wave = _make_wave(agent_role="executor", effort_bucket="L", success_criteria=["c1"])
+    evidence = "EVIDENCE-PIN-aa01 grounding text"
+    prompt = build_auditor_prompt(wave, diff_base="abc123~1", evidence_block=evidence)
+    assert "git diff abc123~1...HEAD" in prompt
+    assert "## Evidence" in prompt
+    assert evidence in prompt
+
+
+def test_build_auditor_prompt_back_compat_shape_unchanged() -> None:
+    """Calling with neither rubric nor evidence matches the legacy section shape.
+
+    The base-case prompt must still carry the four legacy sections in
+    order and omit the new rubric / evidence headings, so existing callers
+    and their string-level expectations stay green.
+    """
+    wave = _make_wave(
+        agent_role="executor",
+        effort_bucket="L",
+        success_criteria=["criterion-alpha", "criterion-beta"],
+    )
+    prompt = build_auditor_prompt(wave, diff_base="abc123~1")
+    assert "## Diff under audit" in prompt
+    assert "## Success criteria" in prompt
+    assert "## Output contract" in prompt
+    # New optional sections are absent in the back-compat call.
+    assert "## Evidence" not in prompt
+    assert "## Rubric" not in prompt
+    assert "DISPROVE" not in prompt
+    # Legacy section order is preserved.
+    assert prompt.index("## Diff under audit") < prompt.index("## Success criteria")
+    assert prompt.index("## Success criteria") < prompt.index("## Output contract")
 
 
 # --------------------------------------------------------------------------- #
