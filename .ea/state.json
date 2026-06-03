@@ -2375,6 +2375,18 @@
       "scope_id": "P29-I08-W02",
       "status": "done",
       "updated_at": "2026-06-03T13:57:17.693588Z"
+    },
+    "P29-I08-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W03",
+      "scope_id": "P29-I08-W03",
+      "status": "done",
+      "updated_at": "2026-06-03T14:04:27.215589Z"
     }
   },
   "agent_sessions": {
@@ -10154,6 +10166,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W02",
       "updated_at": "2026-06-03T13:50:36.323530Z"
+    },
+    "P29-I08-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W03-bucket-20260603T135800Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W03",
+      "updated_at": "2026-06-03T13:58:00.660569Z"
     }
   },
   "goals": {
@@ -12302,7 +12327,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T13:57:17.693958Z",
+  "updated_at": "2026-06-03T14:04:27.215929Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -34996,10 +35021,10 @@
         "P29-I08-W09",
         "P29-I08-W20"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T13:58:00.660563Z",
+      "closed_at": "2026-06-03T14:04:27.215589Z",
+      "commit": "0385ee31cf4563ba51e68cdf79f014a3e56f991f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -35012,10 +35037,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:14.684800Z",
-      "outcome": null,
+      "outcome": "asciinema casts carry source_commit+fixture_id provenance stamp; new evidence_provenance_gate byte-asserts vs golden + verifies embedded commit, failing stale/forged frames; 25+130 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "evidence is regenerated from wave HEAD in CI and byte-asserted against the committed golden with the source commit embedded so a stale frame fails"
       ],
