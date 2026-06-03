@@ -253,7 +253,17 @@ exclude = [
 # function scoring above this (SonarSource cognitive complexity, which
 # weights nested control flow more heavily than flat) is flagged. 15 is
 # the SonarSource default "needs refactoring" threshold.
-max-complexity = 15
+#
+# Wired as a blocking pre-commit gate at the current-tree maximum (56,
+# wave_close_cmd) rather than the 15 design target: this is a
+# no-regression floor that blocks a NEW function exceeding the worst
+# existing one without forcing a codebase-wide refactor of the ~74
+# functions already above the 15 target. The C901 cyclomatic gate
+# (max-complexity = 10, with its own per-file grandfather list) already
+# pressures these functions; ratcheting this budget down toward 15 is
+# dedicated downstream-hygiene work that drops the floor as the worst
+# offenders are split.
+max-complexity = 56
 
 [tool.eawf.agents_md_budget]
 # Tier-0 render blocks are the short, always-visible AGENTS.md rule layer.

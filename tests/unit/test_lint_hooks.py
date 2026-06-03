@@ -494,6 +494,10 @@ def test_plugin_doctor_drift_skip_json(tmp_path: Path) -> None:
         "path-leak-lint",
         "email-leak-lint",
         "log-format-lint",
+        "eawf002-log-key",
+        "eawf003-logger-acquire",
+        "eawf010-module-length",
+        "eawf011-cognitive-complexity",
         "eawf012-design-provenance",
         "eawf013-bracket-position",
         "eawf014-no-manual-wrap",
@@ -505,3 +509,133 @@ def test_hook_subcommands_registered(name: str) -> None:
     result = runner.invoke(app, ["hook", "--help"])
     assert result.exit_code == 0
     assert name in result.stdout
+
+
+# --- eawf002-log-key ------------------------------------------------------
+
+
+def test_eawf002_log_key_cli_blocks_on_id_suffix(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.py"
+    bad.write_text(
+        "import logging\n"
+        "logger = logging.getLogger(__name__)\n"
+        'logger.info(f"close_wave wave_id={1} done")\n',
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["hook", "eawf002-log-key", str(bad)])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF002" in result.stdout
+
+
+def test_eawf002_log_key_cli_clean_exits_zero(tmp_path: Path) -> None:
+    good = tmp_path / "good.py"
+    good.write_text(
+        "import logging\n"
+        "logger = logging.getLogger(__name__)\n"
+        'logger.info(f"close_wave wave={1} done")\n',
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["hook", "eawf002-log-key", str(good)])
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+def test_eawf002_log_key_skips_unparseable(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.py"
+    broken.write_text("def (:\n", encoding="utf-8")
+    result = runner.invoke(app, ["hook", "eawf002-log-key", str(broken)])
+    assert result.exit_code == 0, result.stdout
+
+
+# --- eawf003-logger-acquire -----------------------------------------------
+
+
+def test_eawf003_logger_acquire_cli_blocks_on_hardcoded_name(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.py"
+    bad.write_text(
+        'import logging\nlogger = logging.getLogger("eawf")\n',
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["hook", "eawf003-logger-acquire", str(bad)])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF003" in result.stdout
+
+
+def test_eawf003_logger_acquire_cli_clean_exits_zero(tmp_path: Path) -> None:
+    good = tmp_path / "good.py"
+    good.write_text(
+        "import logging\nlogger = logging.getLogger(__name__)\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["hook", "eawf003-logger-acquire", str(good)])
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+# --- eawf010-module-length ------------------------------------------------
+
+
+def test_eawf010_module_length_cli_blocks_over_budget(tmp_path: Path) -> None:
+    big = tmp_path / "big.py"
+    big.write_text("x = 1\n" * 50, encoding="utf-8")
+    result = runner.invoke(app, ["hook", "eawf010-module-length", str(big), "--max-loc", "10"])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF010" in result.stdout
+
+
+def test_eawf010_module_length_cli_clean_under_budget(tmp_path: Path) -> None:
+    small = tmp_path / "small.py"
+    small.write_text("x = 1\n" * 5, encoding="utf-8")
+    result = runner.invoke(app, ["hook", "eawf010-module-length", str(small), "--max-loc", "10"])
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+def test_eawf010_module_length_cli_waiver_clears(tmp_path: Path) -> None:
+    waived = tmp_path / "waived.py"
+    body = "# noqa: EAWF010 generated table; split deferred\n" + ("x = 1\n" * 50)
+    waived.write_text(body, encoding="utf-8")
+    result = runner.invoke(app, ["hook", "eawf010-module-length", str(waived), "--max-loc", "10"])
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+# --- eawf011-cognitive-complexity -----------------------------------------
+
+
+def test_eawf011_cognitive_complexity_cli_blocks_over_budget(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.py"
+    # A function with deep nested branches exceeds a low budget.
+    bad.write_text(
+        "def f(a, b, c):\n"
+        "    if a:\n"
+        "        if b:\n"
+        "            if c:\n"
+        "                return 1\n"
+        "    return 0\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app, ["hook", "eawf011-cognitive-complexity", str(bad), "--max-complexity", "2"]
+    )
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF011" in result.stdout
+
+
+def test_eawf011_cognitive_complexity_cli_clean_under_budget(tmp_path: Path) -> None:
+    good = tmp_path / "good.py"
+    good.write_text("def f(a):\n    return a + 1\n", encoding="utf-8")
+    result = runner.invoke(
+        app, ["hook", "eawf011-cognitive-complexity", str(good), "--max-complexity", "15"]
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+def test_eawf011_cognitive_complexity_skips_unparseable(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.py"
+    broken.write_text("def (:\n", encoding="utf-8")
+    result = runner.invoke(
+        app, ["hook", "eawf011-cognitive-complexity", str(broken), "--max-complexity", "2"]
+    )
+    assert result.exit_code == 0, result.stdout

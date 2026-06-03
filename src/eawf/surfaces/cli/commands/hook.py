@@ -31,10 +31,11 @@ import logging
 import re
 import subprocess
 import sys
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, Protocol, cast
 
 import orjson
 import typer
@@ -48,6 +49,7 @@ from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
+    from eawf.platform.lint import LintConfig
     from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
     from eawf.runtime.hooks.runner import HookResult
     from eawf.surfaces.render.envelope import EnvelopeStatus, OutputEnvelope
@@ -912,23 +914,10 @@ def log_format_lint(
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
     paths = _resolve_scan_paths(files, hook_name="log-format-lint", base=base, cwd=cwd)
-    rows: list[str] = []
-    violation_count = 0
-    for rel in paths:
-        if not rel.endswith(".py"):
-            continue
-        target = cwd / rel
-        try:
-            source = target.read_text(encoding="utf-8")
-        except OSError, UnicodeDecodeError:
-            continue
-        try:
-            violations = check_source(source, filename=rel)
-        except SyntaxError:
-            continue
-        for violation in violations:
-            violation_count += 1
-            rows.append(f"  {rel}:{violation.render()}")
+    rows, _scanned = _scan_python_rows(
+        paths, cwd=cwd, check=lambda src, rel: check_source(src, filename=rel)
+    )
+    violation_count = len(rows)
     payload: dict[str, object] = {
         "hook": "log-format-lint",
         "scanned": len(paths),
@@ -972,6 +961,64 @@ def _emit_static_lint_result(
     emit_json_or_text(payload, f"{hook_name}: clean ({scanned} file(s) scanned)", flags=flags)
 
 
+class _Renderable(Protocol):
+    """Minimal protocol every lint-violation dataclass already satisfies."""
+
+    def render(self) -> str:  # pragma: no cover - structural protocol
+        ...
+
+
+def _scan_python_rows(
+    paths: list[str],
+    *,
+    cwd: Path,
+    check: Callable[[str, str], Iterable[_Renderable]],
+    exclude: frozenset[str] = frozenset(),
+) -> tuple[list[str], int]:
+    """Run an AST-source ``check`` over the ``.py`` files in ``paths``.
+
+    Shared loop for the source-lint dispatchers (EAWF002 / EAWF003 /
+    EAWF010 / EAWF011 / EAWF012): each only differs in the per-file
+    ``check`` callable (already closed over its threshold) and the
+    optional grandfather ``exclude`` set.
+
+    Non-``.py`` paths, excluded paths, and unreadable / non-UTF-8 files
+    are skipped silently; a file whose ``check`` raises
+    :class:`SyntaxError` is skipped too (the parse failure is an
+    authoring bug surfaced by ruff elsewhere, not this gate's concern).
+
+    Args:
+        paths: Repo-relative candidate paths (already diff/arg-resolved).
+        cwd: Repository working directory the paths are relative to.
+        check: ``(source, rel) -> violations`` callable; each violation
+            exposes ``render()``.
+        exclude: Repo-relative paths (forward-slash normalized) exempt
+            from the scan.
+
+    Returns:
+        ``(rows, scanned)`` — the rendered ``  rel:body`` row strings and
+        the count of files actually scanned.
+    """
+    rows: list[str] = []
+    scanned = 0
+    for rel in paths:
+        if not rel.endswith(".py"):
+            continue
+        if rel.replace("\\", "/") in exclude:
+            continue
+        try:
+            source = (cwd / rel).read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        scanned += 1
+        try:
+            violations = check(source, rel)
+        except SyntaxError:
+            continue
+        rows.extend(f"  {rel}:{violation.render()}" for violation in violations)
+    return rows, scanned
+
+
 @hook_app.command(name="eawf012-design-provenance")
 def eawf012_design_provenance(
     ctx: typer.Context,
@@ -984,18 +1031,7 @@ def eawf012_design_provenance(
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
     paths = _resolve_scan_paths(files, hook_name="eawf012-design-provenance", base=base, cwd=cwd)
-    rows: list[str] = []
-    scanned = 0
-    for rel in paths:
-        if not rel.endswith(".py"):
-            continue
-        target = cwd / rel
-        try:
-            source = target.read_text(encoding="utf-8")
-        except OSError, UnicodeDecodeError:
-            continue
-        scanned += 1
-        rows.extend(f"  {rel}:{violation.render()}" for violation in check_source(source))
+    rows, scanned = _scan_python_rows(paths, cwd=cwd, check=lambda src, _rel: check_source(src))
     _emit_static_lint_result(
         hook_name="eawf012-design-provenance",
         rows=rows,
@@ -1108,6 +1144,200 @@ def eawf015_ears_advisory(
         scanned=scanned,
         flags=flags,
         blocking=False,
+    )
+
+
+@hook_app.command(name="eawf002-log-key")
+def eawf002_log_key(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject ``_id``-suffixed wave/iter/phase keys in library log messages.
+
+    Scans the given Python files (or, when none are given, only the
+    staged ``src/eawf/**/*.py`` modules per the conditional scan). A
+    ``logger.<level>(...)`` message must spell cross-cutting identifiers
+    with their bare key (``wave=``, ``iter=``, ``phase=``), never the
+    ``_id``-suffixed form. Exits 1 on a violation, 0 when clean. Files
+    that fail to parse are skipped (an authoring bug surfaced elsewhere).
+    """
+    from eawf.platform.lint.eawf002 import check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="eawf002-log-key", base=base, cwd=cwd)
+    rows, scanned = _scan_python_rows(
+        paths, cwd=cwd, check=lambda src, rel: check_source(src, filename=rel)
+    )
+    _emit_static_lint_result(
+        hook_name="eawf002-log-key",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf003-logger-acquire")
+def eawf003_logger_acquire(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject library ``getLogger`` calls that do not pass ``__name__``.
+
+    Scans the given Python files (or, when none are given, only the
+    staged ``src/eawf/**/*.py`` modules per the conditional scan). A
+    library logger must be acquired via ``logging.getLogger(__name__)``;
+    a hard-coded name, the root logger (no argument), or any other
+    argument is flagged. Exits 1 on a violation, 0 when clean. Files that
+    fail to parse are skipped (an authoring bug surfaced elsewhere).
+    """
+    from eawf.platform.lint.eawf003 import check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="eawf003-logger-acquire", base=base, cwd=cwd)
+    rows, scanned = _scan_python_rows(
+        paths, cwd=cwd, check=lambda src, rel: check_source(src, filename=rel)
+    )
+    _emit_static_lint_result(
+        hook_name="eawf003-logger-acquire",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
+def _resolve_lint_config(cwd: Path) -> LintConfig | None:
+    """Return the resolved ``[tool.eawf.lint]`` config under ``cwd``, or ``None``.
+
+    Reads ``cwd / pyproject.toml`` via :func:`load_lint_config`. Returns
+    ``None`` when no pyproject is present (e.g. a hermetic test that
+    invokes the gate with an explicit threshold override and an explicit
+    file list), so the dispatcher falls back to the rule's own default
+    cap rather than raising.
+    """
+    from eawf.platform.lint import load_lint_config
+
+    pyproject = cwd / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    return load_lint_config(pyproject)
+
+
+_MaxLocOpt = Annotated[
+    int,
+    typer.Option(
+        "--max-loc",
+        help="Per-module line budget override. -1 (default) reads the "
+        "pyproject [tool.eawf.lint.eawf010] max-loc key.",
+    ),
+]
+_MaxComplexityOpt = Annotated[
+    int,
+    typer.Option(
+        "--max-complexity",
+        help="Per-function cognitive-complexity budget override. -1 "
+        "(default) reads the pyproject [tool.eawf.lint.eawf011] key.",
+    ),
+]
+
+
+@hook_app.command(name="eawf010-module-length")
+def eawf010_module_length(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+    max_loc: _MaxLocOpt = -1,
+) -> None:
+    """Reject Python modules over the physical line-count budget.
+
+    Scans the given Python files (or, when none are given, only the
+    staged ``src/eawf/**/*.py`` modules per the conditional scan). The
+    budget and a per-path grandfather ``exclude`` list come from the
+    pyproject ``[tool.eawf.lint.eawf010]`` table; ``--max-loc`` overrides
+    the budget for hermetic tests. An over-budget module is clean only
+    when it is on the exclude list or carries a
+    ``# noqa: EAWF010 <rationale>`` waiver. Exits 1 on a violation, 0
+    when clean.
+    """
+    from eawf.platform.lint.eawf010 import DEFAULT_MAX_LOC, check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    config = _resolve_lint_config(cwd)
+    if max_loc >= 0:
+        budget = max_loc
+        exclude: frozenset[str] = frozenset()
+    elif config is not None:
+        budget = config.eawf010.max_loc
+        exclude = config.eawf010.exclude
+    else:
+        budget = DEFAULT_MAX_LOC
+        exclude = frozenset()
+    paths = _resolve_scan_paths(files, hook_name="eawf010-module-length", base=base, cwd=cwd)
+    rows, scanned = _scan_python_rows(
+        paths,
+        cwd=cwd,
+        check=lambda src, _rel: check_source(src, max_loc=budget),
+        exclude=frozenset(e.replace("\\", "/") for e in exclude),
+    )
+    _emit_static_lint_result(
+        hook_name="eawf010-module-length",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf011-cognitive-complexity")
+def eawf011_cognitive_complexity(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+    max_complexity: _MaxComplexityOpt = -1,
+) -> None:
+    """Reject functions over the cognitive-complexity budget.
+
+    Scans the given Python files (or, when none are given, only the
+    staged ``src/eawf/**/*.py`` modules per the conditional scan). The
+    budget and a per-path grandfather ``exclude`` list come from the
+    pyproject ``[tool.eawf.lint.eawf011]`` table; ``--max-complexity``
+    overrides the budget for hermetic tests. Exits 1 on a violation, 0
+    when clean. Files that fail to parse are skipped (an authoring bug
+    surfaced elsewhere).
+    """
+    from eawf.platform.lint.eawf011 import DEFAULT_MAX_COMPLEXITY, check_source
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    config = _resolve_lint_config(cwd)
+    if max_complexity >= 0:
+        budget = max_complexity
+        exclude: frozenset[str] = frozenset()
+    elif config is not None:
+        budget = config.eawf011.max_complexity
+        exclude = config.eawf011.exclude
+    else:
+        budget = DEFAULT_MAX_COMPLEXITY
+        exclude = frozenset()
+    paths = _resolve_scan_paths(files, hook_name="eawf011-cognitive-complexity", base=base, cwd=cwd)
+    rows, scanned = _scan_python_rows(
+        paths,
+        cwd=cwd,
+        check=lambda src, rel: check_source(src, filename=rel, max_complexity=budget),
+        exclude=frozenset(e.replace("\\", "/") for e in exclude),
+    )
+    _emit_static_lint_result(
+        hook_name="eawf011-cognitive-complexity",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
     )
 
 

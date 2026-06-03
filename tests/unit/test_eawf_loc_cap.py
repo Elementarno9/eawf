@@ -10,8 +10,10 @@ from pathlib import Path
 import pytest
 
 from eawf.platform.lint import (
+    DEFAULT_MAX_COMPLEXITY,
     DEFAULT_MAX_LOC,
     Eawf010Config,
+    Eawf011Config,
     LintConfig,
     load_lint_config,
 )
@@ -34,6 +36,9 @@ from eawf.platform.lint.eawf010 import (
     check_source,
     count_loc,
     find_waiver,
+)
+from eawf.platform.lint.eawf011 import (
+    check_source as check_eawf011,
 )
 
 # --- EAWF010: the core success criterion ---------------------------------
@@ -277,18 +282,24 @@ def test_load_lint_config_reads_table(tmp_path: Path) -> None:
     body = textwrap.dedent(
         """
         [tool.eawf.lint]
-        enabled = ["EAWF001", "EAWF010"]
+        enabled = ["EAWF001", "EAWF010", "EAWF011"]
 
         [tool.eawf.lint.eawf010]
         max-loc = 500
         exclude = ["src/eawf/big.py"]
+
+        [tool.eawf.lint.eawf011]
+        max-complexity = 40
+        exclude = ["src/eawf/hot.py"]
         """
     )
     config = load_lint_config(_write_pyproject(tmp_path, body))
     assert isinstance(config, LintConfig)
-    assert config.enabled == ("EAWF001", "EAWF010")
+    assert config.enabled == ("EAWF001", "EAWF010", "EAWF011")
     assert config.eawf010.max_loc == 500
     assert config.eawf010.exclude == frozenset({"src/eawf/big.py"})
+    assert config.eawf011.max_complexity == 40
+    assert config.eawf011.exclude == frozenset({"src/eawf/hot.py"})
 
 
 def test_load_lint_config_defaults_when_table_absent(tmp_path: Path) -> None:
@@ -297,6 +308,9 @@ def test_load_lint_config_defaults_when_table_absent(tmp_path: Path) -> None:
     assert config.eawf010 == Eawf010Config()
     assert config.eawf010.max_loc == DEFAULT_MAX_LOC
     assert config.eawf010.exclude == frozenset()
+    assert config.eawf011 == Eawf011Config()
+    assert config.eawf011.max_complexity == DEFAULT_MAX_COMPLEXITY
+    assert config.eawf011.exclude == frozenset()
 
 
 def test_load_lint_config_missing_file_raises(tmp_path: Path) -> None:
@@ -322,3 +336,29 @@ def test_repo_pyproject_excludes_keep_tree_green() -> None:
         if violations:
             offenders.append(rel)
     assert offenders == [], f"un-excluded oversized modules would red the tree: {offenders}"
+
+
+def test_repo_pyproject_eawf011_budget_keeps_tree_green() -> None:
+    """The committed ``[tool.eawf.lint.eawf011] max-complexity`` budget must be
+    at or above the current-tree maximum so wiring EAWF011 as a blocking gate
+    does not red ``pre-commit run --all-files``. The budget is a no-regression
+    floor (set to the worst existing function), not the 15 design target.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    config = load_lint_config(repo_root / "pyproject.toml")
+    assert "EAWF011" in config.enabled
+    offenders: list[str] = []
+    for module in sorted((repo_root / "src" / "eawf").rglob("*.py")):
+        rel = module.relative_to(repo_root).as_posix()
+        if rel in config.eawf011.exclude:
+            continue
+        try:
+            violations = check_eawf011(
+                module.read_text(encoding="utf-8"),
+                filename=rel,
+                max_complexity=config.eawf011.max_complexity,
+            )
+        except SyntaxError:
+            continue
+        offenders.extend(f"{rel}:{v.lineno} {v.name} (cx={v.complexity})" for v in violations)
+    assert offenders == [], f"functions over the EAWF011 budget would red the tree: {offenders}"

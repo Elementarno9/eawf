@@ -21,6 +21,12 @@ from pathlib import Path
 # canonical cap without importing the rule module at config-load time.
 DEFAULT_MAX_LOC = 700
 
+# Default per-function cognitive-complexity budget, mirrored from
+# ``eawf.platform.lint.eawf011`` so a missing
+# ``[tool.eawf.lint.eawf011] max-complexity`` key still yields the
+# canonical cap without importing the rule module at config-load time.
+DEFAULT_MAX_COMPLEXITY = 15
+
 
 @dataclass(frozen=True)
 class Eawf010Config:
@@ -37,16 +43,32 @@ class Eawf010Config:
 
 
 @dataclass(frozen=True)
+class Eawf011Config:
+    """Resolved EAWF011 (cognitive-complexity gate) configuration.
+
+    Attributes:
+        max_complexity: Per-function cognitive-complexity budget.
+        exclude: Repo-relative module paths exempt from the gate (e.g.
+            pre-existing complex modules awaiting a refactor).
+    """
+
+    max_complexity: int = DEFAULT_MAX_COMPLEXITY
+    exclude: frozenset[str] = field(default_factory=frozenset)
+
+
+@dataclass(frozen=True)
 class LintConfig:
     """Resolved ``[tool.eawf.lint]`` configuration.
 
     Attributes:
         enabled: Rule codes the dispatcher should run, in declared order.
         eawf010: Resolved EAWF010 sub-config.
+        eawf011: Resolved EAWF011 sub-config.
     """
 
     enabled: tuple[str, ...]
     eawf010: Eawf010Config
+    eawf011: Eawf011Config
 
 
 def load_lint_config(pyproject_path: Path) -> LintConfig:
@@ -73,4 +95,9 @@ def load_lint_config(pyproject_path: Path) -> LintConfig:
         max_loc=int(raw_010.get("max-loc", DEFAULT_MAX_LOC)),
         exclude=frozenset(raw_010.get("exclude", [])),
     )
-    return LintConfig(enabled=enabled, eawf010=eawf010)
+    raw_011 = table.get("eawf011", {})
+    eawf011 = Eawf011Config(
+        max_complexity=int(raw_011.get("max-complexity", DEFAULT_MAX_COMPLEXITY)),
+        exclude=frozenset(raw_011.get("exclude", [])),
+    )
+    return LintConfig(enabled=enabled, eawf010=eawf010, eawf011=eawf011)

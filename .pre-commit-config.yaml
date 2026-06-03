@@ -109,6 +109,42 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+      - id: eawf002-log-key
+        name: eawf002-log-key
+        entry: uv run eawf hook eawf002-log-key
+        language: system
+        # EAWF002 over the staged src/eawf/**/*.py delta only (git diff
+        # --cached) — bare wave/iter/phase log keys, no `_id` suffix.
+        files: '^src/eawf/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eawf003-logger-acquire
+        name: eawf003-logger-acquire
+        entry: uv run eawf hook eawf003-logger-acquire
+        language: system
+        # EAWF003 over the staged src/eawf/**/*.py delta only — library
+        # loggers acquired via logging.getLogger(__name__).
+        files: '^src/eawf/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eawf010-module-length
+        name: eawf010-module-length
+        entry: uv run eawf hook eawf010-module-length
+        language: system
+        # EAWF010 over the staged src/eawf/**/*.py delta only — module
+        # physical-line cap with the pyproject grandfather exclude list.
+        files: '^src/eawf/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eawf011-cognitive-complexity
+        name: eawf011-cognitive-complexity
+        entry: uv run eawf hook eawf011-cognitive-complexity
+        language: system
+        # EAWF011 over the staged src/eawf/**/*.py delta only — per-
+        # function cognitive-complexity gate (no-regression budget).
+        files: '^src/eawf/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
       - id: eawf012-design-provenance
         name: eawf012-design-provenance
         entry: uv run eawf hook eawf012-design-provenance
