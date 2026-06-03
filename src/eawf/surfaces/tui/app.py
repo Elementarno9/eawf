@@ -105,6 +105,16 @@ DEGRADED_BANNER_HIDDEN_CLASS = "degraded-banner--hidden"
 #: visible. Oldest envelopes drop off the tail once the cap is reached.
 LIVE_EVENT_BUFFER_MAX: int = 200
 
+#: Cap on the reference back / forward navigation history. Each clicked
+#: reference target (a card the operator drilled into) is pushed onto the back
+#: ring; an unbounded history grows for the whole session on a long
+#: click-through trail. Bounding it to a FIFO ring drops the OLDEST back-entry
+#: once the cap is reached -- ``alt+left`` walks the most-recent
+#: :data:`REFERENCE_HISTORY_MAX` hops and stops cleanly at the floor without
+#: resurrecting an evicted entry. The cap is generous (a deep drill-through is
+#: rare) yet finite so the session footprint stays bounded.
+REFERENCE_HISTORY_MAX: int = 32
+
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
 #: mirror :class:`eawf.kernel.state.enums.ScopeKind`; ``user`` is the registry-
 #: scoped portfolio view that has no ``state.json`` ``scope_kind`` of its
@@ -388,8 +398,14 @@ class EaApp(App[None]):
         # purpose -- a dismiss clears on restart (persisted dismiss is YAGNI);
         # the live reducer already auto-clears a row when its source resolves.
         self._attention_dismissed: set[str] = set()
-        self._reference_back_stack: list[ReferenceTarget] = []
-        self._reference_forward_stack: list[ReferenceTarget] = []
+        # Bounded FIFO rings for the reference back / forward history. A
+        # ``deque(maxlen=...)`` is a ring: pushing onto a full back-stack drops
+        # the OLDEST entry (the deque's left end) while ``pop`` / ``[-1]``
+        # operate on the most-recent (right) end -- so ``back`` walks the most
+        # recent REFERENCE_HISTORY_MAX hops and stops at the floor without ever
+        # resurrecting an evicted entry.
+        self._reference_back_stack: deque[ReferenceTarget] = deque(maxlen=REFERENCE_HISTORY_MAX)
+        self._reference_forward_stack: deque[ReferenceTarget] = deque(maxlen=REFERENCE_HISTORY_MAX)
         self._current_reference: ReferenceTarget | None = None
         # The persisted ``ui.glyphs`` policy (auto/ascii/unicode). Read
         # once here, off the same layered-config path /config writes; the
@@ -1542,6 +1558,7 @@ def resolve_scope(scope_kind: ScopeKind) -> ScopeName:
 __all__ = [
     "BRAND",
     "DEFAULT_PROJECT_CODE",
+    "REFERENCE_HISTORY_MAX",
     "EaApp",
     "Header",
     "RepoScreen",

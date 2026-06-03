@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from pathlib import Path
 
 from textual.widgets import Static
 
 from eawf.kernel.state.models import State
-from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.app import REFERENCE_HISTORY_MAX, EaApp
 from eawf.surfaces.tui.palette.verbs import _handle_goto, rank_goto_refs
 from eawf.surfaces.tui.screens.overlays.detail import DetailCard, DetailModal
 from eawf.surfaces.tui.screens.overlays.reference import (
@@ -115,6 +116,41 @@ def test_app_reference_nav_stack_back_and_forward() -> None:
             await pilot.pause()
             assert app._current_reference is not None
             assert app._current_reference.kind == "phase"
+
+    asyncio.run(body())
+
+
+def test_reference_history_stacks_are_bounded_rings() -> None:
+    # W24 wiring: the live app's back/forward history are bounded FIFO rings
+    # (deque with maxlen == REFERENCE_HISTORY_MAX), not unbounded lists. The
+    # ring math is property-tested in tests/property/test_reference_history_ring;
+    # this pins that the real app carries the bound.
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            assert isinstance(app._reference_back_stack, deque)
+            assert isinstance(app._reference_forward_stack, deque)
+            assert app._reference_back_stack.maxlen == REFERENCE_HISTORY_MAX
+            assert app._reference_forward_stack.maxlen == REFERENCE_HISTORY_MAX
+
+    asyncio.run(body())
+
+
+def test_reference_back_on_empty_history_stops_clean() -> None:
+    # W24: ``back`` with no history is a clean no-op -- it notifies and mutates
+    # neither ring nor the current reference (the floor-stop the ring relies on).
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # No navigation yet: both rings empty, no current reference.
+            assert not app._reference_back_stack
+            app.action_reference_back()
+            await pilot.pause()
+            assert not app._reference_back_stack
+            assert not app._reference_forward_stack
+            assert app._current_reference is None
 
     asyncio.run(body())
 
