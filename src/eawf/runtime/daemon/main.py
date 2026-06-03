@@ -257,7 +257,7 @@ def _configure_logging(foreground: bool) -> None:
     handler = logging.FileHandler(log_file, encoding="utf-8")
     handler.setFormatter(logging.Formatter(fmt))
     handler.addFilter(SensitiveScrubber())
-    root = logging.getLogger()
+    root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
     root.setLevel(logging.INFO)
     root.addHandler(handler)
 

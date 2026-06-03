@@ -17,21 +17,30 @@ argument), or any other expression. This rule is the acquisition-site
 sibling of EAWF001 (message shape) and EAWF002 (key naming): together
 they pin the three log-discipline surfaces the conventions name.
 
-CLI handler modules are exempt from the *library* logger convention in
-the AGENTS profile, but this rule does not special-case them — call
-sites that legitimately need a custom logger name carry an ``# noqa``
-at the ruff layer; here the check is intentionally narrow and reports
-every non-``__name__`` acquisition so the caller can decide.
+Application entry-point modules are exempt from the *library* logger
+convention in the AGENTS profile — they legitimately acquire the root
+logger (``root = logging.getLogger()``) to configure handlers. Such
+sites carry a line-level ``# noqa: EAWF003`` marker on the acquisition
+line, which this check honors; every other non-``__name__`` acquisition
+is reported so the caller can decide.
 """
 
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 
 RULE_CODE = "EAWF003"
 
 _GETLOGGER = "getLogger"
+
+# A line-level waiver: a ``getLogger(...)`` acquisition is exempt when its own
+# source line carries a ``# noqa: EAWF003`` marker. Application entry-point
+# modules legitimately acquire the root logger (``root = logging.getLogger()``)
+# to configure handlers; per the AGENTS python profile those handler-config
+# sites are exempt from the library-logger convention and carry the marker.
+_WAIVER_PATTERN = re.compile(r"#\s*noqa:\s*EAWF003\b")
 
 
 @dataclass(frozen=True)
@@ -109,6 +118,7 @@ def check_source(source: str, *, filename: str = "<unknown>") -> list[LoggerName
         SyntaxError: if ``source`` is not parseable Python.
     """
     tree = ast.parse(source, filename=filename)
+    source_lines = source.splitlines()
     violations: list[LoggerNameViolation] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -117,6 +127,10 @@ def check_source(source: str, *, filename: str = "<unknown>") -> list[LoggerName
             continue
         reason = _classify_argument(node)
         if reason is None:
+            continue
+        if 0 < node.lineno <= len(source_lines) and _WAIVER_PATTERN.search(
+            source_lines[node.lineno - 1]
+        ):
             continue
         violations.append(
             LoggerNameViolation(

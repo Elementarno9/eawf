@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`eawf iter candidate-tag` command.** Reads (or, with a value, sets) the proposed `vMAJOR.MINOR.PATCH` release tag carried on the active iter via the new `Iter.candidate_tag` field.
 
 ### Changed
-- **Plugin doctor gained a disk-to-registry orphan drift kind.** The `plugin doctor` walk now reports plugin files present on disk but absent from the managed-hash registry as an `orphan` drift kind, so an operator can prune stray artifacts per the AGENTS.md deletion rule.
+- **Plugin doctor gained a disk-to-registry orphan drift kind.** The `plugin doctor` walk now reports on-disk skill directories that have no corresponding `SkillSpec` row in the skill registry as an `orphan` drift kind, so an operator can prune stray artifacts per the AGENTS.md deletion rule (it flags only — registry growth stays explicit).
 - **Plugin version derives from `eawf.__version__` across all three runtimes.** The Claude, Codex, and OpenCode adapters now stamp the packaged plugin version from the single `eawf.__version__` source instead of hard-coding it per runtime, so a version bump propagates everywhere automatically.
 
 ### Fixed

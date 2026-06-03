@@ -231,6 +231,23 @@ def test_eawf003_flags_root_logger() -> None:
     assert "root logger" in violations[0].reason
 
 
+def test_eawf003_noqa_waiver_suppresses_root_config_acquisition() -> None:
+    source = "root = logging.getLogger()  # noqa: EAWF003 (handler config)\n"
+    assert check_eawf003(source) == []
+
+
+def test_eawf003_noqa_waiver_is_line_local() -> None:
+    # The waiver suppresses only the marked acquisition line; an
+    # unmarked non-__name__ acquisition elsewhere is still flagged.
+    source = (
+        "root = logging.getLogger()  # noqa: EAWF003 (handler config)\n"
+        'other = logging.getLogger("svc")\n'
+    )
+    violations = check_eawf003(source)
+    assert len(violations) == 1
+    assert violations[0].lineno == 2
+
+
 def test_eawf003_flags_bare_getlogger_import_form() -> None:
     source = 'from logging import getLogger\nlogger = getLogger("svc")\n'
     violations = check_eawf003(source)

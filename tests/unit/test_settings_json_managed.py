@@ -16,6 +16,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import eawf
 from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
 _USER_KEYS_FIXTURE: dict[str, object] = {
@@ -37,7 +38,7 @@ def test_settings_managed_namespace_is_present(tmp_path: Path) -> None:
     parsed = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "__eawf_managed" in parsed
     managed = parsed["__eawf_managed"]
-    assert managed["version"] == "1.0"
+    assert managed["version"] == eawf.__version__
     assert isinstance(managed["skills"], list)
     assert isinstance(managed["agents"], list)
     assert isinstance(managed["hooks"], list)

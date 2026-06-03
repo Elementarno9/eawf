@@ -222,7 +222,7 @@ def _configure_logging() -> None:
 
     from eawf.observability.logging.scrub import SensitiveScrubber
 
-    root = logging.getLogger()
+    root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
     if root.handlers:
         return
     handler = logging.StreamHandler(stream=sys.stderr)

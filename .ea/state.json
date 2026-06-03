@@ -4853,7 +4853,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P29-I06-W10"
+    ],
     "iter_id": "P29-I06",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -9707,6 +9709,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I06-W09",
       "updated_at": "2026-06-02T23:40:04.992497Z"
+    },
+    "P29-I06-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W10-bucket-20260603T011104Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I06-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I06-W10",
+      "updated_at": "2026-06-03T01:11:04.040988Z"
     }
   },
   "goals": {
@@ -11013,7 +11028,8 @@
         "P29-I06-W02",
         "P29-I06-W05",
         "P29-I06-W06",
-        "P29-I06-W07"
+        "P29-I06-W07",
+        "P29-I06-W10"
       ]
     },
     "P29-I07": {
@@ -11782,7 +11798,7 @@
   "schema_version": "1.4",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T00:43:21.046378Z",
+  "updated_at": "2026-06-03T01:11:04.041441Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33937,6 +33953,43 @@
         "eawf iter candidate-tag command added (optional/parked exemplar)"
       ],
       "title": "Add iter candidate-tag command (optional/parked)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I06-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-03T01:11:04.040984Z",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/schemas/**",
+        "src/eawf/platform/lint/**",
+        "src/eawf/surfaces/cli/**",
+        "src/eawf/runtime/daemon/main.py",
+        "src/eawf/surfaces/tui/app.py",
+        "tests/unit/**",
+        "pyproject.toml",
+        "CHANGELOG.md"
+      ],
+      "id": "P29-I06-W10",
+      "intent": null,
+      "iter_id": "P29-I06",
+      "opened_at": "2026-06-03T01:11:03.535356Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        "bundled state.schema.json regenerated to match generated (1.4); settings managed-version test tracks __version__; registry.py excluded from EAWF010 cap; EAWF003 honors noqa waiver for root-logger config sites; CHANGELOG orphan-kind wording corrected"
+      ],
+      "title": "Repair I06 integration and audit follow-ups",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null

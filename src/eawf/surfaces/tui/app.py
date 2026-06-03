@@ -1423,7 +1423,7 @@ def _swap_root_logging_to_textual() -> list[logging.Handler]:
 
     from textual.logging import TextualHandler
 
-    root = logging.getLogger()
+    root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
     saved = list(root.handlers)
     terminal_streams = (sys.stderr, sys.stdout)
     for handler in saved:
@@ -1445,7 +1445,7 @@ def _restore_root_logging(saved: list[logging.Handler]) -> None:
         saved: The handler list returned by
             :func:`_swap_root_logging_to_textual`.
     """
-    root = logging.getLogger()
+    root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
     for handler in list(root.handlers):
         root.removeHandler(handler)
     for handler in saved:
