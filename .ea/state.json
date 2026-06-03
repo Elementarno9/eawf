@@ -2606,6 +2606,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-03-A48-P29-i05-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I05/ART-A48-P29-i05"
     },
+    "ART-A49-P29-i06": {
+      "created_at": "2026-06-03T01:47:28.668714Z",
+      "id": "ART-A49-P29-i06",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-03-A49-P29-i06-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I06/ART-A49-P29-i06"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -3437,6 +3447,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A48-P29-i05",
       "scope_id": "P29-I05",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A49-P29-i06": {
+      "check_results": [],
+      "created_at": "2026-06-03T01:47:29.250600Z",
+      "id": "A49-P29-i06",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A49-P29-i06",
+      "scope_id": "P29-I06",
       "status": "complete",
       "verdict": "minor"
     },
@@ -4866,7 +4887,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I06",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -11017,16 +11038,16 @@
       ]
     },
     "P29-I06": {
-      "audit_id": null,
+      "audit_id": "A49-P29-i06",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-03T01:47:29.752084Z",
       "description": "Spawn-free release iter: register the new skills, plugin doctor orphan-walk, version sync across both runtimes, self-hosted marketplace catalog, plugin-release CI on the v-tag, and the v0.5.0 plugin CHANGELOG. v0.5 MUST release the Claude + Codex plugins.",
       "estimate_id": null,
       "id": "P29-I06",
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247796Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Release: plugin packaging, marketplace, CI publish, version-sync",
       "trigger": "none",
       "wave_ids": [
@@ -11148,6 +11169,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I05-close-A48-P29-i05",
       "summary": "iter P29-I05 closed with audit A48-P29-i05; waves closed=14; outcomes P29-I05-W01: VerdictOutcome model + build_verdict_outcomes pure reducer (observability/eval/reputation.py)... | P29-I05-W02: Brier scorer + Murphy REL/RES decomposition + EB-Beta shrink + Wilson/posterior LB (display) ... | P29-I05-W03: ReputationTier C/B/A ladder (distinct from output-quality TrustTier): map_reliability_to_tier...",
+      "tier": "working"
+    },
+    "MEM-P29-I06-close-A49-P29-i06": {
+      "confidence": "high",
+      "id": "MEM-P29-I06-close-A49-P29-i06",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-03T01:47:29.752084Z",
+      "scope_id": "P29-I06",
+      "status": "active",
+      "store_record_id": "MEM-P29-I06-close-A49-P29-i06",
+      "summary": "iter P29-I06 closed with audit A49-P29-i06; waves closed=10; outcomes P29-I06-W01: Registered /design (model-barred) + /spike (model-invocable) SkillSpec rows; stripped /smoke-... | P29-I06-W02: Added orphan-disk-vs-registry drift kind (5th) to plugin doctor; flags unregistered skill dir... | P29-I06-W03: Derived _PLUGIN_VERSION from eawf.__version__ across codex+claude+opencode installers",
       "tier": "working"
     }
   },
@@ -11808,7 +11840,7 @@
   "schema_version": "1.4",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T01:29:07.808965Z",
+  "updated_at": "2026-06-03T01:47:29.752514Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
