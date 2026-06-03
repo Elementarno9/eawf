@@ -255,6 +255,20 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         verbose: true
+      - id: idle-contract-gate
+        name: idle-contract-gate
+        entry: uv run python tools/idle_contract_gate.py
+        language: system
+        # Guards the B091 idle-verifier regression: fails when the spec-jury
+        # producer (produce_spec_jury_verdict) is wired but no shipped profile
+        # enables it via a non-empty uiux_bands + enforce (idle-forever), OR
+        # when the band profile would enforce fleet-wide for a non-UI wave
+        # instead of band-scoped (global flip). Reads the shipped profile set
+        # + the real resolver, builds two pure probe waves in-process, and
+        # mutates nothing — so always-run with no file filter.
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift
