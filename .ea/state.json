@@ -2351,6 +2351,18 @@
       "scope_id": "P29-I07-W12",
       "status": "done",
       "updated_at": "2026-06-03T05:27:58.971488Z"
+    },
+    "P29-I08-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W01",
+      "scope_id": "P29-I08-W01",
+      "status": "done",
+      "updated_at": "2026-06-03T13:48:28.470073Z"
     }
   },
   "agent_sessions": {
@@ -10104,6 +10116,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I07-W12",
       "updated_at": "2026-06-03T05:27:14.357907Z"
+    },
+    "P29-I08-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W01-bucket-20260603T132935Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W01",
+      "updated_at": "2026-06-03T13:29:35.685941Z"
     }
   },
   "goals": {
@@ -12252,7 +12277,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T13:27:34.396093Z",
+  "updated_at": "2026-06-03T13:48:28.470482Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -34878,10 +34903,10 @@
       "blocks": [
         "P29-I08-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T13:29:35.685936Z",
+      "closed_at": "2026-06-03T13:48:28.470073Z",
+      "commit": "8f09404fd4aa8c7d875b87a321975d462f86735e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34894,10 +34919,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:25:19.168424Z",
-      "outcome": null,
+      "outcome": "WaveBehavior gains quality_dimension + jury_scorable; rubric_items parser added; 207 spec tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "WaveSpec behaviors carry quality_dimension and jury_scorable; verify_implements still loads the file; a parser returns ordered RubricItems"
       ],
