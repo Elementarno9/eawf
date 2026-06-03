@@ -35,8 +35,10 @@ from eawf.kernel.config.layered import (
     merge_config,
 )
 from eawf.kernel.config.registry import (
+    LEAF_KEY_REGISTRY,
     ConfigKey,
     coerce_and_validate,
+    keys_for_tab,
     registry_lookup,
 )
 
@@ -159,6 +161,69 @@ def writable_layers_for(workspace: Path | None, repo: Path | None) -> tuple[str,
         ):
             available.append(layer)
     return tuple(available)
+
+
+def is_editable_key(entry: ConfigKey, layers: tuple[str, ...]) -> bool:
+    """Return ``True`` when *entry* may be written from one of *layers*.
+
+    The lock-filter for the surfaced field list: a curated key is editable
+    in the modal only when its leaf-catalog row declares at least one
+    writable layer that the modal can actually target (the intersection of
+    the leaf's ``writable_layers`` with the modal's editable *layers*). A
+    locked leaf (``writable_layers == ()``) intersects nothing and is
+    omitted, so the modal never offers a key the daemon would refuse to
+    persist (matching the writable-layers gate the ``config.set_layer_value``
+    RPC enforces). A curated key absent from the leaf catalog is treated as
+    editable -- the leaf gate is the authority on locking, and a missing row
+    is a registry-consistency bug surfaced elsewhere, not a lock.
+
+    Args:
+        entry: The curated registry entry to test.
+        layers: The writable layers the modal can target (from
+            :func:`writable_layers_for`).
+
+    Returns:
+        ``True`` when at least one of *layers* may write the key.
+    """
+    leaf = LEAF_KEY_REGISTRY.get(entry.key)
+    if leaf is None:
+        return True
+    return any(layer in leaf.writable_layers for layer in layers)
+
+
+def editable_keys_for_tab(tab: str, layers: tuple[str, ...]) -> tuple[ConfigKey, ...]:
+    """Return *tab*'s curated fields, dropping keys not writable from *layers*.
+
+    Wraps :func:`~eawf.kernel.config.registry.keys_for_tab` with the
+    :func:`is_editable_key` lock-filter so the modal renders only the fields
+    an operator can actually save. The modal consumes this single filtered
+    list everywhere it lays out rows so the row-index to widget-id mapping
+    stays consistent.
+
+    Args:
+        tab: Tab name (case-sensitive). Unknown tabs return an empty tuple.
+        layers: The writable layers the modal can target.
+
+    Returns:
+        The tab's editable fields in :func:`keys_for_tab` order.
+    """
+    return tuple(entry for entry in keys_for_tab(tab) if is_editable_key(entry, layers))
+
+
+def is_security_key(entry: ConfigKey) -> bool:
+    """Return ``True`` when *entry* is a ``security.*`` key (confirm-gated).
+
+    A ``security.*`` edit is high-stakes, so the modal routes its save
+    through a :class:`ConfirmModal` whose prompt names the key + staged value
+    before the edit is committed (an unconfirmed ``security.*`` edit no-ops).
+
+    Args:
+        entry: The registry entry to test.
+
+    Returns:
+        ``True`` when the dotted key sits under the ``security`` domain.
+    """
+    return entry.key == "security" or entry.key.startswith("security.")
 
 
 class ConfigModalState(BaseModel):
@@ -432,8 +497,11 @@ __all__ = [
     "EnterAction",
     "current_value",
     "cycle_choice",
+    "editable_keys_for_tab",
     "enter_action",
     "format_value",
+    "is_editable_key",
+    "is_security_key",
     "merged_config",
     "needs_popup_edit",
     "save_dirty_fields",

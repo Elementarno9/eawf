@@ -370,11 +370,96 @@ def test_set_layer_value_rejects_wave_layer_via_set_layer_value(
     _run(body)
 
 
+# ---- Writable-layers gate (P29-I08-W28 security fix) ------------------------
+
+
+def test_set_layer_value_rejects_locked_leaf_key(tmp_path: Path) -> None:
+    """A locked leaf (``writable_layers == ()``) is refused by the layer RPC.
+
+    Security fix: ``set_layer_value`` previously gated leaf-key *existence*
+    only, so a locked key like ``schema_version`` was persistable through the
+    layer RPC. The mirrored writable-layers gate now rejects it, naming the
+    key, exactly as ``set_wave_value`` rejects a non-wave-writable leaf.
+    """
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    config_yaml = repo / ".ea" / "config.yaml"
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match=r"'schema_version' is not writable from the repo"):
+            await set_layer_value(
+                ctx,
+                {
+                    "layer": "repo",
+                    "key_path": ["schema_version"],
+                    "value": "9.9",
+                },
+            )
+        # The locked write never reached disk.
+        assert not config_yaml.exists()
+
+    _run(body)
+
+
+def test_set_layer_value_rejects_leaf_not_writable_from_target_layer(tmp_path: Path) -> None:
+    """A leaf whose allowlist excludes the target layer is refused.
+
+    ``telemetry.db_kind`` is ``global``-only; writing it to the ``repo``
+    layer is refused with the canonical ``not writable from the repo layer``
+    message (lowercase, no period, naming the key).
+    """
+    ctx, _ = _build_ctx(tmp_path=tmp_path)
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match=r"'telemetry.db_kind' is not writable from the repo"):
+            await set_layer_value(
+                ctx,
+                {
+                    "layer": "repo",
+                    "key_path": ["telemetry", "db_kind"],
+                    "value": "duckdb",
+                },
+            )
+
+    _run(body)
+
+
+def test_set_layer_value_allows_leaf_writable_from_target_layer(tmp_path: Path) -> None:
+    """A leaf whose allowlist includes the target layer still writes (no false positive).
+
+    ``vcs.auto_commit`` IS writable from ``repo``, so the gate must let the
+    write through -- the fix rejects only genuinely-unauthorized writes. The
+    repo layer is anchored under the synthetic ``tmp_path`` repo, so no real
+    config file is touched.
+    """
+    ctx, repo = _build_ctx(tmp_path=tmp_path)
+    config_yaml = repo / ".ea" / "config.yaml"
+
+    async def body() -> None:
+        result = await set_layer_value(
+            ctx,
+            {
+                "layer": "repo",
+                "key_path": ["vcs", "auto_commit"],
+                "value": True,
+            },
+        )
+        assert result["value"] is True
+        assert result["layer"] == "repo"
+        assert config_yaml.exists()
+
+    _run(body)
+
+
 # ---- Branch layer round-trip (P25-W14) -------------------------------------
 
 
 def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
-    """Branch layer writes ``.ea/branches/<branch>.yaml`` (subdir form)."""
+    """Branch layer writes ``.ea/branches/<branch>.yaml`` (subdir form).
+
+    Uses ``prose.level`` because it is one of the few branch-writable leaves;
+    the writable-layers gate (P29-I08-W28) rejects a key whose allowlist
+    excludes ``branch``.
+    """
     ctx, repo = _build_ctx(tmp_path=tmp_path)
 
     async def body() -> None:
@@ -382,8 +467,8 @@ def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
             ctx,
             {
                 "layer": "branch",
-                "key_path": ["vcs", "auto_commit"],
-                "value": True,
+                "key_path": ["prose", "level"],
+                "value": "strict",
                 "branch": "feature/p25-w14",
             },
         )
@@ -391,7 +476,7 @@ def test_set_layer_value_branch_writes_subdir_file(tmp_path: Path) -> None:
         target = repo / ".ea" / "branches" / "feature" / "p25-w14.yaml"
         assert target.exists()
         body_disk = yaml.safe_load(target.read_text())
-        assert body_disk == {"vcs": {"auto_commit": True}}
+        assert body_disk == {"prose": {"level": "strict"}}
 
     _run(body)
 
@@ -400,13 +485,15 @@ def test_set_layer_value_branch_rejects_missing_branch_name(tmp_path: Path) -> N
     ctx, _ = _build_ctx(tmp_path=tmp_path)
 
     async def body() -> None:
+        # ``prose.level`` is branch-writable, so the missing-branch-name check
+        # (not the writable-layers gate) is what fires here.
         with pytest.raises(ValueError, match="branch name required"):
             await set_layer_value(
                 ctx,
                 {
                     "layer": "branch",
-                    "key_path": ["vcs", "auto_commit"],
-                    "value": True,
+                    "key_path": ["prose", "level"],
+                    "value": "strict",
                 },
             )
 

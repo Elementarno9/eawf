@@ -498,10 +498,24 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     # paths the daemon may persist; an unknown key is almost always a
     # typo or a stale CLI build.
     dotted = ".".join(args.key_path)
-    _ = leaf_key_lookup(dotted)  # raises ValueError on unknown.
+    entry = leaf_key_lookup(dotted)  # raises ValueError on unknown.
 
     state_path = _resolve_state_anchor(repo_root=args.repo_root, ctx=ctx)
+    # Resolve (and so validate) the target layer first: a bogus layer name
+    # or a missing branch name fails here with its own canonical error
+    # before the authority check below.
     target = _resolve_layer_path(args.layer, state_path=state_path, branch=args.branch)
+
+    # Writable-layers gate: a leaf may only be written from a layer in
+    # its allowlist. An empty allowlist marks a locked / code-only leaf,
+    # so this also refuses persisting a locked key (e.g. schema_version)
+    # through the layer RPC. Mirrors the wave-layer check in
+    # set_wave_value so the two mutator surfaces enforce the same
+    # authority.
+    if args.layer not in entry.writable_layers:
+        raise ValueError(
+            f"validation_failed: leaf {dotted!r} is not writable from the {args.layer} layer"
+        )
 
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()

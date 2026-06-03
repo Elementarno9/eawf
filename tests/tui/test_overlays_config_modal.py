@@ -47,8 +47,11 @@ from eawf.surfaces.tui.screens.overlays.config_modal import (
     ConfigModalState,
     current_value,
     cycle_choice,
+    editable_keys_for_tab,
     enter_action,
     format_value,
+    is_editable_key,
+    is_security_key,
     needs_popup_edit,
     save_dirty_fields,
     toggle_bool,
@@ -709,6 +712,222 @@ def test_flow_keys_stay_subset_of_leaf_catalog() -> None:
         assert key in LEAF_KEY_REGISTRY, key
         assert registry_lookup(key) is not None, key
     assert len(CONFIG_REGISTRY) < len(LEAF_KEY_REGISTRY)
+
+
+# ---------------------------------------------------------------------------
+# Lock-filter + security-confirm (W28)
+# ---------------------------------------------------------------------------
+
+
+def _locked_config_key() -> ConfigKey:
+    """Return a synthetic ConfigKey whose dotted key names a LOCKED leaf.
+
+    ``schema_version`` has ``writable_layers == ()`` in the leaf catalog, so
+    a curated row pointing at it must be filtered out of the modal's surfaced
+    set regardless of the modal's target layers.
+    """
+    leaf = LEAF_KEY_REGISTRY["schema_version"]
+    assert leaf.writable_layers == ()
+    return ConfigKey(tab="config", key="schema_version", label="schema", type="str", default="1.0")
+
+
+def test_is_editable_key_omits_locked_leaf() -> None:
+    """A curated key naming a locked leaf is not editable from any layer."""
+    entry = _locked_config_key()
+    assert is_editable_key(entry, ("global", "repo", "local")) is False
+
+
+def test_is_editable_key_omits_leaf_not_writable_from_layers() -> None:
+    """A key not writable from any offered layer is filtered out.
+
+    ``telemetry.db_kind`` is ``global``-only, so it is editable when the
+    modal can target ``global`` but not when limited to ``repo`` / ``local``.
+    """
+    entry = registry_lookup("telemetry.db_kind")
+    assert entry is not None
+    assert is_editable_key(entry, ("repo", "local")) is False
+    assert is_editable_key(entry, ("global", "repo")) is True
+
+
+def test_is_editable_key_keeps_writable_scalar() -> None:
+    """A curated key writable from an offered layer stays editable."""
+    entry = registry_lookup("vcs.auto_commit")
+    assert entry is not None
+    assert is_editable_key(entry, ("global", "repo", "local")) is True
+
+
+def test_editable_keys_for_tab_drops_locked_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``editable_keys_for_tab`` filters a locked key out of a tab's field list.
+
+    Injects a synthetic locked row into the ``config`` tab via the registry
+    helper so the filter is exercised against a key that would otherwise be
+    surfaced; the locked key must be absent from the returned list while a
+    writable sibling stays.
+    """
+    import eawf.surfaces.tui.screens.overlays.config_modal_logic as logic
+
+    locked = _locked_config_key()
+    writable = ConfigKey(
+        tab="config",
+        key="config.layers_visible",
+        label="layers visible",
+        type="bool",
+        default=True,
+    )
+
+    def fake_keys_for_tab(tab: str) -> tuple[ConfigKey, ...]:
+        return (locked, writable) if tab == "config" else ()
+
+    monkeypatch.setattr(logic, "keys_for_tab", fake_keys_for_tab)
+    result = editable_keys_for_tab("config", ("global", "repo", "local"))
+    keys = [entry.key for entry in result]
+    assert "schema_version" not in keys
+    assert "config.layers_visible" in keys
+
+
+def test_is_security_key_detects_security_domain() -> None:
+    """``is_security_key`` is True for ``security.*`` keys, False otherwise."""
+    sec = ConfigKey(
+        tab="security",
+        key="security.permission_mode",
+        label="perm",
+        type="str",
+        default="ask_first",
+    )
+    assert is_security_key(sec) is True
+    non_sec = registry_lookup("vcs.auto_commit")
+    assert non_sec is not None
+    assert is_security_key(non_sec) is False
+
+
+def _security_config_key() -> ConfigKey:
+    """Return a curated-shaped ConfigKey for a real ``security.*`` leaf.
+
+    ``security.secret_scan`` is a writable ``bool`` leaf; a row pointing at
+    it routes its save through the confirm gate.
+    """
+    leaf = LEAF_KEY_REGISTRY["security.secret_scan"]
+    assert leaf.type == "bool" and leaf.writable_layers != ()
+    return ConfigKey(
+        tab="security",
+        key="security.secret_scan",
+        label="secret scan",
+        type="bool",
+        default=True,
+    )
+
+
+def test_security_edit_without_confirm_no_ops() -> None:
+    """Committing a ``security.*`` edit without confirming leaves dirty untouched.
+
+    ``_commit_staged`` pushes a :class:`ConfirmModal` for a ``security.*``
+    field instead of staging immediately; until the operator confirms, the
+    candidate value is NOT folded into the dirty map.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            entry = _security_config_key()
+            # Stage a flipped value through the security gate.
+            staged = {entry.key: False}
+            modal._commit_staged(entry, staged)
+            await pilot.pause()
+            # A ConfirmModal is now on top, and nothing has been staged yet.
+            assert isinstance(app.screen, ConfirmModal)
+            assert entry.key not in modal._view.dirty
+
+    asyncio.run(body())
+
+
+def test_security_edit_confirm_prompt_names_key_and_value() -> None:
+    """The security confirm prompt names BOTH the key and the staged value."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            entry = _security_config_key()
+            staged = {entry.key: False}
+            modal._commit_staged(entry, staged)
+            await pilot.pause()
+            assert isinstance(app.screen, ConfirmModal)
+            prompt = app.screen._prompt
+            # The prompt names the key and the staged value.
+            assert entry.key in prompt, prompt
+            assert format_value(entry, False) in prompt, prompt
+
+    asyncio.run(body())
+
+
+def test_security_edit_stages_only_after_confirm() -> None:
+    """Confirming the security prompt folds the staged value into the dirty map."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            entry = _security_config_key()
+            modal._merged = {"security": {"secret_scan": True}}
+            modal._commit_staged(entry, {entry.key: False})
+            await pilot.pause()
+            assert isinstance(app.screen, ConfirmModal)
+            # Confirm: move highlight to Yes (right) and press Enter.
+            await pilot.press("right")
+            await pilot.press("enter")
+            await pilot.pause()
+            assert modal._view.dirty.get(entry.key) is False
+
+    asyncio.run(body())
+
+
+def test_security_edit_decline_leaves_dirty_untouched() -> None:
+    """Declining the security prompt (``Esc``) stages nothing."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            entry = _security_config_key()
+            modal._merged = {"security": {"secret_scan": True}}
+            modal._commit_staged(entry, {entry.key: False})
+            await pilot.pause()
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("escape")  # cancel = decline
+            await pilot.pause()
+            assert entry.key not in modal._view.dirty
+
+    asyncio.run(body())
+
+
+def test_non_security_edit_stages_without_confirm() -> None:
+    """A non-``security`` field stages immediately (no confirm modal pushed)."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = _push_config(app)
+            await pilot.pause()
+            entry = registry_lookup("audit.fix_safe")
+            assert entry is not None
+            modal._merged = {"audit": {"fix_safe": False}}
+            modal._commit_staged(entry, {entry.key: True})
+            await pilot.pause()
+            # No confirm modal: the edit staged directly.
+            assert app.screen is modal
+            assert modal._view.dirty.get(entry.key) is True
+
+    asyncio.run(body())
 
 
 # ---------------------------------------------------------------------------

@@ -73,7 +73,6 @@ from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
     ConfigKey,
     coerce_and_validate,
-    keys_for_tab,
     registry_lookup,
     tabs_sorted,
 )
@@ -85,8 +84,11 @@ from eawf.surfaces.tui.screens.overlays.config_modal_logic import (
     _values_equal,
     current_value,
     cycle_choice,
+    editable_keys_for_tab,
     enter_action,
     format_value,
+    is_editable_key,
+    is_security_key,
     merged_config,
     needs_popup_edit,
     save_dirty_fields,
@@ -255,7 +257,7 @@ class ConfigModal(ModalScreen[None]):
             with TabbedContent(id="config-tabs"):
                 for tab in self._tabs:
                     with TabPane(tab, id=self._tab_pane_id(tab)), VerticalScroll():
-                        for index, entry in enumerate(keys_for_tab(tab)):
+                        for index, entry in enumerate(self._fields_for_tab(tab)):
                             # markup=False — the ``[bool]`` / ``[int]`` type
                             # cells are literal text, not Rich tags.
                             yield Static(
@@ -383,10 +385,23 @@ class ConfigModal(ModalScreen[None]):
                 return tab
         return self._tabs[0] if self._tabs else ""
 
+    def _fields_for_tab(self, tab: str) -> tuple[ConfigKey, ...]:
+        """Return *tab*'s surfaced fields, lock-filtered to editable keys.
+
+        Wraps :func:`editable_keys_for_tab` with the modal's writable layers
+        so a locked key (or one not writable from any targetable layer) is
+        omitted from the surfaced set. Every row-laying-out path consumes
+        this one filtered list so the row-index to widget-id mapping stays
+        consistent.
+
+        Args:
+            tab: Tab name (empty returns an empty tuple).
+        """
+        return editable_keys_for_tab(tab, self._layers) if tab else ()
+
     def _active_fields(self) -> tuple[ConfigKey, ...]:
-        """Return the field list of the active tab (alphabetical)."""
-        tab = self._active_tab()
-        return keys_for_tab(tab) if tab else ()
+        """Return the field list of the active tab (alphabetical, lock-filtered)."""
+        return self._fields_for_tab(self._active_tab())
 
     def _active_field(self) -> ConfigKey | None:
         """Return the field under the cursor, or ``None`` for an empty tab."""
@@ -447,7 +462,7 @@ class ConfigModal(ModalScreen[None]):
         tab = self._active_tab()
         if not tab:
             return
-        fields = keys_for_tab(tab)
+        fields = self._fields_for_tab(tab)
         for index, entry in enumerate(fields):
             if entry.key == self._editing_key:
                 continue
@@ -549,18 +564,70 @@ class ConfigModal(ModalScreen[None]):
         action = enter_action(entry, value, row_width=self._row_width())
         if action == "toggle":
             staged = toggle_bool(entry, self._merged, self._view.dirty)
-            self._view.dirty = self._drop_if_unchanged(entry, staged)
-            self._repaint_fields()
+            self._commit_staged(entry, staged)
         elif action == "cycle":
             staged = cycle_choice(entry, self._merged, self._view.dirty, step=1)
-            self._view.dirty = self._drop_if_unchanged(entry, staged)
-            self._repaint_fields()
+            self._commit_staged(entry, staged)
         elif action == "inline":
             self._begin_inline_edit(entry, value)
         elif action == "popup":
             self._open_popup_edit(entry, value)
         elif action == "multichoice":
             self._begin_multichoice_edit(entry, value)
+
+    def _commit_staged(self, entry: ConfigKey, staged: dict[str, Any]) -> None:
+        """Fold *staged* into the dirty map, gating ``security.*`` behind a confirm.
+
+        For a non-``security`` field this stages immediately (dropping the key
+        again when the value nets no change) and repaints. For a ``security.*``
+        field it instead pushes a
+        :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` whose
+        prompt names both the key and the staged value; the edit is folded in
+        only when the operator confirms, so committing a ``security.*`` edit
+        without the confirm no-ops (the dirty map is untouched).
+
+        Args:
+            entry: The field being staged.
+            staged: The candidate dirty map already carrying *entry*'s new
+                value (as produced by the toggle / cycle / commit helpers).
+        """
+        if not is_security_key(entry):
+            self._view.dirty = self._drop_if_unchanged(entry, staged)
+            self._repaint_fields()
+            return
+        from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+
+        value = staged.get(entry.key)
+        prompt = f"Apply security change {entry.key} = {format_value(entry, value)}?"
+        self.app.push_screen(
+            ConfirmModal(prompt),
+            self._make_security_confirm_callback(entry, staged),
+        )
+
+    def _make_security_confirm_callback(
+        self, entry: ConfigKey, staged: dict[str, Any]
+    ) -> Callable[[bool | None], None]:
+        """Build the dismiss callback that stages a ``security.*`` edit on confirm.
+
+        Args:
+            entry: The ``security.*`` field being staged.
+            staged: The candidate dirty map carrying the new value.
+
+        Returns:
+            A callback taking the :class:`ConfirmModal` boolean result; it
+            folds the staged value in only when the operator confirmed
+            (``True``), leaving the dirty map untouched otherwise.
+        """
+
+        def _on_confirm(confirmed: bool | None) -> None:
+            if not confirmed:
+                logger.info(f"config_modal security_edit_declined key={entry.key!r}")
+                return
+            self._view.dirty = self._drop_if_unchanged(entry, staged)
+            logger.info(f"config_modal security_edit_confirmed key={entry.key!r}")
+            self._repaint_fields()
+
+        return _on_confirm
 
     def _row_width(self) -> int:
         """Return the content width of a field row (inline-input budget).
@@ -690,9 +757,12 @@ class ConfigModal(ModalScreen[None]):
         except UserError as exc:
             self._report_inline_error(str(exc))
             return
-        self._view.dirty = self._drop_if_unchanged(entry, {**self._view.dirty, entry.key: coerced})
+        staged = {**self._view.dirty, entry.key: coerced}
         logger.info(f"config_modal inline_commit key={entry.key!r} type={entry.type}")
+        # Tear the editor down first so the security confirm (if any) opens
+        # over the restored static row, then stage through the gate.
         self._teardown_inline_edit()
+        self._commit_staged(entry, staged)
 
     def _cancel_inline_edit(self) -> None:
         """Abort the inline edit (``Esc``) without mutating the dirty map."""
@@ -743,10 +813,7 @@ class ConfigModal(ModalScreen[None]):
         def _on_dismiss(result: Any) -> None:
             if result is None:
                 return
-            self._view.dirty = self._drop_if_unchanged(
-                entry, {**self._view.dirty, entry.key: result}
-            )
-            self._repaint_fields()
+            self._commit_staged(entry, {**self._view.dirty, entry.key: result})
 
         return _on_dismiss
 
@@ -824,9 +891,10 @@ class ConfigModal(ModalScreen[None]):
         except UserError as exc:
             self._report_inline_error(str(exc))
             return
-        self._view.dirty = self._drop_if_unchanged(entry, {**self._view.dirty, entry.key: coerced})
+        staged = {**self._view.dirty, entry.key: coerced}
         logger.info(f"config_modal multichoice_commit key={entry.key!r} count={len(coerced)}")
         self._teardown_multichoice_edit()
+        self._commit_staged(entry, staged)
 
     def on_multichoice_checklist_cancelled(self, message: MultichoiceChecklist.Cancelled) -> None:
         """Abort the checklist edit on ``Esc`` without staging."""
@@ -1015,8 +1083,11 @@ __all__ = [
     "EnterAction",
     "current_value",
     "cycle_choice",
+    "editable_keys_for_tab",
     "enter_action",
     "format_value",
+    "is_editable_key",
+    "is_security_key",
     "merged_config",
     "needs_popup_edit",
     "open_config",
