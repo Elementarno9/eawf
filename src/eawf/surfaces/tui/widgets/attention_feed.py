@@ -198,7 +198,20 @@ class AttentionFeed(VerticalScroll):
         self.state = new_state
 
     def watch_state(self) -> None:
-        """Rebuild the feed when the bound state changes."""
+        """Rebuild the feed when the bound state changes.
+
+        Suppressed behind the
+        :data:`~eawf.surfaces.tui.poc_defects.POC_DEFECTS_ENV` build flag (a
+        W10 PoC fixture for the W11 jury): with the flag armed a fresh
+        ``on_state`` delivery does NOT refresh the band, so the feed renders
+        once on mount then goes stale -- the never-updating-feed defect.
+        With the flag unset (the default) every revision rebuilds as
+        designed.
+        """
+        from eawf.surfaces.tui.poc_defects import poc_defects_enabled
+
+        if poc_defects_enabled():
+            return
         self._rebuild()
 
     def _open_pauses(self) -> tuple[OpenPause, ...]:

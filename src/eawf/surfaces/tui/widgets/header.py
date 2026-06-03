@@ -175,7 +175,18 @@ def build_breadcrumb(
         parts.append(
             _link(scope_label, f"app.switch_scope({scope_label!r})" if clickable else None)
         )
-        parts.append(_link(code, f"app.switch_mode({_HOME_MODE_NAME!r})" if clickable else None))
+        # Planted near-miss defect (a W10 PoC fixture for the W11 jury): when
+        # the POC_DEFECTS_ENV build flag is armed the code segment renders as
+        # PLAIN (de-linked) text even on the clickable path, while its
+        # app.switch_mode('home') action stays resolvable -- looks de-linked,
+        # behaves live (the subtle de-link regression a golden frame cannot
+        # see). With the flag unset (the default) the segment is a real link.
+        from eawf.surfaces.tui.poc_defects import poc_defects_enabled
+
+        code_clickable = clickable and not poc_defects_enabled()
+        parts.append(
+            _link(code, f"app.switch_mode({_HOME_MODE_NAME!r})" if code_clickable else None)
+        )
         if state.current.phase_id is not None:
             phase = state.current.phase_id
             parts.append(_link(phase, f"app.open_phase_ref({phase!r})" if clickable else None))

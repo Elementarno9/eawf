@@ -66,6 +66,7 @@ from eawf.surfaces.tui.modes import (
     mode_bindings,
     mode_title,
 )
+from eawf.surfaces.tui.poc_defects import poc_defects_enabled
 from eawf.surfaces.tui.scopes import RepoScreen, UserScreen, WorkspaceScreen
 from eawf.surfaces.tui.screens.overlays.reference import (
     ReferenceModal,
@@ -1394,6 +1395,24 @@ class EaApp(App[None]):
     def _on_help_closed(self) -> None:
         """Clear the help-open guard when the help overlay dismisses."""
         self._help_open = False
+
+    def action_poc_dead_click(self) -> None:
+        """Planted dead-click defect: resolves but does nothing observable.
+
+        Armed only behind the :data:`~eawf.surfaces.tui.poc_defects.POC_DEFECTS_ENV`
+        build flag (a W10 PoC fixture for the W11 jury). When the flag is
+        set this handler resolves -- ``run_action`` returns ``True`` -- yet
+        mutates no observable signal, the resolved-but-inert dead-click the
+        behaviour probe classifies ``no_op``. When the flag is unset it
+        raises :class:`~textual.actions.SkipAction` so the action never
+        resolves (``run_action`` returns ``False``) -- the honest "no live
+        handler here" shape, identical to a stale action string.
+        """
+        from textual.actions import SkipAction
+
+        if not poc_defects_enabled():
+            raise SkipAction
+        logger.info("action_poc_dead_click resolved outcome=no_op")
 
     async def on_unmount(self) -> None:
         """Tear the read-only binder down on app exit."""
