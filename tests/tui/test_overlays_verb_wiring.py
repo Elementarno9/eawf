@@ -119,13 +119,13 @@ def test_audit_verb_routes_through_push_modal_cap() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             empty = AuditProgress(audit_id="a", scope_label="s", checks=())
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(AuditRunningModal(empty))
                 await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
             _handle_audit(app, "")
             await pilot.pause()
             # Cap holds — the verb's push is rejected, not stacked.
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())

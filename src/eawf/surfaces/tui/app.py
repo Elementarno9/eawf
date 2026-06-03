@@ -245,11 +245,14 @@ class EaApp(App[None]):
 
     #: Maximum number of stacked :class:`~textual.screen.ModalScreen`
     #: overlays (command palette, detail card, confirm, help, and the
-    #: audit / plan-preview overlays of later waves). The cap is **3** —
-    #: deep enough for the plan-mode → edit → confirm flow, shallow
-    #: enough to keep the stack legible. A fourth push is rejected by
-    #: :meth:`push_modal` with a toast.
-    MAX_MODAL_DEPTH: ClassVar[int] = 3
+    #: audit / plan-preview overlays of later waves) that count toward the
+    #: cap. The cap is **6** -- deep enough for a dwell-on reading surface
+    #: plus a chain of drill-ins, shallow enough to keep the stack legible.
+    #: A push past the cap is rejected by :meth:`push_modal` with a toast.
+    #: A viewer overlay that opts out by setting ``counts_toward_depth =
+    #: False`` (the research brief viewer) is exempt and does not count,
+    #: so a brief plus five reference drills never exhausts the cap.
+    MAX_MODAL_DEPTH: ClassVar[int] = 6
 
     #: Global key bindings shared across every scope screen. Scope switch
     #: is the raw ``w`` / ``r`` / ``u`` keys (workspace / repo / user); the
@@ -1167,16 +1170,25 @@ class EaApp(App[None]):
         return True
 
     def modal_depth(self) -> int:
-        """Return the number of :class:`ModalScreen` overlays on the stack.
+        """Return the number of cap-counting :class:`ModalScreen` overlays.
 
         Scope screens are plain :class:`~textual.screen.Screen` subclasses,
         so only the stacked overlays (palette / detail / confirm / help /
-        later-wave overlays) count toward the cap.
+        later-wave overlays) count toward the cap. An overlay that opts out
+        by setting ``counts_toward_depth = False`` (the research brief
+        viewer, a dwell-on reading surface) is excluded, so reference drills
+        opened off a brief do not exhaust :attr:`MAX_MODAL_DEPTH`. The
+        ``getattr`` default of ``True`` means every overlay counts unless it
+        explicitly opts out.
 
         Returns:
-            The current modal-overlay depth.
+            The current cap-counting modal-overlay depth.
         """
-        return sum(1 for screen in self.screen_stack if isinstance(screen, ModalScreen))
+        return sum(
+            1
+            for screen in self.screen_stack
+            if isinstance(screen, ModalScreen) and getattr(screen, "counts_toward_depth", True)
+        )
 
     def _top_modal(self) -> ModalScreen[Any] | None:
         """Return the top-most :class:`ModalScreen` overlay, or ``None``.

@@ -1,10 +1,11 @@
 """Tests for the C06 modal-stack depth cap (P26-W19) + singleton dedup (P29-W26).
 
-The App enforces a single modal-stack gate (``MAX_MODAL_DEPTH == 3`` per
-C06 §5.7 / failure mode F6): every overlay-opening path routes through
-:meth:`EaApp.push_modal`, which rejects the fourth push and toasts rather
-than mutating the stack. These tests drive the cap directly and through
-the palette + detail-drill paths.
+The App enforces a single modal-stack gate (``MAX_MODAL_DEPTH == 6`` per
+C06 §5.7 / failure mode F6, raised from 3 in P29-I09-W01 so a research
+brief plus a chain of reference drills fits): every overlay-opening path
+routes through :meth:`EaApp.push_modal`, which rejects the push past the
+cap and toasts rather than mutating the stack. These tests drive the cap
+directly and through the palette + detail-drill paths.
 
 The W26 dedup adds a top-only singleton guard to the same gate: a modal
 whose class sets ``dedupe_singleton = True`` (the palette / config / help /
@@ -41,37 +42,37 @@ _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
 _CARD = DetailCard(title="t", rows=(("a", "b"),))
 
 
-def test_max_modal_depth_is_three() -> None:
-    assert EaApp.MAX_MODAL_DEPTH == 3
+def test_max_modal_depth_is_six() -> None:
+    assert EaApp.MAX_MODAL_DEPTH == 6
 
 
-def test_push_three_modals_succeeds() -> None:
+def test_push_modals_to_cap_succeeds() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             results = []
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 results.append(app.push_modal(DetailModal(_CARD)))
                 await pilot.pause()
-            assert results == [True, True, True]
-            assert app.modal_depth() == 3
+            assert results == [True] * EaApp.MAX_MODAL_DEPTH
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())
 
 
-def test_fourth_modal_rejected() -> None:
+def test_push_past_cap_rejected() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(DetailModal(_CARD))
                 await pilot.pause()
             accepted = app.push_modal(DetailModal(_CARD))
             await pilot.pause()
             assert accepted is False
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())
 
@@ -81,7 +82,7 @@ def test_cap_frees_after_pop() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(DetailModal(_CARD))
                 await pilot.pause()
             assert app.push_modal(DetailModal(_CARD)) is False
@@ -89,10 +90,10 @@ def test_cap_frees_after_pop() -> None:
             # Pop one (Esc on the top DetailModal), then a push fits again.
             await pilot.press("escape")
             await pilot.pause()
-            assert app.modal_depth() == 2
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH - 1
             assert app.push_modal(ConfirmModal("ok?")) is True
             await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())
 
@@ -108,24 +109,23 @@ def test_modal_depth_zero_on_scope_screen() -> None:
     asyncio.run(body())
 
 
-def test_palette_then_two_more_then_cap() -> None:
+def test_palette_then_fill_then_cap() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             # Open the palette via the keypress (one modal), then stack
-            # two more programmatically and confirm the 4th is rejected.
+            # drill-ins up to the cap and confirm the next push is rejected.
             await pilot.press("slash")
             await pilot.pause()
             assert app.modal_depth() == 1
-            assert app.push_modal(DetailModal(_CARD)) is True
-            await pilot.pause()
-            assert app.push_modal(ConfirmModal("q?")) is True
-            await pilot.pause()
-            assert app.modal_depth() == 3
+            for _ in range(EaApp.MAX_MODAL_DEPTH - 1):
+                assert app.push_modal(DetailModal(_CARD)) is True
+                await pilot.pause()
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
             assert app.push_modal(DetailModal(_CARD)) is False
             await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())
 

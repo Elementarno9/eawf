@@ -303,6 +303,13 @@ class BriefViewerScreen(ModalScreen[None]):
     typed card.
     """
 
+    #: The brief viewer is a dwell-on reading surface, so it opts out of the
+    #: modal-depth cap (:attr:`~eawf.surfaces.tui.app.EaApp.MAX_MODAL_DEPTH`).
+    #: Reference drills opened off a brief stack as ordinary modals; exempting
+    #: the brief itself keeps a brief plus its drill-ins from tripping the cap
+    #: toast.
+    counts_toward_depth: ClassVar[bool] = False
+
     DEFAULT_CSS: ClassVar[str] = """
     BriefViewerScreen {
         align: center middle;

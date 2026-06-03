@@ -136,12 +136,12 @@ def test_open_needs_user_respects_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(NeedsUserModal(_QUESTION))
                 await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
             open_needs_user(app, _QUESTION)
             await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())

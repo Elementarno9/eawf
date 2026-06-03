@@ -2142,12 +2142,12 @@ def test_config_verb_respects_modal_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 _push_config(app)
                 await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
             _handle_config(app, "")
             await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())

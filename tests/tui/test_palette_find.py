@@ -246,14 +246,14 @@ def test_handle_find_routes_through_modal_cap(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_file)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(MetricsModal())
                 await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
             _handle_find(app, "metrics")
             await pilot.pause()
             # Cap holds — the drill-in push is rejected, not stacked.
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())
 

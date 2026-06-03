@@ -7,9 +7,11 @@ from collections import deque
 from pathlib import Path
 
 from textual.widgets import Static
+from textual.widgets._toast import Toast
 
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import REFERENCE_HISTORY_MAX, EaApp
+from eawf.surfaces.tui.modes.brief_viewer import BriefViewerScreen
 from eawf.surfaces.tui.palette.verbs import _handle_goto, rank_goto_refs
 from eawf.surfaces.tui.screens.overlays.detail import DetailCard, DetailModal
 from eawf.surfaces.tui.screens.overlays.reference import (
@@ -155,7 +157,7 @@ def test_reference_back_on_empty_history_stops_clean() -> None:
     asyncio.run(body())
 
 
-def test_reference_back_replaces_modal_at_depth_cap() -> None:
+def test_reference_back_replaces_top_modal_in_place() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
@@ -166,13 +168,17 @@ def test_reference_back_replaces_modal_at_depth_cap() -> None:
             await pilot.pause()
             app.action_open_iter_ref("P01-I01")
             await pilot.pause()
-            assert app.modal_depth() == app.MAX_MODAL_DEPTH
+            # Three reference drills stack three modals (well under the cap).
+            depth_before = app.modal_depth()
+            assert depth_before == 3
             assert app._current_reference is not None
             assert app._current_reference.kind == "iter"
 
+            # Back navigation pops the top ReferenceModal and pushes the
+            # previous one, so the depth is unchanged (a replace, not a push).
             app.action_reference_back()
             await pilot.pause()
-            assert app.modal_depth() == app.MAX_MODAL_DEPTH
+            assert app.modal_depth() == depth_before
             assert isinstance(app.screen, ReferenceModal)
             assert app._current_reference is not None
             assert app._current_reference.kind == "phase"
@@ -190,5 +196,87 @@ def test_goto_handler_opens_reference_modal() -> None:
             await pilot.pause()
             assert isinstance(app.screen, ReferenceModal)
             assert app.screen._card.title == f"wave {_WAVE_ID}"
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Brief viewer exempt from the modal-depth cap (P29-I09-W01)
+# --------------------------------------------------------------------------
+
+
+def _reference_modal(app: EaApp) -> ReferenceModal:
+    """Build a ReferenceModal over the active-wave fixture for cap tests."""
+    card = resolve_reference(app.state, "wave", _WAVE_ID)
+    return ReferenceModal(card, state=app.state)
+
+
+def test_max_modal_depth_raised_to_six() -> None:
+    # The cap was raised from 3 to 6 so a brief plus five reference drills
+    # fits without tripping the depth-cap toast.
+    assert EaApp.MAX_MODAL_DEPTH == 6
+
+
+def test_modal_depth_skips_brief_viewer_but_counts_reference_modal() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # The brief viewer opts out of the cap, so it does not count.
+            assert app.push_modal(BriefViewerScreen("# brief")) is True
+            await pilot.pause()
+            assert app.modal_depth() == 0
+            # A reference drill on top of the brief DOES count.
+            assert app.push_modal(_reference_modal(app)) is True
+            await pilot.pause()
+            assert app.modal_depth() == 1
+
+    asyncio.run(body())
+
+
+def test_brief_viewer_class_opts_out_of_depth_count() -> None:
+    # The exemption is a class-level opt-out, not a per-instance flag; the
+    # ReferenceModal (the drill overlay) keeps the default and counts.
+    assert BriefViewerScreen.counts_toward_depth is False
+    assert getattr(ReferenceModal, "counts_toward_depth", True) is True
+
+
+def test_brief_plus_five_reference_drills_never_hits_cap() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # The criterion scenario: open a brief, then drill five references
+            # off it. The brief is exempt, so the five drills sit at depth 5 --
+            # one below the cap -- and every push succeeds with no cap toast.
+            assert app.push_modal(BriefViewerScreen("# brief")) is True
+            await pilot.pause()
+            results = []
+            for _ in range(5):
+                results.append(app.push_modal(_reference_modal(app)))
+                await pilot.pause()
+            assert results == [True, True, True, True, True]
+            assert app.modal_depth() == 5
+            # No depth-cap toast mounted -- the brief never counted against it.
+            assert not list(app.query(Toast))
+
+    asyncio.run(body())
+
+
+def test_reference_drills_still_cap_without_brief_exemption() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # Counting overlays still cap at six: six reference drills fill the
+            # stack and the seventh is rejected (the brief exemption does not
+            # widen the cap for counting overlays, it just excludes the brief).
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
+                assert app.push_modal(_reference_modal(app)) is True
+                await pilot.pause()
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
+            assert app.push_modal(_reference_modal(app)) is False
+            await pilot.pause()
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())

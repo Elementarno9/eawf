@@ -155,13 +155,13 @@ def test_init_wizard_routes_through_push_modal_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
-            for _ in range(3):
+            for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(ConfirmModal("continue?"))
                 await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
             assert open_init_wizard(app) is False
             await pilot.pause()
-            assert app.modal_depth() == 3
+            assert app.modal_depth() == EaApp.MAX_MODAL_DEPTH
 
     asyncio.run(body())
 
