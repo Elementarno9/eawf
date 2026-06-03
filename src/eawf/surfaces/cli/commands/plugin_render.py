@@ -293,7 +293,7 @@ def _multi_kind_doctor_payload(report: PluginDoctorReport) -> dict[str, object]:
 
 def _multi_kind_doctor_text(report: PluginDoctorReport) -> str:
     """Render the multi-kind :class:`PluginDoctorReport` as text."""
-    parts = [f"plugin doctor (4 drift kinds) -> {report.target_dir}"]
+    parts = [f"plugin doctor ({len(report.kinds)} drift kinds) -> {report.target_dir}"]
     parts.append(f"  runtimes: {', '.join(report.runtimes)}")
     parts.append(f"  clean: {report.clean}")
     for kind in report.kinds:
