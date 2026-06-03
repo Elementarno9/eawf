@@ -3166,6 +3166,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-03-A50-P29-i07-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I07/ART-A50-P29-i07"
     },
+    "ART-A51-P29-i08": {
+      "created_at": "2026-06-03T19:39:04.528334Z",
+      "id": "ART-A51-P29-i08",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-03-A51-P29-i08-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I08/ART-A51-P29-i08"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -4021,6 +4031,17 @@
       "scope_id": "P29-I07",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A51-P29-i08": {
+      "check_results": [],
+      "created_at": "2026-06-03T19:39:05.207410Z",
+      "id": "A51-P29-i08",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A51-P29-i08",
+      "scope_id": "P29-I08",
+      "status": "complete",
+      "verdict": "minor"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -5369,6 +5390,19 @@
       "scope_id": "P29-I07",
       "status": "open",
       "title": "Normalize prose_check_rendered advisory log to bare-key form"
+    },
+    "B093": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-03T19:38:07.205735Z",
+      "description": "K3's evidence_provenance_gate is unit-tested and the cast source_commit stamp round-trips, but the gate is not yet an always-run pre-commit/CI hook over committed provenance-stamped casts (unlike the idle-contract and jury-discrimination gates). Add an invocation in tools/snapshot_pairing_gate.py or a dedicated hook. Non-blocking: the discrimination + idle-contract gates are the load-bearing CI guards.",
+      "id": "B093",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29-I08",
+      "status": "open",
+      "title": "Wire evidence_provenance_gate into CI as an always-run cast hook"
     },
     "B70": {
       "closed_at": null,
@@ -13078,7 +13112,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T19:25:54.879412Z",
+  "updated_at": "2026-06-03T19:39:05.207410Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
