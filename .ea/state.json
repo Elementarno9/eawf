@@ -11390,6 +11390,54 @@
         "P29-I07-W11",
         "P29-I07-W12"
       ]
+    },
+    "P29-I08": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P29-I08",
+      "intent": null,
+      "opened_at": "2026-06-03T12:25:07.586714Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Full UI/UX refactor + LLM-jury QC gate",
+      "trigger": "none",
+      "wave_ids": [
+        "P29-I08-W01",
+        "P29-I08-W02",
+        "P29-I08-W03",
+        "P29-I08-W04",
+        "P29-I08-W05",
+        "P29-I08-W06",
+        "P29-I08-W07",
+        "P29-I08-W08",
+        "P29-I08-W09",
+        "P29-I08-W10",
+        "P29-I08-W11",
+        "P29-I08-W12",
+        "P29-I08-W13",
+        "P29-I08-W14",
+        "P29-I08-W15",
+        "P29-I08-W16",
+        "P29-I08-W17",
+        "P29-I08-W18",
+        "P29-I08-W19",
+        "P29-I08-W20",
+        "P29-I08-W21",
+        "P29-I08-W22",
+        "P29-I08-W23",
+        "P29-I08-W24",
+        "P29-I08-W25",
+        "P29-I08-W26",
+        "P29-I08-W27",
+        "P29-I08-W28",
+        "P29-I08-W29",
+        "P29-I08-W30",
+        "P29-I08-W31",
+        "P29-I08-W32"
+      ]
     }
   },
   "mcp_grants": null,
@@ -12093,7 +12141,8 @@
         "P29-I04",
         "P29-I05",
         "P29-I06",
-        "P29-I07"
+        "P29-I07",
+        "P29-I08"
       ],
       "opened_at": "2026-06-01T00:19:14.247409Z",
       "outcome_ids": [],
@@ -12141,7 +12190,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T05:27:58.971818Z",
+  "updated_at": "2026-06-03T12:26:31.870423Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -34758,6 +34807,1084 @@
         "wheel_max_bytes ceiling raised to fit the legitimate v0.5 code growth (lint suite + math doc-type + plugin skills + 1.5 schema); no plugin-tree/docs/golden bundling regression; test_packaging size-ceiling test passes"
       ],
       "title": "Bump wheel-size ceiling for v0.5 code growth",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W02"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/wave.py",
+        "src/eawf/workflow/audit_dsl/kinds/verify_implements.py"
+      ],
+      "id": "P29-I08-W01",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:25:19.168424Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "WaveSpec behaviors carry quality_dimension and jury_scorable; verify_implements still loads the file; a parser returns ordered RubricItems"
+      ],
+      "title": "Reconcile rubric into WaveSpec behaviors with dimension + scorable flag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W02": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W04"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/verdict.py"
+      ],
+      "id": "P29-I08-W02",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:14.138130Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "build_auditor_prompt gains rubric and evidence_block params and emits a disprove-each-item instruction per RubricItem id with diff omittable"
+      ],
+      "title": "Add spec + evidence params to the auditor prompt, refute-first per item",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W03": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W09",
+        "P29-I08-W20"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/asciinema.py",
+        "tools/snapshot_pairing_gate.py"
+      ],
+      "id": "P29-I08-W03",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:14.684800Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "evidence is regenerated from wave HEAD in CI and byte-asserted against the committed golden with the source commit embedded so a stale frame fails"
+      ],
+      "title": "Build the provenance-pinned evidence channel (CI-regen + byte-assert)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W04": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W05",
+        "P29-I08-W08"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/observability/eval/cross_vendor_jury.py"
+      ],
+      "id": "P29-I08-W04",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:15.237041Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "convene_cross_vendor_jury casts one ballot per RubricItem and the minority-veto reducer with split-to-NEEDS_USER is a tested property over canned ballots"
+      ],
+      "title": "Extend the jury to per-RubricItem ballots + minority-veto",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W04"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/workflow/dispatch/verdict.py"
+      ],
+      "id": "P29-I08-W05",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:15.773966Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the daemon wave-close path routes a band wave through the spec-jury producer and an integration test closes a band wave producing a per-item AUDITOR report at base_id=wave_id"
+      ],
+      "title": "Wire the spec-jury flavour into the daemon wave-close gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W06": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W07",
+        "P29-I08-W23",
+        "P29-I08-W29"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W05"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/profiles/models.py",
+        "src/eawf/platform/profiles/data/core.yaml"
+      ],
+      "id": "P29-I08-W06",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:16.322195Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a profile sets verify.enforce and cross_vendor_jury true for the UI/UX band only and load_active_verify_block returns enforce True for a band wave and False for a non-band wave"
+      ],
+      "title": "Ship the uiux-band verify profile (band-scoped enforce + jury)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W07": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tools/idle_contract_gate.py",
+        "src/eawf/workflow/dispatch/verdict.py"
+      ],
+      "id": "P29-I08-W07",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:16.866160Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "CI fails if produce_wave_verdict exists with no band profile enabling it and fails if the band profile enables enforce globally and band-vs-global is asserted"
+      ],
+      "title": "Add the idle-contract CI gate (producer wired, band not global)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W08": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W11"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W04"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tools/jury_discrimination_gate.py",
+        "src/eawf/observability/eval/cross_vendor_jury.py"
+      ],
+      "id": "P29-I08-W08",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:17.422269Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "over canned ballots a faithful frame passes and a planted-violation frame fails citing the RubricItem id and a hard near-miss fails all deterministically with no live model"
+      ],
+      "title": "Add the canned-ballot discrimination CI gate (the meta-verifier)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W09": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W10"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W03"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py",
+        "src/eawf/surfaces/tui/snapshot/asciinema.py"
+      ],
+      "id": "P29-I08-W09",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:17.966695Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a transcript captured by running run_action in-process on HEAD is provenance-pinned to the build commit and fed as the only evidence with the diff stripped"
+      ],
+      "title": "Add the UI behaviour-probe transcript evidence channel (diff-stripped)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W10": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W11"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W09"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/widgets/attention_feed.py"
+      ],
+      "id": "P29-I08-W10",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:18.510156Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a build flag injects a click no-op and a never-refreshing feed and a plain-text segment whose run_action still resolves and a direct assertion confirms each defect is live"
+      ],
+      "title": "Plant dead-click + stale-feed + hard near-miss behind a build flag",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W11": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W10",
+        "P29-I08-W08"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/observability/",
+        "src/eawf/workflow/dispatch/verdict.py"
+      ],
+      "id": "P29-I08-W11",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:19.082160Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "over canned transcripts the producer fails broken and near-miss and passes correct and the transcript outcome is cross-checked against a direct run_action assertion"
+      ],
+      "title": "Assert the PoC: jury fails broken, passes correct, fails near-miss",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W12": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/header.py"
+      ],
+      "id": "P29-I08-W12",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:19.652668Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "build_breadcrumb wires click on exactly phase and iter and run_action on scope/code/leaf is a no-op with nav_position byte-equal and no link CSS class applies to de-linked spans"
+      ],
+      "title": "De-link breadcrumb scope, code, leaf segments to plain text",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W13": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W14",
+        "P29-I08-W15",
+        "P29-I08-W16"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/render/artifact_chassis.py",
+        "src/eawf/platform/artifacts/validation.py"
+      ],
+      "id": "P29-I08-W13",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:20.231019Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "render_references emits an ordered list with each row carrying a ref-N anchor and self-link and _REFERENCE_ROW_RE parses it plus legacy bare-bracket rows"
+      ],
+      "title": "Render references as numbered anchored list; move validator in lockstep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W14": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/render/link_wrap.py",
+        "src/eawf/surfaces/render/artifact_chassis.py"
+      ],
+      "id": "P29-I08-W14",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:20.823033Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "inline bracket-N is rewritten to a link to ref-N at render time and dense-citation validation still passes on the rewritten body"
+      ],
+      "title": "Linkify inline [N] to its #ref-N anchor at render time",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W15": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/render/release_notes.py"
+      ],
+      "id": "P29-I08-W15",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:21.410473Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "release_notes routes references through render_references with no hand-rolled block and its golden updates to the shared shape"
+      ],
+      "title": "Route release-notes references through render_references",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W16": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W17"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W13"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "id": "P29-I08-W16",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:22.010694Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the TUI brief surface mounts MarkdownViewer and a Pilot test asserts the numbered References list and a TOC render"
+      ],
+      "title": "Render the brief d-tab through MarkdownViewer with a TOC",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W17": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W16"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "id": "P29-I08-W17",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:22.603627Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "after a bracket-N click the target row scroll-Y lands near the anchor and an entity href opens the typed card and a bracket-N href never opens a card"
+      ],
+      "title": "Route Markdown.LinkClicked: anchors goto_anchor, entity refs open cards",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W18": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W19",
+        "P29-I08-W20"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/widgets/attention_feed.py"
+      ],
+      "id": "P29-I08-W18",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:23.172993Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "app.state is bound from the synchronous initial load_state before the Home screen composes so the feed reads non-None state at mount"
+      ],
+      "title": "Hoist the synchronous initial state bind ahead of Home compose",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W19": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W18"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/tui/",
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "id": "P29-I08-W19",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:23.765324Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the first captured pre-settle frame has populated rows for a populated fixture and no empty-class Static and a late None-to-State push populates within one on_state"
+      ],
+      "title": "Add cold-mount Pilot gates for first frame + late push",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W20": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W18",
+        "P29-I08-W03"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/tui/",
+        "src/eawf/surfaces/tui/snapshot/asciinema.py"
+      ],
+      "id": "P29-I08-W20",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:24.340268Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a provenance-pinned cold-launch cast shows no flash-of-stale-empty and no populate-then-clear churn with the jury residual armed for the band"
+      ],
+      "title": "Record the cold-launch cast golden + no-churn gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W21": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py"
+      ],
+      "id": "P29-I08-W21",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:24.943016Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "render_hint_label and a frozen vocab live in footer.py with DEFAULT_HINTS staying canonical and an unknown token raising ValueError"
+      ],
+      "title": "Add render_hint_label helper + canonical vocabulary (regression guard)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W22": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W23"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W21"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py",
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "id": "P29-I08-W22",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:25.671832Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "an enumeration test over MODE_REGISTRY and the three scope screens asserts every hint parses to canon and the w/u scope typo becomes w/r/u scope"
+      ],
+      "title": "Convert all mode + scope hint tuples to render_hint_label canon",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W23": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W22",
+        "P29-I08-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/tui/",
+        "src/eawf/surfaces/tui/widgets/footer.py"
+      ],
+      "id": "P29-I08-W23",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:26.374826Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "no footer fragment truncates mid-word at the captured and a narrow width with provenance-pinned goldens and the jury legibility residual armed"
+      ],
+      "title": "Regen footer goldens, width-stress, pass the jury legibility gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W24": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "id": "P29-I08-W24",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:26.951600Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a Hypothesis property test over a randomized trail asserts the ring never exceeds the cap and back at cap stops cleanly without resurrecting an evicted entry"
+      ],
+      "title": "Bound reference back+forward history to a FIFO ring (property test)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W25": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/scopes/__init__.py"
+      ],
+      "id": "P29-I08-W25",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:27.523088Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "re-opening the top entity leaves screen_stack identity and length unchanged and mounts no Toast while a different entity still stacks by one"
+      ],
+      "title": "Suppress duplicate push of the entity already on the modal top",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W26": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W27",
+        "P29-I08-W28"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/config/",
+        "src/eawf/kernel/config/registry/leaf_catalog.py"
+      ],
+      "id": "P29-I08-W26",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:28.103895Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the 141-key gap between LEAF_KEY_REGISTRY and CONFIG_REGISTRY is bucketed by exactly one of locked or structural or intentionally-CLI-only and a count snapshot guards growth"
+      ],
+      "title": "Add the registry/leaf coverage-gap accounting test (141 bucketed)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W27": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W29"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W26"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/config_modal.py",
+        "src/eawf/kernel/config/registry/coercion.py"
+      ],
+      "id": "P29-I08-W27",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:28.689878Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "each newly-surfaced ConfigKey round-trips through coerce_and_validate against its LEAF_KEY_REGISTRY row in a parametrized test"
+      ],
+      "title": "Surface curated scalar config keys with leaf-consistent choices",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W28": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W29"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W26"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/config.py",
+        "src/eawf/surfaces/tui/screens/overlays/config_modal.py"
+      ],
+      "id": "P29-I08-W28",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:29.298659Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "set_layer_value raises on a locked key mirroring set_wave_value and the modal omits locked keys and a security edit without the ConfirmModal no-ops"
+      ],
+      "title": "Enforce writable_layers in set_layer_value + modal filter + confirm",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W29": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W27",
+        "P29-I08-W28",
+        "P29-I08-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/tui/",
+        "src/eawf/surfaces/tui/screens/overlays/config_modal.py"
+      ],
+      "id": "P29-I08-W29",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:29.871036Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "provenance-pinned per-tab config-modal snapshots refresh and the jury scannability residual passes over at least three fixtures with a refute-first wall-of-rows tab failing"
+      ],
+      "title": "Refresh config-modal snapshots and clear the UX jury gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W30": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W31"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/status.py"
+      ],
+      "id": "P29-I08-W30",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:30.652433Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf status json gains recent_decisions and open_backlog as read-only projections with state.json byte-equal before and after and the text golden updated"
+      ],
+      "title": "Extend eawf status with recent_decisions and open_backlog",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W31": {
+      "agent_role": null,
+      "blocks": [
+        "P29-I08-W32"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W30"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/memory.py"
+      ],
+      "id": "P29-I08-W31",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:31.289207Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf memory digest is a pure projection with state.json and memory.jsonl and event.jsonl byte-equal before and after and the clarity prose-lint passes as a hard gate"
+      ],
+      "title": "Add eawf memory digest emitting a state-derived standup",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I08-W32": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I08-W31"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/platform/profiles/data/core.yaml",
+        "AGENTS.md"
+      ],
+      "id": "P29-I08-W32",
+      "intent": null,
+      "iter_id": "P29-I08",
+      "opened_at": "2026-06-03T12:26:31.870234Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "the durable-vs-derivable memory-hygiene rule naming both memory systems is sourced from core.yaml so a second eawf sync produces no diff"
+      ],
+      "title": "Add the memory-hygiene convention to AGENTS.md from core.yaml",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
