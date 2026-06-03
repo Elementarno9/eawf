@@ -58,6 +58,7 @@ from eawf.surfaces.tui.modes.autopilot import (
     HALT_NO_TARGET,
     KILL_NO_DAEMON,
     KILL_NO_TARGET,
+    PAUSE_NO_DAEMON,
     AutopilotModeScreen,
     ReadyWaveRow,
     build_frontier_items,
@@ -862,7 +863,6 @@ def test_autopilot_halt_no_target_surfaces_honest_line(tmp_path: Path) -> None:
     ("key", "verb", "method"),
     [
         ("S", "skip", "agent.skip"),
-        ("space", "pause", "agent.pause"),
         ("a", "arm", "agent.arm"),
     ],
 )
@@ -916,13 +916,13 @@ def test_autopilot_unwired_keys_surface_not_yet_wired(
     asyncio.run(body())
 
 
-@pytest.mark.parametrize("key", ["S", "space", "a"])
+@pytest.mark.parametrize("key", ["S", "a"])
 def test_autopilot_unwired_keys_no_daemon_surface_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     key: str,
 ) -> None:
-    """With no daemon, skip / pause / arm surface the honest unavailable line.
+    """With no daemon, skip / arm surface the honest unavailable line.
 
     No fake success: when the daemon socket is unavailable each non-destructive
     intervention reports the request was not issued.
@@ -942,5 +942,147 @@ def test_autopilot_unwired_keys_no_daemon_surface_unavailable(
             assert isinstance(pane, AutopilotModeScreen)
             result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
             assert "unavailable" in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# space (pause / resume) -- the real agent.pause / agent.resume wiring (W05)
+# --------------------------------------------------------------------------
+
+
+def _paused_frontier_state() -> State:
+    """Build the two-wave frontier state with ``dispatch_paused`` already set."""
+    state = _frontier_state()
+    state.dispatch_paused = True
+    return state
+
+
+def test_autopilot_pause_issues_pause_rpc_when_not_paused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``space`` on a running scope issues ``agent.pause`` and surfaces ``paused``.
+
+    The bound state reads ``dispatch_paused=False``, so the toggle issues the
+    real ``agent.pause`` RPC and surfaces the persisted paused verdict (never a
+    "not yet wired" line).
+    """
+    state_path = _write_state(tmp_path, _frontier_state())  # dispatch_paused defaults False
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {"paused": True}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("space")  # pause
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "pause: paused" in rendered
+            assert "not yet wired" not in rendered
+
+    asyncio.run(body())
+    # The toggle reached the daemon with the real pause RPC + empty params.
+    assert calls and calls[0] == ("agent.pause", {})
+
+
+def test_autopilot_pause_issues_resume_rpc_when_paused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``space`` on a paused scope issues ``agent.resume`` and surfaces ``resumed``.
+
+    The bound state reads ``dispatch_paused=True``, so the toggle issues the
+    real ``agent.resume`` RPC and surfaces the persisted resumed verdict.
+    """
+    state_path = _write_state(tmp_path, _paused_frontier_state())
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {"paused": False}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("space")  # resume (already paused)
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "pause: resumed" in rendered
+
+    asyncio.run(body())
+    assert calls and calls[0] == ("agent.resume", {})
+
+
+def test_autopilot_pause_no_daemon_surfaces_honest_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no daemon the pause toggle surfaces the honest unavailable line.
+
+    The toggle must never fake a pause: with the daemon socket unavailable it
+    reports the request was not issued.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("space")
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert PAUSE_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
 
     asyncio.run(body())

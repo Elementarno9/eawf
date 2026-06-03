@@ -300,6 +300,33 @@ class KillResult(BaseModel):
     signal: KillSignal
 
 
+class PauseParams(BaseModel):
+    """Params for :func:`pause` / :func:`resume`.
+
+    Both methods are parameterless toggles of the durable
+    :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag, so the
+    model carries no fields; it exists to enforce ``extra="forbid"`` so a
+    caller that ships a stray key is rejected rather than silently
+    ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PauseResult(BaseModel):
+    """Result of :func:`pause` / :func:`resume` — the persisted flag value.
+
+    Attributes:
+        paused: The durable
+            :attr:`~eawf.kernel.state.models.State.dispatch_paused` value
+            after the mutation — ``True`` after ``agent.pause``, ``False``
+            after ``agent.resume``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    paused: bool
+
+
 def _pick_runtime(*, override: str | None, preference: list[str] | None) -> str:
     """Pick the runtime adapter id for a dispatch.
 
@@ -1041,3 +1068,86 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     )
     result = KillResult(killed=False, signal=args.signal)
     return result.model_dump(mode="json")
+
+
+def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:
+    """Persist :attr:`~eawf.kernel.state.models.State.dispatch_paused` = *paused*.
+
+    Routes the write through the daemon canonical state writer (``portalock``
+    + locked atomic write, mirroring :func:`_register_executor_session`):
+    acquire the sibling lock, load the typed state, set the flag, stamp
+    ``updated_at``, then ``atomic_write_json_locked`` under the held lock.
+    Idempotent — setting the flag to its current value re-writes the same
+    payload (only ``updated_at`` advances).
+
+    Args:
+        ctx: Daemon method context — supplies ``state_path``.
+        paused: The value to persist (``True`` to pause, ``False`` to resume).
+
+    Returns:
+        The persisted flag value (always equal to *paused*).
+
+    Raises:
+        RuntimeError: When ``ctx.state_path`` is unset (the toggle cannot
+            persist without an on-disk state).
+    """
+    if ctx.state_path is None:
+        raise RuntimeError("state_path not configured on daemon context")
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        state.dispatch_paused = paused
+        state.updated_at = datetime.now(UTC)
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    logger.info(f"_set_dispatch_paused paused={paused}")
+    return paused
+
+
+@register("agent.pause")
+async def pause(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Pause dispatch by persisting ``state.dispatch_paused = True``.
+
+    A deliberate operator stop: while the flag is set,
+    :func:`eawf.workflow.lifecycle.wave.claim_wave` rejects every claim
+    (regardless of ``out_of_order``) until ``agent.resume`` clears it. The
+    flag is written through the daemon canonical state writer; the call is
+    idempotent (pausing an already-paused state re-writes the same flag).
+
+    Args:
+        ctx: Server context; ``ctx.state_path`` must be configured.
+        params: JSON-RPC params per :class:`PauseParams` (parameterless).
+
+    Returns:
+        Dict matching :class:`PauseResult` with ``paused=true``.
+
+    Raises:
+        RuntimeError: When ``ctx.state_path`` is unset (e.g. tests).
+    """
+    PauseParams.model_validate(params)
+    paused = _set_dispatch_paused(ctx, paused=True)
+    return PauseResult(paused=paused).model_dump(mode="json")
+
+
+@register("agent.resume")
+async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Resume dispatch by persisting ``state.dispatch_paused = False``.
+
+    Clears the deliberate operator stop ``agent.pause`` set, so
+    :func:`eawf.workflow.lifecycle.wave.claim_wave` accepts claims again.
+    The flag is written through the daemon canonical state writer; the call
+    is idempotent (resuming an already-running state re-writes the same
+    flag).
+
+    Args:
+        ctx: Server context; ``ctx.state_path`` must be configured.
+        params: JSON-RPC params per :class:`PauseParams` (parameterless).
+
+    Returns:
+        Dict matching :class:`PauseResult` with ``paused=false``.
+
+    Raises:
+        RuntimeError: When ``ctx.state_path`` is unset (e.g. tests).
+    """
+    PauseParams.model_validate(params)
+    paused = _set_dispatch_paused(ctx, paused=False)
+    return PauseResult(paused=paused).model_dump(mode="json")

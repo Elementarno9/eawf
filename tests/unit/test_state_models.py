@@ -140,6 +140,31 @@ def _seed_diamond() -> State:
     return state
 
 
+# ---- dispatch_paused --------------------------------------------------------
+
+
+def test_state_dispatch_paused_defaults_false() -> None:
+    """``dispatch_paused`` defaults to ``False`` when omitted from the payload."""
+    state = _empty_state()
+    assert state.dispatch_paused is False
+
+
+def test_state_accepts_explicit_dispatch_paused_true() -> None:
+    """``State`` accepts an explicit ``dispatch_paused=True`` and round-trips it."""
+    state = _empty_state()
+    state.dispatch_paused = True
+    reloaded = State.model_validate(state.model_dump(mode="json"))
+    assert reloaded.dispatch_paused is True
+
+
+def test_state_rejects_non_bool_dispatch_paused() -> None:
+    """A non-bool ``dispatch_paused`` is rejected at the ingestion boundary."""
+    payload = _empty_state().model_dump(mode="json")
+    payload["dispatch_paused"] = "not-a-bool"
+    with pytest.raises(ValidationError):
+        State.model_validate(payload)
+
+
 # ---- deps -------------------------------------------------------------------
 
 

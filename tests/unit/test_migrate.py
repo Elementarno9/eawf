@@ -13,10 +13,13 @@ store. The fourth edge (v1.3 -> v1.4) adds the optional
 (additive, replay-safe). The fifth edge (v1.4 -> v1.5) registers the
 ``ArtifactKind.MATH_EXPLAINER`` artifact kind — a purely additive enum value
 no state row references — so the transform is a bare ``schema_version`` bump
-with no field backfill. The live :class:`eawf.kernel.state.models.State`
-model accepts ``"1.0"``, ``"1.1"``, ``"1.2"``, ``"1.3"``, ``"1.4"``, and
-``"1.5"``, so a migrated state re-loads under the live model. The suite
-exercises:
+with no field backfill. The sixth edge (v1.5 -> v1.6) adds the top-level
+``State.dispatch_paused`` flag (the cooperative dispatch-gate marker) — a
+purely additive field the model defaults to ``False`` on load, so the
+transform is again a bare ``schema_version`` bump with no backfill. The live
+:class:`eawf.kernel.state.models.State` model accepts ``"1.0"``, ``"1.1"``,
+``"1.2"``, ``"1.3"``, ``"1.4"``, ``"1.5"``, and ``"1.6"``, so a migrated
+state re-loads under the live model. The suite exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
 * a full v1.0 state migrating to a re-loadable v1.1 state;
@@ -72,6 +75,7 @@ from eawf.kernel.migrations.v1_1_to_v1_2 import MigrationV11ToV12
 from eawf.kernel.migrations.v1_2_to_v1_3 import MigrationV12ToV13, read_claim_anchors
 from eawf.kernel.migrations.v1_3_to_v1_4 import MigrationV13ToV14
 from eawf.kernel.migrations.v1_4_to_v1_5 import MigrationV14ToV15
+from eawf.kernel.migrations.v1_5_to_v1_6 import MigrationV15ToV16
 from eawf.kernel.state.enums import IterTrigger, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
@@ -734,7 +738,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.5"
+    assert model_supported_max_version() == "1.6"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -767,9 +771,14 @@ def test_guard_target_supported_permits_v1_5_now_model_advanced() -> None:
     guard_target_supported("1.5")
 
 
+def test_guard_target_supported_permits_v1_6_now_model_advanced() -> None:
+    """The guard permits 1.6 now the live model accepts it (the dispatch_paused bump)."""
+    guard_target_supported("1.6")
+
+
 def test_guard_target_supported_rejects_target_above_max() -> None:
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        guard_target_supported("1.6")
+        guard_target_supported("1.7")
 
 
 def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> None:
@@ -780,11 +789,11 @@ def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> N
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.6")
+        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.7")
 
     # The on-disk state is byte-for-byte unchanged and no backup was taken.
     assert state_path.read_bytes() == before
-    backup = backup_path_for(state_path, from_version="1.0", to_version="1.6")
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.7")
     assert not backup.exists()
 
 
@@ -825,7 +834,7 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
-    result = CliRunner().invoke(app, ["migrate", "--to", "1.6"])
+    result = CliRunner().invoke(app, ["migrate", "--to", "1.7"])
 
     assert result.exit_code != 0
     assert "exceeds model-supported max" in result.stdout
@@ -833,14 +842,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_5(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_6(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.5) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.6) walks the full chain + re-loads.
 
-    The default target advanced to 1.5 with the ``MATH_EXPLAINER`` artifact-kind
-    bump, so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4
-    -> 1.5 and lands a re-loadable v1.5 state.
+    The default target advanced to 1.6 with the ``dispatch_paused`` flag bump,
+    so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 ->
+    1.5 -> 1.6 and lands a re-loadable v1.6 state.
     """
     from typer.testing import CliRunner
 
@@ -855,7 +864,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_5(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.5"
+    assert reloaded.schema_version == "1.6"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -2077,3 +2086,103 @@ def test_run_chain_full_v1_0_to_v1_5_reloads(tmp_path: Path) -> None:
 
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
     assert reloaded.schema_version == "1.5"
+
+
+# --- v1.5 -> v1.6: State.dispatch_paused flag -----------------------------
+#
+# The v1.6 edge adds the top-level ``dispatch_paused`` flag -- a purely
+# additive field. No existing state row carries it (the field is brand new),
+# and the live ``State`` model supplies the ``False`` default on load, so the
+# transform is a bare ``schema_version`` bump with no field backfill: the
+# round-trip below asserts the migrated state re-loads with the flag defaulted
+# to ``False`` and every pre-existing row preserved.
+
+
+def _minimal_state_v1_5() -> dict[str, Any]:
+    """Return a full v1.5 state payload that re-loads under the live model."""
+    payload = _minimal_state_v1_0()
+    payload["schema_version"] = "1.5"
+    return payload
+
+
+def test_build_migration_chain_v1_5_to_v1_6_single_step() -> None:
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.5", to_version="1.6")
+    assert len(chain) == 1
+    assert chain[0].from_version == "1.5"
+    assert chain[0].to_version == "1.6"
+
+
+def test_v1_5_to_v1_6_apply_bumps_version() -> None:
+    step = MigrationV15ToV16()
+    out = step.apply(_minimal_state_v1_5())
+    assert out["schema_version"] == "1.6"
+
+
+def test_v1_5_to_v1_6_apply_does_not_mutate_input() -> None:
+    step = MigrationV15ToV16()
+    src = _minimal_state_v1_5()
+    step.apply(src)
+    assert src["schema_version"] == "1.5"
+
+
+def test_v1_5_to_v1_6_apply_is_pure_version_bump() -> None:
+    """Boundary: the only delta is the version marker -- every row is preserved."""
+    step = MigrationV15ToV16()
+    src = _minimal_state_v1_5()
+    out = step.apply(src)
+    expected = copy.deepcopy(src)
+    expected["schema_version"] = "1.6"
+    assert out == expected
+
+
+def test_v1_5_to_v1_6_apply_is_idempotent() -> None:
+    """Re-applying to the already-migrated 1.6 result (version reset) is stable."""
+    step = MigrationV15ToV16()
+    once = step.apply(_minimal_state_v1_5())
+    replay = copy.deepcopy(once)
+    replay["schema_version"] = "1.5"
+    twice = step.apply(replay)
+    assert twice == once
+
+
+def test_v1_5_to_v1_6_check_pre_rejects_wrong_version() -> None:
+    step = MigrationV15ToV16()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_pre({"schema_version": "1.4"})
+
+
+def test_v1_5_to_v1_6_check_post_rejects_unbumped_version() -> None:
+    step = MigrationV15ToV16()
+    with pytest.raises(Exception):  # noqa: B017 — Pydantic ValidationError
+        step.check_post({"schema_version": "1.5"})
+
+
+def test_run_chain_v1_5_to_v1_6_reloads_with_dispatch_paused_false(tmp_path: Path) -> None:
+    """End-to-end: a v1.5 state migrates to a re-loadable v1.6 with ``dispatch_paused=False``.
+
+    The additive flag defaults to ``False`` on load (the migration writes no
+    backfill), and the migrated state re-loads under the live ``State`` model.
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_minimal_state_v1_5(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.5", to_version="1.6")
+    run_chain(state_path, chain=chain, from_version="1.5", to_version="1.6")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.6"
+    assert reloaded.dispatch_paused is False
+
+
+def test_run_chain_full_v1_0_to_v1_6_reloads(tmp_path: Path) -> None:
+    """A v1.0 state walks the full 1.0 -> 1.6 chain to a re-loadable v1.6."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_minimal_state_v1_0(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.6")
+    run_chain(state_path, chain=chain, from_version="1.0", to_version="1.6")
+
+    reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+    assert reloaded.schema_version == "1.6"
+    assert reloaded.dispatch_paused is False

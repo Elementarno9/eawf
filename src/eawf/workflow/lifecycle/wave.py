@@ -369,8 +369,10 @@ def claim_wave(
     Raises:
         LifecycleError: when *wave_id* is unknown, wave is not
             PENDING, ``effort_bucket`` is ``None``, dep waves are not
-            CLOSED, or a lower-numbered sibling-ready wave is still
-            PENDING (without ``out_of_order``).
+            CLOSED, a lower-numbered sibling-ready wave is still
+            PENDING (without ``out_of_order``), or dispatch is paused
+            (``state.dispatch_paused`` is ``True``) — the pause gate
+            blocks regardless of ``out_of_order``.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -402,6 +404,11 @@ def claim_wave(
                 f"wave {wave_id!r} would skip lower-numbered ready siblings: "
                 f"{sorted(skipped, key=natural_key)}; pass --out-of-order to claim regardless"
             )
+    # Cooperative dispatch gate: a paused dispatch is a deliberate operator
+    # stop, so it blocks every claim unconditionally -- out_of_order opts out
+    # of the sibling-ordering gate above, not this one.
+    if state.dispatch_paused:
+        raise LifecycleError(f"dispatch paused: resume before claiming {wave_id!r}")
     wave.status = WaveStatus.CLAIMED
     wave.claim_session_id = session_id
     # Stamp the work-start fact on the first claim only. opened_at is

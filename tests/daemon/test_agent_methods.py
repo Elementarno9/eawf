@@ -32,7 +32,14 @@ from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.agent import _runtime_triple, dispatch, kill, session
+from eawf.runtime.daemon.methods.agent import (
+    _runtime_triple,
+    dispatch,
+    kill,
+    pause,
+    resume,
+    session,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -734,5 +741,133 @@ def test_dispatch_outcome_rejects_unknown_fallback_runtime(tmp_path: Path) -> No
                     ),
                 },
             )
+
+    _run(body)
+
+
+# --------------------------------------------------------------------------
+# agent.pause / agent.resume -- the cooperative dispatch-gate flag (P29-I09-W05)
+# --------------------------------------------------------------------------
+
+
+def _read_dispatch_paused(state_path: Path) -> bool:
+    """Return the persisted ``dispatch_paused`` flag off the on-disk state.
+
+    Defaults to ``False`` when the key is absent: a pre-bump fixture payload
+    legitimately omits it (the model defaults it on load), so absence reads as
+    the not-paused default rather than a missing-key error.
+    """
+    payload = orjson.loads(state_path.read_bytes())
+    return bool(payload.get("dispatch_paused", False))
+
+
+def test_pause_sets_dispatch_paused_true_and_persists(tmp_path: Path) -> None:
+    """``agent.pause`` returns ``paused=True`` and persists the flag to disk."""
+    state_path = tmp_path / "state.json"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    assert _read_dispatch_paused(state_path) is False
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        result: dict[str, Any] = await pause(ctx, {})
+        assert result == {"paused": True}
+        assert _read_dispatch_paused(state_path) is True
+
+    _run(body)
+
+
+def test_resume_sets_dispatch_paused_false_and_persists(tmp_path: Path) -> None:
+    """``agent.resume`` returns ``paused=False`` and clears the persisted flag."""
+    state_path = tmp_path / "state.json"
+    payload = _build_state_payload(wave_id="P24-I01-W07")
+    payload["dispatch_paused"] = True
+    _write_state(state_path, payload)
+    assert _read_dispatch_paused(state_path) is True
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        result: dict[str, Any] = await resume(ctx, {})
+        assert result == {"paused": False}
+        assert _read_dispatch_paused(state_path) is False
+
+    _run(body)
+
+
+def test_pause_is_idempotent(tmp_path: Path) -> None:
+    """Pausing an already-paused state re-asserts the flag (no toggle)."""
+    state_path = tmp_path / "state.json"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        first: dict[str, Any] = await pause(ctx, {})
+        second: dict[str, Any] = await pause(ctx, {})
+        assert first == second == {"paused": True}
+        assert _read_dispatch_paused(state_path) is True
+
+    _run(body)
+
+
+def test_resume_is_idempotent(tmp_path: Path) -> None:
+    """Resuming an already-running state re-asserts the cleared flag."""
+    state_path = tmp_path / "state.json"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        first: dict[str, Any] = await resume(ctx, {})
+        second: dict[str, Any] = await resume(ctx, {})
+        assert first == second == {"paused": False}
+        assert _read_dispatch_paused(state_path) is False
+
+    _run(body)
+
+
+def test_pause_resume_round_trip_persists_each_step(tmp_path: Path) -> None:
+    """A pause then resume leaves the flag cleared, persisting each transition."""
+    state_path = tmp_path / "state.json"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        await pause(ctx, {})
+        assert _read_dispatch_paused(state_path) is True
+        await resume(ctx, {})
+        assert _read_dispatch_paused(state_path) is False
+
+    _run(body)
+
+
+def test_pause_missing_state_path_raises(tmp_path: Path) -> None:
+    """``agent.pause`` raises when the daemon context has no state path."""
+    ctx = _build_ctx(state_path=None)
+
+    async def body() -> None:
+        with pytest.raises(RuntimeError, match="state_path not configured"):
+            await pause(ctx, {})
+
+    _run(body)
+
+
+def test_resume_missing_state_path_raises(tmp_path: Path) -> None:
+    """``agent.resume`` raises when the daemon context has no state path."""
+    ctx = _build_ctx(state_path=None)
+
+    async def body() -> None:
+        with pytest.raises(RuntimeError, match="state_path not configured"):
+            await resume(ctx, {})
+
+    _run(body)
+
+
+def test_pause_rejects_extra_params(tmp_path: Path) -> None:
+    """``agent.pause`` rejects a stray param (``extra='forbid'`` on PauseParams)."""
+    state_path = tmp_path / "state.json"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        with pytest.raises(ValidationError):
+            await pause(ctx, {"unexpected": "value"})
 
     _run(body)

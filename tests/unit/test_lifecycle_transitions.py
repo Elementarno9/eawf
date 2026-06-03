@@ -1177,6 +1177,63 @@ def test_claim_wave_out_of_order_overrides_monotonic_gate() -> None:
     assert w.status == WaveStatus.CLAIMED
 
 
+def test_claim_wave_rejected_when_dispatch_paused() -> None:
+    """P29-I09-W05: a paused dispatch blocks the claim (cooperative gate)."""
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket="M",
+    )
+    state.dispatch_paused = True
+    with pytest.raises(LifecycleError, match="dispatch paused: resume before claiming"):
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    # The rejected claim leaves the wave PENDING and unbound.
+    assert state.waves["P01-I01-W01"].status == WaveStatus.PENDING
+    assert state.waves["P01-I01-W01"].claim_session_id is None
+
+
+def test_claim_wave_succeeds_when_not_dispatch_paused() -> None:
+    """The pause gate is inert when ``dispatch_paused`` is ``False`` (the default)."""
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket="M",
+    )
+    assert state.dispatch_paused is False
+    w = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    assert w.status == WaveStatus.CLAIMED
+
+
+def test_claim_wave_pause_gate_blocks_even_out_of_order() -> None:
+    """The pause gate is unconditional: ``out_of_order=True`` does not bypass it.
+
+    ``out_of_order`` opts out of the lower-W## sibling-ordering gate, not the
+    deliberate operator pause, so a claim under a paused dispatch is rejected
+    even with the override set.
+    """
+    state = _seed_wave_state()
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["src/"],
+        effort_bucket="M",
+    )
+    state.dispatch_paused = True
+    with pytest.raises(LifecycleError, match="dispatch paused: resume before claiming"):
+        claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1", out_of_order=True)
+    assert state.waves["P01-I01-W01"].status == WaveStatus.PENDING
+
+
 def test_claim_wave_monotonic_gate_allows_after_w01_claimed() -> None:
     """W02 may be claimed once W01 is CLAIMED/IN_PROGRESS/CLOSED."""
     state = _empty_state()

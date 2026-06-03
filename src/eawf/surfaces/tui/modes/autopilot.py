@@ -50,12 +50,19 @@ out of band:
   signalling ladder lands, so the surfaced result reports that honest verdict
   rather than faking a kill; the keys go fully live for free once the kill wave
   lands (the idle-contract pattern).
-* ``S`` (skip), ``space`` (pause / resume), and ``a`` (arm / launch-flow) have
-  **no daemon RPC yet**. They are bound for muscle-memory + discoverability and
-  routed through the daemon-client seam to their intended method names, but the
-  daemon answers method-not-found, so each surfaces an honest "not yet wired"
-  line and never implies the action happened -- exactly the pre-spawn
-  honest-unavailable path. They go live for free when their RPCs land.
+* ``space`` (pause / resume) is **live**: it reads the current
+  :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag off the bound
+  state and routes through the daemon-client seam to the real ``agent.resume``
+  RPC when already paused, else ``agent.pause`` -- a deliberate operator stop
+  the daemon persists and :func:`eawf.workflow.lifecycle.wave.claim_wave` reads
+  to block the next claim. It surfaces the real paused / resumed verdict on
+  success and the honest unavailable line when the daemon is unreachable.
+* ``S`` (skip) and ``a`` (arm / launch-flow) have **no daemon RPC yet**. They
+  are bound for muscle-memory + discoverability and routed through the
+  daemon-client seam to their intended method names, but the daemon answers
+  method-not-found, so each surfaces an honest "not yet wired" line and never
+  implies the action happened -- exactly the pre-spawn honest-unavailable path.
+  They go live for free when their RPCs land.
 
 Honest-empty is the COMMON path: a scope whose wave graph has no claim-ready
 wave (every wave CLOSED, or the next waves still blocked on open deps) renders
@@ -137,13 +144,14 @@ _SIGNAL_KILL: str = "kill"
 #: same daemon-owned ladder.
 _SIGNAL_TERM: str = "term"
 
-#: Intended daemon methods the not-yet-wired intervention keys route through.
-#: No such RPC exists yet (full registry checked) -- the daemon answers
-#: method-not-found, so the action surfaces the honest "not yet wired" line.
-#: Wiring the keys to the real method names now is the idle-contract pattern:
-#: they go live for free once the matching RPC lands.
+#: Intended daemon methods the still-not-yet-wired intervention keys route
+#: through. No such RPC exists yet (full registry checked) -- the daemon
+#: answers method-not-found, so the action surfaces the honest "not yet wired"
+#: line. Wiring the keys to the real method names now is the idle-contract
+#: pattern: they go live for free once the matching RPC lands. (``space`` /
+#: pause is no longer here -- its ``agent.pause`` / ``agent.resume`` RPCs are
+#: live, so it routes through the real seam below.)
 _SKIP_METHOD: str = "agent.skip"
-_PAUSE_METHOD: str = "agent.pause"
 _ARM_METHOD: str = "agent.arm"
 
 #: Result line when a destructive intervention has nothing to act on.
@@ -154,8 +162,18 @@ HALT_NO_TARGET: str = "halt: no wave to halt"
 KILL_NO_DAEMON: str = "kill: daemon unavailable -- request not issued"
 HALT_NO_DAEMON: str = "halt: daemon unavailable -- request not issued"
 
+#: Daemon JSON-RPC methods the ``space`` (pause / resume) key routes through.
+#: ``agent.pause`` persists ``state.dispatch_paused = True`` (a deliberate stop
+#: that blocks the next claim); ``agent.resume`` clears it. The key reads the
+#: current flag off the bound state to pick which method to issue.
+_PAUSE_RPC: str = "agent.pause"
+_RESUME_RPC: str = "agent.resume"
+
+#: Result line when a pause request could not reach the daemon.
+PAUSE_NO_DAEMON: str = "pause: daemon unavailable -- request not issued"
+
 #: Honest "not yet wired" line for the keys whose daemon RPC does not exist
-#: yet (skip / pause / arm). Formatted with the verb so each key reads clearly.
+#: yet (skip / arm). Formatted with the verb so each key reads clearly.
 _NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- daemon has no {method} RPC"
 
 #: Result line when a not-yet-wired intervention cannot even reach the daemon.
@@ -327,11 +345,14 @@ class AutopilotModeScreen(ScopeScreen):
     The intervention keys add the ratified cockpit controls over that frontier:
     ``K`` (kill) / ``H`` (halt) route through the real ``agent.kill`` RPC -- a
     SIGKILL-class signal vs a graceful SIGTERM -- each gated behind a
-    :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`; while
-    ``S`` (skip) / ``space`` (pause) / ``a`` (arm) route through the seam to
-    their intended (not-yet-existing) methods and surface an honest "not yet
-    wired" line until those RPCs land. Every intervention surfaces its typed
-    outcome honestly and never fakes an action that did not happen.
+    :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`;
+    ``space`` (pause / resume) routes through the real ``agent.pause`` /
+    ``agent.resume`` RPCs -- reading the current ``dispatch_paused`` flag to
+    pick which to issue -- and surfaces the persisted paused / resumed verdict;
+    while ``S`` (skip) / ``a`` (arm) route through the seam to their intended
+    (not-yet-existing) methods and surface an honest "not yet wired" line until
+    those RPCs land. Every intervention surfaces its typed outcome honestly and
+    never fakes an action that did not happen.
 
     The screen self-binds to the host
     :class:`~eawf.surfaces.tui.app.EaApp` reactive ``state``: it seeds from
@@ -566,14 +587,68 @@ class AutopilotModeScreen(ScopeScreen):
         self._issue_unwired(verb="skip", method=_SKIP_METHOD)
 
     def action_toggle_pause(self) -> None:
-        """Pause / resume the flow (no daemon RPC yet -- honest-unavailable).
+        """Pause / resume dispatch through the real daemon RPC.
 
-        Routes through the daemon-client seam to the intended ``agent.pause``
-        method. Pause is non-destructive (no confirm). The daemon answers
-        method-not-found until the RPC lands, so the action surfaces the honest
-        "not yet wired" line and never implies the flow paused.
+        Reads the current
+        :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag off the
+        bound state and issues ``agent.resume`` when already paused, else
+        ``agent.pause`` -- a deliberate operator stop the daemon persists and
+        :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block the next
+        claim. Pause is non-destructive (no confirm). The result line carries
+        the persisted paused / resumed verdict on success, or the honest
+        unavailable line when the daemon is unreachable -- it never fakes a
+        toggle that did not persist.
         """
-        self._issue_unwired(verb="pause", method=_PAUSE_METHOD)
+        result_line = self._issue_pause()
+        self._set_result(result_line)
+        logger.info(f"action_toggle_pause result={result_line!r}")
+
+    def _currently_paused(self) -> bool:
+        """Return the bound state's ``dispatch_paused`` flag (``False`` if unbound).
+
+        The pause toggle reads the current flag to pick which RPC to issue;
+        an unbound state (fresh / user scope) reads as not-paused so the first
+        ``space`` press issues ``agent.pause``.
+        """
+        state = self._current_state()
+        return bool(state.dispatch_paused) if state is not None else False
+
+    def _issue_pause(self) -> str:
+        """Toggle dispatch pause via the real RPC and return a result line.
+
+        Reads the current ``dispatch_paused`` flag, then calls ``agent.resume``
+        (when paused) or ``agent.pause`` (when not) through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI mutates through, when a daemon socket is available. The returned
+        line reports the persisted verdict (``paused`` / ``resumed``); a daemon
+        that is unreachable, rejecting, or timing out yields the honest
+        unavailable line rather than a faked toggle.
+
+        Returns:
+            A content-markup result line describing the pause / resume outcome.
+        """
+        unavailable = f"[$warn]{PAUSE_NO_DAEMON}[/]"
+        if not self._daemon_available():
+            return unavailable
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        paused = self._currently_paused()
+        method = _RESUME_RPC if paused else _PAUSE_RPC
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                result = client.call(method, {})
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_pause daemon_rejected method={method!r} message={exc.message!r}")
+            return (
+                f"[$warn]pause: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+            )
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_pause daemon_fallback method={method!r} cause={exc!r}")
+            return unavailable
+        # The daemon returns the persisted flag; report the honest verdict.
+        now_paused = bool(result.get("paused", not paused))
+        verb = "paused" if now_paused else "resumed"
+        return f"[$ok]pause: {verb}[/]"
 
     def action_arm_flow(self) -> None:
         """Arm / launch the flow (no daemon RPC yet -- honest-unavailable).
@@ -900,6 +975,7 @@ __all__ = [
     "HALT_NO_TARGET",
     "KILL_NO_DAEMON",
     "KILL_NO_TARGET",
+    "PAUSE_NO_DAEMON",
     "SELECTED_ROW_CLASS",
     "AutopilotModeScreen",
     "ReadyWaveRow",
