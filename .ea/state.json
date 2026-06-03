@@ -2399,6 +2399,18 @@
       "scope_id": "P29-I08-W04",
       "status": "done",
       "updated_at": "2026-06-03T14:11:42.143746Z"
+    },
+    "P29-I08-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W05",
+      "scope_id": "P29-I08-W05",
+      "status": "done",
+      "updated_at": "2026-06-03T14:26:13.771069Z"
     }
   },
   "agent_sessions": {
@@ -10204,6 +10216,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P29-I08-W04",
       "updated_at": "2026-06-03T14:04:33.365720Z"
+    },
+    "P29-I08-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W05-bucket-20260603T141148Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I08-W05",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I08-W05",
+      "updated_at": "2026-06-03T14:11:48.441488Z"
     }
   },
   "goals": {
@@ -12352,7 +12377,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T14:11:42.144159Z",
+  "updated_at": "2026-06-03T14:26:13.771720Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35114,10 +35139,10 @@
       "blocks": [
         "P29-I08-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T14:11:48.441482Z",
+      "closed_at": "2026-06-03T14:26:13.771069Z",
+      "commit": "4819581e35ed307b48b8213d0048e6c72bb7f005",
       "deps": [
         "P29-I08-W04"
       ],
@@ -35132,10 +35157,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:15.773966Z",
-      "outcome": null,
+      "outcome": "spec_jury.py producer (idle injected ballot fn) wired into daemon close gate behind wave_in_uiux_band + VerifyBlock.uiux_bands; additive/dormant; 744 regression tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the daemon wave-close path routes a band wave through the spec-jury producer and an integration test closes a band wave producing a per-item AUDITOR report at base_id=wave_id"
       ],
