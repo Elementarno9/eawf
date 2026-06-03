@@ -709,7 +709,13 @@ class DetailModal(ModalScreen[None]):
         Binding("e", "show_tab('e')", "events", show=False),
     ]
 
-    def __init__(self, card: DetailCard, *, state: State | None = None) -> None:
+    def __init__(
+        self,
+        card: DetailCard,
+        *,
+        state: State | None = None,
+        entity_id: str | None = None,
+    ) -> None:
         """Construct the modal for a pre-resolved card.
 
         Args:
@@ -717,11 +723,27 @@ class DetailModal(ModalScreen[None]):
                 the selection id + the bound state).
             state: Optional bound state used for hover previews on
                 clickable refs found in row values.
+            entity_id: The originating entity id (the selection id the card
+                was resolved from), used by the row-drill path to suppress a
+                duplicate push of the entity already on the modal top. ``None``
+                for direct constructions that opt out of the entity dedup.
         """
         super().__init__()
         self._card = card
         self._state = state
+        self._entity_id = entity_id
         self._tab_ids = self._present_tabs(card)
+
+    @property
+    def entity_id(self) -> str | None:
+        """Return the originating entity id, or ``None`` when not drill-sourced.
+
+        The row-drill path (:meth:`~eawf.surfaces.tui.scopes.ScopeScreen._open_detail`)
+        reads this off the top-of-stack modal to suppress a duplicate push of
+        the same entity; a card constructed without an ``entity_id`` (a direct
+        push) carries ``None`` and so never deduplicates.
+        """
+        return self._entity_id
 
     def _enrich_from_app(self) -> None:
         """Refresh wave cards with store-backed report/error rows when mounted."""

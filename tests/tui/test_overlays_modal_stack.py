@@ -21,12 +21,19 @@ import asyncio
 from pathlib import Path
 
 from textual.screen import ModalScreen
+from textual.widgets._toast import Toast
 
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.palette.command_palette import CommandPalette
+from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.screens.overlays.detail import DetailCard, DetailModal
+
+#: A wave / phase entity id present in the active-wave fixture, used to drill
+#: the row-detail path. ``_WAVE_ID`` and ``_PHASE_ID`` are distinct entities.
+_WAVE_ID = "P01-I01-W01"
+_PHASE_ID = "P01"
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -199,5 +206,107 @@ def test_open_config_action_twice_keeps_one_modal() -> None:
                 if isinstance(screen, ModalScreen)
             ]
             assert modal_names == ["ConfigModal"]
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Entity dedup (P29-I08-W25) — re-opening the entity already on top no-ops
+# --------------------------------------------------------------------------
+
+
+def _repo_scope_screen(app: EaApp) -> ScopeScreen:
+    """Return the live repo scope screen (the row-drill host) for *app*."""
+    screen = app.screen
+    assert isinstance(screen, ScopeScreen)
+    return screen
+
+
+def test_reopen_top_entity_leaves_stack_identity_and_length_unchanged() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            screen = _repo_scope_screen(app)
+            # Drill into the wave entity once.
+            screen._open_detail(_WAVE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            top = app._top_modal()
+            assert isinstance(top, DetailModal)
+            assert top.entity_id == _WAVE_ID
+            stack_before = list(app.screen_stack)
+
+            # Re-opening the SAME entity (a double-Enter / re-selection) is a
+            # no-op: the screen stack keeps its exact identity AND length, and
+            # the top modal is the very same instance (not a re-pushed twin).
+            screen._open_detail(_WAVE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            stack_after = list(app.screen_stack)
+            assert [id(s) for s in stack_after] == [id(s) for s in stack_before]
+            assert app._top_modal() is top
+
+    asyncio.run(body())
+
+
+def test_reopen_top_entity_mounts_no_toast() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            screen = _repo_scope_screen(app)
+            screen._open_detail(_WAVE_ID)
+            await pilot.pause()
+            # The dedup-skip is a benign no-op: no Toast notification mounts
+            # (it is logged, not surfaced -- contrast the depth-cap toast).
+            screen._open_detail(_WAVE_ID)
+            await pilot.pause()
+            assert not list(app.query(Toast))
+
+    asyncio.run(body())
+
+
+def test_reopen_different_entity_still_stacks() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            screen = _repo_scope_screen(app)
+            screen._open_detail(_WAVE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            # A drill into a DIFFERENT entity is NOT a duplicate -- it stacks
+            # a new card (+1), so the dedup is strictly entity-scoped.
+            screen._open_detail(_PHASE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 2
+            top = app._top_modal()
+            assert isinstance(top, DetailModal)
+            assert top.entity_id == _PHASE_ID
+
+    asyncio.run(body())
+
+
+def test_reopen_same_entity_after_a_different_one_restacks() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            screen = _repo_scope_screen(app)
+            # wave -> phase stacks two cards; re-drilling the wave is now a
+            # DIFFERENT entity than the phase on top, so it stacks again (the
+            # dedup is top-only, not a global "already open anywhere" guard).
+            screen._open_detail(_WAVE_ID)
+            await pilot.pause()
+            screen._open_detail(_PHASE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 2
+            screen._open_detail(_WAVE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 3
+            top = app._top_modal()
+            assert isinstance(top, DetailModal)
+            assert top.entity_id == _WAVE_ID
 
     asyncio.run(body())

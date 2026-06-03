@@ -31,6 +31,7 @@ Per-scope body layouts:
 
 from __future__ import annotations
 
+import logging
 from typing import ClassVar
 
 from textual.app import ComposeResult
@@ -47,6 +48,8 @@ from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.footer import DEFAULT_HINTS, Footer
 from eawf.surfaces.tui.widgets.header import Header
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+
+logger = logging.getLogger(__name__)
 
 #: Pane id of the Home attention band so a host (or zoom mixin) can address
 #: it without touching the scope-body panes. The band is the orthogonal
@@ -178,16 +181,46 @@ class ScopeScreen(Screen[None]):
         from the App's reactive ``state`` and pushes the overlay through
         the modal-cap-aware helper so the stack-depth limit is honoured.
 
+        Re-activating the row whose card is already on the modal TOP is a
+        benign no-op: the duplicate push is suppressed (logged, no Toast) so a
+        double-Enter or a re-selection of the same row cannot stack a second
+        identical card. A drill into a *different* entity still stacks.
+
         Args:
             selection_id: The id carried by the selection message.
         """
+        if self._detail_already_on_top(selection_id):
+            logger.info(f"_open_detail dedup_skipped entity={selection_id!r}")
+            return
         state = getattr(self.app, "state", None)
         card = resolve_detail(state, selection_id)
         push_modal = getattr(self.app, "push_modal", None)
         if callable(push_modal):
-            push_modal(DetailModal(card, state=state))
+            push_modal(DetailModal(card, state=state, entity_id=selection_id))
             return
-        self.app.push_screen(DetailModal(card, state=state))
+        self.app.push_screen(DetailModal(card, state=state, entity_id=selection_id))
+
+    def _detail_already_on_top(self, selection_id: str) -> bool:
+        """Return whether *selection_id*'s card is the top-of-stack modal.
+
+        Reads the App's top-most overlay (via its ``_top_modal`` accessor) and
+        reports ``True`` only when it is a
+        :class:`~eawf.surfaces.tui.screens.overlays.detail.DetailModal` drilled
+        from the SAME entity id, so the caller can suppress a duplicate push. A
+        bare harness without the accessor, or any non-matching top, yields
+        ``False`` (the push proceeds).
+
+        Args:
+            selection_id: The entity id the new drill targets.
+
+        Returns:
+            ``True`` when the same entity's card is already on top.
+        """
+        top_modal = getattr(self.app, "_top_modal", None)
+        if not callable(top_modal):
+            return False
+        top = top_modal()
+        return isinstance(top, DetailModal) and top.entity_id == selection_id
 
     def on_backlog_table_row_activated(self, message: BacklogTable.RowActivated) -> None:
         """Route a backlog Enter-selection to the DetailModal.
