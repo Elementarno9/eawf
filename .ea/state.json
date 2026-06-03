@@ -2484,6 +2484,18 @@
       "status": "done",
       "updated_at": "2026-06-03T15:33:07.340955Z"
     },
+    "P29-I08-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W12",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W12",
+      "scope_id": "P29-I08-W12",
+      "status": "done",
+      "updated_at": "2026-06-03T16:48:58.409180Z"
+    },
     "P29-I08-W26": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5268,9 +5280,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P29-I08-W12"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P29-I08",
     "phase_id": "P29",
     "project_code": "EAWF",
@@ -12692,7 +12702,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T16:17:45.734021Z",
+  "updated_at": "2026-06-03T16:48:58.409451Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35698,8 +35708,8 @@
       "blocks": [],
       "claim_session_id": "op-flow-p29-i08",
       "claimed_at": "2026-06-03T16:17:45.733770Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-03T16:48:58.409180Z",
+      "commit": "c2605e30af4b6c702badb40c49e384e642d008da",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -35711,10 +35721,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:19.652668Z",
-      "outcome": null,
+      "outcome": "build_breadcrumb de-links scope/code/leaf; W10 near-miss preserved; 1354 tui tests pass",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         "build_breadcrumb wires click on exactly phase and iter and run_action on scope/code/leaf is a no-op with nav_position byte-equal and no link CSS class applies to de-linked spans"
       ],
