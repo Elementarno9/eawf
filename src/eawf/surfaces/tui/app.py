@@ -422,6 +422,28 @@ class EaApp(App[None]):
         for theme in EA_THEMES:
             self.register_theme(theme)
         self.apply_theme(_persisted_theme())
+        # Bind the initial on-disk state SYNCHRONOUSLY here, before the Home
+        # mode composes its scope screen + attention band. ``on_mount`` is
+        # async and only binds real state after ``await connect()``, but the
+        # Home mode's scope screen auto-mounts on ``run()`` before that await
+        # resolves -- so without this the band composes while ``state`` is
+        # still ``None`` and the first settled frame can flash empty even
+        # when populated state is on disk. This mirrors
+        # ``action_switch_scope``'s already-synchronous ``load_state`` bind
+        # (a scope switch never renders against a stale binding). The
+        # ``init=False`` reactive stores the value without firing a watcher
+        # at construction; the binder's first ``on_state`` then re-delivers
+        # it through the normal refresh path (and the live poll / push
+        # backstop keeps it current). The user / portfolio scope has no
+        # on-disk ``state.json``, so its synthesized state binds in
+        # ``on_mount`` as before -- the disk-backed cold-mount race this
+        # hoist closes does not apply there.
+        if self._scope != "user" and self._state_path is not None:
+            from eawf.surfaces.tui.state_binding import load_state
+
+            initial_state = load_state(self._state_path)
+            if initial_state is not None:
+                self.state = initial_state
 
     async def on_mount(self) -> None:
         """Bind state read-only; the default (Home) mode auto-mounts.
@@ -430,12 +452,15 @@ class EaApp(App[None]):
         auto-initialises that mode's screen stack on run -- the Home
         factory builds the resolved scope screen -- so there is no explicit
         ``push_screen`` here. First paint fires as that scope screen
-        mounts; the initial state load is a single synchronous file read
-        inside :meth:`StateBinding.connect`, and the poll loop's first
-        probe is deferred behind ``asyncio.sleep`` so it never blocks the
-        paint. Themes are registered + the persisted one applied in
-        ``__init__`` (the App stylesheet that resolves the semantic
-        ``$var``\\ s is built before ``on_mount`` runs).
+        mounts; the initial disk-backed state is bound SYNCHRONOUSLY in
+        ``__init__`` (ahead of the Home compose, so the attention band reads
+        non-``None`` state at mount with no flash-of-stale-empty), and the
+        binder's :meth:`StateBinding.connect` re-delivers it + starts the
+        poll / push backstop. The poll loop's first probe is deferred behind
+        ``asyncio.sleep`` so it never blocks the paint. Themes are
+        registered + the persisted one applied in ``__init__`` (the App
+        stylesheet that resolves the semantic ``$var``\\ s is built before
+        ``on_mount`` runs).
         """
         self._binding = StateBinding(
             state_path=self._state_path,
