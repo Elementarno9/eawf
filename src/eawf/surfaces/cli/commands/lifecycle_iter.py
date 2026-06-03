@@ -563,3 +563,71 @@ def iter_close_cmd(
         mutation_kind=MutationKind.ITER_CLOSE,
         params={"iter_id": iter_id, "audit_id": audit},
     )
+
+
+@iter_app.command("candidate-tag")
+def iter_candidate_tag_cmd(
+    ctx: typer.Context,
+    iter_id: Annotated[str, typer.Argument(help="Iter id (e.g. P03-I02).")],
+    set_tag: Annotated[
+        str | None,
+        typer.Option(
+            "--set",
+            help="Proposed release tag to persist (vMAJOR.MINOR.PATCH, e.g. v0.5.0).",
+        ),
+    ] = None,
+) -> None:
+    """Show or set an iter's proposed release tag.
+
+    Without ``--set`` the command reads the iter's current
+    ``candidate_tag`` (printing a "none set" line when unset). With
+    ``--set <vX.Y.Z>`` it persists the tag through the daemon-backed
+    mutation path, the same surface the other iter mutations ride.
+    """
+    from eawf.surfaces.cli.commands.lifecycle import _load_state_readonly
+    from eawf.workflow.lifecycle.transitions import set_iter_candidate_tag
+
+    flags: GlobalFlags = ctx.obj
+    if not is_iter_id(iter_id):
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid iter id: {iter_id!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+
+    if set_tag is None:
+        loaded = _load_state_readonly(ctx)
+        if loaded is None:
+            return
+        state, _ = loaded
+        it = state.iters.get(iter_id)
+        if it is None:
+            cli_errors.emit_error(
+                cli_errors.UserError(f"unknown iter: {iter_id!r}", kind="NotFound"),
+                flags=flags,
+            )
+            return
+        tag = it.candidate_tag
+        text = (
+            f"iter candidate-tag {iter_id} {tag}"
+            if tag is not None
+            else f"iter candidate-tag {iter_id} none set"
+        )
+        emit_json_or_text(
+            {"iter": iter_id, "candidate_tag": tag},
+            text,
+            flags=flags,
+        )
+        return
+
+    _run_mutation(
+        ctx,
+        command="iter candidate-tag",
+        args={"id": iter_id, "tag": set_tag},
+        scope_id=iter_id,
+        text=f"iter candidate-tag {iter_id} {set_tag}",
+        envelope=lambda: {"iter": iter_id, "candidate_tag": set_tag},
+        mutate=lambda state: _wrap_no_return(
+            set_iter_candidate_tag(state, iter_id=iter_id, tag=set_tag)
+        ),
+    )

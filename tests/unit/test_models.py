@@ -425,6 +425,50 @@ def test_iter_round_trip() -> None:
     assert restored == it
 
 
+def _iter_kwargs() -> dict[str, object]:
+    """Return the minimal keyword set for a valid :class:`Iter`."""
+    return {
+        "id": "P01-I02",
+        "phase_id": "P01",
+        "title": "First iter",
+        "status": "planned",
+        "opened_at": datetime.now(UTC),
+    }
+
+
+def test_iter_candidate_tag_defaults_none() -> None:
+    """``candidate_tag`` is additive: an iter without it loads as ``None``."""
+    it = models.Iter(**_iter_kwargs())  # type: ignore[arg-type]
+    assert it.candidate_tag is None
+    # An on-disk row predating the field re-validates under ``extra="forbid"``.
+    restored = models.Iter.model_validate(it.model_dump(mode="json"))
+    assert restored.candidate_tag is None
+
+
+def test_iter_candidate_tag_accepts_valid_release_label() -> None:
+    """A ``vMAJOR.MINOR.PATCH`` tag is accepted and round-trips."""
+    it = models.Iter(candidate_tag="v0.5.0", **_iter_kwargs())  # type: ignore[arg-type]
+    assert it.candidate_tag == "v0.5.0"
+    restored = models.Iter.model_validate(it.model_dump(mode="json"))
+    assert restored.candidate_tag == "v0.5.0"
+
+
+@pytest.mark.parametrize(
+    "bad_tag",
+    [
+        "0.5",  # missing v prefix + patch segment
+        "v0.5",  # missing patch segment
+        "foo",  # not a version at all
+        "v0.5.0-junk",  # trailing junk past the semver core
+        "0.5.0",  # missing v prefix
+    ],
+)
+def test_iter_candidate_tag_rejects_malformed(bad_tag: str) -> None:
+    """A tag that violates the ``ReleaseStr`` pattern fails validation."""
+    with pytest.raises(ValidationError):
+        models.Iter(candidate_tag=bad_tag, **_iter_kwargs())  # type: ignore[arg-type]
+
+
 def test_artifact_basic() -> None:
     now = datetime.now(UTC)
     art = models.Artifact(

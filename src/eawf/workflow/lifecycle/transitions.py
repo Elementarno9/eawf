@@ -40,6 +40,7 @@ from eawf.workflow.lifecycle.iter_ import (
     edit_iter_plan,
     open_iter,
     plan_iter,
+    set_iter_candidate_tag,
 )
 from eawf.workflow.lifecycle.phase import (
     activate_phase,
@@ -186,6 +187,7 @@ __all__ = [
     "release_wave",
     "remove_wave_plan",
     "reopen_phase",
+    "set_iter_candidate_tag",
     "set_wave_deps",
     "start_wave",
     "switch_subproject",

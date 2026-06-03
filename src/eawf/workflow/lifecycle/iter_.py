@@ -295,6 +295,40 @@ def edit_iter_plan(
     return it
 
 
+def set_iter_candidate_tag(state: State, *, iter_id: str, tag: str) -> Iter:
+    """Set an iter's proposed release tag in place. Status-agnostic.
+
+    Stamps :attr:`Iter.candidate_tag` with a ``vMAJOR.MINOR.PATCH``
+    release tag an operator pencils onto the iter ahead of the
+    phase-close release pre-flight. The tag is routed through the model's
+    assignment validator so the ``ReleaseStr`` pattern is re-checked; an
+    invalid tag raises :class:`pydantic.ValidationError`. The set is
+    purely cosmetic metadata -- no lifecycle transition fires -- so the
+    helper deliberately does NOT gate on iter status (PLANNED, ACTIVE, and
+    CLOSED iters can all be tagged), mirroring :func:`edit_iter_plan`.
+
+    Args:
+        state: State to mutate in place.
+        iter_id: Canonical iter id (e.g. ``P03-I02``).
+        tag: Proposed release tag (``vMAJOR.MINOR.PATCH``, e.g.
+            ``v0.5.0``).
+
+    Returns:
+        The mutated :class:`Iter`.
+
+    Raises:
+        LifecycleError: when *iter_id* is unknown.
+        pydantic.ValidationError: when *tag* does not match the
+            ``ReleaseStr`` pattern.
+    """
+    it = state.iters.get(iter_id)
+    if it is None:
+        raise LifecycleError(f"unknown iter: {iter_id!r}")
+    it.__pydantic_validator__.validate_assignment(it, "candidate_tag", tag)
+    logger.info(f"set_iter_candidate_tag id={iter_id} tag={tag!r}")
+    return it
+
+
 def activate_iter(state: State, *, iter_id: str) -> Iter:
     """Flip a planned iter to active.
 

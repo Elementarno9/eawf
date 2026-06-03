@@ -36,6 +36,7 @@ from eawf.workflow.lifecycle.transitions import (
     release_wave,
     remove_wave_plan,
     reopen_phase,
+    set_iter_candidate_tag,
     set_wave_deps,
     switch_subproject,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "release_wave",
     "remove_wave_plan",
     "reopen_phase",
+    "set_iter_candidate_tag",
     "set_wave_deps",
     "switch_subproject",
 ]

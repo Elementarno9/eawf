@@ -352,7 +352,7 @@ def test_state_schema_version_accepts_supported_set() -> None:
 
     field = StateModel.model_fields["schema_version"]
     versions = set(get_args(field.annotation))
-    assert versions == {"1.0", "1.1", "1.2", "1.3"}
+    assert versions == {"1.0", "1.1", "1.2", "1.3", "1.4"}
 
 
 # ---- Transition plumb-through -----------------------------------------------

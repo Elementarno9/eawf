@@ -240,6 +240,14 @@ class Iter(_StrictModel):
     (pre-trigger states and in-code constructors stay valid); the lifecycle
     surface that opens iters sets the real value, and :class:`IterTrigger`
     documents how each value lands in the metric denominator.
+
+    ``candidate_tag`` carries a proposed ``vMAJOR.MINOR.PATCH`` release tag
+    for the iter -- the version an operator pencils in for the iter's
+    deliverable before the phase-close release pre-flight pins it. It is
+    strictly optional (default ``None``) so adding it is additive: an iter
+    without a candidate tag loads unchanged and a pre-1.4 ``state.json``
+    stays valid under ``extra="forbid"`` because the missing key takes the
+    default.
     """
 
     id: IterIdStr
@@ -248,6 +256,7 @@ class Iter(_StrictModel):
     description: Annotated[str, Field(max_length=500)] | None = None
     status: IterStatus
     trigger: IterTrigger = IterTrigger.NONE
+    candidate_tag: ReleaseStr | None = None
     wave_ids: list[WaveIdStr] = Field(default_factory=list)
     estimate_id: str | None = None
     audit_id: str | None = None
@@ -813,17 +822,17 @@ class Principal(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts ``"1.0"``, ``"1.1"``, ``"1.2"``, and
-    ``"1.3"`` so an on-disk state written before any bump still
+    ``schema_version`` accepts ``"1.0"``, ``"1.1"``, ``"1.2"``, ``"1.3"``,
+    and ``"1.4"`` so an on-disk state written before any bump still
     re-validates after the model advances — the migrate chain rewrites
     the version string in place, but a read of an un-migrated state must
     never reject. The accepted set drives the migrate guard's
     model-supported max, so the literals move in lockstep with the
     migration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,
-    ``v1_2_to_v1_3``).
+    ``v1_2_to_v1_3``, ``v1_3_to_v1_4``).
     """
 
-    schema_version: Literal["1.0", "1.1", "1.2", "1.3"]
+    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4"]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime

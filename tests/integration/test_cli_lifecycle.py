@@ -427,6 +427,63 @@ def test_iter_open_unknown_phase_exits_3(workspace: Path) -> None:
     assert res.exit_code == 1
 
 
+# ---- iter candidate-tag -----------------------------------------------------
+
+
+def _seed_open_iter(workspace: Path) -> None:
+    """Init a project, open P01, and open the P01-I01 iter."""
+    _init_project(workspace)
+    runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
+    runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "i"])
+
+
+def test_iter_candidate_tag_show_none_when_unset(workspace: Path) -> None:
+    _seed_open_iter(workspace)
+    res = runner.invoke(app, ["--json", "iter", "candidate-tag", "P01-I01"])
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    assert payload["iter"] == "P01-I01"
+    assert payload["candidate_tag"] is None
+
+
+def test_iter_candidate_tag_set_then_show_reflects_tag(workspace: Path) -> None:
+    _seed_open_iter(workspace)
+    set_res = runner.invoke(app, ["--json", "iter", "candidate-tag", "P01-I01", "--set", "v0.5.0"])
+    assert set_res.exit_code == 0, set_res.stdout
+    set_payload = json.loads(set_res.stdout)
+    assert set_payload["candidate_tag"] == "v0.5.0"
+    # The set persisted to state.json through the mutation path.
+    state = _read_state(workspace)
+    assert state["iters"]["P01-I01"]["candidate_tag"] == "v0.5.0"  # type: ignore[index]
+    # A subsequent show reflects the persisted tag.
+    show_res = runner.invoke(app, ["--json", "iter", "candidate-tag", "P01-I01"])
+    assert show_res.exit_code == 0, show_res.stdout
+    assert json.loads(show_res.stdout)["candidate_tag"] == "v0.5.0"
+
+
+def test_iter_candidate_tag_set_invalid_tag_exits_nonzero(workspace: Path) -> None:
+    _seed_open_iter(workspace)
+    res = runner.invoke(app, ["iter", "candidate-tag", "P01-I01", "--set", "0.5.0"])
+    assert res.exit_code != 0
+    # The rejected tag never lands on disk.
+    state = _read_state(workspace)
+    assert state["iters"]["P01-I01"]["candidate_tag"] is None  # type: ignore[index]
+
+
+def test_iter_candidate_tag_invalid_iter_id_exits_nonzero(workspace: Path) -> None:
+    _seed_open_iter(workspace)
+    res = runner.invoke(app, ["iter", "candidate-tag", "not-an-iter"])
+    assert res.exit_code != 0
+    assert "invalid iter id" in res.stdout
+
+
+def test_iter_candidate_tag_unknown_iter_exits_nonzero(workspace: Path) -> None:
+    _seed_open_iter(workspace)
+    res = runner.invoke(app, ["iter", "candidate-tag", "P01-I99"])
+    assert res.exit_code != 0
+    assert "unknown iter" in res.stdout
+
+
 def test_iter_close_with_pending_wave_exits_4(workspace: Path) -> None:
     _init_project(workspace)
     runner.invoke(app, ["phase", "open", "--auto", "--title", "x"])
