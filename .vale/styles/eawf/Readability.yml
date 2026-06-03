@@ -1,0 +1,7 @@
+extends: metric
+message: "LIX readability is %s (target <= 50 for an unfamiliar reader; > 55 is hard going — split the sentence)."
+link: https://vale.sh/docs/checks/metric
+scope: summary
+formula: |
+  (words / sentences) + ((long_words * 100) / words)
+condition: '> 55'

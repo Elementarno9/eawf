@@ -59,6 +59,8 @@ HOOK_FILTERS: dict[str, re.Pattern[str]] = {
     "eawf013-bracket-position": _MARKDOWN,
     "eawf014-no-manual-wrap": _MARKDOWN,
     "eawf015-ears-advisory": _MARKDOWN,
+    "eawf017-inline-refs": _MARKDOWN,
+    "vale-prose": _MARKDOWN,
     "plugin-doctor-drift": _PLUGIN_SURFACE,
 }
 

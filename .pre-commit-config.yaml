@@ -188,6 +188,30 @@ repos:
         files: '^\.ea/state\.json$'
         pass_filenames: false
         stages: [pre-commit]
+      - id: eawf017-inline-refs
+        name: eawf017-inline-refs
+        entry: uv run eawf hook eawf017-inline-refs
+        language: system
+        # EAWF017 over the staged .md delta only: flags inline bare URLs and
+        # more than two inline path:line refs per prose block (they must move
+        # into a numbered ## References table). Composes with EAWF013 (marker
+        # position) and the citation-resolution validator (marker resolution).
+        files: '\.md$'
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: vale-prose
+        name: vale-prose
+        entry: uv run eawf hook vale-prose
+        language: system
+        # Vale prose linter (Google package + custom eawf style) over the
+        # staged .md delta. Non-blocking (advisory-first per the doc-clarity
+        # rollout) and fails open when the `vale` binary is absent, so a
+        # machine without Vale installed still commits. CI installs vale +
+        # runs `vale sync` to fetch the Google package; locally it is a skip.
+        files: '\.md$'
+        pass_filenames: false
+        stages: [pre-commit]
+        verbose: true
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift

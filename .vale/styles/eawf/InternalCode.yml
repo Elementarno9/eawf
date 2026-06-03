@@ -1,0 +1,11 @@
+extends: existence
+message: "Internal code '%s' appears without a plain-language gloss — define it on first use for an unfamiliar reader."
+level: warning
+nonword: true
+ignorecase: false
+tokens:
+  - '\bP\d{2,}(?:-I\d{2,})?(?:-W\d{2,})?\b'
+  - '\bC0\d[a-d]?\b'
+  - '\bSWITCH_[A-Z]+\b'
+  - '\bD-SUP-\d+\b'
+  - '\bH\d{2,}-\d{2,}\b'

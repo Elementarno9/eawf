@@ -156,12 +156,13 @@ target-version = "py314"
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF", "C901"]
 ignore = []
 # ``EAWF0##`` are external lint codes owned by eawf's own pre-commit hooks
-# (EAWF001-016, EAWF020), not ruff rules. Declaring them keeps ruff from
+# (EAWF001-017, EAWF020), not ruff rules. Declaring them keeps ruff from
 # treating an inline ``# noqa: EAWF0##`` waiver as RUF102 (invalid code) /
 # RUF100 (unused) and auto-stripping it — the waiver is honored by the
-# matching eawf hook. EAWF016 is the entity-title-clarity rule; EAWF020 is the
-# changelog-laconic-bullet rule (renumbered from the original EAWF016 so the
-# title-clarity rule could take 016 per the doc-clarity code map).
+# matching eawf hook. EAWF016 is the entity-title-clarity rule; EAWF017 is the
+# inline-reference tabulation rule; EAWF020 is the changelog-laconic-bullet
+# rule (renumbered from the original EAWF016 so the title-clarity rule could
+# take 016 per the doc-clarity code map).
 external = [
     "EAWF001",
     "EAWF002",
@@ -173,6 +174,7 @@ external = [
     "EAWF014",
     "EAWF015",
     "EAWF016",
+    "EAWF017",
     "EAWF020",
 ]
 
@@ -233,11 +235,12 @@ max-complexity = 10
 # Registration for the project's custom static-analysis rules under
 # ``src/eawf/platform/lint/`` (EAWF001 log-format, EAWF002 log-key naming,
 # EAWF003 logger acquisition, EAWF010 module-length advisory alarm,
-# EAWF011 cognitive-complexity gate, EAWF016 entity-title-clarity, EAWF020
-# changelog-laconic-bullet). Ruff carries no ``EAWF`` plugin, so these checks
-# read their config from this table rather than ``[tool.ruff.lint]``.
-# ``enabled`` is the rule allow-list a pre-commit dispatcher iterates; per-rule
-# knobs live in the sub-tables (only EAWF010 / EAWF011 carry tunables).
+# EAWF011 cognitive-complexity gate, EAWF016 entity-title-clarity, EAWF017
+# inline-reference tabulation, EAWF020 changelog-laconic-bullet). Ruff carries
+# no ``EAWF`` plugin, so these checks read their config from this table rather
+# than ``[tool.ruff.lint]``. ``enabled`` is the rule allow-list a pre-commit
+# dispatcher iterates; per-rule knobs live in the sub-tables (only EAWF010 /
+# EAWF011 carry tunables).
 enabled = [
     "EAWF001",
     "EAWF002",
@@ -245,6 +248,7 @@ enabled = [
     "EAWF010",
     "EAWF011",
     "EAWF016",
+    "EAWF017",
     "EAWF020",
 ]
 
