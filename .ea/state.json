@@ -2363,6 +2363,18 @@
       "scope_id": "P29-I08-W01",
       "status": "done",
       "updated_at": "2026-06-03T13:48:28.470073Z"
+    },
+    "P29-I08-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W02",
+      "scope_id": "P29-I08-W02",
+      "status": "done",
+      "updated_at": "2026-06-03T13:57:17.693588Z"
     }
   },
   "agent_sessions": {
@@ -10129,6 +10141,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I08-W01",
       "updated_at": "2026-06-03T13:29:35.685941Z"
+    },
+    "P29-I08-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W02-bucket-20260603T135036Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W02",
+      "updated_at": "2026-06-03T13:50:36.323530Z"
     }
   },
   "goals": {
@@ -12277,7 +12302,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T13:48:28.470482Z",
+  "updated_at": "2026-06-03T13:57:17.693958Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -34936,10 +34961,10 @@
       "blocks": [
         "P29-I08-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T13:50:36.323524Z",
+      "closed_at": "2026-06-03T13:57:17.693588Z",
+      "commit": "20f0693474befc29ac6910f8d20ad192e6f29ef8",
       "deps": [
         "P29-I08-W01"
       ],
@@ -34953,10 +34978,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:14.138130Z",
-      "outcome": null,
+      "outcome": "build_auditor_prompt gains rubric + evidence_block + include_diff params; refute-first per-item block keyed by id+quality_dimension; diff omittable; base-case byte-identical; 48 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "build_auditor_prompt gains rubric and evidence_block params and emits a disprove-each-item instruction per RubricItem id with diff omittable"
       ],
