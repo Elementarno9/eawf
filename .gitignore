@@ -42,6 +42,11 @@ CLAUDE.md
 .codex/
 .opencode/
 
+# Vale prose-linter: the eawf style package + .vale.ini ARE committed; the
+# Google base package is fetched by `vale sync` into StylesPath at CI time
+# and must not be committed.
+.vale/styles/Google/
+
 # Self-hosted marketplace catalog pointers ARE committed — small declarative
 # manifests (NOT rendered plugin trees) that publish the install source for
 # each runtime. Re-included with explicit negations so an operator's global
