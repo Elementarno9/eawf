@@ -36,6 +36,18 @@ beyond the module-level ``logger``. The CLI handlers in
 
 from __future__ import annotations
 
+from eawf.workflow.dispatch.clarity_judge import (
+    CLARITY_DESCRIPTION_SURFACE,
+    DEFAULT_CLARITY_JUROR_COUNT,
+    PASS_DIMENSION_SCORE,
+    ClarityBallotFn,
+    ClarityJudgeResult,
+    build_clarity_judge_prompt,
+    clarity_criteria,
+    juror_verdict_from_criteria,
+    parse_clarity_judge_body,
+    rollup_clarity_judges,
+)
 from eawf.workflow.dispatch.cost_ab import (
     DEFAULT_FLIP_THRESHOLD,
     DEFAULT_PASS_REGRESSION_THRESHOLD,
@@ -84,13 +96,18 @@ from eawf.workflow.dispatch.routing import (
 from eawf.workflow.dispatch.seed import seed_interim_verdict
 
 __all__ = [
+    "CLARITY_DESCRIPTION_SURFACE",
+    "DEFAULT_CLARITY_JUROR_COUNT",
     "DEFAULT_FLIP_THRESHOLD",
     "DEFAULT_MAX_ATTEMPTS",
     "DEFAULT_PASS_REGRESSION_THRESHOLD",
     "DEFAULT_ROUTING_TABLE",
     "DISPATCH_RUNTIMES",
     "MIN_COST_AB_N",
+    "PASS_DIMENSION_SCORE",
     "TOP_TIER_INDEX",
+    "ClarityBallotFn",
+    "ClarityJudgeResult",
     "CostABReport",
     "CostABRow",
     "CostABStatus",
@@ -107,15 +124,20 @@ __all__ = [
     "TierRecommendation",
     "VerdictObservation",
     "assist_with_schema",
+    "build_clarity_judge_prompt",
     "build_role_contract",
     "build_subagent_spec",
+    "clarity_criteria",
     "compute_cost_ab",
     "failure_tier_for_action",
+    "juror_verdict_from_criteria",
     "model_for_runtime",
+    "parse_clarity_judge_body",
     "recommend_tier",
     "render_dispatch_envelope",
     "render_wave_prompt",
     "resolve_routing",
+    "rollup_clarity_judges",
     "seed_interim_verdict",
     "spawn_with_retry",
     "summarize_cost_ab",
