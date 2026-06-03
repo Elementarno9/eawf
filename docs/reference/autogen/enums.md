@@ -9,7 +9,7 @@ that module is listed with its members.
 | `AgentReportVerdict` | `pass`, `pass-with-followups`, `fail`, `blocked` |
 | `AgentSessionRole` | `researcher`, `planner`, `executor`, `auditor`, `reviewer`, `polisher`, `operator`, `domain-specialist` |
 | `AgentSessionStatus` | `active`, `checkpointed`, `closed`, `stale`, `failed` |
-| `ArtifactKind` | `audit_report`, `notebook`, `dataset`, `model`, `backtest`, `strategy`, `binary`, `scene`, `playtest_session`, `cve_ref`, `research_brief`, `plan_spec`, `agent_report` |
+| `ArtifactKind` | `audit_report`, `notebook`, `dataset`, `model`, `backtest`, `strategy`, `binary`, `scene`, `playtest_session`, `cve_ref`, `research_brief`, `plan_spec`, `agent_report`, `math_explainer` |
 | `AuditKind` | `evaluation`, `ship-gate`, `incident`, `review` |
 | `AuditStatus` | `pending`, `running`, `complete`, `failed` |
 | `AuditVerdict` | `pass`, `minor`, `major` |

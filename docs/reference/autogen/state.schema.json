@@ -2935,7 +2935,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Top-level eawf state document.\n\n``schema_version`` accepts ``\"1.0\"``, ``\"1.1\"``, ``\"1.2\"``, ``\"1.3\"``,\nand ``\"1.4\"`` so an on-disk state written before any bump still\nre-validates after the model advances — the migrate chain rewrites\nthe version string in place, but a read of an un-migrated state must\nnever reject. The accepted set drives the migrate guard's\nmodel-supported max, so the literals move in lockstep with the\nmigration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,\n``v1_2_to_v1_3``, ``v1_3_to_v1_4``).",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts ``\"1.0\"``, ``\"1.1\"``, ``\"1.2\"``, ``\"1.3\"``,\n``\"1.4\"``, and ``\"1.5\"`` so an on-disk state written before any bump\nstill re-validates after the model advances — the migrate chain\nrewrites the version string in place, but a read of an un-migrated\nstate must never reject. The accepted set drives the migrate guard's\nmodel-supported max, so the literals move in lockstep with the\nmigration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,\n``v1_2_to_v1_3``, ``v1_3_to_v1_4``, ``v1_4_to_v1_5``). The ``1.5``\nedge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -3224,7 +3224,8 @@
         "1.1",
         "1.2",
         "1.3",
-        "1.4"
+        "1.4",
+        "1.5"
       ],
       "title": "Schema Version",
       "type": "string"
