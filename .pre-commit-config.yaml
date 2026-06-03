@@ -269,6 +269,21 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: jury-discrimination-gate
+        name: jury-discrimination-gate
+        entry: uv run python tools/jury_discrimination_gate.py
+        language: system
+        # Proves the cross-vendor jury DISCRIMINATES without a jury certifying
+        # a jury (no meta-circularity): feeds the pure per-item reducer
+        # (reduce_per_item_ballots) three canned ballot frames in-process and
+        # asserts a faithful frame -> PASS, a planted-violation frame -> FAIL
+        # citing the violated item + refutation, and a hard near-miss frame
+        # (mostly passing, one credible veto) -> FAIL citing its item. A future
+        # regression that makes the reducer rubber-stamp is caught here. Pure +
+        # deterministic (no live model, mutates nothing) — always-run, no filter.
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift
