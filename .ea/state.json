@@ -2100,6 +2100,18 @@
       "status": "done",
       "updated_at": "2026-06-03T00:19:48.798504Z"
     },
+    "P29-I06-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W02",
+      "scope_id": "P29-I06-W02",
+      "status": "done",
+      "updated_at": "2026-06-03T00:32:35.163385Z"
+    },
     "P29-I06-W03": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -2123,6 +2135,18 @@
       "scope_id": "P29-I06-W04",
       "status": "done",
       "updated_at": "2026-06-03T00:19:47.541750Z"
+    },
+    "P29-I06-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I06-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I06-W05",
+      "scope_id": "P29-I06-W05",
+      "status": "done",
+      "updated_at": "2026-06-03T00:32:35.798774Z"
     },
     "P29-I06-W08": {
       "actual_cost_usd": 0.0,
@@ -9556,6 +9580,19 @@
       "scope_id": "P29-I06-W01",
       "updated_at": "2026-06-02T23:40:03.034079Z"
     },
+    "P29-I06-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W02-bucket-20260603T002054Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I06-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I06-W02",
+      "updated_at": "2026-06-03T00:20:54.826964Z"
+    },
     "P29-I06-W03": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I06-W03-bucket-20260602T234003Z",
@@ -9581,6 +9618,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I06-W04",
       "updated_at": "2026-06-02T23:40:04.024431Z"
+    },
+    "P29-I06-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I06-W05-bucket-20260603T002055Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I06-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I06-W05",
+      "updated_at": "2026-06-03T00:20:55.316197Z"
     },
     "P29-I06-W08": {
       "confidence": "low",
@@ -11682,7 +11732,7 @@
   "schema_version": "1.4",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T00:19:50.052685Z",
+  "updated_at": "2026-06-03T00:32:35.799091Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -33573,10 +33623,10 @@
     "P29-I06-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-03T00:20:54.826957Z",
+      "closed_at": "2026-06-03T00:32:35.163385Z",
+      "commit": "b314ed9694a75377deb69755b92f2991808f000f",
       "deps": [
         "P29-I06-W01"
       ],
@@ -33592,10 +33642,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.268219Z",
-      "outcome": null,
+      "outcome": "Added orphan-disk-vs-registry drift kind (5th) to plugin doctor; flags unregistered skill dirs, exit STATE_CONFLICT(3), no auto-register",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "plugin doctor gains a disk-to-registry orphan walk flagging unregistered skills (explicit growth only, no auto-import)"
       ],
@@ -33674,10 +33724,10 @@
         "P29-I06-W06",
         "P29-I06-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i06",
+      "claimed_at": "2026-06-03T00:20:55.316192Z",
+      "closed_at": "2026-06-03T00:32:35.798774Z",
+      "commit": "0ed8038154732bc9fed02b9878111a841f4a07ff",
       "deps": [
         "P29-I06-W01",
         "P29-I06-W03"
@@ -33696,10 +33746,10 @@
       "intent": null,
       "iter_id": "P29-I06",
       "opened_at": "2026-06-01T00:19:14.268552Z",
-      "outcome": null,
+      "outcome": "Marketplace catalog pointers (.claude-plugin npm + .agents git-subdir from pyproject URL); packager publish-source switch, local dev default kept",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "self-hosted marketplace catalog pointers published",
         "pre-claim spike confirms the codex remote plugin source shape (git+ref+path vs tree-in-repo)"
