@@ -1,0 +1,369 @@
+name: Plugin Release
+
+# Plugin Release pipeline. Fires on a ``v*`` version-tag push (mirrors the
+# trigger style of release.yaml / phase-release.yaml) and publishes the
+# rendered runtime plugin trees to their self-hosted marketplace sources:
+#
+#   * Claude — the rendered ``.claude-plugin/`` tree is published to npm as
+#     the ``eawf`` package (the ``.claude-plugin/marketplace.json`` pointer
+#     W05 ships references ``{"source": "npm", "package": "eawf"}``).
+#   * Codex  — the rendered ``plugins/eawf/`` sub-tree is force-written to a
+#     dedicated ``plugins-dist`` branch (the ref the Codex ``git-subdir``
+#     pointer references at ``path: ./plugins/eawf``, ``ref: plugins-dist``).
+#
+# The render step calls the packager library directly (``uv run python``)
+# rather than ``eawf plugin package`` because the CLI does not expose the
+# ``publish_source`` switch — only the library accepts ``PublishSource.NPM``
+# / ``PublishSource.GIT_SUBDIR`` to emit the published-pointer marketplace
+# shape. A blocking validate gate runs over both rendered trees before any
+# publish. ``workflow_dispatch`` renders + validates as a dry-run but never
+# publishes (the publish jobs gate on a real ``v*`` tag push).
+#
+# Secrets consumed (none inlined): ``NPM_TOKEN`` for the npm publish;
+# ``GITHUB_TOKEN`` (built-in) for the plugins-dist branch push + release
+# notes.
+
+on:
+  push:
+    tags:
+      - "v*" # v0.5.0, v0.5.0a1, v0.5.0rc1, ...
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Render + validate only; skip publish"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+
+# One publish per tag; never cancel an in-flight publish.
+concurrency:
+  group: plugin-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package-validate:
+    name: Package + validate both runtimes
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Resolve plugin version
+        id: version
+        # Derive the published version from the package itself so the npm
+        # artifact + plugin manifests match the source-of-truth
+        # ``eawf.__version__`` (which W03 couples to the tag at release).
+        run: |
+          set -euo pipefail
+          version="$(uv run python -c 'import eawf; print(eawf.__version__)')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "resolved plugin version: $version"
+
+      - name: Render published plugin trees (claude=npm, codex=git-subdir)
+        # The CLI ``eawf plugin package`` always emits the LOCAL source
+        # shape; the published-pointer shape is library-only. Call the
+        # packager directly with the published ``PublishSource`` so the
+        # rendered marketplace manifests carry the npm / git-subdir
+        # pointers the W05 self-hosted catalog references.
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          from pathlib import Path
+
+          from eawf.runtime.runtimes.claude.plugin_package import (
+              PublishSource as ClaudePublishSource,
+              package_plugin as package_claude,
+          )
+          from eawf.runtime.runtimes.codex.plugin_package import (
+              PublishSource as CodexPublishSource,
+              package_plugin as package_codex,
+          )
+
+          claude_target = Path("build/eawf-plugin")
+          codex_target = Path("build/eawf-codex-marketplace")
+
+          claude_result = package_claude(
+              claude_target,
+              force=True,
+              publish_source=ClaudePublishSource.NPM,
+          )
+          print(f"claude tree: {claude_result.target}")
+
+          codex_result = package_codex(
+              codex_target,
+              force=True,
+              publish_source=CodexPublishSource.GIT_SUBDIR,
+          )
+          print(f"codex tree: {codex_result.target}")
+          PY
+
+      - name: Validate gate (blocking) — claude + codex trees
+        # Blocking pre-publish gate. For Claude we prefer the official
+        # ``claude plugin validate`` when the binary is present in CI;
+        # otherwise we fall back to a JSON parse + required-key check so a
+        # malformed manifest still reds the job. For Codex (no validator
+        # binary) we parse the marketplace + plugin manifest and assert the
+        # git-subdir pointer + required keys are intact.
+        run: |
+          set -euo pipefail
+          claude_tree="build/eawf-plugin"
+          codex_market="build/eawf-codex-marketplace/.agents/plugins/marketplace.json"
+          codex_manifest="build/eawf-codex-marketplace/plugins/eawf/.codex-plugin/plugin.json"
+
+          if command -v claude >/dev/null 2>&1; then
+            echo "claude binary present — running official validator"
+            (cd "$claude_tree" && claude plugin validate .)
+          else
+            echo "claude binary absent — falling back to JSON-schema/parse check"
+          fi
+
+          uv run python - "$claude_tree" "$codex_market" "$codex_manifest" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          claude_tree = Path(sys.argv[1])
+          codex_market = Path(sys.argv[2])
+          codex_manifest = Path(sys.argv[3])
+
+          failures: list[str] = []
+
+          def load(path: Path) -> dict | None:
+              if not path.is_file():
+                  failures.append(f"missing: {path}")
+                  return None
+              try:
+                  return json.loads(path.read_text(encoding="utf-8"))
+              except json.JSONDecodeError as exc:
+                  failures.append(f"invalid JSON {path}: {exc}")
+                  return None
+
+          # Claude plugin manifest + marketplace pointer (npm source).
+          claude_plugin = load(claude_tree / ".claude-plugin" / "plugin.json")
+          if claude_plugin is not None:
+              for key in ("name", "version"):
+                  if key not in claude_plugin:
+                      failures.append(f"claude plugin.json missing {key!r}")
+              if claude_plugin.get("name") != "eawf":
+                  failures.append(f"claude plugin name {claude_plugin.get('name')!r} != 'eawf'")
+
+          claude_market = load(claude_tree / ".claude-plugin" / "marketplace.json")
+          if claude_market is not None:
+              plugins = claude_market.get("plugins", [])
+              entry = next((p for p in plugins if p.get("name") == "eawf"), None)
+              if entry is None:
+                  failures.append("claude marketplace has no 'eawf' plugin entry")
+              else:
+                  source = entry.get("source")
+                  if not (isinstance(source, dict) and source.get("source") == "npm"):
+                      failures.append(f"claude marketplace source not npm pointer: {source!r}")
+
+          # Codex marketplace + manifest (git-subdir pointer).
+          market = load(codex_market)
+          if market is not None:
+              plugins = market.get("plugins", [])
+              entry = next((p for p in plugins if p.get("name") == "eawf"), None)
+              if entry is None:
+                  failures.append("codex marketplace has no 'eawf' plugin entry")
+              else:
+                  source = entry.get("source")
+                  if not (isinstance(source, dict) and source.get("source") == "git-subdir"):
+                      failures.append(f"codex marketplace source not git-subdir: {source!r}")
+                  elif source.get("ref") != "plugins-dist":
+                      failures.append(f"codex git-subdir ref {source.get('ref')!r} != 'plugins-dist'")
+
+          codex_plugin = load(codex_manifest)
+          if codex_plugin is not None and "name" not in codex_plugin:
+              failures.append("codex plugin.json missing 'name'")
+
+          if failures:
+              print("plugin validate gate FAILED:")
+              for entry in failures:
+                  print(f"  - {entry}")
+              sys.exit(1)
+          print("plugin validate gate passed (both runtimes)")
+          PY
+
+      - name: Upload rendered trees
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-trees
+          path: build/
+          retention-days: 7
+
+  publish-claude-npm:
+    name: Publish Claude plugin to npm
+    needs: package-validate
+    # Live publish, gated on a real ``v*`` tag push. ``workflow_dispatch``
+    # renders + validates in package-validate but never reaches publish.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download rendered trees
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-trees
+          path: build/
+
+      - name: Set up Node + npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Synthesize npm package manifest
+        # The rendered Claude tree carries ``.claude-plugin/plugin.json``
+        # (the Claude marketplace manifest) but no ``package.json``; npm
+        # needs one. Synthesize a minimal manifest naming the package
+        # ``eawf`` (matching the W05 npm-source pointer ``package: "eawf"``)
+        # at the resolved version, bundling the whole rendered tree.
+        env:
+          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd build/eawf-plugin
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["PLUGIN_VERSION"]
+          manifest = {
+              "name": "eawf",
+              "version": version,
+              "description": (
+                  "Eä Workflow — state-first, agent-driven development framework "
+                  "(Claude Code plugin)."
+              ),
+              "license": "MIT",
+              "repository": {
+                  "type": "git",
+                  "url": "git+https://github.com/Elementarno9/eawf.git",
+              },
+              "files": [
+                  ".claude-plugin/",
+                  "skills/",
+                  "agents/",
+                  "hooks.json",
+                  "hooks/",
+                  "README.md",
+              ],
+          }
+          Path("package.json").write_text(
+              json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+          )
+          print(f"wrote package.json name=eawf version={version}")
+          PY
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd build/eawf-plugin
+          npm publish --access public
+
+  publish-codex-branch:
+    name: Publish Codex tree to plugins-dist branch
+    needs: package-validate
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # force-push the rendered tree to plugins-dist
+    steps:
+      - name: Download rendered trees
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-trees
+          path: build/
+
+      - name: Force-write rendered Codex tree to plugins-dist branch
+        # The Codex git-subdir pointer references ``path: ./plugins/eawf``,
+        # ``ref: plugins-dist``. Lay the rendered ``plugins/eawf/`` sub-tree
+        # at the branch root so the pointer resolves, then force-push an
+        # orphan commit (the branch is a published-artifact mirror, not a
+        # development branch, so a single squashed snapshot per release is
+        # the intended shape). Uses the built-in ``GITHUB_TOKEN``.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          src="build/eawf-codex-marketplace/plugins/eawf"
+          if [ ! -d "$src" ]; then
+            echo "rendered codex sub-tree missing: $src" >&2
+            exit 1
+          fi
+
+          work="$(mktemp -d)"
+          mkdir -p "$work/plugins/eawf"
+          cp -R "$src/." "$work/plugins/eawf/"
+          # Carry the marketplace manifest too so the branch is a complete
+          # self-hosted catalog snapshot.
+          mkdir -p "$work/.agents/plugins"
+          cp build/eawf-codex-marketplace/.agents/plugins/marketplace.json \
+            "$work/.agents/plugins/marketplace.json"
+
+          cd "$work"
+          git init -q
+          git checkout -q --orphan plugins-dist
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publish Codex plugin tree for ${TAG} (version ${PLUGIN_VERSION})"
+          git push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" \
+            plugins-dist
+
+  release-notes:
+    name: Publish plugin release notes
+    needs: [package-validate, publish-claude-npm, publish-codex-branch]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # gh release create
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Synthesize + attach plugin release notes
+        # Mirrors phase-release.yaml's notes step. Best-effort: appends a
+        # plugin-distribution section to the existing tag release (created
+        # by phase-release.yaml) or creates one if absent.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Plugin distribution"
+            echo
+            echo "- Claude: \`npm install eawf@${PLUGIN_VERSION}\` (or \`/plugin install eawf@eawf-local\` after \`marketplace add\`)."
+            echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
+          } > plugin-notes.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file plugin-notes.md
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file plugin-notes.md
+          fi
