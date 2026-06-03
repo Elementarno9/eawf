@@ -2544,6 +2544,30 @@
       "status": "done",
       "updated_at": "2026-06-03T17:14:33.308744Z"
     },
+    "P29-I08-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W18",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W18",
+      "scope_id": "P29-I08-W18",
+      "status": "done",
+      "updated_at": "2026-06-03T17:37:30.432257Z"
+    },
+    "P29-I08-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W19",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W19",
+      "scope_id": "P29-I08-W19",
+      "status": "done",
+      "updated_at": "2026-06-03T17:37:31.766921Z"
+    },
     "P29-I08-W26": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -10577,6 +10601,32 @@
       "scope_id": "P29-I08-W16",
       "updated_at": "2026-06-03T17:14:32.568550Z"
     },
+    "P29-I08-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W18-bucket-20260603T173729Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W18",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W18",
+      "updated_at": "2026-06-03T17:37:29.732636Z"
+    },
+    "P29-I08-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W19-bucket-20260603T173731Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I08-W19",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I08-W19",
+      "updated_at": "2026-06-03T17:37:31.091554Z"
+    },
     "P29-I08-W26": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I08-W26-bucket-20260603T153314Z",
@@ -12802,7 +12852,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T17:14:33.309049Z",
+  "updated_at": "2026-06-03T17:37:31.767278Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -36006,10 +36056,10 @@
         "P29-I08-W19",
         "P29-I08-W20"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T17:37:29.732627Z",
+      "closed_at": "2026-06-03T17:37:30.432257Z",
+      "commit": "4bfd0497a64822a7651cd58bb4a0d55e572bd62d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36022,10 +36072,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:23.172993Z",
-      "outcome": null,
+      "outcome": "hoist synchronous initial state bind into EaApp.__init__ ahead of Home compose; cold-mount race fixed (gates fail pre-W18, pass post); watch_state untouched",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "app.state is bound from the synchronous initial load_state before the Home screen composes so the feed reads non-None state at mount"
       ],
@@ -36037,10 +36087,10 @@
     "P29-I08-W19": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T17:37:31.091548Z",
+      "closed_at": "2026-06-03T17:37:31.766921Z",
+      "commit": "98ce3b7db8f3320f84b7477a65efaad9bd4e3e62",
       "deps": [
         "P29-I08-W18"
       ],
@@ -36055,10 +36105,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:23.765324Z",
-      "outcome": null,
+      "outcome": "cold-mount Pilot gates: first pre-settle frame populated + empty-Static absent + one DOM pass; late None->State push fires one _rebuild; PoC green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "the first captured pre-settle frame has populated rows for a populated fixture and no empty-class Static and a late None-to-State push populates within one on_state"
       ],
