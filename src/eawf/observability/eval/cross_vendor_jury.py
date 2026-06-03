@@ -39,6 +39,22 @@ The convener is **injected + testable**: it takes a per-runtime spawn factory
 each runtime's :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
 (via :func:`eawf.runtime.runtimes.selector.select_adapter`) while a test binds
 recording stubs -- no real subprocess, no network, no cost.
+
+Per-rubric-item reduction (P29-I08-W04). The holistic path collects ONE
+verdict per juror and reduces it once. The per-item path
+(:func:`reduce_per_item_ballots`) lifts that to ONE vote per rubric item per
+juror: each juror returns a :class:`PerItemJurorBallot` of
+:class:`RubricItemVote` rows (one per jury-scorable behaviour id), and the
+reducer resolves each item independently before folding the item verdicts into
+a wave-level outcome. The per-item reducer reuses the holistic
+:func:`~eawf.observability.eval.jury.aggregate_jury` per item, so the
+minority-veto (one credible refutation kills the item) and split (-> NEEDS_USER)
+semantics are byte-identical to the holistic path -- only the granularity
+changes. The wave-level fold mirrors the holistic escalation order: any item
+FAIL -> wave FAIL; else any item NEEDS_USER -> wave NEEDS_USER; else PASS. The
+reducer is **pure** (no spawn, no I/O), so it is deterministically testable over
+canned ballots; the holistic :func:`convene_cross_vendor_jury` API is unchanged
+for existing callers.
 """
 
 from __future__ import annotations
@@ -161,6 +177,272 @@ class CrossVendorJuryResult(BaseModel):
         closing the wave.
         """
         return self.outcome is JuryAggregateOutcome.NEEDS_USER
+
+
+class RubricItemVote(BaseModel):
+    """One juror's vote on a single rubric item.
+
+    The per-item upgrade of a holistic ballot: instead of one verdict per
+    juror, a juror returns one of these per rubric item id so the reduction can
+    veto (and cite) at item granularity. A failing vote SHOULD carry a
+    *refutation* -- the credible-refutation text that justifies the veto under
+    the refute-first rubric -- so the result can name which item failed and why.
+
+    Attributes:
+        item_id: The rubric behaviour id (a ``B<n>`` label) this vote scores.
+            Matched against the convened rubric's item ids by the reducer.
+        passed: Whether this juror could NOT refute the item (the refute-first
+            pass) -- ``True`` passes the item, ``False`` votes to fail it.
+        refutation: The credible-refutation text justifying a ``passed=False``
+            vote, or ``None``. A failing vote with a refutation is a veto; a
+            failing vote with no refutation is a non-veto non-pass.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    item_id: str = Field(min_length=1)
+    passed: bool
+    refutation: str | None = Field(default=None, max_length=2000)
+
+
+class PerItemJurorBallot(BaseModel):
+    """One juror's per-item ballot: a vote for every rubric item.
+
+    Replaces the holistic one-verdict-per-juror ballot with one
+    :class:`RubricItemVote` per rubric item id, so the reduction is per item
+    rather than per ballot. The reducer enforces that a ballot's votes cover the
+    convened rubric's item ids exactly -- a vote on an unknown item id is
+    rejected (see :func:`reduce_per_item_ballots`).
+
+    Attributes:
+        juror: The runtime family (juror id) that cast this ballot, one of
+            :data:`JURY_RUNTIME_FAMILIES`. Mirrors
+            :attr:`JurorOutcome.runtime`.
+        votes: One :class:`RubricItemVote` per rubric item the juror scored.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    juror: str = Field(min_length=1)
+    votes: tuple[RubricItemVote, ...]
+
+
+class PerItemVerdict(BaseModel):
+    """The reduced verdict for one rubric item across all jurors.
+
+    Attributes:
+        item_id: The rubric behaviour id this verdict resolves.
+        outcome: The per-item :class:`~eawf.observability.eval.jury.JuryAggregateOutcome`
+            -- ``PASS`` when every juror passed the item, ``FAIL`` when any
+            juror vetoed it with a refutation (minority-veto), ``NEEDS_USER``
+            when the jurors split with no veto.
+        veto_count: Number of jurors that vetoed this item (a ``passed=False``
+            vote carrying a refutation).
+        refutations: The refutation text from every juror that vetoed this item,
+            in juror order, so a caller can cite which item failed and why.
+        reasons: One short string per signal that drove the per-item outcome.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    item_id: str = Field(min_length=1)
+    outcome: JuryAggregateOutcome
+    veto_count: int = Field(ge=0)
+    refutations: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+
+
+class PerItemJuryResult(BaseModel):
+    """Reduced outcome of a per-rubric-item jury vote.
+
+    Carries one :class:`PerItemVerdict` per rubric item plus the wave-level fold
+    over them. The fold mirrors the holistic reducer's escalation order: any
+    item ``FAIL`` sinks the wave to ``FAIL``; absent a fail, any item
+    ``NEEDS_USER`` routes the wave to ``NEEDS_USER``; only when every item
+    passes does the wave clear to ``PASS``.
+
+    Attributes:
+        outcome: The wave-level fold over the per-item verdicts.
+        items: One :class:`PerItemVerdict` per convened rubric item, in the
+            order the item ids were supplied. Empty when the rubric is empty.
+        reasons: One short string per wave-level signal (the folded items'
+            outcomes). Empty for a clean all-pass (including an empty rubric).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    outcome: JuryAggregateOutcome
+    items: tuple[PerItemVerdict, ...] = ()
+    reasons: tuple[str, ...] = ()
+
+    @property
+    def needs_user(self) -> bool:
+        """Return whether the wave-level fold routes to the operator-pause surface."""
+        return self.outcome is JuryAggregateOutcome.NEEDS_USER
+
+    @property
+    def failed_item_ids(self) -> tuple[str, ...]:
+        """Return the ids of the items whose per-item verdict is ``FAIL``."""
+        return tuple(
+            item.item_id for item in self.items if item.outcome is JuryAggregateOutcome.FAIL
+        )
+
+
+def _vote_to_ballot(juror: str, vote: RubricItemVote) -> JurorBallot:
+    """Map one juror's :class:`RubricItemVote` onto a binary :class:`JurorBallot`.
+
+    The mapping is the load-bearing seam that lets the per-item reducer reuse
+    the holistic :func:`~eawf.observability.eval.jury.aggregate_jury`: a passing
+    vote becomes ``PASS``; a failing vote with a refutation becomes a ``FAIL``
+    veto (refute-first -- one credible refutation kills the item); a failing
+    vote with no refutation becomes ``PASS_WITH_FOLLOWUPS``, a non-veto non-pass
+    the holistic reducer reads as a split when mixed with a ``PASS``.
+
+    Args:
+        juror: The juror id (carried onto the ballot's ``juror_id``).
+        vote: The juror's vote on one rubric item.
+
+    Returns:
+        The equivalent binary :class:`JurorBallot`.
+    """
+    if vote.passed:
+        verdict = AgentReportVerdict.PASS
+    elif vote.refutation is not None:
+        verdict = AgentReportVerdict.FAIL
+    else:
+        verdict = AgentReportVerdict.PASS_WITH_FOLLOWUPS
+    return JurorBallot(juror_id=juror, acceptance_style="binary", verdict=verdict)
+
+
+def _fold_wave_outcome(
+    items: tuple[PerItemVerdict, ...],
+) -> tuple[JuryAggregateOutcome, tuple[str, ...]]:
+    """Fold the per-item verdicts into the wave-level outcome + reasons.
+
+    Mirrors the holistic reducer's escalation order so the per-item path and the
+    holistic path agree on which signal dominates: any item ``FAIL`` sinks the
+    wave to ``FAIL`` first; absent a fail, any item ``NEEDS_USER`` routes the
+    wave to ``NEEDS_USER``; only an all-pass rubric (or an empty one) clears to
+    ``PASS``.
+
+    Args:
+        items: The reduced per-item verdicts.
+
+    Returns:
+        The wave-level outcome and its reasons (empty for a clean all-pass).
+    """
+    failed = tuple(i.item_id for i in items if i.outcome is JuryAggregateOutcome.FAIL)
+    if failed:
+        return JuryAggregateOutcome.FAIL, (
+            f"per-item veto: {len(failed)} of {len(items)} rubric items failed "
+            f"({', '.join(failed)})",
+        )
+    unresolved = tuple(i.item_id for i in items if i.outcome is JuryAggregateOutcome.NEEDS_USER)
+    if unresolved:
+        return JuryAggregateOutcome.NEEDS_USER, (
+            f"per-item split: {len(unresolved)} of {len(items)} rubric items "
+            f"unresolved ({', '.join(unresolved)}); routing to operator",
+        )
+    return JuryAggregateOutcome.PASS, ()
+
+
+def reduce_per_item_ballots(
+    ballots: tuple[PerItemJurorBallot, ...],
+    rubric_item_ids: tuple[str, ...],
+) -> PerItemJuryResult:
+    """Reduce per-item juror ballots into a per-item + wave-level result.
+
+    Pure function -- no spawn, no I/O. For each id in *rubric_item_ids* it
+    collects every juror's vote on that item, maps each vote onto a binary
+    :class:`~eawf.observability.eval.jury.JurorBallot` (:func:`_vote_to_ballot`),
+    and reduces them through the holistic
+    :func:`~eawf.observability.eval.jury.aggregate_jury` -- so the per-item
+    minority-veto + split semantics are byte-identical to the holistic reducer's,
+    merely lifted from one ballot per juror to one per (juror, item):
+
+    - every juror passes the item -> item ``PASS``;
+    - any juror vetoes the item (a ``passed=False`` vote with a refutation) ->
+      item ``FAIL`` (minority-veto: one credible refutation kills the item);
+    - the jurors split with no veto -> item ``NEEDS_USER``.
+
+    The wave-level outcome folds the per-item verdicts in the holistic
+    reducer's escalation order (:func:`_fold_wave_outcome`): any item ``FAIL``
+    -> wave ``FAIL``; else any item ``NEEDS_USER`` -> wave ``NEEDS_USER``; else
+    ``PASS``.
+
+    Boundary: an empty *rubric_item_ids* (no jury-scorable items) reduces to a
+    clean ``PASS`` with no per-item verdicts -- a wave with nothing to score has
+    nothing to veto. An item id no juror voted on reduces to ``NEEDS_USER`` for
+    that item (no ballots is an unresolved item, not a silent pass).
+
+    Args:
+        ballots: One :class:`PerItemJurorBallot` per juror that voted. May be
+            empty (every item then resolves to ``NEEDS_USER`` from zero votes,
+            unless the rubric itself is empty).
+        rubric_item_ids: The rubric behaviour ids to reduce, in render order.
+            The reduction is scoped to exactly these ids.
+
+    Returns:
+        The :class:`PerItemJuryResult` carrying the per-item verdicts, the
+        wave-level fold, and the cited refutations.
+
+    Raises:
+        ValueError: When any ballot carries a vote on an item id absent from
+            *rubric_item_ids* -- an off-rubric vote is a malformed ballot, not a
+            silently-dropped one.
+    """
+    known = frozenset(rubric_item_ids)
+    for ballot in ballots:
+        for vote in ballot.votes:
+            if vote.item_id not in known:
+                raise ValueError(
+                    f"ballot from juror {ballot.juror!r} votes on unknown rubric "
+                    f"item: {vote.item_id!r}"
+                )
+
+    items: list[PerItemVerdict] = []
+    for item_id in rubric_item_ids:
+        item_ballots = tuple(
+            _vote_to_ballot(ballot.juror, vote)
+            for ballot in ballots
+            for vote in ballot.votes
+            if vote.item_id == item_id
+        )
+        refutations = tuple(
+            vote.refutation
+            for ballot in ballots
+            for vote in ballot.votes
+            if vote.item_id == item_id and not vote.passed and vote.refutation is not None
+        )
+        if not item_ballots:
+            items.append(
+                PerItemVerdict(
+                    item_id=item_id,
+                    outcome=JuryAggregateOutcome.NEEDS_USER,
+                    veto_count=0,
+                    refutations=(),
+                    reasons=("no juror voted on this rubric item; routing to operator",),
+                )
+            )
+            continue
+        aggregate = aggregate_jury(item_ballots)
+        items.append(
+            PerItemVerdict(
+                item_id=item_id,
+                outcome=aggregate.outcome,
+                veto_count=aggregate.veto_count,
+                refutations=refutations,
+                reasons=aggregate.reasons,
+            )
+        )
+
+    items_tuple = tuple(items)
+    outcome, reasons = _fold_wave_outcome(items_tuple)
+    logger.info(
+        f"reduce_per_item_ballots items={len(items_tuple)} outcome={outcome.value} "
+        f"ballots={len(ballots)}"
+    )
+    return PerItemJuryResult(outcome=outcome, items=items_tuple, reasons=reasons)
 
 
 async def _convene_one_juror(
@@ -407,6 +689,11 @@ __all__ = [
     "JURY_RUNTIME_FAMILIES",
     "CrossVendorJuryResult",
     "JurorOutcome",
+    "PerItemJurorBallot",
+    "PerItemJuryResult",
+    "PerItemVerdict",
+    "RubricItemVote",
     "SpawnFactory",
     "convene_cross_vendor_jury",
+    "reduce_per_item_ballots",
 ]
