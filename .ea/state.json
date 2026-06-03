@@ -2435,6 +2435,18 @@
       "scope_id": "P29-I08-W07",
       "status": "done",
       "updated_at": "2026-06-03T14:52:40.364801Z"
+    },
+    "P29-I08-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W08",
+      "scope_id": "P29-I08-W08",
+      "status": "done",
+      "updated_at": "2026-06-03T15:01:24.197520Z"
     }
   },
   "agent_sessions": {
@@ -10279,6 +10291,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W07",
       "updated_at": "2026-06-03T14:46:00.726337Z"
+    },
+    "P29-I08-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W08-bucket-20260603T145552Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W08",
+      "updated_at": "2026-06-03T14:55:52.949639Z"
     }
   },
   "goals": {
@@ -12427,7 +12452,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T14:52:40.365097Z",
+  "updated_at": "2026-06-03T15:01:24.197866Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35294,10 +35319,10 @@
       "blocks": [
         "P29-I08-W11"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T14:55:52.949634Z",
+      "closed_at": "2026-06-03T15:01:24.197520Z",
+      "commit": "df09902c7c988b6603ac7fe33f5f761ab2bfc617",
       "deps": [
         "P29-I08-W04"
       ],
@@ -35312,10 +35337,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:17.422269Z",
-      "outcome": null,
+      "outcome": "jury_discrimination_gate.py: canned-ballot meta-verifier (faithful PASS, violation FAIL+cite B2, near-miss FAIL+cite B4); rubber-stamp stub FAILs the gate; 15 tests, mypy strict clean; wired as always-run pre-commit hook",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "over canned ballots a faithful frame passes and a planted-violation frame fails citing the RubricItem id and a hard near-miss fails all deterministically with no live model"
       ],
