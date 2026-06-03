@@ -1219,9 +1219,7 @@ def eawf016_title_clarity(
             continue
         scanned += 1
         added = _staged_added_lines(rel, cwd=cwd)
-        rows.extend(
-            f"  {rel}:{violation.render()}" for violation in check_state_title_lines(added)
-        )
+        rows.extend(f"  {rel}:{violation.render()}" for violation in check_state_title_lines(added))
     _emit_static_lint_result(
         hook_name="eawf016-title-clarity",
         rows=rows,
@@ -1536,6 +1534,60 @@ def eawf003_logger_acquire(
     )
     _emit_static_lint_result(
         hook_name="eawf003-logger-acquire",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf019-math-facets")
+def eawf019_math_facets(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Reject math-explainer claims missing a facet, an unresolved citation, or a dead gate.
+
+    Scans the given JSON files (or, when none are given, the staged files
+    relevant to this gate per the conditional scan), validating each as a typed
+    :class:`~eawf.kernel.spec.math.MathExplainer` and running the EAWF019
+    checks: facet-presence (runnable example), citation-resolution (against the
+    canonical EviBound resolver), collected-gate (the kappa silent-skip
+    regression), and formula well-formedness. A JSON file that is not a valid
+    ``MathExplainer`` is skipped silently (it is not a math-explainer doc).
+    Exits 1 on a violation, 0 when clean.
+    """
+    from pydantic import ValidationError as _ValidationError
+
+    from eawf.kernel.spec.math import MathExplainer
+    from eawf.platform.lint.eawf019_math_facets import check_explainer
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = _resolve_scan_paths(files, hook_name="eawf019-math-facets", base=base, cwd=cwd)
+    rows: list[str] = []
+    scanned = 0
+    for rel in paths:
+        if not rel.endswith(".json"):
+            continue
+        try:
+            source = (cwd / rel).read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        try:
+            explainer = MathExplainer.model_validate_json(source)
+        except _ValidationError:
+            # Not a math-explainer doc (or a malformed one rejected at
+            # ingestion) — outside this gate's surface.
+            continue
+        scanned += 1
+        rows.extend(
+            f"  {rel}:{violation.render()}"
+            for violation in check_explainer(explainer, project_root=cwd)
+        )
+    _emit_static_lint_result(
+        hook_name="eawf019-math-facets",
         rows=rows,
         scanned=scanned,
         flags=flags,

@@ -502,6 +502,7 @@ def test_plugin_doctor_drift_skip_json(tmp_path: Path) -> None:
         "eawf013-bracket-position",
         "eawf014-no-manual-wrap",
         "eawf015-ears-advisory",
+        "eawf019-math-facets",
         "plugin-doctor-drift",
     ],
 )

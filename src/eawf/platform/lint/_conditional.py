@@ -42,6 +42,10 @@ DEFAULT_DIFF_BASE = "origin/main"
 # to a hook when its repo-relative path matches the hook's pattern.
 _PYTHON_LIBRARY = re.compile(r"^src/eawf/.*\.py$")
 _MARKDOWN = re.compile(r".*\.md$")
+# Math-explainer docs serialize as JSON; the EAWF019 gate validates each
+# changed .json as a MathExplainer and skips non-matching JSON, so the filter
+# narrows the scan to JSON blobs without binding to a path convention.
+_JSON = re.compile(r".*\.json$")
 _PLUGIN_SURFACE = re.compile(r"^(AGENTS\.md|skills/.*|src/eawf/runtime/runtimes/.*|build/.*)$")
 # The leak gates care about any tracked text blob; an explicit deny-list
 # of binary-ish suffixes keeps the scan from reading non-text payloads.
@@ -60,6 +64,7 @@ HOOK_FILTERS: dict[str, re.Pattern[str]] = {
     "eawf014-no-manual-wrap": _MARKDOWN,
     "eawf015-ears-advisory": _MARKDOWN,
     "eawf017-inline-refs": _MARKDOWN,
+    "eawf019-math-facets": _JSON,
     "vale-prose": _MARKDOWN,
     "plugin-doctor-drift": _PLUGIN_SURFACE,
 }

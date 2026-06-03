@@ -199,6 +199,19 @@ repos:
         files: '\.md$'
         pass_filenames: false
         stages: [pre-commit]
+      - id: eawf019-math-facets
+        name: eawf019-math-facets
+        entry: uv run eawf hook eawf019-math-facets
+        language: system
+        # EAWF019 over staged .json math-explainer docs: validates each as a
+        # typed MathExplainer (non-matching JSON is skipped) and flags a claim
+        # missing the runnable-example facet, a citation that resolves to no
+        # row, a pytest example gate the runner would not collect (the kappa
+        # silent-skip regression), or a malformed formula. The gate-runner owns
+        # correctness; this is the structure/binding layer.
+        files: '\.json$'
+        pass_filenames: false
+        stages: [pre-commit]
       - id: vale-prose
         name: vale-prose
         entry: uv run eawf hook vale-prose
