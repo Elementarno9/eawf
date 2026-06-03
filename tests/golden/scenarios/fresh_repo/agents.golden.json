@@ -16,6 +16,7 @@
     "entity-title-naming": 1777,
     "iter-phase-close-timing": 1251,
     "markdown-no-manual-wrap": 738,
+    "memory-hygiene": 1119,
     "naming-conventions": 3650,
     "non-negotiable-rules": 3380,
     "planned-scope-revisability": 1025,
@@ -63,6 +64,7 @@
     "pr-template",
     "clarity-contract",
     "agent-tool-discipline",
+    "memory-hygiene",
     "anti-patterns"
   ]
 }

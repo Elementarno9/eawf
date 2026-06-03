@@ -58,7 +58,9 @@ def test_research_show_md_migrates_legacy_sources(
     result = runner.invoke(app, ["research", "show", "BR-001", "--md"])
     assert result.exit_code == 0, result.output
     assert "# Research Brief: BR-001" in result.stdout
-    assert "[1] src/eawf/surfaces/render/research.py:1" in result.stdout
+    # W13 renders references as a numbered, anchored, self-linking list, so the
+    # migrated legacy source now carries a #ref-1 anchor + a [1] self-link.
+    assert r"[\[1\]](#ref-1) src/eawf/surfaces/render/research.py:1" in result.stdout
 
 
 def test_research_show_md_uses_all_references_when_findings_lack_markers(
