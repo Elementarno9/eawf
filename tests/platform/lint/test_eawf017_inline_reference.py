@@ -104,11 +104,7 @@ def test_max_inline_path_refs_is_two() -> None:
 
 
 def test_check_source_ignores_fenced_code() -> None:
-    source = (
-        "```\n"
-        "see https://example.org/x and src/a.py:1, src/b.py:2, src/c.py:3\n"
-        "```\n"
-    )
+    source = "```\nsee https://example.org/x and src/a.py:1, src/b.py:2, src/c.py:3\n```\n"
     assert check_source(source) == []
 
 

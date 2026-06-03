@@ -56,9 +56,7 @@ _INLINE_CODE = re.compile(r"`[^`]*`")
 # A reference-table row: ``[N] ...`` / ``- [N] ...`` / a markdown table row
 # whose first cell is a ``[N]`` marker. Mirrors EAWF013's reference-row guard
 # plus the table-row form the brief's worked example uses (``| [a] | ... |``).
-_REFERENCE_ROW = re.compile(
-    r"^\s*(?:[-*]\s+)?\[[0-9A-Za-z]+\](?::|\s+`|\s+https?://|\s+\.)"
-)
+_REFERENCE_ROW = re.compile(r"^\s*(?:[-*]\s+)?\[[0-9A-Za-z]+\](?::|\s+`|\s+https?://|\s+\.)")
 _TABLE_REFERENCE_ROW = re.compile(r"^\s*\|\s*\[[0-9A-Za-z]+\]\s*\|")
 
 # The maximum inline ``path:line`` references tolerated inside one prose block.

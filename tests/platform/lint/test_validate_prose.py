@@ -40,8 +40,7 @@ _BAD_EAWF013 = "The claim holds. [1]\n"
 # EAWF014 — two plain-prose lines where the first does not end a sentence, so
 # the pair looks manually wrapped.
 _BAD_EAWF014 = (
-    "This paragraph is split across two lines and the first line\n"
-    "does not end a sentence.\n"
+    "This paragraph is split across two lines and the first line\ndoes not end a sentence.\n"
 )
 
 # A clean artifact: refs live in a ## References table, no bare URL, no wrap.

@@ -193,12 +193,7 @@ def _decode_json_string(raw: str) -> str:
     (they do not affect any title-clarity rule, which keys on ASCII prefixes,
     ``+``-joins, and bracketed ids).
     """
-    return (
-        raw.replace('\\"', '"')
-        .replace("\\\\", "\\")
-        .replace("\\n", "\n")
-        .replace("\\t", "\t")
-    )
+    return raw.replace('\\"', '"').replace("\\\\", "\\").replace("\\n", "\n").replace("\\t", "\t")
 
 
 def check_state_title_lines(
