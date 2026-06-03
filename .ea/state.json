@@ -2447,6 +2447,18 @@
       "scope_id": "P29-I08-W08",
       "status": "done",
       "updated_at": "2026-06-03T15:01:24.197520Z"
+    },
+    "P29-I08-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I08-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I08-W09",
+      "scope_id": "P29-I08-W09",
+      "status": "done",
+      "updated_at": "2026-06-03T15:11:54.190970Z"
     }
   },
   "agent_sessions": {
@@ -10304,6 +10316,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I08-W08",
       "updated_at": "2026-06-03T14:55:52.949639Z"
+    },
+    "P29-I08-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I08-W09-bucket-20260603T150130Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I08-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I08-W09",
+      "updated_at": "2026-06-03T15:01:30.842218Z"
     }
   },
   "goals": {
@@ -12452,7 +12477,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T15:01:24.197866Z",
+  "updated_at": "2026-06-03T15:11:54.191359Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -35354,10 +35379,10 @@
       "blocks": [
         "P29-I08-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-flow-p29-i08",
+      "claimed_at": "2026-06-03T15:01:30.842212Z",
+      "closed_at": "2026-06-03T15:11:54.190970Z",
+      "commit": "e31beff6104b9a03b2590367b963a2aecbd8ca15",
       "deps": [
         "P29-I08-W03"
       ],
@@ -35372,10 +35397,10 @@
       "intent": null,
       "iter_id": "P29-I08",
       "opened_at": "2026-06-03T12:26:17.966695Z",
-      "outcome": null,
+      "outcome": "behaviour_probe.py: provenance-stamped transcript via run_action in-process; observable/no_op/unresolved classification marks dead-clicks distinctly; render_transcript_evidence; 64 tests green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a transcript captured by running run_action in-process on HEAD is provenance-pinned to the build commit and fed as the only evidence with the diff stripped"
       ],
