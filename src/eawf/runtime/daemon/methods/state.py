@@ -848,6 +848,164 @@ async def _enforce_cross_vendor_jury_gate(
     )
 
 
+def _load_wave_spec(wave_id: str, *, repo_root: Path) -> Any:
+    """Return the on-disk :class:`WaveSpec` for *wave_id*, or ``None``.
+
+    Resolves ``.ea/specs/<phase>/<iter>/<wave>.md``
+    (:func:`eawf.kernel.spec.writer.spec_file_path`) and validates its YAML
+    frontmatter through :class:`~eawf.kernel.spec.wave.WaveSpec`. Returns
+    ``None`` on any miss -- file absent, frontmatter unparseable, or schema
+    invalid -- so a banded close with an authoring gap degrades to a
+    safe-skip rather than raising out of the close path. The spec-jury
+    producer treats a ``None`` spec as nothing to score.
+
+    Args:
+        wave_id: The canonical ``P##-I##-W##`` wave id.
+        repo_root: Repository root the ``.ea/specs`` tree lives under.
+
+    Returns:
+        The validated :class:`~eawf.kernel.spec.wave.WaveSpec`, or ``None``.
+    """
+    from eawf.kernel.spec.wave import WaveSpec
+    from eawf.kernel.spec.writer import spec_file_path
+    from eawf.workflow.audit_dsl.kinds.verify_implements import _parse_frontmatter
+
+    spec_path = spec_file_path(wave_id, repo_root=repo_root)
+    if not spec_path.exists():
+        logger.debug(f"_load_wave_spec wave={wave_id} status=skip reason=no-spec-file")
+        return None
+    try:
+        frontmatter = _parse_frontmatter(spec_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.debug(f"_load_wave_spec wave={wave_id} status=skip err={exc!s}")
+        return None
+    if frontmatter is None or frontmatter.get("kind") != "WaveSpec":
+        return None
+    try:
+        return WaveSpec.model_validate(frontmatter)
+    except ValidationError as exc:
+        logger.warning(f"_load_wave_spec wave={wave_id} status=invalid errors={exc.error_count()}")
+        return None
+
+
+def _spec_jury_ballot_fn(state: State, wave: Wave, *, repo_root: Path) -> Any:
+    """Return the production per-item ballot fn for the spec jury, or ``None``.
+
+    The live binding -- driving each disjoint juror runtime through the
+    bounded re-ask loop to parse a per-item ballot -- is deferred to the
+    band-population wave (W06); until it lands this returns ``None`` so the
+    spec-jury producer stays idle in production (a banded close still routes
+    through the producer, finds no ballot fn, and degrades to the
+    single-auditor / cross-vendor gate). Tests monkeypatch this builder to
+    return a canned ballot fn so the gate -> producer -> report-write wiring
+    is exercised without a real spawn.
+
+    Args:
+        state: Validated state -- read by a future live binding for the
+            wave's sandbox deny-list. Unused while idle.
+        wave: The banded wave under audit. Unused while idle.
+        repo_root: Repository root a future live binding spawns in. Unused
+            while idle.
+
+    Returns:
+        A :data:`~eawf.workflow.dispatch.spec_jury.PerItemBallotFn`, or
+        ``None`` while the live binding is deferred.
+    """
+    del state, wave, repo_root  # live binding deferred to the band-population wave
+    return None
+
+
+async def _enforce_spec_jury_gate(
+    state: State,
+    wave: Wave,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> bool:
+    """Route a UI/UX-banded wave through the spec-jury producer + map its verdict.
+
+    The spec-jury flavour of the close gate (P29-I08-W05). It loads the
+    wave's :class:`~eawf.kernel.spec.wave.WaveSpec`, resolves a fresh AUDITOR
+    session, and runs the per-rubric-item producer
+    (:func:`eawf.workflow.dispatch.spec_jury.produce_spec_jury_verdict`) with
+    the injected ballot fn from :func:`_spec_jury_ballot_fn`. When the
+    producer is idle (no ballot fn bound) or the rubric is empty the producer
+    returns a typed ``"skipped"`` result and this helper returns ``False`` so
+    the caller falls through to the existing single-auditor / cross-vendor
+    gate -- the banded path is a NON-breaking addition. When the producer
+    scores a verdict, a non-close-ready verdict (FAIL / BLOCKED) raises
+    :class:`LifecycleError`; a close-ready verdict returns ``True`` so the
+    caller treats the band gate as satisfied.
+
+    Args:
+        state: Validated state -- mutated in place by the auditor session
+            registration; the close path persists it.
+        wave: The banded wave being closed.
+        state_path: Path to ``state.json``; the auditor report store + the
+            session-start event resolve under its sibling ``store/``.
+        repo_root: Repository root for the spec-file anchor + diff-base
+            derivation.
+
+    Returns:
+        ``True`` when the spec jury scored a close-ready verdict (the band
+        gate is satisfied); ``False`` when the producer was idle / skipped
+        (the caller falls through to the default gate).
+
+    Raises:
+        LifecycleError: When the spec jury scored a non-close-ready verdict.
+    """
+    from eawf.kernel.state.enums import AgentReportVerdict as _Verdict
+    from eawf.workflow.dispatch.spec_jury import produce_spec_jury_verdict
+    from eawf.workflow.dispatch.verdict import _resolve_auditor_session
+
+    ballot_fn = _spec_jury_ballot_fn(state, wave, repo_root=repo_root)
+    if ballot_fn is None:
+        logger.info(f"_enforce_spec_jury_gate wave={wave.id} status=idle degrade=default-gate")
+        return False
+
+    spec = _load_wave_spec(wave.id, repo_root=repo_root)
+    events_path = store_path(state_path, StoreKind.EVENT)
+    auditor_session = _resolve_auditor_session(
+        state=state,
+        events_path=events_path,
+        wave=wave,
+        runtime="claude-code",
+        now=None,
+    )
+    result = await produce_spec_jury_verdict(
+        state=state,
+        state_path=state_path,
+        wave=wave,
+        spec=spec,
+        auditor_session_id=auditor_session.id,
+        per_item_ballot_fn=ballot_fn,
+        repo_root=repo_root,
+    )
+    if not result.scored:
+        logger.info(
+            f"_enforce_spec_jury_gate wave={wave.id} status=skipped "
+            f"reason={result.reason!r} degrade=default-gate"
+        )
+        return False
+    close_ready = {_Verdict.PASS, _Verdict.PASS_WITH_FOLLOWUPS}
+    if result.verdict in close_ready:
+        logger.info(
+            f"_enforce_spec_jury_gate wave={wave.id} status=scored "
+            f"verdict={result.verdict.value if result.verdict else 'none'} passed=True"
+        )
+        return True
+    verdict_value = result.verdict.value if result.verdict is not None else "none"
+    failed = result.result.failed_item_ids if result.result is not None else ()
+    detail = f"failed items=[{', '.join(failed)}]" if failed else "no failed items recorded"
+    logger.warning(
+        f"_enforce_spec_jury_gate wave={wave.id} status=scored "
+        f"verdict={verdict_value} blocked reasons=[{detail}]"
+    )
+    raise LifecycleError(
+        f"wave {wave.id!r} spec-jury blocked close (verdict={verdict_value}): {detail}"
+    )
+
+
 async def _enforce_wave_close_gate(
     state: State,
     mutation: Mutation,
@@ -863,6 +1021,12 @@ async def _enforce_wave_close_gate(
     advisory-only close paths (and every wave-close test that does not enable
     enforcement) are byte-unchanged. The gate flavour is opt-in:
 
+    * the wave is UI/UX-banded (its id / title matches a
+      ``verify.uiux_bands`` token, :func:`wave_in_uiux_band`) AND the
+      spec-jury producer is live (a per-item ballot fn is bound) -> the
+      per-rubric-item spec jury (:func:`_enforce_spec_jury_gate`). An idle
+      producer (the v0.5 default) falls through to the next flavour, so the
+      band check is a NON-breaking addition.
     * ``verify.cross_vendor_jury`` is ``True`` AND enough juror CLI lanes
       resolve on the host (:func:`_cross_vendor_lanes_ready`) -> the
       cross-vendor jury (:func:`_enforce_cross_vendor_jury_gate`).
@@ -885,6 +1049,7 @@ async def _enforce_wave_close_gate(
         LifecycleError: When the resolved gate refuses close.
     """
     from eawf.observability.eval.cross_vendor_jury import JURY_QUORUM
+    from eawf.workflow.dispatch.spec_jury import wave_in_uiux_band
     from eawf.workflow.verify.readiness import load_active_verify_block
 
     wave_id = str(mutation.params.get("wave_id", ""))
@@ -899,6 +1064,14 @@ async def _enforce_wave_close_gate(
     if verify_block is None or not verify_block.enforce:
         return
     wave = state.waves[wave_id]
+    # UI/UX-banded waves route through the per-rubric-item spec jury first.
+    # The producer is idle (no live ballot fn) by default, so a banded close
+    # degrades to the default gate below until the band-population wave binds
+    # the live ballot fn -- the band branch never changes an existing close.
+    if wave_in_uiux_band(wave, bands=verify_block.uiux_bands) and await _enforce_spec_jury_gate(
+        state, wave, state_path=state_path, repo_root=repo_root
+    ):
+        return
     if verify_block.cross_vendor_jury and _cross_vendor_lanes_ready(quorum=JURY_QUORUM):
         await _enforce_cross_vendor_jury_gate(
             state, wave, state_path=state_path, repo_root=repo_root

@@ -170,6 +170,15 @@ class VerifyBlock(BaseModel):
             ``"always"`` subset and a split (no quorum) routes to the
             operator. The path degrades to the single-auditor gate when the
             cross-vendor CLI lanes are unavailable on the host.
+        uiux_bands: Substring tokens that mark a wave as UI/UX-banded for
+            the spec-jury close gate
+            (:func:`eawf.workflow.dispatch.spec_jury.wave_in_uiux_band`). A
+            wave whose id or title contains any token routes its close
+            through the per-rubric-item spec jury rather than (only) the
+            single-auditor gate. Defaults to an empty list so no wave is
+            banded until a profile opts in — the band-population wave (W06)
+            ships the real token set. Only meaningful when :attr:`enforce`
+            is ``True``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -182,6 +191,7 @@ class VerifyBlock(BaseModel):
     waiver_mode: Literal["A", "B", "C"] = "B"
     enforce: bool = False
     cross_vendor_jury: bool = False
+    uiux_bands: list[str] = Field(default_factory=list)
 
 
 class InstrumentReq(BaseModel):

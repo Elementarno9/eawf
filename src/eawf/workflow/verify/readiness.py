@@ -488,6 +488,8 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     floor_checks = []
     argv_allowlist: list[str] = []
     seen_argv: set[str] = set()
+    uiux_bands: list[str] = []
+    seen_bands: set[str] = set()
     timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] = {}
     has_timeout_overrides = False
     waiver_mode: Literal["A", "B", "C"] = "B"
@@ -500,6 +502,11 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
                 continue
             argv_allowlist.append(argv_head)
             seen_argv.add(argv_head)
+        for band in block.uiux_bands:
+            if band in seen_bands:
+                continue
+            uiux_bands.append(band)
+            seen_bands.add(band)
         if block.timeout_class_seconds is not None:
             has_timeout_overrides = True
             timeout_class_seconds.update(block.timeout_class_seconds)
@@ -513,6 +520,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         waiver_mode=waiver_mode,
         enforce=enforce,
         cross_vendor_jury=cross_vendor_jury,
+        uiux_bands=uiux_bands,
     )
 
 
