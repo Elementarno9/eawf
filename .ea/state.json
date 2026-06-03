@@ -5065,7 +5065,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I08",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -5626,6 +5626,23 @@
       "status": "active",
       "superseded_by": null,
       "title": "W57 criterion step-0 ratified as labeling reference"
+    },
+    "D30": {
+      "alternatives": [
+        "Global enforce flip rejected as too broad for a contained PoC",
+        "Sibling rubric file rejected as a second schema to keep in sync",
+        "Jury certifying the jury rejected as meta-circular"
+      ],
+      "consequences": [],
+      "created_at": "2026-06-03T13:27:34.396093Z",
+      "description": null,
+      "id": "D30",
+      "obsoleted_at": null,
+      "rationale": "UI/UX behaviour cannot be fully pinned by deterministic tests so a markdown-spec LLM-jury scores the residual. The gameability red-team proved naive jury gates are gameable via provenance-free evidence and deterministic-decidable rubric items; so deterministic gates rank first, the jury judges only the true residual on provenance-pinned evidence, and discrimination is proven by a deterministic canned-ballot gate not a jury. Producer and jury un-idle for the UI/UX band only via a scoped verify block not the global enforce flip.",
+      "scope_id": "P29-I08",
+      "status": "active",
+      "superseded_by": null,
+      "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
   "estimates": {
@@ -11435,7 +11452,7 @@
       "intent": null,
       "opened_at": "2026-06-03T12:25:07.586714Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "Full UI/UX refactor + LLM-jury QC gate",
       "trigger": "none",
       "wave_ids": [
@@ -12235,7 +12252,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T13:08:11.453602Z",
+  "updated_at": "2026-06-03T13:27:34.396093Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
