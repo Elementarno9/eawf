@@ -2760,6 +2760,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-03-A49-P29-i06-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I06/ART-A49-P29-i06"
     },
+    "ART-A50-P29-i07": {
+      "created_at": "2026-06-03T13:08:10.780134Z",
+      "id": "ART-A50-P29-i07",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-03-A50-P29-i07-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I07/ART-A50-P29-i07"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -3604,6 +3614,17 @@
       "scope_id": "P29-I06",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A50-P29-i07": {
+      "check_results": [],
+      "created_at": "2026-06-03T13:08:11.453602Z",
+      "id": "A50-P29-i07",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A50-P29-i07",
+      "scope_id": "P29-I07",
+      "status": "complete",
+      "verdict": "pass"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -4940,6 +4961,19 @@
       "status": "open",
       "title": "Wire EviBound rung-2-3 chain + campaign driver to production paths"
     },
+    "B092": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-03T13:05:33.397385Z",
+      "description": "The prose_check_rendered advisory logger.warning ends with a free-text parenthetical instead of the canonical funcname key=value form; the wired diff-scoped hook tolerates it but the standalone EAWF001 module flags a latent drift to sweep when the module is next edited.",
+      "id": "B092",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29-I07",
+      "status": "open",
+      "title": "Normalize prose_check_rendered advisory log to bare-key form"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -5031,7 +5065,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I07",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -11364,16 +11398,16 @@
       ]
     },
     "P29-I07": {
-      "audit_id": null,
+      "audit_id": "A50-P29-i07",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-03T13:05:34.616191Z",
       "description": "Spawn-free cross-cut folded into P29 (operator decision 2026-05-31, not a separate P30). Reuses the EviBound gate built in I01. Clarity-contract profile, EAWF016-019 lints, Vale wrapper + chokepoint, AGENTS.md split, entity-title backfill (all 5 kinds), and the math doc-type.",
       "estimate_id": null,
       "id": "P29-I07",
       "intent": null,
       "opened_at": "2026-06-01T00:19:14.247834Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Doc-clarity and math doc-type cross-cut (spawn-free)",
       "trigger": "none",
       "wave_ids": [
@@ -11529,6 +11563,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I06-close-A49-P29-i06",
       "summary": "iter P29-I06 closed with audit A49-P29-i06; waves closed=10; outcomes P29-I06-W01: Registered /design (model-barred) + /spike (model-invocable) SkillSpec rows; stripped /smoke-... | P29-I06-W02: Added orphan-disk-vs-registry drift kind (5th) to plugin doctor; flags unregistered skill dir... | P29-I06-W03: Derived _PLUGIN_VERSION from eawf.__version__ across codex+claude+opencode installers",
+      "tier": "working"
+    },
+    "MEM-P29-I07-close-A50-P29-i07": {
+      "confidence": "high",
+      "id": "MEM-P29-I07-close-A50-P29-i07",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-03T13:05:34.616191Z",
+      "scope_id": "P29-I07",
+      "status": "active",
+      "store_record_id": "MEM-P29-I07-close-A50-P29-i07",
+      "summary": "iter P29-I07 closed with audit A50-P29-i07; waves closed=12; outcomes P29-I07-W01: Clarity-contract core block + profiles/clarity.py glossary/blocklist + ProseConfig tighten-on... | P29-I07-W02: EAWF016 title-clarity lint (laconic renumbered->EAWF020) + description-floor validator on Pha... | P29-I07-W03: eawf hook vale-prose (fail-open when vale absent) + EAWF017 inline-reference lint + .vale Goo...",
       "tier": "working"
     }
   },
@@ -12190,7 +12235,7 @@
   "schema_version": "1.5",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T12:26:31.870423Z",
+  "updated_at": "2026-06-03T13:08:11.453602Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
