@@ -1147,6 +1147,67 @@ def eawf015_ears_advisory(
     )
 
 
+@hook_app.command(name="eawf018-structure-smell")
+def eawf018_structure_smell(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+    base: _BaseOpt = "origin/main",
+) -> None:
+    """Warn on block-bloat structure smells in Markdown and docstrings without blocking.
+
+    Runs the EAWF018 advisory over ``.md`` files (over-long prose block,
+    run-on bullet list, over-long single bullet) and ``.py`` files
+    (over-long docstring leading paragraph, lines joined). Thresholds come
+    from the pyproject ``[tool.eawf.lint.eawf018]`` sub-table (clamped so a
+    local override can only tighten the calibrated defaults). Advisory
+    only: a finding emits a warning and exits 0, never failing the commit.
+    A ``.py`` file that fails to parse is skipped (an authoring bug
+    surfaced by ruff elsewhere).
+    """
+    from eawf.platform.lint import Eawf018Config
+    from eawf.platform.lint.eawf018_structure_smell import check_docstrings, check_markdown
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    config = _resolve_lint_config(cwd)
+    # No pyproject -> the dataclass defaults (the calibrated baselines).
+    caps = config.eawf018 if config is not None else Eawf018Config()
+    paths = _resolve_scan_paths(files, hook_name="eawf018-structure-smell", base=base, cwd=cwd)
+    rows: list[str] = []
+    scanned = 0
+    for rel in paths:
+        is_md = rel.endswith(".md")
+        is_py = rel.endswith(".py")
+        if not (is_md or is_py):
+            continue
+        try:
+            source = (cwd / rel).read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        if is_md:
+            scanned += 1
+            findings = check_markdown(
+                source,
+                max_prose_chars=caps.max_prose_chars,
+                max_bullet_run=caps.max_bullet_run,
+                max_bullet_chars=caps.max_bullet_chars,
+            )
+        else:
+            try:
+                findings = check_docstrings(source, max_para_chars=caps.max_docstring_para_chars)
+            except SyntaxError:
+                continue
+            scanned += 1
+        rows.extend(f"  {rel}:{finding.render()}" for finding in findings)
+    _emit_static_lint_result(
+        hook_name="eawf018-structure-smell",
+        rows=rows,
+        scanned=scanned,
+        flags=flags,
+        blocking=False,
+    )
+
+
 def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
     """Return ``(1-based new lineno, text)`` for lines the staged diff added.
 
