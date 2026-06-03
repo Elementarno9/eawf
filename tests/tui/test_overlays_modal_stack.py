@@ -14,6 +14,16 @@ overlay is the same class, so a re-fired open key / palette verb cannot
 stack a second identical overlay. Non-singleton drill-ins (DetailModal /
 ConfirmModal) still stack freely, and a singleton over a *different*
 singleton still stacks. The dedup tests below pin all three behaviours.
+
+P29-I09-W02 consolidates the W25 per-path entity dedup into the same
+chokepoint via a second ``dedupe_key`` mode: a DetailModal exposing a
+non-``None`` ``dedupe_key`` (its originating ``entity_id``) is rejected
+when the top-of-stack overlay carries the same key, so re-choosing the
+entity already on top is a no-op on *every* push path (the row drill, the
+``/find`` palette verb, a re-choose from inside the open modal). The mode
+is top-only and entity-scoped: a same-entity modal over a *different* top
+stacks, and a DetailModal built without an ``entity_id`` (``dedupe_key is
+None``) stays stackable. The chokepoint tests below pin those edges.
 """
 
 from __future__ import annotations
@@ -308,5 +318,111 @@ def test_reopen_same_entity_after_a_different_one_restacks() -> None:
             top = app._top_modal()
             assert isinstance(top, DetailModal)
             assert top.entity_id == _WAVE_ID
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Entity-key dedup at the push_modal chokepoint (P29-I09-W02) — the dedup
+# now lives on the gate, so EVERY push path (not just the row drill) no-ops
+# a re-choose of the entity already on top.
+# --------------------------------------------------------------------------
+
+
+def _detail(entity_id: str | None) -> DetailModal:
+    """Build a DetailModal carrying *entity_id* (its ``dedupe_key``)."""
+    return DetailModal(_CARD, entity_id=entity_id)
+
+
+def test_detail_modal_exposes_entity_id_as_dedupe_key() -> None:
+    # The chokepoint reads ``dedupe_key`` off the modal; for a DetailModal it
+    # is the originating entity id, and ``None`` when the card opted out.
+    assert _detail(_WAVE_ID).dedupe_key == _WAVE_ID
+    assert _detail(None).dedupe_key is None
+
+
+def test_push_modal_dedups_same_entity_on_top_to_one() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # A DetailModal carrying an entity id pushed twice keeps ONE: the
+            # second push duplicates the top key, so the chokepoint no-ops it
+            # and returns False without mutating the stack.
+            assert app.push_modal(_detail(_WAVE_ID)) is True
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            assert app.push_modal(_detail(_WAVE_ID)) is False
+            await pilot.pause()
+            assert app.modal_depth() == 1
+
+    asyncio.run(body())
+
+
+def test_push_modal_dedup_skip_mounts_no_toast() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_modal(_detail(_WAVE_ID))
+            await pilot.pause()
+            # The entity-key dedup-skip is a benign no-op: it is logged, not
+            # surfaced -- contrast the depth-cap toast.
+            app.push_modal(_detail(_WAVE_ID))
+            await pilot.pause()
+            assert not list(app.query(Toast))
+
+    asyncio.run(body())
+
+
+def test_push_modal_different_entity_stacks() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            assert app.push_modal(_detail(_WAVE_ID)) is True
+            await pilot.pause()
+            # A DIFFERENT entity key is not a duplicate -- it stacks (+1).
+            assert app.push_modal(_detail(_PHASE_ID)) is True
+            await pilot.pause()
+            assert app.modal_depth() == 2
+            top = app._top_modal()
+            assert isinstance(top, DetailModal)
+            assert top.entity_id == _PHASE_ID
+
+    asyncio.run(body())
+
+
+def test_push_modal_none_dedupe_key_is_not_entity_deduped() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # A DetailModal built without an entity id carries ``dedupe_key is
+            # None`` and so opts out of the entity dedup: repeat pushes stack.
+            results = [app.push_modal(_detail(None)) for _ in range(3)]
+            await pilot.pause()
+            assert results == [True, True, True]
+            assert app.modal_depth() == 3
+
+    asyncio.run(body())
+
+
+def test_push_modal_same_entity_over_different_top_restacks() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # wave -> phase stacks two; re-pushing the wave is a DIFFERENT key
+            # than the phase on top, so it stacks again (the dedup is top-only,
+            # not a global "already open anywhere" guard).
+            assert app.push_modal(_detail(_WAVE_ID)) is True
+            await pilot.pause()
+            assert app.push_modal(_detail(_PHASE_ID)) is True
+            await pilot.pause()
+            assert app.modal_depth() == 2
+            assert app.push_modal(_detail(_WAVE_ID)) is True
+            await pilot.pause()
+            assert app.modal_depth() == 3
 
     asyncio.run(body())

@@ -488,8 +488,10 @@ def _handle_find(app: App[None], args: str) -> None:
     :func:`~eawf.surfaces.tui.screens.overlays.detail.resolve_detail`. The modal
     routes through the App's modal-cap-aware ``push_modal`` (falling back to
     ``push_screen`` on a bare host) so the drill-in honours the stack-depth
-    limit. An empty query or a query that matches nothing toasts a hint and
-    opens nothing. Read-only — searching mutates no state.
+    limit. The card carries its ``entity_id`` so the chokepoint entity dedup
+    no-ops a re-``/find`` of the entity already on the modal top. An empty
+    query or a query that matches nothing toasts a hint and opens nothing.
+    Read-only — searching mutates no state.
 
     Args:
         app: The running App.
@@ -511,9 +513,9 @@ def _handle_find(app: App[None], args: str) -> None:
     logger.info(f"palette_verb_find query={query!r} hit={hits[0]!r}")
     push_modal = getattr(app, "push_modal", None)
     if callable(push_modal):
-        push_modal(DetailModal(card, state=state))
+        push_modal(DetailModal(card, state=state, entity_id=hits[0]))
         return
-    app.push_screen(DetailModal(card, state=state))
+    app.push_screen(DetailModal(card, state=state, entity_id=hits[0]))
 
 
 def _candidate_title(record: object) -> str:

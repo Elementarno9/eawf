@@ -1220,7 +1220,7 @@ class EaApp(App[None]):
         routes through here so both the depth limit and the singleton dedup
         are enforced in exactly one place.
 
-        Two rejections, both leaving the stack unmutated:
+        Three rejections, all leaving the stack unmutated:
 
         * **Depth cap** -- a push beyond :attr:`MAX_MODAL_DEPTH` toasts and
           returns ``False``.
@@ -1230,10 +1230,19 @@ class EaApp(App[None]):
           palette verb (``c`` config, ``/`` palette, ``?`` help, the inbox,
           the init wizard) cannot stack a second identical overlay. The
           dedup is **top-only**: a singleton over a *different* singleton
-          still stacks, and non-singleton drill-ins (DetailModal /
-          ConfirmModal) stack freely. A dedup rejection is a benign no-op
-          (logged, no toast) -- the overlay the operator wanted is already
-          open.
+          still stacks, and non-singleton overlays stack freely.
+        * **Entity-key dedup** -- a modal exposing a non-``None``
+          ``dedupe_key`` (the DetailModal's originating entity id) is
+          rejected when the current top-of-stack overlay carries the same
+          key, so re-choosing the entity already on top -- a double-Enter
+          row drill, a ``/find`` for the entity already open, a re-choose
+          from inside the open modal -- cannot stack a second identical
+          card. Also **top-only**: a same-entity modal over a *different*
+          top still stacks, so a wave -> phase -> wave drill chain keeps
+          all three.
+
+        Both dedup rejections are a benign no-op (logged, no toast) -- the
+        overlay the operator wanted is already open.
 
         Args:
             modal: The overlay screen to push.
@@ -1241,8 +1250,8 @@ class EaApp(App[None]):
                 value when it closes (e.g. the needs_user picked label).
 
         Returns:
-            ``True`` when the modal was pushed, ``False`` when the cap or the
-            singleton dedup rejected it.
+            ``True`` when the modal was pushed, ``False`` when the cap or
+            either dedup rejected it.
         """
         if self.modal_depth() >= self.MAX_MODAL_DEPTH:
             logger.info(
@@ -1257,6 +1266,12 @@ class EaApp(App[None]):
             top = self._top_modal()
             if top is not None and type(top) is type(modal):
                 logger.info(f"push_modal dedup_skipped modal={type(modal).__name__!r}")
+                return False
+        new_key = getattr(modal, "dedupe_key", None)
+        if new_key is not None:
+            top = self._top_modal()
+            if top is not None and getattr(top, "dedupe_key", None) == new_key:
+                logger.info(f"push_modal dedup_skipped key={new_key!r}")
                 return False
         if callback is not None:
             self.push_screen(modal, callback=callback)

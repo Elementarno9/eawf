@@ -258,6 +258,87 @@ def test_handle_find_routes_through_modal_cap(tmp_path: Path) -> None:
     asyncio.run(body())
 
 
+def test_handle_find_carries_entity_id_for_dedup(tmp_path: Path) -> None:
+    """The /find drill tags its DetailModal with the picked id (the dedup key)."""
+    state_file = _state_file_with_backlog(
+        tmp_path, {"BL-001": _backlog_item("BL-001", "unrelated")}
+    )
+
+    async def body() -> None:
+        from eawf.surfaces.tui.app import EaApp
+
+        app = EaApp(scope="repo", state_path=state_file)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            _handle_find(app, _WAVE_ID)
+            await pilot.pause()
+            assert isinstance(app.screen, DetailModal)
+            # The card carries the entity id so the chokepoint dedups a re-/find.
+            assert app.screen.entity_id == _WAVE_ID
+            assert app.screen.dedupe_key == _WAVE_ID
+
+    asyncio.run(body())
+
+
+def test_handle_find_refind_same_top_entity_is_noop(tmp_path: Path) -> None:
+    """Re-/find of the entity already on the modal top stacks no duplicate.
+
+    The criterion's choose-P29-in-modal case: with a DetailModal already on
+    top, choosing the SAME entity again (a re-fired ``/find``) routes through
+    the ``push_modal`` chokepoint, which no-ops the duplicate by entity key --
+    the depth is unchanged and no extra card mounts.
+    """
+    state_file = _state_file_with_backlog(
+        tmp_path, {"BL-001": _backlog_item("BL-001", "unrelated")}
+    )
+
+    async def body() -> None:
+        from eawf.surfaces.tui.app import EaApp
+
+        app = EaApp(scope="repo", state_path=state_file)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            _handle_find(app, _WAVE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            top = app._top_modal()
+            assert isinstance(top, DetailModal)
+            # Re-/find the same wave -> deduped at the chokepoint (no +1).
+            _handle_find(app, _WAVE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            assert app._top_modal() is top
+
+    asyncio.run(body())
+
+
+def test_handle_find_different_entity_on_top_still_stacks(tmp_path: Path) -> None:
+    """A /find for a DIFFERENT entity than the modal top stacks a new card."""
+    state_file = _state_file_with_backlog(
+        tmp_path, {"BL-042": _backlog_item("BL-042", "Wire metrics dashboard")}
+    )
+
+    async def body() -> None:
+        from eawf.surfaces.tui.app import EaApp
+
+        app = EaApp(scope="repo", state_path=state_file)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            _handle_find(app, _WAVE_ID)
+            await pilot.pause()
+            assert app.modal_depth() == 1
+            # The wave is on top; /find for the backlog item is a different
+            # entity, so it stacks (the dedup is entity-scoped + top-only).
+            _handle_find(app, "metrics")
+            await pilot.pause()
+            assert app.modal_depth() == 2
+            top = app._top_modal()
+            assert isinstance(top, DetailModal)
+            assert top.entity_id == "BL-042"
+
+    asyncio.run(body())
+
+
 @pytest.mark.parametrize("query", ["W01", "metrics", "implement"])
 def test_handle_find_top_hit_card_matches_ranker(tmp_path: Path, query: str) -> None:
     """The opened card always matches ``rank_find_hits``'s top id."""

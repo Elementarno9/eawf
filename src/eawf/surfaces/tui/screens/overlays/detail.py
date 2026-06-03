@@ -745,6 +745,18 @@ class DetailModal(ModalScreen[None]):
         """
         return self._entity_id
 
+    @property
+    def dedupe_key(self) -> str | None:
+        """Return the modal's entity identity for the push-stack dedup.
+
+        The :meth:`~eawf.surfaces.tui.app.EaApp.push_modal` chokepoint reads
+        this off the new modal and the current top-of-stack overlay: when both
+        carry the same non-``None`` key, the new push is suppressed so
+        re-choosing the entity already on top is a no-op. A card built without
+        an ``entity_id`` carries ``None`` here and so stays stackable.
+        """
+        return self._entity_id
+
     def _enrich_from_app(self) -> None:
         """Refresh wave cards with store-backed report/error rows when mounted."""
         if self._state is None or not self._card.title.startswith("wave "):
