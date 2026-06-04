@@ -2867,6 +2867,18 @@
       "scope_id": "P29-I09-W10",
       "status": "done",
       "updated_at": "2026-06-04T01:17:25.944250Z"
+    },
+    "P29-I09-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W11",
+      "scope_id": "P29-I09-W11",
+      "status": "done",
+      "updated_at": "2026-06-04T14:40:15.193728Z"
     }
   },
   "agent_sessions": {
@@ -11248,6 +11260,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I09-W10",
       "updated_at": "2026-06-04T01:13:26.778178Z"
+    },
+    "P29-I09-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W11-bucket-20260604T142900Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I09-W11",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I09-W11",
+      "updated_at": "2026-06-04T14:29:00.815953Z"
     }
   },
   "goals": {
@@ -12658,7 +12683,8 @@
         "P29-I09-W07",
         "P29-I09-W08",
         "P29-I09-W09",
-        "P29-I09-W10"
+        "P29-I09-W10",
+        "P29-I09-W11"
       ]
     }
   },
@@ -13435,7 +13461,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-04T01:18:50.506836Z",
+  "updated_at": "2026-06-04T14:40:15.194257Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37504,6 +37530,45 @@
         "and error-phrasing consistency aligned across the I09-touched TUI and daemon files"
       ],
       "title": "Polish: footer surface-count comment + I09 consistency sweep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p29-i09-w11-cbind",
+      "claimed_at": "2026-06-04T14:29:00.815939Z",
+      "closed_at": "2026-06-04T14:40:15.193728Z",
+      "commit": "f96011da3412386586a0cd5dd34cd8ad3796b796",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "tests/tui/test_overlays_config_modal.py"
+      ],
+      "id": "P29-I09-W11",
+      "intent": {
+        "desired_outcome": "c opens the ConfigModal from every mode and scope by promoting the binding to App level where action_open_config already lives",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Operator review: c config hotkey dead in every mode screen. c was bound only on the three concrete scope screens; ScopeScreen base and App BINDINGS never declared it so modes inherit none.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-04T14:28:06.186947Z",
+      "outcome": "Promoted c->open_config to EaApp.BINDINGS; config now opens from every mode + scope. +1 mode-screen regression test. tui suite 1425 passed, pre-commit green.",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "existing repo/user/workspace scope c keypress tests still pass and the full tui suite is green"
+      ],
+      "title": "Bind c open_config app-wide so config opens from every mode",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
