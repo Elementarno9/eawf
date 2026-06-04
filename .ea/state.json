@@ -2819,6 +2819,18 @@
       "scope_id": "P29-I09-W07",
       "status": "done",
       "updated_at": "2026-06-03T21:50:29.980244Z"
+    },
+    "P29-I09-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W08",
+      "scope_id": "P29-I09-W08",
+      "status": "done",
+      "updated_at": "2026-06-04T00:34:53.083787Z"
     }
   },
   "agent_sessions": {
@@ -11114,6 +11126,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I09-W07",
       "updated_at": "2026-06-03T21:39:07.998125Z"
+    },
+    "P29-I09-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W08-bucket-20260604T000845Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I09-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I09-W08",
+      "updated_at": "2026-06-04T00:08:45.475596Z"
     }
   },
   "goals": {
@@ -13299,7 +13324,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-04T00:06:48.644936Z",
+  "updated_at": "2026-06-04T00:34:53.084153Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37278,10 +37303,10 @@
     "P29-I09-W08": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-04T00:08:45.475591Z",
+      "closed_at": "2026-06-04T00:34:53.083787Z",
+      "commit": "ab47fe13f7eb35ce86afabc9c45e4bce60914dec",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37293,10 +37318,10 @@
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:51.566277Z",
-      "outcome": null,
+      "outcome": "HelpScreen auto-derives a per-mode action-key section from each mode's own BINDINGS (cls.__dict__, inherited chrome stays in Global) + a Reference navigation section (alt+left/alt+right); coverage test asserts every own binding has a help row, driven off MODE_REGISTRY with classes resolved via the factory; help golden regenerated",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "HelpScreen auto-derives a per-mode action-key section from each mode BINDINGS plus alt-left and alt-right reference nav and a test asserts every binding has a help row"
       ],
