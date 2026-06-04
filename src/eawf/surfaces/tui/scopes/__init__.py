@@ -122,9 +122,20 @@ class ScopeScreen(Screen[None]):
         yield  # pragma: no cover — unreachable; keeps the generator typed
 
     def on_mount(self) -> None:
-        """Apply the scope-specific footer hints once the chassis mounts."""
-        if self.FOOTER_HINTS != DEFAULT_HINTS:
-            self.query_one(Footer).set_hints(self.FOOTER_HINTS)
+        """Route this surface's footer hints through the ordering chokepoint.
+
+        Every surface -- the three scope screens AND all eight mode screens
+        (which subclass this base) -- always calls :meth:`Footer.set_hints`
+        here, so its strip flows through
+        :func:`~eawf.surfaces.tui.widgets.footer.order_hints`: the canonical
+        order plus ``c config`` / ``F5 refresh`` injected when absent. The
+        former ``FOOTER_HINTS != DEFAULT_HINTS`` short-circuit is gone -- with
+        ``order_hints`` idempotent and canonicalising, the default case now
+        needs the same canonicalisation (the raw :data:`DEFAULT_HINTS` is
+        neither fully ordered nor ``c``-complete), so skipping it would leave
+        the default surface with a non-canonical strip.
+        """
+        self.query_one(Footer).set_hints(self.FOOTER_HINTS)
 
     def action_open_palette(self) -> None:
         """Open the ``/`` command palette overlay (cap-checked)."""

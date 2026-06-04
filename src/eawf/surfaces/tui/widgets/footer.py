@@ -210,6 +210,116 @@ DEFAULT_HINTS: tuple[str, ...] = (
 )
 
 
+#: The frozen canonical left-to-right ORDER the footer hint strip lays its
+#: fragments out in. Token freezing (:data:`CANONICAL_HINT_TOKENS`) and action
+#: freezing (:data:`CANONICAL_HINT_ACTIONS`) stopped each label from drifting,
+#: but the *order* the labels appear in still varied across the eleven footer
+#: surfaces -- one screen led with ``↑↓`` and trailed ``q``, another put ``c``
+#: before ``w/r/u``, a third dropped ``F5`` entirely. An operator who learns
+#: the strip on one surface must read it the same way on every other, so the
+#: position of each key is pinned here and every surface is sorted through the
+#: :func:`order_hints` chokepoint. The order is three bands, left to right:
+#:
+#: * **Primary navigation** -- ``↑↓`` / ``←→`` / ``Enter`` / ``Esc`` first, so
+#:   the row-cursor + drill affordances lead (the operator's most-used keys,
+#:   matching the arrows-are-primary keymap convention).
+#: * **Per-mode action keys** -- the mode-specific verbs (``a`` / ``d`` / ``H``
+#:   / ``k`` / ``K`` / ``p`` / ``r`` / ``s`` / ``S`` / ``space``) in the middle
+#:   band, after navigation and before the globals, so a pane's own keys sit
+#:   together regardless of which subset that pane advertises.
+#: * **Global affordances** -- the cross-surface globals last in a fixed order:
+#:   ``w/r/u`` scope-switch, then ``c`` config, then ``F5`` refresh, then the
+#:   ``/`` palette / ``?`` help glyphs, then ``q`` quit at the tail. These read
+#:   identically on every surface (a key always lands at the same offset from
+#:   the right), so the operator's eye finds quit / help / config in one place.
+#:
+#: A token absent from this tuple (a future per-mode key not yet listed) sorts
+#: AFTER every known token in stable original order -- :func:`order_hints`
+#: never drops a fragment, so an unlisted key still renders, just at the tail
+#: of its surface's strip until it is added here.
+HINT_KEY_PRIORITY: Final[tuple[str, ...]] = (
+    # Primary navigation.
+    "↑↓",
+    "←→",
+    "Enter",
+    "Esc",
+    # Per-mode action keys.
+    "a",
+    "d",
+    "H",
+    "k",
+    "K",
+    "p",
+    "r",
+    "s",
+    "S",
+    "space",
+    # Global affordances (fixed tail order).
+    "w/r/u",
+    "c",
+    "F5",
+    "/",
+    "?",
+    "q",
+)
+
+#: The two global-affordance fragments :func:`order_hints` guarantees on every
+#: surface. ``c config`` (the registry-driven config window) and ``F5 refresh``
+#: (the force-refresh + heartbeat ack) are reachable from every scope and mode,
+#: so the strip must advertise them everywhere even on a surface whose authored
+#: tuple omitted one. Both are rendered through :func:`render_hint_label` so the
+#: injected fragment is byte-identical to a hand-authored one (same token + same
+#: canonical action), which keeps the de-dup in :func:`order_hints` a plain
+#: membership test.
+_REQUIRED_HINTS: Final[tuple[str, ...]] = (
+    render_hint_label("c", "config"),
+    render_hint_label("F5", "refresh"),
+)
+
+
+def order_hints(hints: tuple[str, ...]) -> tuple[str, ...]:
+    """Canonicalise a footer hint strip: inject the globals, sort to canon.
+
+    The single chokepoint every footer surface's hints flow through (via
+    :meth:`Footer.set_hints`), so the strip reads the same everywhere. Two
+    transforms, in order:
+
+    * **Inject the required globals.** ``c config`` and ``F5 refresh`` are
+      reachable from every scope and mode, so they are appended (each as the
+      canonical :func:`render_hint_label` fragment) when absent -- a surface
+      whose authored tuple omitted one still advertises it. A fragment already
+      present (byte-equal to the canonical one) is NOT re-added, so the
+      function is idempotent.
+    * **Sort to the canonical order.** Each fragment is keyed by its leading
+      token (the text before the first space, e.g. ``"↑↓ select"`` ->
+      ``"↑↓"``) and sorted by that token's index in :data:`HINT_KEY_PRIORITY`.
+      A token absent from the priority tuple sorts AFTER every known token, in
+      stable original order, so an unlisted key is never dropped -- it renders
+      at the tail until it is added to the canon.
+
+    The sort is stable, so two fragments sharing a leading token (an unusual
+    but legal authoring choice) keep their relative order. Because the injected
+    globals are the canonical fragments and the sort key is the leading token,
+    ``order_hints(order_hints(x)) == order_hints(x)`` for every input.
+
+    Args:
+        hints: The authored hint fragments for one surface (each a
+            ``"<token> <action>"`` label, typically from
+            :func:`render_hint_label`).
+
+    Returns:
+        The hints with ``c config`` + ``F5 refresh`` guaranteed present and the
+        whole strip ordered by :data:`HINT_KEY_PRIORITY`.
+    """
+    complete = list(hints)
+    for required in _REQUIRED_HINTS:
+        if required not in complete:
+            complete.append(required)
+    last = len(HINT_KEY_PRIORITY)
+    priority = {token: index for index, token in enumerate(HINT_KEY_PRIORITY)}
+    return tuple(sorted(complete, key=lambda label: priority.get(label.split(" ", 1)[0], last)))
+
+
 #: Empty-state marker for the weekly-burn line. Rendered when the project
 #: has no ``weekly_eu_target`` set or no actuals have rolled up yet — the
 #: EU estimation surface is unpopulated scaffolding today, so a graceful
@@ -396,8 +506,12 @@ class Footer(Static):
     }
     """
 
-    #: Active key hints, watched so a host override repaints the strip.
-    hints: reactive[tuple[str, ...]] = reactive(DEFAULT_HINTS)
+    #: Active key hints, watched so a host override repaints the strip. The
+    #: default is run through :func:`order_hints` so a surface that never calls
+    #: :meth:`set_hints` (or sets hints equal to :data:`DEFAULT_HINTS`) still
+    #: shows the canonical strip -- ordered + ``c config`` / ``F5 refresh``
+    #: present -- without the host having to canonicalise it.
+    hints: reactive[tuple[str, ...]] = reactive(order_hints(DEFAULT_HINTS))
 
     #: Bound state, watched so a fresh revision repaints the weekly-burn
     #: cell. ``None`` until the first read-only load completes.
@@ -490,10 +604,17 @@ class Footer(Static):
     def set_hints(self, hints: tuple[str, ...]) -> None:
         """Replace the footer key hints (scope-specific override).
 
+        Routes the override through :func:`order_hints` so every surface --
+        scope or mode -- gets the identical canonical strip: ``c config`` /
+        ``F5 refresh`` guaranteed present and the whole strip ordered by
+        :data:`HINT_KEY_PRIORITY`. A host therefore passes its authored tuple
+        verbatim and the chokepoint canonicalises it.
+
         Args:
-            hints: The ordered key-hint fragments (full key names).
+            hints: The authored key-hint fragments (full key names) for this
+                surface; canonicalised before they reach the reactive.
         """
-        self.hints = hints
+        self.hints = order_hints(hints)
 
     def watch_hints(self, hints: tuple[str, ...]) -> None:
         """Repaint the hint strip when the hints change.
@@ -567,6 +688,7 @@ __all__ = [
     "DEFAULT_HINTS",
     "HEARTBEAT_GLYPH",
     "HEARTBEAT_INTERVAL_S",
+    "HINT_KEY_PRIORITY",
     "MODE_ROW_SEP",
     "NEEDS_USER_BADGE_LABEL",
     "WEEKLY_BURN_EMPTY",
@@ -577,5 +699,6 @@ __all__ = [
     "build_weekly_burn_line",
     "format_hints",
     "format_needs_user_badge",
+    "order_hints",
     "render_hint_label",
 ]

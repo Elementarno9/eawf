@@ -37,12 +37,14 @@ from eawf.surfaces.tui.widgets.footer import (
     CANONICAL_HINT_TOKENS,
     DEFAULT_HINTS,
     HEARTBEAT_GLYPH,
+    HINT_KEY_PRIORITY,
     WEEKLY_BURN_EMPTY,
     Footer,
     Heartbeat,
     build_mode_row,
     build_weekly_burn_line,
     format_hints,
+    order_hints,
     render_hint_label,
 )
 
@@ -442,6 +444,270 @@ def test_research_board_scope_hint_uses_all_three_letters() -> None:
 
 
 # --------------------------------------------------------------------------
+# HINT_KEY_PRIORITY + order_hints — central footer ordering canon (W04)
+# --------------------------------------------------------------------------
+
+#: The canonical fragments ``order_hints`` guarantees on every footer surface.
+_C_HINT = render_hint_label("c", "config")
+_F5_HINT = render_hint_label("F5", "refresh")
+
+
+#: Every footer surface class that carries a ``FOOTER_HINTS`` tuple: the three
+#: ``ScopeScreen`` scope subclasses plus the eight mode subclasses. Imported
+#: here so the enumeration test pins the canon across the WHOLE surface set --
+#: a new surface that forgets the chokepoint is caught the moment it lands.
+def _all_surface_classes() -> dict[str, type]:
+    """Import + collect every footer surface class (3 scopes + 8 modes)."""
+    from eawf.surfaces.tui.modes.agent_watch import AgentWatchModeScreen
+    from eawf.surfaces.tui.modes.autopilot import AutopilotModeScreen
+    from eawf.surfaces.tui.modes.doctor import DoctorModeScreen
+    from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
+    from eawf.surfaces.tui.modes.feed import FeedModeScreen
+    from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
+    from eawf.surfaces.tui.modes.trust import TrustModeScreen
+
+    return {
+        "scope:repo": RepoScreen,
+        "scope:workspace": WorkspaceScreen,
+        "scope:user": UserScreen,
+        "mode:autopilot": AutopilotModeScreen,
+        "mode:research_board": ResearchBoardModeScreen,
+        "mode:trust": TrustModeScreen,
+        "mode:doctor": DoctorModeScreen,
+        "mode:evidence": EvidenceModeScreen,
+        "mode:feed": FeedModeScreen,
+        "mode:agent_watch": AgentWatchModeScreen,
+    }
+
+
+def _token(label: str) -> str:
+    """Return the leading key token of a hint label (text before first space)."""
+    return label.split(" ", 1)[0]
+
+
+def _position(ordered: tuple[str, ...], token: str) -> int:
+    """Return the index of the fragment whose leading token is *token* (-1 if absent)."""
+    for index, label in enumerate(ordered):
+        if _token(label) == token:
+            return index
+    return -1
+
+
+def test_hint_key_priority_is_the_frozen_canon_order() -> None:
+    # Pin the exact frozen left-to-right canon: primary navigation, then the
+    # per-mode action keys, then the global affordances in their fixed tail
+    # order. A reorder of the strip canon must update this assertion (and the
+    # goldens), so a silent drift cannot slip through.
+    assert HINT_KEY_PRIORITY == (
+        "↑↓",
+        "←→",
+        "Enter",
+        "Esc",
+        "a",
+        "d",
+        "H",
+        "k",
+        "K",
+        "p",
+        "r",
+        "s",
+        "S",
+        "space",
+        "w/r/u",
+        "c",
+        "F5",
+        "/",
+        "?",
+        "q",
+    )
+    # Every priority token is itself a canonical key token (no priority entry
+    # names a key the vocabulary guard would reject).
+    assert set(HINT_KEY_PRIORITY) <= CANONICAL_HINT_TOKENS
+
+
+def test_order_hints_sorts_scrambled_input_into_priority_order() -> None:
+    # A scrambled strip is reordered to the canon: ``↑↓`` leads, ``q`` trails,
+    # the globals land in their fixed tail order.
+    scrambled = (
+        render_hint_label("q", "quit"),
+        render_hint_label("?", "help"),
+        render_hint_label("/", "palette"),
+        render_hint_label("w/r/u", "scope"),
+        render_hint_label("Enter", "open"),
+        render_hint_label("↑↓", "select"),
+    )
+    ordered = order_hints(scrambled)
+    tokens = [_token(label) for label in ordered]
+    # Navigation leads, the global tail order holds, c/F5 are injected between
+    # the scope switch and the palette/help/quit glyphs.
+    assert tokens == ["↑↓", "Enter", "w/r/u", "c", "F5", "/", "?", "q"]
+
+
+def test_order_hints_injects_c_and_f5_when_absent() -> None:
+    # A surface whose authored tuple omits BOTH globals gets them injected as
+    # the canonical fragments (the doctor/trust-shaped case: no c, no F5).
+    sparse = (
+        render_hint_label("↑↓", "select"),
+        render_hint_label("w/r/u", "scope"),
+        render_hint_label("q", "quit"),
+    )
+    ordered = order_hints(sparse)
+    assert _C_HINT in ordered
+    assert _F5_HINT in ordered
+    # They land in the canonical tail band, between scope and quit.
+    assert _position(ordered, "w/r/u") < _position(ordered, "c")
+    assert _position(ordered, "c") < _position(ordered, "F5")
+    assert _position(ordered, "F5") < _position(ordered, "q")
+
+
+def test_order_hints_does_not_duplicate_present_globals() -> None:
+    # A surface that already advertises c + F5 (the repo/workspace/user-shaped
+    # case) is not double-injected -- each appears exactly once.
+    present = (
+        render_hint_label("↑↓", "select"),
+        render_hint_label("w/r/u", "scope"),
+        render_hint_label("c", "config"),
+        render_hint_label("F5", "refresh"),
+        render_hint_label("q", "quit"),
+    )
+    ordered = order_hints(present)
+    assert ordered.count(_C_HINT) == 1
+    assert ordered.count(_F5_HINT) == 1
+
+
+def test_order_hints_is_idempotent() -> None:
+    # The load-bearing chokepoint invariant: re-canonicalising an already-canon
+    # strip is a no-op (no second c/F5 inject, no reshuffle). Holds for the
+    # sparse case, the dense case, and the raw default.
+    from eawf.surfaces.tui.modes.autopilot import _AUTOPILOT_HINTS
+
+    for sample in (
+        DEFAULT_HINTS,
+        _AUTOPILOT_HINTS,
+        (render_hint_label("q", "quit"),),
+        (),
+    ):
+        once = order_hints(sample)
+        assert order_hints(once) == once
+
+
+def test_order_hints_keeps_unknown_tokens_at_tail_in_stable_order() -> None:
+    # A token absent from HINT_KEY_PRIORITY (a future per-mode key) is never
+    # dropped: it sorts AFTER every known token, preserving the original
+    # relative order of the unknowns.
+    mixed = (
+        render_hint_label("q", "quit"),
+        "zzz first-unknown",
+        render_hint_label("↑↓", "select"),
+        "yyy second-unknown",
+    )
+    ordered = order_hints(mixed)
+    # The known tokens precede both unknowns...
+    assert _position(ordered, "↑↓") < _position(ordered, "q")
+    assert _position(ordered, "q") < ordered.index("zzz first-unknown")
+    # ...and the two unknowns keep their original relative order (stable sort).
+    assert ordered.index("zzz first-unknown") < ordered.index("yyy second-unknown")
+
+
+def test_default_hints_reactive_seeds_canonical_strip() -> None:
+    # A Footer that is never overridden still exposes the canonical strip: the
+    # reactive default is order_hints(DEFAULT_HINTS), so c/F5 are present and
+    # the order is canon even before any set_hints call. Read it off a fresh
+    # (unmounted) Footer -- the reactive returns its default before assignment.
+    default = Footer().hints
+    assert default == order_hints(DEFAULT_HINTS)
+    assert _C_HINT in default
+    assert _F5_HINT in default
+
+
+def test_set_hints_canonicalises_through_chokepoint() -> None:
+    # set_hints routes through order_hints: a scrambled, c/F5-less override is
+    # stored canonicalised on the reactive (the chokepoint the surfaces use).
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 6)) as pilot:
+            await pilot.pause()
+            footer = app.query_one("#ftr", Footer)
+            footer.set_hints(
+                (
+                    render_hint_label("q", "quit"),
+                    render_hint_label("↑↓", "select"),
+                    render_hint_label("w/r/u", "scope"),
+                )
+            )
+            await pilot.pause()
+            # Stored canonicalised: c/F5 injected, ordered ↑↓ ... w/r/u c F5 q.
+            assert footer.hints == order_hints(
+                (
+                    render_hint_label("q", "quit"),
+                    render_hint_label("↑↓", "select"),
+                    render_hint_label("w/r/u", "scope"),
+                )
+            )
+            assert _C_HINT in footer.hints
+            assert _F5_HINT in footer.hints
+
+    asyncio.run(body())
+
+
+def test_every_surface_orders_identically_with_c_and_f5_present() -> None:
+    # The criterion-mandated enumeration gate: every footer surface (3 scope
+    # screens + 8 mode screens) run through order_hints (a) advertises BOTH
+    # ``c config`` and ``F5 refresh``, and (b) lays the shared keys out in the
+    # ONE canon order -- ``↑↓`` leads and ``w/r/u`` < ``c`` < ``F5`` < ``/`` <
+    # ``?`` < ``q``. This pins canon order + shared-key positions across the
+    # whole surface set, so no surface can drift its footer ordering.
+    surfaces = _all_surface_classes()
+    # The sweep spans every distinct footer surface: the three scope screens
+    # plus one screen class per non-Home mode (Home reuses the resolved scope
+    # screen rather than owning its own subclass, so it carries no separate
+    # FOOTER_HINTS). That is 3 scopes + (len(MODE_REGISTRY) - 1) mode classes.
+    assert len(surfaces) == 3 + (len(MODE_REGISTRY) - 1)
+    for name, cls in surfaces.items():
+        ordered = order_hints(cls.FOOTER_HINTS)  # type: ignore[attr-defined]
+        # (a) both globals present on every surface.
+        assert _C_HINT in ordered, f"{name} missing {_C_HINT!r}"
+        assert _F5_HINT in ordered, f"{name} missing {_F5_HINT!r}"
+        # (b) the shared-key relative positions match the canon. Every surface
+        # advertises the full global tail, so all six are present + ordered.
+        for earlier, later in (
+            ("w/r/u", "c"),
+            ("c", "F5"),
+            ("F5", "/"),
+            ("/", "?"),
+            ("?", "q"),
+        ):
+            assert _position(ordered, earlier) < _position(ordered, later), (
+                f"{name} shared keys out of canon order: {earlier!r} !< {later!r} in {ordered}"
+            )
+        # The fragments are sorted by HINT_KEY_PRIORITY: the priority index of
+        # each known token is non-decreasing left to right (the unknown-token
+        # tail, if any, sorts last and is skipped here).
+        priorities = [
+            HINT_KEY_PRIORITY.index(_token(label))
+            for label in ordered
+            if _token(label) in HINT_KEY_PRIORITY
+        ]
+        assert priorities == sorted(priorities), f"{name} not in priority order: {ordered}"
+
+
+def test_every_surface_with_arrow_leads_with_it() -> None:
+    # The ``↑↓`` navigation key, when a surface advertises it, leads the strip
+    # (the operator's most-used key sits first). Surfaces without an arrow hint
+    # (e.g. doctor) are skipped -- their first fragment is the next-priority key.
+    surfaces = _all_surface_classes()
+    saw_arrow = False
+    for name, cls in surfaces.items():
+        ordered = order_hints(cls.FOOTER_HINTS)  # type: ignore[attr-defined]
+        if any(_token(label) == "↑↓" for label in ordered):
+            saw_arrow = True
+            assert _token(ordered[0]) == "↑↓", f"{name} does not lead with the arrow: {ordered}"
+    # At least one arrow-advertising surface was exercised (a regression that
+    # drops every arrow hint would otherwise pass vacuously).
+    assert saw_arrow
+
+
+# --------------------------------------------------------------------------
 # Footer hints — default + override via set_hints
 # --------------------------------------------------------------------------
 
@@ -450,15 +716,25 @@ def test_footer_paints_default_hints() -> None:
     async def body() -> None:
         app = _Harness()
         # Wide canvas: the default hint strip now carries the global
-        # w/r/u scope-switch + F5 refresh affordances and overflows 80
-        # cols; the real scope screens render at 120.
+        # w/r/u scope-switch + c config + F5 refresh affordances (the W04
+        # chokepoint injects c config + F5 refresh into the default), so the
+        # strip overflows 80 cols; the real scope screens render at 120.
         async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
             rendered = app.export_screenshot()
-            assert "quit" in rendered
-            assert "palette" in rendered
+            # The leading affordances paint at 120; the canonical c config +
+            # F5 refresh globals are now present in the default strip.
             assert "scope" in rendered
+            assert "config" in rendered
             assert "refresh" in rendered
+            assert "palette" in rendered
+            # ``q quit`` sits at the tail of the (now longer) canonical strip
+            # and clips off the visible 120-col width, so assert it via the
+            # pre-clip source content rather than the screenshot.
+            from textual.widgets import Static
+
+            footer = app.query_one("#ftr", Footer)
+            assert "q quit" in str(footer.query_one(".footer-hints", Static).render())
 
     asyncio.run(body())
 
@@ -471,7 +747,11 @@ def test_footer_set_hints_repaints_strip() -> None:
             footer = app.query_one("#ftr", Footer)
             footer.set_hints(("xyzzy custom",))
             await pilot.pause()
-            assert footer.hints == ("xyzzy custom",)
+            # set_hints canonicalises through order_hints: the unknown override
+            # token survives (sorted to the tail) and c/F5 are injected, so the
+            # stored value is the canonicalised form -- still carrying ``xyzzy``.
+            assert footer.hints == order_hints(("xyzzy custom",))
+            assert "xyzzy custom" in footer.hints
             assert "xyzzy" in app.export_screenshot()
 
     asyncio.run(body())
