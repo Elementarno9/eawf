@@ -3296,6 +3296,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-03-A51-P29-i08-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I08/ART-A51-P29-i08"
     },
+    "ART-A52-P29-i09": {
+      "created_at": "2026-06-04T01:18:49.251452Z",
+      "id": "ART-A52-P29-i09",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-04-A52-P29-i09-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I09/ART-A52-P29-i09"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -4160,6 +4170,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A51-P29-i08",
       "scope_id": "P29-I08",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A52-P29-i09": {
+      "check_results": [],
+      "created_at": "2026-06-04T01:18:49.893693Z",
+      "id": "A52-P29-i09",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A52-P29-i09",
+      "scope_id": "P29-I09",
       "status": "complete",
       "verdict": "minor"
     },
@@ -5523,6 +5544,19 @@
       "scope_id": "P29-I08",
       "status": "open",
       "title": "Wire evidence_provenance_gate into CI as an always-run cast hook"
+    },
+    "B094": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-04T01:18:50.506836Z",
+      "description": "research_board.py retains the _issue_unwired/_call_unwired/_NOT_WIRED_TEMPLATE stub set for its r follow-up + s snapshot verbs (out of P29-I09-W06 scope, which covered autopilot + agent-watch only). Apply the W06 honest-controls pattern: real-where-cheap or honestly-deferred, no faked daemon round-trip.",
+      "id": "B094",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29",
+      "status": "open",
+      "title": "Make research-board controls honest (no not-yet-wired stubs)"
     },
     "B70": {
       "closed_at": null,
@@ -13401,7 +13435,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-04T01:17:25.944550Z",
+  "updated_at": "2026-06-04T01:18:50.506836Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
