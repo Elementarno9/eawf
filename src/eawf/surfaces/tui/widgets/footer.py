@@ -213,7 +213,7 @@ DEFAULT_HINTS: tuple[str, ...] = (
 #: The frozen canonical left-to-right ORDER the footer hint strip lays its
 #: fragments out in. Token freezing (:data:`CANONICAL_HINT_TOKENS`) and action
 #: freezing (:data:`CANONICAL_HINT_ACTIONS`) stopped each label from drifting,
-#: but the *order* the labels appear in still varied across the eleven footer
+#: but the *order* the labels appear in still varied across the ten footer
 #: surfaces -- one screen led with ``↑↓`` and trailed ``q``, another put ``c``
 #: before ``w/r/u``, a third dropped ``F5`` entirely. An operator who learns
 #: the strip on one surface must read it the same way on every other, so the
