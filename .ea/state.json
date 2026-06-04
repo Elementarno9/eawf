@@ -2784,6 +2784,18 @@
       "status": "done",
       "updated_at": "2026-06-03T23:44:28.103095Z"
     },
+    "P29-I09-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W04",
+      "scope_id": "P29-I09-W04",
+      "status": "done",
+      "updated_at": "2026-06-04T00:06:48.644398Z"
+    },
     "P29-I09-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -11064,6 +11076,19 @@
       "scope_id": "P29-I09-W03",
       "updated_at": "2026-06-03T22:25:58.048560Z"
     },
+    "P29-I09-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W04-bucket-20260603T234649Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I09-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I09-W04",
+      "updated_at": "2026-06-03T23:46:49.126590Z"
+    },
     "P29-I09-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I09-W05-bucket-20260603T211617Z",
@@ -13274,7 +13299,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-03T23:44:28.103418Z",
+  "updated_at": "2026-06-04T00:06:48.644936Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37114,10 +37139,10 @@
     "P29-I09-W04": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-03T23:46:49.126585Z",
+      "closed_at": "2026-06-04T00:06:48.644398Z",
+      "commit": "7c6c7f054939092c8157218227b8347d6a760215",
       "deps": [
         "P29-I09-W03"
       ],
@@ -37133,10 +37158,10 @@
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:49.210298Z",
-      "outcome": null,
+      "outcome": "frozen HINT_KEY_PRIORITY (nav -> per-mode keys -> global tail) + idempotent order_hints chokepoint in Footer.set_hints injects c config + F5 refresh and orders every surface identically; ScopeScreen.on_mount always routes through it; enumeration test pins canon order + shared-key positions; 8 goldens regenerated",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "a frozen HINT_KEY_PRIORITY plus order_hints chokepoint orders every surface identically with c config and F5 refresh present on every surface and an enumeration test pins canon order and shared-key positions"
       ],
