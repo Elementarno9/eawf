@@ -2855,6 +2855,18 @@
       "scope_id": "P29-I09-W09",
       "status": "done",
       "updated_at": "2026-06-04T01:03:03.129977Z"
+    },
+    "P29-I09-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W10",
+      "scope_id": "P29-I09-W10",
+      "status": "done",
+      "updated_at": "2026-06-04T01:17:25.944250Z"
     }
   },
   "agent_sessions": {
@@ -11189,6 +11201,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I09-W09",
       "updated_at": "2026-06-04T01:02:29.282874Z"
+    },
+    "P29-I09-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W10-bucket-20260604T011326Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I09-W10",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I09-W10",
+      "updated_at": "2026-06-04T01:13:26.778178Z"
     }
   },
   "goals": {
@@ -12598,7 +12623,8 @@
         "P29-I09-W06",
         "P29-I09-W07",
         "P29-I09-W08",
-        "P29-I09-W09"
+        "P29-I09-W09",
+        "P29-I09-W10"
       ]
     }
   },
@@ -13375,7 +13401,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-04T01:03:03.130284Z",
+  "updated_at": "2026-06-04T01:17:25.944550Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37411,6 +37437,39 @@
         "docs/reference/autogen schema.md and state.schema.json regenerated to match the schema 1.6 model so the autogen drift gate passes"
       ],
       "title": "Regen autogen reference tree for schema 1.6",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I09-W10": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-04T01:13:26.778172Z",
+      "closed_at": "2026-06-04T01:17:25.944250Z",
+      "commit": "6af26b024540b9e48c21c0812e4049f9cc55b576",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py"
+      ],
+      "id": "P29-I09-W10",
+      "intent": null,
+      "iter_id": "P29-I09",
+      "opened_at": "2026-06-04T01:13:26.254908Z",
+      "outcome": "footer surface-count comment corrected eleven->ten; consistency sweep over the full 5d5063ce..HEAD I09 diff (23 files, 5 executors) confirmed log-format, error-phrasing, Raises-block, naming, and ASCII conventions already aligned; no golden drift",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        "footer surface-count comment corrected to ten; naming",
+        "docstring style",
+        "log-field",
+        "and error-phrasing consistency aligned across the I09-touched TUI and daemon files"
+      ],
+      "title": "Polish: footer surface-count comment + I09 consistency sweep",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
