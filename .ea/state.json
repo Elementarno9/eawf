@@ -2808,6 +2808,18 @@
       "status": "done",
       "updated_at": "2026-06-03T21:33:35.173487Z"
     },
+    "P29-I09-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I09-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I09-W06",
+      "scope_id": "P29-I09-W06",
+      "status": "done",
+      "updated_at": "2026-06-04T00:46:27.599442Z"
+    },
     "P29-I09-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -11114,6 +11126,19 @@
       "scope_id": "P29-I09-W05",
       "updated_at": "2026-06-03T21:16:17.886071Z"
     },
+    "P29-I09-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I09-W06-bucket-20260604T003749Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I09-W06",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I09-W06",
+      "updated_at": "2026-06-04T00:37:49.329107Z"
+    },
     "P29-I09-W07": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I09-W07-bucket-20260603T213907Z",
@@ -13324,7 +13349,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-04T00:34:53.084153Z",
+  "updated_at": "2026-06-04T00:46:27.599800Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37236,10 +37261,10 @@
     "P29-I09-W06": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p29-i09",
+      "claimed_at": "2026-06-04T00:37:49.329103Z",
+      "closed_at": "2026-06-04T00:46:27.599442Z",
+      "commit": "7020a179d2db327a38dc380620a8aa88f1a17090",
       "deps": [
         "P29-I09-W05"
       ],
@@ -37255,10 +37280,10 @@
       "intent": null,
       "iter_id": "P29-I09",
       "opened_at": "2026-06-03T20:05:50.398425Z",
-      "outcome": null,
+      "outcome": "removed the _issue_unwired/_call_unwired not-yet-wired stub mechanism; skip is a real cheap local frontier-advance (no faked RPC); arm honestly labeled deferred (no doomed round-trip); kill/halt keep the real agent.kill placeholder honestly labeled on both autopilot + agent-watch; agent.py unchanged (no unused RPC invented)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "no autopilot or agent-watch control routes through a not-yet-wired stub with skip real where cheap and kill and arm honestly labeled as deferred not faked"
       ],
