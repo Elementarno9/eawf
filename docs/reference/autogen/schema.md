@@ -18,6 +18,7 @@ Full schema: [`state.schema.json`](state.schema.json)
 | `claims` | no |
 | `current` | yes |
 | `decisions` | no |
+| `dispatch_paused` | no |
 | `estimates` | no |
 | `goals` | no |
 | `health` | no |
