@@ -15,9 +15,14 @@ convention. The verb table is built from the static registry
 help reflects exactly what the palette would offer.
 
 The keymap content is assembled by pure helpers
-(:func:`global_key_rows` / :func:`pane_nav_rows` / :func:`scope_key_rows`)
+(:func:`global_key_rows` / :func:`mode_action_key_rows` /
+:func:`reference_nav_rows` / :func:`pane_nav_rows` / :func:`scope_key_rows`)
 so the table is unit-testable without mounting Textual; the screen is a
-thin scrollable view over them.
+thin scrollable view over them. The per-mode action-key section
+(:func:`mode_action_key_rows`) and the reference-nav section
+(:func:`reference_nav_rows`) are auto-derived from each mode screen's own
+``BINDINGS`` and the App's reference-nav bindings respectively, so a
+mode rebinding flows into the help without a manual edit here.
 """
 
 from __future__ import annotations
@@ -123,6 +128,102 @@ def mode_key_rows() -> tuple[tuple[str, str], ...]:
     return tuple((spec.digit, f"switch to {spec.title} mode") for spec in MODE_REGISTRY)
 
 
+def _mode_screen_classes() -> dict[str, type]:
+    """Resolve the ``{mode_name: screen_class}`` map for the action-key help.
+
+    Lazily imports each non-Home mode screen class (mirroring the deferred
+    import :func:`mode_key_rows` uses for the registry) so the help
+    module's import graph stays light and free of the scope-screen cycle.
+    Home is intentionally absent: it reuses the resolved scope screen and
+    owns no mode-specific :attr:`~textual.screen.Screen.BINDINGS`, so it
+    contributes no action-key subsection.
+
+    Returns:
+        A ``{mode_name: screen_class}`` map keyed by the registry mode
+        name, covering every mode that declares its own BINDINGS class.
+    """
+    from eawf.surfaces.tui.modes.agent_watch import AgentWatchModeScreen
+    from eawf.surfaces.tui.modes.autopilot import AutopilotModeScreen
+    from eawf.surfaces.tui.modes.doctor import DoctorModeScreen
+    from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
+    from eawf.surfaces.tui.modes.feed import FeedModeScreen
+    from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
+    from eawf.surfaces.tui.modes.trust import TrustModeScreen
+
+    return {
+        "autopilot": AutopilotModeScreen,
+        "research_board": ResearchBoardModeScreen,
+        "trust": TrustModeScreen,
+        "doctor": DoctorModeScreen,
+        "evidence": EvidenceModeScreen,
+        "feed": FeedModeScreen,
+        "agent_watch": AgentWatchModeScreen,
+    }
+
+
+def mode_action_key_rows() -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...]:
+    """Return the per-mode action-key subsections for the help table.
+
+    For each non-Home mode, in registry (digit) order, derive the mode's
+    own action keys straight from the mode screen class so the help cannot
+    silently diverge from the live bindings. A mode's *own* bindings are
+    read off the class ``__dict__`` (not the inherited :attr:`BINDINGS`
+    attribute) so the shared :class:`~eawf.surfaces.tui.scopes.ScopeScreen`
+    chrome (palette / help / quit -- already documented under the global
+    section) is not re-listed, and a mode that declares no action keys of
+    its own (e.g. Feed / Doctor / Evidence) yields an empty row tuple rather
+    than the inherited chrome.
+
+    Each yielded :class:`~textual.binding.Binding` becomes a
+    ``(key, description)`` row; no binding the mode declares is dropped, so
+    the coverage test can assert every own-binding has a help row.
+
+    Returns:
+        One ``(mode_title, ((key, description), ...))`` pair per non-Home
+        mode, in digit order. Modes that declare no own bindings carry an
+        empty row tuple.
+    """
+    from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
+
+    classes = _mode_screen_classes()
+    sections: list[tuple[str, tuple[tuple[str, str], ...]]] = []
+    for spec in MODE_REGISTRY:
+        cls = classes.get(spec.name)
+        if cls is None:
+            continue
+        own_bindings = cls.__dict__.get("BINDINGS", ())
+        rows = tuple(
+            (binding.key, binding.description)
+            for binding in own_bindings
+            if isinstance(binding, Binding)
+        )
+        sections.append((spec.title, rows))
+    return tuple(sections)
+
+
+def reference_nav_rows() -> tuple[tuple[str, str], ...]:
+    """Return the reference-nav key rows (key, action) for the help table.
+
+    Surfaces the ``alt+left`` / ``alt+right`` history-style reference
+    navigation that the App binds app-wide. Derived from
+    :attr:`~eawf.surfaces.tui.app.EaApp.BINDINGS` filtered to the two
+    ``reference_*`` actions (lazy import so the help module stays free of
+    the App import cycle), so a rebinding of either key flows straight into
+    the help.
+
+    Returns:
+        One ``(key, description)`` row per reference-nav binding, in the
+        order the App declares them (``alt+left`` then ``alt+right``).
+    """
+    from eawf.surfaces.tui.app import EaApp
+
+    return tuple(
+        (binding.key, binding.description)
+        for binding in EaApp.BINDINGS
+        if isinstance(binding, Binding) and binding.action.startswith("reference_")
+    )
+
+
 def pane_nav_rows() -> tuple[tuple[str, str, str], ...]:
     """Return the pane-navigation rows (key, action, vim-alias)."""
     return _PANE_NAV
@@ -220,6 +321,11 @@ class HelpScreen(ModalScreen[None]):
             yield Static("Pane navigation (vim alias)", classes="help-section")
             for key, action, alias in pane_nav_rows():
                 yield Static(f"  {key:<10} {action}  ({alias})", classes="help-row")
+            yield Static("Mode action keys", classes="help-section")
+            yield from self._mode_action_widgets()
+            yield Static("Reference navigation", classes="help-section")
+            for key, action in reference_nav_rows():
+                yield Static(f"  {key:<10} {action}", classes="help-row")
             yield Static(f"{self._scope.capitalize()} screen keys", classes="help-section")
             scope_rows = scope_key_rows(self._scope)
             if scope_rows:
@@ -237,6 +343,23 @@ class HelpScreen(ModalScreen[None]):
             for verb in visible_verbs(self._scope):
                 yield Static(f"  {verb.name:<16} {verb.hint}", classes="help-row")
             yield Static("[ Esc to close ]", classes="help-hint")
+
+    def _mode_action_widgets(self) -> ComposeResult:
+        """Yield the per-mode action-key subsection widgets.
+
+        One ``Static`` mode-title row per non-Home mode followed by a
+        ``Static`` per ``(key, action)`` binding row (or a muted
+        ``(navigation only)`` note when the mode declares no own action
+        keys). Split out of :meth:`compose` so the section's nested loop
+        stays out of the compose method's complexity budget.
+        """
+        for mode_title, rows in mode_action_key_rows():
+            yield Static(f"  {mode_title}", classes="help-row")
+            if rows:
+                for key, action in rows:
+                    yield Static(f"    {key:<10} {action}", classes="help-row")
+            else:
+                yield Static("    (navigation only)", classes="help-row")
 
     def _resolve_scope(self) -> ScopeName:
         """Read the host App's resolved scope (defaults to ``repo``).
@@ -288,8 +411,10 @@ __all__ = [
     "backlog_key_rows",
     "config_overlay_rows",
     "global_key_rows",
+    "mode_action_key_rows",
     "mode_key_rows",
     "open_help",
     "pane_nav_rows",
+    "reference_nav_rows",
     "scope_key_rows",
 ]

@@ -11,13 +11,18 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from textual.binding import Binding
+
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
 from eawf.surfaces.tui.screens.help import (
     HelpScreen,
     backlog_key_rows,
     config_overlay_rows,
     global_key_rows,
+    mode_action_key_rows,
     pane_nav_rows,
+    reference_nav_rows,
     scope_key_rows,
 )
 
@@ -134,6 +139,95 @@ def test_config_overlay_rows_enter_is_sole_mutator() -> None:
 
 
 # --------------------------------------------------------------------------
+# Mode action-key derivation + reference nav
+# --------------------------------------------------------------------------
+
+
+def _resolve_mode_screen_classes() -> dict[str, type]:
+    """Resolve ``{mode_name: screen_class}`` via the live registry factories.
+
+    Drives the resolution off :data:`MODE_REGISTRY` itself (not the help
+    module's private map) so the coverage assertions stay independent of the
+    code under test: each mode's factory is invoked against a real app to
+    learn which screen class that mode actually boots. Home returns its
+    scope-screen *name* (a ``str``), not a screen, so it is skipped -- it
+    owns no mode-specific BINDINGS.
+
+    Returns:
+        A ``{mode_name: screen_class}`` map for every non-Home mode.
+    """
+    app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+    classes: dict[str, type] = {}
+    for spec in MODE_REGISTRY:
+        built = spec.factory(app)
+        if isinstance(built, str):
+            continue
+        classes[spec.name] = type(built)
+    return classes
+
+
+def test_mode_action_key_rows_skip_home() -> None:
+    # Home reuses the scope screen and owns no mode-specific BINDINGS, so it
+    # contributes no action-key subsection; every other registry mode does.
+    titles = [title for title, _ in mode_action_key_rows()]
+    assert "Home" not in titles
+    non_home_titles = {spec.title for spec in MODE_REGISTRY if spec.name != "home"}
+    assert set(titles) == non_home_titles
+
+
+def test_mode_action_key_rows_cover_every_own_binding() -> None:
+    # The criterion's coverage guarantee: for every non-Home mode, every key
+    # the mode screen declares in its OWN BINDINGS must appear as a help row
+    # produced by mode_action_key_rows() -- no binding is silently dropped.
+    # Driven off MODE_REGISTRY so a future mode is covered automatically.
+    help_sections = dict(mode_action_key_rows())
+    classes = _resolve_mode_screen_classes()
+    title_for = {spec.name: spec.title for spec in MODE_REGISTRY}
+
+    for name, cls in classes.items():
+        title = title_for[name]
+        assert title in help_sections, f"mode {name!r} missing its help subsection"
+        help_keys = {key for key, _ in help_sections[title]}
+        own_bindings = cls.__dict__.get("BINDINGS", ())
+        for binding in own_bindings:
+            if isinstance(binding, Binding):
+                assert binding.key in help_keys, (
+                    f"binding {binding.key!r} of mode {name!r} has no help row"
+                )
+
+
+def test_mode_action_key_rows_use_binding_description() -> None:
+    # Each row carries the binding's own description verbatim, so the help
+    # reads the live action label (e.g. autopilot 'd' -> 'dispatch').
+    sections = dict(mode_action_key_rows())
+    autopilot = dict(sections["Autopilot"])
+    assert autopilot["d"] == "dispatch"
+    assert autopilot["K"] == "kill"
+
+
+def test_mode_action_key_rows_omit_inherited_chrome() -> None:
+    # A mode that declares no own BINDINGS (Feed) carries an empty row tuple
+    # rather than re-listing the inherited ScopeScreen chrome (palette / help
+    # / quit), which already lives under the global section.
+    sections = dict(mode_action_key_rows())
+    assert sections["Feed"] == ()
+    # The inherited chrome keys never leak into any mode subsection.
+    all_keys = {key for rows in sections.values() for key, _ in rows}
+    assert "slash" not in all_keys
+    assert "question_mark" not in all_keys
+
+
+def test_reference_nav_rows_surface_alt_arrows() -> None:
+    # The alt-left / alt-right history nav is derived from EaApp.BINDINGS and
+    # surfaced as help rows so the reference-stack nav is discoverable.
+    rows = dict(reference_nav_rows())
+    assert "alt+left" in rows
+    assert "alt+right" in rows
+    assert "back" in rows["alt+left"]
+    assert "forward" in rows["alt+right"]
+
+
+# --------------------------------------------------------------------------
 # Pilot behaviour
 # --------------------------------------------------------------------------
 
@@ -181,6 +275,47 @@ def test_help_renders_keymap_and_verbs() -> None:
             app.screen.query_one("#help-container", VerticalScroll).scroll_end(animate=False)
             await pilot.pause()
             assert "/find" in app.export_screenshot()
+
+    asyncio.run(body())
+
+
+def test_help_renders_mode_action_and_reference_sections() -> None:
+    async def body() -> None:
+        from textual.containers import VerticalScroll
+
+        from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text
+
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            await pilot.press("question_mark")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            # The new sections sit below the fold; scroll the card so they
+            # render, then assert the section headings + a representative row
+            # against the plain-text capture (the SVG screenshot fragments
+            # multi-word strings across <text> runs and is unreliable here).
+            container = app.screen.query_one("#help-container", VerticalScroll)
+            container.scroll_to(y=18, animate=False)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            shot = capture_screen_text(app)
+            assert "Mode action keys" in shot
+            assert "Autopilot" in shot
+            assert "dispatch" in shot
+            # The honest "(navigation only)" note appears for a mode that
+            # declares no own action keys (Doctor / Evidence / Feed).
+            container.scroll_to(y=30, animate=False)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert "(navigation only)" in capture_screen_text(app)
+            # Scroll further to the reference-nav section (alt-arrow nav).
+            container.scroll_to(y=54, animate=False)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            ref = capture_screen_text(app)
+            assert "Reference navigation" in ref
+            assert "alt+left" in ref
 
     asyncio.run(body())
 
