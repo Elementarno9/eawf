@@ -271,6 +271,11 @@ class EaApp(App[None]):
         Binding("ctrl+r", "switch_scope('repo')", "repo", show=False),
         Binding("ctrl+u", "switch_scope('user')", "user", show=False),
         Binding("i", "open_inbox", "inbox", show=False),
+        # ``c`` opens the config window. Declared app-wide (not on the scope
+        # screens alone) so it resolves from every mode screen too -- the
+        # mode screens subclass the ScopeScreen base, which never bound it,
+        # so a scope-only binding left config unreachable from any mode.
+        Binding("c", "open_config", "config", show=False),
         Binding("q", "quit", "quit"),
         Binding("escape", "quit", "quit", show=False),
         # Vim-key aliases for navigation — secondary to the arrows the

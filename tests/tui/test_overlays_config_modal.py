@@ -2114,6 +2114,25 @@ def test_c_keypress_opens_config_on_repo_scope() -> None:
     asyncio.run(body())
 
 
+def test_c_keypress_opens_config_from_a_mode_screen() -> None:
+    # ``c`` is an app-wide binding, so it must reach the config window from a
+    # dedicated mode (autopilot, digit ``2``), not just the home/scope
+    # screens. A scope-only binding regresses this -- the mode screens
+    # subclass the ScopeScreen base, which never bound ``c``.
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")  # -> autopilot mode
+            await pilot.pause()
+            assert app.current_mode == "autopilot"
+            await pilot.press("c")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigModal)
+
+    asyncio.run(body())
+
+
 def test_config_palette_verb_opens_modal() -> None:
     async def body() -> None:
         from eawf.surfaces.tui.palette.verbs import _handle_config
