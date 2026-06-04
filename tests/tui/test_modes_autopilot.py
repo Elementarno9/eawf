@@ -49,6 +49,7 @@ from eawf.kernel.state.models import (
 )
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.autopilot import (
+    ARM_DEFERRED,
     DISPATCH_IDLE,
     DISPATCH_NO_DAEMON,
     DISPATCH_RESULT_ID,
@@ -59,6 +60,8 @@ from eawf.surfaces.tui.modes.autopilot import (
     KILL_NO_DAEMON,
     KILL_NO_TARGET,
     PAUSE_NO_DAEMON,
+    SKIP_NO_NEXT,
+    SKIP_NO_TARGET,
     AutopilotModeScreen,
     ReadyWaveRow,
     build_frontier_items,
@@ -859,91 +862,136 @@ def test_autopilot_halt_no_target_surfaces_honest_line(tmp_path: Path) -> None:
     asyncio.run(body())
 
 
-@pytest.mark.parametrize(
-    ("key", "verb", "method"),
-    [
-        ("S", "skip", "agent.skip"),
-        ("a", "arm", "agent.arm"),
-    ],
-)
-def test_autopilot_unwired_keys_surface_not_yet_wired(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    key: str,
-    verb: str,
-    method: str,
-) -> None:
-    """skip / pause / arm surface the honest "not yet wired" line.
+def test_autopilot_skip_helpers_removed_no_stub_routing() -> None:
+    """No autopilot control routes through a not-yet-wired stub helper.
 
-    Their daemon RPCs do not exist, so with a reachable daemon stubbed to answer
-    method-not-found the action surfaces that the method is not wired and never
-    fakes the intervention.
+    The load-bearing honesty assertion for this wave: the ``_issue_unwired`` /
+    ``_call_unwired`` stub helpers (which fired a doomed RPC and dressed up the
+    method-not-found as "not yet wired") are gone, so neither skip nor arm can
+    route through them. Pins the deletion so a future re-introduction of a
+    faked-stub control fails this test.
+    """
+    assert not hasattr(AutopilotModeScreen, "_issue_unwired")
+    assert not hasattr(AutopilotModeScreen, "_call_unwired")
+
+
+def test_autopilot_skip_advances_selection_to_next_ready_wave(tmp_path: Path) -> None:
+    """``S`` (skip) advances the selection past the current ready wave (local).
+
+    Skip is a real, cheap local frontier operation -- no daemon round-trip. From
+    the first ready wave (W02) it steps the selection to the next one (W05) in
+    claim order and surfaces where it landed, never implying a faked skip.
     """
     state_path = _write_state(tmp_path, _frontier_state())
 
-    class _MethodNotFoundClient:
-        def __enter__(self) -> _MethodNotFoundClient:
-            return self
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            assert pane.selected == 0  # starts on the first ready wave (W02)
+            await pilot.press("S")  # skip -> advance to the next ready wave
+            await settle_screen(pilot)
+            assert pane.selected == 1  # the selection genuinely moved (real effect)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "skip: now on" in rendered
+            assert "P01-I02-W05" in rendered  # the wave it stepped to
 
-        def __exit__(self, *_args: object) -> None:
-            return None
+    asyncio.run(body())
 
-        def call(self, _method: str, _params: dict[str, object]) -> dict[str, object]:
-            from eawf.surfaces.cli._daemon_client import DaemonRpcError
 
-            raise DaemonRpcError(code=-32601, message="method not found")
+def test_autopilot_skip_no_next_surfaces_honest_line(tmp_path: Path) -> None:
+    """``S`` on the last ready wave reports nothing further to skip to (no fake).
+
+    Stepping past the final ready wave has nothing to land on, so the cursor
+    stays put and the result honestly says there is no further ready wave rather
+    than implying a skip happened.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            await pilot.press("down")  # select the last ready wave (W05)
+            await settle_screen(pilot)
+            assert pane.selected == 1
+            await pilot.press("S")  # nothing further to skip to
+            await settle_screen(pilot)
+            assert pane.selected == 1  # cursor unmoved (honest no-op)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert SKIP_NO_NEXT in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_skip_no_target_surfaces_honest_line(tmp_path: Path) -> None:
+    """``S`` on an empty frontier reports there is no ready wave to skip.
+
+    An honest-empty frontier has no selected wave, so skip must report nothing
+    to skip rather than implying a stepped cursor.
+    """
+    state_path = _write_state(tmp_path, _state())  # empty frontier
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("S")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert SKIP_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_arm_surfaces_deferred_not_faked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``a`` (arm) surfaces the honest deferred line and fires no RPC.
+
+    Arm has no cheap real semantics, so it must report the capability is
+    deferred -- NOT a "not yet wired daemon RPC" line and NOT a faked arm. The
+    daemon-client seam is stubbed to record any call; arm must never reach it.
+    """
+    state_path = _write_state(tmp_path, _frontier_state())
+    calls: list[tuple[str, dict[str, object]]] = []
 
     async def body() -> None:
         from eawf.surfaces.cli import _daemon_client as dc
 
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
-        monkeypatch.setattr(dc, "DaemonClient", lambda *a, **k: _MethodNotFoundClient())
+        monkeypatch.setattr(dc, "DaemonClient", _make_recording_client(calls))
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press(_AUTOPILOT_DIGIT)
             await settle_screen(pilot)
-            await pilot.press(key)  # non-destructive -> no confirm modal
+            await pilot.press("a")  # arm -> deferred (no RPC)
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AutopilotModeScreen)  # no modal opened
             result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
             rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "not yet wired" in rendered
-            assert method in rendered
-            assert verb in rendered
+            assert ARM_DEFERRED in rendered
+            assert "deferred" in rendered
+            assert "not yet wired" not in rendered  # not the old faked-stub line
 
     asyncio.run(body())
-
-
-@pytest.mark.parametrize("key", ["S", "a"])
-def test_autopilot_unwired_keys_no_daemon_surface_unavailable(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    key: str,
-) -> None:
-    """With no daemon, skip / arm surface the honest unavailable line.
-
-    No fake success: when the daemon socket is unavailable each non-destructive
-    intervention reports the request was not issued.
-    """
-    state_path = _write_state(tmp_path, _frontier_state())
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=state_path)
-        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await settle_screen(pilot)
-            await pilot.press(_AUTOPILOT_DIGIT)
-            await settle_screen(pilot)
-            await pilot.press(key)
-            await settle_screen(pilot)
-            pane = app.screen
-            assert isinstance(pane, AutopilotModeScreen)
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            assert "unavailable" in str(result.render())  # type: ignore[attr-defined]
-
-    asyncio.run(body())
+    assert calls == []  # arm never reached the daemon (no doomed RPC)
 
 
 # --------------------------------------------------------------------------

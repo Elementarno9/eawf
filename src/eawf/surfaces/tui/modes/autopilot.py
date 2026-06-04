@@ -57,12 +57,19 @@ out of band:
   the daemon persists and :func:`eawf.workflow.lifecycle.wave.claim_wave` reads
   to block the next claim. It surfaces the real paused / resumed verdict on
   success and the honest unavailable line when the daemon is unreachable.
-* ``S`` (skip) and ``a`` (arm / launch-flow) have **no daemon RPC yet**. They
-  are bound for muscle-memory + discoverability and routed through the
-  daemon-client seam to their intended method names, but the daemon answers
-  method-not-found, so each surfaces an honest "not yet wired" line and never
-  implies the action happened -- exactly the pre-spawn honest-unavailable path.
-  They go live for free when their RPCs land.
+* ``S`` (skip) is a **real local frontier operation**: it advances the
+  selection past the current ready wave to the next one in claim order, so the
+  operator steps over a wave they do not want to dispatch next. There is no
+  lightweight "skip this ready wave" daemon transition (the only terminal wave
+  state, ABANDONED, is far too heavy for stepping the cursor), so skip does a
+  true, cheap, local thing rather than firing a doomed RPC: it moves the
+  selection and reports where it landed, and reports honestly when there is no
+  next wave to step to.
+* ``a`` (arm / launch-flow) has **no cheap real semantics yet** -- arming a
+  flow is a daemon capability that does not exist. So rather than firing a
+  doomed RPC and dressing the method-not-found up, arm surfaces a static,
+  honest ``arm: deferred`` line. The key stays bound + footer-advertised for
+  discoverability; its result truthfully says the capability is deferred.
 
 Honest-empty is the COMMON path: a scope whose wave graph has no claim-ready
 wave (every wave CLOSED, or the next waves still blocked on open deps) renders
@@ -144,16 +151,6 @@ _SIGNAL_KILL: str = "kill"
 #: same daemon-owned ladder.
 _SIGNAL_TERM: str = "term"
 
-#: Intended daemon methods the still-not-yet-wired intervention keys route
-#: through. No such RPC exists yet (full registry checked) -- the daemon
-#: answers method-not-found, so the action surfaces the honest "not yet wired"
-#: line. Wiring the keys to the real method names now is the idle-contract
-#: pattern: they go live for free once the matching RPC lands. (``space`` /
-#: pause is no longer here -- its ``agent.pause`` / ``agent.resume`` RPCs are
-#: live, so it routes through the real seam below.)
-_SKIP_METHOD: str = "agent.skip"
-_ARM_METHOD: str = "agent.arm"
-
 #: Result line when a destructive intervention has nothing to act on.
 KILL_NO_TARGET: str = "kill: no wave to kill"
 HALT_NO_TARGET: str = "halt: no wave to halt"
@@ -172,12 +169,19 @@ _RESUME_RPC: str = "agent.resume"
 #: Result line when a pause request could not reach the daemon.
 PAUSE_NO_DAEMON: str = "pause: daemon unavailable -- request not issued"
 
-#: Honest "not yet wired" line for the keys whose daemon RPC does not exist
-#: yet (skip / arm). Formatted with the verb so each key reads clearly.
-_NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- daemon has no {method} RPC"
+#: Result line when ``S`` (skip) advances the selection past the last ready
+#: wave -- there is nothing further to step to, so the cursor stays put and the
+#: line says so honestly rather than implying a wave was skipped.
+SKIP_NO_NEXT: str = "skip: no further ready wave to skip to"
 
-#: Result line when a not-yet-wired intervention cannot even reach the daemon.
-_UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
+#: Result line when ``S`` (skip) has no ready wave selected to step from (the
+#: frontier is empty), so there is nothing to skip.
+SKIP_NO_TARGET: str = "skip: no ready wave to skip"
+
+#: Result line when ``a`` (arm) is pressed. Arm has no cheap real daemon
+#: semantics yet, so the control honestly reports the capability is deferred
+#: rather than firing a doomed RPC and dressing up the method-not-found.
+ARM_DEFERRED: str = "arm: deferred (launch-flow not yet available)"
 
 #: Footer hints for the Autopilot pane (full key names, arrows primary). The
 #: intervention keys ride after dispatch so they are discoverable; the
@@ -349,9 +353,11 @@ class AutopilotModeScreen(ScopeScreen):
     ``space`` (pause / resume) routes through the real ``agent.pause`` /
     ``agent.resume`` RPCs -- reading the current ``dispatch_paused`` flag to
     pick which to issue -- and surfaces the persisted paused / resumed verdict;
-    while ``S`` (skip) / ``a`` (arm) route through the seam to their intended
-    (not-yet-existing) methods and surface an honest "not yet wired" line until
-    those RPCs land. Every intervention surfaces its typed outcome honestly and
+    ``S`` (skip) does a real, cheap local thing -- it advances the selection
+    past the current ready wave to the next one in claim order (no daemon
+    round-trip, no fake); and ``a`` (arm) has no cheap real semantics yet, so
+    it surfaces a static, honest ``arm: deferred`` line rather than firing a
+    doomed RPC. Every intervention surfaces its typed outcome honestly and
     never fakes an action that did not happen.
 
     The screen self-binds to the host
@@ -577,14 +583,30 @@ class AutopilotModeScreen(ScopeScreen):
         )
 
     def action_skip_selected(self) -> None:
-        """Skip the selected wave (no daemon RPC yet -- honest-unavailable).
+        """Skip the selected ready wave by advancing the selection (local).
 
-        Routes through the daemon-client seam to the intended ``agent.skip``
-        method. Skip is non-destructive (no confirm). The daemon answers
-        method-not-found until the RPC lands, so the action surfaces the honest
-        "not yet wired" line and never implies the wave was skipped.
+        A real, cheap, local frontier operation: it steps the selection past
+        the currently-selected ready wave to the next one in claim order, so
+        the operator moves over a wave they do not want to dispatch next. There
+        is no lightweight daemon "skip this ready wave" transition (the only
+        terminal wave state, ABANDONED, is far too heavy for stepping the
+        cursor), so skip does a true local thing rather than firing a doomed
+        RPC. With no ready wave there is nothing to skip; when the selection is
+        already on the last ready wave there is nothing further to step to, and
+        each case is surfaced honestly without moving the cursor or implying a
+        skip that did not happen.
         """
-        self._issue_unwired(verb="skip", method=_SKIP_METHOD)
+        if self._selected_row() is None:
+            self._set_result(f"[$warn]{SKIP_NO_TARGET}[/]")
+            return
+        if self.selected >= len(self._rows) - 1:
+            self._set_result(f"[$warn]{SKIP_NO_NEXT}[/]")
+            return
+        self.selected += 1
+        skipped_to = self._rows[self.selected]
+        result_line = f"[$ok]skip: now on[/] [$muted]{escape_markup(skipped_to.wave_id)}[/]"
+        self._set_result(result_line)
+        logger.info(f"action_skip_selected now={skipped_to.wave_id} selected={self.selected}")
 
     def action_toggle_pause(self) -> None:
         """Pause / resume dispatch through the real daemon RPC.
@@ -651,14 +673,16 @@ class AutopilotModeScreen(ScopeScreen):
         return f"[$ok]pause: {verb}[/]"
 
     def action_arm_flow(self) -> None:
-        """Arm / launch the flow (no daemon RPC yet -- honest-unavailable).
+        """Arm / launch the flow (honestly deferred -- no faked RPC).
 
-        Routes through the daemon-client seam to the intended ``agent.arm``
-        method. Arm is non-destructive (no confirm). The daemon answers
-        method-not-found until the RPC lands, so the action surfaces the honest
-        "not yet wired" line and never implies the flow armed.
+        Arming a flow has no cheap real daemon semantics yet, so rather than
+        firing a doomed RPC and dressing the method-not-found up, the action
+        surfaces a static, honest ``arm: deferred`` line. The key stays bound +
+        footer-advertised for discoverability; its result truthfully reports
+        the capability is deferred and never implies the flow armed.
         """
-        self._issue_unwired(verb="arm", method=_ARM_METHOD)
+        self._set_result(f"[$warn]{ARM_DEFERRED}[/]")
+        logger.info("action_arm_flow deferred")
 
     def _confirm_then_kill(
         self,
@@ -772,62 +796,6 @@ class AutopilotModeScreen(ScopeScreen):
             f"[$warn]{verb}: not killed[/] [$muted]signal={escape_markup(delivered)} "
             "(daemon kill not yet live)[/]"
         )
-
-    def _issue_unwired(self, *, verb: str, method: str) -> None:
-        """Route a not-yet-wired intervention through the seam, honestly.
-
-        Issues *method* through the daemon-client seam for muscle-memory +
-        discoverability. No such RPC exists yet (skip / pause / arm), so the
-        daemon answers method-not-found, which the action surfaces as the honest
-        "not yet wired" line; a daemon that is simply unreachable surfaces the
-        honest unavailable line instead. Either way the action never fakes the
-        intervention -- it goes live for free once the matching RPC lands (the
-        idle-contract pattern).
-
-        Args:
-            verb: The action verb (``"skip"`` / ``"pause"`` / ``"arm"``) for the
-                result line + logs.
-            method: The intended daemon JSON-RPC method name.
-        """
-        result_line = self._call_unwired(verb=verb, method=method)
-        self._set_result(result_line)
-        logger.info(f"_issue_unwired verb={verb} method={method!r} result={result_line!r}")
-
-    def _call_unwired(self, *, verb: str, method: str) -> str:
-        """Call a not-yet-existing *method* and return the honest result line.
-
-        Args:
-            verb: The action verb for the result line.
-            method: The intended daemon JSON-RPC method name (does not exist
-                yet).
-
-        Returns:
-            A content-markup line: the honest "not yet wired" line when the
-            daemon answers method-not-found, or the honest unavailable line when
-            the daemon cannot be reached.
-        """
-        not_wired = _NOT_WIRED_TEMPLATE.format(verb=verb, method=method)
-        unavailable = _UNAVAILABLE_TEMPLATE.format(verb=verb)
-        if not self._daemon_available():
-            return f"[$warn]{unavailable}[/]"
-        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-
-        try:
-            with DaemonClient(call_timeout_seconds=1.0) as client:
-                client.call(method, {})
-        except DaemonRpcError as exc:
-            # A real daemon answers method-not-found for these as-yet-unwired
-            # methods; surface that honestly as "not yet wired". Any other RPC
-            # error is also surfaced as not-wired -- the method does not exist.
-            logger.debug(f"_call_unwired method_absent verb={verb} code={exc.code}")
-            return f"[$warn]{not_wired}[/]"
-        except (OSError, RuntimeError, TimeoutError) as exc:
-            logger.debug(f"_call_unwired daemon_fallback verb={verb} cause={exc!r}")
-            return f"[$warn]{unavailable}[/]"
-        # A success result is impossible today (no such RPC). If a future daemon
-        # implements the method, report it landed so the honest path inverts the
-        # moment the RPC exists.
-        return f"[$ok]{verb}: issued[/]"
 
     def _latest_attempt(self, wave_id: str) -> int:
         """Return the highest recorded attempt for *wave_id*, defaulting to ``1``.
@@ -962,6 +930,7 @@ class AutopilotModeScreen(ScopeScreen):
 
 
 __all__ = [
+    "ARM_DEFERRED",
     "DISPATCH_IDLE",
     "DISPATCH_NO_DAEMON",
     "DISPATCH_NO_TARGET",
@@ -977,6 +946,8 @@ __all__ = [
     "KILL_NO_TARGET",
     "PAUSE_NO_DAEMON",
     "SELECTED_ROW_CLASS",
+    "SKIP_NO_NEXT",
+    "SKIP_NO_TARGET",
     "AutopilotModeScreen",
     "ReadyWaveRow",
     "build_frontier_items",
