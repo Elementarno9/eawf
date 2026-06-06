@@ -3024,6 +3024,18 @@
       "status": "done",
       "updated_at": "2026-06-06T19:10:57.196699Z"
     },
+    "P29-I11-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W04",
+      "scope_id": "P29-I11-W04",
+      "status": "done",
+      "updated_at": "2026-06-06T19:41:03.557353Z"
+    },
     "P29-I11-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -3035,6 +3047,30 @@
       "scope_id": "P29-I11-W05",
       "status": "done",
       "updated_at": "2026-06-06T18:40:15.044109Z"
+    },
+    "P29-I11-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W06",
+      "scope_id": "P29-I11-W06",
+      "status": "done",
+      "updated_at": "2026-06-06T19:41:04.336976Z"
+    },
+    "P29-I11-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W09",
+      "scope_id": "P29-I11-W09",
+      "status": "done",
+      "updated_at": "2026-06-06T19:41:05.112050Z"
     }
   },
   "agent_sessions": {
@@ -11649,6 +11685,19 @@
       "scope_id": "P29-I11-W03",
       "updated_at": "2026-06-06T18:42:43.795424Z"
     },
+    "P29-I11-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W04-bucket-20260606T191335Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I11-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I11-W04",
+      "updated_at": "2026-06-06T19:13:35.959957Z"
+    },
     "P29-I11-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I11-W05-bucket-20260606T184013Z",
@@ -11661,6 +11710,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I11-W05",
       "updated_at": "2026-06-06T18:40:13.550008Z"
+    },
+    "P29-I11-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W06-bucket-20260606T191336Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I11-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I11-W06",
+      "updated_at": "2026-06-06T19:13:36.508427Z"
+    },
+    "P29-I11-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W09-bucket-20260606T191359Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I11-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I11-W09",
+      "updated_at": "2026-06-06T19:13:59.957321Z"
     }
   },
   "goals": {
@@ -13923,7 +13998,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T19:10:57.197197Z",
+  "updated_at": "2026-06-06T19:41:05.112541Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -56195,10 +56270,10 @@
     "P29-I11-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T19:13:35.959947Z",
+      "closed_at": "2026-06-06T19:41:03.557353Z",
+      "commit": "49f82056334150c923723678a2e4f6f2b537794f",
       "deps": [
         "P29-I10-W01",
         "P29-I11-W02"
@@ -56216,10 +56291,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:02.304947Z",
-      "outcome": null,
+      "outcome": "EAWF021 measurability lint (banned-vague + verb/locus on CriterionSpec) + EAWF022 propose coverage gate; registered behind validate_prose with fail-open/fail-closed (ProseReport.strict); 22 new + 162 lint regression green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -56354,10 +56429,10 @@
       "blocks": [
         "P29-I11-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T19:13:36.508419Z",
+      "closed_at": "2026-06-06T19:41:04.336976Z",
+      "commit": "e41569a889eb47d4a096bba8af43ea2a1cabec94",
       "deps": [
         "P29-I11-W03"
       ],
@@ -56373,10 +56448,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:03.318767Z",
-      "outcome": null,
+      "outcome": "Turned verifier ON for the high-risk band: enforce=true in agent_driven profile, produce_wave_verdict wired into close scoped to verdict_requirement=='always' (jury_off->single-auditor), non-high-risk closes early-return (no spawn/block); test_verdict_enforced 5/5.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -56580,10 +56655,10 @@
     "P29-I11-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T19:13:59.957311Z",
+      "closed_at": "2026-06-06T19:41:05.112050Z",
+      "commit": "42d98afc9e955d4f77cc68fc0513346f4b1d77f4",
       "deps": [],
       "description": "The 1.6->1.7 success_criteria retype (I10-W06) broke raw-string fixtures across tests/kernel, tests/platform, tests/daemon, tests/integration, tests/runtime, tests/tui (W06 gauntlet ran only unit/workflow/property/snapshots). Migrate every fixture to typed CriterionSpec (via tests/_criteria_helpers.legacy_criteria) and flip the Wave.success_criteria contract test to list[CriterionSpec].",
       "dispatch_history": [],
@@ -56601,10 +56676,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T19:09:48.374242Z",
-      "outcome": null,
+      "outcome": "Migrated all CriterionSpec ValidationError fixture fallout (kernel/platform/daemon/integration/runtime/tui) to typed criteria via legacy_criteria; flipped the Wave.success_criteria contract test to list[CriterionSpec]; 12 residual daemon failures are W03 gate-unification behaviour-drift (deferred to W10).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
