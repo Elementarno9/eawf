@@ -359,7 +359,13 @@ def test_jury_unanimous_pass_closes(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 
 def test_jury_split_no_veto_blocks_close(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A pass / pass-with-followups split surfaces NEEDS_USER and blocks close."""
+    """A pass / pass-with-followups split surfaces NEEDS_USER and blocks close.
+
+    Re-pinned to the unified oracle: run_oracle routes the always-wave's
+    single un-gated criterion to the jury tier, whose NEEDS_USER reduction
+    surfaces as ``oracle blocked close (... status=needs_user): cross-vendor
+    jury outcome=needs_user``.
+    """
     _patch_jury(
         monkeypatch,
         verdicts={
@@ -371,7 +377,7 @@ def test_jury_split_no_veto_blocks_close(tmp_path: Path, monkeypatch: pytest.Mon
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="cross-vendor jury blocked"):
+        with pytest.raises(DaemonValidationError, match="oracle blocked close"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
@@ -385,7 +391,12 @@ def test_jury_split_no_veto_blocks_close(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_jury_one_fail_vetoes_and_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A single FAIL ballot minority-vetoes the vote to FAIL and blocks close."""
+    """A single FAIL ballot minority-vetoes the vote to FAIL and blocks close.
+
+    Re-pinned to the unified oracle: the jury-tier FAIL reduction surfaces
+    as ``oracle blocked close (... status=fail): cross-vendor jury
+    outcome=fail``.
+    """
     _patch_jury(
         monkeypatch,
         verdicts={"claude-code": "pass", "codex": "fail", "opencode": "pass"},
@@ -393,7 +404,7 @@ def test_jury_one_fail_vetoes_and_blocks(tmp_path: Path, monkeypatch: pytest.Mon
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="cross-vendor jury blocked"):
+        with pytest.raises(DaemonValidationError, match="oracle blocked close"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
@@ -402,7 +413,12 @@ def test_jury_one_fail_vetoes_and_blocks(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_jury_sub_quorum_abstentions_block(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Two juror lanes failing drops below quorum -> NEEDS_USER -> blocks close."""
+    """Two juror lanes failing drops below quorum -> NEEDS_USER -> blocks close.
+
+    Re-pinned to the unified oracle: two abstaining lanes leave the jury
+    below quorum, so run_oracle's jury tier returns NEEDS_USER and the close
+    surfaces as ``oracle blocked close (... status=needs_user)``.
+    """
     _patch_jury(
         monkeypatch,
         verdicts={"claude-code": "pass"},
@@ -411,7 +427,7 @@ def test_jury_sub_quorum_abstentions_block(tmp_path: Path, monkeypatch: pytest.M
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="cross-vendor jury blocked"):
+        with pytest.raises(DaemonValidationError, match="oracle blocked close"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
@@ -447,54 +463,65 @@ def test_jury_one_lane_abstains_quorum_pass_closes(
 # --------------------------------------------------------------------------- #
 
 
-def test_flag_off_does_not_convene_jury(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """With the flag OFF the jury is never convened (single-auditor gate runs).
+def test_flag_off_routes_always_wave_to_single_auditor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the flag OFF an always-wave routes to the single-auditor producer.
 
-    The single-auditor gate blocks an always-wave with no fresh auditor verdict
-    -- the pre-W15 behaviour -- and the patched jury spawn factory is never
-    invoked, proving the flag gates the new path.
+    Under the unified close gate (W03), an ``always`` wave whose profile has
+    ``cross_vendor_jury: false`` takes the single-auditor branch BEFORE the
+    run_oracle loop: it spawns one ``claude-code`` auditor (via the same
+    spawn factory the jury uses) and reads its verdict. The cross-vendor jury
+    is never convened, so only the ``claude-code`` lane is spawned -- the
+    ``codex`` / ``opencode`` lanes stay untouched -- and a clean PASS verdict
+    lets the wave close.
     """
     stubs = _patch_jury(monkeypatch, verdicts=dict.fromkeys(JURY_RUNTIME_FAMILIES, "pass"))
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=False)
 
     async def body() -> None:
-        # No auditor verdict was written, so the single-auditor gate blocks.
-        with pytest.raises(DaemonValidationError, match="verdict gate blocked"):
-            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
+        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "closed"
 
     _run(body)
-    # The jury spawn factory was never called -- no juror spawned.
-    for runtime in JURY_RUNTIME_FAMILIES:
+    # Only the single-auditor (claude-code) lane spawned; no jury convened.
+    claude_stub = stubs["claude-code"]
+    assert isinstance(claude_stub, _RecordingSpawn)
+    assert claude_stub.calls == 1
+    for runtime in ("codex", "opencode"):
         stub = stubs[runtime]
         assert isinstance(stub, _RecordingSpawn)
         assert stub.calls == 0
 
 
 # --------------------------------------------------------------------------- #
-# Degrade: flag-on but the cross-vendor lanes are unavailable -> single-auditor.
+# Flag-on: run_oracle convenes the jury with no separate lane pre-check.
 # --------------------------------------------------------------------------- #
 
 
-def test_flag_on_lanes_unavailable_degrades_to_single_auditor(
+def test_flag_on_lanes_unavailable_block_via_jury_abstention(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Flag-on but no juror CLI lanes -> the single-auditor gate runs instead.
+    """Flag-on with all lanes raising -> jury abstains, sub-quorum -> block.
 
-    The jury spawn factory must not be called when the lane pre-check reports
-    the host lacks the cross-vendor CLIs; the close degrades to the
-    single-auditor gate (which here blocks on the missing verdict).
+    The unified close gate (W03) dropped the separate ``_cross_vendor_lanes_
+    ready`` pre-check: an ``always`` wave under ``cross_vendor_jury: true``
+    always falls through to run_oracle's jury tier. When every juror lane
+    raises (the host lacks the vendor CLIs), each juror abstains, the vote
+    falls below quorum, and the jury returns NEEDS_USER -- so the close is
+    blocked (it does NOT gracefully degrade to a single-auditor PASS). Every
+    lane is spawned (attempted) exactly once.
     """
     stubs = _patch_jury(
         monkeypatch,
-        verdicts=dict.fromkeys(JURY_RUNTIME_FAMILIES, "pass"),
+        raising=set(JURY_RUNTIME_FAMILIES),
         lanes_ready=False,
     )
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="verdict gate blocked"):
+        with pytest.raises(DaemonValidationError, match="oracle blocked close"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
@@ -502,5 +529,5 @@ def test_flag_on_lanes_unavailable_degrades_to_single_auditor(
     _run(body)
     for runtime in JURY_RUNTIME_FAMILIES:
         stub = stubs[runtime]
-        assert isinstance(stub, _RecordingSpawn)
-        assert stub.calls == 0
+        assert isinstance(stub, _RaisingSpawn)
+        assert stub.calls == 1

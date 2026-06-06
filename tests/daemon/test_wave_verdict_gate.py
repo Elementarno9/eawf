@@ -242,6 +242,33 @@ class _RecordingSpawn:
         )
 
 
+def _patch_producer_spawn(
+    monkeypatch: pytest.MonkeyPatch, *, verdict: str, wave_id: str
+) -> _RecordingSpawn:
+    """Stub the close gate's single-auditor producer spawn factory.
+
+    The unified close gate (W03) routes an ``always`` wave under a
+    jury-OFF profile to the single-auditor producer, which now SPAWNS a
+    fresh auditor (via ``_jury_spawn_factory(...)('claude-code')``) before
+    reading the verdict gate -- so the daemon must never reach a real
+    subprocess under test. The returned recording stub replays one canned
+    auditor body so the producer persists a deterministic verdict.
+    """
+    stub = _RecordingSpawn(_auditor_body_json(verdict=verdict, wave_id=wave_id))
+
+    def _fake_factory(state: Any, wave: Any, *, repo_root: Path) -> Callable[[str], Any]:
+        def _factory(runtime: str) -> _RecordingSpawn:
+            return stub
+
+        return _factory
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.state._jury_spawn_factory",
+        _fake_factory,
+    )
+    return stub
+
+
 def _seed_auditor_verdict(*, state_path: Path, wave_id: str, verdict: str, tmp_path: Path) -> None:
     """Write a fresh auditor verdict to disk via the dispatch-layer producer."""
     state = State.model_validate(orjson.loads(state_path.read_bytes()))
@@ -274,8 +301,19 @@ _HIGH_RISK_WAVE = "P29-I04-W07"
 # --------------------------------------------------------------------------- #
 
 
-def test_close_high_risk_no_verdict_is_blocked(tmp_path: Path) -> None:
-    """An always-wave with no auditor verdict is refused before any write."""
+def test_close_high_risk_no_prior_verdict_is_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An always-wave with no prior verdict whose produced verdict is FAIL blocks.
+
+    Re-pinned to the unified close gate (W03): a jury-OFF ``always`` wave
+    routes to the single-auditor producer, which now SPAWNS a fresh auditor
+    before the verdict gate reads it. With no PRIOR auditor verdict the
+    producer spawns (stubbed to a FAIL body); the freshly-produced verdict is
+    not close-ready, so the gate refuses close with ``verdict gate blocked``
+    and the wave stays CLAIMED.
+    """
+    stub = _patch_producer_spawn(monkeypatch, verdict="fail", wave_id=_HIGH_RISK_WAVE)
     _write_passing_verify_profile(tmp_path)
     _init_git_repo(tmp_path)
     state_path = tmp_path / ".ea" / "state.json"
@@ -299,10 +337,21 @@ def test_close_high_risk_no_verdict_is_blocked(tmp_path: Path) -> None:
         assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
 
     _run(body)
+    # The single-auditor producer spawned exactly one fresh auditor.
+    assert stub.calls == 1
 
 
-def test_close_high_risk_fail_verdict_is_blocked(tmp_path: Path) -> None:
-    """An always-wave whose fresh auditor verdict is FAIL is refused."""
+def test_close_high_risk_fail_verdict_is_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An always-wave whose auditor verdict stays FAIL is refused.
+
+    Re-pinned to the unified close gate (W03): a FAIL verdict is seeded, so
+    the single-auditor producer's idempotency check sees a non-close-ready
+    verdict and RE-SPAWNS (stubbed to a FAIL body again); the gate then reads
+    a still-FAIL verdict and refuses close with ``verdict gate blocked``.
+    """
+    stub = _patch_producer_spawn(monkeypatch, verdict="fail", wave_id=_HIGH_RISK_WAVE)
     _write_passing_verify_profile(tmp_path)
     _init_git_repo(tmp_path)
     state_path = tmp_path / ".ea" / "state.json"
@@ -328,6 +377,8 @@ def test_close_high_risk_fail_verdict_is_blocked(tmp_path: Path) -> None:
         assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
 
     _run(body)
+    # The producer re-spawned because the seeded FAIL was not close-ready.
+    assert stub.calls == 1
 
 
 def test_close_high_risk_pass_verdict_proceeds(tmp_path: Path) -> None:
