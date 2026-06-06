@@ -3,18 +3,24 @@
 Layer 2 of the doc-clarity enforcement stack (see
 ``.ea/local/research/2026-05-29-doc-clarity.md``) lands several independent
 prose checks: the Vale wrapper (``eawf hook vale-prose``), the EAWF017
-inline-reference tabulation lint, and the older EAWF013 citation-bracket and
-EAWF014 no-manual-wrap lints. This module composes them into one entry point so
-both the generation-time skill-render loop and a strict CI gate call a single
+inline-reference tabulation lint, the older EAWF013 citation-bracket and
+EAWF014 no-manual-wrap lints, the EAWF021 measurability lint, and the EAWF022
+propose-coverage gate. This module composes them into one entry point so both
+the generation-time skill-render loop and a strict CI gate call a single
 function rather than re-deriving the per-lint plumbing.
 
-The chokepoint is a pure function over Markdown text. The three deterministic
-checks (EAWF013 / EAWF014 / EAWF017) run in-process. Vale is a subprocess that
-lives behind the ``eawf hook vale-prose`` CLI seam and fails open when its
-binary is absent; to keep this function pure (and unit-testable without a Vale
-install) the caller passes already-rendered Vale finding rows through
-``vale_rows`` — the chokepoint folds them into the aggregate but never shells
-out itself.
+The chokepoint is a pure function over Markdown text. The deterministic checks
+(EAWF013 / EAWF014 / EAWF017 / EAWF021 / EAWF022) run in-process. EAWF021 and
+EAWF022 compose through their prose adapters: EAWF021 scans rendered criteria
+prose for banned-vague tokens (its typed criterion surface owns the
+missing-observation-contract leg), and EAWF022's prose adapter is a no-op
+because coverage is a diff over typed inputs (its real surface is
+``check_coverage``, called by the ``/roadmap propose`` render). Vale is a
+subprocess that lives behind the ``eawf hook vale-prose`` CLI seam and fails
+open when its binary is absent; to keep this function pure (and unit-testable
+without a Vale install) the caller passes already-rendered Vale finding rows
+through ``vale_rows`` — the chokepoint folds them into the aggregate but never
+shells out itself.
 
 Stability model (the "Prose coverage DAGs" two-mode contract):
 
@@ -27,8 +33,12 @@ Stability model (the "Prose coverage DAGs" two-mode contract):
   so the PR is blocked.
 
 The Vale leg fails open at its own seam (an absent binary yields no
-``vale_rows``); the deterministic EAWF013/014/017 legs always run, so strict
-mode still rejects a known-bad artifact even on a machine without Vale.
+``vale_rows``); the deterministic EAWF013/014/017/021/022 legs always run, so
+strict mode still rejects a known-bad artifact even on a machine without Vale.
+The two-mode contract is the fail-open / fail-closed switch the new rules ride:
+at ``/roadmap propose`` the render runs in fail-open (advisory) mode by default
+so dropped-detail and vague-token findings are surfaced without blocking; a
+profile opt-in flips the strict (fail-closed) CI gate that rejects them.
 """
 
 from __future__ import annotations
@@ -38,11 +48,18 @@ from dataclasses import dataclass
 from eawf.platform.lint.eawf013_bracket_position import check_source as _check_eawf013
 from eawf.platform.lint.eawf014_no_manual_wrap import check_source as _check_eawf014
 from eawf.platform.lint.eawf017_inline_reference import check_source as _check_eawf017
+from eawf.platform.lint.eawf021_measurable_criterion import check_source as _check_eawf021
+from eawf.platform.lint.eawf022_propose_coverage import check_source as _check_eawf022
 
 # The deterministic Layer-2 lints the chokepoint composes, in source order. The
 # Vale leg is intentionally not in this tuple: it is a subprocess fed in via
-# ``vale_rows`` so this module stays a pure, import-only function.
-COMPOSED_RULES: tuple[str, ...] = ("EAWF013", "EAWF014", "EAWF017")
+# ``vale_rows`` so this module stays a pure, import-only function. EAWF021
+# (measurability) and EAWF022 (propose coverage) compose through their prose
+# adapters: EAWF021 scans for banned-vague tokens here while its typed
+# criterion surface owns the missing-contract leg, and EAWF022 is a no-op over
+# prose because coverage is a diff over typed inputs (its real surface is
+# ``check_coverage``).
+COMPOSED_RULES: tuple[str, ...] = ("EAWF013", "EAWF014", "EAWF017", "EAWF021", "EAWF022")
 
 # The rule label attached to a row that arrives pre-rendered from the Vale
 # subprocess (``eawf hook vale-prose``). The individual ``Google.Weasel`` style
@@ -54,16 +71,17 @@ _VALE_RULE = "VALE"
 class ProseFinding:
     """One normalized finding from any composed Layer-2 check.
 
-    The three deterministic lints each expose their own violation dataclass
+    The deterministic lints each expose their own violation dataclass
     (``BracketPositionViolation``, ``ManualWrapViolation``,
-    ``InlineReferenceViolation``); :func:`validate_prose` normalizes each into
+    ``InlineReferenceViolation``, ``MeasurabilityViolation``,
+    ``CoverageGapViolation``); :func:`validate_prose` normalizes each into
     this shared shape so the aggregate is one homogeneous list. A Vale row
     arrives pre-rendered (it is produced by the subprocess seam) and is wrapped
     with ``code="VALE"`` and ``lineno=0``.
 
     Attributes:
         code: The originating rule code (``"EAWF013"`` / ``"EAWF014"`` /
-            ``"EAWF017"`` / ``"VALE"``).
+            ``"EAWF017"`` / ``"EAWF021"`` / ``"EAWF022"`` / ``"VALE"``).
         lineno: 1-based line the finding is anchored to; ``0`` for a Vale row
             whose position is already inside its rendered text.
         col_offset: 0-based column of the matched token (``0`` for Vale rows
@@ -138,9 +156,9 @@ class ProseReport:
 def _normalize(code: str, violation: object) -> ProseFinding:
     """Wrap one composed-lint violation in the shared :class:`ProseFinding`.
 
-    The three deterministic violation dataclasses share the same attribute
-    surface (``lineno`` / ``col_offset`` / ``reason`` / ``snippet``), so one
-    duck-typed adapter covers all three.
+    The deterministic violation dataclasses share the same attribute surface
+    (``lineno`` / ``col_offset`` / ``reason`` / ``snippet``), so one duck-typed
+    adapter covers all of them.
     """
     return ProseFinding(
         code=code,
@@ -159,12 +177,13 @@ def validate_prose(
 ) -> ProseReport:
     """Compose every Layer-2 prose check over one Markdown surface.
 
-    Runs the three deterministic lints in-process (EAWF013 citation-bracket
-    position, EAWF014 no-manual-wrap, EAWF017 inline-reference tabulation) and
-    folds any pre-rendered Vale rows into one aggregate :class:`ProseReport`.
-    The function never shells out: a caller that wants the Vale leg runs the
-    ``eawf hook vale-prose`` subprocess (which fails open when the binary is
-    absent) and passes its rendered rows here.
+    Runs the deterministic lints in-process (EAWF013 citation-bracket
+    position, EAWF014 no-manual-wrap, EAWF017 inline-reference tabulation,
+    EAWF021 measurability vague-token scan, EAWF022 propose-coverage prose
+    adapter) and folds any pre-rendered Vale rows into one aggregate
+    :class:`ProseReport`. The function never shells out: a caller that wants
+    the Vale leg runs the ``eawf hook vale-prose`` subprocess (which fails open
+    when the binary is absent) and passes its rendered rows here.
 
     Args:
         source: The Markdown text to inspect (a committed artifact, a rendered
@@ -188,6 +207,8 @@ def validate_prose(
         ("EAWF013", _check_eawf013),
         ("EAWF014", _check_eawf014),
         ("EAWF017", _check_eawf017),
+        ("EAWF021", _check_eawf021),
+        ("EAWF022", _check_eawf022),
     ):
         findings.extend(_normalize(code, violation) for violation in check(source))
     findings.sort(key=lambda f: (f.lineno, f.col_offset, f.code))

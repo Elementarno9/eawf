@@ -86,7 +86,7 @@ def test_validate_prose_aggregates_multiple_lints_in_one_pass() -> None:
 
 
 def test_validate_prose_composed_rules_constant_lists_the_deterministic_legs() -> None:
-    assert COMPOSED_RULES == ("EAWF013", "EAWF014", "EAWF017")
+    assert COMPOSED_RULES == ("EAWF013", "EAWF014", "EAWF017", "EAWF021", "EAWF022")
 
 
 def test_validate_prose_findings_sorted_by_position() -> None:
