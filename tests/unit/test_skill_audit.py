@@ -32,6 +32,7 @@ from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.engine import ProbeOutcome, SkillContext, run_skill
+from tests._criteria_helpers import legacy_criteria
 
 
 @pytest.fixture
@@ -242,7 +243,7 @@ def _seed_state_with_wave(
         iter_id=iter_id,
         title="Wave under audit",
         file_scopes=file_scopes,
-        success_criteria=success_criteria,
+        success_criteria=legacy_criteria(*success_criteria),
         effort_bucket="M",
     )
     (state_dir / "state.json").write_text(

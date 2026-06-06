@@ -625,6 +625,113 @@
       "title": "Confidence",
       "type": "string"
     },
+    "CriterionSpec": {
+      "additionalProperties": false,
+      "description": "One success-criterion row attached to a wave / iter / phase.\n\nThe v0.4 spec layer types the criterion separately from the\nfree-form ``Wave.success_criteria: list[str]`` field on the state\nmodel. The state-model field stays string-shaped for v0.4.0 so the\nexisting roadmap / planner / dispatch surfaces are not perturbed;\ndownstream waves (W06 readiness compute, W08 compile-gate, W11\nwaivers) operate on :class:`CriterionSpec` once the field migrates\nin a later release.\n\nThe ``gate_ids`` list addresses :class:`GateSpec` rows by id; the\nspec layer does not enforce referential integrity (the W08\ncompile-gate does that when both lists are co-resident).",
+      "properties": {
+        "acceptance_style": {
+          "enum": [
+            "binary",
+            "graded"
+          ],
+          "title": "Acceptance Style",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "enum": [
+            "deterministic",
+            "jury",
+            "attested"
+          ],
+          "title": "Evidence Kind",
+          "type": "string"
+        },
+        "gate_ids": {
+          "items": {
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "title": "Gate Ids",
+          "type": "array"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "measurable_signal": {
+          "maxLength": 300,
+          "minLength": 20,
+          "title": "Measurable Signal",
+          "type": "string"
+        },
+        "oracle_tier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OracleTier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "quality_dimension": {
+          "$ref": "#/$defs/QualityDimension"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseClause"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "waiver_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waiver Reason"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "kind",
+        "acceptance_style",
+        "evidence_kind",
+        "quality_dimension",
+        "measurable_signal"
+      ],
+      "title": "CriterionSpec",
+      "type": "object"
+    },
     "CurrentPointers": {
       "additionalProperties": false,
       "description": "Active lifecycle pointers for the current state.",
@@ -1752,6 +1859,25 @@
       "title": "MemoryTier",
       "type": "string"
     },
+    "ObserveVerb": {
+      "description": "The EARS ``shall <observe>`` verb a response clause asserts.",
+      "enum": [
+        "returns",
+        "raises",
+        "holds_for_all",
+        "exits",
+        "emits",
+        "validates",
+        "matches_pattern",
+        "transitions_to",
+        "renders_token",
+        "triggers_action",
+        "file_matches",
+        "judged"
+      ],
+      "title": "ObserveVerb",
+      "type": "string"
+    },
     "OpenQuestion": {
       "additionalProperties": false,
       "description": "An unresolved research question tracked as its own first-class entity.\n\nAn open question is NOT folded into :class:`Claim`: a question is a gap to\nclose, a claim is an assertion that closes it, and conflating the two\nloses the distinction the research-campaign control plane needs (a\nquestion can outlive many candidate claims, and an operator can add a\nquestion mid-run through the input channel). The ``BLOCKED`` status feeds\nthe balanced-autonomy interrupt: a blocking question is the only kind that\nraises to the operator.\n\nThe field shape mirrors the sibling research entities (:class:`Claim` /\n:class:`Hypothesis`): a bounded imperative ``title`` with no trailing\nperiod, a 500-char optional ``description``, a ``scope_id`` binding the\nquestion to its campaign, and a closed :class:`OpenQuestionStatus`.\n\nAttributes:\n    id: Stable question id (``IdStr`` — non-empty, no whitespace).\n    scope_id: Campaign / research scope the question belongs to.\n    title: Imperative noun-phrase stating the question, bounded at 72\n        characters with no trailing period (entity-title convention).\n    description: Optional long-form framing bounded at 500 characters.\n    status: Closed :class:`OpenQuestionStatus` lifecycle position.\n    blocking: Whether an unanswered question gates further campaign work;\n        a ``True`` value is what the balanced-autonomy interrupt raises to\n        the operator. Defaults to ``False`` (advisory question).\n    urgency: Shared :class:`~eawf.kernel.state.enums.Urgency` ladder ranking\n        how soon the operator should look at the question. The same enum\n        ranks needs_user pauses and the attention feed, so an open question\n        sorts against pauses on one comparable scale. Defaults to\n        :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` so the field is\n        additive (pre-urgency states and in-code constructors stay valid).\n    answered_by_claim_id: Optional :class:`Claim` id that resolved the\n        question when :attr:`status` is\n        :attr:`OpenQuestionStatus.ANSWERED`; ``None`` otherwise.\n    created_at: When the question was opened.\n    resolved_at: When the question reached a terminal state\n        (``ANSWERED`` / ``DROPPED``); ``None`` while still open.",
@@ -1848,6 +1974,20 @@
       ],
       "title": "OpenQuestionStatus",
       "type": "string"
+    },
+    "OracleTier": {
+      "description": "Ordered oracle tiers; lower = cheaper + more deterministic.\n\nThe runner MUST exhaust lower tiers before T7. IntEnum so ``min`` / ``<``\norder the escalation.",
+      "enum": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "title": "OracleTier",
+      "type": "integer"
     },
     "Outcome": {
       "additionalProperties": false,
@@ -2242,6 +2382,114 @@
       ],
       "title": "ProjectStatus",
       "type": "string"
+    },
+    "ProofLocus": {
+      "description": "Where a response clause's proof is observed.",
+      "enum": [
+        "pytest",
+        "hypothesis",
+        "cli_exit",
+        "log_capture",
+        "schema",
+        "source",
+        "state_json",
+        "tui_snapshot",
+        "tui_pilot",
+        "golden",
+        "human",
+        "jury"
+      ],
+      "title": "ProofLocus",
+      "type": "string"
+    },
+    "QualityDimension": {
+      "description": "ISO-25010:2023 product-quality characteristic a criterion targets.\n\nSix members are the pre-existing set (relocated from wave.py); four\nare added for the full 2023 characteristic set. OPERABILITY is retained\nfor back-compat so existing WaveBehavior rows keep validating.",
+      "enum": [
+        "functional_suitability",
+        "performance_efficiency",
+        "interaction_capability",
+        "reliability",
+        "security",
+        "operability",
+        "compatibility",
+        "maintainability",
+        "flexibility",
+        "safety"
+      ],
+      "title": "QualityDimension",
+      "type": "string"
+    },
+    "ResponseClause": {
+      "additionalProperties": false,
+      "description": "The EARS ``shall <response>`` clause, typed.\n\n``jury_reason`` is required iff ``observe`` is ``JUDGED`` — the\nCriterionSpec validator enforces that, since the clause is only\nmeaningful in the context of its owning criterion.",
+      "properties": {
+        "expected": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected"
+        },
+        "gate_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gate Ref"
+        },
+        "jury_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Jury Reason"
+        },
+        "locus": {
+          "$ref": "#/$defs/ProofLocus"
+        },
+        "object": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Object",
+          "type": "string"
+        },
+        "observe": {
+          "$ref": "#/$defs/ObserveVerb"
+        },
+        "quantifier": {
+          "default": "single",
+          "enum": [
+            "single",
+            "forall"
+          ],
+          "title": "Quantifier",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observe",
+        "object",
+        "locus"
+      ],
+      "title": "ResponseClause",
+      "type": "object"
     },
     "SandboxPolicy": {
       "additionalProperties": false,
@@ -2703,7 +2951,7 @@
         },
         "success_criteria": {
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/CriterionSpec"
           },
           "title": "Success Criteria",
           "type": "array"
@@ -2936,7 +3184,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Top-level eawf state document.\n\n``schema_version`` accepts ``\"1.0\"``, ``\"1.1\"``, ``\"1.2\"``, ``\"1.3\"``,\n``\"1.4\"``, ``\"1.5\"``, and ``\"1.6\"`` so an on-disk state written before\nany bump still re-validates after the model advances — the migrate\nchain rewrites the version string in place, but a read of an\nun-migrated state must never reject. The accepted set drives the\nmigrate guard's model-supported max, so the literals move in lockstep\nwith the migration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,\n``v1_2_to_v1_3``, ``v1_3_to_v1_4``, ``v1_4_to_v1_5``,\n``v1_5_to_v1_6``). The ``1.5`` edge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes.",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts ``\"1.0\"``, ``\"1.1\"``, ``\"1.2\"``, ``\"1.3\"``,\n``\"1.4\"``, ``\"1.5\"``, and ``\"1.6\"`` so an on-disk state written before\nany bump still re-validates after the model advances — the migrate\nchain rewrites the version string in place, but a read of an\nun-migrated state must never reject. The accepted set drives the\nmigrate guard's model-supported max, so the literals move in lockstep\nwith the migration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,\n``v1_2_to_v1_3``, ``v1_3_to_v1_4``, ``v1_4_to_v1_5``,\n``v1_5_to_v1_6``, ``v1_6_to_v1_7``). The ``1.5`` edge is purely\nadditive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes. The ``1.7`` edge retypes\n:attr:`Wave.success_criteria` from ``list[str]`` to\n``list[CriterionSpec]`` and backfills every legacy string into a\ngrandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an\nun-migrated state with bare strings would reject the typed field — the\nmigrate chain rewrites the rows before load.",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -3232,7 +3480,8 @@
         "1.3",
         "1.4",
         "1.5",
-        "1.6"
+        "1.6",
+        "1.7"
       ],
       "title": "Schema Version",
       "type": "string"

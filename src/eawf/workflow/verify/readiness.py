@@ -45,7 +45,7 @@ from typing import Literal
 
 import orjson
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import GRANDFATHERED_KIND, CriterionSpec, GateSpec
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
@@ -67,35 +67,32 @@ logger = logging.getLogger(__name__)
 def _load_criterion_specs(scope_id: str, state: State) -> list[CriterionSpec]:
     """Return typed CriterionSpec rows attached to *scope_id*.
 
-    v0.4.0 returns ``[]`` for every scope because the on-disk source
-    of truth — the per-phase spec cache at
-    ``<runtime_dir>/spec-cache/<phase_id>.json`` (mirrors
-    :class:`eawf.kernel.spec.cache.SpecCachePhase`) plus the markdown
-    spec body at ``.ea/specs/<phase>/[<iter>/]<wave|spec>.md`` — does
-    not yet carry parseable typed CriterionSpec rows. The body parser
-    that yields typed rows lands in a later wave; see
-    :func:`eawf.runtime.daemon.methods.spec._extract_gate_specs` for the
-    symmetric gate-side stub already in place behind the daemon
-    ``spec.promote`` handler.
+    Reads the typed :attr:`~eawf.kernel.state.models.Wave.success_criteria`
+    field directly: the ``1.6 -> 1.7`` migration retyped it from a free-form
+    string list into ``list[CriterionSpec]``, so the wave row IS the on-disk
+    source of truth for criterion specs (no separate spec-cache round-trip
+    is needed). A wave with no criteria yields ``[]``; a non-wave scope (iter
+    / phase) likewise yields ``[]`` until those scopes carry their own
+    criteria.
 
     The helper stays a separate function (rather than inlined into
-    :func:`compute`) so tests can monkeypatch it to feed synthetic
+    :func:`compute`) so tests can still monkeypatch it to feed synthetic
     specs into the deterministic-floor integration (W08) and the
-    waiver-aware rollup (W11) without having to round-trip through
-    the spec-cache writer.
+    waiver-aware rollup (W11) without constructing a full wave row.
 
     Args:
-        scope_id: Wave / iter / phase URN. Reserved for the future
-            multi-scope attachment story (today only waves carry
-            criteria).
-        state: Validated state model. Reserved likewise.
+        scope_id: Wave / iter / phase URN. Only wave scopes carry
+            criteria today; other scopes resolve to ``[]``.
+        state: Validated state model the wave row is read from.
 
     Returns:
-        Empty list in v0.4.0. Future waves attach real specs here
-        without changing the call signature on :func:`compute`.
+        The wave's typed criterion rows, or ``[]`` when the scope is not
+        a known wave or carries no criteria.
     """
-    del scope_id, state  # unused until the body parser ships
-    return []
+    wave = state.waves.get(scope_id)
+    if wave is None:
+        return []
+    return list(wave.success_criteria)
 
 
 def _load_gate_specs(scope_id: str, state: State) -> list[GateSpec]:
@@ -424,6 +421,13 @@ def _build_spec_views(
     views: list[CriterionView] = []
     waived: list[str] = []
     for criterion in criterion_specs:
+        # Grandfathered criteria (legacy strings the 1.6->1.7 migration wrapped
+        # into typed rows) carry no gates and no authored evidence kind, so they
+        # render through the advisory legacy path (:func:`_build_legacy_views`)
+        # rather than the gated spec path -- scoring them here would surface
+        # every un-gated legacy criterion as a blocking ``pending``.
+        if criterion.kind == GRANDFATHERED_KIND:
+            continue
         gates = gates_by_criterion.get(criterion.id, [])
         gate_results: list[GateResult] = []
         per_criterion_waived: list[str] = []
@@ -745,33 +749,37 @@ def _build_floor_views(
 
 
 def _build_legacy_views(wave: Wave) -> tuple[list[CriterionView], list[str]]:
-    """Convert ``Wave.success_criteria`` strings into legacy :class:`CriterionView`.
+    """Project grandfathered criteria into advisory legacy :class:`CriterionView`.
 
-    Each string becomes one view with ``source="legacy"``, ``status="pass"``,
-    and ``gate_results=None``. Returns the per-criterion views plus a
-    list of advisory warning strings — one per criterion so the
-    readiness rollup can tally the legacy-not-gated count without
-    re-walking the views.
+    Each grandfathered criterion (the ``kind == GRANDFATHERED_KIND`` rows the
+    ``1.6 -> 1.7`` migration wrapped from legacy strings) becomes one view with
+    ``source="legacy"``, ``status="pass"``, and ``gate_results=None``. Returns
+    the per-criterion views plus a list of advisory warning strings — one per
+    grandfathered criterion so the readiness rollup can tally the
+    legacy-not-gated count without re-walking the views. Authored typed
+    criteria are skipped here; they render through the gated spec path
+    (:func:`_build_spec_views`).
 
     Args:
-        wave: The closing wave whose legacy strings we project.
+        wave: The closing wave whose grandfathered criteria we project.
 
     Returns:
         ``(views, warnings)``.
     """
     views: list[CriterionView] = []
     warnings: list[str] = []
-    for index, _text in enumerate(wave.success_criteria, start=1):
-        criterion_id = f"CR-{index:02d}"
+    for criterion in wave.success_criteria:
+        if criterion.kind != GRANDFATHERED_KIND:
+            continue
         views.append(
             CriterionView(
-                id=criterion_id,
+                id=criterion.id,
                 source="legacy",
                 status="pass",
                 gate_results=None,
             )
         )
-        warnings.append(f"legacy criterion {criterion_id!r} not gated")
+        warnings.append(f"legacy criterion {criterion.id!r} not gated")
     return views, warnings
 
 

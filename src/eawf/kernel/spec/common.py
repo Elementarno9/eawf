@@ -302,6 +302,52 @@ class CriterionSpec(_StrictModel):
         return self
 
 
+#: Sentinel ``kind`` for a criterion synthesised from a free-form legacy
+#: success-criterion string (operator ``--success`` input or a pre-typed
+#: on-disk wave). Distinguishes a grandfathered row from an authored typed
+#: criterion so renderers + audits can surface the difference.
+GRANDFATHERED_KIND = "legacy"
+
+#: Fallback ``measurable_signal`` for a legacy string too short to clear the
+#: 20-char floor. Lets a one-word legacy criterion grandfather without
+#: failing the :class:`CriterionSpec` ``measurable_signal`` bound.
+GRANDFATHERED_SIGNAL = "grandfathered legacy criterion"
+
+
+def grandfather_criterion(text: str, *, index: int) -> CriterionSpec:
+    """Build a grandfathered :class:`CriterionSpec` from a legacy string.
+
+    The producer chain (CLI ``wave plan --success``, daemon ``add_wave``,
+    ``roadmap revise --add-wave``) accepts free-form operator strings; this
+    helper wraps each into the typed criterion shape so the typed
+    ``Wave.success_criteria`` field can accept it. The same shape is mirrored
+    by the ``1.6 -> 1.7`` state migration so a migrated on-disk criterion and a
+    freshly-planned one are indistinguishable.
+
+    The id is ``CR-<index>`` zero-padded to two digits (e.g. ``CR-01``). The
+    ``measurable_signal`` is the text truncated to the 300-char cap when it
+    already clears the 20-char floor, else the :data:`GRANDFATHERED_SIGNAL`
+    fallback so a short legacy string still validates.
+
+    Args:
+        text: The legacy success-criterion string (1-500 chars).
+        index: 1-based position of the criterion within its wave.
+
+    Returns:
+        A :class:`CriterionSpec` with ``kind == GRANDFATHERED_KIND``.
+    """
+    measurable_signal = text[:300] if len(text) >= 20 else GRANDFATHERED_SIGNAL
+    return CriterionSpec(
+        id=f"CR-{index:02d}",
+        text=text,
+        kind=GRANDFATHERED_KIND,
+        acceptance_style="binary",
+        evidence_kind="attested",
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal=measurable_signal,
+    )
+
+
 class GateSpec(_StrictModel):
     """One gate row that scores a :class:`CriterionSpec` at some cadence.
 
@@ -374,3 +420,29 @@ class GateSpec(_StrictModel):
         except ArgvPolicyError as exc:
             raise ValueError(f"gate {self.id!r} argv rejected by L0 policy: {exc}") from exc
         return self
+
+
+def _rebuild_state_models() -> None:
+    """Resolve the ``list[CriterionSpec]`` forward ref on :class:`Wave`.
+
+    :attr:`eawf.kernel.state.models.Wave.success_criteria` annotates
+    ``list[CriterionSpec]`` but ``state.models`` cannot import
+    :class:`CriterionSpec` (this module imports ``IdStr`` from ``state.models``,
+    so a top-level import there would be a cycle). The forward reference is
+    therefore resolved here, after :class:`CriterionSpec` is defined: the
+    function injects the type into the ``state.models`` namespace and rebuilds
+    :class:`Wave` so Pydantic can compile the field schema. Running it from
+    this module (rather than the bottom of ``state.models``) is cycle-safe
+    regardless of which module the import chain enters first, because by the
+    time this runs both modules are fully defined.
+    """
+    from eawf.kernel.state import models as _state_models
+
+    _state_models.CriterionSpec = CriterionSpec  # type: ignore[attr-defined]
+    _state_models.Wave.model_rebuild()
+
+
+# Resolve the Wave forward reference eagerly on import of this module. The
+# call is idempotent (a second rebuild is a no-op) so it is safe even when
+# ``state.models`` has already triggered it.
+_rebuild_state_models()

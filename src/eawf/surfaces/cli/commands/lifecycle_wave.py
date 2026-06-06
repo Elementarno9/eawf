@@ -318,6 +318,7 @@ def wave_plan_cmd(
     ] = None,
 ) -> None:
     """Plan a new pending wave under an open iter."""
+    from eawf.kernel.spec.common import grandfather_criterion
     from eawf.workflow.lifecycle.transitions import plan_wave
 
     flags: GlobalFlags = ctx.obj
@@ -379,7 +380,10 @@ def wave_plan_cmd(
                 title=title,
                 file_scopes=file_list,
                 deps=deps_list,
-                success_criteria=criteria_list,
+                success_criteria=[
+                    grandfather_criterion(text, index=idx)
+                    for idx, text in enumerate(criteria_list, start=1)
+                ],
                 agent_role=agent_role,
                 effort_bucket=effort_bucket,
                 description=description,

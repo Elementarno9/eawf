@@ -16,10 +16,14 @@ no state row references — so the transform is a bare ``schema_version`` bump
 with no field backfill. The sixth edge (v1.5 -> v1.6) adds the top-level
 ``State.dispatch_paused`` flag (the cooperative dispatch-gate marker) — a
 purely additive field the model defaults to ``False`` on load, so the
-transform is again a bare ``schema_version`` bump with no backfill. The live
+transform is again a bare ``schema_version`` bump with no backfill. The
+seventh edge (v1.6 -> v1.7) retypes ``Wave.success_criteria`` from
+``list[str]`` to ``list[CriterionSpec]`` and backfills every legacy string
+into a grandfathered ``CriterionSpec`` row — a real per-wave backfill, not a
+bare version bump. The live
 :class:`eawf.kernel.state.models.State` model accepts ``"1.0"``, ``"1.1"``,
-``"1.2"``, ``"1.3"``, ``"1.4"``, ``"1.5"``, and ``"1.6"``, so a migrated
-state re-loads under the live model. The suite exercises:
+``"1.2"``, ``"1.3"``, ``"1.4"``, ``"1.5"``, ``"1.6"``, and ``"1.7"``, so a
+migrated state re-loads under the live model. The suite exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
 * a full v1.0 state migrating to a re-loadable v1.1 state;
@@ -738,7 +742,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.6"
+    assert model_supported_max_version() == "1.7"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -776,9 +780,14 @@ def test_guard_target_supported_permits_v1_6_now_model_advanced() -> None:
     guard_target_supported("1.6")
 
 
+def test_guard_target_supported_permits_v1_7_now_model_advanced() -> None:
+    """The guard permits 1.7 now the live model accepts it (the typed-criteria bump)."""
+    guard_target_supported("1.7")
+
+
 def test_guard_target_supported_rejects_target_above_max() -> None:
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        guard_target_supported("1.7")
+        guard_target_supported("1.8")
 
 
 def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> None:
@@ -789,11 +798,11 @@ def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> N
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.7")
+        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.8")
 
     # The on-disk state is byte-for-byte unchanged and no backup was taken.
     assert state_path.read_bytes() == before
-    backup = backup_path_for(state_path, from_version="1.0", to_version="1.7")
+    backup = backup_path_for(state_path, from_version="1.0", to_version="1.8")
     assert not backup.exists()
 
 
@@ -834,7 +843,7 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
-    result = CliRunner().invoke(app, ["migrate", "--to", "1.7"])
+    result = CliRunner().invoke(app, ["migrate", "--to", "1.8"])
 
     assert result.exit_code != 0
     assert "exceeds model-supported max" in result.stdout
@@ -842,14 +851,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_6(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_7(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.6) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.7) walks the full chain + re-loads.
 
-    The default target advanced to 1.6 with the ``dispatch_paused`` flag bump,
-    so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 ->
-    1.5 -> 1.6 and lands a re-loadable v1.6 state.
+    The default target advanced to 1.7 with the typed-criteria bump, so a bare
+    migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5 -> 1.6
+    -> 1.7 and lands a re-loadable v1.7 state.
     """
     from typer.testing import CliRunner
 
@@ -864,7 +873,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_6(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.6"
+    assert reloaded.schema_version == "1.7"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(

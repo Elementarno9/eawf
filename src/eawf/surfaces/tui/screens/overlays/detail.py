@@ -291,7 +291,7 @@ def _wave_card(
         indented = "\n".join(f"  {line}" for line in tree.split("\n"))
         rows.append(("files", f"\n{indented}"))
     for criterion in wave.success_criteria:
-        rows.append(("criterion", criterion))
+        rows.append(("criterion", criterion.text))
     attempt_rollup = per_wave_attempt_rollup(
         wave,
         reports=reports,

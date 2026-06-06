@@ -32,6 +32,7 @@ from eawf.workflow.dispatch.spec_jury import (
     produce_spec_jury_verdict,
     wave_in_uiux_band,
 )
+from tests._criteria_helpers import legacy_criteria
 
 _WAVE_ID = "P29-I08-W05"
 _T0 = datetime(2026, 6, 3, 12, 0, 0, tzinfo=UTC)
@@ -86,7 +87,10 @@ def _make_wave(*, wave_id: str = _WAVE_ID, title: str = "spec-jury producer") ->
             "deps": [],
             "blocks": [],
             "file_scopes": ["src/eawf/workflow/dispatch/spec_jury.py"],
-            "success_criteria": ["route banded waves through the spec jury"],
+            "success_criteria": [
+                c.model_dump(mode="json")
+                for c in legacy_criteria("route banded waves through the spec jury")
+            ],
             "agent_role": "executor",
             "effort_bucket": "L",
             "opened_at": "2026-06-03T00:00:00Z",
@@ -209,7 +213,7 @@ def _wave_with_scopes(file_scopes: list[str]) -> Wave:
             "title": "band-scoped verify resolution",
             "status": "claimed",
             "file_scopes": file_scopes,
-            "success_criteria": ["c1"],
+            "success_criteria": [c.model_dump(mode="json") for c in legacy_criteria("c1")],
             "opened_at": "2026-06-03T00:00:00Z",
             "claimed_at": "2026-06-03T00:00:00Z",
         }

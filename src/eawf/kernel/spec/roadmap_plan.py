@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
 
@@ -26,7 +27,7 @@ class RoadmapPlanWave(_StrictModel):
     description: Annotated[str, Field(max_length=500)] | None = None
     deps: list[str] = Field(default_factory=list)
     file_scopes: list[Annotated[str, Field(min_length=1)]] = Field(min_length=1)
-    success_criteria: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    success_criteria: list[CriterionSpec] = Field(default_factory=list)
     agent_role: AgentSessionRole | None = None
     effort_bucket: EffortBucket
 

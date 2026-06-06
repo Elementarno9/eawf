@@ -28,6 +28,7 @@ from eawf.workflow.lifecycle.criterion_drift import (
     extract_path_globs,
     unresolved_globs,
 )
+from tests._criteria_helpers import legacy_criteria
 
 
 def _make_wave(
@@ -41,7 +42,7 @@ def _make_wave(
         title="test wave",
         status=WaveStatus.CLOSED,
         file_scopes=["src/foo.py"],
-        success_criteria=success_criteria,
+        success_criteria=legacy_criteria(*success_criteria),
         effort_bucket=EffortBucket.M,
         opened_at=datetime(2026, 5, 18, tzinfo=UTC),
         closed_at=datetime(2026, 5, 18, tzinfo=UTC),

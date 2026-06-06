@@ -47,6 +47,7 @@ from eawf.workflow.lifecycle.transitions import (
 )
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.models import CloseReadiness
+from tests._criteria_helpers import legacy_criteria
 
 WAVE_ID = "P01-I01-W01"
 
@@ -93,7 +94,7 @@ def _seed_claimed_wave(state: State, *, criteria: list[str] | None = None) -> No
         iter_id="P01-I01",
         title="wave",
         file_scopes=["src/"],
-        success_criteria=criteria or [],
+        success_criteria=legacy_criteria(*(criteria or [])),
         effort_bucket="M",
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")

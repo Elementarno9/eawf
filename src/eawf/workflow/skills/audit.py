@@ -210,14 +210,15 @@ def _build_criterion_specs(
     # wave itself. Only viable when the wave has both criteria + scopes.
     if wave is not None and wave.file_scopes:
         scope_list = list(wave.file_scopes)
-        for index, criterion in enumerate(wave.success_criteria):
+        for index, criterion_spec in enumerate(wave.success_criteria):
+            criterion_text = criterion_spec.text
             specs.append(
                 CheckSpec(
                     kind="criterion_in_diff",
                     name=f"criterion-{index + 1}",
                     args={
-                        "criterion": criterion,
-                        "pattern": re.escape(criterion),
+                        "criterion": criterion_text,
+                        "pattern": re.escape(criterion_text),
                         "file_scopes": scope_list,
                     },
                 )
@@ -373,7 +374,7 @@ class AuditSkill(Skill):
         # fallback and the criteria are empty, which would render a malformed
         # "spawn an auditor for urn:...:QR/P00 with 0 criteria" directive.
         if wave is not None:
-            criteria = list(wave.success_criteria)
+            criteria = [c.text for c in wave.success_criteria]
             auditor_dispatch: AuditorDispatch | None = AuditorDispatch(
                 wave_id=wave_id,
                 diff_base=diff_base,

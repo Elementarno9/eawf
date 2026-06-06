@@ -584,7 +584,7 @@ def build_view(state: State, iter_id: str) -> PlanView:
             status=w.status.value,
             deps=list(w.deps),
             file_scopes=list(w.file_scopes),
-            success_criteria=list(w.success_criteria),
+            success_criteria=[c.text for c in w.success_criteria],
             agent_role=w.agent_role.value if w.agent_role else None,
             effort_bucket=w.effort_bucket.value if w.effort_bucket else None,
             estimate_eu=wave_estimate_eu(w),

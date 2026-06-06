@@ -757,6 +757,7 @@ def roadmap_revise_cmd(
     """
     from pydantic import ValidationError as PydValidationError
 
+    from eawf.kernel.spec.common import grandfather_criterion
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.transitions import (
         LifecycleError,
@@ -859,7 +860,10 @@ def roadmap_revise_cmd(
                             _coerce_full_wave_id(state, phase_id, d, iter_id=target_iter_id)
                             for d in _split_csv(deps)
                         ],
-                        success_criteria=_split_csv(success),
+                        success_criteria=[
+                            grandfather_criterion(text, index=idx)
+                            for idx, text in enumerate(_split_csv(success), start=1)
+                        ],
                         agent_role=role,
                         effort_bucket=bucket,
                         description=description,

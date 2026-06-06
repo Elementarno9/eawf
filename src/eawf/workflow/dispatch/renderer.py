@@ -398,7 +398,7 @@ def build_subagent_spec(
         scope_id=scope_id,
         agent_role=wave.agent_role.value if wave.agent_role else None,
         effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,
-        success_criteria=list(wave.success_criteria),
+        success_criteria=[c.text for c in wave.success_criteria],
         file_scopes=list(wave.file_scopes),
         dependencies=_build_dependencies(state, wave),
         decisions=_build_decisions(state, scope_id=scope_id),

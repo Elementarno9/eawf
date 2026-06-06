@@ -215,7 +215,7 @@ class WaveVerdictResult:
 
 def _wave_text_corpus(wave: Wave) -> str:
     """Return the lowercased title + success-criteria text for keyword scans."""
-    parts = [wave.title, *wave.success_criteria]
+    parts = [wave.title, *(c.text for c in wave.success_criteria)]
     return "\n".join(parts).lower()
 
 
@@ -448,7 +448,7 @@ def build_auditor_prompt(
     Returns:
         The rendered Markdown auditor prompt.
     """
-    criteria = _criteria_block(wave.success_criteria)
+    criteria = _criteria_block(c.text for c in wave.success_criteria)
     sections: list[str] = [
         f"# Fresh-context audit: wave {wave.id}\n"
         "\n"

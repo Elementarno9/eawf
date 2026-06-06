@@ -63,6 +63,7 @@ from typing import Any, Final
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.kernel.spec.common import grandfather_criterion
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
@@ -1353,7 +1354,10 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
             file_scopes=list(params.get("file_scopes", [])),
             deps=list(params["deps"]) if params.get("deps") is not None else None,
             success_criteria=(
-                list(params["success_criteria"])
+                [
+                    grandfather_criterion(str(text), index=idx)
+                    for idx, text in enumerate(params["success_criteria"], start=1)
+                ]
                 if params.get("success_criteria") is not None
                 else None
             ),

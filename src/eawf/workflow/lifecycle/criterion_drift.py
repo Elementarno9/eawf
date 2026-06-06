@@ -90,7 +90,7 @@ def check_wave_criteria_drift(wave: Wave, repo_root: Path) -> list[str]:
     """
     if not wave.success_criteria:
         return []
-    globs = extract_path_globs(list(wave.success_criteria))
+    globs = extract_path_globs([c.text for c in wave.success_criteria])
     if not globs:
         return []
     unresolved = unresolved_globs(repo_root, globs)

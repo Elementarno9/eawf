@@ -47,6 +47,7 @@ from eawf.workflow.dispatch.verdict import (
     verdict_requirement,
     verify_wave_verdict_gate,
 )
+from tests._criteria_helpers import legacy_criteria
 
 _WAVE_ID = "P29-I04-W07"
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
@@ -138,7 +139,7 @@ def _state_payload(
     the wave from ``state.waves``. ``agent_sessions`` starts empty unless
     *extra_sessions* seeds an executor session (for the self-report path).
     """
-    criteria = (
+    criteria_texts = (
         success_criteria
         if success_criteria is not None
         else [
@@ -146,6 +147,7 @@ def _state_payload(
             "test the producer",
         ]
     )
+    criteria = [c.model_dump(mode="json") for c in legacy_criteria(*criteria_texts)]
     return {
         "schema_version": "1.0",
         "scope_kind": "repo",

@@ -2,8 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
 ## [0.5.0]
 
@@ -13,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`eawf iter candidate-tag` command.** Reads (or, with a value, sets) the proposed `vMAJOR.MINOR.PATCH` release tag carried on the active iter via the new `Iter.candidate_tag` field.
 
 ### Changed
+- **`Wave.success_criteria` retyped from `list[str]` to `list[CriterionSpec]`.** Wave success criteria are now first-class typed rows (id, text, kind, acceptance style, evidence kind, quality dimension, measurable signal) rather than free-form strings, so the close-readiness loader can score real criteria instead of returning an empty stub. The operator-facing `--success` CLI input (and the daemon `add_wave` / `roadmap revise --add-wave` paths) still accept comma-separated strings; each is wrapped into a grandfathered `CriterionSpec` (`kind="legacy"`) at the boundary so the authoring surface is unchanged. The readiness `_load_criterion_specs` loader is no longer idle: it reads the typed field directly, and grandfathered legacy criteria render through the advisory legacy view path while authored typed criteria route through the gated spec path.
 - **Plugin doctor gained a disk-to-registry orphan drift kind.** The `plugin doctor` walk now reports on-disk skill directories that have no corresponding `SkillSpec` row in the skill registry as an `orphan` drift kind, so an operator can prune stray artifacts per the AGENTS.md deletion rule (it flags only — registry growth stays explicit).
 - **Plugin version derives from `eawf.__version__` across all three runtimes.** The Claude, Codex, and OpenCode adapters now stamp the packaged plugin version from the single `eawf.__version__` source instead of hard-coding it per runtime, so a version bump propagates everywhere automatically.
 
@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration
 - **`state.json` `schema_version` advanced 1.3 -> 1.4.** The bump is additive: it introduces the optional `Iter.candidate_tag` field and is replay-safe via the `v1_3_to_v1_4` migration. Run `eawf migrate` to advance an existing repo; a state document written under 1.3 loads unchanged once migrated, and no field is removed or renamed.
+- **`state.json` `schema_version` advanced 1.6 -> 1.7.** This edge is a real per-wave backfill, not a bare version bump: it retypes `Wave.success_criteria` from `list[str]` to `list[CriterionSpec]` and rewrites every legacy criterion string into a grandfathered `CriterionSpec` row (`id=CR-<n>`, `kind=legacy`, `acceptance_style=binary`, `evidence_kind=attested`, `quality_dimension=functional_suitability`, `measurable_signal` = the text truncated to 300 chars, or a fixed fallback for strings under the 20-char floor). An empty `success_criteria` list migrates to `[]`. Run `eawf migrate` to advance an existing repo; the `v1_6_to_v1_7` migration is replay-safe (an already-typed row passes through untouched) and an un-migrated 1.6 state with bare-string criteria would otherwise reject the typed field on load. The original criterion string is preserved verbatim in `CriterionSpec.text`, so no content is lost.
 
 ## [0.4.1] - 2026-05-29
 
@@ -179,3 +180,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON-injection escape, except-parens, count drift in plugin packager
   (P06 W05 review).
 - CC plugin manifest: drop rejected skills/agents directory keys (P06 W05).
+
+## References
+
+| Ref | Source |
+| --- | --- |
+| [1] | Keep a Changelog: https://keepachangelog.com/en/1.1.0/ |
+| [2] | Semantic Versioning: https://semver.org/spec/v2.0.0.html |

@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     ActualStatus,
@@ -43,7 +44,7 @@ def plan_wave(
     title: str,
     file_scopes: list[str],
     deps: list[str] | None = None,
-    success_criteria: list[str] | None = None,
+    success_criteria: list[CriterionSpec] | None = None,
     agent_role: AgentSessionRole | None = None,
     effort_bucket: EffortBucket | None = None,
     description: str | None = None,
@@ -58,7 +59,10 @@ def plan_wave(
         title: Bounded ≤72-char wave title.
         file_scopes: File globs the wave is scoped to.
         deps: Optional list of prerequisite wave ids.
-        success_criteria: Optional list of success-criterion strings.
+        success_criteria: Optional list of typed
+            :class:`~eawf.kernel.spec.common.CriterionSpec` rows. Callers that
+            hold free-form operator strings wrap each via
+            :func:`~eawf.kernel.spec.common.grandfather_criterion` first.
         agent_role: Optional executor role.
         effort_bucket: Required XS/S/M/L/XL estimate bucket.
         description: Optional bounded ≤500-char long-form description;
@@ -181,7 +185,7 @@ def edit_wave_plan(
     wave_id: str,
     title: str | None = None,
     file_scopes: list[str] | None = None,
-    success_criteria: list[str] | None = None,
+    success_criteria: list[CriterionSpec] | None = None,
     agent_role: AgentSessionRole | None = None,
     effort_bucket: EffortBucket | None = None,
     description: str | None = None,
@@ -206,7 +210,9 @@ def edit_wave_plan(
         wave_id: Canonical wave id.
         title: Optional replacement title; ``None`` leaves it untouched.
         file_scopes: Optional replacement file globs; ``None`` leaves untouched.
-        success_criteria: Optional replacement criteria; ``None`` leaves untouched.
+        success_criteria: Optional replacement typed
+            :class:`~eawf.kernel.spec.common.CriterionSpec` rows; ``None``
+            leaves untouched.
         agent_role: Optional replacement role; ``None`` leaves untouched.
         effort_bucket: Optional replacement bucket; ``None`` leaves untouched.
         description: Optional replacement description (≤500 chars);

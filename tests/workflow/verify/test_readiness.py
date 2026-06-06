@@ -51,6 +51,7 @@ from eawf.workflow.lifecycle.transitions import (
 )
 from eawf.workflow.verify import readiness as readiness_mod
 from eawf.workflow.verify.models import CloseReadiness
+from tests._criteria_helpers import legacy_criteria
 
 WAVE_ID = "P01-I01-W01"
 
@@ -90,7 +91,12 @@ def _empty_state() -> State:
 
 
 def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> None:
-    """Seed P01 / P01-I01 / WAVE_ID into *state* with given criteria."""
+    """Seed P01 / P01-I01 / WAVE_ID into *state* with given criteria.
+
+    The string list is wrapped into grandfathered :class:`CriterionSpec` rows
+    (the typed shape :attr:`Wave.success_criteria` now requires) so the seeded
+    criteria mirror what the ``1.6 -> 1.7`` migration produces.
+    """
     open_phase(state, phase_id="P01", title="phase")
     open_iter(state, iter_id="P01-I01", phase_id="P01", title="iter")
     plan_wave(
@@ -99,7 +105,7 @@ def _seed_wave(state: State, *, success_criteria: list[str] | None = None) -> No
         iter_id="P01-I01",
         title="wave",
         file_scopes=["src/"],
-        success_criteria=success_criteria or [],
+        success_criteria=legacy_criteria(*(success_criteria or [])),
         effort_bucket="M",
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")

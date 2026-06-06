@@ -8,9 +8,12 @@ constraint. Datetimes are tz-aware UTC (Pydantic accepts ISO-8601 with ``Z``).
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, get_args
+from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    from eawf.kernel.spec.common import CriterionSpec
 
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
@@ -461,7 +464,7 @@ class Wave(_DescribedEntity):
     deps: list[WaveIdStr] = Field(default_factory=list)
     blocks: list[WaveIdStr] = Field(default_factory=list)
     file_scopes: list[str] = Field(default_factory=list)
-    success_criteria: list[str] = Field(default_factory=list)
+    success_criteria: list[CriterionSpec] = Field(default_factory=list)
     agent_role: AgentSessionRole | None = None
     effort_bucket: EffortBucket | None = None
     claim_session_id: str | None = None
@@ -934,16 +937,22 @@ class State(_StrictModel):
     migrate guard's model-supported max, so the literals move in lockstep
     with the migration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,
     ``v1_2_to_v1_3``, ``v1_3_to_v1_4``, ``v1_4_to_v1_5``,
-    ``v1_5_to_v1_6``). The ``1.5`` edge is purely additive — it registers
+    ``v1_5_to_v1_6``, ``v1_6_to_v1_7``). The ``1.5`` edge is purely
+    additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
     :attr:`dispatch_paused` flag (default ``False``), so a state written
     before the bump re-validates with the flag defaulted and no historical
-    fact changes.
+    fact changes. The ``1.7`` edge retypes
+    :attr:`Wave.success_criteria` from ``list[str]`` to
+    ``list[CriterionSpec]`` and backfills every legacy string into a
+    grandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an
+    un-migrated state with bare strings would reject the typed field — the
+    migrate chain rewrites the rows before load.
     """
 
-    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"]
+    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime
@@ -976,3 +985,13 @@ class State(_StrictModel):
     plugins: dict[str, PluginInstall]
     memory_index: dict[str, MemorySummary] | None = None
     indexes: dict[str, Any]
+
+
+# Importing :mod:`eawf.kernel.spec.common` triggers its module-bottom
+# ``_rebuild_state_models`` call, which resolves the ``list[CriterionSpec]``
+# forward reference on :attr:`Wave.success_criteria`. This is a bare MODULE
+# import (no attribute access) so it is cycle-safe regardless of entry point:
+# when ``common`` is the import entry it is already mid-init in ``sys.modules``
+# and this just binds the partial module without touching an undefined name;
+# when ``state.models`` is the entry ``common`` loads fully here and rebuilds.
+import eawf.kernel.spec.common as _spec_common  # noqa: E402, F401
