@@ -12686,6 +12686,55 @@
         "P29-I09-W10",
         "P29-I09-W11"
       ]
+    },
+    "P29-I10": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "FS01-FS04-FS07-FS09 roots + FS02-FS03-FS08-FS10-FS15: types/checks/FSM/affordance/visual built in isolation, not yet wired into the close gate. Per 2026-06-06-p29-spine-iter-compaction.md.",
+      "estimate_id": null,
+      "id": "P29-I10",
+      "intent": null,
+      "opened_at": "2026-06-06T15:05:27.289935Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Fidelity-Spine substrate: typed criteria + checks + FSM + affordance",
+      "trigger": "none",
+      "wave_ids": [
+        "P29-I10-W01",
+        "P29-I10-W02",
+        "P29-I10-W03",
+        "P29-I10-W04",
+        "P29-I10-W05",
+        "P29-I10-W06",
+        "P29-I10-W07",
+        "P29-I10-W08",
+        "P29-I10-W09"
+      ]
+    },
+    "P29-I11": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "FS05-FS06-FS11-FS12-FS16-FS13-FS17-FS14: wire the substrate into the close gate + propose path; turn the verifier on (risk-weighted); VFL self-verify. Per 2026-06-06-p29-spine-iter-compaction.md.",
+      "estimate_id": null,
+      "id": "P29-I11",
+      "intent": null,
+      "opened_at": "2026-06-06T15:05:42.332020Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "Fidelity-Spine enforcement: oracle runner + close-gate + verifier-on",
+      "trigger": "none",
+      "wave_ids": [
+        "P29-I11-W01",
+        "P29-I11-W02",
+        "P29-I11-W03",
+        "P29-I11-W04",
+        "P29-I11-W05",
+        "P29-I11-W06",
+        "P29-I11-W07",
+        "P29-I11-W08"
+      ]
     }
   },
   "mcp_grants": null,
@@ -13413,7 +13462,9 @@
         "P29-I06",
         "P29-I07",
         "P29-I08",
-        "P29-I09"
+        "P29-I09",
+        "P29-I10",
+        "P29-I11"
       ],
       "opened_at": "2026-06-01T00:19:14.247409Z",
       "outcome_ids": [],
@@ -13461,7 +13512,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-04T14:40:15.194257Z",
+  "updated_at": "2026-06-06T15:08:04.352658Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37569,6 +37620,660 @@
         "existing repo/user/workspace scope c keypress tests still pass and the full tui suite is green"
       ],
       "title": "Bind c open_config app-wide so config opens from every mode",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I10-W05",
+        "P29-I10-W06",
+        "P29-I10-W07",
+        "P29-I11-W02",
+        "P29-I11-W04"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "FS01 of fidelity-spine-impl-spec. extra=forbid preserved; OPERABILITY retained for back-compat; oracle_tier defaults None (FS02 computes it).",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec/common.py",
+        "src/eawf/kernel/spec/wave.py",
+        "tests/unit/spec/test_criterion_schema.py"
+      ],
+      "id": "P29-I10-W01",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:27.016746Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "CriterionSpec gains oracle_tier quality_dimension measurable_signal and response fields",
+        "QualityDimension relocates to common.py and extends to ten ISO-25010:2023 members",
+        "JUDGED response without jury_reason raises ValidationError",
+        "D-FIDELITY-SPINE Decision row lands and impl-spec promotes to artifacts"
+      ],
+      "title": "Type CriterionSpec: oracle_tier + quality_dimension + EARS response",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W01"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "FS04. single CheckKind; uses existing CriterionSpec/GateSpec so it is an L0 root independent of FS01.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/audit_dsl/models.py",
+        "src/eawf/workflow/audit_dsl/registry.py",
+        "src/eawf/workflow/audit_dsl/kinds/schema_validate.py",
+        "tests/unit/audit_dsl/test_schema_validate.py"
+      ],
+      "id": "P29-I10-W02",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:27.540718Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "CheckKind Literal contains schema_validate",
+        "CHECK_REGISTRY schema_validate validates a target model and returns pass or fail",
+        "malformed args returns fail not a raised exception"
+      ],
+      "title": "Add schema_validate CheckKind for arbitrary Pydantic models",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I10-W08"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "FS07. guarded table dict[Status frozenset[tuple[Status GuardName]]]; pure refactor of the scattered guards; behaviour unchanged.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/spec.py",
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/workflow/lifecycle/phase.py",
+        "src/eawf/workflow/lifecycle/iter_.py",
+        "tests/unit/lifecycle/test_transition_tables.py"
+      ],
+      "id": "P29-I10-W03",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:28.061581Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "WAVE PHASE and ITER guarded transition tables mirror SPEC_TRANSITIONS",
+        "validate_transition rejects every edge absent from the table",
+        "pre and post refactor guards reject the same illegal transitions"
+      ],
+      "title": "Add lifecycle FSM transition tables derived from code",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I10-W09"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "FS09. one capability across two files: the probe key-press path and the parity check consuming it.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/behaviour_probe.py",
+        "src/eawf/workflow/audit_dsl/models.py",
+        "src/eawf/workflow/audit_dsl/kinds/affordance_parity.py",
+        "src/eawf/workflow/audit_dsl/registry.py",
+        "tests/snapshots/tui/test_affordance_parity.py"
+      ],
+      "id": "P29-I10-W04",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:28.586691Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "behaviour_probe gains a press-based driver surfacing a missing Binding as UNRESOLVED",
+        "affordance_parity flags an advertised key with no resolving binding",
+        "pressing c in any mode screen resolves to open_config"
+      ],
+      "title": "Add key-press affordance probe + affordance_parity CheckKind",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W01",
+        "P29-I11-W02"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W01"
+      ],
+      "description": "FS02. verb maps to the cheapest tier; JUDGED is the only path to T6/T7; the LLM never supplies the tier.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/common.py",
+        "tests/unit/spec/test_assign_oracle_tier.py"
+      ],
+      "id": "P29-I10-W05",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:29.103816Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "assign_oracle_tier is total over every ObserveVerb member",
+        "forall response with a non-hypothesis locus raises ValueError",
+        "JUDGED with empty jury_reason raises ValueError"
+      ],
+      "title": "Add assign_oracle_tier total deterministic function",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W02",
+        "P29-I11-W03"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W01"
+      ],
+      "description": "FS03. schema_version bump + forward migration; PlannedWaveSummary stays list[str]; pair the golden regen commit per snapshot_pairing_gate.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/spec/roadmap_plan.py",
+        "src/eawf/workflow/lifecycle/transitions.py",
+        "src/eawf/workflow/verify/readiness.py",
+        "CHANGELOG.md"
+      ],
+      "id": "P29-I10-W06",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:29.632363Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "Wave.success_criteria is list[CriterionSpec] with a forward migration grandfathering legacy strings",
+        "_load_criterion_specs returns the typed list not an empty list",
+        "uv run mypy src exits zero",
+        "the state snapshot golden is regenerated and paired"
+      ],
+      "title": "Migrate Wave.success_criteria to typed CriterionSpec + un-idle loaders",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W05"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W01"
+      ],
+      "description": "FS15. reuses CriterionSpec/GateSpec/WaveBehavior.quality_dimension; the runner is FS05 and the SVG stack is FS16.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/visual.py",
+        "tests/unit/spec/test_visual_contract.py"
+      ],
+      "id": "P29-I10-W07",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:30.167739Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a populated VisualContract round-trips through model_validate",
+        "VisualContract with an unknown surface literal raises ValidationError",
+        "the module adds types only with no check logic"
+      ],
+      "title": "Add VisualContract + DeterminismRecipe types",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W03"
+      ],
+      "description": "FS08. self-instruments the covered set over a Hypothesis RuleBasedStateMachine; zero new dependency.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/audit_dsl/models.py",
+        "src/eawf/workflow/audit_dsl/registry.py",
+        "src/eawf/workflow/audit_dsl/kinds/transition_coverage.py",
+        "tests/property/test_lifecycle_stateful.py"
+      ],
+      "id": "P29-I10-W08",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:30.684269Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "transition_coverage returns pass iff covered edges equal table edges",
+        "the RuleBasedStateMachine never reaches an illegal status",
+        "a missing covering rule returns fail naming the uncovered edge"
+      ],
+      "title": "Add transition_coverage CheckKind + stateful lifecycle test",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I10-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W07"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W04"
+      ],
+      "description": "FS10. the dead-c-hotkey incident killer; covers the six modes the hand-fix left untested.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/snapshots/tui/test_affordance_matrix.py"
+      ],
+      "id": "P29-I10-W09",
+      "intent": null,
+      "iter_id": "P29-I10",
+      "opened_at": "2026-06-06T15:07:31.215152Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "every mode and advertised-key pair resolves",
+        "modes enumerate from MODE_REGISTRY so a new mode auto-joins",
+        "a synthetic dead-key mode fails the matrix proving it is not vacuous"
+      ],
+      "title": "Add affordance-resolves matrix over modes times footer keys",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W03",
+        "P29-I11-W05"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W05",
+        "P29-I10-W02"
+      ],
+      "description": "FS05. deterministic tiers run before any jury call; adds OracleResult + _tier_for_gate_kind; threads events_path and spawn_factory for the jury tier.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/verify/oracle.py",
+        "tests/unit/verify/test_run_oracle.py"
+      ],
+      "id": "P29-I11-W01",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:00.762969Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "run_oracle tries gates in ascending tier order",
+        "a passing T1 gate short-circuits without calling the jury",
+        "a gate that raises yields blocked rather than propagating"
+      ],
+      "title": "Add run_oracle ordered-escalation verification runner",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W04"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W01",
+        "P29-I10-W05",
+        "P29-I10-W06"
+      ],
+      "description": "FS11. adds SourceUnit/CoverageReport/DeferredDeliverable; LLM slot-fills text and response only; FS02 computes the tier; emit target is the FS03-typed RoadmapPlanWave.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/workflow/propose/generator.py",
+        "src/eawf/kernel/spec/common.py",
+        "tests/unit/propose/test_generator_coverage.py"
+      ],
+      "id": "P29-I11-W02",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:01.280812Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "coverage_diff flags every unmapped span that has no DeferredDeliverable",
+        "a DeferredDeliverable with a too-short reason fails validation",
+        "the TUI prior-failure brief fixture flags the collapsed digit-map span"
+      ],
+      "title": "Add anti-drift generator: slot-fill + deterministic coverage-diff",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W06",
+        "P29-I11-W08"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I11-W01",
+        "P29-I10-W06"
+      ],
+      "description": "FS06. replaces the dispatch chain after the enforce guard with a per-criterion run_oracle loop; adds validate_criterion_gate_refs at the mutate boundary.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/kernel/spec/common.py",
+        "tests/unit/daemon/test_close_gate_oracle.py"
+      ],
+      "id": "P29-I11-W03",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:01.784631Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a wave with all-passing T1 criteria closes",
+        "an orphan gate_id is rejected at the mutate boundary",
+        "an author-set oracle_tier is rejected",
+        "a failing required criterion blocks close with a structured detail"
+      ],
+      "title": "Wire run_oracle into close gate + boundary orphan-detection",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W04": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I10-W01",
+        "P29-I11-W02"
+      ],
+      "description": "FS12. registers behind the validate_prose chokepoint; fail-open advisory at propose and fail-closed only on profile opt-in.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/lint/eawf021_measurability.py",
+        "src/eawf/platform/lint/eawf022_coverage.py",
+        "src/eawf/platform/lint/validate_prose.py",
+        "tests/unit/lint/test_eawf021_022.py"
+      ],
+      "id": "P29-I11-W04",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:02.304947Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "EAWF021 rejects a vague criterion and passes the rewritten form",
+        "a 20-char vague phrase is still caught by the verb-and-locus check",
+        "EAWF022 emits the dropped-detail report at propose render time"
+      ],
+      "title": "Add EAWF021 measurability lint + EAWF022 propose coverage gate",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W05": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W07"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I11-W01",
+        "P29-I10-W07"
+      ],
+      "description": "FS16. resvg pinned in the CI image with a shutil.which guard; vendored fonts disable system fonts; a resvg version bump is a golden-refresh event.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/audit_dsl/models.py",
+        "src/eawf/workflow/audit_dsl/kinds/svg_well_formed.py",
+        "src/eawf/workflow/audit_dsl/kinds/svg_pixel_diff.py",
+        "src/eawf/workflow/audit_dsl/registry.py",
+        "tests/snapshots/svg/test_svg_oracle.py"
+      ],
+      "id": "P29-I11-W05",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:02.816637Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "svg_well_formed on a Markdown-fenced SVG exits non-zero and the runner aborts before the pixel diff",
+        "resvg render of a fixture SVG matches its committed golden",
+        "resvg absent locally skips while CI runs the pinned binary"
+      ],
+      "title": "Add SVG oracle stack: xmllint T2 + resvg T5 pixel-diff",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I11-W08"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I11-W03"
+      ],
+      "description": "FS13. enforce true for the high-risk band only (security sandbox spawn L-XL judgment); cross-vendor jury stays advisory until FS14 calibration clears.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/platform/profiles/models.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "tests/unit/daemon/test_verdict_enforced.py"
+      ],
+      "id": "P29-I11-W06",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:03.318767Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "a high-risk wave cannot close without a fresh auditor verdict",
+        "verdict_requirement returns the expected branch value for a fixed high-risk and a fixed low-risk wave",
+        "produce_wave_verdict is wired into the close path"
+      ],
+      "title": "Flip verify.enforce for the high-risk band",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I11-W05",
+        "P29-I10-W09"
+      ],
+      "description": "FS17. mirrors eawf snapshot update; the no-diff refusal is the verifiable guard.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/vfl.py",
+        "src/eawf/surfaces/cli/commands/snapshot.py",
+        "tests/unit/cli/test_vfl_approve.py"
+      ],
+      "id": "P29-I11-W07",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:03.833358Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "eawf vfl approve with a pending golden diff exits zero",
+        "eawf vfl approve with no diff exits non-zero refusing",
+        "the VFL goldens register in SNAPSHOT_SURFACES for the pairing gate"
+      ],
+      "title": "Add eawf vfl approve golden management + pairing-gate coverage",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I11-W03",
+        "P29-I11-W06"
+      ],
+      "description": "FS14. ratio is T1-T5 criteria over required; per-phase floor verify.odr_floor default 0.80 advisory; escape ledger tags caught_at close review or production feeding verdict_requirement.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/metrics/odr.py",
+        "tests/unit/metrics/test_odr.py"
+      ],
+      "id": "P29-I11-W08",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T15:08:04.352468Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        "oracle_determinism_ratio over a known criteria set equals the hand-computed fraction",
+        "ODR below the configured floor surfaces an advisory finding at iter-close",
+        "an empty criteria set returns a defined value not a ZeroDivisionError"
+      ],
+      "title": "Add Oracle-Determinism-Ratio metric + escape ledger",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
