@@ -29,6 +29,10 @@ Public surface:
   claim (four facets: intuition + runnable example gate + regime + citation);
   :class:`~eawf.kernel.spec.math.MathExplainer` folds claims into a doc-type
   promotable iff every claim is grounded
+- :class:`~eawf.kernel.spec.visual.VisualContract` — typed visual-fidelity
+  contract over one rendered surface (criteria + gates + goldens + recipe +
+  rubric); :class:`~eawf.kernel.spec.visual.DeterminismRecipe` captures the
+  byte-determinism knobs the runner and SVG stack rely on
 - :data:`~eawf.kernel.spec.common.TestRef`,
   :data:`~eawf.kernel.spec.common.FileScopeRef` — annotated path types
 
@@ -84,6 +88,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "CriterionAcceptanceStyle": ("common", "CriterionAcceptanceStyle"),
     "CriterionEvidenceKind": ("common", "CriterionEvidenceKind"),
     "CriterionSpec": ("common", "CriterionSpec"),
+    "DeterminismRecipe": ("visual", "DeterminismRecipe"),
     "DomainProgress": ("operator_input", "DomainProgress"),
     "DomainProgressStatus": ("operator_input", "DomainProgressStatus"),
     "DropReason": ("pruning", "DropReason"),
@@ -133,6 +138,8 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "TestRef": ("common", "TestRef"),
     "VerdictCitation": ("common", "VerdictCitation"),
     "VerdictIdStr": ("common", "VerdictIdStr"),
+    "VisualContract": ("visual", "VisualContract"),
+    "VisualSurface": ("visual", "VisualSurface"),
     "WaveBehavior": ("wave", "WaveBehavior"),
     "WaveMockup": ("wave", "WaveMockup"),
     "WaveSpec": ("wave", "WaveSpec"),
