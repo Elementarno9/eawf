@@ -2999,6 +2999,30 @@
       "scope_id": "P29-I11-W01",
       "status": "done",
       "updated_at": "2026-06-06T18:02:09.966493Z"
+    },
+    "P29-I11-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W02",
+      "scope_id": "P29-I11-W02",
+      "status": "done",
+      "updated_at": "2026-06-06T18:40:14.250237Z"
+    },
+    "P29-I11-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W05",
+      "scope_id": "P29-I11-W05",
+      "status": "done",
+      "updated_at": "2026-06-06T18:40:15.044109Z"
     }
   },
   "agent_sessions": {
@@ -11586,6 +11610,32 @@
       "reference_class": "bucket:L",
       "scope_id": "P29-I11-W01",
       "updated_at": "2026-06-06T17:54:10.830287Z"
+    },
+    "P29-I11-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W02-bucket-20260606T184013Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I11-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I11-W02",
+      "updated_at": "2026-06-06T18:40:13.012249Z"
+    },
+    "P29-I11-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W05-bucket-20260606T184013Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I11-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I11-W05",
+      "updated_at": "2026-06-06T18:40:13.550008Z"
     }
   },
   "goals": {
@@ -13847,7 +13897,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T18:02:09.967007Z",
+  "updated_at": "2026-06-06T18:40:15.044647Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -55949,10 +55999,10 @@
       "blocks": [
         "P29-I11-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T18:40:13.012243Z",
+      "closed_at": "2026-06-06T18:40:14.250237Z",
+      "commit": "505133ab83a20fb3294be57e5f7c9887ff14e161",
       "deps": [
         "P29-I10-W01",
         "P29-I10-W05",
@@ -55970,10 +56020,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:01.280812Z",
-      "outcome": null,
+      "outcome": "Anti-drift generator (propose/generator.py): extract_units + deterministic coverage_diff over SourceUnit ids; SourceUnit/DeferredDeliverable/CoverageReport types; TUI-drift fixture flags collapsed digit-map span; 10 tests.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -56198,10 +56248,10 @@
       "blocks": [
         "P29-I11-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T18:40:13.550002Z",
+      "closed_at": "2026-06-06T18:40:15.044109Z",
+      "commit": "866d9ac5f8d1ce7bed21ddb3577bd5666d169a86",
       "deps": [
         "P29-I11-W01",
         "P29-I10-W07"
@@ -56220,10 +56270,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:02.816637Z",
-      "outcome": null,
+      "outcome": "SVG oracle stack: svg_well_formed (xmllint T2) + svg_pixel_diff (resvg T5, dependency-free byte-compare, shutil.which+placeholder skip-guard); resvg 0.45.1 pinned in ci.yaml; vendored font + placeholder golden (CI seeds real); 24 passed/2 skipped.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
