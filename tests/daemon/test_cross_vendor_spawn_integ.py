@@ -220,7 +220,17 @@ def _state_payload(*, runtime: str, effort_bucket: str) -> dict[str, Any]:
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
-                "success_criteria": ["spawn through the real adapter"],
+                "success_criteria": [
+                    {
+                        "id": "CR-01",
+                        "text": "spawn through the real adapter",
+                        "kind": "legacy",
+                        "acceptance_style": "binary",
+                        "evidence_kind": "attested",
+                        "quality_dimension": "functional_suitability",
+                        "measurable_signal": "spawn through the real adapter",
+                    }
+                ],
                 "agent_role": "executor",
                 "effort_bucket": effort_bucket,
                 "claim_session_id": None,

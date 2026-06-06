@@ -326,7 +326,17 @@ def _wave(*, wave_id: str, title: str, file_scopes: list[str]) -> Wave:
             "title": title,
             "status": "claimed",
             "file_scopes": file_scopes,
-            "success_criteria": ["c1"],
+            "success_criteria": [
+                {
+                    "id": "CR-01",
+                    "text": "c1",
+                    "kind": "legacy",
+                    "acceptance_style": "binary",
+                    "evidence_kind": "attested",
+                    "quality_dimension": "functional_suitability",
+                    "measurable_signal": "grandfathered legacy criterion",
+                }
+            ],
             "opened_at": "2026-06-03T00:00:00Z",
             "claimed_at": "2026-06-03T00:00:00Z",
         }

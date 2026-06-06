@@ -212,7 +212,17 @@ def _state_payload(*, wave_id: str, effort_bucket: str, title: str) -> dict[str,
                 "title": title,
                 "status": "claimed",
                 "claim_session_id": "session-abc",
-                "success_criteria": [_CRITERION],
+                "success_criteria": [
+                    {
+                        "id": "CR-01",
+                        "text": _CRITERION,
+                        "kind": "legacy",
+                        "acceptance_style": "binary",
+                        "evidence_kind": "attested",
+                        "quality_dimension": "functional_suitability",
+                        "measurable_signal": _CRITERION,
+                    }
+                ],
                 "effort_bucket": effort_bucket,
                 "agent_role": "executor",
                 "opened_at": _now().isoformat(),

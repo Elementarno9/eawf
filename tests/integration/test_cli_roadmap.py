@@ -171,7 +171,13 @@ iters:
         deps:
           - P22-I01-W01
         success_criteria:
-          - second criterion
+          - id: CR-01
+            text: second criterion
+            kind: legacy
+            acceptance_style: binary
+            evidence_kind: attested
+            quality_dimension: functional_suitability
+            measurable_signal: grandfathered legacy criterion
         effort_bucket: S
       - id: P22-I01-W01
         title: "First wave"
@@ -198,7 +204,9 @@ iters:
     assert state["iters"]["P22-I01"]["wave_ids"] == ["P22-I01-W01", "P22-I01-W02"]
     assert state["waves"]["P22-I01-W01"]["blocks"] == ["P22-I01-W02"]
     assert state["waves"]["P22-I01-W02"]["deps"] == ["P22-I01-W01"]
-    assert state["waves"]["P22-I01-W02"]["success_criteria"] == ["second criterion"]
+    stored_criteria = state["waves"]["P22-I01-W02"]["success_criteria"]
+    assert [c["text"] for c in stored_criteria] == ["second criterion"]
+    assert stored_criteria[0]["kind"] == "legacy"
 
 
 def test_roadmap_propose_from_plan_validation_failure_is_all_or_nothing(
@@ -272,7 +280,9 @@ def test_roadmap_revise_add_wave(workspace: Path) -> None:
     state = _read_state(workspace)
     assert "P21-I01-W01" in state["waves"]
     assert state["waves"]["P21-I01-W01"]["title"] == "Foo handling"
-    assert state["waves"]["P21-I01-W01"]["success_criteria"] == ["criterion1", "criterion2"]
+    stored_criteria = state["waves"]["P21-I01-W01"]["success_criteria"]
+    assert [c["text"] for c in stored_criteria] == ["criterion1", "criterion2"]
+    assert all(c["kind"] == "legacy" for c in stored_criteria)
 
 
 def test_roadmap_revise_set_deps(workspace: Path) -> None:

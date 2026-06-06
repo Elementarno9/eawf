@@ -186,7 +186,17 @@ def _state_payload(*, agent_role: str = "executor", effort_bucket: str = "L") ->
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
-                "success_criteria": ["spawn for real behind the floor"],
+                "success_criteria": [
+                    {
+                        "id": "CR-01",
+                        "text": "spawn for real behind the floor",
+                        "kind": "legacy",
+                        "acceptance_style": "binary",
+                        "evidence_kind": "attested",
+                        "quality_dimension": "functional_suitability",
+                        "measurable_signal": "spawn for real behind the floor",
+                    }
+                ],
                 "agent_role": agent_role,
                 "effort_bucket": effort_bucket,
                 "claim_session_id": None,

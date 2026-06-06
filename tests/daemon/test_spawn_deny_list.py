@@ -179,7 +179,17 @@ def _state_payload(*, sandbox_policies: dict[str, dict[str, Any]] | None = None)
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/runtime/daemon/methods/agent.py"],
-                "success_criteria": ["deny-list reaches the argv"],
+                "success_criteria": [
+                    {
+                        "id": "CR-01",
+                        "text": "deny-list reaches the argv",
+                        "kind": "legacy",
+                        "acceptance_style": "binary",
+                        "evidence_kind": "attested",
+                        "quality_dimension": "functional_suitability",
+                        "measurable_signal": "deny-list reaches the argv",
+                    }
+                ],
                 "agent_role": "executor",
                 "effort_bucket": "M",
                 "claim_session_id": None,
