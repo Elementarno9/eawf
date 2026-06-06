@@ -204,6 +204,13 @@ def _write_enforcing_profile(root: Path) -> None:
     only gate that can refuse close is the FS06 ordered-oracle loop --
     isolating it. The floor check is ``git status`` (a read-only verb
     that exits 0 inside the git repo :func:`_init_git_repo` set up).
+
+    ``cross_vendor_jury: true`` is set so the high-risk (``"always"``,
+    e.g. the L-effort wave these tests use) close routes through the
+    ``run_oracle`` loop -- the gate these FS06 tests stub. Without it the
+    risk-weighted enforce-flip (FS13) routes a high-risk jury-off wave
+    through the dedicated single-auditor producer instead, which is
+    covered by ``test_verdict_enforced.py``.
     """
     profile_dir = root / ".ea" / "profiles"
     profile_dir.mkdir(parents=True, exist_ok=True)
@@ -217,6 +224,7 @@ def _write_enforcing_profile(root: Path) -> None:
                 "name: enforcing",
                 "verify:",
                 "  enforce: true",
+                "  cross_vendor_jury: true",
                 "  argv_allowlist:",
                 "    - git",
                 "  floor_checks:",

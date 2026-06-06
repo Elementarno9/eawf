@@ -1053,6 +1053,66 @@ async def _enforce_spec_jury_gate(
     )
 
 
+async def _produce_high_risk_verdict(
+    state: State,
+    wave: Wave,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> None:
+    """Write the single fresh-auditor verdict the high-risk close gate reads.
+
+    The producer half of the high-risk single-auditor close gate: it spawns
+    a fresh-context auditor (via
+    :func:`eawf.workflow.dispatch.verdict.produce_wave_verdict`) so the
+    verdict :func:`_enforce_wave_verdict_gate` then reads is actually
+    persisted. The spawn is scoped to the high-risk subset and is
+    idempotent against an existing close-ready verdict:
+
+    * the caller invokes this ONLY for an ``"always"`` (high-risk) wave, so
+      a non-high-risk close never reaches the producer and never spawns an
+      auditor;
+    * a wave whose freshest persisted auditor verdict is already close-ready
+      is a no-op -- the gate would pass on the read alone, so re-spawning
+      would burn a redundant auditor.
+
+    Only an ``"always"`` wave with an absent or non-close-ready verdict
+    spawns. The single juror runtime is bound from
+    :func:`_jury_spawn_factory` at the ``claude-code`` family so the produce
+    stays a single-auditor gate -- the cross-vendor jury is a separate
+    opt-in path the close gate routes to only when ``cross_vendor_jury`` is
+    set.
+
+    Args:
+        state: Validated state -- mutated in place by the auditor session
+            registration; the close path persists it.
+        wave: The high-risk wave being closed.
+        state_path: Path to ``state.json``; the auditor report store +
+            events resolve under its sibling ``store/`` directory.
+        repo_root: Repository root forwarded to the auditor's diff-base
+            derivation + spawn cwd.
+    """
+    from eawf.workflow.dispatch.verdict import (
+        produce_wave_verdict,
+        verify_wave_verdict_gate,
+    )
+
+    if verify_wave_verdict_gate(wave, state_path=state_path).passed:
+        logger.debug(f"_produce_high_risk_verdict wave={wave.id} status=already-ready")
+        return
+    events_path = store_path(state_path, StoreKind.EVENT)
+    spawn = _jury_spawn_factory(state, wave, repo_root=repo_root)("claude-code")
+    await produce_wave_verdict(
+        state=state,
+        state_path=state_path,
+        events_path=events_path,
+        wave=wave,
+        spawn=spawn,
+        repo_root=repo_root,
+    )
+    logger.info(f"_produce_high_risk_verdict wave={wave.id} status=produced")
+
+
 async def _enforce_wave_close_gate(
     state: State,
     mutation: Mutation,
@@ -1093,9 +1153,10 @@ async def _enforce_wave_close_gate(
             juror diff-base / spawn cwd.
 
     Raises:
-        LifecycleError: When the ordered oracle refuses close for any
-            required criterion.
+        LifecycleError: When the ordered oracle (or the high-risk
+            single-auditor gate) refuses close.
     """
+    from eawf.workflow.dispatch.verdict import verdict_requirement
     from eawf.workflow.verify.oracle import run_oracle
     from eawf.workflow.verify.readiness import (
         _load_gate_specs,
@@ -1121,6 +1182,35 @@ async def _enforce_wave_close_gate(
         wave,
     )
     if verify_block is None or not verify_block.enforce:
+        return
+    # High-risk single-auditor gate. The verdict gate is a READ -- it only
+    # blocks close when a fresh auditor verdict is already persisted -- so
+    # the close path must WRITE that verdict first, but only for the
+    # high-risk subset and only when the cross-vendor jury is not opted in.
+    # A high-risk wave under an opted-in jury falls through to run_oracle's
+    # jury tier; a mechanical wave takes the risk-weighted early-return or
+    # the run_oracle path below depending on whether the profile is banded.
+    if verdict_requirement(wave) == "always" and not verify_block.cross_vendor_jury:
+        await _produce_high_risk_verdict(
+            state,
+            wave,
+            state_path=state_path,
+            repo_root=repo_root,
+        )
+        _enforce_wave_verdict_gate(wave, state_path=state_path)
+        logger.info(f"_enforce_wave_close_gate wave={wave_id} high_risk=single-auditor passed=True")
+        return
+    # Whole-fleet enforce is risk-weighted: a fleet profile (no
+    # ``uiux_bands``) gates only the high-risk ``"always"`` subset, so a
+    # mechanical (``"sampled"`` / ``"skip"``) wave closes exactly as it does
+    # under an advisory profile -- no oracle run, no block, no spawn. A
+    # band-scoped profile keeps the run_oracle path below: the resolver has
+    # already narrowed ``enforce`` to ``False`` for a non-band wave, so any
+    # wave that reaches here under a banded block is in-band and is scored.
+    if not verify_block.uiux_bands and verdict_requirement(wave) != "always":
+        logger.debug(
+            f"_enforce_wave_close_gate wave={wave_id} requirement=mechanical advisory=True"
+        )
         return
     # Past the enforce guard the ordered oracle scores each required
     # criterion. The events_path + spawn_factory mirror the cross-vendor

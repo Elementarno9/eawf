@@ -106,5 +106,24 @@ render_blocks:
       is checked against D10's status — only a superseding Decision discharges
       the divergence.
 
+# Risk-weighted close-verdict enforcement. ``enforce: true`` turns the
+# close-time verdict gate ON, but the daemon close path
+# (:func:`eawf.runtime.daemon.methods.state._enforce_wave_close_gate`)
+# narrows the hard gate to the HIGH-RISK band -- the subset where
+# :func:`eawf.workflow.dispatch.verdict.verdict_requirement` returns
+# ``"always"`` (security / sandbox / spawn / L-XL / judgment waves). A
+# high-risk wave cannot close without a fresh-context auditor verdict: the
+# close path spawns one auditor (single-auditor gate) and reads the
+# persisted verdict. A mechanical (sampled / skip) wave is left advisory --
+# no auditor is spawned and the close is byte-unchanged from the pre-enforce
+# behavior. ``cross_vendor_jury`` stays ``false`` so the high-risk gate is a
+# single fresh-context auditor, not the three-vendor jury; the jury is a
+# deferred calibration opt-in. No ``uiux_bands`` here -- this is a
+# whole-fleet enforce profile whose effective scope is the high-risk band,
+# not a UI/UX-token band.
+verify:
+  enforce: true
+  cross_vendor_jury: false
+
 skills_referenced: []
 hooks_referenced: []
