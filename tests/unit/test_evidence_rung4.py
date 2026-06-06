@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec
+from eawf.kernel.spec.common import CriterionSpec, QualityDimension
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.workflow.evidence.rung4 import (
     EviBoundVerdict,
@@ -46,6 +46,8 @@ def _attested_criterion(criterion_id: str = "CR-1") -> CriterionSpec:
         kind="judgement",
         acceptance_style="binary",
         evidence_kind="attested",
+        quality_dimension=QualityDimension.RELIABILITY,
+        measurable_signal="the operator records a signed attestation that the rollout is healthy",
     )
 
 
@@ -57,6 +59,8 @@ def _criterion(evidence_kind: str, criterion_id: str = "CR-1") -> CriterionSpec:
         kind="behavioral",
         acceptance_style="binary",
         evidence_kind=evidence_kind,  # type: ignore[arg-type]
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the criterion's evidence row resolves to a passing status",
     )
 
 

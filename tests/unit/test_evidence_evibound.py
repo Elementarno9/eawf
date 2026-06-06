@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.workflow.evidence.evibound import (
@@ -52,6 +52,8 @@ def _deterministic_criterion(criterion_id: str = "CR-1") -> CriterionSpec:
         acceptance_style="binary",
         evidence_kind="deterministic",
         gate_ids=["G-1"],
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the allowlisted command_exit_zero gate exits with returncode 0",
     )
 
 

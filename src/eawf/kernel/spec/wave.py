@@ -20,38 +20,19 @@ loader and CLI validators because they need disk + state-tree lookups.
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
 
 from eawf.kernel.spec.common import (
     FileScopeRef,
+    QualityDimension,
     TestRef,
     VerdictCitation,
     _StrictModel,
 )
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 from eawf.kernel.state.models import IterIdStr, PhaseIdStr, WaveIdStr
-
-
-class QualityDimension(StrEnum):
-    """ISO-25010-flavoured quality dimension a jury-scorable behaviour targets.
-
-    A jury-scorable :class:`WaveBehavior` names the quality dimension
-    the spec-jury scores it against — the typed-criterion idea folded
-    into the rubric, so a rubric item IS a measurable criterion tagged
-    with the axis it lives on. The closed value set is the subset of
-    ISO-25010 product-quality characteristics that matter for the
-    UI/UX behaviour this gate scores.
-    """
-
-    INTERACTION_CAPABILITY = "interaction_capability"
-    OPERABILITY = "operability"
-    RELIABILITY = "reliability"
-    SECURITY = "security"
-    FUNCTIONAL_SUITABILITY = "functional_suitability"
-    PERFORMANCE_EFFICIENCY = "performance_efficiency"
 
 
 class WaveBehavior(_StrictModel):

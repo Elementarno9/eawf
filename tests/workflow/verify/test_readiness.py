@@ -37,7 +37,7 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind, StoreKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.kernel.store.envelope import Envelope
@@ -144,6 +144,8 @@ def _make_criterion(
         gate_ids=list(gate_ids or []),
         required=True,
         waiver_reason=waiver_reason,
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the W06 readiness compute resolves an evidence row for this criterion",
     )
 
 

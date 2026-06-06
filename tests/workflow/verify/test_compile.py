@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.platform.profiles.models import FloorCheck
 from eawf.workflow.audit_dsl.models import CheckSpec
 from eawf.workflow.verify import compile_gate
@@ -49,6 +49,8 @@ def _criterion(
         evidence_kind=evidence_kind,  # type: ignore[arg-type]
         gate_ids=list(gate_ids or []),
         required=True,
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the compiled floor pack scores this criterion deterministically",
     )
 
 

@@ -10,6 +10,7 @@ authoritative place.
 
 from __future__ import annotations
 
+from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -168,6 +169,93 @@ GateCadence = Literal[
 ]
 
 
+class OracleTier(IntEnum):
+    """Ordered oracle tiers; lower = cheaper + more deterministic.
+
+    The runner MUST exhaust lower tiers before T7. IntEnum so ``min`` / ``<``
+    order the escalation.
+    """
+
+    T1_STATIC = 1
+    T2_STRUCTURAL = 2
+    T3_SNAPSHOT = 3
+    T4_CONTRACT = 4
+    T5_GOLDEN = 5
+    T6_APPROVAL = 6
+    T7_JURY = 7
+
+
+class ObserveVerb(StrEnum):
+    """The EARS ``shall <observe>`` verb a response clause asserts."""
+
+    RETURNS = "returns"
+    RAISES = "raises"
+    HOLDS_FOR_ALL = "holds_for_all"
+    EXITS = "exits"
+    EMITS = "emits"
+    VALIDATES = "validates"
+    MATCHES_PATTERN = "matches_pattern"
+    TRANSITIONS_TO = "transitions_to"
+    RENDERS_TOKEN = "renders_token"
+    TRIGGERS_ACTION = "triggers_action"
+    FILE_MATCHES = "file_matches"
+    JUDGED = "judged"
+
+
+class ProofLocus(StrEnum):
+    """Where a response clause's proof is observed."""
+
+    PYTEST = "pytest"
+    HYPOTHESIS = "hypothesis"
+    CLI_EXIT = "cli_exit"
+    LOG_CAPTURE = "log_capture"
+    SCHEMA = "schema"
+    SOURCE = "source"
+    STATE_JSON = "state_json"
+    TUI_SNAPSHOT = "tui_snapshot"
+    TUI_PILOT = "tui_pilot"
+    GOLDEN = "golden"
+    HUMAN = "human"
+    JURY = "jury"
+
+
+class QualityDimension(StrEnum):
+    """ISO-25010:2023 product-quality characteristic a criterion targets.
+
+    Six members are the pre-existing set (relocated from wave.py); four
+    are added for the full 2023 characteristic set. OPERABILITY is retained
+    for back-compat so existing WaveBehavior rows keep validating.
+    """
+
+    FUNCTIONAL_SUITABILITY = "functional_suitability"
+    PERFORMANCE_EFFICIENCY = "performance_efficiency"
+    INTERACTION_CAPABILITY = "interaction_capability"
+    RELIABILITY = "reliability"
+    SECURITY = "security"
+    OPERABILITY = "operability"
+    COMPATIBILITY = "compatibility"
+    MAINTAINABILITY = "maintainability"
+    FLEXIBILITY = "flexibility"
+    SAFETY = "safety"
+
+
+class ResponseClause(_StrictModel):
+    """The EARS ``shall <response>`` clause, typed.
+
+    ``jury_reason`` is required iff ``observe`` is ``JUDGED`` — the
+    CriterionSpec validator enforces that, since the clause is only
+    meaningful in the context of its owning criterion.
+    """
+
+    observe: ObserveVerb
+    object: Annotated[str, Field(min_length=1, max_length=200)]
+    locus: ProofLocus
+    expected: str | None = None
+    quantifier: Literal["single", "forall"] = "single"
+    gate_ref: IdStr | None = None
+    jury_reason: str | None = None
+
+
 class CriterionSpec(_StrictModel):
     """One success-criterion row attached to a wave / iter / phase.
 
@@ -192,6 +280,26 @@ class CriterionSpec(_StrictModel):
     gate_ids: list[IdStr] = Field(default_factory=list)
     required: bool = True
     waiver_reason: str | None = None
+    quality_dimension: QualityDimension
+    measurable_signal: Annotated[str, Field(min_length=20, max_length=300)]
+    response: ResponseClause | None = None
+    oracle_tier: OracleTier | None = None
+
+    @model_validator(mode="after")
+    def _judged_requires_reason(self) -> CriterionSpec:
+        """Require a jury_reason on every JUDGED response clause.
+
+        Raises:
+            ValueError: when the response observes JUDGED but carries no
+                jury_reason (an auditable fallthrough requires a reason).
+        """
+        if (
+            self.response is not None
+            and self.response.observe is ObserveVerb.JUDGED
+            and not self.response.jury_reason
+        ):
+            raise ValueError("judged response requires jury_reason")
+        return self
 
 
 class GateSpec(_StrictModel):

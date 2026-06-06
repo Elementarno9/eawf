@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec
+from eawf.kernel.spec.common import CriterionSpec, QualityDimension
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.kernel.store.paths import store_dir as _store_dir
@@ -305,6 +305,8 @@ def test_floor_pack_yields_to_typed_spec_when_both_present(
         evidence_kind="jury",
         gate_ids=[],
         required=True,
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the typed criterion wins and the floor pack stays silent for this wave",
     )
     monkeypatch.setattr(
         readiness_mod,
