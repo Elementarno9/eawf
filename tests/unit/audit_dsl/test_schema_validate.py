@@ -23,7 +23,7 @@ import inspect
 import json
 from pathlib import Path
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckSpec
 from eawf.workflow.audit_dsl import models as models_module
 from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
@@ -177,6 +177,8 @@ def test_compile_gate_schema_validate_returns_checkspec() -> None:
         kind="schema",
         acceptance_style="binary",
         evidence_kind="deterministic",
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the compiled schema_validate gate is not None",
     )
     gate = GateSpec(
         id="G-1",
