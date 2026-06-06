@@ -13431,7 +13431,25 @@
         "P29-I12-W04",
         "P29-I12-W05",
         "P29-I12-W06",
-        "P29-I12-W07"
+        "P29-I12-W07",
+        "P29-I12-W08"
+      ]
+    },
+    "P29-I13": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "The in-band TUI build-out + folded B069/B011/B018, authored through the I12 spec-body machinery so every wave closes on a deterministic gate.",
+      "estimate_id": null,
+      "id": "P29-I13",
+      "intent": null,
+      "opened_at": "2026-06-06T23:54:12.402754Z",
+      "phase_id": "P29",
+      "status": "planned",
+      "title": "TUI surfaces + folded scope (authored via spec-body)",
+      "trigger": "none",
+      "wave_ids": [
+        "P29-I13-W01"
       ]
     }
   },
@@ -14196,7 +14214,8 @@
         "P29-I09",
         "P29-I10",
         "P29-I11",
-        "P29-I12"
+        "P29-I12",
+        "P29-I13"
       ],
       "opened_at": "2026-06-01T00:19:14.247409Z",
       "outcome_ids": [],
@@ -14244,7 +14263,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T23:43:32.353794Z",
+  "updated_at": "2026-06-06T23:54:13.009414Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -58068,6 +58087,96 @@
         }
       ],
       "title": "Seed real svg golden and un-skip the T5 pixel-diff",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W08": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands",
+        "src/eawf/surfaces/cli/registry.py"
+      ],
+      "gates": [],
+      "id": "P29-I12-W08",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T23:54:11.789791Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "eawf exposes dispatch resume and pause verbs that call the agent.resume and agent.pause RPCs and report the resulting dispatch_paused flag",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf exposes dispatch resume and pause verbs that call the agent.resume and agent.pause RPCs and report the resulting dispatch_paused flag",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add eawf dispatch resume and pause CLI verbs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/state_binding.py",
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "gates": [],
+      "id": "P29-I13-W01",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-06T23:54:13.009236Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the TUI load_state runs the forward migration chain so a newer on-disk schema parses and a parse failure surfaces a restart banner instead of silently freezing the roadmap",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the TUI load_state runs the forward migration chain so a newer on-disk schema parses and a parse failure surfaces a restart banner instead of silently freezing the roadmap",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Migrate state on TUI load and show a staleness banner",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
