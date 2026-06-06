@@ -3426,6 +3426,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-04-A52-P29-i09-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I09/ART-A52-P29-i09"
     },
+    "ART-A53-P29-i10": {
+      "created_at": "2026-06-06T17:43:39.376353Z",
+      "id": "ART-A53-P29-i10",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-06-A53-P29-i10-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I10/ART-A53-P29-i10"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -4301,6 +4311,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A52-P29-i09",
       "scope_id": "P29-I09",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A53-P29-i10": {
+      "check_results": [],
+      "created_at": "2026-06-06T17:43:40.094568Z",
+      "id": "A53-P29-i10",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A53-P29-i10",
+      "scope_id": "P29-I10",
       "status": "complete",
       "verdict": "minor"
     },
@@ -5678,6 +5699,32 @@
       "status": "open",
       "title": "Make research-board controls honest (no not-yet-wired stubs)"
     },
+    "B095": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-06T17:44:15.775700Z",
+      "description": "FS03 retyped Wave.success_criteria but _load_gate_specs (readiness.py) still returns []; GateSpec rows are not persisted in success_criteria and need a separate markdown body parser. No FS03 criterion pins this, so it was deferred. Build the parser and refresh the stale v0.4.0 docstring.",
+      "id": "B095",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29",
+      "status": "open",
+      "title": "Un-idle _load_gate_specs with a wave-body gate parser"
+    },
+    "B096": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-06T17:44:16.472397Z",
+      "description": "FS03 golden-regen over tests/golden/state was a no-op because no fixture carries populated typed success_criteria, so the G7 migration-safety step was not exercised end-to-end. Add a state golden fixture with populated typed criteria so the snapshot-pairing obligation is covered.",
+      "id": "B096",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29",
+      "status": "open",
+      "title": "Exercise state-golden migration safety end-to-end"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -5769,7 +5816,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I10",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6365,7 +6412,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -12929,16 +12976,16 @@
       ]
     },
     "P29-I10": {
-      "audit_id": null,
+      "audit_id": "A53-P29-i10",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-06T17:51:19.428561Z",
       "description": "FS01-FS04-FS07-FS09 roots + FS02-FS03-FS08-FS10-FS15: types/checks/FSM/affordance/visual built in isolation, not yet wired into the close gate. Per 2026-06-06-p29-spine-iter-compaction.md.",
       "estimate_id": null,
       "id": "P29-I10",
       "intent": null,
       "opened_at": "2026-06-06T15:05:27.289935Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Fidelity-Spine substrate: typed criteria + checks + FSM + affordance",
       "trigger": "none",
       "wave_ids": [
@@ -13100,6 +13147,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I09-close-A52-P29-i09",
       "summary": "iter P29-I09 closed with audit A52-P29-i09; waves closed=11; outcomes P29-I09-W01: modal_depth counts only counts_toward_depth modals (brief viewer exempt via counts_toward_dep... | P29-I09-W02: entity-dedup consolidated at the push_modal chokepoint via dedupe_key (top-only, no toast); D... | P29-I09-W03: CANONICAL_HINT_ACTIONS map (arrow=select, Enter=open, Esc=back, <-> =collapse, w/r/u=scope, F...",
+      "tier": "working"
+    },
+    "MEM-P29-I10-close-A53-P29-i10": {
+      "confidence": "high",
+      "id": "MEM-P29-I10-close-A53-P29-i10",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-06T17:51:19.428561Z",
+      "scope_id": "P29-I10",
+      "status": "active",
+      "store_record_id": "MEM-P29-I10-close-A53-P29-i10",
+      "summary": "iter P29-I10 closed with audit A53-P29-i10; waves closed=9; outcomes P29-I10-W01: Typed CriterionSpec: OracleTier/ObserveVerb/ProofLocus/ResponseClause added, QualityDimension... | P29-I10-W02: schema_validate CheckKind added, registered, implemented (kinds/schema_validate.py), tested 1... | P29-I10-W03: Lifecycle FSM transition tables (WAVE/PHASE/ITER) + validate_transition derived from code as ...",
       "tier": "working"
     }
   },
@@ -13764,7 +13822,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T17:30:09.079291Z",
+  "updated_at": "2026-06-06T17:51:19.429099Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
