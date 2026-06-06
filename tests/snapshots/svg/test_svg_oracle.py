@@ -44,6 +44,22 @@ _HAS_XMLLINT = shutil.which("xmllint") is not None
 _HAS_RESVG = shutil.which("resvg") is not None
 
 
+def _golden_is_placeholder() -> bool:
+    """True when the committed golden is the resvg-absent placeholder marker.
+
+    The placeholder PNG carries a ``PLACEHOLDER golden`` tEXt chunk; until the
+    real golden is seeded (``eawf vfl approve --kind svg`` on a resvg host), the
+    render-match assertion would byte-compare against a 1x1 stub, so it skips.
+    """
+    png = _REPO_ROOT / _GOLDEN_PNG
+    if not png.exists():
+        return False
+    return b"PLACEHOLDER golden" in png.read_bytes()
+
+
+_GOLDEN_PLACEHOLDER = _golden_is_placeholder()
+
+
 # --------------------------------------------------------------------------
 # fixtures-on-disk sanity (these are committed assets the kinds read)
 # --------------------------------------------------------------------------
@@ -246,6 +262,10 @@ def test_svg_pixel_diff_blocked_without_resvg() -> None:
 
 
 @pytest.mark.skipif(not _HAS_RESVG, reason="resvg not installed")
+@pytest.mark.skipif(
+    _GOLDEN_PLACEHOLDER,
+    reason="golden is placeholder; run eawf vfl approve --kind svg to seed the real golden",
+)
 def test_svg_pixel_diff_render_matches_golden() -> None:
     """A fixture SVG renders bit-identically to its committed golden (CR-2).
 
