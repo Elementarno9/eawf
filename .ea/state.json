@@ -2963,6 +2963,30 @@
       "scope_id": "P29-I10-W07",
       "status": "done",
       "updated_at": "2026-06-06T17:18:35.413308Z"
+    },
+    "P29-I10-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I10-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I10-W08",
+      "scope_id": "P29-I10-W08",
+      "status": "done",
+      "updated_at": "2026-06-06T17:30:08.324606Z"
+    },
+    "P29-I10-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I10-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I10-W09",
+      "scope_id": "P29-I10-W09",
+      "status": "done",
+      "updated_at": "2026-06-06T17:30:09.078843Z"
     }
   },
   "agent_sessions": {
@@ -11464,6 +11488,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I10-W07",
       "updated_at": "2026-06-06T17:18:33.356024Z"
+    },
+    "P29-I10-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I10-W08-bucket-20260606T173006Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I10-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I10-W08",
+      "updated_at": "2026-06-06T17:30:06.974406Z"
+    },
+    "P29-I10-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I10-W09-bucket-20260606T173007Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I10-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I10-W09",
+      "updated_at": "2026-06-06T17:30:07.506740Z"
     }
   },
   "goals": {
@@ -13714,7 +13764,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T17:18:35.413684Z",
+  "updated_at": "2026-06-06T17:30:09.079291Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -55585,10 +55635,10 @@
     "P29-I10-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i10",
+      "claimed_at": "2026-06-06T17:30:06.974400Z",
+      "closed_at": "2026-06-06T17:30:08.324606Z",
+      "commit": "78bf400e4982f64196340b3c062c095f78dfa064",
       "deps": [
         "P29-I10-W03"
       ],
@@ -55605,10 +55655,10 @@
       "intent": null,
       "iter_id": "P29-I10",
       "opened_at": "2026-06-06T15:07:30.684269Z",
-      "outcome": null,
+      "outcome": "transition_coverage CheckKind + self-instrumenting RuleBasedStateMachine; covered edges compared to FSM table edges, deterministic; 23 tests.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -55663,10 +55713,10 @@
       "blocks": [
         "P29-I11-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i10",
+      "claimed_at": "2026-06-06T17:30:07.506735Z",
+      "closed_at": "2026-06-06T17:30:09.078843Z",
+      "commit": "80df776c5c1219c93b59e9c299fcb47c0a6196c5",
       "deps": [
         "P29-I10-W04"
       ],
@@ -55680,10 +55730,10 @@
       "intent": null,
       "iter_id": "P29-I10",
       "opened_at": "2026-06-06T15:07:31.215152Z",
-      "outcome": null,
+      "outcome": "TUI affordance-resolves matrix over all 8 MODE_REGISTRY modes x 93 footer-key pairs; every pair resolves (not UNRESOLVED); synthetic dead-key error-path proves non-vacuity; 27 tests.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
