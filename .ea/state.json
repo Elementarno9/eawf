@@ -3060,6 +3060,30 @@
       "status": "done",
       "updated_at": "2026-06-06T19:41:04.336976Z"
     },
+    "P29-I11-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W07",
+      "scope_id": "P29-I11-W07",
+      "status": "done",
+      "updated_at": "2026-06-06T20:00:41.107530Z"
+    },
+    "P29-I11-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W08",
+      "scope_id": "P29-I11-W08",
+      "status": "done",
+      "updated_at": "2026-06-06T20:00:41.922829Z"
+    },
     "P29-I11-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -3071,6 +3095,18 @@
       "scope_id": "P29-I11-W09",
       "status": "done",
       "updated_at": "2026-06-06T19:41:05.112050Z"
+    },
+    "P29-I11-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W10",
+      "scope_id": "P29-I11-W10",
+      "status": "done",
+      "updated_at": "2026-06-06T20:00:42.718202Z"
     }
   },
   "agent_sessions": {
@@ -11724,6 +11760,32 @@
       "scope_id": "P29-I11-W06",
       "updated_at": "2026-06-06T19:13:36.508427Z"
     },
+    "P29-I11-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W07-bucket-20260606T194238Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I11-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I11-W07",
+      "updated_at": "2026-06-06T19:42:38.211460Z"
+    },
+    "P29-I11-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W08-bucket-20260606T194238Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I11-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I11-W08",
+      "updated_at": "2026-06-06T19:42:38.742599Z"
+    },
     "P29-I11-W09": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I11-W09-bucket-20260606T191359Z",
@@ -11736,6 +11798,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P29-I11-W09",
       "updated_at": "2026-06-06T19:13:59.957321Z"
+    },
+    "P29-I11-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W10-bucket-20260606T194239Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I11-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I11-W10",
+      "updated_at": "2026-06-06T19:42:39.265730Z"
     }
   },
   "goals": {
@@ -13197,7 +13272,8 @@
         "P29-I11-W06",
         "P29-I11-W07",
         "P29-I11-W08",
-        "P29-I11-W09"
+        "P29-I11-W09",
+        "P29-I11-W10"
       ]
     }
   },
@@ -13998,7 +14074,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T19:41:05.112541Z",
+  "updated_at": "2026-06-06T20:00:42.718692Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -56504,10 +56580,10 @@
     "P29-I11-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T19:42:38.211449Z",
+      "closed_at": "2026-06-06T20:00:41.107530Z",
+      "commit": "6258efcb2990f05b6e45000c2ad61a9b4457a48d",
       "deps": [
         "P29-I11-W05",
         "P29-I10-W09"
@@ -56524,10 +56600,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:03.833358Z",
-      "outcome": null,
+      "outcome": "eawf vfl approve golden management: regenerates via run_regen, refuses no-op approval (exit non-zero with no pending golden diff), exit 0 on pending diff; svg surface registered in SNAPSHOT_SURFACES so the pairing gate watches it; 9 tests (resvg-free).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -56580,10 +56656,10 @@
     "P29-I11-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T19:42:38.742592Z",
+      "closed_at": "2026-06-06T20:00:41.922829Z",
+      "commit": "2c6b1627798595a4aac2c2578a07c496d440e58f",
       "deps": [
         "P29-I11-W03",
         "P29-I11-W06"
@@ -56599,10 +56675,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:04.352468Z",
-      "outcome": null,
+      "outcome": "oracle_determinism_ratio (T1..T5 / required) + odr_floor (0.80 advisory on VerifyBlock) advisory finding at iter-close + typed escape ledger (EscapeStage/EscapeFinding/escape_rate); None-tier excluded, zero-denominator=1.0; 16 tests.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -56725,6 +56801,79 @@
         }
       ],
       "title": "Migrate test fixtures to typed CriterionSpec",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T19:42:39.265723Z",
+      "closed_at": "2026-06-06T20:00:42.718202Z",
+      "commit": "030845ff006eb6abad7378c895ea2ed5b66cdeb7",
+      "deps": [],
+      "description": "I11-W03 unified the close gate into run_oracle (subsuming the separate cross-vendor-jury / spec-jury / single-auditor dispatch). 12 tests/daemon tests assert the OLD per-gate error strings + flag/lane semantics. Re-pin them to the unified run_oracle behaviour (justified by D-FIDELITY-SPINE); where a test exercises a fully-removed path, re-pin to the run_oracle equivalent or remove with the D-FIDELITY-SPINE verdict.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/daemon/test_wave_cross_vendor_jury_gate.py",
+        "tests/daemon/test_wave_spec_jury_gate.py",
+        "tests/daemon/test_wave_verdict_gate.py"
+      ],
+      "id": "P29-I11-W10",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T19:41:28.763165Z",
+      "outcome": "Re-pinned 12 daemon gate-semantics tests to the unified run_oracle close path (string + routing re-pins, renames, dead spec-jury-path assertion removals justified by D-FIDELITY-SPINE); tests/daemon 417 passed/0 failed; no run_oracle bug.",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "tests/daemon green under the unified run_oracle close gate",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/daemon green under the unified run_oracle close gate",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "each re-pinned test asserts the unified 'oracle blocked close' behaviour not the removed per-gate dispatch",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "each re-pinned test asserts the unified 'oracle blocked close' behaviour not the removed per-gate dispatch",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "no test silently masks a run_oracle regression",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no test silently masks a run_oracle regression",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-pin daemon gate-semantics tests to the unified oracle",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
