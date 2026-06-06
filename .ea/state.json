@@ -5996,7 +5996,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I12",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -13335,6 +13335,29 @@
         "P29-I11-W09",
         "P29-I11-W10"
       ]
+    },
+    "P29-I12": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "Build the deterministic-gate storage + the spec-body criteria/gate authoring system that I13's in-band TUI waves require to close. Backend/advisory waves; authored via the current CLI.",
+      "estimate_id": null,
+      "id": "P29-I12",
+      "intent": null,
+      "opened_at": "2026-06-06T22:15:00.093423Z",
+      "phase_id": "P29",
+      "status": "active",
+      "title": "Spine-authoring bootstrap: gate-row storage + spec-body sync",
+      "trigger": "none",
+      "wave_ids": [
+        "P29-I12-W01",
+        "P29-I12-W02",
+        "P29-I12-W03",
+        "P29-I12-W04",
+        "P29-I12-W05",
+        "P29-I12-W06",
+        "P29-I12-W07"
+      ]
     }
   },
   "mcp_grants": null,
@@ -14097,7 +14120,8 @@
         "P29-I08",
         "P29-I09",
         "P29-I10",
-        "P29-I11"
+        "P29-I11",
+        "P29-I12"
       ],
       "opened_at": "2026-06-01T00:19:14.247409Z",
       "outcome_ids": [],
@@ -14145,7 +14169,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T20:37:41.095252Z",
+  "updated_at": "2026-06-06T22:27:04.872277Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -56945,6 +56969,329 @@
         }
       ],
       "title": "Re-pin daemon gate-semantics tests to the unified oracle",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W01": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I12-W02",
+        "P29-I12-W05"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "src/eawf/kernel/migrations"
+      ],
+      "id": "P29-I12-W01",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T22:15:36.175910Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Wave.gates is a typed list of GateSpec defaulting empty and the 1.7 to 1.8 migration backfills it for every existing wave with the full tests suite green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Wave.gates is a typed list of GateSpec defaulting empty and the 1.7 to 1.8 migration backfills it for every existing wave with the full tests suite green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add Wave.gates typed field with schema migration",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W02": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I12-W06"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I12-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/verify/readiness.py"
+      ],
+      "id": "P29-I12-W02",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T22:15:36.726080Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_load_gate_specs returns the wave.gates list so compute and the close gate observe gates without test monkeypatching while prior monkeypatch tests stay green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_load_gate_specs returns the wave.gates list so compute and the close gate observe gates without test monkeypatching while prior monkeypatch tests stay green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Read wave.gates in the readiness gate-spec loader",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W03": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I12-W04"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/spec"
+      ],
+      "id": "P29-I12-W03",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T22:15:37.248724Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a wave-spec markdown body schema parses a criteria block and a gate block into typed CriterionSpec and GateSpec rows and rejects an unknown field or missing measurable_signal",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a wave-spec markdown body schema parses a criteria block and a gate block into typed CriterionSpec and GateSpec rows and rejects an unknown field or missing measurable_signal",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Define the wave-spec body schema for criteria and gates",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W04": {
+      "agent_role": "executor",
+      "blocks": [
+        "P29-I12-W05"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I12-W03"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/spec.py"
+      ],
+      "id": "P29-I12-W04",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T22:15:37.769868Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_extract_gate_specs and a sibling criteria extractor parse a wave-spec body into typed GateSpec and CriterionSpec rows carrying evidence_kind and gate_ids",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_extract_gate_specs and a sibling criteria extractor parse a wave-spec body into typed GateSpec and CriterionSpec rows carrying evidence_kind and gate_ids",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Implement the spec-body criteria and gate extractor",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W05": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I12-W01",
+        "P29-I12-W04"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/spec.py",
+        "src/eawf/runtime/daemon/methods/spec.py"
+      ],
+      "id": "P29-I12-W05",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T22:15:38.293936Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "eawf spec sync parses a wave-spec body runs the EAWF021 and EAWF022 lints and writes criteria to wave.success_criteria and gates to wave.gates via the daemon failing on a vague signal",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf spec sync parses a wave-spec body runs the EAWF021 and EAWF022 lints and writes criteria to wave.success_criteria and gates to wave.gates via the daemon failing on a vague signal",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add eawf spec sync to materialize parsed rows to state",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W06": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P29-I12-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/kernel/store/kinds/evidence.py"
+      ],
+      "id": "P29-I12-W06",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T22:15:38.848474Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a passing deterministic gate at the close gate mints an EvidenceRecord with evidence_kind deterministic and status pass and the trust scorecard labels the wave verified",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a passing deterministic gate at the close gate mints an EvidenceRecord with evidence_kind deterministic and status pass and the trust scorecard labels the wave verified",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Persist deterministic oracle outcome as evidence row",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W07": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/snapshots/svg",
+        "src/eawf/workflow/audit_dsl/kinds"
+      ],
+      "id": "P29-I12-W07",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-06T22:15:39.416104Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a real svg golden replaces the placeholder so the test_svg_oracle T5 pixel diff runs instead of skipping and eawf vfl approve --kind svg regenerates it under the pairing gate",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a real svg golden replaces the placeholder so the test_svg_oracle T5 pixel diff runs instead of skipping and eawf vfl approve --kind svg regenerates it under the pairing gate",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Seed real svg golden and un-skip the T5 pixel-diff",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
