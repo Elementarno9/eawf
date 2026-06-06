@@ -25,6 +25,12 @@ from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import ActualSummary, State, Wave
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
+from eawf.workflow.lifecycle.spec import (
+    WAVE_TRANSITIONS,
+    GuardContext,
+    GuardName,
+    validate_transition,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -387,28 +393,36 @@ def claim_wave(
             f"wave {wave_id!r} has no effort_bucket; set one via "
             f"`eawf roadmap revise --set-bucket` before claiming"
         )
+    # The pending -> claimed status move plus its named guards (deps-closed,
+    # sibling-ordering, dispatch-not-paused) live in WAVE_TRANSITIONS now; the
+    # booleans + the operator-facing failure messages are computed here (where
+    # the wave id + sorted lists live) and evaluated by validate_transition in
+    # the legacy deps -> sibling -> pause order. The pause gate is
+    # unconditional: out_of_order satisfies sibling-ordering, not the pause.
     unmet_deps = [
         dep_id
         for dep_id in wave.deps
         if state.waves.get(dep_id) is None or state.waves[dep_id].status != WaveStatus.CLOSED
     ]
-    if unmet_deps:
-        raise LifecycleError(
-            f"wave {wave_id!r} blocked on un-closed dep waves: "
-            f"{sorted(unmet_deps, key=natural_key)}"
-        )
-    if not out_of_order:
-        skipped = _lower_w_sibling_pending(state, wave)
-        if skipped:
-            raise LifecycleError(
+    skipped = _lower_w_sibling_pending(state, wave)
+    guard_ctx = GuardContext(
+        deps_closed=not unmet_deps,
+        sibling_ordered=not skipped,
+        out_of_order=out_of_order,
+        not_paused=not state.dispatch_paused,
+        messages={
+            GuardName.DEPS_CLOSED: (
+                f"wave {wave_id!r} blocked on un-closed dep waves: "
+                f"{sorted(unmet_deps, key=natural_key)}"
+            ),
+            GuardName.SIBLING_ORDERED: (
                 f"wave {wave_id!r} would skip lower-numbered ready siblings: "
                 f"{sorted(skipped, key=natural_key)}; pass --out-of-order to claim regardless"
-            )
-    # Cooperative dispatch gate: a paused dispatch is a deliberate operator
-    # stop, so it blocks every claim unconditionally -- out_of_order opts out
-    # of the sibling-ordering gate above, not this one.
-    if state.dispatch_paused:
-        raise LifecycleError(f"dispatch paused: resume before claiming {wave_id!r}")
+            ),
+            GuardName.NOT_PAUSED: f"dispatch paused: resume before claiming {wave_id!r}",
+        },
+    )
+    validate_transition(WAVE_TRANSITIONS, WaveStatus.PENDING, WaveStatus.CLAIMED, guard_ctx)
     wave.status = WaveStatus.CLAIMED
     wave.claim_session_id = session_id
     # Stamp the work-start fact on the first claim only. opened_at is
@@ -508,10 +522,17 @@ def start_wave(state: State, *, wave_id: str) -> Wave:
     if wave.status == WaveStatus.IN_PROGRESS:
         logger.debug(f"start_wave idempotent wave={wave_id} already in_progress")
         return wave
-    if wave.status != WaveStatus.CLAIMED:
-        raise LifecycleError(
+    # claimed -> in_progress is the only legal source for a start (the table
+    # has no pending/terminal -> in_progress edge), so any non-claimed source
+    # is rejected with the legacy "not claimed" message.
+    validate_transition(
+        WAVE_TRANSITIONS,
+        wave.status,
+        WaveStatus.IN_PROGRESS,
+        illegal_message=(
             f"wave {wave_id!r} is not claimed (status={wave.status.value!r}); cannot start"
-        )
+        ),
+    )
     wave.status = WaveStatus.IN_PROGRESS
     logger.info(f"start_wave wave={wave_id}")
     return wave
@@ -573,11 +594,18 @@ def close_wave(
     wave = state.waves.get(wave_id)
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
-    if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
-        raise LifecycleError(
+    # claimed/in_progress -> closed are the only legal close edges; the table
+    # has no pending/terminal -> closed edge, so a non-closable source raises
+    # the legacy "not claimed/in_progress" message.
+    validate_transition(
+        WAVE_TRANSITIONS,
+        wave.status,
+        WaveStatus.CLOSED,
+        illegal_message=(
             f"wave {wave_id!r} is not claimed/in_progress "
             f"(status={wave.status.value!r}); cannot close"
-        )
+        ),
+    )
     if tokens_consumed is not None:
         if tokens_consumed < 0:
             raise LifecycleError(f"tokens_consumed must be non-negative; got {tokens_consumed}")
@@ -633,12 +661,15 @@ def fail_wave(state: State, *, wave_id: str, reason: str) -> Wave:
     wave = state.waves.get(wave_id)
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
-    if wave.status in {
-        WaveStatus.CLOSED,
+    # pending/claimed/in_progress -> failed are the only legal fail edges; the
+    # table has no terminal -> failed edge, so an already-terminal source
+    # raises the legacy "already terminal" message.
+    validate_transition(
+        WAVE_TRANSITIONS,
+        wave.status,
         WaveStatus.FAILED,
-        WaveStatus.ABANDONED,
-    }:
-        raise LifecycleError(f"wave {wave_id!r} already terminal (status={wave.status.value!r})")
+        illegal_message=f"wave {wave_id!r} already terminal (status={wave.status.value!r})",
+    )
     wave.status = WaveStatus.FAILED
     wave.outcome = reason
     wave.closed_at = datetime.now(UTC)
@@ -679,11 +710,18 @@ def release_wave(state: State, *, wave_id: str, reason: str | None = None) -> Wa
     if wave.status == WaveStatus.PENDING:
         logger.debug(f"release_wave idempotent wave={wave_id} already pending")
         return wave
-    if wave.status not in {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}:
-        raise LifecycleError(
+    # claimed/in_progress -> pending are the only legal release edges; the
+    # table has no terminal -> pending edge, so a terminal source raises the
+    # legacy "not claimed/in_progress" message.
+    validate_transition(
+        WAVE_TRANSITIONS,
+        wave.status,
+        WaveStatus.PENDING,
+        illegal_message=(
             f"wave {wave_id!r} is not claimed/in_progress "
             f"(status={wave.status.value!r}); cannot release"
-        )
+        ),
+    )
     wave.status = WaveStatus.PENDING
     wave.claim_session_id = None
     wave.worktree_id = None

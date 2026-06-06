@@ -26,6 +26,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Phase, State
 from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
+from eawf.workflow.lifecycle.spec import PHASE_TRANSITIONS, validate_transition
 
 if TYPE_CHECKING:
     from eawf.workflow.verify.models import CloseReadiness, CriterionView
@@ -708,11 +709,18 @@ def archive_phase(state: State, *, phase_id: str) -> Phase:
     phase = state.phases.get(phase_id)
     if phase is None:
         raise LifecycleError(f"unknown phase {phase_id!r}")
-    if phase.status != PhaseStatus.PLANNED:
-        raise LifecycleError(
+    # planned -> archived is the only legal archive edge; the table has no
+    # active/closed/archived -> archived edge, so a non-planned source raises
+    # the legacy "only planned phases can be archived" message.
+    validate_transition(
+        PHASE_TRANSITIONS,
+        phase.status,
+        PhaseStatus.ARCHIVED,
+        illegal_message=(
             f"phase {phase_id!r} has status {phase.status.value!r}; "
             "only planned phases can be archived"
-        )
+        ),
+    )
     now = datetime.now(UTC)
     iter_ids_in_phase = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
     abandoned_waves = 0

@@ -30,6 +30,7 @@ from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State, Wave
 from eawf.kernel.state.mutations import Mutation, MutationKind, apply_memory_add
 from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
+from eawf.workflow.lifecycle.spec import ITER_TRANSITIONS, validate_transition
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +97,14 @@ def close_iter(state: State, *, iter_id: str, audit_id: str) -> Iter:
     it = state.iters.get(iter_id)
     if it is None:
         raise LifecycleError(f"unknown iter {iter_id!r}")
-    if it.status not in {IterStatus.PLANNED, IterStatus.ACTIVE}:
-        raise LifecycleError(f"iter {iter_id!r} has status {it.status.value!r}; cannot close")
+    # planned/active -> closed are the only legal close edges; the table has no
+    # terminal -> closed edge, so a terminal source raises the legacy message.
+    validate_transition(
+        ITER_TRANSITIONS,
+        it.status,
+        IterStatus.CLOSED,
+        illegal_message=f"iter {iter_id!r} has status {it.status.value!r}; cannot close",
+    )
     open_waves = [
         wid
         for wid, w in state.waves.items()
@@ -344,10 +351,17 @@ def activate_iter(state: State, *, iter_id: str) -> Iter:
     it = state.iters.get(iter_id)
     if it is None:
         raise LifecycleError(f"unknown iter {iter_id!r}")
-    if it.status != IterStatus.PLANNED:
-        raise LifecycleError(
+    # planned -> active is the only legal activate edge; the table has no
+    # active/terminal -> active edge, so a non-planned source raises the
+    # legacy "only planned iters can activate" message.
+    validate_transition(
+        ITER_TRANSITIONS,
+        it.status,
+        IterStatus.ACTIVE,
+        illegal_message=(
             f"iter {iter_id!r} has status {it.status.value!r}; only planned iters can activate"
-        )
+        ),
+    )
     it.status = IterStatus.ACTIVE
     state.current.phase_id = it.phase_id
     state.current.iter_id = iter_id
