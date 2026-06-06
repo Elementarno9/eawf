@@ -3012,6 +3012,18 @@
       "status": "done",
       "updated_at": "2026-06-06T18:40:14.250237Z"
     },
+    "P29-I11-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W03",
+      "scope_id": "P29-I11-W03",
+      "status": "done",
+      "updated_at": "2026-06-06T19:10:57.196699Z"
+    },
     "P29-I11-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -11624,6 +11636,19 @@
       "scope_id": "P29-I11-W02",
       "updated_at": "2026-06-06T18:40:13.012249Z"
     },
+    "P29-I11-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W03-bucket-20260606T184243Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I11-W03",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I11-W03",
+      "updated_at": "2026-06-06T18:42:43.795424Z"
+    },
     "P29-I11-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I11-W05-bucket-20260606T184013Z",
@@ -13096,7 +13121,8 @@
         "P29-I11-W05",
         "P29-I11-W06",
         "P29-I11-W07",
-        "P29-I11-W08"
+        "P29-I11-W08",
+        "P29-I11-W09"
       ]
     }
   },
@@ -13897,7 +13923,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T18:40:15.044647Z",
+  "updated_at": "2026-06-06T19:10:57.197197Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -56079,10 +56105,10 @@
         "P29-I11-W06",
         "P29-I11-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T18:42:43.795419Z",
+      "closed_at": "2026-06-06T19:10:57.196699Z",
+      "commit": "1bbab61c77c77d6e67cd3ebdbcd8297c231a7e35",
       "deps": [
         "P29-I11-W01",
         "P29-I10-W06"
@@ -56099,10 +56125,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:01.784631Z",
-      "outcome": null,
+      "outcome": "Wired run_oracle per-criterion loop into the daemon wave-close gate past the enforce guard (byte-unchanged at enforce=False); added validate_criterion_gate_refs (orphan gate_id / unknown criterion / un-compilable deterministic gate / author-set oracle_tier) at the WAVE_CLOSE mutate boundary; readiness projection intact; 6 tests + no new regressions.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -56547,6 +56573,83 @@
         }
       ],
       "title": "Add Oracle-Determinism-Ratio metric + escape ledger",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I11-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "The 1.6->1.7 success_criteria retype (I10-W06) broke raw-string fixtures across tests/kernel, tests/platform, tests/daemon, tests/integration, tests/runtime, tests/tui (W06 gauntlet ran only unit/workflow/property/snapshots). Migrate every fixture to typed CriterionSpec (via tests/_criteria_helpers.legacy_criteria) and flip the Wave.success_criteria contract test to list[CriterionSpec].",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/kernel/**",
+        "tests/platform/**",
+        "tests/daemon/**",
+        "tests/integration/**",
+        "tests/runtime/**",
+        "tests/tui/**",
+        "tests/_criteria_helpers.py"
+      ],
+      "id": "P29-I11-W09",
+      "intent": null,
+      "iter_id": "P29-I11",
+      "opened_at": "2026-06-06T19:09:48.374242Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "every tests/ fixture constructing success_criteria uses typed CriterionSpec (no raw str list)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "every tests/ fixture constructing success_criteria uses typed CriterionSpec (no raw str list)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "tests/kernel tests/platform tests/daemon tests/integration tests/runtime tests/tui pass under the typed model",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/kernel tests/platform tests/daemon tests/integration tests/runtime tests/tui pass under the typed model",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the Wave.success_criteria contract test asserts list[CriterionSpec] not list[str]",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the Wave.success_criteria contract test asserts list[CriterionSpec] not list[str]",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Migrate test fixtures to typed CriterionSpec",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
