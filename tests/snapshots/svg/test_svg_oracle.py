@@ -17,7 +17,10 @@ kind fails.
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -58,6 +61,71 @@ def _golden_is_placeholder() -> bool:
 
 
 _GOLDEN_PLACEHOLDER = _golden_is_placeholder()
+
+
+def _render_well_formed_png() -> bytes:
+    """Render the well-formed fixture SVG to PNG bytes via the pinned resvg.
+
+    Replicates the exact ``resvg`` argv ``check_svg_pixel_diff`` shells out
+    so the seeded golden is byte-identical to what the T5 oracle produces
+    at verify time: the vendored font directory is passed via
+    ``--use-fonts-dir`` and system-font fallback is disabled via
+    ``--skip-system-fonts``. Determinism rests on the resvg version + font
+    pins documented in :mod:`eawf.workflow.audit_dsl.kinds.svg_pixel_diff`.
+
+    Raises:
+        RuntimeError: When the resvg render exits non-zero or writes no PNG.
+    """
+    svg_path = _REPO_ROOT / _WELL_FORMED
+    with tempfile.TemporaryDirectory() as tmp:
+        rendered = Path(tmp) / "rendered.png"
+        argv = [
+            "resvg",
+            "--use-fonts-dir",
+            str(_FONTS),
+            "--skip-system-fonts",
+            str(svg_path),
+            str(rendered),
+        ]
+        completed = subprocess.run(
+            argv,
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=str(_REPO_ROOT),
+        )
+        if completed.returncode != 0 or not rendered.is_file():
+            diagnostic = completed.stderr.strip() or completed.stdout.strip() or "render failed"
+            raise RuntimeError(f"resvg render failed: {diagnostic}")
+        return rendered.read_bytes()
+
+
+# --------------------------------------------------------------------------
+# golden refresh (drives `eawf vfl approve --kind svg` / `eawf snapshot update`)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not _HAS_RESVG, reason="resvg not installed")
+def test_refresh_svg_golden() -> None:
+    """Rewrite the committed SVG golden under ``EAWF_REFRESH_GOLDEN=1``.
+
+    This node is the regeneration surface for the ``svg`` snapshot kind:
+    ``eawf vfl approve --kind svg`` (and ``eawf snapshot update --kind
+    svg``) drive this test file with ``EAWF_REFRESH_GOLDEN=1`` set, which
+    switches the node from a no-op assert to write-mode -- it renders the
+    fixture SVG via the pinned ``resvg`` and writes the bytes to the
+    committed golden (or to ``EAWF_SNAPSHOT_OUT`` when verifying without
+    disturbing the tree). Without the env var the node skips, so a normal
+    test run never rewrites the golden.
+    """
+    if not os.environ.get("EAWF_REFRESH_GOLDEN"):
+        pytest.skip("set EAWF_REFRESH_GOLDEN=1 (via `eawf vfl approve --kind svg`) to refresh")
+
+    png_bytes = _render_well_formed_png()
+    out_root = os.environ.get("EAWF_SNAPSHOT_OUT")
+    target = Path(out_root) / "well_formed.png" if out_root else _GOLDEN / "well_formed.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(png_bytes)
 
 
 # --------------------------------------------------------------------------
