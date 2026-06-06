@@ -3107,6 +3107,42 @@
       "scope_id": "P29-I11-W10",
       "status": "done",
       "updated_at": "2026-06-06T20:00:42.718202Z"
+    },
+    "P29-I12-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W01",
+      "scope_id": "P29-I12-W01",
+      "status": "done",
+      "updated_at": "2026-06-06T23:43:29.682504Z"
+    },
+    "P29-I12-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W03",
+      "scope_id": "P29-I12-W03",
+      "status": "done",
+      "updated_at": "2026-06-06T23:43:31.012351Z"
+    },
+    "P29-I12-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W07",
+      "scope_id": "P29-I12-W07",
+      "status": "done",
+      "updated_at": "2026-06-06T23:43:32.353449Z"
     }
   },
   "agent_sessions": {
@@ -6592,7 +6628,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -11871,6 +11907,45 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I11-W10",
       "updated_at": "2026-06-06T19:42:39.265730Z"
+    },
+    "P29-I12-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W01-bucket-20260606T234328Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I12-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I12-W01",
+      "updated_at": "2026-06-06T23:43:28.969185Z"
+    },
+    "P29-I12-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W03-bucket-20260606T234330Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I12-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I12-W03",
+      "updated_at": "2026-06-06T23:43:30.305024Z"
+    },
+    "P29-I12-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W07-bucket-20260606T234331Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I12-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I12-W07",
+      "updated_at": "2026-06-06T23:43:31.641323Z"
     }
   },
   "goals": {
@@ -14166,10 +14241,10 @@
       "scope_kind": "wave"
     }
   },
-  "schema_version": "1.7",
+  "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T22:27:04.872277Z",
+  "updated_at": "2026-06-06T23:43:32.353794Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -14190,6 +14265,7 @@
         "src/eawf/cli/commands/wave_dispatch.py",
         "tests/dispatch/**"
       ],
+      "gates": [],
       "id": "P08-I01-W01",
       "intent": null,
       "iter_id": "P08-I01",
@@ -14224,6 +14300,7 @@
         "src/eawf/cli/commands/lifecycle.py",
         "tests/state/**"
       ],
+      "gates": [],
       "id": "P08-I01-W02",
       "intent": null,
       "iter_id": "P08-I01",
@@ -14259,6 +14336,7 @@
         "src/eawf/cli/commands/worktree.py",
         "tests/worktree/**"
       ],
+      "gates": [],
       "id": "P08-I01-W03",
       "intent": null,
       "iter_id": "P08-I01",
@@ -14289,6 +14367,7 @@
         "src/eawf/cli/commands/wave_budget.py",
         "tests/budget/**"
       ],
+      "gates": [],
       "id": "P08-I01-W04",
       "intent": null,
       "iter_id": "P08-I01",
@@ -14321,6 +14400,7 @@
         "src/eawf/cli/commands/wave_fix_ci.py",
         "tests/ci_loop/**"
       ],
+      "gates": [],
       "id": "P08-I01-W05",
       "intent": null,
       "iter_id": "P08-I01",
@@ -14353,6 +14433,7 @@
         "src/eawf/cli/commands/wave_review.py",
         "tests/pr_review/**"
       ],
+      "gates": [],
       "id": "P08-I01-W06",
       "intent": null,
       "iter_id": "P08-I01",
@@ -14385,6 +14466,7 @@
         "src/eawf/worktree/wave_land.py",
         "src/eawf/util/sortutil.py"
       ],
+      "gates": [],
       "id": "P09-I01-W01",
       "intent": null,
       "iter_id": "P09-I01",
@@ -14414,6 +14496,7 @@
         "src/eawf/state/models.py",
         "tests/state/test_models_blocks_invariant.py"
       ],
+      "gates": [],
       "id": "P09-I01-W02",
       "intent": null,
       "iter_id": "P09-I01",
@@ -14443,6 +14526,7 @@
         "src/eawf/cli/commands/worktree.py",
         "tests/cli/test_worktree_path_fix.py"
       ],
+      "gates": [],
       "id": "P09-I01-W03",
       "intent": null,
       "iter_id": "P09-I01",
@@ -14474,6 +14558,7 @@
         "src/eawf/cli/commands/lifecycle.py",
         "tests/cli/test_wave_budget_consume.py"
       ],
+      "gates": [],
       "id": "P09-I01-W04",
       "intent": null,
       "iter_id": "P09-I01",
@@ -14507,6 +14592,7 @@
         "tests/unit/cli/test_skill_render.py",
         "tests/unit/cli/test_skill_list_payload.py"
       ],
+      "gates": [],
       "id": "P10-I01-W01",
       "intent": null,
       "iter_id": "P10-I01",
@@ -14543,6 +14629,7 @@
         "tests/unit/cli/test_mcp_grant_cmd.py",
         "tests/unit/validate/test_invariant_mcp_grant_ref.py"
       ],
+      "gates": [],
       "id": "P10-I01-W02",
       "intent": null,
       "iter_id": "P10-I01",
@@ -14577,6 +14664,7 @@
         "tests/unit/render/test_dispatch_envelope.py",
         "tests/unit/cli/test_wave_dispatch_runtime.py"
       ],
+      "gates": [],
       "id": "P10-I01-W03",
       "intent": null,
       "iter_id": "P10-I01",
@@ -14610,6 +14698,7 @@
         "tests/integration/test_dual_runtime_envelope.py",
         ".ea/artifacts/A11-P10-ship-gate.md"
       ],
+      "gates": [],
       "id": "P10-I01-W04",
       "intent": null,
       "iter_id": "P10-I01",
@@ -14641,6 +14730,7 @@
         "src/eawf/config/defaults.py",
         "tests/unit/test_config_layered.py"
       ],
+      "gates": [],
       "id": "P11-I01-W01",
       "intent": null,
       "iter_id": "P11-I01",
@@ -14671,6 +14761,7 @@
       "file_scopes": [
         "src/eawf/render/skills.py"
       ],
+      "gates": [],
       "id": "P11-I01-W02",
       "intent": null,
       "iter_id": "P11-I01",
@@ -14703,6 +14794,7 @@
         "build/eawf-plugin/skills/**",
         "tests/unit/test_skill_registry_p11.py"
       ],
+      "gates": [],
       "id": "P11-I01-W03",
       "intent": null,
       "iter_id": "P11-I01",
@@ -14733,6 +14825,7 @@
         "src/eawf/cli/commands/evidence.py",
         "tests/unit/render/test_decision_graph.py"
       ],
+      "gates": [],
       "id": "P12-I01-W01",
       "intent": null,
       "iter_id": "P12-I01",
@@ -14766,6 +14859,7 @@
         "tests/unit/memory/test_gc.py",
         "tests/unit/state/test_memory_tier.py"
       ],
+      "gates": [],
       "id": "P12-I01-W02",
       "intent": null,
       "iter_id": "P12-I01",
@@ -14796,6 +14890,7 @@
         "src/eawf/cli/commands/doc.py",
         "tests/unit/doctor/test_doc_verify.py"
       ],
+      "gates": [],
       "id": "P12-I01-W03",
       "intent": null,
       "iter_id": "P12-I01",
@@ -14829,6 +14924,7 @@
         "tests/unit/render/test_pr_body.py",
         "tests/unit/render/test_wiki.py"
       ],
+      "gates": [],
       "id": "P12-I01-W04",
       "intent": null,
       "iter_id": "P12-I01",
@@ -14858,6 +14954,7 @@
         "tests/eval/**",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P12-I01-W05",
       "intent": null,
       "iter_id": "P12-I01",
@@ -14892,6 +14989,7 @@
         "tests/unit/cli/test_wave_policy_cmd.py",
         "tests/unit/validate/test_invariant_sandbox_scope.py"
       ],
+      "gates": [],
       "id": "P12-I01-W06",
       "intent": null,
       "iter_id": "P12-I01",
@@ -14922,6 +15020,7 @@
         "src/eawf/cli/commands/impact.py",
         "tests/unit/render/test_impact.py"
       ],
+      "gates": [],
       "id": "P12-I01-W07",
       "intent": null,
       "iter_id": "P12-I01",
@@ -14956,6 +15055,7 @@
         ".ea/state.json",
         ".ea/store/*.jsonl"
       ],
+      "gates": [],
       "id": "P13-I01-W01",
       "intent": null,
       "iter_id": "P13-I01",
@@ -14990,6 +15090,7 @@
         "tests/golden/scenarios/**",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P13-I01-W02",
       "intent": null,
       "iter_id": "P13-I01",
@@ -15025,6 +15126,7 @@
         "tests/eval/golden/*.json",
         "tests/unit/test_eval_score.py"
       ],
+      "gates": [],
       "id": "P13-I01-W03",
       "intent": null,
       "iter_id": "P13-I01",
@@ -15062,6 +15164,7 @@
         "tests/golden/audit_dsl/**",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P13-I01-W04",
       "intent": null,
       "iter_id": "P13-I01",
@@ -15099,6 +15202,7 @@
         "docs/architecture/plugins.md",
         "README.md"
       ],
+      "gates": [],
       "id": "P13-I01-W05",
       "intent": null,
       "iter_id": "P13-I01",
@@ -15139,6 +15243,7 @@
         "docs/architecture/installation.md",
         "docs/policy/fixed-decisions.md"
       ],
+      "gates": [],
       "id": "P13-I01-W06",
       "intent": null,
       "iter_id": "P13-I01",
@@ -15174,6 +15279,7 @@
         "src/eawf/runtimes/claude/plugin_update.py",
         "tests/unit/test_doctor_user_scope.py"
       ],
+      "gates": [],
       "id": "P13-I01-W07",
       "intent": null,
       "iter_id": "P13-I01",
@@ -15207,6 +15313,7 @@
         "src/eawf/cli/commands/iter.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P14-I01-W01",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15240,6 +15347,7 @@
         "src/eawf/cli/commands/doc.py",
         "tests/unit/test_commit_prefix_lint.py"
       ],
+      "gates": [],
       "id": "P14-I01-W02",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15277,6 +15385,7 @@
         "tests/unit/test_install_wizard.py",
         "tests/unit/test_config_layering.py"
       ],
+      "gates": [],
       "id": "P14-I01-W03",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15311,6 +15420,7 @@
         "src/eawf/profiles/discovery.py",
         "tests/unit/test_profiles_discovery.py"
       ],
+      "gates": [],
       "id": "P14-I01-W04",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15345,6 +15455,7 @@
         "tests/unit/test_profile_cli.py",
         "tests/unit/test_profile_trust.py"
       ],
+      "gates": [],
       "id": "P14-I01-W05",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15383,6 +15494,7 @@
         "tests/unit/test_plugin_install_codex.py",
         "tests/integration/test_plugin_install_full.py"
       ],
+      "gates": [],
       "id": "P14-I01-W06",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15420,6 +15532,7 @@
         "src/eawf/cli/commands/plugin.py",
         "tests/unit/test_plugin_install_opencode.py"
       ],
+      "gates": [],
       "id": "P14-I01-W07",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15453,6 +15566,7 @@
         "src/eawf/doctor/checks.py",
         "tests/unit/test_doctor_mcp_drift.py"
       ],
+      "gates": [],
       "id": "P14-I01-W08",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15484,6 +15598,7 @@
         "src/eawf/render/skills.py",
         "tests/unit/test_skill_registry_user_catalogue.py"
       ],
+      "gates": [],
       "id": "P14-I01-W09",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15515,6 +15630,7 @@
         "src/eawf/cli/app.py",
         "tests/unit/test_tui_smoke.py"
       ],
+      "gates": [],
       "id": "P14-I01-W10",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15549,6 +15665,7 @@
         "tests/unit/test_artifact_kind_enum.py",
         "tests/unit/test_blitz_recursion_guard.py"
       ],
+      "gates": [],
       "id": "P14-I01-W11",
       "intent": null,
       "iter_id": "P14-I01",
@@ -15584,6 +15701,7 @@
         "tests/integration/test_plugin_install_full.py",
         "docs/architecture/plugins.md"
       ],
+      "gates": [],
       "id": "P14-I02-W01",
       "intent": null,
       "iter_id": "P14-I02",
@@ -15620,6 +15738,7 @@
         "tests/unit/test_plugin_install_opencode.py",
         "tests/unit/test_plugin_doctor_opencode.py"
       ],
+      "gates": [],
       "id": "P14-I03-W01",
       "intent": null,
       "iter_id": "P14-I03",
@@ -15649,6 +15768,7 @@
         "src/eawf/lifecycle/transitions.py",
         "src/eawf/cli/commands/lifecycle.py"
       ],
+      "gates": [],
       "id": "P14-I04-W01",
       "intent": null,
       "iter_id": "P14-I04",
@@ -15679,6 +15799,7 @@
         "src/eawf/runtimes/codex/plugin_package.py",
         "src/eawf/runtimes/codex/plugin_doctor.py"
       ],
+      "gates": [],
       "id": "P14-I04-W03",
       "intent": null,
       "iter_id": "P14-I04",
@@ -15708,6 +15829,7 @@
         "src/eawf/runtimes/codex/plugin_install.py",
         "src/eawf/runtimes/codex/plugin_package.py"
       ],
+      "gates": [],
       "id": "P14-I04-W04",
       "intent": null,
       "iter_id": "P14-I04",
@@ -15736,6 +15858,7 @@
       "file_scopes": [
         "src/eawf/runtimes/codex/plugin_install.py"
       ],
+      "gates": [],
       "id": "P14-I04-W05",
       "intent": null,
       "iter_id": "P14-I04",
@@ -15770,6 +15893,7 @@
         "tests/unit/test_skill_research.py",
         "tests/integration/test_skill_run_research.py"
       ],
+      "gates": [],
       "id": "P15-I01-W01",
       "intent": null,
       "iter_id": "P15-I01",
@@ -15808,6 +15932,7 @@
         "tests/unit/test_blitz_recursion_guard.py",
         "tests/unit/test_skill_research.py"
       ],
+      "gates": [],
       "id": "P15-I01-W02",
       "intent": null,
       "iter_id": "P15-I01",
@@ -15841,6 +15966,7 @@
         "tests/unit/test_skill_registry_user_catalogue.py",
         "tests/unit/test_cli_skill.py"
       ],
+      "gates": [],
       "id": "P15-I01-W03",
       "intent": null,
       "iter_id": "P15-I01",
@@ -15879,6 +16005,7 @@
         ".ea/store/audit.jsonl",
         ".secrets.baseline"
       ],
+      "gates": [],
       "id": "P15-I01-W04",
       "intent": null,
       "iter_id": "P15-I01",
@@ -15912,6 +16039,7 @@
         "src/eawf/cli/commands/config.py",
         "tests/unit/test_vcs_coauthor.py"
       ],
+      "gates": [],
       "id": "P17-I01-W01",
       "intent": null,
       "iter_id": "P17-I01",
@@ -15963,6 +16091,7 @@
         "tests/integration/test_cli_coauthor.py",
         "tests/unit/test_commit_prefix_lint.py"
       ],
+      "gates": [],
       "id": "P17-I01-W02",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16010,6 +16139,7 @@
         "src/eawf/cli/commands/pr.py",
         "tests/unit/test_render_pr_body.py"
       ],
+      "gates": [],
       "id": "P17-I01-W03",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16059,6 +16189,7 @@
         "src/eawf/render/pr_body.py",
         "tests/unit/test_render_pr_body.py"
       ],
+      "gates": [],
       "id": "P17-I01-W04",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16111,6 +16242,7 @@
         "src/eawf/cli/app.py",
         "tests/unit/test_render_release_notes.py"
       ],
+      "gates": [],
       "id": "P17-I01-W05",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16163,6 +16295,7 @@
         "tests/unit/test_artifact_references.py",
         "tests/unit/test_skill_ship.py"
       ],
+      "gates": [],
       "id": "P17-I01-W06",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16209,6 +16342,7 @@
         "src/eawf/render/pr_body.py",
         "tests/unit/test_render_pr_body.py"
       ],
+      "gates": [],
       "id": "P17-I01-W07",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16260,6 +16394,7 @@
         "tests/**",
         "src/eawf/cli/commands/lifecycle.py"
       ],
+      "gates": [],
       "id": "P17-I01-W08",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16308,6 +16443,7 @@
         ".ea/store/audit.jsonl",
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P17-I01-W09",
       "intent": null,
       "iter_id": "P17-I01",
@@ -16355,6 +16491,7 @@
         "src/eawf/state/enums.py",
         "tests/unit/test_agent_report_payload.py"
       ],
+      "gates": [],
       "id": "P18-I01-W01",
       "intent": null,
       "iter_id": "P18-I01",
@@ -16431,6 +16568,7 @@
         "src/eawf/store/kinds/agent_report.py",
         "tests/unit/test_agent_report_payload.py"
       ],
+      "gates": [],
       "id": "P18-I01-W02",
       "intent": null,
       "iter_id": "P18-I01",
@@ -16511,6 +16649,7 @@
         "tests/unit/test_enums.py",
         "tests/integration/test_store_paths_consistency.py"
       ],
+      "gates": [],
       "id": "P18-I01-W03",
       "intent": null,
       "iter_id": "P18-I01",
@@ -16591,6 +16730,7 @@
         "tests/unit/test_agent_report_store.py",
         "tests/unit/test_cli_hook_run.py"
       ],
+      "gates": [],
       "id": "P18-I01-W04",
       "intent": null,
       "iter_id": "P18-I01",
@@ -16685,6 +16825,7 @@
         "tests/unit/test_hook_event.py",
         "tests/unit/test_plugin_doctor_claude.py"
       ],
+      "gates": [],
       "id": "P18-I01-W05",
       "intent": null,
       "iter_id": "P18-I01",
@@ -16765,6 +16906,7 @@
         "src/eawf/cli/app.py",
         "tests/integration/test_cli_agent_report.py"
       ],
+      "gates": [],
       "id": "P18-I01-W06",
       "intent": null,
       "iter_id": "P18-I01",
@@ -16842,6 +16984,7 @@
         "tests/unit/test_render_agent_report.py",
         "tests/golden/agent_report"
       ],
+      "gates": [],
       "id": "P18-I01-W07",
       "intent": null,
       "iter_id": "P18-I01",
@@ -16919,6 +17062,7 @@
         "src/eawf/validate/invariants.py",
         "tests/unit/test_validate_agent_report_invariants.py"
       ],
+      "gates": [],
       "id": "P18-I01-W08",
       "intent": null,
       "iter_id": "P18-I01",
@@ -17053,6 +17197,7 @@
         "src/eawf/cli/commands/pr.py",
         "tests/unit/test_render_pr_body.py"
       ],
+      "gates": [],
       "id": "P18-I01-W09",
       "intent": null,
       "iter_id": "P18-I01",
@@ -17131,6 +17276,7 @@
         "tests/unit/test_render_claude_agents.py",
         "tests/golden/plugin_install"
       ],
+      "gates": [],
       "id": "P18-I01-W10",
       "intent": null,
       "iter_id": "P18-I01",
@@ -17195,6 +17341,7 @@
         "docs/reference/enums.md",
         "docs/reference/urn-namespace.md"
       ],
+      "gates": [],
       "id": "P18-I01-W11",
       "intent": null,
       "iter_id": "P18-I01",
@@ -17273,6 +17420,7 @@
         "tests/golden/agents_md",
         "tests/unit/test_render_agents_md.py"
       ],
+      "gates": [],
       "id": "P18-I01-W12",
       "intent": null,
       "iter_id": "P18-I01",
@@ -17363,6 +17511,7 @@
         ".ea/store/audit.jsonl",
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P18-I01-W13",
       "intent": null,
       "iter_id": "P18-I01",
@@ -17444,6 +17593,7 @@
         "src/eawf/lifecycle/transitions.py",
         "tests/lifecycle/"
       ],
+      "gates": [],
       "id": "P19-I01-W01",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17493,6 +17643,7 @@
         "src/eawf/cli/wave.py",
         "tests/lifecycle/"
       ],
+      "gates": [],
       "id": "P19-I01-W02",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17541,6 +17692,7 @@
         "src/eawf/lifecycle/transitions.py",
         "tests/lifecycle/"
       ],
+      "gates": [],
       "id": "P19-I01-W03",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17594,6 +17746,7 @@
         "tools/migrate_drop_wave_commit.py",
         "tests/"
       ],
+      "gates": [],
       "id": "P19-I01-W04",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17640,6 +17793,7 @@
         "tools/commit_prefix_lint.py",
         "tests/tools/"
       ],
+      "gates": [],
       "id": "P19-I01-W05",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17691,6 +17845,7 @@
         "build/eawf-plugin/skills/roadmap/SKILL.md",
         "tests/cli/test_roadmap.py"
       ],
+      "gates": [],
       "id": "P19-I01-W06",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17740,6 +17895,7 @@
         "build/eawf-plugin/skills/prep/SKILL.md",
         "build/eawf-plugin/agents/planner.md"
       ],
+      "gates": [],
       "id": "P19-I01-W07",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17794,6 +17950,7 @@
         "AGENTS.md",
         "build/eawf-plugin/managed-blocks/"
       ],
+      "gates": [],
       "id": "P19-I01-W08",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17898,6 +18055,7 @@
       "file_scopes": [
         "tests/golden/"
       ],
+      "gates": [],
       "id": "P19-I01-W09",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17943,6 +18101,7 @@
       "file_scopes": [
         ".ea/artifacts/"
       ],
+      "gates": [],
       "id": "P19-I01-W10",
       "intent": null,
       "iter_id": "P19-I01",
@@ -17990,6 +18149,7 @@
         "src/eawf/lifecycle/transitions.py",
         "src/eawf/cli/commands/lifecycle.py"
       ],
+      "gates": [],
       "id": "P19-I02-W11",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18064,6 +18224,7 @@
         "src/eawf/cli/commands/roadmap.py",
         "src/eawf/lifecycle/transitions.py"
       ],
+      "gates": [],
       "id": "P19-I02-W12",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18139,6 +18300,7 @@
       "file_scopes": [
         "src/eawf/cli/commands/lifecycle.py"
       ],
+      "gates": [],
       "id": "P19-I02-W13",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18214,6 +18376,7 @@
         "docs/architecture/coauthor.md",
         "tests/integration"
       ],
+      "gates": [],
       "id": "P19-I02-W14",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18290,6 +18453,7 @@
         "git-hooks",
         "tests/unit"
       ],
+      "gates": [],
       "id": "P19-I02-W15",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18378,6 +18542,7 @@
         ".ea/state.json",
         ".ea/store/event.jsonl"
       ],
+      "gates": [],
       "id": "P19-I02-W16",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18452,6 +18617,7 @@
         "src/eawf/cli/commands/lifecycle.py",
         "src/eawf/state/models.py"
       ],
+      "gates": [],
       "id": "P19-I02-W17",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18512,6 +18678,7 @@
         "src/eawf/cli/commands/lifecycle.py",
         "src/eawf/cli/commands/wave_policy.py"
       ],
+      "gates": [],
       "id": "P19-I02-W18",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18572,6 +18739,7 @@
         "src/eawf/render/agents_md.py",
         "tests/unit"
       ],
+      "gates": [],
       "id": "P19-I02-W19",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18646,6 +18814,7 @@
         "src/eawf/cli/commands/state.py",
         "src/eawf/artifacts/validation.py"
       ],
+      "gates": [],
       "id": "P19-I02-W20",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18729,6 +18898,7 @@
         ".ea/artifacts",
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P19-I02-W21",
       "intent": null,
       "iter_id": "P19-I02",
@@ -18803,6 +18973,7 @@
       "file_scopes": [
         "src/eawf/cli/commands/roadmap.py"
       ],
+      "gates": [],
       "id": "P20-I01-W01",
       "intent": null,
       "iter_id": "P20-I01",
@@ -18868,6 +19039,7 @@
         "src/eawf/tui/app.py",
         "src/eawf/tui/layout.py"
       ],
+      "gates": [],
       "id": "P20-I01-W02",
       "intent": null,
       "iter_id": "P20-I01",
@@ -18957,6 +19129,7 @@
       "file_scopes": [
         "src/eawf/tui/wave_board.py"
       ],
+      "gates": [],
       "id": "P20-I01-W03",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19030,6 +19203,7 @@
       "file_scopes": [
         "src/eawf/tui/overlays.py"
       ],
+      "gates": [],
       "id": "P20-I01-W04",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19106,6 +19280,7 @@
         "src/eawf/tui/workspace.py",
         "src/eawf/cli/commands/workspace.py"
       ],
+      "gates": [],
       "id": "P20-I01-W05",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19180,6 +19355,7 @@
         "src/eawf/tui/portfolio.py",
         "src/eawf/cli/commands/repo.py"
       ],
+      "gates": [],
       "id": "P20-I01-W06",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19241,6 +19417,7 @@
       "file_scopes": [
         "src/eawf/tui/audit_overlay.py"
       ],
+      "gates": [],
       "id": "P20-I01-W07",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19315,6 +19492,7 @@
         "src/eawf/cli/commands/metrics.py",
         "src/eawf/estimation"
       ],
+      "gates": [],
       "id": "P20-I01-W08",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19389,6 +19567,7 @@
         "src/eawf/state/models.py",
         "src/eawf/tui"
       ],
+      "gates": [],
       "id": "P20-I01-W09",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19464,6 +19643,7 @@
         "src/eawf/cli/commands/config.py",
         "src/eawf/config"
       ],
+      "gates": [],
       "id": "P20-I01-W10",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19540,6 +19720,7 @@
       "file_scopes": [
         "src/eawf/tui/config_modal.py"
       ],
+      "gates": [],
       "id": "P20-I01-W11",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19615,6 +19796,7 @@
       "file_scopes": [
         "src/eawf/cli"
       ],
+      "gates": [],
       "id": "P20-I01-W12",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19693,6 +19875,7 @@
         "docs/architecture/tui.md",
         ".ea/artifacts"
       ],
+      "gates": [],
       "id": "P20-I01-W13",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19767,6 +19950,7 @@
         "AGENTS.md",
         "build/eawf-plugin/skills"
       ],
+      "gates": [],
       "id": "P20-I01-W14",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19841,6 +20025,7 @@
         "src/eawf/state/models.py",
         "src/eawf/cli/commands/wave_policy.py"
       ],
+      "gates": [],
       "id": "P20-I01-W15",
       "intent": null,
       "iter_id": "P20-I01",
@@ -19914,6 +20099,7 @@
         "src/eawf/profiles/data/core.yaml",
         "tests/golden/agents_md"
       ],
+      "gates": [],
       "id": "P20-I02-W01",
       "intent": null,
       "iter_id": "P20-I02",
@@ -19990,6 +20176,7 @@
         "tests/integration/test_tui_app.py",
         "src/eawf/tui/overlays.py"
       ],
+      "gates": [],
       "id": "P20-I03-W01",
       "intent": null,
       "iter_id": "P20-I03",
@@ -20064,6 +20251,7 @@
         ".ea/state.json",
         "src/eawf/profiles"
       ],
+      "gates": [],
       "id": "P21-I01-W01",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20131,6 +20319,7 @@
         "src/eawf/profiles",
         "src/eawf/install"
       ],
+      "gates": [],
       "id": "P21-I01-W02",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20204,6 +20393,7 @@
       "file_scopes": [
         "src/eawf/profiles"
       ],
+      "gates": [],
       "id": "P21-I01-W03",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20266,6 +20456,7 @@
       "file_scopes": [
         "src/eawf/profiles/quant.yaml"
       ],
+      "gates": [],
       "id": "P21-I01-W04",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20342,6 +20533,7 @@
       "file_scopes": [
         "src/eawf/profiles/ml.yaml"
       ],
+      "gates": [],
       "id": "P21-I01-W05",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20417,6 +20609,7 @@
       "file_scopes": [
         "src/eawf/profiles"
       ],
+      "gates": [],
       "id": "P21-I01-W06",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20494,6 +20687,7 @@
         "src/eawf/state/enums.py",
         "src/eawf/store"
       ],
+      "gates": [],
       "id": "P21-I01-W07",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20558,6 +20752,7 @@
         "src/eawf/profiles/web.yaml",
         "src/eawf/state"
       ],
+      "gates": [],
       "id": "P21-I01-W08",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20631,6 +20826,7 @@
       "file_scopes": [
         "src/eawf/profiles"
       ],
+      "gates": [],
       "id": "P21-I01-W09",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20706,6 +20902,7 @@
       "file_scopes": [
         "src/eawf/profiles"
       ],
+      "gates": [],
       "id": "P21-I01-W10",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20783,6 +20980,7 @@
         "src/eawf/skills",
         "build/eawf-plugin"
       ],
+      "gates": [],
       "id": "P21-I01-W11",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20861,6 +21059,7 @@
         "src/eawf/mcp",
         "src/eawf/render"
       ],
+      "gates": [],
       "id": "P21-I01-W12",
       "intent": null,
       "iter_id": "P21-I01",
@@ -20937,6 +21136,7 @@
         "src/eawf/sandbox",
         "src/eawf/audit_dsl"
       ],
+      "gates": [],
       "id": "P21-I01-W13",
       "intent": null,
       "iter_id": "P21-I01",
@@ -21018,6 +21218,7 @@
         "docs/architecture/profiles.md",
         "tests/golden/profiles"
       ],
+      "gates": [],
       "id": "P21-I01-W14",
       "intent": null,
       "iter_id": "P21-I01",
@@ -21078,6 +21279,7 @@
         ".ea/artifacts",
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P21-I01-W15",
       "intent": null,
       "iter_id": "P21-I01",
@@ -21168,6 +21370,7 @@
         "build/eawf-plugin",
         "build/eawf-codex-marketplace"
       ],
+      "gates": [],
       "id": "P21-I01-W16",
       "intent": null,
       "iter_id": "P21-I01",
@@ -21241,6 +21444,7 @@
       "file_scopes": [
         "AGENTS.md"
       ],
+      "gates": [],
       "id": "P22-I01-W01",
       "intent": null,
       "iter_id": "P22-I01",
@@ -21356,6 +21560,7 @@
       "file_scopes": [
         ".gitignore"
       ],
+      "gates": [],
       "id": "P22-I01-W02",
       "intent": null,
       "iter_id": "P22-I01",
@@ -21418,6 +21623,7 @@
         "src/eawf/evidence/decision.py",
         "tests/unit/test_decision_supersede.py"
       ],
+      "gates": [],
       "id": "P22-I01-W03",
       "intent": null,
       "iter_id": "P22-I01",
@@ -21494,6 +21700,7 @@
         ".ea/state.json",
         ".ea/store/event.jsonl"
       ],
+      "gates": [],
       "id": "P22-I01-W04",
       "intent": null,
       "iter_id": "P22-I01",
@@ -21567,6 +21774,7 @@
       "file_scopes": [
         "/dev/null"
       ],
+      "gates": [],
       "id": "P22-I01-W05",
       "intent": null,
       "iter_id": "P22-I01",
@@ -21661,6 +21869,7 @@
         "src/eawf/cli/commands/draft.py",
         ".ea/artifacts/research/long-term/"
       ],
+      "gates": [],
       "id": "P22-I01-W06",
       "intent": null,
       "iter_id": "P22-I01",
@@ -21749,6 +21958,7 @@
         ".ea/artifacts/A28-P22-ship-gate.md",
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P22-I01-W07",
       "intent": null,
       "iter_id": "P22-I01",
@@ -21838,6 +22048,7 @@
         "src/eawf/state/urn.py",
         "tests/unit/test_state_urn*.py"
       ],
+      "gates": [],
       "id": "P23-I01-W01",
       "intent": null,
       "iter_id": "P23-I01",
@@ -21968,6 +22179,7 @@
         "src/eawf/state/models.py",
         "tests/unit/test_state_models.py"
       ],
+      "gates": [],
       "id": "P23-I01-W02",
       "intent": null,
       "iter_id": "P23-I01",
@@ -22085,6 +22297,7 @@
         "src/eawf/lifecycle/allocator.py",
         "tests/unit/test_lifecycle*.py"
       ],
+      "gates": [],
       "id": "P23-I01-W03",
       "intent": null,
       "iter_id": "P23-I01",
@@ -22200,6 +22413,7 @@
         "src/eawf/lifecycle/transitions.py",
         "tests/unit/test_criterion_drift.py"
       ],
+      "gates": [],
       "id": "P23-I02-W01",
       "intent": null,
       "iter_id": "P23-I02",
@@ -22335,6 +22549,7 @@
         "src/eawf/daemon/**/*.py",
         "tests/daemon/test_scaffolding.py"
       ],
+      "gates": [],
       "id": "P24-I01-W01",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22369,6 +22584,7 @@
         "src/eawf/daemon/windows_pipe.py",
         "tests/daemon/test_windows_pipe.py"
       ],
+      "gates": [],
       "id": "P24-I01-W02",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22405,6 +22621,7 @@
         "src/eawf/daemon/recovery.py",
         "tests/daemon/test_wal.py"
       ],
+      "gates": [],
       "id": "P24-I01-W03",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22441,6 +22658,7 @@
         "src/eawf/daemon/win_service.py",
         "src/eawf/cli/commands/daemon.py"
       ],
+      "gates": [],
       "id": "P24-I01-W04",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22473,6 +22691,7 @@
         "src/eawf/daemon/auth.py",
         "tests/daemon/test_auth.py"
       ],
+      "gates": [],
       "id": "P24-I01-W05",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22508,6 +22727,7 @@
         "src/eawf/daemon/methods/event.py",
         "tests/daemon/test_bus.py"
       ],
+      "gates": [],
       "id": "P24-I01-W06",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22543,6 +22763,7 @@
         "src/eawf/daemon/methods/agent.py",
         "src/eawf/daemon/session.py"
       ],
+      "gates": [],
       "id": "P24-I01-W07",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22578,6 +22799,7 @@
         "src/eawf/daemon/idle.py",
         "benches/daemon_cold_spawn.py"
       ],
+      "gates": [],
       "id": "P24-I01-W08",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22614,6 +22836,7 @@
         "src/eawf/daemon/methods/state.py",
         "src/eawf/cli/commands/*.py"
       ],
+      "gates": [],
       "id": "P24-I01-W09",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22647,6 +22870,7 @@
         "src/eawf/daemon/methods/config.py",
         "src/eawf/daemon/methods/registry.py"
       ],
+      "gates": [],
       "id": "P24-I01-W10",
       "intent": null,
       "iter_id": "P24-I01",
@@ -22676,6 +22900,7 @@
         "src/eawf/daemon/main.py",
         "tests/daemon/test_main_boot.py"
       ],
+      "gates": [],
       "id": "P24-I02-W01",
       "intent": null,
       "iter_id": "P24-I02",
@@ -22714,6 +22939,7 @@
         "src/eawf/spec/__init__.py",
         "tests/unit/test_spec_schemas.py"
       ],
+      "gates": [],
       "id": "P25-I01-W01",
       "intent": null,
       "iter_id": "P25-I01",
@@ -22805,6 +23031,7 @@
         "tests/unit/test_verify_implements.py",
         "tests/integration/test_verify_implements_cadence.py"
       ],
+      "gates": [],
       "id": "P25-I01-W02",
       "intent": null,
       "iter_id": "P25-I01",
@@ -22897,6 +23124,7 @@
         "tests/unit/test_spec_writer.py",
         "tests/integration/test_spec_rpc.py"
       ],
+      "gates": [],
       "id": "P25-I01-W03",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23030,6 +23258,7 @@
         "tests/unit/test_spec_backfill.py",
         "tests/integration/test_spec_backfill_bulk.py"
       ],
+      "gates": [],
       "id": "P25-I01-W04",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23121,6 +23350,7 @@
         "tests/unit/test_spec_validators.py",
         "tests/integration/test_spec_three_layer_enforcement.py"
       ],
+      "gates": [],
       "id": "P25-I01-W05",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23200,6 +23430,7 @@
         "tests/unit/test_event_canonical_model.py",
         "tests/unit/test_event_store_layout.py"
       ],
+      "gates": [],
       "id": "P25-I01-W06",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23290,6 +23521,7 @@
         "tests/unit/test_commit_prefix_lint.py",
         "tests/unit/test_worktree_home.py"
       ],
+      "gates": [],
       "id": "P25-I01-W07",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23366,6 +23598,7 @@
         "tests/unit/test_registry_explicit_growth.py",
         "tests/integration/test_scope_dispatch_ladder.py"
       ],
+      "gates": [],
       "id": "P25-I01-W08",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23456,6 +23689,7 @@
         "tests/unit/test_render_envelope.py",
         "tests/unit/test_brand_glyph_fallback.py"
       ],
+      "gates": [],
       "id": "P25-I01-W09",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23551,6 +23785,7 @@
         "tests/unit/test_runtime_adapter.py",
         "tests/integration/test_runtime_event_emission.py"
       ],
+      "gates": [],
       "id": "P25-I01-W10",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23645,6 +23880,7 @@
         "tests/unit/test_plugin_manifest.py",
         "tests/integration/test_plugin_sync_three_runtimes.py"
       ],
+      "gates": [],
       "id": "P25-I01-W11",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23736,6 +23972,7 @@
         "tests/unit/test_plugin_doctor.py",
         "tests/integration/test_coauthor_verification.py"
       ],
+      "gates": [],
       "id": "P25-I01-W12",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23812,6 +24049,7 @@
         "src/eawf/cli/commands/doctor.py",
         "tests/unit/test_capability_matrix.py"
       ],
+      "gates": [],
       "id": "P25-I01-W13",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23892,6 +24130,7 @@
         "tests/unit/test_layered_config.py",
         "tests/integration/test_config_migration_1_0.py"
       ],
+      "gates": [],
       "id": "P25-I01-W14",
       "intent": null,
       "iter_id": "P25-I01",
@@ -23997,6 +24236,7 @@
         "tests/unit/test_profile_body_v2.py",
         "tests/integration/test_profile_composition_loader.py"
       ],
+      "gates": [],
       "id": "P25-I01-W15",
       "intent": null,
       "iter_id": "P25-I01",
@@ -24104,6 +24344,7 @@
         "tests/unit/test_init_templates.py",
         "tests/integration/test_init_multi_profile.py"
       ],
+      "gates": [],
       "id": "P25-I01-W16",
       "intent": null,
       "iter_id": "P25-I01",
@@ -24227,6 +24468,7 @@
         "tests/golden/plugin_install/claude/skills/ship/SKILL.md",
         "tests/golden/scenarios/fresh_repo/agents.golden.json"
       ],
+      "gates": [],
       "id": "P25-I01-W17",
       "intent": null,
       "iter_id": "P25-I01",
@@ -24328,6 +24570,7 @@
         "src/eawf/runtimes/probes/sdk_baseline.py",
         "tests/integration/test_sdk_probe_baseline.py"
       ],
+      "gates": [],
       "id": "P25-I01-W18",
       "intent": null,
       "iter_id": "P25-I01",
@@ -24415,6 +24658,7 @@
         ".ea/specs/**/*.md",
         "src/eawf/spec/backfill.py"
       ],
+      "gates": [],
       "id": "P25-I01-W19",
       "intent": null,
       "iter_id": "P25-I01",
@@ -24505,6 +24749,7 @@
         "tests/golden/plugin_install/claude/skills/differentiate/SKILL.md",
         "tests/golden/plugin_install/claude/skills/blitz/SKILL.md"
       ],
+      "gates": [],
       "id": "P26-I01-W01",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24554,6 +24799,7 @@
         ".ea/config.yaml",
         "tests/config/test_migration_legacy_shape.py"
       ],
+      "gates": [],
       "id": "P26-I01-W02",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24602,6 +24848,7 @@
         "src/eawf/cli/_daemon_client.py",
         "tests/integration/test_daemon_cross_repo_anchor.py"
       ],
+      "gates": [],
       "id": "P26-I01-W03",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24657,6 +24904,7 @@
         "src/eawf/cli/flags.py",
         "CHANGELOG.md"
       ],
+      "gates": [],
       "id": "P26-I01-W04",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24708,6 +24956,7 @@
         "src/eawf/cli/commands/state.py",
         "tests/cli/test_daemon_escalation.py"
       ],
+      "gates": [],
       "id": "P26-I01-W05",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24787,6 +25036,7 @@
         "docs/help/",
         "tests/cli/test_streaming.py"
       ],
+      "gates": [],
       "id": "P26-I01-W06",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24836,6 +25086,7 @@
         "src/eawf/evidence/",
         "src/eawf/memory/"
       ],
+      "gates": [],
       "id": "P26-I01-W07",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24885,6 +25136,7 @@
         "tests/unit/test_skill_prep.py",
         "src/eawf/skills/bodies/prep.py"
       ],
+      "gates": [],
       "id": "P26-I01-W08",
       "intent": null,
       "iter_id": "P26-I01",
@@ -24933,6 +25185,7 @@
         "src/eawf/skills/ship.py",
         "tests/unit/test_skill_ship.py"
       ],
+      "gates": [],
       "id": "P26-I01-W09",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25013,6 +25266,7 @@
         "tests/runtimes/test_plugin_manifest.py",
         "tests/integration/test_coauthor_verification.py"
       ],
+      "gates": [],
       "id": "P26-I01-W10",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25095,6 +25349,7 @@
         "src/eawf/skills/security_review.py",
         "src/eawf/skills/_bootstrap.py"
       ],
+      "gates": [],
       "id": "P26-I01-W11",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25142,6 +25397,7 @@
       "file_scopes": [
         "tests/unit/test_agent_report_store.py"
       ],
+      "gates": [],
       "id": "P26-I01-W12",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25236,6 +25492,7 @@
         "src/eawf/runtimes/fallback.py",
         "tests/runtimes/test_skill_adapter_handshake.py"
       ],
+      "gates": [],
       "id": "P26-I01-W13",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25315,6 +25572,7 @@
         "src/eawf/runtimes/opencode/adapter.py",
         "tests/runtimes/test_cache_control.py"
       ],
+      "gates": [],
       "id": "P26-I01-W14",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25398,6 +25656,7 @@
         ".ea/artifacts/audits/2026-05-NN-p26-i01-surfaces.md",
         "tests/integration/test_surfaces_smoke.py"
       ],
+      "gates": [],
       "id": "P26-I01-W15",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25453,6 +25712,7 @@
         "tests/tui_v2/test_app_scaffold.py",
         "uv.lock"
       ],
+      "gates": [],
       "id": "P26-I01-W16",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25504,6 +25764,7 @@
         "src/eawf/tui_v2/widgets/git_pane.py",
         "src/eawf/tui_v2/widgets/backlog_table.py"
       ],
+      "gates": [],
       "id": "P26-I01-W17",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25566,6 +25827,7 @@
         "tests/tui_v2/test_scope_workspace.py",
         "tests/tui_v2/test_scope_user.py"
       ],
+      "gates": [],
       "id": "P26-I01-W18",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25629,6 +25891,7 @@
         "tests/tui_v2/test_overlays_modal_stack.py",
         "tests/tui_v2/test_overlays_help.py"
       ],
+      "gates": [],
       "id": "P26-I01-W19",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25686,6 +25949,7 @@
         "tests/tui_v2/test_overlays_audit_failed.py",
         "tests/tui_v2/test_overlays_verb_wiring.py"
       ],
+      "gates": [],
       "id": "P26-I01-W20",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25742,6 +26006,7 @@
         "tests/tui_v2/test_overlays_pr_list.py",
         "tests/tui_v2/test_widgets_heartbeat.py"
       ],
+      "gates": [],
       "id": "P26-I01-W21",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25797,6 +26062,7 @@
         "tests/perf/tui/__init__.py",
         "tests/tui_v2/test_legacy_escape_hatch.py"
       ],
+      "gates": [],
       "id": "P26-I01-W22",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25844,6 +26110,7 @@
         "src/eawf/profiles/data/core.yaml",
         "src/eawf/render/skills.py"
       ],
+      "gates": [],
       "id": "P26-I01-W23",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25944,6 +26211,7 @@
         "src/eawf/tui/layout.py",
         "tests/integration/test_tui_weekly_eu.py"
       ],
+      "gates": [],
       "id": "P26-I01-W24",
       "intent": null,
       "iter_id": "P26-I01",
@@ -25992,6 +26260,7 @@
         "tests/cli/test_daemon_escalation.py",
         "tests/integration/test_surfaces_smoke.py"
       ],
+      "gates": [],
       "id": "P26-I01-W25",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26084,6 +26353,7 @@
         "src/eawf/skills/bodies/",
         "tests/integration/test_surfaces_smoke.py"
       ],
+      "gates": [],
       "id": "P26-I01-W26",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26174,6 +26444,7 @@
         "src/eawf/tui_v2/",
         "src/eawf/render/envelope.py"
       ],
+      "gates": [],
       "id": "P26-I01-W27",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26290,6 +26561,7 @@
         "src/eawf/cli/commands/completion.py",
         "tests/cli/test_completion_runtime.py"
       ],
+      "gates": [],
       "id": "P26-I01-W28",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26376,6 +26648,7 @@
         "src/eawf/cli/commands/completion.py",
         "tests/cli/test_completion_runtime.py"
       ],
+      "gates": [],
       "id": "P26-I01-W29",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26476,6 +26749,7 @@
         "src/eawf/cli/commands/",
         "tests/perf/cli/test_import_budget.py"
       ],
+      "gates": [],
       "id": "P26-I01-W30",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26680,6 +26954,7 @@
         "src/eawf/tui_v2/theme.tcss",
         "tests/snapshots/tui"
       ],
+      "gates": [],
       "id": "P26-I01-W31",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26798,6 +27073,7 @@
         "src/eawf/tui_v2/widgets/footer.py",
         "tests/snapshots/tui"
       ],
+      "gates": [],
       "id": "P26-I01-W32",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26874,6 +27150,7 @@
         "src/eawf/tui_v2/screens/overlays",
         "tests/snapshots/tui"
       ],
+      "gates": [],
       "id": "P26-I01-W33",
       "intent": null,
       "iter_id": "P26-I01",
@@ -26951,6 +27228,7 @@
         "src/eawf/tui_v2/app.py",
         "tests/snapshots/tui"
       ],
+      "gates": [],
       "id": "P26-I01-W34",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27074,6 +27352,7 @@
         "src/eawf/skills/ship.py",
         "tests"
       ],
+      "gates": [],
       "id": "P26-I01-W35",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27177,6 +27456,7 @@
         "tests",
         "tests/snapshots/tui"
       ],
+      "gates": [],
       "id": "P26-I01-W36",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27264,6 +27544,7 @@
         "tests/tui_v2",
         "tests/snapshots/tui"
       ],
+      "gates": [],
       "id": "P26-I01-W37",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27337,6 +27618,7 @@
         "tests/tui_v2",
         "tests/snapshots/tui"
       ],
+      "gates": [],
       "id": "P26-I01-W38",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27438,6 +27720,7 @@
         "src/eawf/tui_v2",
         "tests/tui_v2"
       ],
+      "gates": [],
       "id": "P26-I01-W39",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27511,6 +27794,7 @@
         "src/eawf/lifecycle/iter_.py",
         "tests/unit"
       ],
+      "gates": [],
       "id": "P26-I01-W40",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27582,6 +27866,7 @@
       "file_scopes": [
         ".ea/artifacts/audits/2026-05-21-p26-i01-tui-fixes.md"
       ],
+      "gates": [],
       "id": "P26-I01-W41",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27643,6 +27928,7 @@
         "src/eawf/cli/commands/workspace.py",
         "tests"
       ],
+      "gates": [],
       "id": "P26-I01-W42",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27730,6 +28016,7 @@
         "src/eawf/tui_v2/snapshot/pilot_harness.py",
         "tests"
       ],
+      "gates": [],
       "id": "P26-I01-W43",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27803,6 +28090,7 @@
         "src/eawf/tui_v2/palette/verbs.py",
         "tests/tui_v2"
       ],
+      "gates": [],
       "id": "P26-I01-W44",
       "intent": null,
       "iter_id": "P26-I01",
@@ -27908,6 +28196,7 @@
         "tests/tui_v2/test_overlays_edit_field.py",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W01",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28013,6 +28302,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W02",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28128,6 +28418,7 @@
         "src/eawf/tui_v2/widgets/backlog_table.py",
         "tests/tui_v2/**"
       ],
+      "gates": [],
       "id": "P26-I02-W03",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28215,6 +28506,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W04",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28291,6 +28583,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W05",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28409,6 +28702,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W06",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28483,6 +28777,7 @@
         "src/eawf/tui_v2/app.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P26-I02-W07",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28568,6 +28863,7 @@
       "file_scopes": [
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P26-I02-W08",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28612,6 +28908,7 @@
         "src/eawf/config/layered.py",
         "tests/unit/test_config_layered.py"
       ],
+      "gates": [],
       "id": "P26-I02-W09",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28697,6 +28994,7 @@
       "file_scopes": [
         ".ea/artifacts/audits/2026-05-22-p26-i02-tui-qol.md"
       ],
+      "gates": [],
       "id": "P26-I02-W10",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28768,6 +29066,7 @@
       "file_scopes": [
         "src/eawf/cli/commands/skill.py"
       ],
+      "gates": [],
       "id": "P26-I02-W11",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28857,6 +29156,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W12",
       "intent": null,
       "iter_id": "P26-I02",
@@ -28931,6 +29231,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W13",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29066,6 +29367,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W14",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29177,6 +29479,7 @@
         "tests/tui_v2/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P26-I02-W15",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29264,6 +29567,7 @@
         "src/eawf/tui_v2/app.py",
         "tests/tui_v2/**"
       ],
+      "gates": [],
       "id": "P26-I02-W16",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29353,6 +29657,7 @@
         "tests/snapshots/tui/golden/detail_overlay_iter_metrics.txt",
         "tests/snapshots/tui/golden/detail_overlay_wave_size.txt"
       ],
+      "gates": [],
       "id": "P26-I02-W17",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29398,6 +29703,7 @@
         "tests/tui_v2/test_overlays_config_modal.py",
         "tests/snapshots/tui/golden/config_modal_inline_int.txt"
       ],
+      "gates": [],
       "id": "P26-I02-W18",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29443,6 +29749,7 @@
         "src/eawf/tui_v2/app.py",
         "tests/tui_v2/test_theme_auto.py"
       ],
+      "gates": [],
       "id": "P26-I02-W19",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29492,6 +29799,7 @@
         "tests/daemon/test_agent_methods.py",
         "tests/runtimes/test_plugin_manifest.py"
       ],
+      "gates": [],
       "id": "P26-I02-W20",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29580,6 +29888,7 @@
         "tests/cli/test_streaming.py",
         "tests/cli/test_mutation_proxy.py"
       ],
+      "gates": [],
       "id": "P26-I02-W21",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29671,6 +29980,7 @@
         "tests/tui_v2/test_widgets_git_pane.py",
         "tests/tui_v2/test_overlays_pr_list.py"
       ],
+      "gates": [],
       "id": "P26-I02-W22",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29763,6 +30073,7 @@
         "src/eawf/render/envelope.py",
         "src/eawf/skills/bodies/__init__.py"
       ],
+      "gates": [],
       "id": "P26-I02-W23",
       "intent": null,
       "iter_id": "P26-I02",
@@ -29853,6 +30164,7 @@
         "tests/unit/test_worktree_git*.py",
         "tests/fixtures/conftest.py"
       ],
+      "gates": [],
       "id": "P27-I01-W01",
       "intent": null,
       "iter_id": "P27-I01",
@@ -29901,6 +30213,7 @@
         ".ea/state.json",
         "docs/reference/coverage-gates.md"
       ],
+      "gates": [],
       "id": "P27-I01-W02",
       "intent": null,
       "iter_id": "P27-I01",
@@ -29949,6 +30262,7 @@
         "tests/unit/test_log_scrub.py",
         "tests/unit/test_eawf001_rule.py"
       ],
+      "gates": [],
       "id": "P27-I01-W03",
       "intent": null,
       "iter_id": "P27-I01",
@@ -29997,6 +30311,7 @@
         ".pre-commit-config.yaml",
         "tests/unit/test_lint_hooks.py"
       ],
+      "gates": [],
       "id": "P27-I01-W04",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30047,6 +30362,7 @@
         "tests/unit/test_eawf_loc_cap.py",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P27-I01-W05",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30096,6 +30412,7 @@
         "src/eawf/cli/commands/lifecycle_wave.py",
         "tests/unit/test_lifecycle_cmd_inventory.py"
       ],
+      "gates": [],
       "id": "P27-I01-W06",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30145,6 +30462,7 @@
         "src/eawf/cli/commands/evidence_incident.py",
         "tests/unit/test_evidence_cmd_inventory.py"
       ],
+      "gates": [],
       "id": "P27-I01-W07",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30195,6 +30513,7 @@
         "tests/fixtures/store/incident_sample.json",
         "tests/unit/test_incident_payload.py"
       ],
+      "gates": [],
       "id": "P27-I01-W08",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30246,6 +30565,7 @@
         "src/eawf/store/kinds/events/cache_mislayer.py",
         "tests/unit/test_event_payload_union.py"
       ],
+      "gates": [],
       "id": "P27-I01-W09",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30296,6 +30616,7 @@
         "src/eawf/store/kinds/events/session_failover.py",
         "tests/integration/test_daemon_event_emit.py"
       ],
+      "gates": [],
       "id": "P27-I01-W10",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30350,6 +30671,7 @@
         "src/eawf/cli/commands/telemetry.py",
         "tests/unit/test_pricing.py"
       ],
+      "gates": [],
       "id": "P27-I01-W11",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30400,6 +30722,7 @@
         "src/eawf/telemetry/store/duckdb_store.py",
         "tests/unit/test_metrics_store.py"
       ],
+      "gates": [],
       "id": "P27-I01-W12",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30450,6 +30773,7 @@
         "src/eawf/telemetry/sources/claude_session.py",
         "tests/unit/test_sources_jsonl_claude.py"
       ],
+      "gates": [],
       "id": "P27-I01-W13",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30499,6 +30823,7 @@
         "src/eawf/telemetry/sources/opencode_session.py",
         "tests/unit/test_sources_codex_opencode.py"
       ],
+      "gates": [],
       "id": "P27-I01-W14",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30553,6 +30878,7 @@
         "tests/unit/test_aggregator.py",
         "tests/unit/test_projector.py"
       ],
+      "gates": [],
       "id": "P27-I01-W15",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30604,6 +30930,7 @@
         "src/eawf/config/defaults.py",
         "tests/golden/metrics_export"
       ],
+      "gates": [],
       "id": "P27-I01-W16",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30650,6 +30977,7 @@
         "tests/unit/test_validation_index.py",
         "benches/validate_invariants.py"
       ],
+      "gates": [],
       "id": "P27-I01-W17",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30697,6 +31025,7 @@
         "tests/fixtures/bench/small.json",
         ".ea/bench/thresholds.yaml"
       ],
+      "gates": [],
       "id": "P27-I01-W18",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30742,6 +31071,7 @@
         ".github/workflows/ci.yaml",
         "tests/unit/test_snapshot_update.py"
       ],
+      "gates": [],
       "id": "P27-I01-W19",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30788,6 +31118,7 @@
         "tests/golden/dispatch/cc_research.txt",
         "tests/unit/test_plugin_doctor_strict.py"
       ],
+      "gates": [],
       "id": "P27-I01-W20",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30839,6 +31170,7 @@
         "docs/reference/error-codes.md",
         "tests/unit/test_error_codes.py"
       ],
+      "gates": [],
       "id": "P27-I01-W21",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30893,6 +31225,7 @@
         "tests/unit/test_migrate.py",
         ".gitignore"
       ],
+      "gates": [],
       "id": "P27-I01-W22",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30941,6 +31274,7 @@
         "src/eawf/backup/store.py",
         "tests/unit/test_backup.py"
       ],
+      "gates": [],
       "id": "P27-I01-W23",
       "intent": null,
       "iter_id": "P27-I01",
@@ -30987,6 +31321,7 @@
         "src/eawf/config/registry.py",
         "tests/unit/test_budget_enforce.py"
       ],
+      "gates": [],
       "id": "P27-I01-W24",
       "intent": null,
       "iter_id": "P27-I01",
@@ -31035,6 +31370,7 @@
         "src/eawf/cli/commands/calibrate.py",
         "tests/unit/test_variance_calibrate.py"
       ],
+      "gates": [],
       "id": "P27-I01-W25",
       "intent": null,
       "iter_id": "P27-I01",
@@ -31087,6 +31423,7 @@
         "docs/reference/index.md",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P27-I01-W26",
       "intent": null,
       "iter_id": "P27-I01",
@@ -31137,6 +31474,7 @@
         "pyproject.toml",
         ".github/workflows/release.yaml"
       ],
+      "gates": [],
       "id": "P27-I01-W27",
       "intent": null,
       "iter_id": "P27-I01",
@@ -31184,6 +31522,7 @@
         "src/eawf/telemetry/**",
         "src/eawf/cli/commands/**"
       ],
+      "gates": [],
       "id": "P27-I01-W28",
       "intent": null,
       "iter_id": "P27-I01",
@@ -31229,6 +31568,7 @@
         "src/eawf/daemon/runtime_dir.py",
         "src/eawf/daemon/server.py"
       ],
+      "gates": [],
       "id": "P27-I02-W01",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31273,6 +31613,7 @@
         "src/eawf/logging/scrub.py",
         "src/eawf/daemon/main.py"
       ],
+      "gates": [],
       "id": "P27-I02-W02",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31316,6 +31657,7 @@
       "file_scopes": [
         "src/eawf/cli/commands/metrics.py"
       ],
+      "gates": [],
       "id": "P27-I02-W03",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31361,6 +31703,7 @@
         "src/eawf/telemetry/aggregator.py",
         "src/eawf/telemetry/pricing.py"
       ],
+      "gates": [],
       "id": "P27-I02-W04",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31404,6 +31747,7 @@
       "file_scopes": [
         "src/eawf/telemetry/aggregator.py"
       ],
+      "gates": [],
       "id": "P27-I02-W05",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31453,6 +31797,7 @@
         "src/eawf/store/kinds/events/**",
         "src/eawf/store/kinds/event.py"
       ],
+      "gates": [],
       "id": "P27-I02-W06",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31496,6 +31841,7 @@
       "file_scopes": [
         "src/eawf/backup/store.py"
       ],
+      "gates": [],
       "id": "P27-I02-W07",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31544,6 +31890,7 @@
         "src/eawf/cli/commands/migrate.py",
         "src/eawf/state/models.py"
       ],
+      "gates": [],
       "id": "P27-I02-W08",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31587,6 +31934,7 @@
       "file_scopes": [
         "src/eawf/backup/store.py"
       ],
+      "gates": [],
       "id": "P27-I02-W09",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31631,6 +31979,7 @@
         "src/eawf/cli/commands/snapshot.py",
         "src/eawf/tools/snapshot_pairing_gate.py"
       ],
+      "gates": [],
       "id": "P27-I02-W10",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31674,6 +32023,7 @@
       "file_scopes": [
         "src/eawf/telemetry/projector.py"
       ],
+      "gates": [],
       "id": "P27-I02-W11",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31721,6 +32071,7 @@
         "src/eawf/telemetry/sources/opencode_session.py",
         "src/eawf/lint/eawf001.py"
       ],
+      "gates": [],
       "id": "P27-I02-W12",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31768,6 +32119,7 @@
       "file_scopes": [
         "tests/e2e/**"
       ],
+      "gates": [],
       "id": "P27-I02-W13",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31813,6 +32165,7 @@
       "file_scopes": [
         "src/eawf/skills/audit.py"
       ],
+      "gates": [],
       "id": "P27-I02-W14",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31860,6 +32213,7 @@
       "file_scopes": [
         "src/eawf/skills/ship.py"
       ],
+      "gates": [],
       "id": "P27-I02-W15",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31907,6 +32261,7 @@
         "src/eawf/state/mutations.py",
         "src/eawf/lifecycle/**"
       ],
+      "gates": [],
       "id": "P27-I02-W16",
       "intent": null,
       "iter_id": "P27-I02",
@@ -31956,6 +32311,7 @@
         "src/eawf/cli/_mutation.py",
         "src/eawf/cli/commands/lifecycle.py"
       ],
+      "gates": [],
       "id": "P27-I02-W17",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32007,6 +32363,7 @@
         "src/eawf/cli/_mutation.py",
         "src/eawf/daemon/wal.py"
       ],
+      "gates": [],
       "id": "P27-I02-W18",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32053,6 +32410,7 @@
         "src/eawf/state/models.py",
         "src/eawf/render/agents_md.py"
       ],
+      "gates": [],
       "id": "P27-I02-W19",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32101,6 +32459,7 @@
         "src/eawf/cli/commands/evidence.py",
         "src/eawf/validate/invariants.py"
       ],
+      "gates": [],
       "id": "P27-I02-W20",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32146,6 +32505,7 @@
       "file_scopes": [
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P27-I02-W21",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32195,6 +32555,7 @@
         "src/eawf/state/models.py",
         "src/eawf/migrations/v1_0_to_v1_1.py"
       ],
+      "gates": [],
       "id": "P27-I02-W22",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32252,6 +32613,7 @@
         "docs/reference/autogen/**",
         "tests/**"
       ],
+      "gates": [],
       "id": "P27-I02-W23",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32297,6 +32659,7 @@
       "file_scopes": [
         "src/eawf/migrations/v1_0_to_v1_1.py"
       ],
+      "gates": [],
       "id": "P27-I02-W24",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32344,6 +32707,7 @@
         "src/eawf/estimation/buckets.py",
         "src/eawf/state/models.py"
       ],
+      "gates": [],
       "id": "P27-I02-W25",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32390,6 +32754,7 @@
         "src/eawf/migrations",
         "src/eawf/estimation/buckets.py"
       ],
+      "gates": [],
       "id": "P27-I02-W26",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32436,6 +32801,7 @@
         "src/eawf/migrations/_base.py",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P27-I02-W27",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32484,6 +32850,7 @@
         "src/eawf/daemon/main.py",
         "tests/e2e/test_daemon_e2e.py"
       ],
+      "gates": [],
       "id": "P27-I02-W28",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32531,6 +32898,7 @@
         "src/eawf/cli/commands/metrics.py",
         "docs/reference/autogen/cli.md"
       ],
+      "gates": [],
       "id": "P27-I02-W29",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32574,6 +32942,7 @@
       "file_scopes": [
         "src/eawf/cli/_mutation.py"
       ],
+      "gates": [],
       "id": "P27-I02-W30",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32621,6 +32990,7 @@
         "src/eawf/daemon/methods/state.py",
         "src/eawf/cli/_dispatch.py"
       ],
+      "gates": [],
       "id": "P27-I02-W31",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32670,6 +33040,7 @@
         "src/eawf/daemon/recovery.py",
         "src/eawf/cli/commands/lifecycle.py"
       ],
+      "gates": [],
       "id": "P27-I02-W32",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32713,6 +33084,7 @@
       "file_scopes": [
         "src/eawf/logging/scrub.py"
       ],
+      "gates": [],
       "id": "P27-I02-W33",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32785,6 +33157,7 @@
         "src/eawf/migrations/_base.py",
         "src/eawf/migrations/v1_0_to_v1_1.py"
       ],
+      "gates": [],
       "id": "P27-I02-W34",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32828,6 +33201,7 @@
       "file_scopes": [
         "src/eawf/skills/ship.py"
       ],
+      "gates": [],
       "id": "P27-I02-W35",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32872,6 +33246,7 @@
         "src/eawf/cli/commands/lifecycle_phase.py",
         "src/eawf/lifecycle/phase.py"
       ],
+      "gates": [],
       "id": "P27-I02-W36",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32916,6 +33291,7 @@
         "src/eawf/evidence/decision.py",
         "src/eawf/validate/invariants.py"
       ],
+      "gates": [],
       "id": "P27-I02-W37",
       "intent": null,
       "iter_id": "P27-I02",
@@ -32965,6 +33341,7 @@
         "src/eawf/cli/commands/snapshot.py",
         "src/eawf/render/pr_body.py"
       ],
+      "gates": [],
       "id": "P27-I02-W38",
       "intent": null,
       "iter_id": "P27-I02",
@@ -33011,6 +33388,7 @@
         "src/eawf/cli/_dispatch.py",
         "src/eawf/daemon/wal.py"
       ],
+      "gates": [],
       "id": "P27-I02-W39",
       "intent": null,
       "iter_id": "P27-I02",
@@ -33054,6 +33432,7 @@
       "file_scopes": [
         ".ea/artifacts/audits/2026-05-23-p27-i02-review-fixes.md"
       ],
+      "gates": [],
       "id": "P27-I02-W40",
       "intent": null,
       "iter_id": "P27-I02",
@@ -33105,6 +33484,7 @@
         "src/eawf/render/agents_md.py",
         "src/eawf/templates/AGENTS.md.j2"
       ],
+      "gates": [],
       "id": "P27-I03-W01",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33152,6 +33532,7 @@
       "file_scopes": [
         "src/eawf/profiles/data/quality.yaml"
       ],
+      "gates": [],
       "id": "P27-I03-W02",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33198,6 +33579,7 @@
       "file_scopes": [
         "src/eawf/profiles/data/agent_driven.yaml"
       ],
+      "gates": [],
       "id": "P27-I03-W03",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33245,6 +33627,7 @@
         "src/eawf/lint/eawf011.py",
         "src/eawf/lint/eawf010.py"
       ],
+      "gates": [],
       "id": "P27-I03-W04",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33291,6 +33674,7 @@
         "src/eawf/profiles/data/core.yaml",
         "src/eawf/profiles/data/python.yaml"
       ],
+      "gates": [],
       "id": "P27-I03-W05",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33340,6 +33724,7 @@
         "src/eawf/profiles/data/apps.yaml",
         "src/eawf/profiles/data/infra.yaml"
       ],
+      "gates": [],
       "id": "P27-I03-W06",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33390,6 +33775,7 @@
         "src/eawf/render/plan_view.py",
         "src/eawf/render/release_notes.py"
       ],
+      "gates": [],
       "id": "P27-I03-W07",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33437,6 +33823,7 @@
         "src/eawf/profiles/data/core.yaml",
         "src/eawf/render/agents_md.py"
       ],
+      "gates": [],
       "id": "P27-I03-W08",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33487,6 +33874,7 @@
         "src/eawf/daemon/methods/agent.py",
         "src/eawf/daemon/dispatch_runner.py"
       ],
+      "gates": [],
       "id": "P27-I03-W09",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33533,6 +33921,7 @@
       "file_scopes": [
         "src/eawf/daemon/dispatch_runner.py"
       ],
+      "gates": [],
       "id": "P27-I03-W10",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33579,6 +33968,7 @@
         "src/eawf/daemon/dispatch_runner.py",
         "src/eawf/lifecycle/wave.py"
       ],
+      "gates": [],
       "id": "P27-I03-W11",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33625,6 +34015,7 @@
         "src/eawf/render/skills.py",
         "build/eawf-plugin/skills/**"
       ],
+      "gates": [],
       "id": "P27-I03-W12",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33673,6 +34064,7 @@
         "src/eawf/skills/research.py",
         "src/eawf/skills/prep.py"
       ],
+      "gates": [],
       "id": "P27-I03-W13",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33721,6 +34113,7 @@
         "src/eawf/agents/specs/**",
         "src/eawf/dispatch/renderer.py"
       ],
+      "gates": [],
       "id": "P27-I03-W14",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33765,6 +34158,7 @@
         "src/eawf/skills/roadmap.py",
         "src/eawf/cli/commands/roadmap.py"
       ],
+      "gates": [],
       "id": "P27-I03-W15",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33809,6 +34203,7 @@
         "build/eawf-plugin/skills/**",
         "src/eawf/render/skills.py"
       ],
+      "gates": [],
       "id": "P27-I03-W16",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33854,6 +34249,7 @@
       "file_scopes": [
         "src/eawf/**"
       ],
+      "gates": [],
       "id": "P27-I03-W17",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33898,6 +34294,7 @@
         "src/eawf/**",
         "tests/**"
       ],
+      "gates": [],
       "id": "P27-I03-W18",
       "intent": null,
       "iter_id": "P27-I03",
@@ -33944,6 +34341,7 @@
         "src/eawf/cli/commands/lifecycle.py",
         "src/eawf/state/io.py"
       ],
+      "gates": [],
       "id": "P27-I03-W19",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34001,6 +34399,7 @@
         "tests/unit/test_spec_validators.py",
         "tests/unit/test_variance_calibrate.py"
       ],
+      "gates": [],
       "id": "P27-I03-W20",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34047,6 +34446,7 @@
         "src/eawf/dispatch/renderer.py",
         "src/eawf/sandbox/policy.py"
       ],
+      "gates": [],
       "id": "P27-I03-W21",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34090,6 +34490,7 @@
       "file_scopes": [
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P27-I03-W22",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34133,6 +34534,7 @@
       "file_scopes": [
         "tests/contract/**"
       ],
+      "gates": [],
       "id": "P27-I03-W23",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34176,6 +34578,7 @@
       "file_scopes": [
         "tests/unit/test_lifecycle_cmd_inventory.py"
       ],
+      "gates": [],
       "id": "P27-I03-W24",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34219,6 +34622,7 @@
       "file_scopes": [
         "src/eawf/cli/commands/hook.py"
       ],
+      "gates": [],
       "id": "P27-I03-W25",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34304,6 +34708,7 @@
       "file_scopes": [
         "src/eawf/**"
       ],
+      "gates": [],
       "id": "P27-I03-W26",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34348,6 +34753,7 @@
         "src/eawf/cli/commands/lifecycle_iter.py",
         "tests/integration/test_cli_lifecycle.py"
       ],
+      "gates": [],
       "id": "P27-I03-W27",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34395,6 +34801,7 @@
         "AGENTS.md",
         "tests/golden/agents_md/**"
       ],
+      "gates": [],
       "id": "P27-I03-W28",
       "intent": null,
       "iter_id": "P27-I03",
@@ -34443,6 +34850,7 @@
         "src/eawf/state/models.py",
         "tests/daemon/test_dispatch_cost_accrual.py"
       ],
+      "gates": [],
       "id": "P27-I04-W01",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34492,6 +34900,7 @@
         "src/eawf/tui_v2/app.py",
         "tests/tui_v2/test_widgets_eu_bar.py"
       ],
+      "gates": [],
       "id": "P27-I04-W02",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34539,6 +34948,7 @@
         "src/eawf/tui_v2/widgets/roadmap_tree.py",
         "tests/tui_v2/test_widgets_roadmap_tree.py"
       ],
+      "gates": [],
       "id": "P27-I04-W03",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34587,6 +34997,7 @@
         "src/eawf/tui_v2/widgets/status_pane.py",
         "tests/tui_v2/test_widgets_status_pane.py"
       ],
+      "gates": [],
       "id": "P27-I04-W04",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34635,6 +35046,7 @@
         "src/eawf/tui_v2/widgets/heartbeat.py",
         "tests/tui_v2/test_widgets_status_pane.py"
       ],
+      "gates": [],
       "id": "P27-I04-W05",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34684,6 +35096,7 @@
         "src/eawf/tui_v2/widgets/workspace_table.py",
         "tests/tui_v2/test_scope_workspace.py"
       ],
+      "gates": [],
       "id": "P27-I04-W06",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34730,6 +35143,7 @@
         "src/eawf/tui_v2/scopes/user.py",
         "tests/tui_v2/test_scope_user.py"
       ],
+      "gates": [],
       "id": "P27-I04-W07",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34777,6 +35191,7 @@
         "src/eawf/config/registry.py",
         "tests/tui_v2/test_toast_emitter.py"
       ],
+      "gates": [],
       "id": "P27-I04-W08",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34824,6 +35239,7 @@
         "src/eawf/config/registry.py",
         "tests/tui_v2/test_overlays_config_modal.py"
       ],
+      "gates": [],
       "id": "P27-I04-W09",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34872,6 +35288,7 @@
         "src/eawf/tui/app.py",
         "src/eawf/tui/widgets/status_pane.py"
       ],
+      "gates": [],
       "id": "P27-I04-W10",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34916,6 +35333,7 @@
         "src/eawf/tui/widgets/roadmap_tree.py",
         "src/eawf/tui/widgets/eu_bar.py"
       ],
+      "gates": [],
       "id": "P27-I04-W11",
       "intent": null,
       "iter_id": "P27-I04",
@@ -34961,6 +35379,7 @@
       "file_scopes": [
         "src/eawf/tui/screens/overlays/config_modal.py"
       ],
+      "gates": [],
       "id": "P27-I04-W12",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35006,6 +35425,7 @@
       "file_scopes": [
         "src/eawf/tui/screens/overlays/config_modal.py"
       ],
+      "gates": [],
       "id": "P27-I04-W13",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35094,6 +35514,7 @@
         "src/eawf/tui/widgets/status_pane.py",
         "src/eawf/tui/theme.tcss"
       ],
+      "gates": [],
       "id": "P27-I04-W14",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35140,6 +35561,7 @@
         "src/eawf/cli/app.py",
         "src/eawf/tui/scopes/user.py"
       ],
+      "gates": [],
       "id": "P27-I04-W15",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35184,6 +35606,7 @@
         "src/eawf/tui/screens/overlays/config_modal.py",
         "src/eawf/tui/screens/overlays/multichoice_checklist.py"
       ],
+      "gates": [],
       "id": "P27-I04-W16",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35229,6 +35652,7 @@
         "src/eawf/tui/screens/overlays/multichoice_checklist.py",
         "tests/tui/test_overlays_config_modal.py"
       ],
+      "gates": [],
       "id": "P27-I04-W17",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35305,6 +35729,7 @@
         "tests/tui/test_widgets_roadmap_tree.py",
         "tests/tui/test_scope_workspace.py"
       ],
+      "gates": [],
       "id": "P27-I04-W18",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35391,6 +35816,7 @@
         "src/eawf/tui/app.py",
         "tests/tui/test_scope_user_switch.py"
       ],
+      "gates": [],
       "id": "P27-I04-W19",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35463,6 +35889,7 @@
         "src/eawf/daemon/service_install.py",
         "tests/daemon/test_service_install.py"
       ],
+      "gates": [],
       "id": "P27-I04-W20",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35553,6 +35980,7 @@
         "tests/daemon/test_methods_state.py",
         "tests/cli/test_roadmap.py"
       ],
+      "gates": [],
       "id": "P27-I04-W21",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35642,6 +36070,7 @@
         "tests/tui/test_scope_workspace.py",
         "tests/tui/test_palette_command.py"
       ],
+      "gates": [],
       "id": "P27-I04-W22",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35742,6 +36171,7 @@
         "src/eawf/daemon/service_install.py",
         "tests/daemon/test_service_install.py"
       ],
+      "gates": [],
       "id": "P27-I04-W23",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35814,6 +36244,7 @@
         "src/eawf/tui/widgets/workspace_table.py",
         "tests/tui/test_widgets_workspace_table.py"
       ],
+      "gates": [],
       "id": "P27-I04-W24",
       "intent": null,
       "iter_id": "P27-I04",
@@ -35903,6 +36334,7 @@
         "tests/tui/test_scope_user.py",
         "tests/tui/test_scope_workspace.py"
       ],
+      "gates": [],
       "id": "P27-I04-W25",
       "intent": null,
       "iter_id": "P27-I04",
@@ -36003,6 +36435,7 @@
         "src/eawf/tui/widgets/status_pane.py",
         "tests/tui/test_widgets_status_pane.py"
       ],
+      "gates": [],
       "id": "P27-I04-W26",
       "intent": null,
       "iter_id": "P27-I04",
@@ -36106,6 +36539,7 @@
         "tests/tui/test_widgets_roadmap_tree.py",
         "tests/snapshots/tui/golden/*.txt"
       ],
+      "gates": [],
       "id": "P27-I04-W27",
       "intent": null,
       "iter_id": "P27-I04",
@@ -36154,6 +36588,7 @@
         "src/eawf/tui/scopes/user.py",
         "tests/tui/*"
       ],
+      "gates": [],
       "id": "P27-I04-W28",
       "intent": null,
       "iter_id": "P27-I04",
@@ -36203,6 +36638,7 @@
         "tests/tui/test_scope_user_switch.py",
         "tests/snapshots/tui/golden/*.txt"
       ],
+      "gates": [],
       "id": "P27-I04-W29",
       "intent": null,
       "iter_id": "P27-I04",
@@ -36248,6 +36684,7 @@
         "tests/tui/test_widgets_eu_bar.py",
         "tests/tui/test_widgets_roadmap_tree.py"
       ],
+      "gates": [],
       "id": "P27-I04-W30",
       "intent": null,
       "iter_id": "P27-I04",
@@ -36296,6 +36733,7 @@
         "tests/snapshots/tui/golden/repo_screen.txt",
         "tests/snapshots/tui/golden/roadmap_scrolled_long_iter.txt"
       ],
+      "gates": [],
       "id": "P27-I04-W31",
       "intent": null,
       "iter_id": "P27-I04",
@@ -36340,6 +36778,7 @@
         "docs/architecture/source-map.md",
         "README.md"
       ],
+      "gates": [],
       "id": "P27-I05-W01",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36384,6 +36823,7 @@
         "README.md",
         "docs/architecture/overview.md"
       ],
+      "gates": [],
       "id": "P27-I05-W02",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36428,6 +36868,7 @@
         "pyproject.toml",
         "src/eawf/backup/store.py"
       ],
+      "gates": [],
       "id": "P27-I05-W03",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36472,6 +36913,7 @@
         "src/eawf/cli/dispatch.py",
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P27-I05-W04",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36517,6 +36959,7 @@
         "src/eawf/docs/autogen.py",
         "tests/unit/test_schema.py"
       ],
+      "gates": [],
       "id": "P27-I05-W05",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36560,6 +37003,7 @@
       "file_scopes": [
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P27-I05-W06",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36604,6 +37048,7 @@
         "src/eawf/cli/app.py",
         "src/eawf/cli/registry.py"
       ],
+      "gates": [],
       "id": "P27-I05-W07",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36648,6 +37093,7 @@
         "src/eawf/config/registry.py",
         "src/eawf/config/__init__.py"
       ],
+      "gates": [],
       "id": "P27-I05-W08",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36696,6 +37142,7 @@
         "src/eawf/skills/flow.py",
         "src/eawf/tui/screens/overlays/config_modal.py"
       ],
+      "gates": [],
       "id": "P27-I05-W09",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36739,6 +37186,7 @@
       "file_scopes": [
         "tools/dead_modules.py"
       ],
+      "gates": [],
       "id": "P27-I05-W10",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36785,6 +37233,7 @@
         "src/eawf/cli/commands/evidence_backlog.py",
         "src/eawf/evidence/backlog.py"
       ],
+      "gates": [],
       "id": "P27-I05-W11",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36830,6 +37279,7 @@
       "file_scopes": [
         ".ea/state.json"
       ],
+      "gates": [],
       "id": "P27-I05-W12",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36873,6 +37323,7 @@
       "file_scopes": [
         "src/eawf/tui/screens/overlays/detail.py"
       ],
+      "gates": [],
       "id": "P27-I05-W13",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36918,6 +37369,7 @@
       "file_scopes": [
         ".ea/local/research"
       ],
+      "gates": [],
       "id": "P27-I05-W14",
       "intent": null,
       "iter_id": "P27-I05",
@@ -36970,6 +37422,7 @@
         "src/eawf/spec",
         "src/eawf/migrations"
       ],
+      "gates": [],
       "id": "P27-I05-W15",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37025,6 +37478,7 @@
         "src/eawf/pr_review",
         "src/eawf/estimation"
       ],
+      "gates": [],
       "id": "P27-I05-W16",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37082,6 +37536,7 @@
         "src/eawf/hooks",
         "src/eawf/vcs"
       ],
+      "gates": [],
       "id": "P27-I05-W17",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37131,6 +37586,7 @@
         "src/eawf/tui",
         "src/eawf/render"
       ],
+      "gates": [],
       "id": "P27-I05-W18",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37182,6 +37638,7 @@
         "src/eawf/bench",
         "src/eawf/eval"
       ],
+      "gates": [],
       "id": "P27-I05-W19",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37238,6 +37695,7 @@
         "src/eawf/backup",
         "src/eawf/docs"
       ],
+      "gates": [],
       "id": "P27-I05-W20",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37289,6 +37747,7 @@
         "src/eawf",
         "tests"
       ],
+      "gates": [],
       "id": "P27-I05-W21",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37337,6 +37796,7 @@
         "src/eawf/cli/commands/evidence_incident.py",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P27-I05-W22",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37388,6 +37848,7 @@
       "file_scopes": [
         "src/eawf/_version.py"
       ],
+      "gates": [],
       "id": "P27-I05-W23",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37434,6 +37895,7 @@
         "src/eawf/cli/commands/release.py",
         ".github/workflows/release.yaml"
       ],
+      "gates": [],
       "id": "P27-I05-W24",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37483,6 +37945,7 @@
         "src/eawf/cli/commands/plugin*.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P27-I05-W25",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37534,6 +37997,7 @@
         "src/eawf/cli/commands/lifecycle_wave.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P27-I05-W26",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37581,6 +38045,7 @@
         ".ea/store/**",
         ".ea/artifacts/**"
       ],
+      "gates": [],
       "id": "P27-I05-W27",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37631,6 +38096,7 @@
         "src/eawf/surfaces/cli/commands/metrics.py",
         "tests"
       ],
+      "gates": [],
       "id": "P27-I05-W28",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37674,6 +38140,7 @@
       "file_scopes": [
         "tests/golden/scenarios/fresh_repo/agents.golden.json"
       ],
+      "gates": [],
       "id": "P27-I05-W29",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37717,6 +38184,7 @@
       "file_scopes": [
         "docs/reference/autogen/cli.md"
       ],
+      "gates": [],
       "id": "P27-I05-W30",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37760,6 +38228,7 @@
       "file_scopes": [
         "src/eawf/runtime/mcp/installer.py"
       ],
+      "gates": [],
       "id": "P27-I05-W31",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37817,6 +38286,7 @@
       "file_scopes": [
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P27-I05-W32",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37860,6 +38330,7 @@
       "file_scopes": [
         "tests/unit/test_metrics_dispatch_cost.py"
       ],
+      "gates": [],
       "id": "P27-I05-W33",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37910,6 +38381,7 @@
         "docs/architecture/overview.md",
         "tests/unit/test_estimation_recovery.py"
       ],
+      "gates": [],
       "id": "P27-I05-W34",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37955,6 +38427,7 @@
         "tests/golden/metrics_export/fixture.json",
         "tests/unit/test_metrics_exporter.py"
       ],
+      "gates": [],
       "id": "P27-I05-W35",
       "intent": null,
       "iter_id": "P27-I05",
@@ -37998,6 +38471,7 @@
       "file_scopes": [
         "tests/unit/test_metrics_dispatch_cost.py"
       ],
+      "gates": [],
       "id": "P27-I05-W36",
       "intent": null,
       "iter_id": "P27-I05",
@@ -38041,6 +38515,7 @@
       "file_scopes": [
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P27-I05-W37",
       "intent": null,
       "iter_id": "P27-I05",
@@ -38085,6 +38560,7 @@
         "tools/snapshot_pairing_gate.py",
         "tests/unit/test_snapshot_update.py"
       ],
+      "gates": [],
       "id": "P27-I05-W38",
       "intent": null,
       "iter_id": "P27-I05",
@@ -38142,6 +38618,7 @@
       "file_scopes": [
         ".github/workflows/ci.yaml"
       ],
+      "gates": [],
       "id": "P27-I05-W39",
       "intent": null,
       "iter_id": "P27-I05",
@@ -38185,6 +38662,7 @@
       "file_scopes": [
         "tests/tui/test_overlays_detail.py"
       ],
+      "gates": [],
       "id": "P27-I05-W40",
       "intent": null,
       "iter_id": "P27-I05",
@@ -38228,6 +38706,7 @@
       "file_scopes": [
         ".ea/specs/**"
       ],
+      "gates": [],
       "id": "P27-I06-W41",
       "intent": null,
       "iter_id": "P27-I06",
@@ -38279,6 +38758,7 @@
         "src/eawf/kernel/store/kinds/agent_report.py",
         "tests/kernel/spec/test_common.py"
       ],
+      "gates": [],
       "id": "P28-I01-W01",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38341,6 +38821,7 @@
         "src/eawf/surfaces/cli/commands/roadmap.py",
         "src/eawf/runtime/daemon/methods/state.py"
       ],
+      "gates": [],
       "id": "P28-I01-W02",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38406,6 +38887,7 @@
         "src/eawf/kernel/spec/common.py",
         "tests/kernel/spec/"
       ],
+      "gates": [],
       "id": "P28-I01-W03",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38490,6 +38972,7 @@
         "tests/kernel/store/",
         "tests/runtime/daemon/methods/"
       ],
+      "gates": [],
       "id": "P28-I01-W04",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38582,6 +39065,7 @@
         "src/eawf/runtime/worktree/create.py",
         "tests/runtime/sandbox/"
       ],
+      "gates": [],
       "id": "P28-I01-W05",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38678,6 +39162,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/runtime/worktree/wave_land.py"
       ],
+      "gates": [],
       "id": "P28-I01-W06",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38753,6 +39238,7 @@
         "src/eawf/platform/lint/_conditional.py",
         "src/eawf/workflow/lifecycle/wave_sha.py"
       ],
+      "gates": [],
       "id": "P28-I01-W07",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38833,6 +39319,7 @@
         "src/eawf/workflow/audit_dsl/registry.py",
         "src/eawf/kernel/readiness.py"
       ],
+      "gates": [],
       "id": "P28-I01-W08",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38909,6 +39396,7 @@
         "src/eawf/workflow/gates/persistence.py",
         "tests/runtime/daemon/methods/test_spec.py"
       ],
+      "gates": [],
       "id": "P28-I01-W09",
       "intent": null,
       "iter_id": "P28-I01",
@@ -38960,6 +39448,7 @@
         "src/eawf/kernel/spec/profile.py",
         "tests/platform/profiles/"
       ],
+      "gates": [],
       "id": "P28-I01-W10",
       "intent": null,
       "iter_id": "P28-I01",
@@ -39023,6 +39512,7 @@
         "src/eawf/workflow/lifecycle/wave.py",
         "src/eawf/surfaces/cli/commands/lifecycle_wave.py"
       ],
+      "gates": [],
       "id": "P28-I01-W11",
       "intent": null,
       "iter_id": "P28-I01",
@@ -39103,6 +39593,7 @@
         "src/eawf/workflow/dispatch/renderer.py",
         "src/eawf/surfaces/render/agents.py"
       ],
+      "gates": [],
       "id": "P28-I01-W12",
       "intent": null,
       "iter_id": "P28-I01",
@@ -39164,6 +39655,7 @@
         "src/eawf/runtime/runtimes/claude/adapter.py",
         "src/eawf/kernel/store/kinds/agent_report.py"
       ],
+      "gates": [],
       "id": "P28-I01-W13",
       "intent": null,
       "iter_id": "P28-I01",
@@ -39226,6 +39718,7 @@
         "tests/unit/test_render_pr_body.py",
         "tests/unit/test_validate_agent_report_invariants.py"
       ],
+      "gates": [],
       "id": "P28-I01-W14",
       "intent": null,
       "iter_id": "P28-I01",
@@ -39319,6 +39812,7 @@
         "src/eawf/workflow/lifecycle/wave_sha.py",
         "tests/workflow/audit_dsl/"
       ],
+      "gates": [],
       "id": "P28-I01-W15",
       "intent": null,
       "iter_id": "P28-I01",
@@ -39426,6 +39920,7 @@
         "src/eawf/runtime/runtimes/opencode/plugin_install.py",
         "src/eawf/surfaces/cli/commands/plugin.py"
       ],
+      "gates": [],
       "id": "P28-I02-W01",
       "intent": null,
       "iter_id": "P28-I02",
@@ -39517,6 +40012,7 @@
         "src/eawf/workflow/lifecycle/wave.py",
         "src/eawf/surfaces/cli/commands/roadmap.py"
       ],
+      "gates": [],
       "id": "P28-I02-W02",
       "intent": null,
       "iter_id": "P28-I02",
@@ -39585,6 +40081,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/kernel/store/kinds/event.py"
       ],
+      "gates": [],
       "id": "P28-I02-W03",
       "intent": null,
       "iter_id": "P28-I02",
@@ -39661,6 +40158,7 @@
         "src/eawf/platform/memory/gc.py",
         "tests/kernel/state/test_mutations.py"
       ],
+      "gates": [],
       "id": "P28-I02-W04",
       "intent": null,
       "iter_id": "P28-I02",
@@ -39723,6 +40221,7 @@
         "src/eawf/platform/memory/render_context.py",
         "src/eawf/workflow/lifecycle/iter_.py"
       ],
+      "gates": [],
       "id": "P28-I02-W05",
       "intent": null,
       "iter_id": "P28-I02",
@@ -39805,6 +40304,7 @@
         "src/eawf/workflow/verify/readiness.py",
         "tests/platform/profiles/test_verify_block.py"
       ],
+      "gates": [],
       "id": "P28-I02-W06",
       "intent": null,
       "iter_id": "P28-I02",
@@ -39871,6 +40371,7 @@
         "tests/workflow/audit_dsl/test_registry_timeouts.py",
         "tests/unit/test_agent_report_store.py"
       ],
+      "gates": [],
       "id": "P28-I02-W07",
       "intent": null,
       "iter_id": "P28-I02",
@@ -39934,6 +40435,7 @@
         "src/eawf/workflow/estimation/metrics.py",
         "src/eawf/surfaces/tui/widgets/"
       ],
+      "gates": [],
       "id": "P28-I02-W08",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40013,6 +40515,7 @@
         "src/eawf/surfaces/render/decision_graph.py",
         "src/eawf/surfaces/tui/widgets/backlog_table.py"
       ],
+      "gates": [],
       "id": "P28-I02-W09",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40104,6 +40607,7 @@
         "src/eawf/kernel/store/kinds/agent_report.py",
         "src/eawf/runtime/daemon/dispatch_runner.py"
       ],
+      "gates": [],
       "id": "P28-I02-W10",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40201,6 +40705,7 @@
         "src/eawf/surfaces/render/agents_md.py",
         "src/eawf/surfaces/tui/screens/overlays/detail.py"
       ],
+      "gates": [],
       "id": "P28-I02-W11",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40301,6 +40806,7 @@
         "src/eawf/surfaces/cli/commands/repo_registry.py",
         "tests/golden/scenarios/fresh_repo/agents.golden.json"
       ],
+      "gates": [],
       "id": "P28-I02-W12",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40408,6 +40914,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/kernel/store/kinds/event.py"
       ],
+      "gates": [],
       "id": "P28-I02-W13",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40486,6 +40993,7 @@
         "src/eawf/kernel/config/schema.py",
         "tests/workflow/estimation/test_buckets.py"
       ],
+      "gates": [],
       "id": "P28-I02-W14",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40568,6 +41076,7 @@
         "tests/unit/test_event_canonical_model.py",
         "tests/daemon/test_state_methods.py"
       ],
+      "gates": [],
       "id": "P28-I02-W15",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40656,6 +41165,7 @@
         "src/eawf/workflow/lifecycle/wave.py",
         "tests/workflow/lifecycle/test_wave_claim.py"
       ],
+      "gates": [],
       "id": "P28-I02-W16",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40734,6 +41244,7 @@
         "tests/golden/subagent_spec/roles/",
         "tests/workflow/dispatch/test_renderer.py"
       ],
+      "gates": [],
       "id": "P28-I02-W17",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40809,6 +41320,7 @@
         "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
         "src/eawf/surfaces/render/plan_view.py"
       ],
+      "gates": [],
       "id": "P28-I02-W18",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40902,6 +41414,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/kernel/store/kinds/event.py"
       ],
+      "gates": [],
       "id": "P28-I02-W19",
       "intent": null,
       "iter_id": "P28-I02",
@@ -40991,6 +41504,7 @@
         "src/eawf/runtime/daemon/stale_wave.py",
         "src/eawf/kernel/store/kinds/event.py"
       ],
+      "gates": [],
       "id": "P28-I02-W20",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41083,6 +41597,7 @@
         "tests/runtime/daemon/",
         "tests/surfaces/cli/"
       ],
+      "gates": [],
       "id": "P28-I02-W21",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41157,6 +41672,7 @@
         "AGENTS.md",
         "src/eawf/platform/install/wizard.py"
       ],
+      "gates": [],
       "id": "P28-I02-W22",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41231,6 +41747,7 @@
       "file_scopes": [
         "tests/"
       ],
+      "gates": [],
       "id": "P28-I02-W23",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41313,6 +41830,7 @@
         "tests/daemon/test_spawn.py",
         "tests/daemon/test_service_install.py"
       ],
+      "gates": [],
       "id": "P28-I02-W24",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41430,6 +41948,7 @@
         "src/eawf/workflow/evidence/decision.py",
         "tests/daemon/test_state_methods.py"
       ],
+      "gates": [],
       "id": "P28-I02-W25",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41504,6 +42023,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P28-I02-W26",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41577,6 +42097,7 @@
         "src/eawf/runtime/daemon/dispatch_runner.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P28-I02-W27",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41650,6 +42171,7 @@
         "src/eawf/surfaces/cli/commands/**",
         "tests/**"
       ],
+      "gates": [],
       "id": "P28-I02-W28",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41723,6 +42245,7 @@
         "src/eawf/platform/config/**",
         "tests/**"
       ],
+      "gates": [],
       "id": "P28-I02-W29",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41797,6 +42320,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P28-I02-W30",
       "intent": null,
       "iter_id": "P28-I02",
@@ -41893,6 +42417,7 @@
         "src/eawf/surfaces/render/release_notes.py",
         "tests/surfaces/render/"
       ],
+      "gates": [],
       "id": "P28-I03-W01",
       "intent": null,
       "iter_id": "P28-I03",
@@ -41972,6 +42497,7 @@
         "src/eawf/platform/lint/tools/commit_prefix_lint.py",
         "src/eawf/workflow/lifecycle/wave_sha.py"
       ],
+      "gates": [],
       "id": "P28-I03-W02",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42046,6 +42572,7 @@
         "src/eawf/platform/lint/tools/agents_md_budget.py",
         "docs/conventions.md"
       ],
+      "gates": [],
       "id": "P28-I03-W03",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42124,6 +42651,7 @@
         "src/eawf/platform/lint/tools/eawf015_ears_advisory.py",
         ".pre-commit-config.yaml"
       ],
+      "gates": [],
       "id": "P28-I03-W04",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42188,6 +42716,7 @@
         "src/eawf/workflow/skills/needs_user.py",
         "src/eawf/surfaces/tui/screens/overlays/needs_user.py"
       ],
+      "gates": [],
       "id": "P28-I03-W05",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42289,6 +42818,7 @@
         "src/eawf/surfaces/cli/app.py",
         "src/eawf/surfaces/tui/screens/"
       ],
+      "gates": [],
       "id": "P28-I03-W06",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42350,6 +42880,7 @@
         "src/eawf/platform/install/runtimes/codex/skills.py",
         "tests/platform/install/runtimes/codex/"
       ],
+      "gates": [],
       "id": "P28-I03-W07",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42424,6 +42955,7 @@
         "src/eawf/platform/install/runtimes/opencode/plugin_install.py",
         "tests/platform/install/runtimes/opencode/"
       ],
+      "gates": [],
       "id": "P28-I03-W08",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42500,6 +43032,7 @@
         "tests/platform/install/runtimes/claude/",
         "tests/golden/subagent_spec/"
       ],
+      "gates": [],
       "id": "P28-I03-W09",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42592,6 +43125,7 @@
         "src/eawf/platform/install/gitignore_writer.py",
         "src/eawf/platform/profiles/data"
       ],
+      "gates": [],
       "id": "P28-I03-W10",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42714,6 +43248,7 @@
         "src/eawf/observability/eval/rule_adherence.py",
         "tests/eval/waves/recorded/"
       ],
+      "gates": [],
       "id": "P28-I03-W11",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42802,6 +43337,7 @@
         "src/eawf/observability/eval/experiments/",
         "tests/eval/experiments/"
       ],
+      "gates": [],
       "id": "P28-I03-W12",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42886,6 +43422,7 @@
         "src/eawf/surfaces/cli/commands/why.py",
         "tests/workflow/estimation/test_trust_scorecard.py"
       ],
+      "gates": [],
       "id": "P28-I03-W13",
       "intent": null,
       "iter_id": "P28-I03",
@@ -42988,6 +43525,7 @@
         "src/eawf/workflow/lifecycle/ceremony.py",
         "src/eawf/workflow/dispatch/renderer.py"
       ],
+      "gates": [],
       "id": "P28-I03-W14",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43060,6 +43598,7 @@
         "src/eawf/observability/telemetry/otel.py",
         "src/eawf/observability/telemetry/pricing.py"
       ],
+      "gates": [],
       "id": "P28-I03-W15",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43135,6 +43674,7 @@
         ".github/workflows/reviewdog.yml",
         "tests/platform/lint/"
       ],
+      "gates": [],
       "id": "P28-I03-W16",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43215,6 +43755,7 @@
         "src/eawf/workflow/skills/ship.py",
         "src/eawf/workflow/lifecycle/phase.py"
       ],
+      "gates": [],
       "id": "P28-I03-W17",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43293,6 +43834,7 @@
         "src/eawf/surfaces/tui/screens/overlays/metrics.py",
         "tests/observability/telemetry/"
       ],
+      "gates": [],
       "id": "P28-I03-W18",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43366,6 +43908,7 @@
         "src/eawf/surfaces/tui/scopes/_zoom.py",
         "tests/surfaces/tui/"
       ],
+      "gates": [],
       "id": "P28-I03-W19",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43438,6 +43981,7 @@
         "src/eawf/workflow/skills/research.py",
         "tests/workflow/skills/test_research.py"
       ],
+      "gates": [],
       "id": "P28-I03-W20",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43502,6 +44046,7 @@
         "tests/surfaces/tui/screens/overlays/test_detail.py",
         "tests/surfaces/cli/commands/test_wave.py"
       ],
+      "gates": [],
       "id": "P28-I03-W21",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43589,6 +44134,7 @@
         "docs/concepts.md",
         "mkdocs.yml"
       ],
+      "gates": [],
       "id": "P28-I03-W22",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43662,6 +44208,7 @@
         "docs/tutorial/tui-tour.md",
         "docs/_static/"
       ],
+      "gates": [],
       "id": "P28-I03-W23",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43734,6 +44281,7 @@
         "docs/tutorial/troubleshooting.md",
         "docs/reference/doctor.md"
       ],
+      "gates": [],
       "id": "P28-I03-W24",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43779,6 +44327,7 @@
         "CONTRIBUTING.md",
         "README.md"
       ],
+      "gates": [],
       "id": "P28-I03-W25",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43840,6 +44389,7 @@
         "src/eawf/surfaces/cli/commands/calibrate.py",
         "tests/surfaces/cli/"
       ],
+      "gates": [],
       "id": "P28-I03-W26",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43917,6 +44467,7 @@
         "src/eawf/surfaces/tui/screens/overlays/detail.py",
         "src/eawf/workflow/agent_report/rollup.py"
       ],
+      "gates": [],
       "id": "P28-I03-W27",
       "intent": null,
       "iter_id": "P28-I03",
@@ -43993,6 +44544,7 @@
         "src/eawf/workflow/estimation/metrics.py",
         "src/eawf/surfaces/cli/commands/roadmap.py"
       ],
+      "gates": [],
       "id": "P28-I03-W28",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44069,6 +44621,7 @@
         "src/eawf/surfaces/tui/widgets/calibration_table.py",
         "src/eawf/observability/telemetry/metrics_projection.py"
       ],
+      "gates": [],
       "id": "P28-I03-W29",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44161,6 +44714,7 @@
         "src/eawf/observability/telemetry/join.py",
         "src/eawf/kernel/state/models.py"
       ],
+      "gates": [],
       "id": "P28-I03-W30",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44266,6 +44820,7 @@
         "tests/unit/test_commit_prefix_lint.py",
         "AGENTS.md"
       ],
+      "gates": [],
       "id": "P28-I03-W31",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44358,6 +44913,7 @@
         "src/eawf/surfaces/tui/palette/command_palette.py",
         "src/eawf/surfaces/tui/palette/verbs.py"
       ],
+      "gates": [],
       "id": "P28-I03-W32",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44464,6 +45020,7 @@
         "src/eawf/platform/lint/tools/eawf016_laconic_bullet.py",
         "src/eawf/kernel/config/defaults.py"
       ],
+      "gates": [],
       "id": "P28-I03-W33",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44570,6 +45127,7 @@
         ".github/workflows/phase-release.yaml",
         ".github/workflows/ci.yaml"
       ],
+      "gates": [],
       "id": "P28-I03-W34",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44661,6 +45219,7 @@
         "src/eawf/surfaces/tui/palette/command_palette.py",
         "src/eawf/surfaces/tui/palette/verbs.py"
       ],
+      "gates": [],
       "id": "P28-I03-W35",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44776,6 +45335,7 @@
       "file_scopes": [
         "src/eawf/**/*.py"
       ],
+      "gates": [],
       "id": "P28-I03-W36",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44854,6 +45414,7 @@
         "tests/surfaces/cli/test_roadmap_propose.py",
         "tests/workflow/lifecycle/test_transitions.py"
       ],
+      "gates": [],
       "id": "P28-I03-W37",
       "intent": null,
       "iter_id": "P28-I03",
@@ -44955,6 +45516,7 @@
       "file_scopes": [
         "docs/*"
       ],
+      "gates": [],
       "id": "P28-I03-W38",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45014,6 +45576,7 @@
         ".ea/state.json",
         ".ea/store/audit.jsonl"
       ],
+      "gates": [],
       "id": "P28-I03-W39",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45096,6 +45659,7 @@
         "tests/cli/test_lifecycle_daemon_routing.py",
         "tests/unit/test_variance_calibrate.py"
       ],
+      "gates": [],
       "id": "P28-I03-W40",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45171,6 +45735,7 @@
         "src/eawf/runtime/sandbox/argv_policy.py",
         "tests/runtime/sandbox/test_argv_policy.py"
       ],
+      "gates": [],
       "id": "P28-I03-W41",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45249,6 +45814,7 @@
         "tests/workflow/estimation/test_trust_scorecard.py",
         "tests/observability/telemetry/test_metrics_projection.py"
       ],
+      "gates": [],
       "id": "P28-I03-W42",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45331,6 +45897,7 @@
         "tests/unit/test_lifecycle_phase_prepare_close.py",
         "tests/integration/test_cli_lifecycle.py"
       ],
+      "gates": [],
       "id": "P28-I03-W43",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45409,6 +45976,7 @@
         "tests/integration/test_cli_roadmap.py",
         "tests/workflow/lifecycle/test_transitions.py"
       ],
+      "gates": [],
       "id": "P28-I03-W44",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45504,6 +46072,7 @@
         "tests/unit/test_subagent_roles.py",
         "tests/golden/subagent_spec/**"
       ],
+      "gates": [],
       "id": "P28-I03-W45",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45584,6 +46153,7 @@
         "tests/tui/test_reference_links.py",
         "tests/tui/test_overlays_detail.py"
       ],
+      "gates": [],
       "id": "P28-I03-W46",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45661,6 +46231,7 @@
         "docs/reference/**/*.md",
         "docs/reference/autogen/**/*.json"
       ],
+      "gates": [],
       "id": "P28-I03-W47",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45750,6 +46321,7 @@
         "src/eawf/kernel/spec/roadmap_plan.py",
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P28-I03-W48",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45830,6 +46402,7 @@
         "tests/golden/plan_view/test_golden_plan_view.py",
         "tests/golden/subagent_spec/full_wave.md"
       ],
+      "gates": [],
       "id": "P28-I03-W49",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45910,6 +46483,7 @@
         "tests/integration/test_phase2_acceptance.py",
         "tests/golden/dispatch/**"
       ],
+      "gates": [],
       "id": "P28-I03-W50",
       "intent": null,
       "iter_id": "P28-I03",
@@ -45990,6 +46564,7 @@
         "src/eawf/surfaces/cli/commands/roadmap.py",
         "src/eawf/surfaces/tui/app.py"
       ],
+      "gates": [],
       "id": "P28-I03-W51",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46051,6 +46626,7 @@
         "tests/kernel/spec/test_intent.py",
         "tests/surfaces/render/test_narrative.py"
       ],
+      "gates": [],
       "id": "P28-I03-W52",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46163,6 +46739,7 @@
         "src/eawf/surfaces/tui/theme.tcss",
         "tests/daemon/test_stale_wave.py"
       ],
+      "gates": [],
       "id": "P28-I03-W53",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46209,6 +46786,7 @@
         "tests/surfaces/tui/widgets/test_status_pane.py",
         "tests/runtime/daemon/methods/test_state_actuals.py"
       ],
+      "gates": [],
       "id": "P28-I03-W54",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46258,6 +46836,7 @@
         "tests/surfaces/tui/screens/overlays/test_detail.py",
         "tests/golden/narrative/"
       ],
+      "gates": [],
       "id": "P28-I03-W55",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46306,6 +46885,7 @@
         "src/eawf/surfaces/cli/commands/backlog.py",
         "tests/runtime/daemon/methods/test_backlog.py"
       ],
+      "gates": [],
       "id": "P28-I03-W56",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46410,6 +46990,7 @@
         "tests/workflow/agents/specs/test_models.py",
         "tests/runtime/daemon/test_dispatch_runner.py"
       ],
+      "gates": [],
       "id": "P28-I03-W57",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46455,6 +47036,7 @@
         "tests/runtime/runtimes/codex/test_plugin_install.py",
         "tests/golden/codex_plugin/"
       ],
+      "gates": [],
       "id": "P28-I03-W58",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46515,6 +47097,7 @@
         "src/eawf/kernel/spec/intent.py",
         "tests/unit/test_intent_brief.py"
       ],
+      "gates": [],
       "id": "P28-I03-W59",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46628,6 +47211,7 @@
         "tests/unit/test_render_narrative.py",
         "tests/integration/test_cli_evidence.py"
       ],
+      "gates": [],
       "id": "P28-I03-W60",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46688,6 +47272,7 @@
         "tests/integration/test_cli_evidence.py",
         "CHANGELOG.md"
       ],
+      "gates": [],
       "id": "P28-I03-W61",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46792,6 +47377,7 @@
         "tests/unit/test_docs_autogen.py",
         "tests/unit/test_packaging.py"
       ],
+      "gates": [],
       "id": "P28-I03-W62",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46835,6 +47421,7 @@
       "file_scopes": [
         "tests/perf/cli/test_import_budget.py"
       ],
+      "gates": [],
       "id": "P28-I03-W63",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46883,6 +47470,7 @@
         "tests/unit/test_telemetry_*.py",
         "tests/daemon/test_telemetry_*.py"
       ],
+      "gates": [],
       "id": "P28-I03-W64",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46927,6 +47515,7 @@
         "tests/perf/cli/test_import_budget.py",
         "tests/perf/tui/test_perf_budget.py"
       ],
+      "gates": [],
       "id": "P28-I03-W65",
       "intent": null,
       "iter_id": "P28-I03",
@@ -46975,6 +47564,7 @@
         "src/eawf/kernel/state/enums.py",
         "src/eawf/kernel/migrations/**"
       ],
+      "gates": [],
       "id": "P29-I01-W01",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47034,6 +47624,7 @@
       "file_scopes": [
         "src/eawf/observability/telemetry/**"
       ],
+      "gates": [],
       "id": "P29-I01-W02",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47094,6 +47685,7 @@
         "src/eawf/observability/telemetry/**",
         "src/eawf/workflow/estimation/**"
       ],
+      "gates": [],
       "id": "P29-I01-W03",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47151,6 +47743,7 @@
       "file_scopes": [
         "src/eawf/observability/doctor/**"
       ],
+      "gates": [],
       "id": "P29-I01-W04",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47196,6 +47789,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/**"
       ],
+      "gates": [],
       "id": "P29-I01-W05",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47255,6 +47849,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/**"
       ],
+      "gates": [],
       "id": "P29-I01-W06",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47316,6 +47911,7 @@
         "src/eawf/workflow/evidence/**",
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W07",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47380,6 +47976,7 @@
         "src/eawf/workflow/evidence/**",
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W08",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47442,6 +48039,7 @@
         "src/eawf/workflow/evidence/**",
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W09",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47504,6 +48102,7 @@
         "src/eawf/workflow/evidence/**",
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W10",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47551,6 +48150,7 @@
         "src/eawf/kernel/spec/**",
         "src/eawf/kernel/config/**"
       ],
+      "gates": [],
       "id": "P29-I01-W11",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47616,6 +48216,7 @@
         "src/eawf/kernel/spec/**",
         "src/eawf/kernel/state/**"
       ],
+      "gates": [],
       "id": "P29-I01-W12",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47679,6 +48280,7 @@
       "file_scopes": [
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W13",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47743,6 +48345,7 @@
         "src/eawf/kernel/spec/**",
         "src/eawf/kernel/store/kinds/**"
       ],
+      "gates": [],
       "id": "P29-I01-W14",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47807,6 +48410,7 @@
         "src/eawf/kernel/spec/**",
         "src/eawf/kernel/store/kinds/**"
       ],
+      "gates": [],
       "id": "P29-I01-W15",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47869,6 +48473,7 @@
       "file_scopes": [
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W16",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47930,6 +48535,7 @@
         "src/eawf/workflow/skills/**",
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W17",
       "intent": null,
       "iter_id": "P29-I01",
@@ -47976,6 +48582,7 @@
       "file_scopes": [
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W18",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48026,6 +48633,7 @@
         "src/eawf/kernel/state/models.py",
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I01-W19",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48072,6 +48680,7 @@
       "file_scopes": [
         "src/eawf/observability/telemetry/pricing.py"
       ],
+      "gates": [],
       "id": "P29-I01-W20",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48137,6 +48746,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I01-W21",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48200,6 +48810,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I01-W22",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48262,6 +48873,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/kernel/config/**"
       ],
+      "gates": [],
       "id": "P29-I01-W23",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48322,6 +48934,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I01-W24",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48385,6 +48998,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I01-W25",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48443,6 +49057,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I01-W26",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48492,6 +49107,7 @@
         "src/eawf/workflow/skills/**",
         "src/eawf/platform/profiles/**"
       ],
+      "gates": [],
       "id": "P29-I01-W27",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48552,6 +49168,7 @@
         "src/eawf/schemas/**",
         "docs/reference/autogen/**"
       ],
+      "gates": [],
       "id": "P29-I01-W28",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48611,6 +49228,7 @@
       "file_scopes": [
         "src/eawf/workflow/evidence/**"
       ],
+      "gates": [],
       "id": "P29-I01-W29",
       "intent": null,
       "iter_id": "P29-I01",
@@ -48668,6 +49286,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W01",
       "intent": null,
       "iter_id": "P29-I02",
@@ -48711,6 +49330,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W02",
       "intent": null,
       "iter_id": "P29-I02",
@@ -48754,6 +49374,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W03",
       "intent": null,
       "iter_id": "P29-I02",
@@ -48797,6 +49418,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W04",
       "intent": null,
       "iter_id": "P29-I02",
@@ -48840,6 +49462,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W05",
       "intent": null,
       "iter_id": "P29-I02",
@@ -48897,6 +49520,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W06",
       "intent": null,
       "iter_id": "P29-I02",
@@ -48940,6 +49564,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W07",
       "intent": null,
       "iter_id": "P29-I02",
@@ -48983,6 +49608,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W08",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49028,6 +49654,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W09",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49071,6 +49698,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W10",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49128,6 +49756,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W11",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49171,6 +49800,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I02-W12",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49218,6 +49848,7 @@
         "src/eawf/workflow/skills/**",
         "src/eawf/kernel/state/models.py"
       ],
+      "gates": [],
       "id": "P29-I02-W13",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49263,6 +49894,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W14",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49308,6 +49940,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W15",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49381,6 +50014,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W16",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49440,6 +50074,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W17",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49487,6 +50122,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W18",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49533,6 +50169,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W19",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49578,6 +50215,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W20",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49623,6 +50261,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W21",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49668,6 +50307,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W22",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49715,6 +50355,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W23",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49762,6 +50403,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W24",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49807,6 +50449,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W25",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49852,6 +50495,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W26",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49897,6 +50541,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W27",
       "intent": null,
       "iter_id": "P29-I02",
@@ -49956,6 +50601,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W28",
       "intent": null,
       "iter_id": "P29-I02",
@@ -50009,6 +50655,7 @@
         "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P29-I02-W29",
       "intent": null,
       "iter_id": "P29-I02",
@@ -50128,6 +50775,7 @@
         "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
         "tests/**"
       ],
+      "gates": [],
       "id": "P29-I02-W30",
       "intent": null,
       "iter_id": "P29-I02",
@@ -50255,6 +50903,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I02-W31",
       "intent": null,
       "iter_id": "P29-I02",
@@ -50298,6 +50947,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/**"
       ],
+      "gates": [],
       "id": "P29-I02-W32",
       "intent": null,
       "iter_id": "P29-I02",
@@ -50346,6 +50996,7 @@
       "file_scopes": [
         "src/eawf/runtime/sandbox/**"
       ],
+      "gates": [],
       "id": "P29-I03-W01",
       "intent": null,
       "iter_id": "P29-I03",
@@ -50393,6 +51044,7 @@
       "file_scopes": [
         "src/eawf/runtime/sandbox/**"
       ],
+      "gates": [],
       "id": "P29-I03-W02",
       "intent": null,
       "iter_id": "P29-I03",
@@ -50452,6 +51104,7 @@
       "file_scopes": [
         "src/eawf/runtime/sandbox/**"
       ],
+      "gates": [],
       "id": "P29-I03-W03",
       "intent": null,
       "iter_id": "P29-I03",
@@ -50504,6 +51157,7 @@
       "file_scopes": [
         "src/eawf/runtime/sandbox/**"
       ],
+      "gates": [],
       "id": "P29-I03-W04",
       "intent": null,
       "iter_id": "P29-I03",
@@ -50566,6 +51220,7 @@
         "src/eawf/runtime/budget/**",
         "src/eawf/runtime/daemon/**"
       ],
+      "gates": [],
       "id": "P29-I03-W05",
       "intent": null,
       "iter_id": "P29-I03",
@@ -50619,6 +51274,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W01",
       "intent": null,
       "iter_id": "P29-I04",
@@ -50679,6 +51335,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W02",
       "intent": null,
       "iter_id": "P29-I04",
@@ -50726,6 +51383,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W03",
       "intent": null,
       "iter_id": "P29-I04",
@@ -50771,6 +51429,7 @@
         "src/eawf/runtime/runtimes/opencode/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W04",
       "intent": null,
       "iter_id": "P29-I04",
@@ -50823,6 +51482,7 @@
         "src/eawf/runtime/runtimes/opencode/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W05",
       "intent": null,
       "iter_id": "P29-I04",
@@ -50887,6 +51547,7 @@
         "src/eawf/runtime/runtimes/opencode/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W06",
       "intent": null,
       "iter_id": "P29-I04",
@@ -50951,6 +51612,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W07",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51030,6 +51692,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/**"
       ],
+      "gates": [],
       "id": "P29-I04-W08",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51095,6 +51758,7 @@
       "file_scopes": [
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I04-W09",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51140,6 +51804,7 @@
       "file_scopes": [
         "src/eawf/kernel/spec/**"
       ],
+      "gates": [],
       "id": "P29-I04-W10",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51187,6 +51852,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I04-W11",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51233,6 +51899,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I04-W12",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51280,6 +51947,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/**"
       ],
+      "gates": [],
       "id": "P29-I04-W13",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51324,6 +51992,7 @@
         "pyproject.toml",
         "tests/snapshots/tui/golden/**"
       ],
+      "gates": [],
       "id": "P29-I04-W14",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51359,6 +52028,7 @@
         "src/eawf/runtime/sandbox/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I04-W15",
       "intent": null,
       "iter_id": "P29-I04",
@@ -51407,6 +52077,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/**"
       ],
+      "gates": [],
       "id": "P29-I05-W01",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51454,6 +52125,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/**"
       ],
+      "gates": [],
       "id": "P29-I05-W02",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51516,6 +52188,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/**"
       ],
+      "gates": [],
       "id": "P29-I05-W03",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51562,6 +52235,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/**"
       ],
+      "gates": [],
       "id": "P29-I05-W04",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51610,6 +52284,7 @@
         "src/eawf/workflow/dispatch/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I05-W05",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51661,6 +52336,7 @@
         "tests/tui/**",
         "tests/snapshots/tui/**"
       ],
+      "gates": [],
       "id": "P29-I05-W06",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51735,6 +52411,7 @@
         "src/eawf/surfaces/tui/modes/autopilot.py",
         "tests/tui/test_modes_autopilot.py"
       ],
+      "gates": [],
       "id": "P29-I05-W07",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51823,6 +52500,7 @@
         "src/eawf/surfaces/tui/modes/research_board.py",
         "tests/tui/**"
       ],
+      "gates": [],
       "id": "P29-I05-W08",
       "intent": null,
       "iter_id": "P29-I05",
@@ -51915,6 +52593,7 @@
         "tests/tui/**",
         "src/eawf/surfaces/tui/screens/overlays/multichoice_checklist.py"
       ],
+      "gates": [],
       "id": "P29-I05-W09",
       "intent": null,
       "iter_id": "P29-I05",
@@ -52004,6 +52683,7 @@
         "src/eawf/surfaces/tui/widgets/header.py",
         "tests/tui/**"
       ],
+      "gates": [],
       "id": "P29-I05-W10",
       "intent": null,
       "iter_id": "P29-I05",
@@ -52080,6 +52760,7 @@
         "tests/eval/**",
         "tests/workflow/dispatch/**"
       ],
+      "gates": [],
       "id": "P29-I05-W11",
       "intent": null,
       "iter_id": "P29-I05",
@@ -52125,6 +52806,7 @@
         "src/eawf/surfaces/tui/modes/autopilot.py",
         "tests/tui/**"
       ],
+      "gates": [],
       "id": "P29-I05-W12",
       "intent": null,
       "iter_id": "P29-I05",
@@ -52184,6 +52866,7 @@
         "src/eawf/surfaces/tui/app.py",
         "tests/tui/**"
       ],
+      "gates": [],
       "id": "P29-I05-W13",
       "intent": null,
       "iter_id": "P29-I05",
@@ -52228,6 +52911,7 @@
         "src/eawf/surfaces/tui/state_binding.py",
         "tests/tui/**"
       ],
+      "gates": [],
       "id": "P29-I05-W14",
       "intent": null,
       "iter_id": "P29-I05",
@@ -52291,6 +52975,7 @@
         "src/eawf/platform/install/**",
         "src/eawf/surfaces/render/skills/**"
       ],
+      "gates": [],
       "id": "P29-I06-W01",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52338,6 +53023,7 @@
         "src/eawf/surfaces/render/skills/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I06-W02",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52385,6 +53071,7 @@
         "src/eawf/surfaces/render/skills/**",
         "src/eawf/runtime/runtimes/**"
       ],
+      "gates": [],
       "id": "P29-I06-W03",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52428,6 +53115,7 @@
       "file_scopes": [
         ".gitignore"
       ],
+      "gates": [],
       "id": "P29-I06-W04",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52481,6 +53169,7 @@
         ".claude-plugin/**",
         ".agents/**"
       ],
+      "gates": [],
       "id": "P29-I06-W05",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52542,6 +53231,7 @@
       "file_scopes": [
         ".github/workflows/**"
       ],
+      "gates": [],
       "id": "P29-I06-W06",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52589,6 +53279,7 @@
         "CHANGELOG.md",
         "docs/**"
       ],
+      "gates": [],
       "id": "P29-I06-W07",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52633,6 +53324,7 @@
         "src/eawf/platform/lint/**",
         ".pre-commit-config.yaml"
       ],
+      "gates": [],
       "id": "P29-I06-W08",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52679,6 +53371,7 @@
         "src/eawf/kernel/state/models.py",
         "src/eawf/kernel/migrations/**"
       ],
+      "gates": [],
       "id": "P29-I06-W09",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52729,6 +53422,7 @@
         "pyproject.toml",
         "CHANGELOG.md"
       ],
+      "gates": [],
       "id": "P29-I06-W10",
       "intent": null,
       "iter_id": "P29-I06",
@@ -52779,6 +53473,7 @@
         "src/eawf/platform/profiles/**",
         "src/eawf/kernel/config/**"
       ],
+      "gates": [],
       "id": "P29-I07-W01",
       "intent": null,
       "iter_id": "P29-I07",
@@ -52829,6 +53524,7 @@
         "src/eawf/surfaces/render/**",
         "src/eawf/kernel/state/models.py"
       ],
+      "gates": [],
       "id": "P29-I07-W02",
       "intent": null,
       "iter_id": "P29-I07",
@@ -52880,6 +53576,7 @@
         "src/eawf/runtime/hooks/**",
         "src/eawf/surfaces/cli/commands/hook.py"
       ],
+      "gates": [],
       "id": "P29-I07-W03",
       "intent": null,
       "iter_id": "P29-I07",
@@ -52929,6 +53626,7 @@
         ".github/workflows/**",
         ".pre-commit-config.yaml"
       ],
+      "gates": [],
       "id": "P29-I07-W04",
       "intent": null,
       "iter_id": "P29-I07",
@@ -52975,6 +53673,7 @@
         "src/eawf/platform/lint/**",
         "src/eawf/surfaces/render/**"
       ],
+      "gates": [],
       "id": "P29-I07-W05",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53037,6 +53736,7 @@
         "src/eawf/platform/profiles/**",
         "src/eawf/platform/lint/**"
       ],
+      "gates": [],
       "id": "P29-I07-W06",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53099,6 +53799,7 @@
         "src/eawf/platform/lint/tools/**",
         "src/eawf/surfaces/cli/**"
       ],
+      "gates": [],
       "id": "P29-I07-W07",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53145,6 +53846,7 @@
         "src/eawf/platform/lint/**",
         "src/eawf/workflow/dispatch/**"
       ],
+      "gates": [],
       "id": "P29-I07-W08",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53197,6 +53899,7 @@
         "src/eawf/kernel/state/enums.py",
         "src/eawf/kernel/state/urn.py"
       ],
+      "gates": [],
       "id": "P29-I07-W09",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53245,6 +53948,7 @@
         "src/eawf/kernel/spec/**",
         "src/eawf/platform/lint/**"
       ],
+      "gates": [],
       "id": "P29-I07-W10",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53293,6 +53997,7 @@
         "src/eawf/workflow/skills/**",
         "src/eawf/surfaces/render/skills/**"
       ],
+      "gates": [],
       "id": "P29-I07-W11",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53336,6 +54041,7 @@
       "file_scopes": [
         "pyproject.toml"
       ],
+      "gates": [],
       "id": "P29-I07-W12",
       "intent": null,
       "iter_id": "P29-I07",
@@ -53382,6 +54088,7 @@
         "src/eawf/kernel/spec/wave.py",
         "src/eawf/workflow/audit_dsl/kinds/verify_implements.py"
       ],
+      "gates": [],
       "id": "P29-I08-W01",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53429,6 +54136,7 @@
       "file_scopes": [
         "src/eawf/workflow/dispatch/verdict.py"
       ],
+      "gates": [],
       "id": "P29-I08-W02",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53476,6 +54184,7 @@
         "src/eawf/surfaces/tui/snapshot/asciinema.py",
         "tools/snapshot_pairing_gate.py"
       ],
+      "gates": [],
       "id": "P29-I08-W03",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53524,6 +54233,7 @@
       "file_scopes": [
         "src/eawf/observability/eval/cross_vendor_jury.py"
       ],
+      "gates": [],
       "id": "P29-I08-W04",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53572,6 +54282,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/workflow/dispatch/verdict.py"
       ],
+      "gates": [],
       "id": "P29-I08-W05",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53622,6 +54333,7 @@
         "src/eawf/platform/profiles/models.py",
         "src/eawf/platform/profiles/data/core.yaml"
       ],
+      "gates": [],
       "id": "P29-I08-W06",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53668,6 +54380,7 @@
         "tools/idle_contract_gate.py",
         "src/eawf/workflow/dispatch/verdict.py"
       ],
+      "gates": [],
       "id": "P29-I08-W07",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53716,6 +54429,7 @@
         "tools/jury_discrimination_gate.py",
         "src/eawf/observability/eval/cross_vendor_jury.py"
       ],
+      "gates": [],
       "id": "P29-I08-W08",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53764,6 +54478,7 @@
         "src/eawf/surfaces/tui/snapshot/pilot_harness.py",
         "src/eawf/surfaces/tui/snapshot/asciinema.py"
       ],
+      "gates": [],
       "id": "P29-I08-W09",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53812,6 +54527,7 @@
         "src/eawf/surfaces/tui/app.py",
         "src/eawf/surfaces/tui/widgets/attention_feed.py"
       ],
+      "gates": [],
       "id": "P29-I08-W10",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53859,6 +54575,7 @@
         "tests/observability/",
         "src/eawf/workflow/dispatch/verdict.py"
       ],
+      "gates": [],
       "id": "P29-I08-W11",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53902,6 +54619,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/header.py"
       ],
+      "gates": [],
       "id": "P29-I08-W12",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53950,6 +54668,7 @@
         "src/eawf/surfaces/render/artifact_chassis.py",
         "src/eawf/platform/artifacts/validation.py"
       ],
+      "gates": [],
       "id": "P29-I08-W13",
       "intent": null,
       "iter_id": "P29-I08",
@@ -53996,6 +54715,7 @@
         "src/eawf/surfaces/render/link_wrap.py",
         "src/eawf/surfaces/render/artifact_chassis.py"
       ],
+      "gates": [],
       "id": "P29-I08-W14",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54041,6 +54761,7 @@
       "file_scopes": [
         "src/eawf/surfaces/render/release_notes.py"
       ],
+      "gates": [],
       "id": "P29-I08-W15",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54088,6 +54809,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/research_board.py"
       ],
+      "gates": [],
       "id": "P29-I08-W16",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54134,6 +54856,7 @@
         "src/eawf/surfaces/tui/modes/research_board.py",
         "src/eawf/surfaces/tui/app.py"
       ],
+      "gates": [],
       "id": "P29-I08-W17",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54181,6 +54904,7 @@
         "src/eawf/surfaces/tui/app.py",
         "src/eawf/surfaces/tui/widgets/attention_feed.py"
       ],
+      "gates": [],
       "id": "P29-I08-W18",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54227,6 +54951,7 @@
         "tests/tui/",
         "src/eawf/surfaces/tui/app.py"
       ],
+      "gates": [],
       "id": "P29-I08-W19",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54274,6 +54999,7 @@
         "tests/tui/",
         "src/eawf/surfaces/tui/snapshot/asciinema.py"
       ],
+      "gates": [],
       "id": "P29-I08-W20",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54319,6 +55045,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/footer.py"
       ],
+      "gates": [],
       "id": "P29-I08-W21",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54367,6 +55094,7 @@
         "src/eawf/surfaces/tui/widgets/footer.py",
         "src/eawf/surfaces/tui/modes/research_board.py"
       ],
+      "gates": [],
       "id": "P29-I08-W22",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54414,6 +55142,7 @@
         "tests/tui/",
         "src/eawf/surfaces/tui/widgets/footer.py"
       ],
+      "gates": [],
       "id": "P29-I08-W23",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54457,6 +55186,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/app.py"
       ],
+      "gates": [],
       "id": "P29-I08-W24",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54501,6 +55231,7 @@
         "src/eawf/surfaces/tui/app.py",
         "src/eawf/surfaces/tui/scopes/__init__.py"
       ],
+      "gates": [],
       "id": "P29-I08-W25",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54548,6 +55279,7 @@
         "tests/config/",
         "src/eawf/kernel/config/registry/leaf_catalog.py"
       ],
+      "gates": [],
       "id": "P29-I08-W26",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54596,6 +55328,7 @@
         "src/eawf/surfaces/tui/screens/overlays/config_modal.py",
         "src/eawf/kernel/config/registry/coercion.py"
       ],
+      "gates": [],
       "id": "P29-I08-W27",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54644,6 +55377,7 @@
         "src/eawf/runtime/daemon/methods/config.py",
         "src/eawf/surfaces/tui/screens/overlays/config_modal.py"
       ],
+      "gates": [],
       "id": "P29-I08-W28",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54692,6 +55426,7 @@
         "tests/tui/",
         "src/eawf/surfaces/tui/screens/overlays/config_modal.py"
       ],
+      "gates": [],
       "id": "P29-I08-W29",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54737,6 +55472,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/commands/status.py"
       ],
+      "gates": [],
       "id": "P29-I08-W30",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54784,6 +55520,7 @@
       "file_scopes": [
         "src/eawf/surfaces/cli/commands/memory.py"
       ],
+      "gates": [],
       "id": "P29-I08-W31",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54830,6 +55567,7 @@
         "src/eawf/platform/profiles/data/core.yaml",
         "AGENTS.md"
       ],
+      "gates": [],
       "id": "P29-I08-W32",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54874,6 +55612,7 @@
         "tests/golden/scenarios/fresh_repo/agents.golden.json",
         "tests/integration/test_cli_artifact_chassis.py"
       ],
+      "gates": [],
       "id": "P29-I08-W33",
       "intent": null,
       "iter_id": "P29-I08",
@@ -54918,6 +55657,7 @@
         "src/eawf/surfaces/tui/app.py",
         "src/eawf/surfaces/tui/modes/brief_viewer.py"
       ],
+      "gates": [],
       "id": "P29-I09-W01",
       "intent": null,
       "iter_id": "P29-I09",
@@ -54964,6 +55704,7 @@
         "src/eawf/surfaces/tui/screens/overlays/detail.py",
         "src/eawf/surfaces/tui/palette/verbs.py"
       ],
+      "gates": [],
       "id": "P29-I09-W02",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55020,6 +55761,7 @@
         "src/eawf/surfaces/tui/modes/doctor.py",
         "src/eawf/surfaces/tui/modes/placeholder.py"
       ],
+      "gates": [],
       "id": "P29-I09-W03",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55067,6 +55809,7 @@
         "src/eawf/surfaces/tui/scopes/__init__.py",
         "tests/tui/test_widgets_footer.py"
       ],
+      "gates": [],
       "id": "P29-I09-W04",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55119,6 +55862,7 @@
         "src/eawf/kernel/migrations/__init__.py",
         "src/eawf/schemas/state.schema.json"
       ],
+      "gates": [],
       "id": "P29-I09-W05",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55166,6 +55910,7 @@
         "src/eawf/surfaces/tui/modes/agent_watch.py",
         "src/eawf/runtime/daemon/methods/agent.py"
       ],
+      "gates": [],
       "id": "P29-I09-W06",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55212,6 +55957,7 @@
         "src/eawf/runtime/daemon/methods/__init__.py",
         "src/eawf/runtime/daemon/server.py"
       ],
+      "gates": [],
       "id": "P29-I09-W07",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55255,6 +56001,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/screens/help.py"
       ],
+      "gates": [],
       "id": "P29-I09-W08",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55301,6 +56048,7 @@
         "docs/reference/autogen/schema.md",
         "docs/reference/autogen/state.schema.json"
       ],
+      "gates": [],
       "id": "P29-I09-W09",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55344,6 +56092,7 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/footer.py"
       ],
+      "gates": [],
       "id": "P29-I09-W10",
       "intent": null,
       "iter_id": "P29-I09",
@@ -55430,6 +56179,7 @@
         "src/eawf/surfaces/tui/app.py",
         "tests/tui/test_overlays_config_modal.py"
       ],
+      "gates": [],
       "id": "P29-I09-W11",
       "intent": {
         "desired_outcome": "c opens the ConfigModal from every mode and scope by promoting the binding to App level where action_open_config already lives",
@@ -55489,6 +56239,7 @@
         "src/eawf/kernel/spec/wave.py",
         "tests/unit/spec/test_criterion_schema.py"
       ],
+      "gates": [],
       "id": "P29-I10-W01",
       "intent": null,
       "iter_id": "P29-I10",
@@ -55579,6 +56330,7 @@
         "src/eawf/workflow/audit_dsl/kinds/schema_validate.py",
         "tests/unit/audit_dsl/test_schema_validate.py"
       ],
+      "gates": [],
       "id": "P29-I10-W02",
       "intent": null,
       "iter_id": "P29-I10",
@@ -55656,6 +56408,7 @@
         "src/eawf/workflow/lifecycle/iter_.py",
         "tests/unit/lifecycle/test_transition_tables.py"
       ],
+      "gates": [],
       "id": "P29-I10-W03",
       "intent": null,
       "iter_id": "P29-I10",
@@ -55733,6 +56486,7 @@
         "src/eawf/workflow/audit_dsl/registry.py",
         "tests/snapshots/tui/test_affordance_parity.py"
       ],
+      "gates": [],
       "id": "P29-I10-W04",
       "intent": null,
       "iter_id": "P29-I10",
@@ -55810,6 +56564,7 @@
         "src/eawf/kernel/spec/common.py",
         "tests/unit/spec/test_assign_oracle_tier.py"
       ],
+      "gates": [],
       "id": "P29-I10-W05",
       "intent": null,
       "iter_id": "P29-I10",
@@ -55890,6 +56645,7 @@
         "src/eawf/workflow/verify/readiness.py",
         "CHANGELOG.md"
       ],
+      "gates": [],
       "id": "P29-I10-W06",
       "intent": null,
       "iter_id": "P29-I10",
@@ -55980,6 +56736,7 @@
         "src/eawf/kernel/spec/visual.py",
         "tests/unit/spec/test_visual_contract.py"
       ],
+      "gates": [],
       "id": "P29-I10-W07",
       "intent": null,
       "iter_id": "P29-I10",
@@ -56056,6 +56813,7 @@
         "src/eawf/workflow/audit_dsl/kinds/transition_coverage.py",
         "tests/property/test_lifecycle_stateful.py"
       ],
+      "gates": [],
       "id": "P29-I10-W08",
       "intent": null,
       "iter_id": "P29-I10",
@@ -56131,6 +56889,7 @@
       "file_scopes": [
         "tests/snapshots/tui/test_affordance_matrix.py"
       ],
+      "gates": [],
       "id": "P29-I10-W09",
       "intent": null,
       "iter_id": "P29-I10",
@@ -56209,6 +56968,7 @@
         "src/eawf/workflow/verify/oracle.py",
         "tests/unit/verify/test_run_oracle.py"
       ],
+      "gates": [],
       "id": "P29-I11-W01",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56288,6 +57048,7 @@
         "src/eawf/kernel/spec/common.py",
         "tests/unit/propose/test_generator_coverage.py"
       ],
+      "gates": [],
       "id": "P29-I11-W02",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56367,6 +57128,7 @@
         "src/eawf/kernel/spec/common.py",
         "tests/unit/daemon/test_close_gate_oracle.py"
       ],
+      "gates": [],
       "id": "P29-I11-W03",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56458,6 +57220,7 @@
         "src/eawf/platform/lint/validate_prose.py",
         "tests/unit/lint/test_eawf021_022.py"
       ],
+      "gates": [],
       "id": "P29-I11-W04",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56538,6 +57301,7 @@
         "src/eawf/workflow/audit_dsl/registry.py",
         "tests/snapshots/svg/test_svg_oracle.py"
       ],
+      "gates": [],
       "id": "P29-I11-W05",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56615,6 +57379,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "tests/unit/daemon/test_verdict_enforced.py"
       ],
+      "gates": [],
       "id": "P29-I11-W06",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56691,6 +57456,7 @@
         "src/eawf/surfaces/cli/commands/snapshot.py",
         "tests/unit/cli/test_vfl_approve.py"
       ],
+      "gates": [],
       "id": "P29-I11-W07",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56766,6 +57532,7 @@
         "src/eawf/observability/metrics/odr.py",
         "tests/unit/metrics/test_odr.py"
       ],
+      "gates": [],
       "id": "P29-I11-W08",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56843,6 +57610,7 @@
         "tests/tui/**",
         "tests/_criteria_helpers.py"
       ],
+      "gates": [],
       "id": "P29-I11-W09",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56916,6 +57684,7 @@
         "tests/daemon/test_wave_spec_jury_gate.py",
         "tests/daemon/test_wave_verdict_gate.py"
       ],
+      "gates": [],
       "id": "P29-I11-W10",
       "intent": null,
       "iter_id": "P29-I11",
@@ -56979,10 +57748,10 @@
         "P29-I12-W02",
         "P29-I12-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-06T23:43:28.969178Z",
+      "closed_at": "2026-06-06T23:43:29.682504Z",
+      "commit": "4403f647de7f0f414518a24addff5847194f26b6",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -56991,14 +57760,15 @@
         "src/eawf/kernel/state/models.py",
         "src/eawf/kernel/migrations"
       ],
+      "gates": [],
       "id": "P29-I12-W01",
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T22:15:36.175910Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -57038,6 +57808,7 @@
       "file_scopes": [
         "src/eawf/workflow/verify/readiness.py"
       ],
+      "gates": [],
       "id": "P29-I12-W02",
       "intent": null,
       "iter_id": "P29-I12",
@@ -57072,10 +57843,10 @@
       "blocks": [
         "P29-I12-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-06T23:43:30.305017Z",
+      "closed_at": "2026-06-06T23:43:31.012351Z",
+      "commit": "96b6188edf87b6f10ae30de01041b419bbd47ea6",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -57083,14 +57854,15 @@
       "file_scopes": [
         "src/eawf/kernel/spec"
       ],
+      "gates": [],
       "id": "P29-I12-W03",
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T22:15:37.248724Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -57130,6 +57902,7 @@
       "file_scopes": [
         "src/eawf/runtime/daemon/methods/spec.py"
       ],
+      "gates": [],
       "id": "P29-I12-W04",
       "intent": null,
       "iter_id": "P29-I12",
@@ -57177,6 +57950,7 @@
         "src/eawf/surfaces/cli/commands/spec.py",
         "src/eawf/runtime/daemon/methods/spec.py"
       ],
+      "gates": [],
       "id": "P29-I12-W05",
       "intent": null,
       "iter_id": "P29-I12",
@@ -57223,6 +57997,7 @@
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/kernel/store/kinds/evidence.py"
       ],
+      "gates": [],
       "id": "P29-I12-W06",
       "intent": null,
       "iter_id": "P29-I12",
@@ -57255,10 +58030,10 @@
     "P29-I12-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-06T23:43:31.641317Z",
+      "closed_at": "2026-06-06T23:43:32.353449Z",
+      "commit": "743e625b5ce7945f857940de5c68f88a977ce796",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -57267,14 +58042,15 @@
         "tests/snapshots/svg",
         "src/eawf/workflow/audit_dsl/kinds"
       ],
+      "gates": [],
       "id": "P29-I12-W07",
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T22:15:39.416104Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
