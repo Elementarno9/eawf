@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
-    from eawf.kernel.spec.common import CriterionSpec
+    from eawf.kernel.spec.common import CriterionSpec, GateSpec
 
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
@@ -465,6 +465,7 @@ class Wave(_DescribedEntity):
     blocks: list[WaveIdStr] = Field(default_factory=list)
     file_scopes: list[str] = Field(default_factory=list)
     success_criteria: list[CriterionSpec] = Field(default_factory=list)
+    gates: list[GateSpec] = Field(default_factory=list)
     agent_role: AgentSessionRole | None = None
     effort_bucket: EffortBucket | None = None
     claim_session_id: str | None = None
@@ -949,10 +950,14 @@ class State(_StrictModel):
     ``list[CriterionSpec]`` and backfills every legacy string into a
     grandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an
     un-migrated state with bare strings would reject the typed field — the
-    migrate chain rewrites the rows before load.
+    migrate chain rewrites the rows before load. The ``1.8`` edge is purely
+    additive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a
+    state written before the bump re-validates with the list defaulted and no
+    historical fact changes; the migrate chain backfills ``gates: []`` on every
+    wave for an explicit on-disk row.
     """
 
-    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"]
+    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime

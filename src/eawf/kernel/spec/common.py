@@ -616,22 +616,24 @@ def validate_criterion_gate_refs(
 
 
 def _rebuild_state_models() -> None:
-    """Resolve the ``list[CriterionSpec]`` forward ref on :class:`Wave`.
+    """Resolve the ``list[CriterionSpec]`` + ``list[GateSpec]`` forward refs on :class:`Wave`.
 
     :attr:`eawf.kernel.state.models.Wave.success_criteria` annotates
-    ``list[CriterionSpec]`` but ``state.models`` cannot import
-    :class:`CriterionSpec` (this module imports ``IdStr`` from ``state.models``,
-    so a top-level import there would be a cycle). The forward reference is
-    therefore resolved here, after :class:`CriterionSpec` is defined: the
-    function injects the type into the ``state.models`` namespace and rebuilds
-    :class:`Wave` so Pydantic can compile the field schema. Running it from
-    this module (rather than the bottom of ``state.models``) is cycle-safe
-    regardless of which module the import chain enters first, because by the
-    time this runs both modules are fully defined.
+    ``list[CriterionSpec]`` and :attr:`eawf.kernel.state.models.Wave.gates`
+    annotates ``list[GateSpec]``, but ``state.models`` cannot import either
+    type (this module imports ``IdStr`` from ``state.models``, so a top-level
+    import there would be a cycle). The forward references are therefore
+    resolved here, after both :class:`CriterionSpec` and :class:`GateSpec` are
+    defined: the function injects the types into the ``state.models`` namespace
+    and rebuilds :class:`Wave` so Pydantic can compile the field schemas.
+    Running it from this module (rather than the bottom of ``state.models``) is
+    cycle-safe regardless of which module the import chain enters first, because
+    by the time this runs both modules are fully defined.
     """
     from eawf.kernel.state import models as _state_models
 
     _state_models.CriterionSpec = CriterionSpec  # type: ignore[attr-defined]
+    _state_models.GateSpec = GateSpec  # type: ignore[attr-defined]
     _state_models.Wave.model_rebuild()
 
 
