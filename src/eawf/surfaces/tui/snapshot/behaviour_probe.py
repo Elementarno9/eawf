@@ -28,6 +28,29 @@ The three statuses render distinctly in
 :func:`render_transcript_evidence`, so a spec-jury reading the evidence
 block can tell a live action from a dead one without re-running the app.
 
+Two driver shapes share the classification
+------------------------------------------
+
+:func:`record_behaviour_transcript` drives each probe as an *action
+string* through :meth:`~textual.app.App.run_action` -- the same parser
+the ``[@click=...]`` markup routes through. That path proves the handler
+behind an action does something, but it ROUTES AROUND the
+key->:class:`~textual.binding.Binding` layer: an advertised key that no
+longer resolves to any action still has a working handler, so the action
+probe never sees the broken affordance.
+
+:func:`record_keypress_transcript` closes that gap by driving each probe
+as a *real key press* (:meth:`~textual.pilot.Pilot.press`), exercising
+the genuine key->Binding resolution. A key whose press resolves to no
+:class:`~textual.binding.Binding` in the active screen's binding map
+classifies :data:`ProbeStatus.UNRESOLVED` (the advertised-but-dead key);
+a key that resolves but moves no observable signal classifies
+:data:`ProbeStatus.NO_OP`; a key that resolves and moves a signal
+classifies :data:`ProbeStatus.OBSERVABLE`. The two drivers reuse the same
+:class:`ProbeOutcome` / :class:`BehaviourTranscript` shapes, so a
+key-press transcript renders through the same evidence formatter; the
+:attr:`ProbeOutcome.action` field holds the key string for a key probe.
+
 Provenance: the transcript is stamped with the source commit it was
 recorded against (mirroring the asciinema cast provenance stamp), so the
 evidence the jury grounds in is pinned to a specific build of the code --
@@ -260,6 +283,89 @@ async def record_behaviour_transcript(
     return BehaviourTranscript(source_commit=source_commit, outcomes=tuple(outcomes))
 
 
+def _key_resolves(app: EaApp, key: str) -> bool:
+    """Return True when *key* resolves to a Binding in the active screen.
+
+    Reads the active screen's :attr:`~textual.screen.Screen.active_bindings`
+    map -- the merged app + screen + focus-chain binding table Textual itself
+    resolves a key press against. A key present in the map resolves to a real
+    :class:`~textual.binding.Binding`; a key absent from it has no binding, so
+    pressing it would reach no handler (the advertised-but-dead affordance the
+    key-press driver classifies :data:`ProbeStatus.UNRESOLVED`).
+
+    Args:
+        app: The live :class:`~eawf.surfaces.tui.app.EaApp` under a Pilot
+            harness, already settled.
+        key: The Textual key string to test (e.g. ``"c"`` / ``"enter"`` /
+            ``"f5"``).
+
+    Returns:
+        ``True`` when *key* is a key in the active screen's binding map.
+    """
+    return key in app.screen.active_bindings
+
+
+async def record_keypress_transcript(
+    pilot: Pilot[object],
+    keys: Sequence[str],
+    *,
+    source_commit: str,
+) -> BehaviourTranscript:
+    """Drive each key through the real key->Binding path and record its outcome.
+
+    The key-press complement to :func:`record_behaviour_transcript`. Where the
+    action-string driver routes around the binding layer (it dispatches the
+    action directly), this driver presses the *actual key*
+    (:meth:`~textual.pilot.Pilot.press`), exercising the genuine
+    key->:class:`~textual.binding.Binding` resolution a live operator hits. For
+    each key:
+
+    * resolution is read from the active screen's binding map
+      (:func:`_key_resolves`) BEFORE the press -- a key absent from the map has
+      no Binding, so it classifies :data:`ProbeStatus.UNRESOLVED` and is NOT
+      pressed (there is nothing to drive);
+    * a resolving key is pressed with the observable state sampled
+      (:func:`_sample_observable_state`) before + after, draining the
+      background workers first (via :func:`settle_screen`) so a binding that
+      offloads to a worker is observed after it settles -- keeping the
+      transcript deterministic across runs;
+    * a resolving key that moves at least one observable signal classifies
+      :data:`ProbeStatus.OBSERVABLE`; one that resolves but moves nothing
+      classifies :data:`ProbeStatus.NO_OP` (the resolved-but-inert key).
+
+    The :attr:`ProbeOutcome.action` field holds the key string for a key probe,
+    so the result renders through the shared
+    :func:`render_transcript_evidence` formatter unchanged.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from
+            ``app.run_test()``, already settled.
+        keys: Ordered Textual key strings to drive (e.g.
+            ``["c", "enter", "f5"]``).
+        source_commit: The commit SHA the transcript is recorded against
+            -- stamped onto the result as its provenance pin.
+
+    Returns:
+        The provenance-pinned :class:`BehaviourTranscript`, one
+        :class:`ProbeOutcome` per key in key order.
+    """
+    app = cast("EaApp", pilot.app)
+    await settle_screen(pilot)
+    outcomes: list[ProbeOutcome] = []
+    for key in keys:
+        if not _key_resolves(app, key):
+            outcomes.append(ProbeOutcome(action=key, status=ProbeStatus.UNRESOLVED))
+            continue
+        before = _sample_observable_state(app)
+        await pilot.press(key)
+        await settle_screen(pilot)
+        after = _sample_observable_state(app)
+        signals = _diff_signals(before, after)
+        status = ProbeStatus.OBSERVABLE if signals else ProbeStatus.NO_OP
+        outcomes.append(ProbeOutcome(action=key, status=status, signals=signals))
+    return BehaviourTranscript(source_commit=source_commit, outcomes=tuple(outcomes))
+
+
 def render_transcript_evidence(transcript: BehaviourTranscript) -> str:
     """Format *transcript* as the auditor ``evidence_block`` text.
 
@@ -303,5 +409,6 @@ __all__ = [
     "ProbeOutcome",
     "ProbeStatus",
     "record_behaviour_transcript",
+    "record_keypress_transcript",
     "render_transcript_evidence",
 ]

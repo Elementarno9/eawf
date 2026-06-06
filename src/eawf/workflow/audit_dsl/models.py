@@ -39,6 +39,12 @@ The check kinds frozen for v0.3:
   repo-relative JSON file path resolved against ``cwd``); a
   :class:`pydantic.ValidationError` fails the check rather than
   raising.
+* ``affordance_parity`` — ``args = {mode: str, state_path: str, size:
+  [int, int]}``. Mounts the operator TUI, switches to the named mode,
+  and drives each advertised footer-hint key through the real
+  key->Binding path; fails (naming each offending key) when an
+  advertised key does not resolve to a binding, else passes. A
+  malformed ``args`` degrades to ``status="fail"`` rather than raising.
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -66,6 +72,7 @@ CheckKind = Literal[
     "criterion_in_diff",
     "citation_resolves",
     "schema_validate",
+    "affordance_parity",
 ]
 
 
