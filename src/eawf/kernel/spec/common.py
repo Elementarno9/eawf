@@ -550,6 +550,71 @@ class GateSpec(_StrictModel):
         return self
 
 
+def validate_criterion_gate_refs(
+    criteria: list[CriterionSpec],
+    gates: list[GateSpec],
+) -> None:
+    """Reject a criterion/gate set whose cross-references do not resolve.
+
+    Enforces referential integrity between a wave's typed criteria and
+    its gate rows at the close-mutation boundary, where the
+    grandfathered common case (empty ``gate_ids`` + empty ``gates``) is a
+    deliberate no-op: a wave whose criteria carry no gate references and
+    that owns no gate rows has nothing to reject, so every live and
+    migration-grandfathered criterion passes cleanly. The checks fire
+    only when a wave author actually attaches gate references:
+
+    1. Every :attr:`CriterionSpec.gate_ids` entry resolves to a
+       :attr:`GateSpec.id` in *gates*.
+    2. Every :attr:`GateSpec.criterion_id` resolves back to a
+       :attr:`CriterionSpec.id` in *criteria*.
+    3. A ``deterministic``-kind criterion's gate compiles
+       (:func:`eawf.workflow.verify.compile.compile_gate` returns a
+       non-``None`` runnable spec) -- an orphan deterministic gate that
+       cannot compile would silently never falsify the criterion.
+
+    Additionally rejects an author-set
+    :attr:`CriterionSpec.oracle_tier`: the tier is computed server-side
+    by :func:`assign_oracle_tier`, never authored on input, so a
+    non-``None`` value on a close mutation indicates a malformed spec.
+
+    Args:
+        criteria: The wave's typed criterion rows.
+        gates: The wave's typed gate rows.
+
+    Raises:
+        ValueError: When a criterion references an unknown gate id, a
+            gate references an unknown criterion id, a deterministic
+            criterion's gate fails to compile, or a criterion carries an
+            author-set ``oracle_tier``.
+    """
+    # Local import keeps the module-level layer thin and avoids a cycle:
+    # the compile layer imports CriterionSpec / GateSpec from this module.
+    from eawf.workflow.verify.compile import compile_gate
+
+    criterion_by_id = {c.id: c for c in criteria}
+    gate_ids = {g.id for g in gates}
+
+    for criterion in criteria:
+        if criterion.oracle_tier is not None:
+            raise ValueError(f"oracle_tier must not be author-set: criterion={criterion.id!r}")
+        for ref in criterion.gate_ids:
+            if ref not in gate_ids:
+                raise ValueError(f"criterion {criterion.id!r} references unknown gate id: {ref!r}")
+
+    for gate in gates:
+        owner = criterion_by_id.get(gate.criterion_id)
+        if owner is None:
+            raise ValueError(
+                f"gate {gate.id!r} references unknown criterion id: {gate.criterion_id!r}"
+            )
+        is_deterministic = owner.evidence_kind == "deterministic"
+        if is_deterministic and compile_gate(gate, criterion=owner) is None:
+            raise ValueError(
+                f"deterministic gate {gate.id!r} for criterion {owner.id!r} does not compile"
+            )
+
+
 def _rebuild_state_models() -> None:
     """Resolve the ``list[CriterionSpec]`` forward ref on :class:`Wave`.
 

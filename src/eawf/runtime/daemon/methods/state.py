@@ -63,7 +63,7 @@ from typing import Any, Final
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.kernel.spec.common import grandfather_criterion
+from eawf.kernel.spec.common import grandfather_criterion, validate_criterion_gate_refs
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
@@ -656,6 +656,42 @@ def _compute_wave_close_readiness(
     )
 
 
+def _validate_wave_close_gate_refs(state: State, mutation: Mutation) -> None:
+    """Reject a wave-close mutation whose criterion/gate refs do not resolve.
+
+    Runs at the close-mutation model-validate boundary REGARDLESS of
+    ``verify.enforce`` -- a malformed spec (an orphan ``gate_ids`` entry,
+    a gate naming an unknown criterion, an un-compilable deterministic
+    gate, or an author-set ``oracle_tier``) is a structural defect that
+    must be rejected before any apply, independent of whether the active
+    profile gates the close.
+
+    The check is a deliberate no-op for the grandfathered common case
+    (criteria with empty ``gate_ids`` + no gate rows), so every live and
+    migration-grandfathered wave closes through this boundary unchanged.
+
+    Args:
+        state: Validated state the closing wave row is read from.
+        mutation: The wave-close mutation; its ``wave_id`` param names
+            the wave under validation.
+
+    Raises:
+        DaemonValidationError: When
+            :func:`eawf.kernel.spec.common.validate_criterion_gate_refs`
+            rejects the wave's criteria / gate refs.
+    """
+    from eawf.workflow.verify.readiness import _load_gate_specs
+
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id or wave_id not in state.waves:
+        return
+    wave = state.waves[wave_id]
+    try:
+        validate_criterion_gate_refs(list(wave.success_criteria), _load_gate_specs(wave_id, state))
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+
+
 def _enforce_wave_verdict_gate(wave: Wave, *, state_path: Path) -> None:
     """Raise when the wave's single fresh-auditor verdict gate blocks close.
 
@@ -1024,27 +1060,27 @@ async def _enforce_wave_close_gate(
     state_path: Path,
     repo_root: Path,
 ) -> None:
-    """Run the enforcing wave-close verdict gate (single-auditor or jury).
+    """Run the enforcing wave-close gate via the ordered oracle.
 
     The async daemon-side hook the close path awaits before applying a
     wave-close mutation. It loads the active verify block and runs the gate
     ONLY when an enabled profile sets ``verify.enforce`` -- so the
     advisory-only close paths (and every wave-close test that does not enable
-    enforcement) are byte-unchanged. The gate flavour is opt-in:
+    enforcement) are byte-unchanged: the early-return guard short-circuits
+    before the per-criterion loop runs.
 
-    * the wave is UI/UX-banded (its id / title matches a
-      ``verify.uiux_bands`` token, :func:`wave_in_uiux_band`) AND the
-      spec-jury producer is live (a per-item ballot fn is bound) -> the
-      per-rubric-item spec jury (:func:`_enforce_spec_jury_gate`). An idle
-      producer (the v0.5 default) falls through to the next flavour, so the
-      band check is a NON-breaking addition.
-    * ``verify.cross_vendor_jury`` is ``True`` AND enough juror CLI lanes
-      resolve on the host (:func:`_cross_vendor_lanes_ready`) -> the
-      cross-vendor jury (:func:`_enforce_cross_vendor_jury_gate`).
-    * otherwise -> the single fresh-context auditor gate
-      (:func:`_enforce_wave_verdict_gate`), the pre-W15 behaviour, so a host
-      without the cross-vendor CLIs degrades cleanly rather than forcing
-      every enforcing close to the operator.
+    Past the guard, each REQUIRED criterion on the wave is scored through
+    :func:`eawf.workflow.verify.oracle.run_oracle`, which escalates the
+    criterion's gates from the cheapest deterministic tier upward and only
+    consults the jury / single-auditor tier last. A criterion whose
+    :class:`~eawf.workflow.verify.oracle.OracleResult` status is not
+    ``"pass"`` blocks the close; all required criteria passing lets close
+    proceed. A criterion's gates are gathered from
+    :func:`eawf.workflow.verify.readiness._load_gate_specs` filtered to that
+    criterion; the gate loader returns ``[]`` today (gate storage is a
+    separate backlog), so run_oracle falls through to the verdict / jury
+    tier -- preserving the prior single-auditor / cross-vendor-jury
+    behaviour for an un-gated criterion.
 
     Args:
         state: Validated state -- mutated in place when a jury registers its
@@ -1057,11 +1093,12 @@ async def _enforce_wave_close_gate(
             juror diff-base / spawn cwd.
 
     Raises:
-        LifecycleError: When the resolved gate refuses close.
+        LifecycleError: When the ordered oracle refuses close for any
+            required criterion.
     """
-    from eawf.observability.eval.cross_vendor_jury import JURY_QUORUM
-    from eawf.workflow.dispatch.spec_jury import wave_in_uiux_band
+    from eawf.workflow.verify.oracle import run_oracle
     from eawf.workflow.verify.readiness import (
+        _load_gate_specs,
         load_active_verify_block,
         resolve_wave_verify_block,
     )
@@ -1085,25 +1122,40 @@ async def _enforce_wave_close_gate(
     )
     if verify_block is None or not verify_block.enforce:
         return
-    # UI/UX-banded waves route through the per-rubric-item spec jury first.
-    # The producer is idle (no live ballot fn) by default, so a banded close
-    # degrades to the default gate below until the band-population wave binds
-    # the live ballot fn -- the band branch never changes an existing close.
-    if wave_in_uiux_band(wave, bands=verify_block.uiux_bands) and await _enforce_spec_jury_gate(
-        state, wave, state_path=state_path, repo_root=repo_root
-    ):
-        return
-    if verify_block.cross_vendor_jury and _cross_vendor_lanes_ready(quorum=JURY_QUORUM):
-        await _enforce_cross_vendor_jury_gate(
-            state, wave, state_path=state_path, repo_root=repo_root
+    # Past the enforce guard the ordered oracle scores each required
+    # criterion. The events_path + spawn_factory mirror the cross-vendor
+    # jury gate so the jury tier (run_oracle's last resort for an un-gated
+    # criterion) convenes against the same store + per-runtime spawn map.
+    events_path = store_path(state_path, StoreKind.EVENT)
+    spawn_factory = _jury_spawn_factory(state, wave, repo_root=repo_root)
+    gate_specs = _load_gate_specs(wave_id, state)
+    for criterion in wave.success_criteria:
+        if not criterion.required:
+            continue
+        gates = [g for g in gate_specs if g.criterion_id == criterion.id]
+        result = await run_oracle(
+            criterion,
+            gates,
+            wave=wave,
+            state=state,
+            state_path=state_path,
+            events_path=events_path,
+            repo_root=repo_root,
+            spawn_factory=spawn_factory,
         )
-        return
-    if verify_block.cross_vendor_jury:
-        logger.info(
-            f"_enforce_wave_close_gate wave={wave_id} jury=requested "
-            "lanes=unavailable degrade=single-auditor"
-        )
-    _enforce_wave_verdict_gate(wave, state_path=state_path)
+        if result.status != "pass":
+            logger.warning(
+                f"_enforce_wave_close_gate wave={wave_id} criterion={criterion.id!r} "
+                f"tier={int(result.tier)} status={result.status} blocked"
+            )
+            raise LifecycleError(
+                f"wave {wave_id!r} oracle blocked close "
+                f"(criterion={criterion.id!r} tier={int(result.tier)} "
+                f"status={result.status}): {result.detail}"
+            )
+    logger.info(
+        f"_enforce_wave_close_gate wave={wave_id} oracle=pass criteria={len(wave.success_criteria)}"
+    )
 
 
 def _compute_wave_close_extras(
@@ -2070,12 +2122,16 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
             try:
                 if mutation.kind == MutationKind.WAVE_CLOSE:
-                    # The enforcing verdict gate (single-auditor or, when the
-                    # active profile opts in via ``verify.cross_vendor_jury``,
-                    # the three-vendor jury) runs BEFORE any apply so a blocked
-                    # close aborts the whole mutation. Advisory close paths are
-                    # unaffected -- the gate returns early when no profile
-                    # enforces verify.
+                    # Structural criterion/gate referential integrity is
+                    # checked first, regardless of verify.enforce: an orphan
+                    # gate ref or an author-set oracle_tier is a malformed
+                    # spec that must never reach apply. This is a no-op for the
+                    # grandfathered common case (empty gate_ids + no gates).
+                    _validate_wave_close_gate_refs(state, mutation)
+                    # The enforcing close gate runs the ordered oracle BEFORE
+                    # any apply so a blocked close aborts the whole mutation.
+                    # Advisory close paths are unaffected -- the gate returns
+                    # early when no profile enforces verify.
                     await _enforce_wave_close_gate(
                         state,
                         mutation,
