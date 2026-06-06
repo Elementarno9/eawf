@@ -552,6 +552,14 @@ Telemetry / observability subsystem — pricing currency, projection.
 |---|---|
 | `pricing-currency-check` | Validate the embedded pricing snapshot and emit a drift report. |
 
+### `eawf vfl`
+
+Visual-fidelity-layer golden management -- approve regenerated goldens.
+
+| Verb | Summary |
+|---|---|
+| `approve` | Regenerate and approve one surface's golden bytes. |
+
 ### `eawf wal`
 
 Inspect the daemon write-ahead log (read-only: status, list, show).
