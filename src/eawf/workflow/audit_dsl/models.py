@@ -33,6 +33,12 @@ The check kinds frozen for v0.3:
   :class:`CitationResolvesArgs`: ``{path: str}`` or ``{text: str}``,
   plus optional typed ``references`` rows. Verifies dense ``[N]`` prose
   citations resolve to portable citation rows.
+* ``schema_validate`` — ``args = {model: str, target: dict | str}``.
+  Imports the dotted Pydantic model path in ``model`` and runs
+  ``Model.model_validate`` over ``target`` (an inline dict or a
+  repo-relative JSON file path resolved against ``cwd``); a
+  :class:`pydantic.ValidationError` fails the check rather than
+  raising.
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -59,6 +65,7 @@ CheckKind = Literal[
     "verify_implements",
     "criterion_in_diff",
     "citation_resolves",
+    "schema_validate",
 ]
 
 

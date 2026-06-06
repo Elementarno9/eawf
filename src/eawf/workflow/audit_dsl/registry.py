@@ -65,6 +65,7 @@ from eawf.platform.artifacts.references import (
 )
 from eawf.platform.lint._conditional import changed_files
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
+from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.workflow.audit_dsl.models import (
     CheckResult,
@@ -389,6 +390,7 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "verify_implements": check_verify_implements,
     "criterion_in_diff": check_criterion_in_diff,
     "citation_resolves": _check_citation_resolves,
+    "schema_validate": check_schema_validate,
 }
 
 
