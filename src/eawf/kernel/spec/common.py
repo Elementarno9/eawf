@@ -256,6 +256,53 @@ class ResponseClause(_StrictModel):
     jury_reason: str | None = None
 
 
+_VERB_TIER: dict[ObserveVerb, OracleTier] = {
+    ObserveVerb.VALIDATES: OracleTier.T1_STATIC,
+    ObserveVerb.MATCHES_PATTERN: OracleTier.T1_STATIC,
+    ObserveVerb.EXITS: OracleTier.T2_STRUCTURAL,
+    ObserveVerb.EMITS: OracleTier.T2_STRUCTURAL,
+    ObserveVerb.TRANSITIONS_TO: OracleTier.T2_STRUCTURAL,
+    ObserveVerb.TRIGGERS_ACTION: OracleTier.T2_STRUCTURAL,
+    ObserveVerb.RENDERS_TOKEN: OracleTier.T3_SNAPSHOT,
+    ObserveVerb.RETURNS: OracleTier.T4_CONTRACT,
+    ObserveVerb.RAISES: OracleTier.T4_CONTRACT,
+    ObserveVerb.HOLDS_FOR_ALL: OracleTier.T4_CONTRACT,
+    ObserveVerb.FILE_MATCHES: OracleTier.T5_GOLDEN,
+}
+
+
+def _tier_for_gate_kind(gate_ref: IdStr) -> OracleTier:
+    """Map a gate reference to its oracle tier.
+
+    Stub until the run_oracle wave supplies the real gate-kind -> tier map.
+
+    Raises:
+        ValueError: always, until the gate-kind map lands.
+    """
+    raise ValueError(f"unknown gate kind: {gate_ref!r}")
+
+
+def assign_oracle_tier(r: ResponseClause) -> OracleTier:
+    """Total: verb -> cheapest tier; JUDGED is the only path to T6/T7.
+
+    Raises:
+        ValueError: observe==JUDGED with empty jury_reason; or
+            quantifier==forall with locus != HYPOTHESIS; or gate_ref names
+            an unknown gate kind.
+    """
+    if r.gate_ref is not None:
+        return _tier_for_gate_kind(r.gate_ref)
+    if r.observe in _VERB_TIER:
+        if r.quantifier == "forall" and r.locus is not ProofLocus.HYPOTHESIS:
+            raise ValueError(f"forall response must use hypothesis locus: object={r.object!r}")
+        return _VERB_TIER[r.observe]
+    if r.observe is ObserveVerb.JUDGED:
+        if not r.jury_reason:
+            raise ValueError("judged response requires jury_reason (auditable fallthrough)")
+        return OracleTier.T6_APPROVAL if r.locus is ProofLocus.HUMAN else OracleTier.T7_JURY
+    raise ValueError(f"unhandled observe verb: {r.observe!r}")
+
+
 class CriterionSpec(_StrictModel):
     """One success-criterion row attached to a wave / iter / phase.
 
