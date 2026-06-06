@@ -271,15 +271,46 @@ _VERB_TIER: dict[ObserveVerb, OracleTier] = {
 }
 
 
-def _tier_for_gate_kind(gate_ref: IdStr) -> OracleTier:
-    """Map a gate reference to its oracle tier.
+#: Gate KIND (the :attr:`GateSpec.kind` / ``CheckKind`` string) -> cheapest
+#: oracle tier that can falsify it. The principle: the cheapest deterministic
+#: falsifier wins, so static parse / lint / schema / citation checks sit at
+#: T1, structural / state / FSM checks at T2, contract / command checks at T4,
+#: and golden pixel diffs at T5. The ``svg_*`` kinds are listed by string even
+#: though they are not yet registered ``CheckKind`` values -- they land in a
+#: sibling wave and the map must already route them when they do.
+_GATE_KIND_TIER: dict[str, OracleTier] = {
+    "file_exists": OracleTier.T1_STATIC,
+    "path_glob_nonempty": OracleTier.T1_STATIC,
+    "regex_in_file": OracleTier.T1_STATIC,
+    "schema_validate": OracleTier.T1_STATIC,
+    "citation_resolves": OracleTier.T1_STATIC,
+    "criterion_in_diff": OracleTier.T1_STATIC,
+    "state_field_equals": OracleTier.T2_STRUCTURAL,
+    "transition_coverage": OracleTier.T2_STRUCTURAL,
+    "affordance_parity": OracleTier.T2_STRUCTURAL,
+    "svg_well_formed": OracleTier.T2_STRUCTURAL,
+    "command_exit_zero": OracleTier.T4_CONTRACT,
+    "verify_implements": OracleTier.T4_CONTRACT,
+    "svg_pixel_diff": OracleTier.T5_GOLDEN,
+}
 
-    Stub until the run_oracle wave supplies the real gate-kind -> tier map.
+
+def _tier_for_gate_kind(kind: str) -> OracleTier:
+    """Map a gate KIND string to the cheapest oracle tier that falsifies it.
+
+    Args:
+        kind: The :attr:`GateSpec.kind` value (a ``CheckKind`` family name).
+
+    Returns:
+        The cheapest :class:`OracleTier` that can produce a verdict for *kind*.
 
     Raises:
-        ValueError: always, until the gate-kind map lands.
+        ValueError: When *kind* is not a recognised gate kind.
     """
-    raise ValueError(f"unknown gate kind: {gate_ref!r}")
+    tier = _GATE_KIND_TIER.get(kind)
+    if tier is None:
+        raise ValueError(f"unknown gate kind: {kind!r}")
+    return tier
 
 
 def assign_oracle_tier(r: ResponseClause) -> OracleTier:

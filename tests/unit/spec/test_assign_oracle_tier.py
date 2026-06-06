@@ -11,9 +11,10 @@ Covers the typed criteria CR-1..CR-3 of the FS02 spec:
   locus raises ``ValueError`` (substring "hypothesis").
 * CR-3 (raises, contract): a JUDGED response with an empty ``jury_reason``
   raises ``ValueError`` (substring "jury_reason").
-* error-path: a clause carrying a ``gate_ref`` routes to the
-  ``_tier_for_gate_kind`` stub, which raises ``ValueError`` (substring
-  "gate kind").
+* error-path: a clause carrying a ``gate_ref`` that names an unknown gate
+  kind routes to ``_tier_for_gate_kind``, which raises ``ValueError``
+  (substring "gate kind"). A ``gate_ref`` naming a recognised kind instead
+  resolves to that kind's tier.
 """
 
 from __future__ import annotations
@@ -99,8 +100,14 @@ def test_assign_oracle_tier_judged_empty_jury_reason_raises() -> None:
         assign_oracle_tier(clause)
 
 
-def test_assign_oracle_tier_gate_ref_routes_to_gate_kind_stub() -> None:
-    """A clause carrying a gate_ref routes to the gate-kind stub, which raises."""
-    clause = _clause(ObserveVerb.RETURNS, gate_ref="GATE-1")
+def test_assign_oracle_tier_gate_ref_unknown_kind_raises() -> None:
+    """A gate_ref naming an unknown gate kind routes to the map and raises."""
+    clause = _clause(ObserveVerb.RETURNS, gate_ref="totally-unknown-kind")
     with pytest.raises(ValueError, match="gate kind"):
         assign_oracle_tier(clause)
+
+
+def test_assign_oracle_tier_gate_ref_known_kind_returns_tier() -> None:
+    """A gate_ref naming a recognised gate kind resolves to that kind's tier."""
+    clause = _clause(ObserveVerb.RETURNS, gate_ref="file_exists")
+    assert assign_oracle_tier(clause) is OracleTier.T1_STATIC
