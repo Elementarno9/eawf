@@ -2987,6 +2987,18 @@
       "scope_id": "P29-I10-W09",
       "status": "done",
       "updated_at": "2026-06-06T17:30:09.078843Z"
+    },
+    "P29-I11-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I11-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I11-W01",
+      "scope_id": "P29-I11-W01",
+      "status": "done",
+      "updated_at": "2026-06-06T18:02:09.966493Z"
     }
   },
   "agent_sessions": {
@@ -5816,7 +5828,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I11",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6412,7 +6424,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -11561,6 +11573,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I10-W09",
       "updated_at": "2026-06-06T17:30:07.506740Z"
+    },
+    "P29-I11-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I11-W01-bucket-20260606T175410Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I11-W01",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I11-W01",
+      "updated_at": "2026-06-06T17:54:10.830287Z"
     }
   },
   "goals": {
@@ -13010,7 +13035,7 @@
       "intent": null,
       "opened_at": "2026-06-06T15:05:42.332020Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "Fidelity-Spine enforcement: oracle runner + close-gate + verifier-on",
       "trigger": "none",
       "wave_ids": [
@@ -13822,7 +13847,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T17:51:19.429099Z",
+  "updated_at": "2026-06-06T18:02:09.967007Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -55847,10 +55872,10 @@
         "P29-I11-W03",
         "P29-I11-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i11",
+      "claimed_at": "2026-06-06T17:54:10.830275Z",
+      "closed_at": "2026-06-06T18:02:09.966493Z",
+      "commit": "5b779ab238821022f29c6b09609b0d4bb7b6b43d",
       "deps": [
         "P29-I10-W05",
         "P29-I10-W02"
@@ -55866,10 +55891,10 @@
       "intent": null,
       "iter_id": "P29-I11",
       "opened_at": "2026-06-06T15:08:00.762969Z",
-      "outcome": null,
+      "outcome": "run_oracle ordered-escalation runner (verify/oracle.py): sorts gates by gate-kind tier, exhausts deterministic gates cheapest-first, short-circuits on first pass, falls through to async cross-vendor jury (verdict_requirement=='always') or sync single-auditor gate; OracleResult typed; _tier_for_gate_kind real map replaces FS02 stub; 40 tests.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
