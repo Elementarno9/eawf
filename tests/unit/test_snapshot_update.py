@@ -73,7 +73,9 @@ def test_inventory_covers_spec_locked_kinds() -> None:
 
     ``tui_config_modal`` extends the locked set: its committed bytes live
     at ``tests/golden/tui_config_modal/`` and must be guarded by the
-    pairing gate alongside the primary ``tui`` surface.
+    pairing gate alongside the primary ``tui`` surface. ``svg`` extends it
+    with the visual-fidelity oracle golden render, guarded under
+    ``tests/snapshots/svg/golden/`` and driven by ``eawf vfl approve``.
     """
     expected = {
         "state",
@@ -90,6 +92,7 @@ def test_inventory_covers_spec_locked_kinds() -> None:
         "telemetry",
         "metrics_export",
         "agents_md",
+        "svg",
     }
     assert set(SNAPSHOT_SURFACES) == expected
 

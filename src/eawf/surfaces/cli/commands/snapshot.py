@@ -152,6 +152,12 @@ SNAPSHOT_SURFACES: dict[str, SnapshotSurface] = {
             regen_target="tests/golden/test_golden_agents_md.py",
             description="Rendered AGENTS.md after every sync.",
         ),
+        SnapshotSurface(
+            kind="svg",
+            golden_dir="tests/snapshots/svg/golden",
+            regen_target="tests/snapshots/svg/test_svg_oracle.py",
+            description="SVG visual-fidelity oracle golden render (resvg PNG).",
+        ),
     )
 }
 

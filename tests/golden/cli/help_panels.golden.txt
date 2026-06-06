@@ -1,5 +1,5 @@
 Commands: why
-audit: audit, backfill, backup, doc, doctor, evidence, migrate, schema, snapshot, validate
+audit: audit, backfill, backup, doc, doctor, evidence, migrate, schema, snapshot, validate, vfl
 estimation: actual, bench, calibrate, estimate, impact, metrics, telemetry
 planning: agent-report, artifact, backlog, decision, draft, goal, hypothesis, incident, iter, memory, operator, outcome, phase, plan, project, research, roadmap, session, spec, subproject, wave
 runtime: cc, config, daemon, hook, mcp, plugin, profile, skill

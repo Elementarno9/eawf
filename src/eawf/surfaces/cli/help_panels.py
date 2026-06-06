@@ -71,6 +71,7 @@ COMMAND_PANELS: dict[str, str] = {
     "schema": "audit",
     "snapshot": "audit",
     "validate": "audit",
+    "vfl": "audit",
     # estimation: EU estimates / actuals, impact graph, rolling metrics,
     # perf bench harness, effort-bucket calibration.
     "actual": "estimation",
