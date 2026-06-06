@@ -259,10 +259,18 @@ def test_fixture_profile_parses_with_verify_block(
 
 
 def test_builtin_gate_pack_profile_count_is_eight() -> None:
-    """Exactly eight built-in profiles currently ship floor packs."""
+    """Exactly eight built-in profiles currently ship floor packs.
+
+    Counts profiles that carry a non-empty floor pack, not merely any
+    ``verify:`` leaf -- ``agent_driven`` ships a ``verify`` block for the
+    risk-weighted ``enforce`` flip (Fidelity Spine) without a floor pack, so
+    it is not a floor-pack profile.
+    """
     expected = {"apps", "docs", "infra", "ml", "python", "quality", "research", "robotics"}
     actual = {
-        profile_id for profile_id in list_profiles() if (load_profile(profile_id).verify or False)
+        profile_id
+        for profile_id in list_profiles()
+        if (block := load_profile(profile_id).verify) is not None and block.floor_checks
     }
     assert actual == expected
 
@@ -453,20 +461,20 @@ def test_every_shipped_profile_loads_and_validates() -> None:
     ``verify:`` leaf must produce a strict :class:`VerifyBlock`; profiles
     without one keep ``verify=None`` (advisory, no floor pack).
 
-    The only shipped profile that declares fleet-level ``enforce: true`` is
-    ``quality``, and it does so under the band-conditional contract (P29-I08-
-    W06): the bit is narrowed per wave by
-    :func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block`, so it
-    gates only the UI/UX band, not every wave. Every OTHER shipped profile
-    keeps ``enforce=False``.
+    Two shipped profiles declare ``enforce: true``: ``quality`` (band-scoped
+    via ``uiux_bands``, narrowed per wave by
+    :func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block`) and
+    ``agent_driven`` (whole-fleet enforce scoped to the high-risk band by the
+    daemon's ``verdict_requirement`` risk-weighting -- the Fidelity Spine
+    verifier-on flip). Every OTHER shipped profile keeps ``enforce=False``.
     """
-    band_scoped = {"quality"}
+    enforcing = {"quality", "agent_driven"}
     for profile_id in list_profiles():
         body = load_profile(profile_id)
         assert body.name, f"profile {profile_id!r} has an empty name"
         if body.verify is not None:
             assert isinstance(body.verify, VerifyBlock)
-            if profile_id not in band_scoped:
+            if profile_id not in enforcing:
                 assert body.verify.enforce is False, (
                     f"shipped profile {profile_id!r} unexpectedly sets verify.enforce=true"
                 )
@@ -485,12 +493,26 @@ def test_only_quality_ships_band_scoped_enforce() -> None:
     just ``core``), so an existing repo is unaffected until it enables it.
     Every other bundled profile stays advisory.
     """
-    enforcing = [
+    band_scoped = [
         profile_id
         for profile_id in list_profiles()
-        if (block := load_profile(profile_id).verify) is not None and block.enforce
+        if (block := load_profile(profile_id).verify) is not None
+        and block.enforce
+        and block.uiux_bands
     ]
-    assert enforcing == ["quality"]
+    fleet_enforce = [
+        profile_id
+        for profile_id in list_profiles()
+        if (block := load_profile(profile_id).verify) is not None
+        and block.enforce
+        and not block.uiux_bands
+    ]
+    # quality is the sole BAND-SCOPED enforcer (enforce + uiux_bands).
+    assert band_scoped == ["quality"]
+    # agent_driven is the whole-fleet enforcer (enforce, no uiux_bands): the
+    # Fidelity Spine verifier-on flip, scoped to the high-risk band by the
+    # daemon's verdict_requirement risk-weighting rather than by uiux_bands.
+    assert fleet_enforce == ["agent_driven"]
     quality = load_profile("quality").verify
     assert quality is not None
     assert quality.enforce is True
@@ -501,6 +523,10 @@ def test_only_quality_ships_band_scoped_enforce() -> None:
     # structural file_scopes arm baked into ``wave_in_uiux_band``.
     assert "tui" in quality.uiux_bands
     assert "render" in quality.uiux_bands
+    agent_driven = load_profile("agent_driven").verify
+    assert agent_driven is not None
+    assert agent_driven.enforce is True
+    assert not agent_driven.uiux_bands
 
 
 def test_robotics_floor_check_carries_hil_flags() -> None:
