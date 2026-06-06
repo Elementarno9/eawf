@@ -3556,6 +3556,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-06-A53-P29-i10-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I10/ART-A53-P29-i10"
     },
+    "ART-A54-P29-i11": {
+      "created_at": "2026-06-06T20:31:10.045187Z",
+      "id": "ART-A54-P29-i11",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-06-A54-P29-i11-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I11/ART-A54-P29-i11"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -4442,6 +4452,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A53-P29-i10",
       "scope_id": "P29-I10",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A54-P29-i11": {
+      "check_results": [],
+      "created_at": "2026-06-06T20:31:10.767810Z",
+      "id": "A54-P29-i11",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A54-P29-i11",
+      "scope_id": "P29-I11",
       "status": "complete",
       "verdict": "minor"
     },
@@ -5845,6 +5866,45 @@
       "status": "open",
       "title": "Exercise state-golden migration safety end-to-end"
     },
+    "B097": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-06T20:31:11.480685Z",
+      "description": "FS16 svg_pixel_diff T5 render-match skips on the placeholder golden even on resvg-equipped CI; seed the real golden via eawf vfl approve --kind svg on a resvg host and remove the placeholder skip so FS16 CR-2 is exercised.",
+      "id": "B097",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29",
+      "status": "open",
+      "title": "Seed real SVG golden so the T5 pixel-diff runs in CI"
+    },
+    "B098": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-06T20:31:12.196988Z",
+      "description": "generator.coverage_diff uses (units, covered_span_ids:set, deferrals); FS11 spec text says (units, criteria, deferrals). Deviation is documented in source + preserves determinism; amend the spec text or add a criteria-keyed adapter to remove the doc/impl drift.",
+      "id": "B098",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29",
+      "status": "open",
+      "title": "Reconcile coverage_diff signature with the FS11 spec text"
+    },
+    "B099": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-06T20:31:12.924055Z",
+      "description": "_enforce_spec_jury_gate + wave_in_uiux_band are dead from the close path after W03 unified it into run_oracle; remove per the deletion rule (justified by D-FIDELITY-SPINE) or record intentional retention.",
+      "id": "B099",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "P29",
+      "status": "open",
+      "title": "Remove dead spec-jury close-path code or confirm retention"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -5936,7 +5996,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I11",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -6532,7 +6592,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -13251,16 +13311,16 @@
       ]
     },
     "P29-I11": {
-      "audit_id": null,
+      "audit_id": "A54-P29-i11",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-06T20:37:41.094693Z",
       "description": "FS05-FS06-FS11-FS12-FS16-FS13-FS17-FS14: wire the substrate into the close gate + propose path; turn the verifier on (risk-weighted); VFL self-verify. Per 2026-06-06-p29-spine-iter-compaction.md.",
       "estimate_id": null,
       "id": "P29-I11",
       "intent": null,
       "opened_at": "2026-06-06T15:05:42.332020Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Fidelity-Spine enforcement: oracle runner + close-gate + verifier-on",
       "trigger": "none",
       "wave_ids": [
@@ -13410,6 +13470,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I10-close-A53-P29-i10",
       "summary": "iter P29-I10 closed with audit A53-P29-i10; waves closed=9; outcomes P29-I10-W01: Typed CriterionSpec: OracleTier/ObserveVerb/ProofLocus/ResponseClause added, QualityDimension... | P29-I10-W02: schema_validate CheckKind added, registered, implemented (kinds/schema_validate.py), tested 1... | P29-I10-W03: Lifecycle FSM transition tables (WAVE/PHASE/ITER) + validate_transition derived from code as ...",
+      "tier": "working"
+    },
+    "MEM-P29-I11-close-A54-P29-i11": {
+      "confidence": "high",
+      "id": "MEM-P29-I11-close-A54-P29-i11",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-06T20:37:41.094693Z",
+      "scope_id": "P29-I11",
+      "status": "active",
+      "store_record_id": "MEM-P29-I11-close-A54-P29-i11",
+      "summary": "iter P29-I11 closed with audit A54-P29-i11; waves closed=10; outcomes P29-I11-W01: run_oracle ordered-escalation runner (verify/oracle.py): sorts gates by gate-kind tier, exhau... | P29-I11-W02: Anti-drift generator (propose/generator.py): extract_units + deterministic coverage_diff over... | P29-I11-W03: Wired run_oracle per-criterion loop into the daemon wave-close gate past the enforce guard (b...",
       "tier": "working"
     }
   },
@@ -14074,7 +14145,7 @@
   "schema_version": "1.7",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T20:00:42.718692Z",
+  "updated_at": "2026-06-06T20:37:41.095252Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
