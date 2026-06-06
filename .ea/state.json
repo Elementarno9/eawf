@@ -2879,6 +2879,42 @@
       "scope_id": "P29-I09-W11",
       "status": "done",
       "updated_at": "2026-06-04T14:40:15.193728Z"
+    },
+    "P29-I10-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I10-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I10-W01",
+      "scope_id": "P29-I10-W01",
+      "status": "done",
+      "updated_at": "2026-06-06T15:57:37.604957Z"
+    },
+    "P29-I10-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I10-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I10-W02",
+      "scope_id": "P29-I10-W02",
+      "status": "done",
+      "updated_at": "2026-06-06T15:57:38.283732Z"
+    },
+    "P29-I10-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I10-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I10-W03",
+      "scope_id": "P29-I10-W03",
+      "status": "done",
+      "updated_at": "2026-06-06T15:57:38.950507Z"
     }
   },
   "agent_sessions": {
@@ -5661,12 +5697,28 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I10",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
   },
   "decisions": {
+    "D-FIDELITY-SPINE": {
+      "alternatives": [
+        "Keep prose success_criteria with the verifier idle (status quo that produced the drift)",
+        "Defer enforcement to a later phase (P30); rejected because the drift is active now"
+      ],
+      "consequences": [],
+      "created_at": "2026-06-06T15:57:29.221176Z",
+      "description": null,
+      "id": "D-FIDELITY-SPINE",
+      "obsoleted_at": null,
+      "rationale": "P29 review found phase-wide drift from rich success criteria to thin one-liners, and the close-time verifier sat idle (enforce=False, backlog B091), so artifacts could diverge from intent unchecked. The Spine retypes Wave.success_criteria to CriterionSpec, computes a deterministic oracle_tier per criterion, runs the cheapest falsifying check first (jury last), and turns the verifier on for the high-risk band. Ratified from the jury-passed impl spec .ea/local/research/2026-06-04-fidelity-spine-impl-spec.md.",
+      "scope_id": "P29",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Adopt the Fidelity Spine: typed criteria + layered oracle + verifier-on"
+    },
     "D-SUP-01": {
       "alternatives": [],
       "consequences": [],
@@ -11273,6 +11325,45 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I09-W11",
       "updated_at": "2026-06-04T14:29:00.815953Z"
+    },
+    "P29-I10-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I10-W01-bucket-20260606T153237Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I10-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I10-W01",
+      "updated_at": "2026-06-06T15:32:37.745016Z"
+    },
+    "P29-I10-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I10-W02-bucket-20260606T153238Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I10-W02",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I10-W02",
+      "updated_at": "2026-06-06T15:32:38.268285Z"
+    },
+    "P29-I10-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I10-W03-bucket-20260606T153238Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I10-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I10-W03",
+      "updated_at": "2026-06-06T15:32:38.791292Z"
     }
   },
   "goals": {
@@ -12697,7 +12788,7 @@
       "intent": null,
       "opened_at": "2026-06-06T15:05:27.289935Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "Fidelity-Spine substrate: typed criteria + checks + FSM + affordance",
       "trigger": "none",
       "wave_ids": [
@@ -13523,7 +13614,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T15:13:34.944736Z",
+  "updated_at": "2026-06-06T15:57:38.950797Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -37644,10 +37735,10 @@
         "P29-I11-W02",
         "P29-I11-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i10",
+      "claimed_at": "2026-06-06T15:32:37.745007Z",
+      "closed_at": "2026-06-06T15:57:37.604957Z",
+      "commit": "fe0606238b8a8f4823b3f912fb3f9a4899dc1d7b",
       "deps": [],
       "description": "FS01 of fidelity-spine-impl-spec. extra=forbid preserved; OPERABILITY retained for back-compat; oracle_tier defaults None (FS02 computes it).",
       "dispatch_history": [],
@@ -37661,10 +37752,10 @@
       "intent": null,
       "iter_id": "P29-I10",
       "opened_at": "2026-06-06T15:07:27.016746Z",
-      "outcome": null,
+      "outcome": "Typed CriterionSpec: OracleTier/ObserveVerb/ProofLocus/ResponseClause added, QualityDimension relocated to common.py + widened to ISO-25010:2023, CriterionSpec gains quality_dimension+measurable_signal (required) + response+oracle_tier (optional) + JUDGED-requires-jury_reason validator. D-FIDELITY-SPINE ratified.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "CriterionSpec gains oracle_tier quality_dimension measurable_signal and response fields",
         "QualityDimension relocates to common.py and extends to ten ISO-25010:2023 members",
@@ -37681,10 +37772,10 @@
       "blocks": [
         "P29-I11-W01"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i10",
+      "claimed_at": "2026-06-06T15:32:38.268278Z",
+      "closed_at": "2026-06-06T15:57:38.283732Z",
+      "commit": "6e44335d7bbccad674c63c9fa4cdfb79506b45eb",
       "deps": [],
       "description": "FS04. single CheckKind; uses existing CriterionSpec/GateSpec so it is an L0 root independent of FS01.",
       "dispatch_history": [],
@@ -37699,10 +37790,10 @@
       "intent": null,
       "iter_id": "P29-I10",
       "opened_at": "2026-06-06T15:07:27.540718Z",
-      "outcome": null,
+      "outcome": "schema_validate CheckKind added, registered, implemented (kinds/schema_validate.py), tested 11/11; compile.py generic passthrough handles it unchanged.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "CheckKind Literal contains schema_validate",
         "CHECK_REGISTRY schema_validate validates a target model and returns pass or fail",
@@ -37718,10 +37809,10 @@
       "blocks": [
         "P29-I10-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i10",
+      "claimed_at": "2026-06-06T15:32:38.791287Z",
+      "closed_at": "2026-06-06T15:57:38.950507Z",
+      "commit": "ff2b874d11fe92cf3cf70c431c540373f11c944c",
       "deps": [],
       "description": "FS07. guarded table dict[Status frozenset[tuple[Status GuardName]]]; pure refactor of the scattered guards; behaviour unchanged.",
       "dispatch_history": [],
@@ -37737,10 +37828,10 @@
       "intent": null,
       "iter_id": "P29-I10",
       "opened_at": "2026-06-06T15:07:28.061581Z",
-      "outcome": null,
+      "outcome": "Lifecycle FSM transition tables (WAVE/PHASE/ITER) + validate_transition derived from code as pure refactor; no behaviour change, 278 lifecycle tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         "WAVE PHASE and ITER guarded transition tables mirror SPEC_TRANSITIONS",
         "validate_transition rejects every edge absent from the table",
