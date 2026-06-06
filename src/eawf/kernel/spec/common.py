@@ -426,6 +426,56 @@ def grandfather_criterion(text: str, *, index: int) -> CriterionSpec:
     )
 
 
+class SourceUnit(_StrictModel):
+    """One atomic clause/sentence span extracted from a source brief.
+
+    The anti-drift generator (FS11) splits a brief into ``SourceUnit``
+    rows BEFORE any criteria are authored, so the coverage diff is
+    computed over the brief's own spans rather than over an LLM's
+    self-report of what it dropped. ``span_id`` is a stable extraction
+    id (``U-007``) and ``char_offset`` is the 0-based start offset of the
+    span in the original brief text, so a finding can be traced back to
+    the exact source location.
+    """
+
+    span_id: Annotated[str, Field(min_length=1)]
+    quote: Annotated[str, Field(min_length=1, max_length=1000)]
+    char_offset: Annotated[int, Field(ge=0)]
+
+
+class DeferredDeliverable(_StrictModel):
+    """An explicitly deferred source span with a recorded target.
+
+    A span that the planner consciously chooses NOT to cover in the
+    current wave set is suppressed from the ``uncovered`` finding list
+    only when an authored ``DeferredDeliverable`` names where the work
+    is filed (``target`` -> phase / wave / backlog id) and why
+    (``reason``). The 20-char ``reason`` floor forces a real rationale:
+    the TUI brief-criteria-drift incident dropped its rich digit-map
+    detail with neither a criterion nor a deferral, so the gap went
+    permanently untracked.
+    """
+
+    span_id: Annotated[str, Field(min_length=1)]
+    reason: Annotated[str, Field(min_length=20, max_length=500)]
+    target: Annotated[str, Field(min_length=1)]
+
+
+class CoverageReport(_StrictModel):
+    """Deterministic coverage diff of source spans against criteria.
+
+    ``covered`` lists span ids mapped to at least one emitted criterion;
+    ``deferred`` carries the explicit :class:`DeferredDeliverable` rows;
+    ``uncovered`` lists span ids that map to neither -- each a hard
+    finding. The diff is computed over :class:`SourceUnit` ids, never
+    over an LLM's claim that it dropped nothing.
+    """
+
+    covered: list[str] = Field(default_factory=list)
+    deferred: list[DeferredDeliverable] = Field(default_factory=list)
+    uncovered: list[str] = Field(default_factory=list)
+
+
 class GateSpec(_StrictModel):
     """One gate row that scores a :class:`CriterionSpec` at some cadence.
 
