@@ -55,6 +55,19 @@ The check kinds frozen for v0.3:
   in-process to collect coverage; an explicit list (e.g. one missing a
   known edge) drives the deterministic error path. A malformed ``args``
   degrades to ``status="fail"`` rather than raising.
+* ``svg_well_formed`` — ``args = {path: str}`` or ``{svg: str}``. Shells
+  ``xmllint --noout`` over an SVG file (or inline SVG string) and turns a
+  clean parse into ``pass``, a parser error into ``fail`` (with the
+  ``line:col`` diagnostic in ``details``). A missing ``xmllint`` yields
+  ``blocked``. The cheapest structural falsifier (T2) of the SVG
+  visual-fidelity oracle stack.
+* ``svg_pixel_diff`` — ``args = {svg: str, golden: str, fonts_dir: str}``.
+  Renders the SVG via the pinned ``resvg`` CLI (vendored fonts +
+  system-font fallback disabled, so the render is host-independent) and
+  byte-compares the PNG to the committed golden. ``status="pass"`` iff
+  byte-identical (ratio-0, satisfying ``maxDiffPixelRatio <= 0.001``);
+  ``blocked`` when ``resvg`` is absent. The golden-pixel falsifier (T5),
+  consulted only after ``svg_well_formed`` passes.
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -84,6 +97,8 @@ CheckKind = Literal[
     "schema_validate",
     "affordance_parity",
     "transition_coverage",
+    "svg_well_formed",
+    "svg_pixel_diff",
 ]
 
 

@@ -67,6 +67,8 @@ from eawf.platform.lint._conditional import changed_files
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
+from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
+from eawf.workflow.audit_dsl.kinds.svg_well_formed import check_svg_well_formed
 from eawf.workflow.audit_dsl.kinds.transition_coverage import check_transition_coverage
 from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.workflow.audit_dsl.models import (
@@ -395,6 +397,8 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "schema_validate": check_schema_validate,
     "affordance_parity": check_affordance_parity,
     "transition_coverage": check_transition_coverage,
+    "svg_well_formed": check_svg_well_formed,
+    "svg_pixel_diff": check_svg_pixel_diff,
 }
 
 

@@ -33,6 +33,15 @@ jobs:
       - name: Sync (frozen)
         run: uv sync --frozen
 
+      - name: Install resvg (pinned, T5 SVG pixel-diff oracle)
+        # CI tool manifest pin for the svg_pixel_diff audit-DSL kind.
+        # resvg renders bit-identically across hosts once fonts are
+        # vendored + system fonts disabled, so the golden PNGs under
+        # tests/snapshots/svg/golden/ are compared by exact bytes. A
+        # version bump here is a GOLDEN-REFRESH event: regenerate the
+        # committed goldens (eawf vfl approve) whenever this pin moves.
+        run: cargo install resvg --version 0.45.1 --locked
+
       - name: Pre-commit
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
