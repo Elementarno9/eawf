@@ -199,6 +199,14 @@ class VerifyBlock(BaseModel):
             deterministic canned-ballot gate (W08) is what proves the gate
             discriminates. Recording the panel here keeps the intent typed
             and ready for the live binding without enabling a spawn.
+        odr_floor: Advisory Oracle-Determinism-Ratio floor consulted at
+            iter-close by
+            :func:`eawf.observability.metrics.odr.odr_below_floor`. The
+            ODR is the fraction of a scope's required criteria gated by a
+            deterministic oracle (tiers T1..T5) rather than a judgment
+            oracle (T6/T7); when the computed ratio falls below this
+            floor the close seam surfaces an ADVISORY finding (log only)
+            but never blocks. Defaults to ``0.80``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -213,6 +221,7 @@ class VerifyBlock(BaseModel):
     cross_vendor_jury: bool = False
     uiux_bands: list[str] = Field(default_factory=list)
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
+    odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)
 
 
 class InstrumentReq(BaseModel):
