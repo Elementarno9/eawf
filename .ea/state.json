@@ -5661,7 +5661,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I09",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -12661,16 +12661,16 @@
       ]
     },
     "P29-I09": {
-      "audit_id": null,
+      "audit_id": "A52-P29-i09",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-06T15:13:34.944308Z",
       "description": null,
       "estimate_id": null,
       "id": "P29-I09",
       "intent": null,
       "opened_at": "2026-06-03T20:05:23.151431Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "UI/UX review follow-ups: modal, footer, pause, campaign, help",
       "trigger": "none",
       "wave_ids": [
@@ -12848,6 +12848,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I08-close-A51",
       "summary": "iter P29-I08 closed with audit A51; waves closed=33; outcomes P29-I08-W01: WaveBehavior gains quality_dimension + jury_scorable; rubric_items parser added; 207 spec tes... | P29-I08-W02: build_auditor_prompt gains rubric + evidence_block + include_diff params; refute-first per-it... | P29-I08-W03: asciinema casts carry source_commit+fixture_id provenance stamp; new evidence_provenance_gate...",
+      "tier": "working"
+    },
+    "MEM-P29-I09-close-A52-P29-i09": {
+      "confidence": "high",
+      "id": "MEM-P29-I09-close-A52-P29-i09",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-06T15:13:34.944308Z",
+      "scope_id": "P29-I09",
+      "status": "active",
+      "store_record_id": "MEM-P29-I09-close-A52-P29-i09",
+      "summary": "iter P29-I09 closed with audit A52-P29-i09; waves closed=11; outcomes P29-I09-W01: modal_depth counts only counts_toward_depth modals (brief viewer exempt via counts_toward_dep... | P29-I09-W02: entity-dedup consolidated at the push_modal chokepoint via dedupe_key (top-only, no toast); D... | P29-I09-W03: CANONICAL_HINT_ACTIONS map (arrow=select, Enter=open, Esc=back, <-> =collapse, w/r/u=scope, F...",
       "tier": "working"
     }
   },
@@ -13512,7 +13523,7 @@
   "schema_version": "1.6",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T15:08:04.352658Z",
+  "updated_at": "2026-06-06T15:13:34.944736Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
