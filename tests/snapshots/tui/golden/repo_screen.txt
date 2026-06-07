@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Home    runtime: 1 running    HH:MM UTC
+state schema 1.0 trails live daemon schema 1.8; showing a migrated read-only view -- run eawf migrate to update the file
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
 │ nothing needs you                                                                                                    │

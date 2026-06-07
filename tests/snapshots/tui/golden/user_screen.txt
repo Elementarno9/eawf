@@ -1,4 +1,4 @@
- Eä  user ❯ QR ❯ Home    runtime: idle    HH:MM UTC
+state schema 1.0 trails live daemon schema 1.8; showing a migrated read-only view -- run eawf migrate to update the file
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
 │ nothing needs you                                                                                                    │
