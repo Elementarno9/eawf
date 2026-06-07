@@ -3815,6 +3815,18 @@
       "scope_id": "P29-I13-W49",
       "status": "done",
       "updated_at": "2026-06-07T09:54:32.754282Z"
+    },
+    "P29-I13-W50": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W50",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W50",
+      "scope_id": "P29-I13-W50",
+      "status": "done",
+      "updated_at": "2026-06-07T10:37:49.906173Z"
     }
   },
   "agent_sessions": {
@@ -13391,6 +13403,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I13-W49",
       "updated_at": "2026-06-07T09:54:32.037742Z"
+    },
+    "P29-I13-W50": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W50-bucket-20260607T103749Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W50",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W50",
+      "updated_at": "2026-06-07T10:37:49.197054Z"
     }
   },
   "goals": {
@@ -14944,7 +14969,8 @@
         "P29-I13-W46",
         "P29-I13-W47",
         "P29-I13-W48",
-        "P29-I13-W49"
+        "P29-I13-W49",
+        "P29-I13-W50"
       ]
     }
   },
@@ -15769,7 +15795,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T09:54:32.754719Z",
+  "updated_at": "2026-06-07T10:37:49.906571Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -62561,6 +62587,36 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Repair legacy jury and egress test debt",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W50": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T10:37:49.197047Z",
+      "closed_at": "2026-06-07T10:37:49.906173Z",
+      "commit": "c19818ca747ce2d393f654414c58d666caad0f93",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/_version.py",
+        "CHANGELOG.md"
+      ],
+      "gates": [],
+      "id": "P29-I13-W50",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T10:36:44.964822Z",
+      "outcome": "version bumped to 0.5.0 + changelog finalized; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Bump version to 0.5.0 and finalize the v0.5.0 changelog",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
