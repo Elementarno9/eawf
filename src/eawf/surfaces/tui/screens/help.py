@@ -128,6 +128,30 @@ def mode_key_rows() -> tuple[tuple[str, str], ...]:
     return tuple((spec.digit, f"switch to {spec.title} mode") for spec in MODE_REGISTRY)
 
 
+def mode_key_rows_active(current_mode: str) -> tuple[tuple[str, str, bool], ...]:
+    """Return the mode digit-key rows tagged with the active-mode flag.
+
+    Mirrors :func:`mode_key_rows` but appends an ``is_active`` flag per row,
+    ``True`` only for the row whose mode name equals *current_mode*, so the
+    help overlay can mark which mode the operator is currently in. A
+    *current_mode* that matches no registered mode tags no row active (the
+    honest path under a bare harness with no resolved mode).
+
+    Args:
+        current_mode: The App's active mode name (``app.current_mode``).
+
+    Returns:
+        One ``(digit, action, is_active)`` triple per registered mode, in
+        digit order.
+    """
+    from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
+
+    return tuple(
+        (spec.digit, f"switch to {spec.title} mode", spec.name == current_mode)
+        for spec in MODE_REGISTRY
+    )
+
+
 def _mode_screen_classes() -> dict[str, type]:
     """Resolve the ``{mode_name: screen_class}`` map for the action-key help.
 
@@ -290,6 +314,10 @@ class HelpScreen(ModalScreen[None]):
     HelpScreen .help-row {
         height: auto;
     }
+    HelpScreen .help-row-active {
+        text-style: bold;
+        color: $accent;
+    }
     HelpScreen .help-hint {
         color: $text-muted;
         margin-top: 1;
@@ -316,8 +344,7 @@ class HelpScreen(ModalScreen[None]):
             for key, action in global_key_rows():
                 yield Static(f"  {key:<10} {action}", classes="help-row")
             yield Static("Modes (digit keys)", classes="help-section")
-            for key, action in mode_key_rows():
-                yield Static(f"  {key:<10} {action}", classes="help-row")
+            yield from self._mode_key_widgets()
             yield Static("Pane navigation (vim alias)", classes="help-section")
             for key, action, alias in pane_nav_rows():
                 yield Static(f"  {key:<10} {action}  ({alias})", classes="help-row")
@@ -343,6 +370,25 @@ class HelpScreen(ModalScreen[None]):
             for verb in visible_verbs(self._scope):
                 yield Static(f"  {verb.name:<16} {verb.hint}", classes="help-row")
             yield Static("[ Esc to close ]", classes="help-hint")
+
+    def _mode_key_widgets(self) -> ComposeResult:
+        """Yield the mode digit-key rows, highlighting the active mode.
+
+        The row whose mode is the App's :attr:`current_mode` is marked with a
+        ``>`` cursor + an ``(active)`` tag and carries the ``help-row-active``
+        style class, so the operator reads at a glance which mode they are in.
+        The marker is plain text so it survives the text-only snapshot capture
+        (the CSS style would not appear in the captured frame on its own).
+        """
+        current_mode = self._resolve_current_mode()
+        for key, action, is_active in mode_key_rows_active(current_mode):
+            if is_active:
+                yield Static(
+                    f"> {key:<10} {action} (active)",
+                    classes="help-row help-row-active",
+                )
+            else:
+                yield Static(f"  {key:<10} {action}", classes="help-row")
 
     def _mode_action_widgets(self) -> ComposeResult:
         """Yield the per-mode action-key subsection widgets.
@@ -372,6 +418,21 @@ class HelpScreen(ModalScreen[None]):
         if scope in ("repo", "workspace", "user"):
             return scope  # type: ignore[return-value]
         return "repo"
+
+    def _resolve_current_mode(self) -> str:
+        """Read the host App's active mode name (empty when unknown).
+
+        Mirrors the ``current_mode`` read the footer + header use. Returns
+        the empty string under a bare harness with no resolved mode, which
+        tags no row active rather than guessing.
+
+        Returns:
+            The App's ``current_mode`` when a string, else ``""``.
+        """
+        current_mode = getattr(self.app, "current_mode", None)
+        if isinstance(current_mode, str):
+            return current_mode
+        return ""
 
     def action_close(self) -> None:
         """Dismiss the help overlay (``Esc``)."""
@@ -413,6 +474,7 @@ __all__ = [
     "global_key_rows",
     "mode_action_key_rows",
     "mode_key_rows",
+    "mode_key_rows_active",
     "open_help",
     "pane_nav_rows",
     "reference_nav_rows",

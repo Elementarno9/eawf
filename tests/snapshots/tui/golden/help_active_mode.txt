@@ -20,10 +20,10 @@
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
       │  Modes (digit keys)                                                                                      │
-      │  > 1          switch to Home mode (active)                                                               │
+      │    1          switch to Home mode                                                                        │
       │    2          switch to Autopilot mode                                                                   │
       │    3          switch to Research mode                                                                    │
-      │    4          switch to Trust mode                                                                       │
+      │  > 4          switch to Trust mode (active)                                                              │
       │    5          switch to Doctor mode                                                                      │
       │    6          switch to Evidence mode                                                                    │
       │    7          switch to Feed mode                                                                        │
