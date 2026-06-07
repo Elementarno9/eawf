@@ -15,6 +15,7 @@ that module is listed with its members.
 | `AuditVerdict` | `pass`, `minor`, `major` |
 | `BacklogPriority` | `P0`, `P1`, `P2`, `P3` |
 | `BacklogStatus` | `open`, `in_progress`, `closed`, `deferred` |
+| `CampaignStatus` | `active`, `cancelled` |
 | `ClaimStatus` | `open`, `supported`, `refuted`, `superseded` |
 | `Confidence` | `high`, `medium`, `low` |
 | `DecisionStatus` | `active`, `superseded`, `reversed`, `obsolete` |

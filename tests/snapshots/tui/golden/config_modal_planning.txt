@@ -6,7 +6,7 @@
       │  Configuration                                                                                           │
       │  save layer: repo  (L cycles: global local)                                                              │
       │                                                                                                          │
-      │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  telemetry  ui  │
+      │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  planning.approval                      [choice]       ask                                            │
       │     planning.auto_plan                     [bool]         false                                          │

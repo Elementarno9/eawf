@@ -6,8 +6,8 @@
       │  Configuration                                                                                           │
       │  save layer: global  (L cycles: repo local)                                                              │
       │                                                                                                          │
-      │  stimation  flow  planning  preferences  prose  research  runtime  ship  telemetry  ui  vcs  worktrees   │
-      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+      │   flow  planning  preferences  prose  research  runtime  ship  statusline  telemetry  ui  vcs  worktree  │
+      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  runtime.adapter_catalog.claude.enabled   [bool]         true  (read-only)                            │
       │     runtime.adapter_catalog.codex.enabled    [bool]         false  (read-only)                           │
       │     runtime.adapter_catalog.opencode.enabled [bool]         false  (read-only)                           │
