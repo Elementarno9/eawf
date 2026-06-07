@@ -20,12 +20,6 @@ from typing import Annotated
 
 import typer
 
-from eawf.runtime.runtimes.claude.statusline_install import (
-    global_settings_path,
-    install_statusline,
-    is_already_installed,
-    read_settings,
-)
 from eawf.surfaces.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
@@ -64,6 +58,17 @@ def statusline_install(
     """
     if ctx.invoked_subcommand is not None:
         return
+    # Imported in-body, not at module level: the installer lives under the
+    # claude runtime package, whose import pulls jinja2 (the template engine).
+    # A module-level import would leak jinja2 into the CLI app import and
+    # blow the cold-start import budget.
+    from eawf.runtime.runtimes.claude.statusline_install import (
+        global_settings_path,
+        install_statusline,
+        is_already_installed,
+        read_settings,
+    )
+
     path = global_settings_path()
     try:
         current = read_settings(path)

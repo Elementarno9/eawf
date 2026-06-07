@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from eawf.runtime.runtimes.claude import statusline_install as statusline_install_module
 from eawf.surfaces.cli.commands import cc as cc_module
 from eawf.surfaces.cli.commands import statusline as statusline_module
 from eawf.surfaces.cli.commands.cc import cc_app
@@ -30,7 +31,9 @@ _EXPECTED_COMMAND = {"type": "command", "command": "eawf cc statusline"}
 def settings_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Redirect the global settings path to a tmp file."""
     path = tmp_path / ".claude" / "settings.json"
-    monkeypatch.setattr(statusline_module, "global_settings_path", lambda: path)
+    # The command imports the installer in-body (to keep jinja2 off the CLI
+    # import budget), so patch the source module the in-body import reads.
+    monkeypatch.setattr(statusline_install_module, "global_settings_path", lambda: path)
     yield path
 
 
