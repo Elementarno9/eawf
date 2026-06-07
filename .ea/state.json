@@ -3120,6 +3120,18 @@
       "status": "done",
       "updated_at": "2026-06-06T23:43:29.682504Z"
     },
+    "P29-I12-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W02",
+      "scope_id": "P29-I12-W02",
+      "status": "done",
+      "updated_at": "2026-06-07T00:06:48.943882Z"
+    },
     "P29-I12-W03": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -3132,6 +3144,18 @@
       "status": "done",
       "updated_at": "2026-06-06T23:43:31.012351Z"
     },
+    "P29-I12-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W04",
+      "scope_id": "P29-I12-W04",
+      "status": "done",
+      "updated_at": "2026-06-07T00:06:50.255324Z"
+    },
     "P29-I12-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -3143,6 +3167,18 @@
       "scope_id": "P29-I12-W07",
       "status": "done",
       "updated_at": "2026-06-06T23:43:32.353449Z"
+    },
+    "P29-I12-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W08",
+      "scope_id": "P29-I12-W08",
+      "status": "done",
+      "updated_at": "2026-06-07T00:06:51.608937Z"
     }
   },
   "agent_sessions": {
@@ -11921,6 +11957,19 @@
       "scope_id": "P29-I12-W01",
       "updated_at": "2026-06-06T23:43:28.969185Z"
     },
+    "P29-I12-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W02-bucket-20260607T000648Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I12-W02",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I12-W02",
+      "updated_at": "2026-06-07T00:06:48.166910Z"
+    },
     "P29-I12-W03": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I12-W03-bucket-20260606T234330Z",
@@ -11934,6 +11983,19 @@
       "scope_id": "P29-I12-W03",
       "updated_at": "2026-06-06T23:43:30.305024Z"
     },
+    "P29-I12-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W04-bucket-20260607T000649Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I12-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I12-W04",
+      "updated_at": "2026-06-07T00:06:49.553425Z"
+    },
     "P29-I12-W07": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I12-W07-bucket-20260606T234331Z",
@@ -11946,6 +12008,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I12-W07",
       "updated_at": "2026-06-06T23:43:31.641323Z"
+    },
+    "P29-I12-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W08-bucket-20260607T000650Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I12-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I12-W08",
+      "updated_at": "2026-06-07T00:06:50.881641Z"
     }
   },
   "goals": {
@@ -14263,7 +14338,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-06T23:54:13.009414Z",
+  "updated_at": "2026-06-07T00:06:51.609232Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -57814,10 +57889,10 @@
       "blocks": [
         "P29-I12-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-07T00:06:48.166901Z",
+      "closed_at": "2026-06-07T00:06:48.943882Z",
+      "commit": "a768340bea5232cd9d14f48c2aa731100215e194",
       "deps": [
         "P29-I12-W01"
       ],
@@ -57832,10 +57907,10 @@
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T22:15:36.726080Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -57908,10 +57983,10 @@
       "blocks": [
         "P29-I12-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-07T00:06:49.553417Z",
+      "closed_at": "2026-06-07T00:06:50.255324Z",
+      "commit": "73d5966b9e215580b2ca1c04400e171c847d97f4",
       "deps": [
         "P29-I12-W03"
       ],
@@ -57926,10 +58001,10 @@
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T22:15:37.769868Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -58094,10 +58169,10 @@
     "P29-I12-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-07T00:06:50.881634Z",
+      "closed_at": "2026-06-07T00:06:51.608937Z",
+      "commit": "6390054dbd20126c1514477c87908feefce8def4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -58111,10 +58186,10 @@
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T23:54:11.789791Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
