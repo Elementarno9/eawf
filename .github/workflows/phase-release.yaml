@@ -85,6 +85,10 @@ jobs:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           set -euo pipefail
+          # The runner has no git identity by default, and ``git tag -a`` needs
+          # one (else "fatal: empty ident name"); set the github-actions bot.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
             echo "tag $TAG already exists" >&2
             exit 1
