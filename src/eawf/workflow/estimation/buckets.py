@@ -1,4 +1,16 @@
-"""Wave effort-bucket roll-up + calibration helpers."""
+"""Wave effort-bucket roll-up + calibration helpers.
+
+Bucket-drift premise (B069 reframe): the EU effort buckets are re-fit
+against recorded actual elapsed EU. The recalibration input is the
+measured agent runtime captured on every :class:`ActualSummary` at wave
+close (derived from the telemetry-rollup session ``duration_ms``), so the
+drift re-fit now reads a live signal rather than waiting on the operator
+to run ``eawf actual start/stop`` by hand. ``elapsed_eu`` is the measured
+session runtime, NOT the open->close wall-clock span (which counts idle /
+overnight / cross-session time and would inflate the re-fit), so the
+calibration compares like with like against the :data:`BUCKET_EU`
+centroids.
+"""
 
 from __future__ import annotations
 
@@ -18,9 +30,13 @@ from eawf.kernel.state.models import ActualSummary, EstimateSummary, State, Wave
 #: session time (:data:`EU_MINUTES`), so XS is a ~7.5-minute task and XL a
 #: ~105-minute one. Operator config (``estimation.buckets.overrides``) may
 #: tighten a bucket per repo, but this table is the fallback every estimate
-#: and the drift calibration compare against. The values are pinned by
+#: and the drift calibration compare against. These centroids are the
+#: starting estimate the close-time measured ``elapsed_eu`` is re-fit
+#: against (the B069 recalibration input); :func:`calibrate_buckets`
+#: surfaces the drift but never mutates this table, so the values stay
+#: pinned by
 #: ``tests/workflow/estimation/test_buckets.py::test_bucket_eu_is_canonical_table``
-#: so a silent edit reds a test rather than shifting every projection.
+#: and a silent edit reds a test rather than shifting every projection.
 BUCKET_EU: dict[EffortBucket, float] = {
     EffortBucket.XS: 0.25,
     EffortBucket.S: 0.5,
@@ -237,7 +253,11 @@ def _bucket_actuals(state: State, *, now: datetime) -> dict[EffortBucket, list[f
     A wave contributes its :class:`ActualSummary.elapsed_eu` when it is
     CLOSED, carries a non-``None`` ``effort_bucket``, has an actual whose
     ``updated_at`` falls inside the :data:`CALIBRATION_WINDOW`, and that
-    actual records positive elapsed EU.
+    actual records positive elapsed EU. The positive-elapsed filter keeps
+    a wave with no captured runtime (auto-actual elapsed EU of ``0.0``)
+    out of the re-fit; the close path now records measured runtime EU on
+    the auto-actual, so a wave with telemetry contributes its real pace as
+    the B069 recalibration input.
 
     Args:
         state: Loaded typed :class:`State` snapshot (read-only).
