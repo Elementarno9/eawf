@@ -459,6 +459,69 @@ def _record_criterion_ids(record: EvidenceRecord) -> tuple[str, ...]:
     return tuple(ordered)
 
 
+#: Section heading for evidence rows that join no in-scope criterion -- the
+#: "orphan" bucket the evidence->criterion join groups unmatched rows under.
+ORPHAN_SECTION: str = "orphan"
+
+
+@dataclass(frozen=True)
+class EvidenceJoin:
+    """The result of joining evidence rows to typed criteria.
+
+    Attributes:
+        matched: A ``{criterion_id: (records, ...)}`` map -- the evidence rows
+            that join each in-scope criterion, keyed by criterion id. A
+            criterion with no joining evidence is absent from the map (callers
+            that want a row per criterion read the close-readiness view, not
+            this join).
+        orphans: The evidence rows that join NO in-scope criterion, in input
+            order. Grouped here under the :data:`ORPHAN_SECTION` heading so an
+            evidence row referencing an unknown / dropped criterion stays
+            visible rather than silently vanishing.
+    """
+
+    matched: dict[str, tuple[EvidenceRecord, ...]]
+    orphans: tuple[EvidenceRecord, ...]
+
+
+def join_evidence_to_criteria(
+    criterion_ids: Iterable[str],
+    records: Iterable[EvidenceRecord],
+) -> EvidenceJoin:
+    """Join *records* to the *criterion_ids* they reference, bucketing orphans.
+
+    Maps each :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` to the
+    in-scope criterion id it references (via its ``metrics["criterion_id"]`` or
+    its ``refs``); a record that references at least one in-scope criterion
+    lands under every such id in :attr:`EvidenceJoin.matched`, and a record
+    that references none lands in :attr:`EvidenceJoin.orphans`. The orphan
+    bucket is the load-bearing half: an evidence row whose criterion was
+    dropped (or never existed) stays visible under the :data:`ORPHAN_SECTION`
+    heading rather than silently disappearing.
+
+    Args:
+        criterion_ids: The in-scope criterion ids (typically the close-
+            readiness view's criterion ids) a record may join.
+        records: The scope's evidence rows.
+
+    Returns:
+        The :class:`EvidenceJoin` of matched groups + the orphan bucket.
+    """
+    in_scope = set(criterion_ids)
+    matched: dict[str, list[EvidenceRecord]] = {}
+    orphans: list[EvidenceRecord] = []
+    for record in records:
+        joined = [cid for cid in _record_criterion_ids(record) if cid in in_scope]
+        if not joined:
+            orphans.append(record)
+            continue
+        for criterion_id in joined:
+            matched.setdefault(criterion_id, []).append(record)
+    frozen = {cid: tuple(rows) for cid, rows in matched.items()}
+    logger.info(f"join_evidence_to_criteria matched={len(frozen)} orphans={len(orphans)}")
+    return EvidenceJoin(matched=frozen, orphans=tuple(orphans))
+
+
 class EvidenceModeScreen(ScopeScreen):
     """Evidence-mode base screen rendering the agent-report rollup.
 
@@ -681,6 +744,8 @@ __all__ = [
     "EMPTY_NOTICE",
     "LEDGER_EMPTY_NOTICE",
     "NO_CRITERIA_NOTICE",
+    "ORPHAN_SECTION",
+    "EvidenceJoin",
     "EvidenceModeScreen",
     "EvidenceRow",
     "LedgerRow",
@@ -690,6 +755,7 @@ __all__ = [
     "criterion_ready_count",
     "evidence_summary_line",
     "gate_status_label",
+    "join_evidence_to_criteria",
     "render_followups_block",
     "sort_evidence_rows",
 ]
