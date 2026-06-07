@@ -105,6 +105,21 @@ _SCORED_STATUSES: frozenset[str] = frozenset({"pass", "fail", "blocked", "waived
 #: so no ratio can be formed). Muted so it reads as "not measured yet".
 NO_SCORED_EVIDENCE: str = "no scored evidence yet"
 
+#: The evidence status that marks a criterion as escaped -- an operator
+#: waiver cleared it rather than a gate passing it. The escape ledger lists
+#: every such row so a waived criterion stays visible (an escape is the
+#: thing the trust surface must never hide).
+_WAIVED_STATUS: str = "waived"
+
+#: Notice rendered in the escape-ledger section when no criterion was waived
+#: -- the COMMON path (nothing escaped the gate). Muted so a clean ledger
+#: reads as "no escapes", the desired state, not as missing data.
+NO_ESCAPES_NOTICE: str = "no escaped criteria"
+
+#: Cap on escape-ledger rows so a project with many waivers does not flood
+#: the section; an overflow count is appended past the cap.
+_MAX_ESCAPE_ROWS: int = 12
+
 
 def is_data_starved(scorecard: TrustScorecard) -> bool:
     """Return whether *scorecard* lacks any signal to back a trust verdict.
@@ -216,6 +231,77 @@ def render_oracle_determinism(determinism: OracleDeterminism) -> str:
             f" / {determinism.total_scored} scored",
         ]
     )
+
+
+@dataclass(frozen=True)
+class EscapedCriterion:
+    """One escaped (operator-waived) criterion + its waiver reason.
+
+    An *escape* is a criterion cleared by an operator waiver rather than a
+    passing gate -- the verdict the trust surface must always surface so a
+    waived criterion never hides behind a green close. The reason is the
+    waiver's one-line justification (the evidence row's summary).
+
+    Attributes:
+        scope_id: The scope the waived evidence row backs (the criterion /
+            wave the waiver cleared).
+        reason: The waiver's one-line justification.
+    """
+
+    scope_id: str
+    reason: str
+
+
+def build_escape_ledger(records: Iterable[EvidenceRecord]) -> tuple[EscapedCriterion, ...]:
+    """Build one ledger row per waived evidence row in *records*.
+
+    Selects the evidence rows whose ``status`` is ``waived`` (a criterion an
+    operator escaped) and projects each to its scope id + waiver reason (the
+    row summary). Non-waived rows are skipped. The COMMON path is the empty
+    tuple -- nothing was waived -- which the renderer surfaces as the
+    honest-empty notice.
+
+    Args:
+        records: The scope's evidence rows.
+
+    Returns:
+        The escaped-criterion rows in input order; empty when none was
+        waived.
+    """
+    escapes = tuple(
+        EscapedCriterion(scope_id=record.scope_id, reason=record.summary)
+        for record in records
+        if record.status == _WAIVED_STATUS
+    )
+    logger.info(f"build_escape_ledger escapes={len(escapes)}")
+    return escapes
+
+
+def render_escape_ledger(escapes: tuple[EscapedCriterion, ...]) -> str:
+    """Render the escape-ledger section body.
+
+    Lists one ``<scope> -- <reason>`` line per escaped criterion so the
+    operator reads exactly which criterion was waived and why. The rows are
+    capped at :data:`_MAX_ESCAPE_ROWS` with an overflow count. The
+    honest-empty path (no waivers -- the common, desired state) renders the
+    muted :data:`NO_ESCAPES_NOTICE`.
+
+    Args:
+        escapes: The escaped-criterion rows.
+
+    Returns:
+        A content-markup section body.
+    """
+    if not escapes:
+        return f"[$muted]{NO_ESCAPES_NOTICE}[/]"
+    lines = [
+        f"[$warn]{escape.scope_id}[/] [$muted]{escape.reason}[/]"
+        for escape in escapes[:_MAX_ESCAPE_ROWS]
+    ]
+    overflow = len(escapes) - _MAX_ESCAPE_ROWS
+    if overflow > 0:
+        lines.append(f"[$muted]+{overflow} more[/]")
+    return "\n".join(lines)
 
 
 def render_overview(scorecard: TrustScorecard) -> str:
@@ -462,6 +548,7 @@ class TrustModeScreen(ScopeScreen):
         ("trust-section-overview", "TRUST"),
         ("trust-section-tiers", "TIERS"),
         ("trust-section-determinism", "ORACLE DETERMINISM"),
+        ("trust-section-escapes", "ESCAPE LEDGER"),
         ("trust-section-stores", "SAMPLE SIZES"),
         ("trust-section-calibration", "EU CALIBRATION"),
         ("trust-section-verifier", "VERIFIER RELIABILITY"),
@@ -543,6 +630,8 @@ class TrustModeScreen(ScopeScreen):
             return render_oracle_determinism(
                 compute_oracle_determinism(self._current_evidence_records())
             )
+        if section_id == "trust-section-escapes":
+            return render_escape_ledger(build_escape_ledger(self._current_evidence_records()))
         if scorecard is None:
             return f"[$muted]{NO_DATA}[/]"
         if section_id == "trust-section-overview":
@@ -655,12 +744,16 @@ class TrustModeScreen(ScopeScreen):
 __all__ = [
     "DATA_STARVED_NOTICE",
     "NO_DATA",
+    "NO_ESCAPES_NOTICE",
     "NO_SCORED_EVIDENCE",
     "TRUST_REFRESH_S",
+    "EscapedCriterion",
     "OracleDeterminism",
     "TrustModeScreen",
+    "build_escape_ledger",
     "compute_oracle_determinism",
     "is_data_starved",
+    "render_escape_ledger",
     "render_eu_calibration",
     "render_oracle_determinism",
     "render_output_labels",
