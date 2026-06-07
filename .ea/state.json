@@ -3996,6 +3996,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-01-A44-P29-i01-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I01/A44-P29-i01-report"
     },
+    "A56-P29-i13-report": {
+      "created_at": "2026-06-07T14:26:09.891096Z",
+      "id": "A56-P29-i13-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-07-A56-P29-i13-closeout.md",
+      "urn": "urn:eawf:v1:artifact:P29-I13/A56-P29-i13-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -5273,10 +5283,21 @@
       "id": "A56-P29-i13",
       "integrity_results": [],
       "kind": "evaluation",
-      "report_artifact_id": null,
+      "report_artifact_id": "A56-P29-i13-report",
       "scope_id": "P29-I13",
-      "status": "pending",
-      "verdict": null
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A57-P29-ship-gate": {
+      "check_results": [],
+      "created_at": "2026-06-07T14:26:46.013506Z",
+      "id": "A57-P29-ship-gate",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "A56-P29-i13-report",
+      "scope_id": "P29",
+      "status": "complete",
+      "verdict": "minor"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -6821,8 +6842,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I13",
-    "phase_id": "P29",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -15033,16 +15054,16 @@
       ]
     },
     "P29-I13": {
-      "audit_id": null,
+      "audit_id": "A56-P29-i13",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-07T14:23:58.687549Z",
       "description": "The in-band TUI build-out + folded B069/B011/B018, authored through the I12 spec-body machinery so every wave closes on a deterministic gate.",
       "estimate_id": null,
       "id": "P29-I13",
       "intent": null,
       "opened_at": "2026-06-06T23:54:12.402754Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "TUI surfaces + folded scope (authored via spec-body)",
       "trigger": "none",
       "wave_ids": [
@@ -15259,6 +15280,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I12-close-A55-P29-i12",
       "summary": "iter P29-I12 closed with audit A55-P29-i12; waves closed=10; outcomes P29-I12-W01: integrated via cherry-pick; tests green per executor report | P29-I12-W02: integrated via cherry-pick; tests green per executor report | P29-I12-W03: integrated via cherry-pick; tests green per executor report",
+      "tier": "working"
+    },
+    "MEM-P29-I13-close-A56-P29-i13": {
+      "confidence": "high",
+      "id": "MEM-P29-I13-close-A56-P29-i13",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-07T14:23:58.687549Z",
+      "scope_id": "P29-I13",
+      "status": "active",
+      "store_record_id": "MEM-P29-I13-close-A56-P29-i13",
+      "summary": "iter P29-I13 closed with audit A56-P29-i13; waves closed=55; outcomes P29-I13-W01: stale-schema banner surfaces on TUI bind when bound state schema_version trails the live daem... | P29-I13-W02: config + repo hygiene tuned for I13: agent_driven+quality enabled, researchcfg committed, cov... | P29-I13-W03: close-readiness header renders passed/total criterion count in evidence mode; snapshot gate g...",
       "tier": "working"
     }
   },
@@ -15858,8 +15890,8 @@
       "title": "Build v0.4 verify spine + lifecycle + clarity + plugins + trust + eval"
     },
     "P29": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A57-P29-ship-gate",
+      "closed_at": "2026-06-07T14:26:52.954054Z",
       "depends_on": [],
       "description": "All-in v0.5.0 mega-phase: spawn-free foundation (engine + surfaces), safety floor, live cross-vendor spawn, research orchestrator, cross-vendor jury, trust/reputation engine, plugin release, and the doc-clarity + math doc-type cross-cut. Keystone A = per-wave verdict producer (I04); Keystone B = Claim + EviBound scorer (I01). schema_version 1.1->1.2 (Iter.trigger + UserQuestion.urgency).",
       "id": "P29",
@@ -15887,7 +15919,7 @@
         "2026-05-31-p29-detailed-plan",
         "2026-05-31-p29-build-order"
       ],
-      "status": "active",
+      "status": "closed",
       "subproject_id": null,
       "title": "Build v0.5.0: spawn engine + safety floor + jury + trust + release"
     }
@@ -15925,7 +15957,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T13:52:23.230774Z",
+  "updated_at": "2026-06-07T14:26:52.954252Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
