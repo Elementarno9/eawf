@@ -25,6 +25,8 @@ don't want to decorate.
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from dataclasses import dataclass, field
 from importlib.resources import files
 from typing import Any, Literal
@@ -32,6 +34,34 @@ from typing import Any, Literal
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+GlyphMode = Literal["ascii", "unicode"]
+"""Effective glyph set after resolving the configured policy.
+
+The configured ``statusline.glyph_mode`` policy is one of ``auto`` /
+``ascii`` / ``unicode``; :func:`resolve_glyph_mode` collapses ``auto`` to a
+concrete :data:`GlyphMode` against the terminal capability probe, so the
+render path only ever sees a resolved value.
+"""
+
+ColorMode = Literal["on", "off"]
+"""Effective colour state after resolving the configured policy.
+
+The configured ``statusline.color_mode`` policy is one of ``auto`` /
+``always`` / ``never``; :func:`resolve_color_mode` collapses ``auto`` against
+the terminal capability probe to a concrete :data:`ColorMode`.
+"""
+
+_GLYPH_MODE_AUTO: str = "auto"
+_GLYPH_MODE_ASCII: GlyphMode = "ascii"
+_GLYPH_MODE_UNICODE: GlyphMode = "unicode"
+
+_COLOR_MODE_AUTO: str = "auto"
+_COLOR_MODE_ALWAYS: str = "always"
+_COLOR_MODE_NEVER: str = "never"
+_COLOR_ON: ColorMode = "on"
+_COLOR_OFF: ColorMode = "off"
 
 
 SegmentStatus = Literal["ok", "warn", "missing", "degraded", "failed"]
@@ -240,11 +270,96 @@ def render_segments(segments: list[StatuslineSegment], theme: StatuslineTheme) -
     return theme.separator.join(decorated)
 
 
+def terminal_supports_color() -> bool:
+    """Return ``True`` when the active terminal can render ANSI colour.
+
+    The probe is the colour-capability source of truth for the statusline
+    auto modes. A terminal is treated as colour-capable unless any of the
+    standard no-colour signals fires:
+
+    - the ``NO_COLOR`` env var is set to any value (the cross-tool
+      no-colour convention);
+    - ``TERM`` is ``dumb`` or empty (a non-capable terminal);
+    - stdout is not attached to a TTY (a pipe / file / CI capture).
+
+    Returns:
+        ``True`` when none of the no-colour signals fires, else ``False``.
+    """
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    term = os.environ.get("TERM", "")
+    if term in ("", "dumb"):
+        return False
+    return sys.stdout.isatty()
+
+
+def resolve_glyph_mode(configured: str, *, color_capable: bool) -> GlyphMode:
+    """Resolve a configured glyph policy to a concrete :data:`GlyphMode`.
+
+    The ``statusline.glyph_mode`` policy is one of ``auto`` / ``ascii`` /
+    ``unicode``. ``auto`` downgrades to :data:`_GLYPH_MODE_ASCII` on a
+    no-colour terminal (``color_capable`` is falsy) and selects
+    :data:`_GLYPH_MODE_UNICODE` otherwise; the explicit ``ascii`` / ``unicode``
+    policies pass through unchanged.
+
+    Args:
+        configured: The configured policy string.
+        color_capable: Terminal colour capability, typically from
+            :func:`terminal_supports_color`.
+
+    Returns:
+        The resolved :data:`GlyphMode`.
+
+    Raises:
+        ValueError: When *configured* is not one of the known policies.
+    """
+    if configured == _GLYPH_MODE_ASCII:
+        return _GLYPH_MODE_ASCII
+    if configured == _GLYPH_MODE_UNICODE:
+        return _GLYPH_MODE_UNICODE
+    if configured == _GLYPH_MODE_AUTO:
+        return _GLYPH_MODE_UNICODE if color_capable else _GLYPH_MODE_ASCII
+    raise ValueError(f"unknown statusline glyph mode: {configured!r}")
+
+
+def resolve_color_mode(configured: str, *, color_capable: bool) -> ColorMode:
+    """Resolve a configured colour policy to a concrete :data:`ColorMode`.
+
+    The ``statusline.color_mode`` policy is one of ``auto`` / ``always`` /
+    ``never``. ``always`` forces :data:`_COLOR_ON`, ``never`` forces
+    :data:`_COLOR_OFF`, and ``auto`` defers to the terminal capability probe
+    (``color_capable``), turning colour off on a no-colour terminal.
+
+    Args:
+        configured: The configured policy string.
+        color_capable: Terminal colour capability, typically from
+            :func:`terminal_supports_color`.
+
+    Returns:
+        The resolved :data:`ColorMode`.
+
+    Raises:
+        ValueError: When *configured* is not one of the known policies.
+    """
+    if configured == _COLOR_MODE_ALWAYS:
+        return _COLOR_ON
+    if configured == _COLOR_MODE_NEVER:
+        return _COLOR_OFF
+    if configured == _COLOR_MODE_AUTO:
+        return _COLOR_ON if color_capable else _COLOR_OFF
+    raise ValueError(f"unknown statusline color mode: {configured!r}")
+
+
 __all__ = [
+    "ColorMode",
+    "GlyphMode",
     "SegmentStatus",
     "StatuslineSegment",
     "StatuslineTheme",
     "load_themes",
     "render_segments",
+    "resolve_color_mode",
+    "resolve_glyph_mode",
     "resolve_theme",
+    "terminal_supports_color",
 ]
