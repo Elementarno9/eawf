@@ -3299,6 +3299,18 @@
       "scope_id": "P29-I13-W42",
       "status": "done",
       "updated_at": "2026-06-07T02:54:53.555715Z"
+    },
+    "P29-I13-W43": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W43",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W43",
+      "scope_id": "P29-I13-W43",
+      "status": "done",
+      "updated_at": "2026-06-07T03:01:31.048244Z"
     }
   },
   "agent_sessions": {
@@ -12305,6 +12317,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I13-W42",
       "updated_at": "2026-06-07T02:54:52.858024Z"
+    },
+    "P29-I13-W43": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W43-bucket-20260607T030130Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W43",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W43",
+      "updated_at": "2026-06-07T03:01:30.309888Z"
     }
   },
   "goals": {
@@ -13851,7 +13876,8 @@
         "P29-I13-W39",
         "P29-I13-W40",
         "P29-I13-W41",
-        "P29-I13-W42"
+        "P29-I13-W42",
+        "P29-I13-W43"
       ]
     }
   },
@@ -14676,7 +14702,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T02:56:34.948419Z",
+  "updated_at": "2026-06-07T03:01:31.048569Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -61259,6 +61285,35 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Make the affordance-parity gate loop-safe under the daemon loop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W43": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T03:01:30.309881Z",
+      "closed_at": "2026-06-07T03:01:31.048244Z",
+      "commit": "e2b71570258443c304dbb7cd708ac303104312dd",
+      "deps": [],
+      "description": "The deterministic close gate appends evidence.jsonl rows as a wave closes, but the commit-prefix lint state whitelist only named event.jsonl + audit.jsonl, rejecting the evidence store. Broaden the whitelist to the .ea/store/ prefix per the authority map's uniform treatment of committed daemon stores. Surfaced closing the Evidence surface.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py"
+      ],
+      "gates": [],
+      "id": "P29-I13-W43",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T03:00:43.870070Z",
+      "outcome": "commit-prefix lint state whitelist broadened to .ea/store/ prefix; evidence.jsonl now rides state commits; regression test green",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Allow committed .ea/store JSONLs in state-bookkeeping commits",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
