@@ -21,6 +21,7 @@ import pytest
 
 from eawf.kernel.config.registry import (
     CONFIG_REGISTRY,
+    LEAF_KEY_REGISTRY,
     ConfigKey,
     coerce_and_validate,
     is_known_key,
@@ -29,6 +30,16 @@ from eawf.kernel.config.registry import (
     tabs_sorted,
 )
 from eawf.surfaces.cli.errors import UserError
+
+#: The adapter-enable + budget keys promoted into the operator-tunable
+#: registry (P29-I13-W18). Each must now resolve as a recognized,
+#: layer-aware config key so the TUI config modal (W19) can surface it.
+_PROMOTED_KEYS: tuple[str, ...] = (
+    "runtime.adapter_catalog.claude.enabled",
+    "runtime.adapter_catalog.codex.enabled",
+    "runtime.adapter_catalog.opencode.enabled",
+    "flow.budget.multiplier",
+)
 
 
 def test_registry_non_empty() -> None:
@@ -347,3 +358,68 @@ def test_is_known_key_for_merged_only() -> None:
 def test_is_known_key_unknown_returns_false() -> None:
     assert not is_known_key({"foo": {"bar": 1}}, "no.such.key")
     assert not is_known_key(None, "no.such.key")
+
+
+# --- W18: promoted adapter-enable + budget keys ------------------------------
+
+
+@pytest.mark.parametrize("key", _PROMOTED_KEYS)
+def test_promoted_key_is_registered(key: str) -> None:
+    # Each promoted key resolves to a CONFIG_REGISTRY entry, so the operator-
+    # tunable menu + the TUI config modal both surface it.
+    entry = registry_lookup(key)
+    assert entry is not None, f"promoted key {key!r} is not in CONFIG_REGISTRY"
+    assert entry.key == key
+
+
+@pytest.mark.parametrize("key", _PROMOTED_KEYS)
+def test_promoted_key_is_recognized_as_known(key: str) -> None:
+    # boundary: a promoted registry key is reported known regardless of merged
+    # content, so a write to it is no longer rejected as an unknown key.
+    assert is_known_key({}, key)
+
+
+@pytest.mark.parametrize("key", _PROMOTED_KEYS)
+def test_promoted_key_is_layer_aware(key: str) -> None:
+    # The promoted keys are layer-aware: each has a leaf-catalog row declaring
+    # its writable layers, which the W19 config-modal lock reads to decide
+    # whether the key edits or renders read-only on the active save layer. A
+    # promoted key with no leaf row would render editable on every layer (the
+    # is_editable_key missing-row fallback), defeating the lock.
+    leaf = LEAF_KEY_REGISTRY.get(key)
+    assert leaf is not None, f"promoted key {key!r} has no leaf-catalog row"
+    assert leaf.writable_layers, f"promoted key {key!r} declares no writable layer"
+
+
+def test_adapter_enable_keys_are_repo_locked() -> None:
+    # The adapter-enable keys are writable only on the repo layer, so they
+    # render read-only on every other layer the modal can target -- the exact
+    # lock W19's snapshot pins.
+    for key in (
+        "runtime.adapter_catalog.claude.enabled",
+        "runtime.adapter_catalog.codex.enabled",
+        "runtime.adapter_catalog.opencode.enabled",
+    ):
+        leaf = LEAF_KEY_REGISTRY.get(key)
+        assert leaf is not None
+        assert leaf.writable_layers == ("repo",)
+
+
+def test_promoted_key_defaults_match_leaf_catalog() -> None:
+    # The registry default and the leaf-catalog default must agree so the
+    # modal's resolved value (merged -> registry default) matches the daemon's
+    # built-in layer; a divergent default would flag a phantom dirty edit.
+    for key in _PROMOTED_KEYS:
+        entry = registry_lookup(key)
+        leaf = LEAF_KEY_REGISTRY.get(key)
+        assert entry is not None and leaf is not None
+        assert entry.default == leaf.default, f"default drift for {key!r}"
+
+
+def test_budget_multiplier_rejects_below_minimum() -> None:
+    # error-path: the budget multiplier is bounded at >= 1.0 (a cap below the
+    # base budget is nonsensical), so an under-range value is rejected.
+    entry = registry_lookup("flow.budget.multiplier")
+    assert entry is not None
+    with pytest.raises(UserError, match="below minimum"):
+        coerce_and_validate(entry, "0.5")

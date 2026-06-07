@@ -16,7 +16,7 @@
       │     flow.auto_accept.review   [bool]         false                                                       │
       │     flow.auto_accept.ship     [bool]         false                                                       │
       │     flow.budget.enforce       [choice]       soft                                                        │
-      │                                                                                                          │
+      │     flow.budget.multiplier    [float]        1.5                                                         │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

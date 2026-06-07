@@ -548,11 +548,15 @@ def test_config_modal_planning_tab_snapshot() -> None:
 
 
 def test_config_modal_runtime_single_field_snapshot() -> None:
-    """The single-field ``runtime`` tab: its lone choice row carries the caret.
+    """The ``runtime`` tab: the adapter-enable bools + the default choice row.
 
-    The lone ``runtime.default`` choice carries the ``>`` cursor caret
-    (field 0 of the tab), showing it is keyboard-reachable; ``←`` / ``→``
-    leave this tab and ``Enter`` cycles the choice in place.
+    Field 0 (the first adapter-enable bool) carries the ``>`` cursor caret,
+    showing the tab is keyboard-reachable; the three
+    ``runtime.adapter_catalog.*.enabled`` bools and the ``runtime.default``
+    choice surface in alphabetical-by-key order. The modal opens on the repo
+    layer, where the repo-writable adapter keys edit in place (no read-only
+    marker); ``←`` / ``→`` leave this tab and ``Enter`` mutates the focused
+    field.
     """
 
     async def body() -> None:
@@ -691,13 +695,14 @@ def test_config_modal_inline_edit_int_snapshot() -> None:
 
 
 def test_config_modal_flow_tab_snapshot() -> None:
-    """The W27 ``flow`` tab renders its curated keys, lock-filtered (W28).
+    """The ``flow`` tab renders its curated keys, lock-filtered (W28).
 
     W27 surfaced the curated ``flow.*`` keys (``ask_on_decisions`` + the six
-    ``auto_accept.*`` toggles + ``budget.enforce``), which added this tab to
-    the config modal. The golden pins that curated set; the W28 lock-filter
-    drops any key not writable from a targetable layer, so a locked / CLI-only
-    key (e.g. the non-curated ``flow.budget.multiplier``) never reaches a row.
+    ``auto_accept.*`` toggles + ``budget.enforce``); P29-I13-W18 promoted
+    ``budget.multiplier`` into the curated set too (writable global/workspace/
+    repo). The golden pins that curated set on the repo layer, where both
+    budget keys edit in place; the lock-filter still drops any key not
+    writable from a targetable layer.
     """
 
     async def body() -> None:
@@ -722,9 +727,9 @@ def test_config_modal_every_surfaced_field_is_lock_filtered() -> None:
     modal's surfaced field list (``editable_keys_for_tab``) only contains keys
     that pass :func:`is_editable_key`, so a locked leaf (``writable_layers
     == ()``) -- the key the ``set_layer_value`` RPC would refuse -- can never
-    appear as an editable row. The flow tab is asserted to specifically omit
-    the non-curated ``flow.budget.multiplier`` while keeping the curated
-    ``flow.budget.enforce``.
+    appear as an editable row. The flow tab is asserted to surface both
+    curated budget keys (``flow.budget.enforce`` + the W18-promoted
+    ``flow.budget.multiplier``, both writable from the repo layer).
     """
     # The modal's targetable layers for a workspace-less repo modal -- the
     # same set ``_open_config`` resolves (repo anchor, no workspace).
@@ -742,10 +747,10 @@ def test_config_modal_every_surfaced_field_is_lock_filtered() -> None:
                 f"locked key {entry.key!r} leaked into tab {tab!r}'s surfaced rows"
             )
     flow_keys = {entry.key for entry in editable_keys_for_tab("flow", layers)}
-    # The curated, writable flow key is surfaced; the non-curated multiplier
-    # (CLI-only) is absent from the modal's editable rows.
+    # Both curated budget keys are surfaced -- writable from the repo layer the
+    # modal can target, so neither is dropped by the lock-filter.
     assert "flow.budget.enforce" in flow_keys
-    assert "flow.budget.multiplier" not in flow_keys
+    assert "flow.budget.multiplier" in flow_keys
 
 
 def test_edit_field_modal_int_snapshot() -> None:

@@ -8,10 +8,10 @@
       │                                                                                                          │
       │  stimation  flow  planning  preferences  prose  research  runtime  ship  telemetry  ui  vcs  worktrees   │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  runtime.default          [choice]       claude                                                       │
-      │                                                                                                          │
-      │                                                                                                          │
-      │                                                                                                          │
+      │  >  runtime.adapter_catalog.claude.enabled   [bool]         true                                         │
+      │     runtime.adapter_catalog.codex.enabled    [bool]         false                                        │
+      │     runtime.adapter_catalog.opencode.enabled [bool]         false                                        │
+      │     runtime.default                          [choice]       claude                                       │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
