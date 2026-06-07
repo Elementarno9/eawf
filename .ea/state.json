@@ -3156,6 +3156,30 @@
       "status": "done",
       "updated_at": "2026-06-07T00:06:50.255324Z"
     },
+    "P29-I12-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W05",
+      "scope_id": "P29-I12-W05",
+      "status": "done",
+      "updated_at": "2026-06-07T00:30:39.135703Z"
+    },
+    "P29-I12-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W06",
+      "scope_id": "P29-I12-W06",
+      "status": "done",
+      "updated_at": "2026-06-07T00:30:40.468837Z"
+    },
     "P29-I12-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -11996,6 +12020,32 @@
       "scope_id": "P29-I12-W04",
       "updated_at": "2026-06-07T00:06:49.553425Z"
     },
+    "P29-I12-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W05-bucket-20260607T003038Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I12-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I12-W05",
+      "updated_at": "2026-06-07T00:30:38.394916Z"
+    },
+    "P29-I12-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W06-bucket-20260607T003039Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I12-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I12-W06",
+      "updated_at": "2026-06-07T00:30:39.766342Z"
+    },
     "P29-I12-W07": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I12-W07-bucket-20260606T234331Z",
@@ -14338,7 +14388,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T00:06:51.609232Z",
+  "updated_at": "2026-06-07T00:30:40.469149Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -58029,10 +58079,10 @@
     "P29-I12-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-07T00:30:38.394910Z",
+      "closed_at": "2026-06-07T00:30:39.135703Z",
+      "commit": "7ee053f3a26d260b81d5b6bcab32d8908281acf6",
       "deps": [
         "P29-I12-W01",
         "P29-I12-W04"
@@ -58049,10 +58099,10 @@
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T22:15:38.293936Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -58077,10 +58127,10 @@
     "P29-I12-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-07T00:30:39.766336Z",
+      "closed_at": "2026-06-07T00:30:40.468837Z",
+      "commit": "749ce44f93691c6cec2e1fab35381362fb84e307",
       "deps": [
         "P29-I12-W02"
       ],
@@ -58096,10 +58146,10 @@
       "intent": null,
       "iter_id": "P29-I12",
       "opened_at": "2026-06-06T22:15:38.848474Z",
-      "outcome": null,
+      "outcome": "integrated via cherry-pick; tests green per executor report",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
