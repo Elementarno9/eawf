@@ -1,0 +1,40 @@
+ Eä  repo ❯ QR ❯ Research    runtime: idle    HH:MM UTC
+
+  ┌─ TOPIC TREE ───────────────────────┐┌─ CLAIMS / EVIDENCE ─────────────────┐┌─ PROGRESS / BUDGET ─────────────────┐
+  │ > v Survey the options-pricing     ││                                     ││ RUN staged -- live run not yet      │
+  │ landscape                          ││ none yet                            ││ wired                               │
+  │     > round 1                      ││                                     ││ ROUND 1/1 (staged)                  │
+  │       # market-structure           ││ Unresolved                          ││ ACTIVE 0 claim(s)                   │
+  │       # pricing-models             ││ open round 1 Which curve model fits ││ WAITING 2 open question(s)          │
+  │       ? Which curve model fits the ││ the short tenor                     ││ PAUSED 0 checkpoint(s)              │
+  │ short tenor                        ││ answered round 1 Does the smile     ││ BUDGET 2 staged topic(s), 1         │
+  │       ? Does the smile invert past ││ invert past the 90 delta wing       ││ answered                            │
+  │ the 90 delta wing                  ││ blocking round 1 Is the             ││ RISKS 1 blocking question(s)        │
+  │       ? Is the term-structure      ││ term-structure arbitrage real       ││                                     │
+  │ arbitrage real                     ││                                     ││                                     │
+  │ enter to peek the selected node    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  └────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘
+
+  ┌─ CHECKPOINT ─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ no checkpoint -- nothing awaiting operator review                                                                │
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  enter peek  n new  a approve  p park  r follow-up  s snapshot  x cancel
+
+ ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  p park  ·  r follow-up  ·  s  weekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch

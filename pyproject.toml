@@ -303,6 +303,12 @@ max-loc = 1400
 # dispatcher, so the file is split-by-command extract-module follow-up
 # work rather than a logic-density problem; it joins the list until that
 # split lands.
+# research_board.py is the cohesive Research-mode surface mid-build across
+# P29-I13 W15/W16/W17 (the n/x campaign-lifecycle keys + the Unresolved /
+# Options / Conflicts tab projections). The pure render helpers split into a
+# sibling module once the live multi-round runner lands; it joins the list as
+# an extract-module follow-up until that seam exists rather than reding the
+# suite mid-surface.
 exclude = [
     "src/eawf/kernel/config/registry/leaf_catalog.py",
     "src/eawf/runtime/daemon/methods/state.py",
@@ -311,6 +317,7 @@ exclude = [
     "src/eawf/surfaces/render/plan_view.py",
     "src/eawf/surfaces/render/skills/registry.py",
     "src/eawf/surfaces/tui/app.py",
+    "src/eawf/surfaces/tui/modes/research_board.py",
 ]
 
 [tool.eawf.lint.eawf011]

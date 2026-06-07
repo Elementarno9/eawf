@@ -97,6 +97,13 @@ _MAX_ROWS: int = 12
 #: Cap on per-campaign staged-dispatch topic (domain) nodes shown in the tree.
 _MAX_TOPICS_PER_CAMPAIGN: int = 8
 
+#: The synthetic round number an unresolved question renders under. The board's
+#: campaigns are staged (the live multi-round runner is spawn-gated), so every
+#: open question belongs to the same staged round the topic tree labels
+#: "round 1" -- the honest pre-multi-round round number, live for free once a
+#: per-round question projection lands.
+STAGED_ROUND: int = 1
+
 #: Pane / drawer widget ids (addressable so a host or rebuild can target them).
 TREE_PANE_ID: str = "research-tree"
 CENTER_PANE_ID: str = "research-center"
@@ -113,6 +120,13 @@ PEEK_RESULT_ID: str = "research-peek"
 #: Id of the action-result line under the drawer (approve / park / follow-up /
 #: snapshot outcome -- honest about whether the request was issued).
 ACTION_RESULT_ID: str = "research-action"
+
+#: Id of the Unresolved-tab section header in the center pane (one row per
+#: open question with its status + round number).
+UNRESOLVED_HEADER_ID: str = "research-unresolved-header"
+
+#: Id of the Unresolved-tab body in the center pane (the rendered question rows).
+UNRESOLVED_BODY_ID: str = "research-unresolved-body"
 
 #: CSS class on each rendered topic-tree node row.
 TREE_NODE_CLASS: str = "research-tree-node"
@@ -152,11 +166,10 @@ _SNAPSHOT_METHOD: str = "research.snapshot"
 _CANCEL_METHOD: str = "research.cancel_campaign"
 
 #: Intended daemon method the ``n`` (new-campaign) key routes through. Staging
-#: a campaign from the TUI has no callable seam yet (campaigns are staged
-#: through the ``eawf research campaign new`` CLI / ``research.create_campaign``
-#: RPC, which needs a full ``research:`` block the board cannot yet compose), so
-#: ``n`` surfaces the honest "not yet wired" line -- the idle-contract pattern,
-#: live for free once a TUI campaign-staging seam lands.
+#: a campaign from the TUI has no callable seam yet (campaigns stage through the
+#: ``research.create_campaign`` RPC, which needs a full ``research:`` block the
+#: board cannot yet compose), so ``n`` surfaces the honest "not yet wired" line
+#: -- the idle-contract pattern, live for free once a staging seam lands.
 _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 
 #: Drawer line before any checkpoint is open (the idle checkpoint surface).
@@ -504,6 +517,42 @@ def render_claims(claims: tuple[Claim, ...]) -> str:
     return "\n".join(lines)
 
 
+def render_unresolved(
+    questions: tuple[OpenQuestion, ...], *, round_number: int = STAGED_ROUND
+) -> str:
+    """Render the Unresolved tab -- one row per open question + status + round.
+
+    Lists one row per :class:`~eawf.kernel.state.models.OpenQuestion`, each
+    naming the question's status (a blocking question reads ``blocking`` in
+    ``$warn``, else its lifecycle status) and the round it belongs to. Every row
+    renders under the same synthetic *round_number* the topic tree labels
+    (:data:`STAGED_ROUND`, the staged round before the live multi-round runner).
+    Rows cap at :data:`_MAX_ROWS` with a ``+N more`` line; an empty ledger
+    renders :data:`NONE_YET`.
+
+    Args:
+        questions: The state-resident open-question rows for the scope.
+        round_number: The round number every row renders under (defaults to
+            :data:`STAGED_ROUND`).
+
+    Returns:
+        A content-markup string of one question line per row.
+    """
+    if not questions:
+        return f"[$muted]{NONE_YET}[/]"
+    lines: list[str] = []
+    for question in questions[:_MAX_ROWS]:
+        tint = "$warn" if question.blocking else "$accent"
+        status = "blocking" if question.blocking else question.status.value
+        lines.append(
+            f"[{tint}]{status}[/] [$muted]round {round_number}[/] {escape_markup(question.title)}"
+        )
+    overflow = len(questions) - _MAX_ROWS
+    if overflow > 0:
+        lines.append(f"[$muted]+{overflow} more[/]")
+    return "\n".join(lines)
+
+
 def render_progress(
     campaigns: tuple[CampaignRow, ...],
     claims: tuple[Claim, ...],
@@ -694,6 +743,11 @@ class ResearchBoardModeScreen(ScopeScreen):
         border: solid $warn;
         padding: 1 2;
     }
+    ResearchBoardModeScreen .research-center-section {
+        height: auto;
+        text-style: bold;
+        margin-top: 1;
+    }
     ResearchBoardModeScreen .research-tree-node {
         height: auto;
     }
@@ -767,6 +821,12 @@ class ResearchBoardModeScreen(ScopeScreen):
                     center.border_title = "CLAIMS / EVIDENCE"
                     yield Static(render_center_tabs("Claims"), id="research-center-tabs")
                     yield Static(render_claims(claims), id="research-center-body")
+                    yield Static(
+                        "[$accent]Unresolved[/]",
+                        id=UNRESOLVED_HEADER_ID,
+                        classes="research-center-section",
+                    )
+                    yield Static(render_unresolved(questions), id=UNRESOLVED_BODY_ID)
                 with VerticalScroll(id=PROGRESS_PANE_ID, classes="research-pane") as progress:
                     progress.border_title = "PROGRESS / BUDGET"
                     yield Static(
@@ -924,11 +984,10 @@ class ResearchBoardModeScreen(ScopeScreen):
 
         Routes through the daemon-client seam to the intended
         ``research.stage_campaign`` method. The board cannot yet compose the
-        full ``research:`` block ``research.create_campaign`` requires, so no
-        TUI-callable staging seam exists: the daemon answers method-not-found
-        and the action surfaces the honest "not yet wired" line -- it never
-        implies a campaign was staged. It goes live for free once a TUI
-        staging seam lands (the idle-contract pattern).
+        full ``research:`` block staging requires, so no TUI-callable seam
+        exists: the daemon answers method-not-found and the action surfaces the
+        honest "not yet wired" line -- it never implies a campaign was staged. It
+        goes live for free once a staging seam lands (the idle-contract pattern).
         """
         self._issue_unwired(verb="new-campaign", method=_NEW_CAMPAIGN_METHOD)
 
@@ -1022,11 +1081,11 @@ class ResearchBoardModeScreen(ScopeScreen):
     def _issue_cancel(self, campaign_id: str) -> str:
         """Issue ``research.cancel_campaign`` for *campaign_id* and return a result line.
 
-        Calls the daemon ``research.cancel_campaign`` method with the campaign
-        id through the same :class:`~eawf.surfaces.cli._daemon_client.DaemonClient`
-        seam the rest of the TUI mutates through, when a daemon socket is
-        available. A daemon that is unreachable, rejecting, or timing out yields
-        the honest unavailable / rejected line rather than a faked cancellation.
+        Calls the daemon ``research.cancel_campaign`` method through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI mutates through, when a daemon socket is available. A daemon that
+        is unreachable, rejecting, or timing out yields the honest unavailable /
+        rejected line rather than a faked cancellation.
 
         Args:
             campaign_id: The id of the campaign to cancel.
@@ -1129,6 +1188,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         pause = self._current_checkpoint()
         self._update_one("research-tree-body", render_tree(self._tree, self.selected))
         self._update_one("research-center-body", render_claims(claims))
+        self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions))
         self._update_one(
             "research-progress-body",
             render_progress(campaigns, claims, questions, checkpoints=1 if pause else 0),
@@ -1325,6 +1385,9 @@ __all__ = [
     "PARK_NO_CHECKPOINT",
     "PARK_NO_DAEMON",
     "RESEARCH_REFRESH_S",
+    "STAGED_ROUND",
+    "UNRESOLVED_BODY_ID",
+    "UNRESOLVED_HEADER_ID",
     "CampaignRow",
     "NodeKind",
     "ResearchBoardModeScreen",
@@ -1337,4 +1400,5 @@ __all__ = [
     "render_claims",
     "render_progress",
     "render_tree",
+    "render_unresolved",
 ]
