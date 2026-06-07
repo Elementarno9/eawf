@@ -191,6 +191,33 @@ def is_editable_key(entry: ConfigKey, layers: tuple[str, ...]) -> bool:
     return any(layer in leaf.writable_layers for layer in layers)
 
 
+def is_editable_on_layer(entry: ConfigKey, layer: str) -> bool:
+    """Return ``True`` when *entry* may be written from the single *layer*.
+
+    The per-layer half of the writable-lock: where :func:`is_editable_key`
+    asks whether ANY targetable layer can write the key (the surface filter),
+    this asks whether the ONE currently-selected save layer can. A key
+    surfaced in the modal (writable from at least one available layer) still
+    renders **read-only** while the active save layer cannot write it -- the
+    operator must cycle (``L``) to a permitted layer before the key edits. A
+    curated key absent from the leaf catalog is treated as editable on every
+    layer (the leaf gate is the authority on locking; a missing row is a
+    registry-consistency bug surfaced elsewhere, not a lock), matching
+    :func:`is_editable_key`.
+
+    Args:
+        entry: The curated registry entry to test.
+        layer: The single writable layer the modal's save currently targets.
+
+    Returns:
+        ``True`` when *layer* may write the key.
+    """
+    leaf = LEAF_KEY_REGISTRY.get(entry.key)
+    if leaf is None:
+        return True
+    return layer in leaf.writable_layers
+
+
 def editable_keys_for_tab(tab: str, layers: tuple[str, ...]) -> tuple[ConfigKey, ...]:
     """Return *tab*'s curated fields, dropping keys not writable from *layers*.
 
@@ -501,6 +528,7 @@ __all__ = [
     "enter_action",
     "format_value",
     "is_editable_key",
+    "is_editable_on_layer",
     "is_security_key",
     "merged_config",
     "needs_popup_edit",

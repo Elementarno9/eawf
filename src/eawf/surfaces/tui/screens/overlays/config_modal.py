@@ -88,6 +88,7 @@ from eawf.surfaces.tui.screens.overlays.config_modal_logic import (
     enter_action,
     format_value,
     is_editable_key,
+    is_editable_on_layer,
     is_security_key,
     merged_config,
     needs_popup_edit,
@@ -336,6 +337,13 @@ class ConfigModal(ModalScreen[None]):
     def _field_line(self, entry: ConfigKey, *, selected: bool = False) -> str:
         """Render one field row: focus caret + dirty marker + key + type + value.
 
+        A key the active save layer cannot write (its leaf-catalog row omits
+        the current :attr:`ConfigModalState.layer` from its writable layers)
+        renders with a trailing ``(read-only)`` marker, so the operator sees
+        at a glance that the field is locked on this layer and must cycle
+        (``L``) to a permitted layer before it edits. The marker is plain
+        ASCII so it survives a plain-text snapshot capture unchanged.
+
         Args:
             entry: The registry entry the row renders.
             selected: ``True`` when this row is the focused field — adds a
@@ -348,9 +356,10 @@ class ConfigModal(ModalScreen[None]):
         dirty_mark = "*" if entry.key in self._view.dirty else " "
         type_cell = f"[{entry.type}]"
         key_width = self._key_col_width()
+        lock_mark = "" if is_editable_on_layer(entry, self._view.layer) else "  (read-only)"
         return (
             f"{caret}{dirty_mark} {entry.key:<{key_width}} "
-            f"{type_cell:<14} {format_value(entry, value)}"
+            f"{type_cell:<14} {format_value(entry, value)}{lock_mark}"
         )
 
     def _hint_line(self) -> str:
@@ -559,6 +568,12 @@ class ConfigModal(ModalScreen[None]):
             return
         entry = self._active_field()
         if entry is None:
+            return
+        if not is_editable_on_layer(entry, self._view.layer):
+            self.app.notify(
+                f"{entry.key} is read-only on the {self._view.layer} layer",
+                severity="warning",
+            )
             return
         value = current_value(entry, self._merged, self._view.dirty)
         action = enter_action(entry, value, row_width=self._row_width())
@@ -987,7 +1002,9 @@ class ConfigModal(ModalScreen[None]):
             return
         index = self._layers.index(self._view.layer)
         self._view.layer = self._layers[(index + 1) % len(self._layers)]
-        self.query_one("#config-layer", Static).update(self._layer_line())
+        # The read-only markers track the active save layer, so repaint the
+        # field rows (not just the layer line) when the layer cycles.
+        self._repaint_fields()
 
     def action_close(self) -> None:
         """Handle ``Esc``: cancel an inline edit, else close (dirty-guarded).

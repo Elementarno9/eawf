@@ -1,0 +1,37 @@
+
+
+
+      ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+      │                                                                                                          │
+      │  Configuration                                                                                           │
+      │  save layer: global  (L cycles: repo local)                                                              │
+      │                                                                                                          │
+      │  stimation  flow  planning  preferences  prose  research  runtime  ship  telemetry  ui  vcs  worktrees   │
+      │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+      │  >  runtime.adapter_catalog.claude.enabled   [bool]         true  (read-only)                            │
+      │     runtime.adapter_catalog.codex.enabled    [bool]         false  (read-only)                           │
+      │     runtime.adapter_catalog.opencode.enabled [bool]         false  (read-only)                           │
+      │     runtime.default                          [choice]       claude                                       │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │                                                                                                          │
+      │  [ ↑/↓ field · ←/→ tab · Enter edit · s save · r reset · L layer · Esc close ]                           │
+      │                                                                                                          │
+      └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
