@@ -98,3 +98,7 @@ state.json.bak.*
 *.pem
 *.key
 secrets/
+
+# Daemon state lock (contains pid/hostname heartbeat) -- never commit
+.ea/state.json.lock
+.ea/*.lock

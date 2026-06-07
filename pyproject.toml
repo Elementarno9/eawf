@@ -9,7 +9,10 @@ authors = [
     { name = "Elementarno9", email = "edwardpro9@gmail.com" },
 ]
 dependencies = [
-    "click>=8.1",
+    # Cap below 8.4: click 8.4 changed the shell-completion env-var protocol,
+    # which breaks the typer ``complete_zsh`` completion-script swap in
+    # ``surfaces/cli/commands/completion.py`` ("Shell zsh not supported").
+    "click>=8.1,<8.4",
     "jinja2>=3.1.0",
     "orjson>=3.11.9",
     "portalocker>=3.2.0",
@@ -18,7 +21,10 @@ dependencies = [
     "questionary>=2.1.1",
     "rich>=15.0.0",
     "textual>=8.0",
-    "typer>=0.25.1",
+    # Cap below 0.26: typer 0.26 changed shell-completion handling so the
+    # ``complete_zsh`` env value the generated script uses is no longer
+    # recognized ("Shell zsh not supported"); pairs with the click<8.4 cap.
+    "typer>=0.25.1,<0.26",
 ]
 
 [project.urls]

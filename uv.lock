@@ -300,7 +300,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "click", specifier = ">=8.1" },
+    { name = "click", specifier = ">=8.1,<8.4" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
@@ -312,7 +312,7 @@ requires-dist = [
     { name = "questionary", specifier = ">=2.1.1" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "textual", specifier = ">=8.0" },
-    { name = "typer", specifier = ">=0.25.1" },
+    { name = "typer", specifier = ">=0.25.1,<0.26" },
 ]
 provides-extras = ["docs", "windows"]
 
