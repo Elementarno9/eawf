@@ -83,12 +83,20 @@ class CriterionView(_StrictModel):
         gate_results: Per-gate outcomes for ``source="spec"`` views;
             ``None`` for legacy views (no gates exist on the string
             list).
+        required: Whether the criterion gates the close. Mirrors
+            :attr:`~eawf.kernel.spec.common.CriterionSpec.required`. A
+            non-required (advisory) criterion is surfaced in the view but
+            does NOT flip :attr:`CloseReadiness.ready` when it fails, so an
+            advisory gate (e.g. a ``cadence="ship"`` pixel diff) cannot
+            block an every-wave close -- matching the oracle path, which
+            skips non-required criteria.
     """
 
     id: IdStr
     source: CriterionSource
     status: CriterionStatus
     gate_results: list[GateResult] | None = None
+    required: bool = True
 
 
 class CloseReadiness(_StrictModel):

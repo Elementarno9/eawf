@@ -485,6 +485,7 @@ def _build_spec_views(
                 # Same rationale as the gate status cast above.
                 status=criterion_status,  # type: ignore[arg-type]
                 gate_results=gate_results,
+                required=criterion.required,
             )
         )
     return views, waived
@@ -794,9 +795,16 @@ def _build_legacy_views(wave: Wave) -> tuple[list[CriterionView], list[str]]:
 
 
 def _not_ready_criteria(criteria: list[CriterionView]) -> list[str]:
-    """Return compact ``criterion_id:status`` strings for non-ready criteria."""
+    """Return compact ``criterion_id:status`` strings for blocking non-ready criteria.
+
+    Only ``required`` criteria gate the close, so a non-required (advisory)
+    criterion that failed is omitted here -- it is surfaced in the view but
+    never reported as a close blocker.
+    """
     return [
-        f"{view.id}:{view.status}" for view in criteria if view.status not in ("pass", "waived")
+        f"{view.id}:{view.status}"
+        for view in criteria
+        if view.required and view.status not in ("pass", "waived")
     ]
 
 
@@ -968,20 +976,25 @@ def compute(
 
 
 def _is_ready(criteria: list[CriterionView]) -> bool:
-    """Return ``True`` iff every criterion has status in ``{pass, waived}``.
+    """Return ``True`` iff every REQUIRED criterion has status in ``{pass, waived}``.
 
-    Pure helper so :func:`compute` reads top-down. A criterion with
-    ``status="pending"`` or ``"blocked"`` or ``"fail"`` flips the
-    aggregate to ``ready=False``.
+    Pure helper so :func:`compute` reads top-down. A required criterion with
+    ``status="pending"`` or ``"blocked"`` or ``"fail"`` flips the aggregate
+    to ``ready=False``. A non-required (advisory) criterion is exempt -- it
+    is surfaced in the view but never blocks the close, matching the oracle
+    path's ``if not criterion.required: continue`` skip, so an advisory gate
+    (e.g. a ``cadence="ship"`` pixel diff marked ``required=false``) cannot
+    block an every-wave close.
 
     Args:
         criteria: All :class:`CriterionView` rows for the scope.
 
     Returns:
-        ``True`` when every criterion is pass/waived (or the list is
-        empty — an empty scope is trivially ready by definition).
+        ``True`` when every required criterion is pass/waived (or no
+        required criterion exists -- an empty / advisory-only scope is
+        trivially ready by definition).
     """
-    return all(view.status in ("pass", "waived") for view in criteria)
+    return all(view.status in ("pass", "waived") for view in criteria if view.required)
 
 
 __all__ = [

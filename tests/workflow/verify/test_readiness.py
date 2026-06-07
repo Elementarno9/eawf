@@ -133,6 +133,7 @@ def _make_criterion(
     gate_ids: list[str] | None = None,
     waiver_reason: str | None = None,
     evidence_kind: str = "jury",
+    required: bool = True,
 ) -> CriterionSpec:
     """Build a synthetic CriterionSpec for the W06 evidence-row tests.
 
@@ -148,7 +149,7 @@ def _make_criterion(
         acceptance_style="binary",
         evidence_kind=evidence_kind,  # type: ignore[arg-type]
         gate_ids=list(gate_ids or []),
-        required=True,
+        required=required,
         waiver_reason=waiver_reason,
         quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
         measurable_signal="the W06 readiness compute resolves an evidence row for this criterion",
@@ -346,6 +347,49 @@ def test_spec_wave_one_gate_fail_flips_ready(
     assert fail_view.status == "fail"
     assert fail_view.gate_results is not None
     assert fail_view.gate_results[0].status == "fail"
+
+
+def test_non_required_criterion_failure_does_not_block_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An advisory (``required=False``) criterion that fails does NOT flip ready.
+
+    A required criterion that passes plus a non-required criterion that fails
+    must leave ``ready=True``: the advisory criterion is surfaced in the view
+    (status fail) but never blocks the close, matching the oracle path's
+    skip of non-required criteria. This is the cadence="ship" pixel-diff case.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    state_path = tmp_path / "state.json"
+    store_dir = _store_dir(state_path)
+
+    req = _make_criterion("CRIT-req", gate_ids=["GATE-req"], required=True)
+    adv = _make_criterion("CRIT-adv", gate_ids=["GATE-adv"], required=False)
+    gate_req = _make_gate("GATE-req", criterion_id="CRIT-req")
+    gate_adv = _make_gate("GATE-adv", criterion_id="CRIT-adv")
+
+    monkeypatch.setattr(
+        readiness_mod, "_load_criterion_specs", lambda scope_id, state_arg: [req, adv]
+    )
+    monkeypatch.setattr(
+        readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate_req, gate_adv]
+    )
+    _write_evidence_row(
+        store_dir,
+        record=_make_evidence_record(scope_id=WAVE_ID, status="pass", refs=["GATE-req"]),
+    )
+    _write_evidence_row(
+        store_dir,
+        record=_make_evidence_record(scope_id=WAVE_ID, status="fail", refs=["GATE-adv"]),
+    )
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is True
+    adv_view = next(v for v in result.criteria if v.id == "CRIT-adv")
+    assert adv_view.status == "fail"
+    assert adv_view.required is False
 
 
 def test_spec_wave_waived_gate_passes_and_counts(
