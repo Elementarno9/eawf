@@ -199,6 +199,55 @@ def test_close_wave_auto_actual_accepts_telemetry_attention_eu() -> None:
     assert actual.elapsed_eu == pytest.approx(0.0)
 
 
+def test_close_wave_auto_actual_records_elapsed_eu() -> None:
+    """A telemetry-derived elapsed EU lands on the auto-created actual."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    close_wave(
+        state,
+        wave_id="P01-I01-W01",
+        outcome="ok",
+        actual_elapsed_eu=1.5,
+    )
+
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W01"]
+    assert actual.elapsed_eu == pytest.approx(1.5)
+
+
+def test_close_wave_negative_elapsed_eu_rejects_without_mutation() -> None:
+    """A negative elapsed EU is rejected before the wave closes."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    with pytest.raises(LifecycleError, match="actual_elapsed_eu must be non-negative"):
+        close_wave(
+            state,
+            wave_id="P01-I01-W01",
+            outcome="ok",
+            actual_elapsed_eu=-1.0,
+        )
+
+    wave = state.waves["P01-I01-W01"]
+    assert wave.status == WaveStatus.CLAIMED
+    assert state.actuals is None
+
+
+def test_close_wave_no_elapsed_eu_leaves_zero() -> None:
+    """Omitting elapsed EU keeps the honest zero-EU auto-actual."""
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    assert state.actuals["P01-I01-W01"].elapsed_eu == pytest.approx(0.0)
+
+
 def test_close_wave_tokens_consumed_param_sets_final_tally() -> None:
     """The close call may set the final token tally before actual upsert."""
     state = _empty_state()

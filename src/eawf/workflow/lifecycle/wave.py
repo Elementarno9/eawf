@@ -552,6 +552,7 @@ def close_wave(
     tokens_consumed: int | None = None,
     actual_attention_eu: float | None = None,
     actual_agent_runtime_eu: float | None = None,
+    actual_elapsed_eu: float | None = None,
 ) -> Wave:
     """Close a claimed/in-progress wave with an outcome string.
 
@@ -571,15 +572,20 @@ def close_wave(
     ``agent_runtime_eu``. Existing summaries are operator-authored actuals;
     their effort fields are preserved and only token / cost status fields
     refresh.
-    The auto-created actual leaves ``elapsed_eu=0.0`` — the open->close
-    wall-clock span is not agent effort (it counts overnight,
-    cross-session, and other-wave idle time, inflating consumed EU by
-    ~10x per P27-I05 EU research); real elapsed-EU comes from measured
-    ``eawf actual start/stop`` segments when an operator runs them.
-    ``actual_cost_usd`` stays at ``0.0`` for v0.4 — the per-model rate
-    table that turns tokens into dollars is not yet wired (the field
-    exists so the post-mutation event envelope can publish a typed cost
-    value once the rate table lands).
+    The auto-created actual carries ``elapsed_eu`` derived from the
+    measured agent runtime when the caller supplies *actual_elapsed_eu*
+    (the daemon close path converts the telemetry-rollup session
+    ``duration_ms`` to EU). The measured session runtime is bounded agent
+    effort — distinct from the open->close wall-clock span, which is NOT
+    agent effort (it counts overnight, cross-session, and other-wave idle
+    time, inflating consumed EU by ~10x per P27-I05 EU research) and is
+    never substituted here. When *actual_elapsed_eu* is ``None`` (no
+    telemetry runtime captured) the auto-created actual leaves
+    ``elapsed_eu=0.0`` so a wave with no measured runtime keeps the honest
+    zero-EU state. ``actual_cost_usd`` stays at ``0.0`` for v0.4 — the
+    per-model rate table that turns tokens into dollars is not yet wired
+    (the field exists so the post-mutation event envelope can publish a
+    typed cost value once the rate table lands).
 
     Args:
         state: State to mutate in place.
@@ -592,6 +598,10 @@ def close_wave(
             for an auto-created :class:`ActualSummary`.
         actual_agent_runtime_eu: Optional telemetry-derived runtime effort
             for an auto-created :class:`ActualSummary`.
+        actual_elapsed_eu: Optional telemetry-derived elapsed effort (the
+            measured session runtime in EU) for an auto-created
+            :class:`ActualSummary`. ``None`` leaves the auto-created
+            ``elapsed_eu`` at ``0.0``.
 
     Raises:
         LifecycleError: when *wave_id* is unknown, the wave is not
@@ -622,6 +632,8 @@ def close_wave(
         raise LifecycleError(
             f"actual_agent_runtime_eu must be non-negative; got {actual_agent_runtime_eu}"
         )
+    if actual_elapsed_eu is not None and actual_elapsed_eu < 0.0:
+        raise LifecycleError(f"actual_elapsed_eu must be non-negative; got {actual_elapsed_eu}")
     wave.status = WaveStatus.CLOSED
     wave.outcome = outcome
     now = datetime.now(UTC)
@@ -632,17 +644,18 @@ def close_wave(
     # carry the close-time token tally. Existing records (e.g. seeded
     # by a manual ``eawf actual stop``) keep their elapsed_eu /
     # attention_eu / runtime_eu fields and only the token rollup is
-    # refreshed; auto-created records leave elapsed_eu at 0.0 per the
-    # docstring note above.
+    # refreshed; auto-created records take the telemetry-derived
+    # elapsed_eu when one is supplied (else 0.0 per the docstring note).
     if state.actuals is None:
         state.actuals = {}
     existing = state.actuals.get(wave_id)
+    auto_elapsed_eu = actual_elapsed_eu if actual_elapsed_eu is not None else 0.0
     if existing is None:
         state.actuals[wave_id] = ActualSummary(
             id=f"ACT-{wave_id}",
             scope_id=wave_id,
             status=ActualStatus.DONE,
-            elapsed_eu=0.0,
+            elapsed_eu=auto_elapsed_eu,
             attention_eu=actual_attention_eu,
             agent_runtime_eu=actual_agent_runtime_eu,
             actual_tokens=wave.tokens_consumed,
@@ -657,7 +670,7 @@ def close_wave(
     logger.info(
         f"close_wave id={wave_id} outcome={outcome!r} "
         f"actual_tokens={wave.tokens_consumed} actual_cost_usd=0.0 "
-        f"actual_attention_eu={actual_attention_eu}"
+        f"actual_attention_eu={actual_attention_eu} elapsed_eu={auto_elapsed_eu}"
     )
     return wave
 

@@ -504,6 +504,7 @@ def _apply_wave_close(
     mutation: Mutation,
     *,
     wave_session_rollup: WaveSessionRollup | None = None,
+    elapsed_eu: float | None = None,
 ) -> None:
     """Apply :attr:`MutationKind.WAVE_CLOSE` — delegate to ``close_wave``.
 
@@ -511,6 +512,11 @@ def _apply_wave_close(
     SHA; the CLI side (in :mod:`eawf.surfaces.cli.commands.lifecycle`) resolves
     ``--commit <ref>`` BEFORE calling the daemon so the daemon never
     has to invoke git.
+
+    *elapsed_eu* is the telemetry-derived measured runtime (the wave's
+    session ``duration_ms`` converted to EU by :func:`_wave_close_elapsed_eu`)
+    that the auto-created :class:`ActualSummary` records on
+    ``elapsed_eu``; ``None`` leaves the auto-created elapsed at ``0.0``.
     """
     params = mutation.params
     tokens_raw = params.get("tokens_consumed")
@@ -530,10 +536,41 @@ def _apply_wave_close(
         tokens_consumed=int(tokens_raw) if tokens_raw is not None else None,
         actual_attention_eu=rollup_attention_eu,
         actual_agent_runtime_eu=None,
+        actual_elapsed_eu=elapsed_eu,
     )
     commit = params.get("commit")
     if commit is not None:
         wave.commit = str(commit)
+
+
+def _wave_close_elapsed_eu(
+    wave_session_rollup: WaveSessionRollup | None,
+    *,
+    eu_minutes: float,
+) -> float | None:
+    """Return the measured elapsed EU for a wave close, or ``None``.
+
+    Derives elapsed EU from the telemetry rollup's aggregate session
+    ``duration_ms`` (the measured agent runtime captured across the
+    wave's sessions) via :func:`eawf.observability.telemetry.join._duration_ms_to_eu`.
+    Returns ``None`` when no rollup is present or the rollup carries no
+    duration — so a wave with no captured runtime keeps the honest
+    zero-EU auto-actual.
+
+    Args:
+        wave_session_rollup: The telemetry rollup joined at close, or
+            ``None`` when no telemetry matched the wave's sessions.
+        eu_minutes: Minutes represented by one effort unit (the same
+            ``estimation.eu_minutes`` used for the rollup join).
+
+    Returns:
+        The measured elapsed EU, or ``None`` when no runtime was captured.
+    """
+    from eawf.observability.telemetry.join import _duration_ms_to_eu
+
+    if wave_session_rollup is None:
+        return None
+    return _duration_ms_to_eu(wave_session_rollup.duration_ms, eu_minutes=eu_minutes)
 
 
 def _wave_close_rollup_config(repo_root: Path) -> tuple[str, float]:
@@ -2321,7 +2358,19 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                         state_path=state_path,
                         repo_root=repo_anchor,
                     )
-                    _apply_wave_close(state, mutation, wave_session_rollup=wave_close_rollup)
+                    # Auto-derive measured elapsed EU from the same telemetry
+                    # rollup so the close-time ActualSummary records real
+                    # runtime; a wave with no captured runtime keeps 0.0.
+                    _, _close_eu_minutes = _wave_close_rollup_config(repo_anchor)
+                    wave_close_elapsed_eu = _wave_close_elapsed_eu(
+                        wave_close_rollup, eu_minutes=_close_eu_minutes
+                    )
+                    _apply_wave_close(
+                        state,
+                        mutation,
+                        wave_session_rollup=wave_close_rollup,
+                        elapsed_eu=wave_close_elapsed_eu,
+                    )
                 else:
                     apply_func(state, mutation)
             except LifecycleError as exc:

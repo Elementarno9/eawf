@@ -652,6 +652,103 @@ def test_mutate_wave_close_does_not_conflate_attention_and_runtime_eu(
     _run(body)
 
 
+def test_mutate_wave_close_derives_elapsed_eu_from_telemetry_duration(
+    tmp_path: Path,
+) -> None:
+    """Wave close auto-actual records elapsed_eu from session runtime."""
+    from decimal import Decimal
+
+    from eawf.observability.telemetry.models import TelemetrySession
+    from eawf.observability.telemetry.store import SqliteMetricsStore, metrics_db_path
+
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    assert isinstance(wave, dict)
+    wave["sessions"] = {
+        "1": {
+            "attempt": 1,
+            "runtime": "codex",
+            "session_id": "sess-elapsed-1",
+            "session_log_handle": "urn:eawf:v1:session-log:codex:sess-elapsed-1",
+            "started_at": _now().isoformat(),
+            "ended_at": (_now() + timedelta(minutes=30)).isoformat(),
+            "exit_status": 0,
+        }
+    }
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    store = SqliteMetricsStore(metrics_db_path(state_path))
+    store.init_schema()
+    store.upsert(
+        "telemetry_sessions",
+        TelemetrySession(
+            session_id="sess-elapsed-1",
+            project_id="repo/eawf",
+            runtime="codex",
+            wave_id="P24-I01-W09",
+            attempt_id="1",
+            session_log_path="opaque://sess-elapsed-1",
+            started_at=_now(),
+            ended_at=_now() + timedelta(minutes=30),
+            duration_ms=1_800_000,  # 30 min -> 1.0 EU at 30 min/EU.
+            model_primary=None,
+            total_cost_usd=Decimal("0"),
+            end_marker="clean_stop",
+        ),
+    )
+    store.commit()
+    store.close()
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        actual = written["actuals"]["P24-I01-W09"]
+        # The measured session runtime (30 min) derives 1.0 elapsed EU.
+        assert actual["elapsed_eu"] == pytest.approx(1.0)
+
+    _run(body)
+
+
+def test_mutate_wave_close_no_telemetry_leaves_elapsed_eu_zero(tmp_path: Path) -> None:
+    """A close with no captured runtime keeps the honest zero-EU actual."""
+    payload = _build_state_payload()
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        actual = written["actuals"]["P24-I01-W09"]
+        assert actual["elapsed_eu"] == pytest.approx(0.0)
+
+    _run(body)
+
+
+def test_wave_close_elapsed_eu_helper_boundaries() -> None:
+    """``_wave_close_elapsed_eu`` converts rollup duration; None when absent."""
+    from eawf.observability.telemetry.join import WaveSessionRollup
+    from eawf.runtime.daemon.methods.state import _wave_close_elapsed_eu
+
+    # No rollup -> no derived EU.
+    assert _wave_close_elapsed_eu(None, eu_minutes=30.0) is None
+    # Rollup with no captured duration -> no derived EU.
+    no_duration = WaveSessionRollup(wave_id="P24-I01-W09", duration_ms=None)
+    assert _wave_close_elapsed_eu(no_duration, eu_minutes=30.0) is None
+    # 45 min of measured runtime -> 1.5 EU at 30 min/EU.
+    measured = WaveSessionRollup(wave_id="P24-I01-W09", duration_ms=2_700_000)
+    assert _wave_close_elapsed_eu(measured, eu_minutes=30.0) == pytest.approx(1.5)
+
+
 def test_mutate_wave_close_enforced_readiness_rejects_before_write(tmp_path: Path) -> None:
     """Daemon path enforces real profile readiness before persisting close."""
     from eawf.runtime.daemon.methods import DaemonValidationError
