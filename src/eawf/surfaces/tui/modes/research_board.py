@@ -62,7 +62,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import CampaignStatus, StoreKind
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
@@ -331,20 +331,34 @@ def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
             scope / no resolved state) yields no rows.
 
     Returns:
-        The campaign rows in record (chronological) order; empty when no
-        campaign store exists for the scope.
+        The live campaign rows in first-seen order; empty when no campaign
+        store exists for the scope. The store is append-only, so a campaign
+        re-appended by a cancel resolves to its LATEST row per
+        ``campaign_id`` (latest-wins, mirroring the daemon's
+        ``read_latest_campaign``), and a campaign whose latest status is
+        :attr:`~eawf.kernel.state.enums.CampaignStatus.CANCELLED` is dropped
+        -- a tombstoned campaign is not live research signal on the board.
     """
     if state_path is None:
         return ()
     path = store_path(state_path, StoreKind.RESEARCH_CAMPAIGN)
     if not path.exists():
         return ()
-    rows: list[CampaignRow] = []
+    # Collapse the append-only store to the latest payload per campaign_id,
+    # preserving first-seen order so the board reads stably.
+    latest: dict[str, ResearchCampaignPayload] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         if not raw_line.strip():
             continue
         envelope = Envelope.model_validate_json(raw_line)
         payload = ResearchCampaignPayload.model_validate(envelope.payload)
+        latest[payload.campaign_id] = payload
+    rows: list[CampaignRow] = []
+    cancelled = 0
+    for payload in latest.values():
+        if payload.status is CampaignStatus.CANCELLED:
+            cancelled += 1
+            continue
         campaign = payload.campaign
         rows.append(
             CampaignRow(
@@ -354,7 +368,9 @@ def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
                 default_depth=payload.config.default_depth.value,
             )
         )
-    logger.info(f"read_campaign_rows campaigns={len(rows)} path={path.name!r}")
+    logger.info(
+        f"read_campaign_rows campaigns={len(rows)} cancelled={cancelled} path={path.name!r}"
+    )
     return tuple(rows)
 
 

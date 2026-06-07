@@ -44,6 +44,7 @@ from eawf.kernel.spec.research_campaign import (
     stage_campaign,
 )
 from eawf.kernel.state.enums import (
+    CampaignStatus,
     ClaimStatus,
     OpenQuestionStatus,
     ProjectStatus,
@@ -58,7 +59,10 @@ from eawf.kernel.state.models import (
     State,
 )
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+from eawf.kernel.store.kinds.research_campaign import (
+    CampaignTombstone,
+    ResearchCampaignPayload,
+)
 from eawf.kernel.store.paths import store_path
 from eawf.platform.artifacts.references import Citation
 from eawf.surfaces.tui.app import EaApp
@@ -320,6 +324,48 @@ def test_read_campaign_rows_populated_projects_campaign(tmp_path: Path) -> None:
     assert row.domains == ("market-structure", "pricing-models")
     assert row.default_depth == "medium"
     assert row.domain_count == 2
+
+
+def test_read_campaign_rows_drops_cancelled_campaign(tmp_path: Path) -> None:
+    """A campaign whose latest row is CANCELLED is not a live board row.
+
+    The store is append-only: a cancel appends a tombstoned CANCELLED copy of
+    the campaign. The reader must collapse latest-wins per campaign_id and drop
+    the cancelled one, else the board renders a duplicate, never-filtered live
+    row (the CampaignStatus.CANCELLED contract).
+    """
+    state_path = _write_state(tmp_path, _project_state())
+    active = _campaign_payload()
+    _append_campaign(state_path, active)
+    cancelled = active.model_copy(
+        update={
+            "status": CampaignStatus.CANCELLED,
+            "tombstone": CampaignTombstone(cancelled_at=_T0, reason="superseded"),
+        }
+    )
+    _append_campaign(state_path, cancelled)
+    assert read_campaign_rows(state_path) == ()
+
+
+def test_read_campaign_rows_collapses_latest_and_keeps_active(tmp_path: Path) -> None:
+    """With one cancelled + one active campaign, only the active one renders once."""
+    state_path = _write_state(tmp_path, _project_state())
+    keep = _campaign_payload(campaign_id="RC-0001")
+    drop = _campaign_payload(campaign_id="RC-0002")
+    _append_campaign(state_path, keep)
+    _append_campaign(state_path, drop)
+    _append_campaign(
+        state_path,
+        drop.model_copy(
+            update={
+                "status": CampaignStatus.CANCELLED,
+                "tombstone": CampaignTombstone(cancelled_at=_T0),
+            }
+        ),
+    )
+    rows = read_campaign_rows(state_path)
+    assert len(rows) == 1
+    assert rows[0].campaign_id == "RC-0001"
 
 
 # --------------------------------------------------------------------------
