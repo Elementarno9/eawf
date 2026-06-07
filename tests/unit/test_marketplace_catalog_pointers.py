@@ -51,7 +51,7 @@ def test_codex_pointer_exists_and_parses() -> None:
     """The committed Codex pointer is present and valid JSON."""
     assert _CODEX_POINTER.is_file()
     body = json.loads(_CODEX_POINTER.read_text(encoding="utf-8"))
-    assert body["name"] == "eawf-codex"
+    assert body["name"] == "eawf"
     assert isinstance(body["plugins"], list)
 
 

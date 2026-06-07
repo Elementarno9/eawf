@@ -363,7 +363,7 @@ jobs:
           {
             echo "## Plugin distribution"
             echo
-            echo "- Claude: \`npm install eawf@${PLUGIN_VERSION}\` (or \`/plugin install eawf@eawf-local\` after \`marketplace add\`)."
+            echo "- Claude: \`npm install eawf@${PLUGIN_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
             echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
           } > plugin-notes.md
 

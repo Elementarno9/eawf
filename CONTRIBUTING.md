@@ -38,7 +38,7 @@ Then install it in Claude Code:
 
 ```text
 /plugin marketplace add ./build/eawf-plugin
-/plugin install eawf@eawf-local
+/plugin install eawf@eawf
 ```
 
 Codex and opencode render directly into the workspace root:

@@ -165,7 +165,7 @@ runs:
 codex plugin marketplace add ./build/eawf-codex-marketplace
 ```
 
-`marketplace add` registers the marketplace and auto-installs its plugins. Codex has no separate `plugin install` subcommand — only `plugin marketplace {add,upgrade,remove}`. The `[plugins.eawf] enabled = true` block that `eawf plugin install codex` writes to `~/.codex/config.toml` activates the plugin once Codex discovers it. After registration, Codex caches the plugin under `~/.codex/plugins/cache/eawf-codex/eawf/<version>/` and loads it from there.
+`marketplace add` registers the marketplace and auto-installs its plugins. Codex has no separate `plugin install` subcommand — only `plugin marketplace {add,upgrade,remove}`. The `[plugins.eawf] enabled = true` block that `eawf plugin install codex` writes to `~/.codex/config.toml` activates the plugin once Codex discovers it. After registration, Codex caches the plugin under `~/.codex/plugins/cache/eawf/eawf/<version>/` and loads it from there.
 
 ## Install from the committed marketplace
 
@@ -184,7 +184,7 @@ Eä ships its own marketplace pointers in the repo, so an operator installs the 
 
 ### Codex flow
 
-`.agents/plugins/marketplace.json` declares the `eawf-codex` marketplace whose single `eawf` plugin resolves from a `git-subdir` source: the `./plugins/eawf` subtree on the `plugins-dist` branch of the same repo. Point `codex plugin marketplace add` at the repo (Codex reads the committed `.agents/plugins/marketplace.json`):
+`.agents/plugins/marketplace.json` declares the `eawf` marketplace whose single `eawf` plugin resolves from a `git-subdir` source: the `./plugins/eawf` subtree on the `plugins-dist` branch of the same repo. Point `codex plugin marketplace add` at the repo (Codex reads the committed `.agents/plugins/marketplace.json`):
 
 ```bash
 codex plugin marketplace add https://github.com/Elementarno9/eawf

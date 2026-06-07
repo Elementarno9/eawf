@@ -69,7 +69,7 @@ from eawf.surfaces.render.skills import SKILL_REGISTRY
 logger = logging.getLogger(__name__)
 
 
-_MARKETPLACE_NAME: str = "eawf-codex"
+_MARKETPLACE_NAME: str = "eawf"
 _MARKETPLACE_DISPLAY: str = "Eä Workflow (local)"
 _PLUGIN_NAME: str = "eawf"
 _PLUGIN_CATEGORY: str = "Productivity"

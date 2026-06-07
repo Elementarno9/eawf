@@ -48,7 +48,7 @@ def test_marketplace_json_has_required_codex_schema_fields(tmp_path: Path) -> No
     body = json.loads(
         (target / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
     )
-    assert body["name"] == "eawf-codex"
+    assert body["name"] == "eawf"
     assert body["interface"]["displayName"]
     assert isinstance(body["plugins"], list)
     plugin_entry = body["plugins"][0]
