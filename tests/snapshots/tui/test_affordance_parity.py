@@ -41,7 +41,7 @@ from eawf.surfaces.tui.snapshot.behaviour_probe import (
     record_keypress_transcript,
 )
 from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
-from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckSpec
+from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckResult, CheckSpec
 from eawf.workflow.audit_dsl import models as models_module
 from eawf.workflow.audit_dsl.kinds import affordance_parity as ap_module
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
@@ -200,6 +200,24 @@ def test_check_affordance_parity_no_state_path_passes() -> None:
         args={"mode": "home"},
     )
     result = check_affordance_parity(spec, _REPO_ROOT)
+    assert result.status == "pass", result.details
+
+
+def test_check_affordance_parity_passes_inside_running_event_loop() -> None:
+    # The deterministic close gate scores the floor synchronously while the
+    # daemon JSON-RPC handler's event loop is running; a bare ``asyncio.run``
+    # would raise "cannot be called from a running event loop" and degrade the
+    # check to a spurious fail. The thread-offload path keeps it passing.
+    spec = CheckSpec(
+        kind="affordance_parity",
+        name="home-in-loop",
+        args={"mode": "home"},
+    )
+
+    async def body() -> CheckResult:
+        return check_affordance_parity(spec, _REPO_ROOT)
+
+    result = asyncio.run(body())
     assert result.status == "pass", result.details
 
 

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -246,6 +247,44 @@ async def _offending_keys(
     return offending
 
 
+def _collect_offending_keys(
+    *,
+    mode: str,
+    state_path: Path | None,
+    size: tuple[int, int],
+) -> list[str]:
+    """Run :func:`_offending_keys` to completion from a sync caller, loop-safe.
+
+    The check kind is invoked synchronously by the gate runner, but that
+    runner can itself be driven from inside a live event loop -- the daemon
+    close path scores the deterministic floor while its JSON-RPC handler's
+    loop is running. A bare :func:`asyncio.run` raises ``RuntimeError`` in
+    that context ("cannot be called from a running event loop"), so when a
+    running loop is detected the Pilot mount is offloaded to a dedicated
+    worker thread with its own fresh loop; the no-loop path (a one-shot CLI,
+    recovery shell, or test) runs :func:`asyncio.run` inline.
+
+    Args:
+        mode: The mode name to switch to before enumerating the footer.
+        state_path: The fixture ``state.json`` to bind, or ``None``.
+        size: The Pilot terminal size.
+
+    Returns:
+        The offending advertised key strings, in advertised order (empty
+        when every advertised key resolves to a binding).
+    """
+
+    def _run() -> list[str]:
+        return asyncio.run(_offending_keys(mode=mode, state_path=state_path, size=size))
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _run()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_run).result()
+
+
 def check_affordance_parity(spec: CheckSpec, cwd: Path) -> CheckResult:
     """Drive a mode screen's advertised footer keys + flag any that do not resolve.
 
@@ -307,7 +346,7 @@ def check_affordance_parity(spec: CheckSpec, cwd: Path) -> CheckResult:
         )
 
     try:
-        offending = asyncio.run(_offending_keys(mode=mode, state_path=state_path, size=size))
+        offending = _collect_offending_keys(mode=mode, state_path=state_path, size=size)
     except Exception as exc:
         # The TUI mount / switch path can raise a broad family of Textual /
         # runtime errors; the check degrades any of them to a fail so a bad
