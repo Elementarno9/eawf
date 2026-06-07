@@ -14525,7 +14525,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T01:48:28.702095Z",
+  "updated_at": "2026-06-07T02:03:32.145726Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -58501,7 +58501,27 @@
         "src/eawf/surfaces/tui/state_binding.py",
         "src/eawf/surfaces/tui/app.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_state_binding.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W01",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58513,16 +58533,18 @@
       "success_criteria": [
         {
           "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
           "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "the TUI load_state runs the forward migration chain so a newer on-disk schema parses and a parse failure surfaces a restart banner instead of silently freezing the roadmap",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the staleness banner shows when the bound state schema_version trails the live daemon schema",
           "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "quality_dimension": "interaction_capability",
           "required": true,
           "response": null,
-          "text": "the TUI load_state runs the forward migration chain so a newer on-disk schema parses and a parse failure surfaces a restart banner instead of silently freezing the roadmap",
+          "text": "the TUI staleness banner is rendered on load, asserted when the state-binding snapshot test exits zero under pytest",
           "waiver_reason": null
         }
       ],
@@ -58575,7 +58597,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/evidence.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_evidence_header.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W03",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58584,7 +58626,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the close-readiness header row shows the passed-over-total criterion count in the evidence mode",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the evidence-mode close-readiness header is rendered, asserted when the header snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add close-readiness header to the evidence mode",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58604,7 +58663,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/evidence.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_evidence_ledger.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W04",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58613,7 +58692,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "build_evidence_ledger emits one row per CloseReadiness criterion with criterion gate status and produced_by columns",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the evidence ledger renders one row per typed criterion, asserted when the ledger snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Render the evidence ledger over typed criteria",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58633,7 +58729,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/evidence.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/tui/test_evidence_join.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W05",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58642,7 +58758,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the join maps each EvidenceRecord to its criterion id and groups unmatched evidence under an orphan section",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the evidence-to-criterion join returns matched rows, asserted when the join test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Join evidence records to criterion rows",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58662,7 +58795,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modals/evidence_drill.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_evidence_drill.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "evidence"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W06",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58671,7 +58836,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the why-peek modal shows the selected criterion evidence chain with each gate outcome",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the why-peek evidence drill modal renders the criterion evidence chain, asserted when the modal snapshot test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the advertised drill key resolves to a live binding that opens the why-peek evidence modal",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the advertised drill key transitions to its action via tui_pilot",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the why-peek evidence drill modal",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58691,7 +58889,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/evidence.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/tui/test_evidence_export.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W07",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58700,7 +58918,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the evidence export refuses a payload carrying unscrubbed host paths and emits a scrub-clean manifest",
+          "oracle_tier": null,
+          "quality_dimension": "security",
+          "required": true,
+          "response": null,
+          "text": "the evidence export emits a scrub-clean manifest, asserted when the export test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add scrub-gated evidence export",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58720,7 +58955,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/trust.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_trust_determinism.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W08",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58729,7 +58984,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the trust mode shows the oracle-determinism ratio computed over closed criteria",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the trust-mode oracle-determinism section is rendered, asserted when the determinism snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the oracle-determinism section to the trust mode",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58749,7 +59021,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/trust.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_trust_escape_ledger.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W09",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58758,7 +59050,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the escape-ledger readout lists each escaped criterion with its waiver reason",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the trust-mode escape-ledger readout is rendered, asserted when the escape-ledger snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Render the escape-ledger readout in the trust mode",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58778,7 +59087,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modals/verifier_drill.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_verifier_drill.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "trust"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W10",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58787,7 +59128,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the verifier drill modal shows the oracle tier and producer for each scored criterion",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the verifier-role drill modal renders the per-criterion oracle tier, asserted when the modal snapshot test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the advertised verifier key resolves to a live binding that opens the verifier-role drill modal",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the advertised verifier key transitions to its action via tui_pilot",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the verifier-role drill modal",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58807,7 +59181,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modals/calibration_drill.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_calibration_drill.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "trust"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W11",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58816,7 +59222,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the calibration drill modal shows the Brier score and ECE for the jury calibration set",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the calibration-detail drill modal renders the Brier and ECE detail, asserted when the modal snapshot test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the advertised calibration key resolves to a live binding that opens the calibration-detail modal",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the advertised calibration key transitions to its action via tui_pilot",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the calibration-detail drill modal",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58836,7 +59275,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/snapshot/behaviour_probe.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_affordance_matrix.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W12",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58845,7 +59316,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the affordance sweep over NAV_SCOPES and MODE_REGISTRY reports zero unresolved advertised keys outside DEFERRED_KEYS",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the affordance matrix sweep reports zero unresolved advertised keys, asserted when the matrix sweep test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "each advertised home-scope key resolves to a live binding with no dead advertised key",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the advertised home-scope key transitions to its action via tui_pilot",
+          "waiver_reason": null
+        }
+      ],
       "title": "Sweep the affordance matrix across all legal scopes",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58923,7 +59427,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/research_board.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_research_board_bindings.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "research"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W15",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58932,7 +59468,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the research board footer advertises the n new-campaign and x cancel-campaign actions",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the research board advertises the new and cancel campaign actions, asserted when the bindings snapshot test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the advertised n and x keys resolve to live bindings for new-campaign and cancel-campaign",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the advertised campaign key transitions to its action via tui_pilot",
+          "waiver_reason": null
+        }
+      ],
       "title": "Bind n-new and x-cancel on the research board",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58952,7 +59521,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/research_board.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_research_board_unresolved.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W16",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58961,7 +59550,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the unresolved tab lists one row per OpenQuestion with its status and round number",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the research board unresolved tab renders one row per open question, asserted when the unresolved snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Populate the unresolved tab from open questions",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -58981,7 +59587,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/research_board.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_research_board_claims.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W17",
       "intent": null,
       "iter_id": "P29-I13",
@@ -58990,7 +59616,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the options and conflicts tabs render claims grouped by supporting and contradicting evidence",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the research board options and conflicts tabs render claim rows, asserted when the claims snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Populate options and conflicts tabs from claims",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59039,7 +59682,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modals/config.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_config_modal_lock.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "config"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W19",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59048,7 +59723,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the config modal shows the adapter-enable and budget keys read-only on every layer the writable-lock forbids",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the config modal renders the new keys read-only on locked layers, asserted when the lock snapshot test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the advertised config key resolves to a live binding that opens the config modal",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the advertised config key transitions to its action via tui_pilot",
+          "waiver_reason": null
+        }
+      ],
       "title": "Test the config-modal writable-layers lock for new keys",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59068,7 +59776,39 @@
       "file_scopes": [
         "src/eawf/surfaces/render/bars.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/render/test_bars.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "path": "tests/snapshots/svg/fixtures/block_eighths.svg"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "svg_well_formed",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W20",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59077,7 +59817,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the bar renderable maps a 0 to 1 ratio onto the eight block-eighths glyphs with correct partial-cell rounding",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the block-eighths bar renderable maps a ratio to the eight glyphs, asserted when the render test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "xmllint parses the block-eighths bar svg fixture as well-formed xml with no parser error",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the block-eighths bar svg fixture validates as well-formed markup via schema",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add a block-eighths bar renderable",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59097,7 +59870,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/progress.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_progress_widget.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W21",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59106,7 +59899,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "Pilot asserts the ProgressBar widget shows the block-eighths fill matching the bound completion ratio",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the determinate ProgressBar wrapper renders the bound fill ratio, asserted when the widget Pilot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add a determinate ProgressBar wrapper widget",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59126,7 +59936,27 @@
       "file_scopes": [
         "src/eawf/surfaces/render/spinner.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/render/test_spinner.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W22",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59135,7 +59965,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the spinner helper returns the next braille frame in the eight-dot cycle on each advance call",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the braille spinner helper returns the next frame, asserted when the spinner test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the indeterminate braille spinner helper",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59155,7 +60002,27 @@
       "file_scopes": [
         "src/eawf/surfaces/render/eu.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/render/test_eu.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W23",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59164,7 +60031,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the EU render fns accumulate elapsed and projected EU through the shared accruing-state helper without recompute",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "the migrated EU render fns thread the accruing-state helper, asserted when the render test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Migrate the EU render fns with an accruing-state helper",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59184,7 +60068,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/status_pane.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_bar_swap.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "path": "tests/snapshots/svg/bar_swap.svg"
+          },
+          "cadence": "ship",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "svg_pixel_diff",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W24",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59193,7 +60109,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "Pilot asserts StatusPane RoadmapTree and WorkspaceTable each render the block-eighths bar in place of the prior glyph",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the StatusPane RoadmapTree and WorkspaceTable render the block-eighths bar, asserted when the bar-swap Pilot test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the rendered bar svg file matches the committed pixel golden within the byte-exact tolerance",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": false,
+          "response": null,
+          "text": "the swapped-bar render file matches the approved pixel golden via golden",
+          "waiver_reason": null
+        }
+      ],
       "title": "Swap the StatusPane and RoadmapTree and WorkspaceTable bars",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59213,7 +60162,27 @@
       "file_scopes": [
         "src/eawf/surfaces/render/mode.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_render_mode_flip.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W25",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59222,7 +60191,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "Pilot asserts the unicode-to-ascii render-mode flip swaps every block-eighths bar to an ascii fallback glyph",
+          "oracle_tier": null,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": null,
+          "text": "the render-mode flip swaps every bar to the ascii fallback, asserted when the flip Pilot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Propagate the render-mode flip and verify ascii fallback",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59271,7 +60257,39 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modals/tour.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_tour_modal.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W27",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59280,7 +60298,40 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "Pilot asserts the tour carousel advances across its cards and sets ui.tour_completed on dismissal",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the carousel tour modal advances its dismissible cards, asserted when the tour Pilot test exits zero under pytest",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "structural",
+          "measurable_signal": "the advertised tour next and dismiss keys resolve to live bindings that advance and close the tour modal",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the advertised tour key transitions to its action via tui_pilot",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the carousel tour modal with dismissible cards",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59300,7 +60351,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modals/help.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_help_active_mode.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W28",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59309,7 +60380,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the help screen shows the active mode row with the highlight style applied",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the help screen renders the active mode with the highlight style, asserted when the help snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add active-mode highlight to the help screen",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59387,7 +60475,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/trust.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_trust_tile_calibration.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W31",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59396,7 +60504,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the trust tile shows the calibration-readiness state derived from captured elapsed_eu",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the trust tile renders the calibration-readiness readout, asserted when the trust-tile snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the calibration-readiness readout to the trust tile",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59416,7 +60541,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/workspace.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/tui/test_portfolio_totals.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W32",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59425,7 +60570,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the portfolio reducer sums per-repo wave counts and EU into the totals row rendered under the workspace table",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the portfolio-totals reducer returns a totals row, asserted when the reducer test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the portfolio-totals reducer and summary row",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59445,7 +60607,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/workspace.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_workspace_chips.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W33",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59454,7 +60636,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts each repo row renders an attention chip when its blocker or stale-band threshold trips",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the workspace table renders cross-repo attention chips, asserted when the chips snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add cross-repo attention chips to the workspace table",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59474,7 +60673,27 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/workspace.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_workspace_pr_count.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W34",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59483,7 +60702,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "snapshot asserts the workspace dashboard shows a PR-count column with the open-PR total per repo row",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the workspace dashboard renders the PR-count column, asserted when the column snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the PR-count column to the workspace dashboard",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59503,7 +60739,27 @@
       "file_scopes": [
         "src/eawf/surfaces/render/workspace.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/render/test_workspace_offline.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W35",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59512,7 +60768,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the offline workspace render emits the same totals-row layout as the live render when no daemon is reachable",
+          "oracle_tier": null,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": null,
+          "text": "the offline workspace render emits the totals-row layout, asserted when the offline render test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Align the offline workspace render with the totals row",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59561,7 +60834,27 @@
       "file_scopes": [
         "src/eawf/surfaces/render/statusline.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/render/test_statusline_modes.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W37",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59570,7 +60863,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the statusline resolves glyph-mode and color-mode from config and downgrades to ascii on a no-color terminal",
+          "oracle_tier": null,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": null,
+          "text": "the statusline resolves glyph and color modes, asserted when the resolution test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add glyph and color mode resolution to the statusline",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59590,7 +60900,27 @@
       "file_scopes": [
         "src/eawf/surfaces/render/statusline.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/statusline/test_statusline_rows.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W38",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59599,7 +60929,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the statusline renderer emits the configured row count and file matches the committed multi-line golden",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the rows-aware statusline renders the configured row count, asserted when the rows snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add the rows-aware multi-line statusline renderer",
       "token_budget": null,
       "tokens_consumed": 0,
@@ -59619,7 +60966,27 @@
       "file_scopes": [
         "src/eawf/surfaces/render/statusline.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/statusline/test_statusline_bars.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P29-I13-W39",
       "intent": null,
       "iter_id": "P29-I13",
@@ -59628,7 +60995,24 @@
       "runtime_preference": null,
       "sessions": {},
       "status": "pending",
-      "success_criteria": [],
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the statusline renders a context-usage bar and a rate-window bar each as a block-eighths progress glyph",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the statusline renders the ctx and rate-window progress bars, asserted when the bars snapshot test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
       "title": "Add ctx and rate-window progress bars to the statusline",
       "token_budget": null,
       "tokens_consumed": 0,
