@@ -36,21 +36,24 @@ can recover the body via ``git log -- <path>``.
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final, Literal
 
+import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.spec import cache as spec_cache
 from eawf.kernel.spec import writer as spec_writer
-from eawf.kernel.spec.common import GateSpec
+from eawf.kernel.spec.common import CriterionSpec, GateSpec
 from eawf.kernel.spec.promotion import (
     SpecPromoteValidationError,
     validate_argv_gates,
 )
+from eawf.kernel.spec.wave_body import WAVE_BODY_FENCE, WaveSpecBody
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.methods import MethodContext, register
@@ -206,25 +209,136 @@ def _resolve_repo_root(override: str | None) -> Path:
     return Path.cwd()
 
 
-def _extract_gate_specs(_body: bytes) -> list[GateSpec]:
-    """Extract typed :class:`GateSpec` rows from a spec markdown body.
+#: Matches the ``eawf-wave-body`` fenced YAML block in a markdown body.
+#: ``re.DOTALL`` lets ``.`` span newlines so the captured group is the
+#: whole block content; ``re.MULTILINE`` anchors the open/close fences to
+#: the start of a line so a fence inside indented prose is not matched.
+#: Tolerates optional trailing whitespace after the open info string and a
+#: trailing newline before the close fence so an authored block round-trips.
+_WAVE_BODY_BLOCK_RE: Final[re.Pattern[str]] = re.compile(
+    rf"^```{re.escape(WAVE_BODY_FENCE)}[ \t]*\n(?P<yaml>.*?)\n?^```[ \t]*$",
+    re.DOTALL | re.MULTILINE,
+)
 
-    v0.4.0 seam — returns an empty list because the spec body is a
-    free-form markdown scaffold (see :func:`spec_writer.scaffold_body`)
-    that does not yet carry typed GateSpec rows in a parseable block.
-    P28-I01-W08 lands the body schema + parser that yields real
-    GateSpec rows; the W09 promote-side argv-policy check
-    (:func:`eawf.kernel.spec.promotion.validate_argv_gates`) already
-    consumes whatever this helper returns, so W08 only needs to
-    replace the body of this function.
+
+def _decode_body(body: bytes | str) -> str:
+    """Return *body* as text, decoding bytes as UTF-8.
+
+    The promote handler feeds raw ``file_path.read_bytes()`` while tests
+    and the ``eawf spec sync`` command (W05) pass already-decoded text;
+    this helper accepts either so the extractors have one entry shape.
 
     Args:
-        _body: Raw markdown spec body bytes (unused in v0.4.0).
+        body: Raw markdown spec body, as bytes or text.
 
     Returns:
-        Empty list — a placeholder until W08 lands the parser.
+        The body decoded to ``str``.
     """
-    return []
+    if isinstance(body, bytes):
+        return body.decode("utf-8")
+    return body
+
+
+def _parse_wave_body(body: bytes | str) -> WaveSpecBody | None:
+    """Parse the ``eawf-wave-body`` fenced block of a spec body, if present.
+
+    Locates the single fenced YAML block labelled
+    :data:`~eawf.kernel.spec.wave_body.WAVE_BODY_FENCE`, deserialises its
+    contents with :func:`yaml.safe_load`, and validates the mapping
+    through :meth:`~eawf.kernel.spec.wave_body.WaveSpecBody.from_mapping`.
+    A body with no such fence returns ``None`` so the legacy scaffold
+    body (see :func:`spec_writer.scaffold_body`) stays a clean no-op
+    (back-compat). A fenced block whose YAML is malformed, or whose
+    mapping violates the strict :class:`WaveSpecBody` contract, surfaces
+    the underlying error — the typed parse boundary is the single place
+    an authoring mistake fails.
+
+    Args:
+        body: Raw markdown spec body, as bytes or text.
+
+    Returns:
+        The validated :class:`WaveSpecBody`, or ``None`` when the body
+        carries no ``eawf-wave-body`` fenced block.
+
+    Raises:
+        ValueError: When the fenced block's YAML does not deserialise to
+            a mapping (e.g. a bare scalar or a sequence).
+        yaml.YAMLError: When the fenced block is not well-formed YAML.
+        pydantic.ValidationError: When the mapping carries an unknown
+            key, a malformed criterion / gate row, or a cross-reference
+            to an absent criterion / gate id.
+    """
+    text = _decode_body(body)
+    match = _WAVE_BODY_BLOCK_RE.search(text)
+    if match is None:
+        return None
+    payload = yaml.safe_load(match.group("yaml"))
+    if payload is None:
+        # An empty fenced block is a valid, if uninteresting, document.
+        payload = {}
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"wave-body block must deserialise to a mapping, got {type(payload).__name__}"
+        )
+    return WaveSpecBody.from_mapping(payload)
+
+
+def _extract_gate_specs(body: bytes | str) -> list[GateSpec]:
+    """Extract typed :class:`GateSpec` rows from a spec markdown body.
+
+    Parses the ``eawf-wave-body`` fenced block (see
+    :func:`_parse_wave_body`) and returns its ``gates`` list. A body with
+    no such block returns an empty list so the legacy scaffold body stays
+    a clean no-op. The W09 promote-side argv-policy check
+    (:func:`eawf.kernel.spec.promotion.validate_argv_gates`) consumes
+    whatever this helper returns.
+
+    Args:
+        body: Raw markdown spec body, as bytes or text.
+
+    Returns:
+        The typed gate rows, or an empty list when the body carries no
+        ``eawf-wave-body`` fenced block.
+
+    Raises:
+        ValueError: When the fenced block's YAML is not a mapping.
+        yaml.YAMLError: When the fenced block is not well-formed YAML.
+        pydantic.ValidationError: When a gate / criterion row is
+            malformed or a cross-reference does not resolve.
+    """
+    parsed = _parse_wave_body(body)
+    if parsed is None:
+        return []
+    return parsed.gates
+
+
+def _extract_criterion_specs(body: bytes | str) -> list[CriterionSpec]:
+    """Extract typed :class:`CriterionSpec` rows from a spec markdown body.
+
+    Sibling of :func:`_extract_gate_specs`: parses the same
+    ``eawf-wave-body`` fenced block and returns its ``criteria`` list,
+    each row carrying its ``evidence_kind`` and ``gate_ids``. A body with
+    no such block returns an empty list (back-compat with the legacy
+    scaffold). The ``eawf spec sync`` command (W05) materialises these
+    rows onto the wave's typed ``success_criteria`` field.
+
+    Args:
+        body: Raw markdown spec body, as bytes or text.
+
+    Returns:
+        The typed criterion rows, or an empty list when the body carries
+        no ``eawf-wave-body`` fenced block.
+
+    Raises:
+        ValueError: When the fenced block's YAML is not a mapping.
+        yaml.YAMLError: When the fenced block is not well-formed YAML.
+        pydantic.ValidationError: When a criterion / gate row is
+            malformed or a cross-reference does not resolve.
+    """
+    parsed = _parse_wave_body(body)
+    if parsed is None:
+        return []
+    return parsed.criteria
 
 
 def _resolve_cache_dir(override: str | None) -> Path | None:
@@ -593,16 +707,14 @@ async def promote(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         body = file_path.read_bytes()
         file_sha = spec_writer.blob_sha_for(body)
         if args.target_status == "READY":
-            # W09 — L0 argv-policy attaches at the spec-promote→READY
+            # L0 argv-policy attaches at the spec-promote->READY
             # persistence seam. Walks the spec body's embedded GateSpec
             # rows and routes each argv-bearing gate's ``args['argv']``
             # through :func:`validate_gate_argv`. Atomicity: the check
             # runs BEFORE :func:`write_cache_entry`, so a reject leaves
             # the spec in its prior DRAFT status with no cache mutation.
-            # The body parser that yields typed GateSpec rows lands in
-            # W08; until then the iterable is empty and the call is a
-            # no-op pass-through — the seam exists so W08 has a single
-            # call site to feed.
+            # A scaffold body with no ``eawf-wave-body`` fenced block
+            # yields an empty list and the call is a no-op pass-through.
             gates_in_body: list[GateSpec] = _extract_gate_specs(body)
             try:
                 validate_argv_gates(gates_in_body)
