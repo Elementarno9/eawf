@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
+from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Static
@@ -76,6 +77,7 @@ _COLUMNS: tuple[str, ...] = ("role", "verdict", "wave", "attempt", "followups")
 #: tokens stay pinned to the canonical vocabulary.
 _EVIDENCE_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
+    render_hint_label("p", "peek"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
     render_hint_label("?", "help"),
@@ -539,6 +541,14 @@ class EvidenceModeScreen(ScopeScreen):
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _EVIDENCE_HINTS
 
+    #: ``p`` peeks into the selected ledger criterion's evidence chain (the
+    #: why-peek drill modal). Appended to the shared
+    #: :class:`~eawf.surfaces.tui.scopes.ScopeScreen` chrome bindings so the
+    #: advertised ``p peek`` footer key resolves to a live binding.
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("p", "drill", "peek", show=False),
+    ]
+
     DEFAULT_CSS: ClassVar[str] = """
     EvidenceModeScreen #evidence-body {
         padding: 0 1;
@@ -738,6 +748,64 @@ class EvidenceModeScreen(ScopeScreen):
         has_rows = bool(ledger_rows)
         ledger.display = has_rows
         empty.display = not has_rows
+
+    def action_drill(self) -> None:
+        """Open the why-peek drill modal for the selected ledger criterion.
+
+        Resolves the highlighted ledger row to its
+        :class:`~eawf.workflow.verify.models.CriterionView`, joins the bound
+        evidence rows to it (:func:`join_evidence_to_criteria`), and pushes the
+        :class:`~eawf.surfaces.tui.modals.evidence_drill.EvidenceDrillModal`
+        through the App's cap-aware ``push_modal`` (falling back to
+        ``push_screen`` under a bare harness). A no-op when no readiness view
+        is bound or the ledger has no selectable criterion -- the binding still
+        resolves, so the advertised ``p peek`` affordance is never dead.
+        """
+        view = self._selected_criterion()
+        if view is None:
+            logger.info("evidence_drill skipped reason=no-selection")
+            return
+        records = join_evidence_to_criteria([view.id], self._records).matched.get(view.id, ())
+        from eawf.surfaces.tui.modals.evidence_drill import EvidenceDrillModal
+
+        modal = EvidenceDrillModal(view, records)
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal)
+            return
+        self.app.push_screen(modal)
+
+    def _selected_criterion(self) -> CriterionView | None:
+        """Resolve the highlighted ledger row to its criterion view, or ``None``.
+
+        Reads the ledger's row cursor and maps the highlighted row key (the
+        criterion id) back to the bound close-readiness view's criterion.
+        Returns ``None`` when no readiness view is bound, the ledger carries no
+        rows, or the cursor resolves to no in-view criterion.
+
+        Returns:
+            The selected :class:`~eawf.workflow.verify.models.CriterionView`,
+            or ``None`` when no criterion is selectable.
+        """
+        if self._readiness is None:
+            return None
+        ledgers = self.query("#evidence-ledger")
+        if not ledgers:
+            return None
+        ledger = ledgers.first(DataTable)
+        if ledger.row_count == 0:
+            return None
+        try:
+            row_key = ledger.coordinate_to_cell_key(ledger.cursor_coordinate).row_key
+        except Exception:
+            # The cursor may sit outside any cell on an empty / unfocused
+            # table; treat that as no selection rather than propagating.
+            return None
+        criterion_id = row_key.value
+        for view in self._readiness.criteria:
+            if view.id == criterion_id:
+                return view
+        return None
 
 
 __all__ = [
