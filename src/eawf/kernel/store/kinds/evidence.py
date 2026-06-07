@@ -17,6 +17,7 @@ length, mirroring the existing 4-byte suffix conventions in
 from __future__ import annotations
 
 import secrets
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field
@@ -100,10 +101,66 @@ class EvidenceRecord(_StrictModel):
     created_at: UtcDatetime
 
 
+def deterministic_pass_record(
+    *,
+    scope_id: str,
+    criterion_id: str,
+    gate_id: str,
+    tier: int,
+    detail: str = "",
+) -> EvidenceRecord:
+    """Mint a ``deterministic`` / ``pass`` :class:`EvidenceRecord` for a gate.
+
+    The verify-spine close gate calls this once per criterion whose
+    cheapest deterministic falsifier passed, so the deterministic-evidence
+    pipeline is no longer write-idle: the row it returns is the single
+    signal the trust scorecard reads to label a wave ``verified`` (a row
+    with ``evidence_kind == "deterministic"`` and ``status == "pass"``).
+
+    The record carries ``produced_by="tool"`` — a deterministic checker,
+    not a human or agent — and stamps the originating tier + gate id onto
+    ``metrics`` / ``refs`` so a later audit can re-trace which gate at
+    which oracle tier minted the row. The id is freshly minted via
+    :func:`mint_evidence_id` and ``created_at`` is the current UTC instant.
+
+    Args:
+        scope_id: Wave URN the evidence backs (also the envelope scope).
+        criterion_id: Id of the criterion the gate scored. Recorded on
+            ``refs`` and ``metrics["criterion_id"]`` for traceability.
+        gate_id: Id of the deterministic gate that passed. Recorded on
+            ``refs`` (first entry) and ``metrics["gate_id"]``.
+        tier: Oracle tier (1-7) the producing gate sat at. Stamped onto
+            ``metrics["oracle_tier"]`` so an audit can confirm the
+            cheapest falsifier minted the row.
+        detail: Optional one-line gate-runner detail folded into the
+            summary; truncated to keep the ``summary`` under its 500-char
+            cap.
+
+    Returns:
+        A validated :class:`EvidenceRecord` ready for daemon append.
+    """
+    summary = f"deterministic gate {gate_id} passed criterion {criterion_id} at tier T{tier}"
+    if detail:
+        summary = f"{summary}: {detail}"
+    summary = summary[:500]
+    return EvidenceRecord(
+        id=mint_evidence_id(),
+        scope_id=scope_id,
+        produced_by="tool",
+        evidence_kind="deterministic",
+        status="pass",
+        summary=summary,
+        refs=[gate_id, criterion_id],
+        metrics={"criterion_id": criterion_id, "gate_id": gate_id, "oracle_tier": tier},
+        created_at=datetime.now(UTC),
+    )
+
+
 __all__ = [
     "EvidenceRecord",
     "EvidenceSourceKind",
     "EvidenceStatus",
     "ProducedBy",
+    "deterministic_pass_record",
     "mint_evidence_id",
 ]

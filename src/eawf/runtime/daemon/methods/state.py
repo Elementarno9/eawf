@@ -89,6 +89,7 @@ from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventKind, EventPayload
+from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
 from eawf.observability.telemetry.join import (
@@ -1119,7 +1120,7 @@ async def _enforce_wave_close_gate(
     *,
     state_path: Path,
     repo_root: Path,
-) -> None:
+) -> list[EvidenceRecord]:
     """Run the enforcing wave-close gate via the ordered oracle.
 
     The async daemon-side hook the close path awaits before applying a
@@ -1142,6 +1143,16 @@ async def _enforce_wave_close_gate(
     tier -- preserving the prior single-auditor / cross-vendor-jury
     behaviour for an un-gated criterion.
 
+    Each criterion that PASSES at a deterministic tier (the
+    :class:`~eawf.workflow.verify.oracle.OracleResult` carries a non-None
+    ``gate_id`` only on the deterministic-gate branch) mints one
+    ``deterministic`` / ``pass`` :class:`EvidenceRecord`. The records are
+    BUILT here but NOT yet persisted -- the caller appends them only after
+    ``_apply_wave_close`` succeeds, so a wave whose close is later refused
+    on a different criterion never leaves a stray pass row behind. The
+    jury / single-auditor fallthrough has ``gate_id is None`` and mints no
+    deterministic row (it is not a code-gated check).
+
     Args:
         state: Validated state -- mutated in place when a jury registers its
             auditor sessions; the close path persists it.
@@ -1152,10 +1163,17 @@ async def _enforce_wave_close_gate(
         repo_root: Repository root for the verify-block config anchor + the
             juror diff-base / spawn cwd.
 
+    Returns:
+        The deterministic-pass :class:`EvidenceRecord` rows the caller
+        appends to ``evidence.jsonl`` after the apply commits. Empty on
+        every advisory / early-return path and for a wave whose required
+        criteria were all scored by the jury / single-auditor tier.
+
     Raises:
         LifecycleError: When the ordered oracle (or the high-risk
             single-auditor gate) refuses close.
     """
+    from eawf.kernel.store.kinds.evidence import deterministic_pass_record
     from eawf.workflow.dispatch.verdict import verdict_requirement
     from eawf.workflow.verify.oracle import run_oracle
     from eawf.workflow.verify.readiness import (
@@ -1166,7 +1184,7 @@ async def _enforce_wave_close_gate(
 
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id or wave_id not in state.waves:
-        return
+        return []
     wave = state.waves[wave_id]
     # Band-conditional enforcement: the merged block records the fleet
     # intent; the wave-aware resolver narrows ``enforce`` +
@@ -1182,7 +1200,7 @@ async def _enforce_wave_close_gate(
         wave,
     )
     if verify_block is None or not verify_block.enforce:
-        return
+        return []
     # High-risk single-auditor gate. The verdict gate is a READ -- it only
     # blocks close when a fresh auditor verdict is already persisted -- so
     # the close path must WRITE that verdict first, but only for the
@@ -1199,7 +1217,7 @@ async def _enforce_wave_close_gate(
         )
         _enforce_wave_verdict_gate(wave, state_path=state_path)
         logger.info(f"_enforce_wave_close_gate wave={wave_id} high_risk=single-auditor passed=True")
-        return
+        return []
     # Whole-fleet enforce is risk-weighted: a fleet profile (no
     # ``uiux_bands``) gates only the high-risk ``"always"`` subset, so a
     # mechanical (``"sampled"`` / ``"skip"``) wave closes exactly as it does
@@ -1211,7 +1229,7 @@ async def _enforce_wave_close_gate(
         logger.debug(
             f"_enforce_wave_close_gate wave={wave_id} requirement=mechanical advisory=True"
         )
-        return
+        return []
     # Past the enforce guard the ordered oracle scores each required
     # criterion. The events_path + spawn_factory mirror the cross-vendor
     # jury gate so the jury tier (run_oracle's last resort for an un-gated
@@ -1219,6 +1237,7 @@ async def _enforce_wave_close_gate(
     events_path = store_path(state_path, StoreKind.EVENT)
     spawn_factory = _jury_spawn_factory(state, wave, repo_root=repo_root)
     gate_specs = _load_gate_specs(wave_id, state)
+    deterministic_evidence: list[EvidenceRecord] = []
     for criterion in wave.success_criteria:
         if not criterion.required:
             continue
@@ -1243,9 +1262,65 @@ async def _enforce_wave_close_gate(
                 f"(criterion={criterion.id!r} tier={int(result.tier)} "
                 f"status={result.status}): {result.detail}"
             )
+        # Only a deterministic gate carries a gate_id; the jury /
+        # single-auditor fallthrough scores the whole wave (gate_id=None)
+        # and is not a code-gated check, so it mints no deterministic row.
+        if result.gate_id is not None:
+            deterministic_evidence.append(
+                deterministic_pass_record(
+                    scope_id=wave_id,
+                    criterion_id=result.criterion_id,
+                    gate_id=result.gate_id,
+                    tier=int(result.tier),
+                    detail=result.detail,
+                )
+            )
     logger.info(
-        f"_enforce_wave_close_gate wave={wave_id} oracle=pass criteria={len(wave.success_criteria)}"
+        f"_enforce_wave_close_gate wave={wave_id} oracle=pass "
+        f"criteria={len(wave.success_criteria)} "
+        f"deterministic_evidence={len(deterministic_evidence)}"
     )
+    return deterministic_evidence
+
+
+def _append_close_evidence(
+    records: list[EvidenceRecord],
+    *,
+    state_path: Path,
+) -> None:
+    """Append every deterministic-pass close-gate row to ``evidence.jsonl``.
+
+    Each :class:`EvidenceRecord` is wrapped in a
+    :class:`~eawf.kernel.store.envelope.Envelope` (``kind=StoreKind.EVIDENCE``)
+    and written through :func:`eawf.kernel.store.append.append_envelope` so
+    the on-disk shape is indistinguishable from a row written by the
+    ``evidence.append`` RPC or the waiver path. The append acquires the
+    sibling ``evidence.jsonl`` portalock — distinct from the ``state.json``
+    lock the close mutation holds, so there is no deadlock — which is why
+    this in-close append is safe (see
+    :func:`eawf.kernel.store.append.append_envelope`).
+
+    Args:
+        records: The deterministic-pass rows minted by
+            :func:`_enforce_wave_close_gate`. May be empty (no-op).
+        state_path: Path to ``state.json``; anchors
+            ``<state_dir>/store/evidence.jsonl``.
+    """
+    evidence_path = store_path(state_path, StoreKind.EVIDENCE)
+    for record in records:
+        envelope = Envelope(
+            id=record.id,
+            kind=StoreKind.EVIDENCE,
+            scope_id=record.scope_id,
+            created_at=record.created_at,
+            summary=record.summary,
+            payload=record.model_dump(mode="json"),
+        )
+        append_envelope(evidence_path, envelope)
+        logger.info(
+            f"_append_close_evidence scope={record.scope_id!r} evidence_id={record.id!r} "
+            f"evidence_kind={record.evidence_kind!r} status={record.status!r}"
+        )
 
 
 def _compute_wave_close_extras(
@@ -2205,6 +2280,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             before_version = _state_version(payload)
             wave_close_readiness: CloseReadiness | None = None
             wave_close_rollup: WaveSessionRollup | None = None
+            wave_close_evidence: list[EvidenceRecord] = []
             actual_written_auto = False
             repo_anchor = (
                 Path(args.repo_root) if args.repo_root else _config_root_for_state_path(state_path)
@@ -2221,8 +2297,11 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                     # The enforcing close gate runs the ordered oracle BEFORE
                     # any apply so a blocked close aborts the whole mutation.
                     # Advisory close paths are unaffected -- the gate returns
-                    # early when no profile enforces verify.
-                    await _enforce_wave_close_gate(
+                    # early when no profile enforces verify. The returned
+                    # deterministic-pass rows are persisted only AFTER the
+                    # state write commits (below), so a wave whose close is
+                    # later refused never leaves a stray pass row behind.
+                    wave_close_evidence = await _enforce_wave_close_gate(
                         state,
                         mutation,
                         state_path=state_path,
@@ -2358,6 +2437,16 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             if drift_envelope is not None:
                 append_envelope(event_path, drift_envelope)
             wal.mark_fsynced(wal_path, mutation.mutation_id)
+
+            # Persist the deterministic-pass evidence rows the close gate
+            # minted, AFTER the state write commits. Each row lands in the
+            # sibling ``evidence.jsonl`` (its own portalock, distinct from
+            # the state lock — no deadlock) so the deterministic-evidence
+            # pipeline is no longer write-idle: the trust scorecard reads
+            # these ``deterministic`` / ``pass`` rows to label the wave
+            # ``verified``. Empty on every advisory / non-enforcing close.
+            if wave_close_evidence:
+                _append_close_evidence(wave_close_evidence, state_path=state_path)
 
             if ctx.bus is not None and hasattr(ctx.bus, "publish"):
                 ctx.bus.publish(envelope)
