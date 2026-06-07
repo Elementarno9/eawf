@@ -6150,7 +6150,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P29-I13",
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -13656,7 +13656,7 @@
       "intent": null,
       "opened_at": "2026-06-06T23:54:12.402754Z",
       "phase_id": "P29",
-      "status": "planned",
+      "status": "active",
       "title": "TUI surfaces + folded scope (authored via spec-body)",
       "trigger": "none",
       "wave_ids": [
@@ -14525,7 +14525,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T02:03:32.145726Z",
+  "updated_at": "2026-06-07T02:16:30.475807Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -59764,7 +59764,9 @@
     },
     "P29-I13-W20": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P29-I13-W24"
+      ],
       "claim_session_id": null,
       "claimed_at": null,
       "closed_at": null,
@@ -59858,7 +59860,9 @@
     },
     "P29-I13-W21": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P29-I13-W24"
+      ],
       "claim_session_id": null,
       "claimed_at": null,
       "closed_at": null,
@@ -60061,7 +60065,10 @@
       "claimed_at": null,
       "closed_at": null,
       "commit": null,
-      "deps": [],
+      "deps": [
+        "P29-I13-W20",
+        "P29-I13-W21"
+      ],
       "description": null,
       "dispatch_history": [],
       "effort_bucket": "L",
