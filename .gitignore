@@ -13,6 +13,7 @@ src/eawf/_data/
 .ruff_cache/
 .mypy_cache/
 .coverage
+coverage.xml
 htmlcov/
 # mutmut rewrites source + writes its CI/CD stats into this sandbox dir
 # at the repo root when a mutation campaign runs locally.
@@ -66,6 +67,10 @@ CLAUDE.md
 .ea/local/
 .ea/indexes/
 .ea/instrument-probe.json
+# instrument-probe cache embeds absolute host paths; the bare glob covers
+# nested copies a doctor / skill run may write under a resolved state dir
+# (e.g. tests/fixtures/**/.ea/), not just the repo-root .ea/ default.
+**/instrument-probe.json
 
 # Render cache (memory-view) + machine-specific MCP / opencode runtime
 # configs written by `eawf plugin install`; regenerable, never committed.

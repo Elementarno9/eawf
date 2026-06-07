@@ -24,6 +24,8 @@ profiles:
   - core
   - python
   - research
+  - agent_driven
+  - quality
 research:
   agent_count: 10
   default_depth: deep

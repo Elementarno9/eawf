@@ -1,0 +1,19 @@
+name: researchcfg
+version: '1.0'
+description: 'Research-campaign config: per-domain depth + focus for eawf research campaign new'
+
+# Per-domain research-campaign config. `eawf research campaign new "<topic>"`
+# fans the topic across every domain below, one staged dispatch each.
+# Edit the domains/focus to taste, then enable this profile for your scope:
+#   eawf config profile enable researchcfg repo   # or workspace | user
+research:
+  default_depth: deep          # shallow | medium | deep | exhaustive
+  domains:
+    competitive-landscape:
+      depth: deep
+      focus: 'nearest 3 competitors and their differentiators'
+    market-structure:
+      depth: medium
+    technical-feasibility:
+      depth: deep
+      agent_role: researcher

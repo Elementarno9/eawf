@@ -37,3 +37,12 @@ pyproject
 pre-commit
 EviBound
 rollup
+config
+[Uu]ntyped
+mitigation
+mitigations
+enablement
+hostnames
+descriptor
+descriptors
+idle-contract
