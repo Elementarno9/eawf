@@ -387,6 +387,18 @@ def _repo_cell(row: RepoRow) -> str:
     return f"{row.code} {chip}" if chip is not None else row.code
 
 
+#: Row key for the portfolio totals summary row appended under the repo
+#: rows. The leading sentinel avoids colliding with any repo code (a repo
+#: code matches the project-code symbol pattern and never starts with this
+#: marker), so a totals row is never mistaken for a zoomable repo.
+TOTALS_ROW_KEY: str = "Σ-totals"
+
+#: Repo-column cell text for the totals summary row. The capital sigma
+#: reads as "sum across the portfolio" and keeps the row visually distinct
+#: from the per-repo rows above it.
+TOTALS_ROW_LABEL: str = "Σ"
+
+
 @dataclass(frozen=True)
 class PortfolioTotals:
     """Workspace-wide roll-up of every repo row's wave + EU counts.
@@ -445,6 +457,36 @@ def portfolio_totals(rows: list[RepoRow]) -> PortfolioTotals:
     )
 
 
+def format_totals_line(totals: PortfolioTotals) -> str:
+    """Format a plain-text one-line portfolio-totals summary.
+
+    The shared totals layout both the live workspace table's summary row
+    and the headless offline render emit, so the two surfaces stay
+    byte-aligned on the totals fields. Carries the same numbers as the
+    live row -- the :data:`TOTALS_ROW_LABEL` sigma, the repo count, the
+    summed wave ``done/total``, the summed EU ``consumed/total``, and the
+    summed open-PR count -- without the live row's Rich-tinted bars (a
+    plain-text frame cannot carry the colour spans).
+
+    The EU + PR fields degrade to a dash when nothing was reported
+    (``eu_total <= 0`` / ``open_prs == 0``) so an empty portfolio reads as
+    honest-empty rather than a fabricated ``0.0/0.0`` ratio.
+
+    Args:
+        totals: The folded :class:`PortfolioTotals`.
+
+    Returns:
+        The one-line totals summary (no trailing newline).
+    """
+    eu = f"{totals.eu_consumed:g}/{totals.eu_total:g}" if totals.eu_total > 0 else "—"
+    prs = str(totals.open_prs) if totals.open_prs > 0 else "—"
+    return (
+        f"{TOTALS_ROW_LABEL} {totals.repo_count} repos  "
+        f"waves {totals.wave_done}/{totals.wave_total}  "
+        f"EU {eu}  PR {prs}"
+    )
+
+
 def build_repo_rows(state: State | None) -> list[RepoRow]:
     """Build the workspace table's rows from a bound workspace *state*.
 
@@ -482,13 +524,33 @@ def _repo_row(ref: WorkspaceRepoRef) -> RepoRow:
     Returns:
         The populated :class:`RepoRow`.
     """
-    repo_path = Path(ref.path)
+    return repo_row_from_path(ref.code, ref.path)
+
+
+def repo_row_from_path(code: str, path: str) -> RepoRow:
+    """Build one :class:`RepoRow` from a repo *code* + on-disk *path*.
+
+    The shared off-disk row builder both the live workspace table (via a
+    :class:`~eawf.kernel.state.models.WorkspaceRepoRef`) and the headless
+    offline render (via a registry entry) use, so the two surfaces fold
+    identical per-repo inputs into the portfolio totals. Reads the repo's
+    own ``state.json`` (best-effort) for the bar inputs and derives the
+    last-touch age + stale flag from the same file's mtime.
+
+    Args:
+        code: The repo's project code (the row key).
+        path: Absolute on-disk path to the repo working tree.
+
+    Returns:
+        The populated :class:`RepoRow`.
+    """
+    repo_path = Path(path)
     repo_state = read_repo_state(repo_path)
     phase_id, done, total = active_phase_completion(repo_state)
     consumed, eu_total = eu_pair(repo_state)
     return RepoRow(
-        code=ref.code,
-        path=ref.path,
+        code=code,
+        path=path,
         phase_id=phase_id,
         phase_done=done,
         phase_total=total,
@@ -595,18 +657,6 @@ def _eu_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | Non
     if row.eu_total <= 0:
         return EMPTY_STATE
     return render_bar_rich(row.eu_consumed, row.eu_total, mode=mode, palette=palette)
-
-
-#: Row key for the portfolio totals summary row appended under the repo
-#: rows. The leading sentinel avoids colliding with any repo code (a repo
-#: code matches the project-code symbol pattern and never starts with this
-#: marker), so a totals row is never mistaken for a zoomable repo.
-TOTALS_ROW_KEY: str = "Σ-totals"
-
-#: Repo-column cell text for the totals summary row. The capital sigma
-#: reads as "sum across the portfolio" and keeps the row visually distinct
-#: from the per-repo rows above it.
-TOTALS_ROW_LABEL: str = "Σ"
 
 
 def _totals_phase_cell(totals: PortfolioTotals, *, mode: RenderMode) -> str:
@@ -927,7 +977,9 @@ __all__ = [
     "build_repo_rows",
     "completion_pair",
     "eu_pair",
+    "format_totals_line",
     "portfolio_totals",
     "repo_has_blocker",
     "repo_is_stale",
+    "repo_row_from_path",
 ]

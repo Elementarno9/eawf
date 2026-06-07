@@ -54,6 +54,7 @@ def test_portfolio_totals_empty_is_zero() -> None:
         wave_total=0,
         eu_consumed=pytest.approx(0.0),
         eu_total=pytest.approx(0.0),
+        open_prs=0,
     )
 
 

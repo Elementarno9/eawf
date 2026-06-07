@@ -177,6 +177,37 @@ def _workspace_breadcrumb(registry: Registry | None) -> str:
     return DEFAULT_PROJECT_CODE
 
 
+def _totals_line(registry: Registry | None) -> str:
+    """Build the offline portfolio-totals line for the workspace strip.
+
+    Folds every registered repo's off-disk state into the same
+    :class:`~eawf.surfaces.tui.widgets.workspace_table.PortfolioTotals` the live
+    workspace table sums, then formats it through the shared
+    :func:`~eawf.surfaces.tui.widgets.workspace_table.format_totals_line`, so the
+    headless ``workspace registry-status`` frame emits the same totals-row
+    layout as the live render when no daemon is reachable. An unavailable /
+    empty registry folds to a zero-valued totals (``Σ 0 repos ...``) rather
+    than omitting the line, so the totals row is present on every frame.
+
+    Args:
+        registry: The loaded registry, or ``None`` when unavailable.
+
+    Returns:
+        The one-line totals summary.
+    """
+    from eawf.surfaces.tui.widgets.workspace_table import (
+        format_totals_line,
+        portfolio_totals,
+        repo_row_from_path,
+    )
+
+    rows = []
+    if registry is not None:
+        for code in sorted(registry.repos):
+            rows.append(repo_row_from_path(code, registry.repos[code].path))
+    return format_totals_line(portfolio_totals(rows))
+
+
 def _strip_line(registry: Registry | None, *, is_stale_at: dict[str, bool]) -> str:
     """Build the one-line repo strip ``CODE [chips]  CODE [chips]`` row.
 
@@ -268,6 +299,7 @@ def offline_render(
         "",
         "workspace",
         _strip_line(registry, is_stale_at=is_stale_at),
+        _totals_line(registry),
         "",
         "roadmap",
         f"  repos: {repo_count}",
