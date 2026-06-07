@@ -65,6 +65,14 @@ pytestmark = pytest.mark.skipif(
     reason="POSIX-only client transport; daemon Windows-pipe is a separate harness",
 )
 
+#: Generous per-call RPC timeout for the cross-repo tests. The
+#: ``DaemonClient`` default (30 s) sets the socket read deadline; under a
+#: saturated ``-n auto`` matrix on slow CI runners the in-process daemon
+#: thread can be starved long enough that a single round-trip exceeds it,
+#: surfacing as ``TimeoutError: timed out``. A 60 s ceiling removes the
+#: load sensitivity while still failing fast on a genuinely hung daemon.
+_CLIENT_CALL_TIMEOUT_SECONDS: float = 60.0
+
 
 def _short_runtime_dir() -> Path:
     """Return a per-test runtime dir short enough for AF_UNIX (104-byte cap)."""
@@ -136,7 +144,11 @@ class _ServerHandle:
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
-        assert self._ready.wait(timeout=5.0), "server failed to start within 5 s"
+        # Generous start budget: under a saturated ``-n auto`` matrix on slow
+        # CI runners the worker thread can be scheduled late, so a 5 s ceiling
+        # races the server-ready handshake. 20 s removes the load sensitivity
+        # without weakening the assertion (a truly dead server still fails).
+        assert self._ready.wait(timeout=20.0), "server failed to start within 20 s"
         self._pid_file.write_text(
             f"{os.getpid()}\n{PROTOCOL_VERSION}\n2026-05-19T00:00:00+00:00\n",
             encoding="utf-8",
@@ -216,7 +228,10 @@ def test_state_read_with_repo_root_resolves_target_repo(
 ) -> None:
     """Daemon booted against repoA returns repoB when caller passes repo_root."""
     server, _repo_a, repo_b = harness
-    with DaemonClient(runtime_dir=server.runtime_dir) as client:
+    with DaemonClient(
+        runtime_dir=server.runtime_dir,
+        call_timeout_seconds=_CLIENT_CALL_TIMEOUT_SECONDS,
+    ) as client:
         result = client.call("state.read", {"repo_root": str(repo_b)})
     assert result["state"]["project"]["code"] == "REPOB"
 
@@ -233,7 +248,10 @@ def test_config_read_with_repo_root_resolves_target_repo(
     cfg = repo_b / ".ea" / "config.yaml"
     cfg.write_text("vcs:\n  auto_commit: true\n")
 
-    with DaemonClient(runtime_dir=server.runtime_dir) as client:
+    with DaemonClient(
+        runtime_dir=server.runtime_dir,
+        call_timeout_seconds=_CLIENT_CALL_TIMEOUT_SECONDS,
+    ) as client:
         result = client.call("config.read", {"layer": "repo", "repo_root": str(repo_b)})
 
     # layer_path must point under repoB (NOT repoA / the daemon's boot anchor).
@@ -258,7 +276,10 @@ def test_state_read_without_repo_root_falls_back_and_warns_once(
     monkeypatch.setattr(state_methods, "_ANCHOR_FALLBACK_WARN_EMITTED", False)
     caplog.set_level(logging.WARNING, logger="eawf.runtime.daemon.methods.state")
 
-    with DaemonClient(runtime_dir=server.runtime_dir) as client:
+    with DaemonClient(
+        runtime_dir=server.runtime_dir,
+        call_timeout_seconds=_CLIENT_CALL_TIMEOUT_SECONDS,
+    ) as client:
         # First call → fallback path → warning emitted.
         first = client.call("state.read", {})
         # Second call → still falls back, but the one-shot flag stays

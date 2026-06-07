@@ -58,6 +58,14 @@ def _write_event_jsonl(path: Path, envelopes: list[Envelope]) -> None:
     with path.open("wb") as fh:
         for env in envelopes:
             fh.write(orjson.dumps(env.model_dump(mode="json")) + b"\n")
+        # Force the bytes to disk before any reader runs. Under a saturated
+        # ``-n auto`` matrix on slow / networked CI filesystems the OS write
+        # buffer can lag the close, so a follow-on ``list_events`` read has
+        # observed a short / partial file. ``flush`` + ``fsync`` make the
+        # full payload durable by construction, so the count assertion does
+        # not depend on filesystem buffering timing.
+        fh.flush()
+        os.fsync(fh.fileno())
 
 
 def _build_ctx(*, event_path: Path | None, bus: EventBus | None = None) -> MethodContext:

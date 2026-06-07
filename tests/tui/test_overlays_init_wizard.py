@@ -155,6 +155,12 @@ def test_init_wizard_routes_through_push_modal_cap() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            # Drain the GitPane git-probe worker (a real ``git`` subprocess
+            # off the event loop) spawned on mount before pumping the modal
+            # stack. Left in flight it keeps the screen's message count
+            # non-zero, so a follow-on ``pilot.pause`` can hit Textual's 30 s
+            # ``WaitForScreenTimeout`` under a saturated ``-n auto`` matrix.
+            await app.workers.wait_for_complete()
             for _ in range(EaApp.MAX_MODAL_DEPTH):
                 app.push_modal(ConfirmModal("continue?"))
                 await pilot.pause()

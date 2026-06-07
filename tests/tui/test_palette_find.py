@@ -270,6 +270,12 @@ def test_handle_find_carries_entity_id_for_dedup(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_file)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            # Drain the GitPane git-probe worker (a real ``git`` subprocess
+            # off the event loop) spawned on mount before driving /find. Left
+            # in flight it keeps the screen's message count non-zero, so a
+            # follow-on ``pilot.pause`` can hit Textual's 30 s
+            # ``WaitForScreenTimeout`` under a saturated ``-n auto`` matrix.
+            await app.workers.wait_for_complete()
             _handle_find(app, _WAVE_ID)
             await pilot.pause()
             assert isinstance(app.screen, DetailModal)

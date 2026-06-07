@@ -244,6 +244,7 @@ _VALID_REPO_STATE = (
 )
 
 
+@pytest.mark.xdist_group("serial_io")
 def test_materialise_state_keys_serialises_with_concurrent_writer(tmp_path: Path) -> None:
     """A racing ``state_transaction`` must not drop materialised state keys.
 

@@ -217,6 +217,15 @@ def test_dispatch_unknown_event_type_rejected(tmp_path: Path) -> None:
 
 def test_dispatch_help_shows_event_type_option() -> None:
     """The dispatch subcommand surfaces the --event-type option."""
-    result = runner.invoke(app, ["hook", "dispatch", "--help"])
+    # Pin the render width so the option name is never clipped / wrapped.
+    # Typer/Click + Rich read ``COLUMNS`` for the help layout; on a CI runner
+    # the inherited terminal width is environment-dependent and can be narrow
+    # enough that ``--event-type`` wraps mid-token and the substring assertion
+    # fails. A wide, fixed width renders the full option text deterministically.
+    result = runner.invoke(
+        app,
+        ["hook", "dispatch", "--help"],
+        env={"COLUMNS": "200", "TERM": "dumb"},
+    )
     assert result.exit_code == 0
     assert "--event-type" in result.stdout

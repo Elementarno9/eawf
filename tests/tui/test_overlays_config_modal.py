@@ -1415,6 +1415,13 @@ def test_config_inline_edit_same_value_leaves_no_dirty() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
+            # Drain the GitPane git-probe worker spawned on mount. It runs a
+            # real ``git`` subprocess off the event loop; left in flight it
+            # keeps the screen's message count non-zero, so a follow-on
+            # ``pilot.pause`` can hit Textual's 30 s ``WaitForScreenTimeout``
+            # under a saturated ``-n auto`` matrix. Draining to quiescence
+            # removes the timing sensitivity (the project Pilot-worker rule).
+            await app.workers.wait_for_complete()
             modal = _push_config(app)
             await pilot.pause()
             _goto_tab(modal, "planning")
