@@ -31,6 +31,7 @@ from typing import ClassVar, Literal
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from eawf.surfaces.render.bars import render_block_bar
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 from eawf.workflow.estimation.thresholds import OK_BAND_CEILING, OVER_BUDGET_CEILING
 
@@ -213,21 +214,31 @@ def _ascii_glyphs(filled: int, width: int) -> str:
 def _mode_glyphs(fraction: float, *, width: int, mode: RenderMode) -> str:
     """Return the glyph run for *fraction* in the active *mode*.
 
-    The single fork between the Braille and ASCII fill so every bar
-    renderer below honours :attr:`eawf.surfaces.tui.app.EaApp.render_mode` through
-    one code path — a single flip rerenders the whole tree, status pane,
-    and tables.
+    The single fork between the unicode block-eighths fill and the ASCII
+    fallback so every bar renderer below honours
+    :attr:`eawf.surfaces.tui.app.EaApp.render_mode` through one code path -- a
+    single flip rerenders the whole tree, status pane, and tables. The
+    unicode mode paints the block-eighths bar
+    (:func:`~eawf.surfaces.render.bars.render_block_bar`) at one-eighth-cell
+    sub-resolution; the ASCII mode keeps the ``#``/``-`` fallback for fonts
+    lacking block-glyph coverage.
+
+    *fraction* is clamped into ``[0, 1]`` before the block-eighths render so
+    an over-budget bar clamps to a full bar (the colour band carries the
+    over-budget signal) and a negative fraction clamps to empty.
 
     Args:
-        fraction: Consumed / total ratio.
+        fraction: Consumed / total ratio (over-budget clamps to full;
+            negative clamps to empty).
         width: Bar cell count.
-        mode: ``"braille"`` or ``"ascii"``.
+        mode: ``"braille"`` (the unicode block-eighths fill) or ``"ascii"``.
 
     Returns:
-        The Braille or ASCII glyph run, *width* cells wide.
+        The block-eighths or ASCII glyph run, *width* cells wide.
     """
     if mode == "braille":
-        return render_bar_braille(fraction, width=width)
+        clamped = min(max(fraction, 0.0), 1.0)
+        return render_block_bar(clamped, width=width)
     return _ascii_glyphs(_fill_cells_width(fraction, width), width)
 
 

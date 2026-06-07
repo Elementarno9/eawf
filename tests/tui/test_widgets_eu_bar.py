@@ -15,6 +15,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 
 import eawf.surfaces.tui.app as eaapp_mod
+from eawf.surfaces.render.bars import BLOCK_FULL
 from eawf.surfaces.tui.app import EaApp, probe_braille_coverage, resolve_render_mode
 from eawf.surfaces.tui.widgets.eu_bar import (
     _BUCKET_FIELD_WIDTH,
@@ -137,8 +138,9 @@ def test_eu_bar_paints_under_real_palette() -> None:
             await pilot.pause()
             rendered = app.export_screenshot()
             assert "80%" in rendered
-            # The widget defaults to Braille fill; 80% lights full cells.
-            assert _BRAILLE_FULL in rendered
+            # The widget defaults to the unicode block-eighths fill; 80%
+            # lights full cells.
+            assert BLOCK_FULL in rendered
 
     asyncio.run(body())
 
@@ -384,11 +386,11 @@ def test_render_bar_braille_custom_width_doubles_resolution() -> None:
 
 
 def test_render_bar_markup_braille_mode_status_tinted() -> None:
-    # Braille glyphs wrapped in the status-tint band span (bar hue == the
-    # row's status hue). 80% -> warn band, full braille fill front.
+    # Block-eighths glyphs wrapped in the status-tint band span (bar hue ==
+    # the row's status hue). 80% -> warn band, full block-eighths fill front.
     markup = render_bar_markup(4.0, 5.0, mode="braille")
     assert markup.startswith("[$ok]")  # 80% is the $ok upper bound
-    assert _BRAILLE_FULL in markup
+    assert BLOCK_FULL in markup
     assert "80%" in markup
 
 
@@ -444,21 +446,21 @@ def test_render_bar_rich_falls_back_on_missing_band_key() -> None:
 
 
 def test_render_bar_plain_honours_mode() -> None:
-    assert _BRAILLE_FULL in render_bar_plain(5.0, 5.0, mode="braille")
+    assert BLOCK_FULL in render_bar_plain(5.0, 5.0, mode="braille")
     assert render_bar_plain(5.0, 5.0, mode="ascii") == f"{GLYPH_FULL * 5}  100%"
 
 
 def test_render_eu_bar_plain_honours_mode() -> None:
-    assert _BRAILLE_FULL in render_eu_bar_plain(4.0, 4.0, mode="braille")
+    assert BLOCK_FULL in render_eu_bar_plain(4.0, 4.0, mode="braille")
     assert GLYPH_FULL in render_eu_bar_plain(4.0, 4.0, mode="ascii")
     # Empty-state guard is mode-independent.
     assert render_eu_bar_plain(0.0, 0.0, mode="braille") == EMPTY_STATE
 
 
 def test_render_completion_bar_honours_mode() -> None:
-    braille = render_completion_bar(3, 6, mode="braille")
-    assert braille.endswith("      3/6")
-    assert _BRAILLE_FULL in braille
+    block = render_completion_bar(3, 6, mode="braille")
+    assert block.endswith("      3/6")
+    assert BLOCK_FULL in block
     ascii_bar = render_completion_bar(3, 6, mode="ascii")
     assert ascii_bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}      3/6"
 
@@ -469,9 +471,9 @@ def test_render_completion_bar_empty_state_mode_independent() -> None:
 
 
 def test_render_size_bar_honours_mode() -> None:
-    braille = render_size_bar("M", mode="braille")
-    assert braille.endswith(f"  {'M':>{_BUCKET_FIELD_WIDTH}}")
-    assert _BRAILLE_FULL in braille
+    block = render_size_bar("M", mode="braille")
+    assert block.endswith(f"  {'M':>{_BUCKET_FIELD_WIDTH}}")
+    assert BLOCK_FULL in block
     ascii_bar = render_size_bar("M", mode="ascii")
     assert ascii_bar == f"{GLYPH_FULL * 3}{GLYPH_EMPTY * 2}  {'M':>{_BUCKET_FIELD_WIDTH}}"
 
@@ -494,12 +496,12 @@ def test_eu_bar_render_mode_flip_repaints() -> None:
             bar = app.query_one("#bar", EUBar)
             bar.set_eu(5.0, 5.0)
             await pilot.pause()
-            assert _BRAILLE_FULL in app.export_screenshot()
+            assert BLOCK_FULL in app.export_screenshot()
             bar.render_mode = "ascii"
             await pilot.pause()
             rendered = app.export_screenshot()
             assert GLYPH_FULL in rendered
-            assert _BRAILLE_FULL not in rendered
+            assert BLOCK_FULL not in rendered
 
     asyncio.run(body())
 

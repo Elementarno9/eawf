@@ -22,6 +22,7 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
+from eawf.surfaces.render.bars import BLOCK_FULL
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.heartbeat import (
     HEARTBEAT_GLYPH,
@@ -1244,7 +1245,7 @@ def test_dispatch_lines_now_rows_show_role_and_dot() -> None:
     w03_row = next(line for line in lines if "W03" in line)
     assert HEARTBEAT_GLYPH in w03_row  # lit dot (default lit=True)
     assert "executor" in w03_row
-    assert "#" in w03_row or "⣿" in w03_row  # token-burn fill (1400/2000)
+    assert "#" in w03_row or BLOCK_FULL in w03_row  # token-burn fill (1400/2000)
 
 
 def test_dispatch_lines_no_budget_shows_empty_state() -> None:

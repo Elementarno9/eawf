@@ -18,6 +18,7 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.kernel.state.models import State
+from eawf.surfaces.render.bars import BLOCK_EIGHTHS
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
 from eawf.surfaces.tui.widgets.eu_bar import (
@@ -1078,6 +1079,11 @@ def _has_braille(text: str) -> bool:
     return any(BRAILLE_BASE <= ord(ch) <= BRAILLE_BASE + 0xFF for ch in text)
 
 
+def _has_block(text: str) -> bool:
+    """Return ``True`` if *text* carries any block-eighths glyph."""
+    return any(ch in BLOCK_EIGHTHS for ch in text)
+
+
 def test_wave_burn_bar_renders_for_budgeted_wave() -> None:
     """A wave with a token budget shows its burn bar pinned flush-right."""
 
@@ -1156,7 +1162,7 @@ def _write_state(state: State, tmp_path: Path) -> Path:
 
 
 def test_wave_burn_bar_braille_mode_via_app(tmp_path: Path) -> None:
-    """Under the real :class:`EaApp` (braille mode) the burn bar uses Braille."""
+    """Under the real :class:`EaApp` (unicode mode) the burn bar uses block-eighths."""
     state_path = _write_state(_state_wave_token_burn(), tmp_path)
 
     async def body() -> None:
@@ -1167,7 +1173,7 @@ def test_wave_burn_bar_braille_mode_via_app(tmp_path: Path) -> None:
             await settle_screen(pilot)
             tree = app.screen.query_one(RoadmapTree)
             label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
-            assert _has_braille(label)  # braille glyph run in the burn bar
+            assert _has_block(label)  # block-eighths glyph run in the burn bar
 
     asyncio.run(body())
 
@@ -1325,7 +1331,7 @@ def test_wave_row_empty_state_when_neither_bucket_nor_budget() -> None:
 
 
 def test_wave_row_size_bar_repaints_on_render_mode_flip(tmp_path: Path) -> None:
-    """A braille↔ascii flip repaints the size bar via the existing rebuild path."""
+    """A unicode<->ascii flip repaints the size bar via the existing rebuild path."""
     state_path = _write_state(_state_wave_hybrid_metric(), tmp_path)
 
     async def body() -> None:
@@ -1335,12 +1341,12 @@ def test_wave_row_size_bar_repaints_on_render_mode_flip(tmp_path: Path) -> None:
             app.render_mode = "braille"
             await settle_screen(pilot)
             tree = app.screen.query_one(RoadmapTree)
-            braille_label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
-            assert _has_braille(braille_label)  # braille glyph run in the size bar
+            block_label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
+            assert _has_block(block_label)  # block-eighths glyph run in the size bar
             app.render_mode = "ascii"
             await settle_screen(pilot)
             ascii_label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
-            assert not _has_braille(ascii_label)
+            assert not _has_block(ascii_label)
             assert "#" in ascii_label  # the ascii size-bar fill glyph
 
     asyncio.run(body())
