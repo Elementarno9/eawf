@@ -218,6 +218,24 @@ async def _open_stream_from_socket(
     return reader, writer
 
 
+async def _close_stream_writers(*writers: asyncio.StreamWriter | None) -> None:
+    """Close each StreamWriter transport so no socketpair transport leaks.
+
+    A transport left open is closed by its ``__del__`` during a later GC --
+    on an already-closed event loop that emits an unraisable "unclosed
+    transport" error which fails whichever innocent test happens to be
+    running. Closing the writers here keeps the leak from crossing tests
+    under ``-n auto``.
+    """
+    for writer in writers:
+        if writer is None:
+            continue
+        with contextlib.suppress(Exception):
+            writer.close()
+        with contextlib.suppress(Exception):
+            await writer.wait_closed()
+
+
 @pytest_subscribe_skip
 def test_subscribe_streamer_pushes_published_event(tmp_path: Path) -> None:
     """End-to-end: subscribe, publish via the bus, receive ``event.push``."""
@@ -227,6 +245,8 @@ def test_subscribe_streamer_pushes_published_event(tmp_path: Path) -> None:
 
     async def body() -> None:
         server_sock, client_sock = socket.socketpair()
+        server_writer: asyncio.StreamWriter | None = None
+        client_writer: asyncio.StreamWriter | None = None
         try:
             client_sock.setblocking(False)
             server_sock.setblocking(False)
@@ -262,6 +282,7 @@ def test_subscribe_streamer_pushes_published_event(tmp_path: Path) -> None:
             await asyncio.wait_for(handler, timeout=2.0)
             assert bus.active_subscriptions == 0
         finally:
+            await _close_stream_writers(server_writer, client_writer)
             with contextlib.suppress(OSError):
                 server_sock.close()
             with contextlib.suppress(OSError):
@@ -280,6 +301,8 @@ def test_subscribe_streamer_replays_backlog(tmp_path: Path) -> None:
 
     async def body() -> None:
         server_sock, client_sock = socket.socketpair()
+        server_writer: asyncio.StreamWriter | None = None
+        client_writer: asyncio.StreamWriter | None = None
         try:
             client_sock.setblocking(False)
             server_sock.setblocking(False)
@@ -311,6 +334,7 @@ def test_subscribe_streamer_replays_backlog(tmp_path: Path) -> None:
                 await client_writer.wait_closed()
             await asyncio.wait_for(handler, timeout=2.0)
         finally:
+            await _close_stream_writers(server_writer, client_writer)
             with contextlib.suppress(OSError):
                 server_sock.close()
             with contextlib.suppress(OSError):
@@ -328,6 +352,8 @@ def test_state_subscribe_alias_routes_to_streamer(tmp_path: Path) -> None:
 
     async def body() -> None:
         server_sock, client_sock = socket.socketpair()
+        server_writer: asyncio.StreamWriter | None = None
+        client_writer: asyncio.StreamWriter | None = None
         try:
             client_sock.setblocking(False)
             server_sock.setblocking(False)
@@ -352,6 +378,7 @@ def test_state_subscribe_alias_routes_to_streamer(tmp_path: Path) -> None:
                 await client_writer.wait_closed()
             await asyncio.wait_for(handler, timeout=2.0)
         finally:
+            await _close_stream_writers(server_writer, client_writer)
             with contextlib.suppress(OSError):
                 server_sock.close()
             with contextlib.suppress(OSError):
