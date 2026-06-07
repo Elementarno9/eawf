@@ -908,10 +908,16 @@ class WorkspaceTable(DataTable[str]):
         portfolio); the repo column carries the :data:`TOTALS_ROW_LABEL`
         sigma so the row reads as a roll-up rather than a repo.
 
+        An empty repo set adds no totals row -- there is nothing to sum, so
+        the table stays at zero rows rather than rendering a ``Σ 0 repos``
+        row on an otherwise-empty grid.
+
         Args:
             rows: The repo rows already added above the totals row.
             palette: Band-colour map for the EU bar (see :func:`_band_palette`).
         """
+        if not rows:
+            return
         totals = portfolio_totals(rows)
         self.add_row(
             TOTALS_ROW_LABEL,

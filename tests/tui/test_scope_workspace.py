@@ -244,7 +244,8 @@ def test_workspace_table_renders_one_row_at_n1() -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             table = app.screen.query_one(WorkspaceTable)
-            assert table.row_count == 1
+            # One repo row + the appended portfolio-totals summary row.
+            assert table.row_count == 2
             rows = table.rows_data()
             assert len(rows) == 1
             assert rows[0].code == "QR"
@@ -450,8 +451,10 @@ def test_git_unavailable_dims_column_without_crashing(monkeypatch: pytest.Monkey
             await pilot.pause()
             table = app.screen.query_one(WorkspaceTable)
             assert table.get_cell("QR", "git") == GIT_UNAVAILABLE_CELL
-            # Other columns still render (the repo code cell is intact).
-            assert table.get_cell("QR", "repo") == "QR"
+            # Other columns still render (the repo code cell is intact). The
+            # fixture repo path is absent, so the repo trips the stale band
+            # and the cell carries the code plus the (stale) attention chip.
+            assert table.get_cell("QR", "repo") == "QR (stale)"
 
     asyncio.run(body())
 
@@ -483,9 +486,10 @@ def test_large_n_rows_scroll_without_breaking_widths() -> None:
             await app.workers.wait_for_complete()
             await pilot.pause()
             table = app.screen.query_one(WorkspaceTable)
-            assert table.row_count == 30
-            assert len(table.columns) == 5
-            assert table.get_cell("R29", "repo") == "R29"
+            # 30 repo rows + the appended portfolio-totals summary row.
+            assert table.row_count == 31
+            assert len(table.columns) == 6
+            assert table.get_cell("R29", "repo") == "R29 (stale)"
 
     asyncio.run(body())
 

@@ -149,7 +149,7 @@ def test_user_portfolio_table_renders() -> None:
 
 
 def test_user_portfolio_table_columns_match_workspace_family() -> None:
-    """The portfolio grid carries the workspace family's five columns."""
+    """The portfolio grid carries the workspace family's six columns."""
 
     async def body() -> None:
         app = EaApp(scope="user", state_path=_WORKSPACE)
@@ -157,8 +157,10 @@ def test_user_portfolio_table_columns_match_workspace_family() -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             table = app.screen.query_one(PortfolioTable)
-            assert len(table.columns) == 5
-            assert table.get_cell("QR", "repo") == "QR"
+            assert len(table.columns) == 6
+            # The fixture repo path is absent, so the repo trips the stale
+            # band and the cell carries the code plus the (stale) chip.
+            assert table.get_cell("QR", "repo") == "QR (stale)"
             assert table.get_cell("QR", "git") == "clean"
 
     asyncio.run(body())
@@ -190,7 +192,8 @@ def test_user_portfolio_table_renders_one_row_at_n1() -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             table = app.screen.query_one(PortfolioTable)
-            assert table.row_count == 1
+            # One repo row + the appended portfolio-totals summary row.
+            assert table.row_count == 2
             assert table.focused_repo() == "QR"
 
     asyncio.run(body())
@@ -210,10 +213,11 @@ def test_user_portfolio_table_empty_registry_renders_no_rows() -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             table = app.screen.query_one(PortfolioTable)
+            # No repos -> no rows AND no totals row (nothing to sum).
             assert table.row_count == 0
             assert table.focused_repo() is None
-            # The five columns persist even with no rows (not a fallback panel).
-            assert len(table.columns) == 5
+            # The six columns persist even with no rows (not a fallback panel).
+            assert len(table.columns) == 6
 
     asyncio.run(body())
 
@@ -235,13 +239,15 @@ def test_user_portfolio_large_n_scrolls() -> None:
             await app.workers.wait_for_complete()
             await pilot.pause()
             table = app.screen.query_one(PortfolioTable)
-            assert table.row_count == 30
+            # 30 repo rows + the appended portfolio-totals summary row.
+            assert table.row_count == 31
             # Column count + the off-screen tail row both render — the table
             # scrolls (more rows than the viewport height) without dropping
-            # columns or clipping the last repo's code.
-            assert len(table.columns) == 5
-            assert table.get_cell("R00", "repo") == "R00"
-            assert table.get_cell("R29", "repo") == "R29"
+            # columns or clipping the last repo's code. The synthetic repo
+            # paths are absent, so each repo trips the stale band.
+            assert len(table.columns) == 6
+            assert table.get_cell("R00", "repo") == "R00 (stale)"
+            assert table.get_cell("R29", "repo") == "R29 (stale)"
 
     asyncio.run(body())
 
@@ -577,7 +583,8 @@ def test_user_scope_none_state_synthesizes_from_registry(tmp_path: Path) -> None
             await pilot.pause()
             await app.workers.wait_for_complete()
             table = app.screen.query_one(PortfolioTable)
-            assert table.row_count == 2
+            # Two repo rows + the appended portfolio-totals summary row.
+            assert table.row_count == 3
             assert {row.code for row in table.rows_data()} == {"ABC", "DEF"}
 
     asyncio.run(body())

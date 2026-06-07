@@ -122,7 +122,8 @@ def test_u_keypress_switch_synthesizes_portfolio(tmp_path: Path) -> None:
             rows = build_repo_rows(app.state)
             assert {row.code for row in rows} == {"ABC", "DEF"}
             table = app.screen.query_one(PortfolioTable)
-            assert table.row_count == 2
+            # Two repo rows + the appended portfolio-totals summary row.
+            assert table.row_count == 3
             assert {row.code for row in table.rows_data()} == {"ABC", "DEF"}
 
     asyncio.run(body())
@@ -145,7 +146,8 @@ def test_action_switch_scope_user_rebinds_state(tmp_path: Path) -> None:
             assert app.state is not None
             assert app.state.workspace is not None
             table = app.screen.query_one(PortfolioTable)
-            assert table.row_count == 1
+            # One repo row + the appended portfolio-totals summary row.
+            assert table.row_count == 2
             assert table.rows_data()[0].code == "ABC"
 
     asyncio.run(body())
@@ -215,7 +217,8 @@ def test_w_keypress_after_u_rebinds_workspace_state(tmp_path: Path) -> None:
             assert len(rows) > 0
             assert "ABC" not in {row.code for row in rows}
             table = app.screen.query_one(WorkspaceTable)
-            assert table.row_count == len(rows)
+            # Repo rows + the appended portfolio-totals summary row.
+            assert table.row_count == len(rows) + 1
 
     asyncio.run(body())
 
@@ -239,8 +242,9 @@ def test_u_switch_empty_registry_renders_no_rows(tmp_path: Path) -> None:
             assert isinstance(app.screen, UserScreen)
             assert build_repo_rows(app.state) == []
             table = app.screen.query_one(PortfolioTable)
+            # No repos -> no rows AND no totals row (nothing to sum).
             assert table.row_count == 0
-            # The five columns persist even with no rows (not a fallback panel).
-            assert len(table.columns) == 5
+            # The six columns persist even with no rows (not a fallback panel).
+            assert len(table.columns) == 6
 
     asyncio.run(body())
