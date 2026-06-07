@@ -3851,6 +3851,18 @@
       "scope_id": "P29-I13-W52",
       "status": "done",
       "updated_at": "2026-06-07T11:34:19.062297Z"
+    },
+    "P29-I13-W53": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W53",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W53",
+      "scope_id": "P29-I13-W53",
+      "status": "done",
+      "updated_at": "2026-06-07T12:16:25.096633Z"
     }
   },
   "agent_sessions": {
@@ -13466,6 +13478,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I13-W52",
       "updated_at": "2026-06-07T11:34:18.388870Z"
+    },
+    "P29-I13-W53": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W53-bucket-20260607T121624Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W53",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W53",
+      "updated_at": "2026-06-07T12:16:24.353842Z"
     }
   },
   "goals": {
@@ -15022,7 +15047,8 @@
         "P29-I13-W49",
         "P29-I13-W50",
         "P29-I13-W51",
-        "P29-I13-W52"
+        "P29-I13-W52",
+        "P29-I13-W53"
       ]
     }
   },
@@ -15847,7 +15873,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T11:34:19.062683Z",
+  "updated_at": "2026-06-07T12:16:25.097110Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -62768,6 +62794,41 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Update version-coupled tests and plugin goldens for 0.5.0",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W53": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T12:16:24.353836Z",
+      "closed_at": "2026-06-07T12:16:25.096633Z",
+      "commit": "c58ae87bb50a351093837063511c7e0648dc95ae",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/test_config_profile.py",
+        "tests/daemon/test_event_methods.py",
+        "tests/unit/test_cli_hook_dispatch.py",
+        "tests/integration/test_daemon_cross_repo_anchor.py",
+        "tests/tui/test_overlays_config_modal.py",
+        "tests/tui/test_overlays_init_wizard.py",
+        "tests/tui/test_palette_find.py"
+      ],
+      "gates": [],
+      "id": "P29-I13-W53",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T12:16:23.293831Z",
+      "outcome": "7 pre-existing xdist/timing-flaky tests hardened (serial-group race, fsync event store, pin help width, bump daemon/Pilot timeouts, drain workers); advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Harden pre-existing xdist/timing-flaky tests for the CI matrix",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
