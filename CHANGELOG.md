@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.5.1]
+
+### Changed
+- **Unified the plugin marketplace name to `eawf` across both runtimes.** The Claude Code and Codex catalogs now register under the same marketplace name `eawf`, so the install command is `/plugin install eawf@eawf` on either runtime; previously the Codex catalog registered as `eawf-codex`. The plugin name was already `eawf` everywhere — only the Codex marketplace identifier changed.
+
+### Fixed
+- **First successful npm publish of the Claude plugin.** The `v0.5.0` tag's `plugin-release` run failed at the npm publish step with `ENEEDAUTH` because the `NPM_TOKEN` repository secret had not been configured yet, and a follow-up `workflow_dispatch` run validates the rendered trees but never publishes by design. The token is now set, and two release-pipeline regressions are fixed alongside it: `actions/upload-artifact` was dropping the hidden `.claude-plugin/` tree from the packaged Claude plugin (so the npm tarball would have been incomplete), and the `phase-release` annotated-tag step had no git identity. `v0.5.1` is the first tag to publish the Claude plugin to npm.
+
 ## [0.5.0]
 
 ### Added
