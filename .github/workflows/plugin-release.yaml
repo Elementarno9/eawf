@@ -205,6 +205,11 @@ jobs:
           name: plugin-trees
           path: build/
           retention-days: 7
+          # The rendered trees ARE dotdirs (.claude/, .agents/, .codex-plugin/);
+          # upload-artifact@v4 excludes hidden files by default, which would
+          # strip the entire plugin payload (the publish jobs then download empty
+          # trees -> codex cp fails, npm publishes an incomplete package).
+          include-hidden-files: true
 
   publish-claude-npm:
     name: Publish Claude plugin to npm
