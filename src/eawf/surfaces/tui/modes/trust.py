@@ -78,6 +78,7 @@ _MAX_REFS_PER_LABEL: int = 3
 #: tokens stay pinned to the canonical vocabulary.
 _TRUST_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
+    render_hint_label("v", "verifier"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
     render_hint_label("?", "help"),
@@ -538,6 +539,12 @@ class TrustModeScreen(ScopeScreen):
         Binding("end", "scroll_end", "end", show=False),
         Binding("k", "scroll_up", "up", show=False),
         Binding("j", "scroll_down", "down", show=False),
+        # ``v`` opens the verifier-role drill (oracle tier + producer per
+        # scored row). Declared at the SCREEN level -- not on a child widget
+        # that hides when there is no data -- so the advertised ``v verifier``
+        # footer key resolves to a live binding even in the honest-empty mount
+        # the affordance-parity gate probes.
+        Binding("v", "verifier_drill", "verifier", show=False),
     ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _TRUST_HINTS
@@ -666,6 +673,26 @@ class TrustModeScreen(ScopeScreen):
         self._evidence_override = None if records is None else tuple(records)
         if self.is_mounted:
             self._refresh_all()
+
+    def action_verifier_drill(self) -> None:
+        """Open the verifier-role drill modal over the scope's scored evidence.
+
+        Builds the modal from the same evidence rows the determinism + escape
+        sections read (:meth:`_current_evidence_records`) and pushes it through
+        the App's cap-aware ``push_modal`` (falling back to ``push_screen``
+        under a bare harness). The binding always resolves -- even in the
+        honest-empty mount with no scored rows -- so the advertised ``v
+        verifier`` affordance is never dead; the modal then renders its own
+        honest-empty notice.
+        """
+        from eawf.surfaces.tui.modals.verifier_drill import VerifierDrillModal
+
+        modal = VerifierDrillModal(self._current_evidence_records())
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal)
+            return
+        self.app.push_screen(modal)
 
     def _current_evidence_records(self) -> tuple[EvidenceRecord, ...]:
         """Return the evidence rows backing the determinism + escape sections.

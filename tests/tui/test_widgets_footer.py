@@ -512,6 +512,7 @@ def test_hint_key_priority_is_the_frozen_canon_order() -> None:
         "r",
         "s",
         "S",
+        "v",
         "space",
         "w/r/u",
         "c",
