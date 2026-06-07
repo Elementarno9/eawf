@@ -1,4 +1,4 @@
-state schema 1.0 trails live daemon schema 1.8; showing a migrated read-only view -- run eawf migrate to update the file
+ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Home    runtime: 1 running    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
 │ nothing needs you                                                                                                    │
@@ -37,4 +37,4 @@ state schema 1.0 trails live daemon schema 1.8; showing a migrated read-only vie
 │                                                          ││                                                          │
 └──────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────┘
  ↑↓ select  ·  ←→ collapse  ·  Enter open  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  /     weekly burn: — no data•
- 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
+state schema 1.0 trails live daemon schema 1.8; showing a migrated read-only view -- run eawf migrate to update the file
