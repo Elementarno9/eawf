@@ -1137,11 +1137,11 @@ async def _enforce_wave_close_gate(
     :class:`~eawf.workflow.verify.oracle.OracleResult` status is not
     ``"pass"`` blocks the close; all required criteria passing lets close
     proceed. A criterion's gates are gathered from
-    :func:`eawf.workflow.verify.readiness._load_gate_specs` filtered to that
-    criterion; the gate loader returns ``[]`` today (gate storage is a
-    separate backlog), so run_oracle falls through to the verdict / jury
-    tier -- preserving the prior single-auditor / cross-vendor-jury
-    behaviour for an un-gated criterion.
+    :func:`eawf.workflow.verify.readiness._load_gate_specs` (which reads the
+    wave's typed ``gates`` rows) filtered to that criterion; a criterion with
+    a passing deterministic gate scores at that gate's tier, while an un-gated
+    criterion falls through to the verdict / jury tier -- preserving the prior
+    single-auditor / cross-vendor-jury behaviour.
 
     Each criterion that PASSES at a deterministic tier (the
     :class:`~eawf.workflow.verify.oracle.OracleResult` carries a non-None
