@@ -4,19 +4,19 @@
   │ > v Survey the options-pricing     ││                                     ││ RUN staged -- live run not yet      │
   │ landscape                          ││ none yet                            ││ wired                               │
   │     > round 1                      ││                                     ││ ROUND 1/1 (staged)                  │
-  │       # market-structure           ││ Unresolved                          ││ ACTIVE 0 claim(s)                   │
-  │       # pricing-models             ││ open round 1 Which curve model fits ││ WAITING 2 open question(s)          │
-  │       ? Which curve model fits the ││ the short tenor                     ││ PAUSED 0 checkpoint(s)              │
-  │ short tenor                        ││ answered round 1 Does the smile     ││ BUDGET 2 staged topic(s), 1         │
-  │       ? Does the smile invert past ││ invert past the 90 delta wing       ││ answered                            │
-  │ the 90 delta wing                  ││ blocking round 1 Is the             ││ RISKS 1 blocking question(s)        │
-  │       ? Is the term-structure      ││ term-structure arbitrage real       ││                                     │
-  │ arbitrage real                     ││                                     ││                                     │
-  │ enter to peek the selected node    ││                                     ││                                     │
-  │                                    ││                                     ││                                     │
-  │                                    ││                                     ││                                     │
-  │                                    ││                                     ││                                     │
-  │                                    ││                                     ││                                     │
+  │       # market-structure           ││ Options (supporting evidence)       ││ ACTIVE 0 claim(s)                   │
+  │       # pricing-models             ││ none yet                            ││ WAITING 2 open question(s)          │
+  │       ? Which curve model fits the ││                                     ││ PAUSED 0 checkpoint(s)              │
+  │ short tenor                        ││ Conflicts (contradicting evidence)  ││ BUDGET 2 staged topic(s), 1         │
+  │       ? Does the smile invert past ││ none yet                            ││ answered                            │
+  │ the 90 delta wing                  ││                                     ││ RISKS 1 blocking question(s)        │
+  │       ? Is the term-structure      ││ Unresolved                          ││                                     │
+  │ arbitrage real                     ││ open round 1 Which curve model fits ││                                     │
+  │ enter to peek the selected node    ││ the short tenor                     ││                                     │
+  │                                    ││ answered round 1 Does the smile     ││                                     │
+  │                                    ││ invert past the 90 delta wing       ││                                     │
+  │                                    ││ blocking round 1 Is the             ││                                     │
+  │                                    ││ term-structure arbitrage real       ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │

@@ -128,6 +128,14 @@ UNRESOLVED_HEADER_ID: str = "research-unresolved-header"
 #: Id of the Unresolved-tab body in the center pane (the rendered question rows).
 UNRESOLVED_BODY_ID: str = "research-unresolved-body"
 
+#: Id of the Options-tab body in the center pane (claims grouped by supporting
+#: evidence -- the live candidate answers).
+OPTIONS_BODY_ID: str = "research-options-body"
+
+#: Id of the Conflicts-tab body in the center pane (claims grouped by
+#: contradicting evidence -- the surfaced conflicts).
+CONFLICTS_BODY_ID: str = "research-conflicts-body"
+
 #: CSS class on each rendered topic-tree node row.
 TREE_NODE_CLASS: str = "research-tree-node"
 
@@ -517,6 +525,97 @@ def render_claims(claims: tuple[Claim, ...]) -> str:
     return "\n".join(lines)
 
 
+def group_claims_by_evidence(
+    claims: tuple[Claim, ...],
+) -> tuple[tuple[Claim, ...], tuple[Claim, ...]]:
+    """Split *claims* into the supporting and contradicting evidence groups.
+
+    A claim's :class:`~eawf.kernel.state.enums.ClaimStatus` is its evidence
+    verdict: a ``SUPPORTED`` claim carries supporting evidence (a live candidate
+    answer), a ``REFUTED`` claim carries contradicting evidence (a conflict).
+    An ``OPEN`` or ``SUPERSEDED`` claim is neither yet -- it carries no settled
+    evidence verdict, so it joins neither group. Order within each group is
+    preserved from the input (the natural-id sort the caller supplies).
+
+    Args:
+        claims: The state-resident claim rows for the scope.
+
+    Returns:
+        A ``(supporting, contradicting)`` pair: the ``SUPPORTED`` claims and
+        the ``REFUTED`` claims, each in input order.
+    """
+    from eawf.kernel.state.enums import ClaimStatus
+
+    supporting = tuple(c for c in claims if c.status is ClaimStatus.SUPPORTED)
+    contradicting = tuple(c for c in claims if c.status is ClaimStatus.REFUTED)
+    return supporting, contradicting
+
+
+def _render_claim_group(claims: tuple[Claim, ...]) -> str:
+    """Render one claim group -- one row per claim (status + evidence count + title).
+
+    Each row names the claim status, its evidence-ref count (``N ref(s)``), and
+    the title, so the operator reads how strongly each grouped claim is backed.
+    Rows cap at :data:`_MAX_ROWS` with a ``+N more`` overflow line; an empty
+    group renders :data:`NONE_YET`.
+
+    Args:
+        claims: The claims in one evidence group (supporting or contradicting).
+
+    Returns:
+        A content-markup string of one claim line per row.
+    """
+    if not claims:
+        return f"[$muted]{NONE_YET}[/]"
+    lines: list[str] = []
+    for claim in claims[:_MAX_ROWS]:
+        refs = len(claim.evidence_refs)
+        lines.append(
+            f"{_claim_status_markup(claim.status.value)} [$muted]{refs} ref(s)[/] "
+            f"{escape_markup(claim.title)}"
+        )
+    overflow = len(claims) - _MAX_ROWS
+    if overflow > 0:
+        lines.append(f"[$muted]+{overflow} more[/]")
+    return "\n".join(lines)
+
+
+def render_options(claims: tuple[Claim, ...]) -> str:
+    """Render the Options tab -- claims grouped by supporting evidence.
+
+    Projects the supporting-evidence group from
+    :func:`group_claims_by_evidence` (the ``SUPPORTED`` claims -- the live
+    candidate answers backed by evidence), one row per claim with its evidence-
+    ref count. An empty group renders :data:`NONE_YET`.
+
+    Args:
+        claims: The state-resident claim rows for the scope.
+
+    Returns:
+        A content-markup string of one supporting-claim row per line.
+    """
+    supporting, _ = group_claims_by_evidence(claims)
+    return _render_claim_group(supporting)
+
+
+def render_conflicts(claims: tuple[Claim, ...]) -> str:
+    """Render the Conflicts tab -- claims grouped by contradicting evidence.
+
+    Projects the contradicting-evidence group from
+    :func:`group_claims_by_evidence` (the ``REFUTED`` claims -- the conflicts
+    the campaign surfaced), one row per claim with its evidence-ref count. An
+    empty group renders :data:`NONE_YET`.
+
+    Args:
+        claims: The state-resident claim rows for the scope.
+
+    Returns:
+        A content-markup string of one contradicting-claim row per line.
+    """
+    _, contradicting = group_claims_by_evidence(claims)
+    return _render_claim_group(contradicting)
+
+
 def render_unresolved(
     questions: tuple[OpenQuestion, ...], *, round_number: int = STAGED_ROUND
 ) -> str:
@@ -821,6 +920,16 @@ class ResearchBoardModeScreen(ScopeScreen):
                     center.border_title = "CLAIMS / EVIDENCE"
                     yield Static(render_center_tabs("Claims"), id="research-center-tabs")
                     yield Static(render_claims(claims), id="research-center-body")
+                    yield Static(
+                        "[$accent]Options[/] [$muted](supporting evidence)[/]",
+                        classes="research-center-section",
+                    )
+                    yield Static(render_options(claims), id=OPTIONS_BODY_ID)
+                    yield Static(
+                        "[$accent]Conflicts[/] [$muted](contradicting evidence)[/]",
+                        classes="research-center-section",
+                    )
+                    yield Static(render_conflicts(claims), id=CONFLICTS_BODY_ID)
                     yield Static(
                         "[$accent]Unresolved[/]",
                         id=UNRESOLVED_HEADER_ID,
@@ -1188,6 +1297,8 @@ class ResearchBoardModeScreen(ScopeScreen):
         pause = self._current_checkpoint()
         self._update_one("research-tree-body", render_tree(self._tree, self.selected))
         self._update_one("research-center-body", render_claims(claims))
+        self._update_one(OPTIONS_BODY_ID, render_options(claims))
+        self._update_one(CONFLICTS_BODY_ID, render_conflicts(claims))
         self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions))
         self._update_one(
             "research-progress-body",
@@ -1379,9 +1490,11 @@ __all__ = [
     "CANCEL_NO_DAEMON",
     "CENTER_TABS",
     "CHECKPOINT_IDLE",
+    "CONFLICTS_BODY_ID",
     "DRAWER_ID",
     "EMPTY_NOTICE",
     "NONE_YET",
+    "OPTIONS_BODY_ID",
     "PARK_NO_CHECKPOINT",
     "PARK_NO_DAEMON",
     "RESEARCH_REFRESH_S",
@@ -1393,11 +1506,14 @@ __all__ = [
     "ResearchBoardModeScreen",
     "TreeNode",
     "build_tree_nodes",
+    "group_claims_by_evidence",
     "has_research_signal",
     "read_campaign_rows",
     "render_center_tabs",
     "render_checkpoint",
     "render_claims",
+    "render_conflicts",
+    "render_options",
     "render_progress",
     "render_tree",
     "render_unresolved",

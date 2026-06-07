@@ -1,0 +1,40 @@
+ Eä  repo ❯ QR ❯ Research    runtime: idle    HH:MM UTC
+
+  ┌─ TOPIC TREE ───────────────────────┐┌─ CLAIMS / EVIDENCE ─────────────────┐┌─ PROGRESS / BUDGET ─────────────────┐
+  │ > v Survey the options-pricing     ││                                     ││ RUN staged -- live run not yet      │
+  │ landscape                          ││ supported Implied vol surface is    ││ wired                               │
+  │     > round 1                      ││ downward sloping in strike          ││ ROUND 1/1 (staged)                  │
+  │       # market-structure           ││ supported Short-tenor smile is well ││ ACTIVE 4 claim(s)                   │
+  │       # pricing-models             ││ fit by SABR                         ││ WAITING 0 open question(s)          │
+  │ enter to peek the selected node    ││ refuted Term-structure arbitrage is ││ PAUSED 0 checkpoint(s)              │
+  │                                    ││ exploitable intraday                ││ BUDGET 2 staged topic(s), 0         │
+  │                                    ││ open Overnight gamma decay drives   ││ answered                            │
+  │                                    ││ the skew                            ││ RISKS none                          │
+  │                                    ││                                     ││                                     │
+  │                                    ││ Options (supporting evidence)       ││                                     │
+  │                                    ││ supported 2 ref(s) Implied vol      ││                                     │
+  │                                    ││ surface is downward sloping in      ││                                     │
+  │                                    ││ strike                              ││                                     │
+  │                                    ││ supported 1 ref(s) Short-tenor      ││                                     │
+  │                                    ││ smile is well fit by SABR           ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││ Conflicts (contradicting evidence)  ││                                     │
+  │                                    ││ refuted 1 ref(s) Term-structure     ││                                     │
+  │                                    ││ arbitrage is exploitable intraday   ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││ Unresolved                          ││                                     │
+  │                                    ││ none yet                            ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  └────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘
+
+  ┌─ CHECKPOINT ─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ no checkpoint -- nothing awaiting operator review                                                                │
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  enter peek  n new  a approve  p park  r follow-up  s snapshot  x cancel
+
+ ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  p park  ·  r follow-up  ·  s  weekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
