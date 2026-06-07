@@ -3456,6 +3456,78 @@
       "status": "done",
       "updated_at": "2026-06-07T06:08:30.553420Z"
     },
+    "P29-I13-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W20",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W20",
+      "scope_id": "P29-I13-W20",
+      "status": "done",
+      "updated_at": "2026-06-07T06:43:02.134781Z"
+    },
+    "P29-I13-W21": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W21",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W21",
+      "scope_id": "P29-I13-W21",
+      "status": "done",
+      "updated_at": "2026-06-07T06:43:07.330054Z"
+    },
+    "P29-I13-W22": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W22",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W22",
+      "scope_id": "P29-I13-W22",
+      "status": "done",
+      "updated_at": "2026-06-07T06:43:10.294082Z"
+    },
+    "P29-I13-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W23",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W23",
+      "scope_id": "P29-I13-W23",
+      "status": "done",
+      "updated_at": "2026-06-07T06:43:13.237539Z"
+    },
+    "P29-I13-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W24",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W24",
+      "scope_id": "P29-I13-W24",
+      "status": "done",
+      "updated_at": "2026-06-07T06:48:06.127286Z"
+    },
+    "P29-I13-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W25",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W25",
+      "scope_id": "P29-I13-W25",
+      "status": "done",
+      "updated_at": "2026-06-07T06:43:42.752887Z"
+    },
     "P29-I13-W42": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -3479,6 +3551,18 @@
       "scope_id": "P29-I13-W43",
       "status": "done",
       "updated_at": "2026-06-07T03:01:31.048244Z"
+    },
+    "P29-I13-W44": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W44",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W44",
+      "scope_id": "P29-I13-W44",
+      "status": "done",
+      "updated_at": "2026-06-07T06:48:01.177978Z"
     }
   },
   "agent_sessions": {
@@ -12655,6 +12739,84 @@
       "scope_id": "P29-I13-W19",
       "updated_at": "2026-06-07T06:08:01.365776Z"
     },
+    "P29-I13-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W20-bucket-20260607T064300Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I13-W20",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I13-W20",
+      "updated_at": "2026-06-07T06:43:00.263284Z"
+    },
+    "P29-I13-W21": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W21-bucket-20260607T064303Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W21",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W21",
+      "updated_at": "2026-06-07T06:43:03.225653Z"
+    },
+    "P29-I13-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W22-bucket-20260607T064308Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W22",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W22",
+      "updated_at": "2026-06-07T06:43:08.430713Z"
+    },
+    "P29-I13-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W23-bucket-20260607T064311Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P29-I13-W23",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P29-I13-W23",
+      "updated_at": "2026-06-07T06:43:11.414778Z"
+    },
+    "P29-I13-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W24-bucket-20260607T064324Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P29-I13-W24",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P29-I13-W24",
+      "updated_at": "2026-06-07T06:43:24.183391Z"
+    },
+    "P29-I13-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W25-bucket-20260607T064329Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W25",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W25",
+      "updated_at": "2026-06-07T06:43:29.004300Z"
+    },
     "P29-I13-W42": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I13-W42-bucket-20260607T025452Z",
@@ -12680,6 +12842,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I13-W43",
       "updated_at": "2026-06-07T03:01:30.309888Z"
+    },
+    "P29-I13-W44": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W44-bucket-20260607T064800Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W44",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W44",
+      "updated_at": "2026-06-07T06:48:00.458848Z"
     }
   },
   "goals": {
@@ -14227,7 +14402,8 @@
         "P29-I13-W40",
         "P29-I13-W41",
         "P29-I13-W42",
-        "P29-I13-W43"
+        "P29-I13-W43",
+        "P29-I13-W44"
       ]
     }
   },
@@ -15052,7 +15228,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T06:08:30.553874Z",
+  "updated_at": "2026-06-07T06:48:06.127700Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -60295,10 +60471,10 @@
       "blocks": [
         "P29-I13-W24"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:43:00.263276Z",
+      "closed_at": "2026-06-07T06:43:02.134781Z",
+      "commit": "aa3f120c38d21a70b7c260a9ae786b92484d22c1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -60328,7 +60504,7 @@
         },
         {
           "args": {
-            "path": "tests/snapshots/svg/fixtures/block_eighths.svg"
+            "path": "tests/snapshots/svg/fixtures/block_eighths_bar.svg"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-02",
@@ -60343,10 +60519,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:14.412191Z",
-      "outcome": null,
+      "outcome": "block-eighths bar renderable with partial-cell rounding; svg fixture well-formed; both gates green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -60391,10 +60567,10 @@
       "blocks": [
         "P29-I13-W24"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:43:03.225647Z",
+      "closed_at": "2026-06-07T06:43:07.330054Z",
+      "commit": "0f2400283b3152b06f5be07d70e8f3ebd6440a1d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -60427,10 +60603,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:15.094961Z",
-      "outcome": null,
+      "outcome": "determinate ProgressBar widget shows block-eighths fill matching bound ratio; snapshot gate green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -60457,10 +60633,10 @@
     "P29-I13-W22": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:43:08.430705Z",
+      "closed_at": "2026-06-07T06:43:10.294082Z",
+      "commit": "b3094ad7c2e16bfc595dcd134fa21c72e770bfac",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -60493,10 +60669,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:15.778758Z",
-      "outcome": null,
+      "outcome": "indeterminate braille spinner returns next frame in eight-dot cycle; unit gate green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -60523,10 +60699,10 @@
     "P29-I13-W23": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:43:11.414771Z",
+      "closed_at": "2026-06-07T06:43:13.237539Z",
+      "commit": "ba3bc45ded6e151bce1c52933c1f7407418eeafa",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -60559,10 +60735,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:16.458993Z",
-      "outcome": null,
+      "outcome": "EU render fns accumulate elapsed+projected via accruing-state helper, no recompute; unit gate green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -60589,10 +60765,10 @@
     "P29-I13-W24": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:43:24.183386Z",
+      "closed_at": "2026-06-07T06:48:06.127286Z",
+      "commit": "71e9dc138cc1c05aea0f4ebf16fe5e4e74024ad1",
       "deps": [
         "P29-I13-W20",
         "P29-I13-W21"
@@ -60640,10 +60816,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:17.134669Z",
-      "outcome": null,
+      "outcome": "StatusPane/RoadmapTree/WorkspaceTable swapped to block-eighths bar; CR-01 bar-swap Pilot green; CR-02 pixel-diff advisory (required=false), does not block",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -60686,10 +60862,10 @@
     "P29-I13-W25": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:43:29.004292Z",
+      "closed_at": "2026-06-07T06:43:42.752887Z",
+      "commit": "2bba780afcae63bec86785799caed7c1f26e9a80",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -60722,10 +60898,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:17.820581Z",
-      "outcome": null,
+      "outcome": "unicode->ascii render-mode flip swaps every block-eighths bar to ascii fallback; snapshot gate green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -61665,6 +61841,36 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Allow committed .ea/store JSONLs in state-bookkeeping commits",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W44": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:48:00.458835Z",
+      "closed_at": "2026-06-07T06:48:01.177978Z",
+      "commit": "fb0f1c6f904cbb70cfc176338165a08b6f1c41ff",
+      "deps": [],
+      "description": "readiness.compute scored ALL criteria for the ready determination, so an advisory (required=false) criterion that failed blocked the close -- contradicting required=false semantics and the oracle path which skips non-required criteria. Thread required onto CriterionView and exempt non-required from _is_ready. Surfaced by W24's cadence=ship svg_pixel_diff.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/verify/models.py",
+        "src/eawf/workflow/verify/readiness.py"
+      ],
+      "gates": [],
+      "id": "P29-I13-W44",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T06:47:28.978349Z",
+      "outcome": "non-required criteria exempted from close-readiness blocking; CriterionView.required threaded; regression test green; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Exempt non-required criteria from close-readiness blocking",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
