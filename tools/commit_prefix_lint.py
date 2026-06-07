@@ -136,18 +136,20 @@ _SUBJECT_STYLE_BRACKET = "bracket"
 _SUBJECT_STYLE_TRAILER = "trailer"
 _STATE_ONLY_ALLOWED = (
     ".ea/state.json",
-    ".ea/store/event.jsonl",
-    # ``audit add`` writes one envelope line per audit into
-    # ``.ea/store/audit.jsonl``; this lives in the state-bookkeeping
-    # surface alongside ``event.jsonl``.
-    ".ea/store/audit.jsonl",
     # ``.secrets.baseline`` auto-tracks state.json line numbers; the
     # detect-secrets pre-commit hook regenerates it whenever state.json
     # mutates, and refuses to commit when baseline is left unstaged.
     # State-bookkeeping commits therefore always need it riding along.
     ".secrets.baseline",
 )
-_STATE_ONLY_PREFIXES = (".ea/specs/",)
+# Every per-kind JSONL under ``.ea/store/`` is a daemon-written, committed
+# store (event / audit / evidence / decision / flow / role reports / memory)
+# per the authority map's uniform treatment of ``.ea/store/*.jsonl``. They
+# all ride the state-bookkeeping surface: e.g. the deterministic close gate
+# appends ``evidence.jsonl`` rows as a wave closes, so a state commit carries
+# them alongside ``state.json`` + ``event.jsonl``. ``.ea/specs/`` carries the
+# in-band wave spec bodies authored as state.
+_STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
 
 # Bare ``[P##(-I##)?] docs:`` commits carry phase/iter-scoped
 # documentation artifacts that no single wave owns (closure audits,
@@ -299,8 +301,7 @@ def _check_scoped_paths(
             return 1, (
                 f"{trigger} commit touches non-state paths: {bad}\n"
                 "state-scoped commits must mutate only .ea/state.json, "
-                ".ea/store/event.jsonl, .ea/store/audit.jsonl, "
-                ".secrets.baseline, or .ea/specs/**"
+                ".ea/store/**, .secrets.baseline, or .ea/specs/**"
             )
     elif is_bare and commit_type == "docs":
         bad = [p for p in staged if not _is_docs_bare_path(p)]

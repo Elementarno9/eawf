@@ -294,6 +294,18 @@ def test_accepts_core_touching_audit_store(tmp_path: Path, mod) -> None:
     assert code == 0, diag
 
 
+def test_accepts_state_touching_evidence_store(tmp_path: Path, mod) -> None:
+    # The deterministic close gate appends evidence.jsonl rows as a wave
+    # closes; every per-kind JSONL under .ea/store/ is a committed daemon
+    # store and rides the state-bookkeeping surface.
+    msg = _write_msg(tmp_path, "[P29-I13] state: close wave\n")
+    code, diag = mod.lint(
+        msg,
+        [".ea/state.json", ".ea/store/event.jsonl", ".ea/store/evidence.jsonl"],
+    )
+    assert code == 0, diag
+
+
 def test_empty_subject_rejected(tmp_path: Path, mod) -> None:
     msg = _write_msg(tmp_path, "\n# just a comment\n", with_trailer=False)
     code, _diag = mod.lint(msg, [])
