@@ -3767,6 +3767,54 @@
       "scope_id": "P29-I13-W45",
       "status": "done",
       "updated_at": "2026-06-07T07:52:56.692416Z"
+    },
+    "P29-I13-W46": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W46",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W46",
+      "scope_id": "P29-I13-W46",
+      "status": "done",
+      "updated_at": "2026-06-07T09:54:27.250706Z"
+    },
+    "P29-I13-W47": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W47",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W47",
+      "scope_id": "P29-I13-W47",
+      "status": "done",
+      "updated_at": "2026-06-07T09:54:29.082042Z"
+    },
+    "P29-I13-W48": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W48",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W48",
+      "scope_id": "P29-I13-W48",
+      "status": "done",
+      "updated_at": "2026-06-07T09:54:30.918250Z"
+    },
+    "P29-I13-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W49",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W49",
+      "scope_id": "P29-I13-W49",
+      "status": "done",
+      "updated_at": "2026-06-07T09:54:32.754282Z"
     }
   },
   "agent_sessions": {
@@ -7297,7 +7345,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -13291,6 +13339,58 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I13-W45",
       "updated_at": "2026-06-07T07:52:55.966601Z"
+    },
+    "P29-I13-W46": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W46-bucket-20260607T095426Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W46",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W46",
+      "updated_at": "2026-06-07T09:54:26.533949Z"
+    },
+    "P29-I13-W47": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W47-bucket-20260607T095428Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W47",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W47",
+      "updated_at": "2026-06-07T09:54:28.356174Z"
+    },
+    "P29-I13-W48": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W48-bucket-20260607T095430Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W48",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W48",
+      "updated_at": "2026-06-07T09:54:30.216331Z"
+    },
+    "P29-I13-W49": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W49-bucket-20260607T095432Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W49",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W49",
+      "updated_at": "2026-06-07T09:54:32.037742Z"
     }
   },
   "goals": {
@@ -14840,7 +14940,11 @@
         "P29-I13-W42",
         "P29-I13-W43",
         "P29-I13-W44",
-        "P29-I13-W45"
+        "P29-I13-W45",
+        "P29-I13-W46",
+        "P29-I13-W47",
+        "P29-I13-W48",
+        "P29-I13-W49"
       ]
     }
   },
@@ -15665,7 +15769,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T09:16:21.365288Z",
+  "updated_at": "2026-06-07T09:54:32.754719Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -62337,6 +62441,126 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Regenerate the stale-schema banner golden after the W24 bar swap",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W46": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T09:54:26.533943Z",
+      "closed_at": "2026-06-07T09:54:27.250706Z",
+      "commit": "4ba1649e7d4b585d7d1416e24f4c35733da08449",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/statusline.py"
+      ],
+      "gates": [],
+      "id": "P29-I13-W46",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T09:53:17.743216Z",
+      "outcome": "statusline installer imported in-body; jinja2 off the CLI import budget; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Lazy-import the statusline installer to keep jinja2 off the CLI budget",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W47": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T09:54:28.356167Z",
+      "closed_at": "2026-06-07T09:54:29.082042Z",
+      "commit": "4b364493db9095093d17b21695d2cd497754daf3",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/snapshots/tui/golden/config_modal_*.txt",
+        "docs/reference/autogen/enums.md"
+      ],
+      "gates": [],
+      "id": "P29-I13-W47",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T09:53:18.395893Z",
+      "outcome": "config-modal goldens + autogen enums regenerated after I13 config/enum additions; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Regenerate config-modal goldens and autogen enums after I13 additions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W48": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T09:54:30.216324Z",
+      "closed_at": "2026-06-07T09:54:30.918250Z",
+      "commit": "a71aa0fc8840189c587a734104c084f92a1707a7",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "pyproject.toml",
+        "uv.lock",
+        ".gitignore"
+      ],
+      "gates": [],
+      "id": "P29-I13-W48",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T09:53:19.031100Z",
+      "outcome": "click<8.4 + typer<0.26 capped (completion protocol); state.json.lock gitignored; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Cap click and typer below the completion-breaking releases",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W49": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T09:54:32.037735Z",
+      "closed_at": "2026-06-07T09:54:32.754282Z",
+      "commit": "70a942d3ed5f92606be044a2460e7fe8c5d9749e",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/eval/jury/test_cross_vendor_jury.py",
+        "tests/runtime/sandbox/test_egress_proxy.py"
+      ],
+      "gates": [],
+      "id": "P29-I13-W49",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T09:53:19.655399Z",
+      "outcome": "legacy jury fixture + egress AF_UNIX socket-path debt repaired; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Repair legacy jury and egress test debt",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
