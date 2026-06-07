@@ -48,15 +48,45 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.spec import cache as spec_cache
 from eawf.kernel.spec import writer as spec_writer
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import (
+    CriterionSpec,
+    DeferredDeliverable,
+    GateSpec,
+    validate_criterion_gate_refs,
+)
 from eawf.kernel.spec.promotion import (
     SpecPromoteValidationError,
     validate_argv_gates,
 )
 from eawf.kernel.spec.wave_body import WAVE_BODY_FENCE, WaveSpecBody
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind, WaveStatus
+from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.validate.strict import validate_state
+from eawf.platform.lint.eawf021_measurable_criterion import (
+    MeasurabilityViolation,
+    check_criterion_spec,
+)
+from eawf.platform.lint.eawf022_propose_coverage import (
+    CoverageGapViolation,
+    check_coverage,
+)
+from eawf.runtime.daemon import wal
+from eawf.runtime.daemon.methods import (
+    DaemonValidationError,
+    MethodContext,
+    register,
+)
+from eawf.runtime.daemon.methods.state import (
+    _read_state,
+    _resolve_mutator_paths,
+    _state_version,
+)
+from eawf.runtime.daemon.wal import WalRecord
+from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
+from eawf.workflow.propose.generator import extract_units
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +172,32 @@ class ArchiveParams(BaseModel):
     cache_dir: str | None = None
 
 
+class SyncParams(BaseModel):
+    """Params for :func:`sync`.
+
+    Attributes:
+        wave_id: Canonical wave id (``P##-I##-W##``) whose typed
+            ``success_criteria`` + ``gates`` are materialised from the
+            spec body.
+        spec_path: Optional repo-relative or absolute path of the spec
+            markdown file. ``None`` resolves the default per-wave spec
+            file (``.ea/specs/<phase>/<iter>/<wave>.md``) via
+            :func:`eawf.kernel.spec.writer.spec_file_path`.
+        repo_root: Optional absolute path of the repo working tree
+            (default ``Path.cwd``). The CLI proxy forwards
+            ``flags.workspace`` here so per-test ``tmp_path``-rooted
+            repos resolve correctly.
+        idempotency_key: Optional caller-supplied retry key.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    wave_id: str = Field(min_length=1)
+    spec_path: str | None = None
+    repo_root: str | None = None
+    idempotency_key: str | None = None
+
+
 class SpecResult(BaseModel):
     """Common result shape for the four spec.* RPCs."""
 
@@ -153,6 +209,28 @@ class SpecResult(BaseModel):
     status: str
     file_path: str
     file_sha: str
+    envelope: dict[str, Any]
+    idempotent_replay: bool = False
+
+
+class SpecSyncResult(BaseModel):
+    """Result shape for the :func:`sync` RPC.
+
+    Distinct from :class:`SpecResult` because ``spec.sync`` mutates the
+    wave's typed ``state.json`` row (not the spec cache) — it reports the
+    materialised criteria / gate counts plus the canonical state event
+    envelope, mirroring the ``state.mutate`` result fields the lifecycle
+    surfaces already consume.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: str
+    wave_id: str
+    criteria_count: int
+    gates_count: int
+    before_version: str
+    after_version: str
     envelope: dict[str, Any]
     idempotent_replay: bool = False
 
@@ -856,10 +934,446 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
 
 
+# ---- spec.sync helpers ----------------------------------------------------
+
+
+def _run_measurability_lint(criteria: list[CriterionSpec]) -> list[MeasurabilityViolation]:
+    """Return every EAWF021 measurability finding across *criteria*.
+
+    Runs :func:`eawf.platform.lint.eawf021_measurable_criterion.check_criterion_spec`
+    over each parsed criterion. A non-empty result means at least one
+    criterion carries a banned-vague token (in its ``text`` or
+    ``measurable_signal``) or lacks an observation contract — the sync
+    rejects rather than materialise an unfalsifiable criterion onto the
+    wave row.
+
+    Args:
+        criteria: The parsed criterion rows from the spec body.
+
+    Returns:
+        Findings in criterion order; empty when every criterion is
+        measurable.
+    """
+    findings: list[MeasurabilityViolation] = []
+    for criterion in criteria:
+        findings.extend(check_criterion_spec(criterion))
+    return findings
+
+
+#: Minimum length for a "significant" token in the coverage overlap check.
+#: Tokens shorter than this (``the``, ``a``, ``to``, ``via``, ``and``, ...)
+#: carry no topical signal, so they are dropped before matching a criterion
+#: against a planned step — otherwise every step would trivially "match"
+#: any criterion through a shared article.
+_COVERAGE_TOKEN_MIN_LEN: Final[int] = 4
+
+#: Word-token pattern for the coverage overlap check (alphanumeric runs).
+_COVERAGE_TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9]+")
+
+
+def _significant_tokens(text: str) -> set[str]:
+    """Return the lowercased significant tokens of *text*.
+
+    A significant token is an alphanumeric run of at least
+    :data:`_COVERAGE_TOKEN_MIN_LEN` characters; short connective words are
+    dropped so the coverage overlap check keys on topical content, not
+    shared articles.
+
+    Args:
+        text: The source string to tokenise.
+
+    Returns:
+        The set of lowercased significant tokens.
+    """
+    return {
+        token.lower()
+        for token in _COVERAGE_TOKEN_RE.findall(text)
+        if len(token) >= _COVERAGE_TOKEN_MIN_LEN
+    }
+
+
+def _run_coverage_lint(
+    criteria: list[CriterionSpec],
+    *,
+    planned_steps: list[str],
+) -> list[CoverageGapViolation]:
+    """Return every EAWF022 coverage gap of *planned_steps* by *criteria*.
+
+    The wave's :class:`~eawf.kernel.spec.intent.IntentBrief` ``planned_steps``
+    are the per-wave brief spans the authored criteria must account for.
+    Each step is extracted into a :class:`~eawf.kernel.spec.common.SourceUnit`
+    via :func:`eawf.workflow.propose.generator.extract_units`, and a span is
+    COVERED when at least one criterion's ``text`` or ``measurable_signal``
+    shares a significant token (see :func:`_significant_tokens`) with the
+    step. A span no criterion topically addresses is a hard finding so a
+    silently-dropped planned step fails the sync rather than the close gate.
+
+    The cover-set is decided by deterministic token overlap, never by an
+    LLM's self-report: the diff is reproducible over identical input. A
+    wave with no planned steps has nothing to cover, so the lint is a
+    clean no-op.
+
+    Args:
+        criteria: The parsed criterion rows from the spec body.
+        planned_steps: The wave's ``IntentBrief.planned_steps`` (empty
+            when the wave carries no intent or no steps).
+
+    Returns:
+        One finding per uncovered planned-step span; empty when every
+        step is covered.
+    """
+    if not planned_steps:
+        return []
+    units = extract_units("\n".join(planned_steps))
+    criterion_tokens = [
+        _significant_tokens(f"{criterion.text} {criterion.measurable_signal}")
+        for criterion in criteria
+    ]
+    cover_set = {
+        unit.span_id
+        for unit in units
+        if (step_tokens := _significant_tokens(unit.quote))
+        and any(step_tokens & ctokens for ctokens in criterion_tokens)
+    }
+    deferrals: list[DeferredDeliverable] = []
+    return check_coverage(units, covered_span_ids=cover_set, deferrals=deferrals)
+
+
+def _render_lint_findings(
+    measurability: list[MeasurabilityViolation],
+    coverage: list[CoverageGapViolation],
+) -> str:
+    """Render a combined ``validation_failed`` message for lint findings.
+
+    Args:
+        measurability: EAWF021 findings (may be empty).
+        coverage: EAWF022 findings (may be empty).
+
+    Returns:
+        A single-line ``validation_failed: ...`` message listing each
+        finding's ``code reason: snippet`` body, comma-joined.
+    """
+    bodies = [v.render() for v in measurability] + [v.render() for v in coverage]
+    return "validation_failed: spec sync lint findings: " + "; ".join(bodies)
+
+
+# ---- spec.sync handler ----------------------------------------------------
+
+
+@register("spec.sync")
+async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Materialise a wave spec body's criteria + gates onto the wave row.
+
+    The authoring keystone: reads the per-wave spec markdown body, parses
+    its ``eawf-wave-body`` fenced block into typed criteria + gates (via
+    :func:`_extract_criterion_specs` / :func:`_extract_gate_specs`), runs
+    the EAWF021 measurability lint + the EAWF022 coverage lint, and — only
+    when both pass — replaces the target PENDING wave's typed
+    :attr:`~eawf.kernel.state.models.Wave.success_criteria` +
+    :attr:`~eawf.kernel.state.models.Wave.gates` through the daemon's
+    canonical state-write transaction (portalock → WAL → atomic write →
+    event append), per AGENTS rule 4.
+
+    The criteria are written through the lifecycle
+    :func:`~eawf.workflow.lifecycle.wave.edit_wave_plan` transition (which
+    enforces the PENDING-only invariant of planned-scope-revisability);
+    the gates are set on the same wave row and the combined criterion /
+    gate cross-references are checked by
+    :func:`~eawf.kernel.spec.common.validate_criterion_gate_refs` before the
+    write commits.
+
+    Args:
+        ctx: Server context. ``ctx.wal_dir`` MUST be configured.
+        params: JSON-RPC params per :class:`SyncParams`.
+
+    Returns:
+        Dict matching :class:`SpecSyncResult` with the materialised
+        criteria / gate counts + the canonical state event envelope.
+
+    Raises:
+        DaemonValidationError: When the spec body fails to parse, a lint
+            finding rejects the criteria, the target wave is not PENDING,
+            the criterion / gate cross-references do not resolve, or the
+            post-mutation state fails schema / invariant validation
+            (mapped to ``-32002`` so the CLI exit code matches a
+            rejected mutation).
+        ValueError: When *wave_id* is not a wave scope, the wave is
+            unknown, or the spec file is missing (mapped to ``-32602``).
+        RuntimeError: When ``ctx.wal_dir`` is unset.
+    """
+    try:
+        args = SyncParams.model_validate(params)
+    except ValidationError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+
+    try:
+        kind = spec_writer.classify_scope(args.wave_id)
+    except ValueError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+    if kind != "wave":
+        raise ValueError(f"validation_failed: spec sync targets a wave scope, got {args.wave_id!r}")
+
+    replay = _idempotent_replay(ctx, args.idempotency_key)
+    if replay is not None:
+        logger.info(f"sync idempotent_replay wave={args.wave_id!r}")
+        return replay
+
+    repo_root = _resolve_repo_root(args.repo_root)
+    spec_file = _resolve_sync_spec_file(
+        wave_id=args.wave_id,
+        spec_path=args.spec_path,
+        repo_root=repo_root,
+    )
+    body = spec_file.read_text(encoding="utf-8")
+    try:
+        criteria = _extract_criterion_specs(body)
+        gates = _extract_gate_specs(body)
+    except (ValueError, yaml.YAMLError, ValidationError) as exc:
+        raise DaemonValidationError(f"validation_failed: spec body parse failed: {exc}") from exc
+
+    state_path, event_path, wal_path = _resolve_mutator_paths(
+        repo_root=args.repo_root,
+        ctx=ctx,
+    )
+
+    from eawf.runtime.lock import portalock
+
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(state_path, timeout=5.0):
+            result = _apply_sync_locked(
+                ctx,
+                args=args,
+                criteria=criteria,
+                gates=gates,
+                state_path=state_path,
+                event_path=event_path,
+                wal_path=wal_path,
+            )
+        _cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        return result
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
+def _resolve_sync_spec_file(*, wave_id: str, spec_path: str | None, repo_root: Path) -> Path:
+    """Resolve + verify the on-disk spec file for a sync.
+
+    Args:
+        wave_id: The wave whose default spec path is derived when
+            *spec_path* is ``None``.
+        spec_path: Optional explicit path (repo-relative or absolute).
+        repo_root: Repo working-tree root the relative path resolves under.
+
+    Returns:
+        The existing spec file path.
+
+    Raises:
+        ValueError: When the resolved spec file does not exist (mapped to
+            ``-32602``).
+    """
+    if spec_path is not None:
+        spec_file = Path(spec_path)
+        if not spec_file.is_absolute():
+            spec_file = repo_root / spec_file
+    else:
+        spec_file = spec_writer.spec_file_path(wave_id, repo_root=repo_root)
+    if not spec_file.is_file():
+        raise ValueError(f"validation_failed: spec file missing for wave={wave_id!r}: {spec_file}")
+    return spec_file
+
+
+def _apply_sync_locked(
+    ctx: MethodContext,
+    *,
+    args: SyncParams,
+    criteria: list[CriterionSpec],
+    gates: list[GateSpec],
+    state_path: Path,
+    event_path: Path,
+    wal_path: Path,
+) -> dict[str, Any]:
+    """Run the locked spec-sync transaction: lint, mutate, validate, write.
+
+    The caller holds the state-path portalock. This helper reads + validates
+    state, enforces the PENDING-only gate, runs the EAWF021 + EAWF022 lints
+    (rejecting before any mutation), materialises the criteria via
+    :func:`~eawf.workflow.lifecycle.wave.edit_wave_plan` + sets the gates,
+    re-validates the post-mutation state, then commits through the canonical
+    WAL → atomic-write → event-append sequence and publishes the envelope.
+
+    Args:
+        ctx: Server context (for the publish bus).
+        args: The validated sync params.
+        criteria: Parsed + lint-pending criterion rows.
+        gates: Parsed gate rows.
+        state_path: Path to ``state.json``.
+        event_path: Path to the event JSONL store.
+        wal_path: Path to the daemon WAL directory.
+
+    Returns:
+        Dict matching :class:`SpecSyncResult`.
+
+    Raises:
+        DaemonValidationError: When the wave is not PENDING, a lint finding
+            rejects the criteria, the cross-references do not resolve, or the
+            post-mutation state fails validation (mapped to ``-32002``).
+        ValueError: When the wave id is unknown (mapped to ``-32602``).
+    """
+    state, _payload = _read_state(state_path)
+    before_version = _state_version(state.model_dump(mode="json"))
+    wave = state.waves.get(args.wave_id)
+    if wave is None:
+        raise ValueError(f"validation_failed: unknown wave: {args.wave_id!r}")
+    if wave.status != WaveStatus.PENDING:
+        raise DaemonValidationError(
+            f"validation_failed: wave {args.wave_id!r} is not pending "
+            f"(status={wave.status.value!r}); only PENDING waves accept a spec sync"
+        )
+
+    planned_steps = list(wave.intent.planned_steps) if wave.intent is not None else []
+    measurability = _run_measurability_lint(criteria)
+    coverage = _run_coverage_lint(criteria, planned_steps=planned_steps)
+    if measurability or coverage:
+        raise DaemonValidationError(_render_lint_findings(measurability, coverage))
+
+    # Referential integrity (criterion.gate_ids <-> gate.criterion_id,
+    # deterministic-gate compile) BEFORE any in-place mutation so a malformed
+    # pair leaves the wave row untouched.
+    validate_criterion_gate_refs(criteria, gates)
+
+    try:
+        edit_wave_plan(state, wave_id=args.wave_id, success_criteria=criteria)
+    except LifecycleError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    wave.gates = list(gates)
+
+    state.updated_at = datetime.now(UTC)
+    new_payload = state.model_dump(mode="json")
+    after_version = _validate_post_sync(new_payload)
+
+    mutation_id = uuid.uuid4().hex
+    envelope = _build_sync_envelope(
+        wave_id=args.wave_id,
+        criteria_count=len(criteria),
+        gates_count=len(gates),
+        before_version=before_version,
+        after_version=after_version,
+    )
+    record = WalRecord(
+        record_id=mutation_id,
+        envelope=envelope,
+        idempotency_key=args.idempotency_key,
+        written_at=datetime.now(UTC),
+        before_state_version=before_version,
+        after_state_version=after_version,
+    )
+    wal.write_pending(wal_path, record)
+    atomic_write_json_locked(state_path, new_payload)
+    wal.mark_applied(wal_path, mutation_id)
+    append_envelope(event_path, envelope)
+    wal.mark_fsynced(wal_path, mutation_id)
+
+    _publish(ctx, envelope)
+    logger.info(
+        f"sync ok wave={args.wave_id} criteria={len(criteria)} gates={len(gates)} "
+        f"before={before_version} after={after_version}"
+    )
+    return SpecSyncResult(
+        operation="sync",
+        wave_id=args.wave_id,
+        criteria_count=len(criteria),
+        gates_count=len(gates),
+        before_version=before_version,
+        after_version=after_version,
+        envelope=envelope.model_dump(mode="json"),
+    ).model_dump(mode="json")
+
+
+def _validate_post_sync(new_payload: dict[str, Any]) -> str:
+    """Re-validate the post-mutation state payload and return its version.
+
+    Args:
+        new_payload: The candidate ``state.json`` payload after the sync
+            mutation applied.
+
+    Returns:
+        The post-mutation state version digest.
+
+    Raises:
+        DaemonValidationError: When the payload fails schema validation or
+            trips an invariant (mapped to ``-32002``).
+    """
+    post = validate_state(new_payload, strict_optional=False)
+    if post.state is None:
+        raise DaemonValidationError(
+            "validation_failed: post-mutation schema invalid: " + "; ".join(post.schema_errors[:3])
+        )
+    if post.violations:
+        codes = ",".join(v.code for v in post.violations)
+        raise DaemonValidationError(
+            f"validation_failed: post-mutation invariants violated: {codes}"
+        )
+    return _state_version(new_payload)
+
+
+def _build_sync_envelope(
+    *,
+    wave_id: str,
+    criteria_count: int,
+    gates_count: int,
+    before_version: str,
+    after_version: str,
+) -> Envelope:
+    """Build the canonical ``StoreKind.EVENT`` envelope for a spec sync.
+
+    Mirrors the ``state.mutate`` event shape (a ``state.mutate.spec_sync``
+    ``event_type``) so subscribers and the event log cannot tell the sync
+    write apart from any other canonical state mutation.
+
+    Args:
+        wave_id: The wave whose criteria / gates were materialised.
+        criteria_count: Number of typed criteria written.
+        gates_count: Number of typed gates written.
+        before_version: State digest before the write.
+        after_version: State digest after the write.
+
+    Returns:
+        The canonical event envelope, ready for the WAL + event log.
+    """
+    now = datetime.now(UTC)
+    summary = f"spec.sync wave={wave_id} criteria={criteria_count} gates={gates_count}"
+    payload = EventPayload(
+        timestamp=now,
+        event_type="state.mutate.spec_sync",
+        actor="daemon",
+        command="spec.sync",
+        args_hash="",
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="ok",
+        message=summary,
+        extras={"criteria_count": criteria_count, "gates_count": gates_count},
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
 __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
     "archive",
     "init",
     "promote",
+    "sync",
     "validate",
 ]

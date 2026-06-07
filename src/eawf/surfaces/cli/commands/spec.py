@@ -1,21 +1,24 @@
 """``eawf spec`` Typer sub-app — proxies through the daemon.
 
-Five verbs:
+Six verbs:
 
 * ``eawf spec init <scope-id> --title ... --repo-code ...``
 * ``eawf spec validate <scope-id> --repo-code ...``
 * ``eawf spec promote <scope-id> --to {READY,IMPLEMENTED} --repo-code ...``
 * ``eawf spec archive <scope-id> --repo-code ...``
+* ``eawf spec sync <wave-id> [--spec-path PATH]``
 * ``eawf spec show <urn> [--from-git]`` (read-only)
 
-The first four are mutators and route through the daemon's
-``spec.{init,validate,promote,archive}`` JSON-RPC methods per
+The first five are mutators and route through the daemon's
+``spec.{init,validate,promote,archive,sync}`` JSON-RPC methods per
 authority-map row 9-10. The dispatch matches the existing
 ``_persist_registry`` shape: daemon-proxy arm by default; the
 daemonless carve-out (``EAWF_DAEMONLESS=1`` or daemon unreachable)
 falls back to the in-process writer for the operations that do not
 require a running daemon. ``archive`` always requires the daemon up because the
-``git rm`` + cache atomicity is daemon-owned.
+``git rm`` + cache atomicity is daemon-owned. ``sync`` is likewise always
+daemon-mediated because materialising the parsed criteria + gates onto
+``state.json`` is a canonical state mutation (AGENTS rule 4).
 
 ``show`` is the recovery surface: it reads the daemon-resident cache
 to find ``file_path`` + ``file_sha``, then either reads the file from
@@ -70,6 +73,20 @@ def _emit_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
     text = (
         f"{payload.get('operation')} ok scope_id={payload.get('scope_id')!r} "
         f"urn={payload.get('spec_urn')!r} status={payload.get('status')}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _emit_sync_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
+    """Emit the ``spec.sync`` RPC result as JSON or terse text.
+
+    The sync result reports the wave id plus the materialised criteria /
+    gate counts (it mutates the wave's ``state.json`` row, not the spec
+    cache), so it has its own terse line distinct from :func:`_emit_result`.
+    """
+    text = (
+        f"sync ok wave={payload.get('wave_id')!r} "
+        f"criteria={payload.get('criteria_count')} gates={payload.get('gates_count')}"
     )
     emit_json_or_text(payload, text, flags=flags)
 
@@ -396,6 +413,58 @@ def spec_archive_cmd(
         raise
     result["proxied"] = True
     _emit_result(result, flags=flags)
+
+
+@spec_app.command("sync")
+def spec_sync_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave id: P##-I##-W##.")],
+    spec_path: Annotated[
+        str | None,
+        typer.Option(
+            "--spec-path",
+            help="Spec markdown path (default: .ea/specs/<phase>/<iter>/<wave>.md).",
+        ),
+    ] = None,
+) -> None:
+    """Parse a wave spec body + materialise its criteria + gates onto state.
+
+    Reads the per-wave spec body, parses its ``eawf-wave-body`` block into
+    typed criteria + gates, runs the EAWF021 measurability + EAWF022
+    coverage lints, and — only when both pass — replaces the target PENDING
+    wave's ``success_criteria`` + ``gates`` through the daemon's canonical
+    state-write transaction (AGENTS rule 4). A vague ``measurable_signal``,
+    an uncovered planned-step span, a non-PENDING target, or an unresolved
+    criterion / gate cross-reference fails the sync (non-zero exit) with no
+    state write.
+
+    Always daemon-mediated: the state mutation is daemon-owned, so there is
+    no in-process fallback.
+    """
+    from eawf.surfaces.cli._mutation import _daemon_reachable
+
+    flags: GlobalFlags = ctx.obj
+    repo_root = (flags.workspace or Path.cwd()).resolve()
+
+    if not _daemon_proxy_enabled_for_spec() or not _daemon_reachable():
+        raise cli_errors.StateConflict(
+            "daemon_required: spec sync requires the daemon up; run `eawf daemon start`",
+            kind="IntegrityViolation",
+        )
+
+    params: dict[str, Any] = {"wave_id": wave_id, "repo_root": str(repo_root)}
+    if spec_path is not None:
+        params["spec_path"] = spec_path
+
+    try:
+        with DaemonClient() as client:
+            result = client.call("spec.sync", params)
+    except DaemonRpcError as exc:
+        if exc.code in (-32602, cli_errors.RPC_VALIDATION_FAILED):
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise
+    result["proxied"] = True
+    _emit_sync_result(result, flags=flags)
 
 
 # ---- Read-only surface ----------------------------------------------------

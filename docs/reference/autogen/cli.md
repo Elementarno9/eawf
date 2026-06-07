@@ -180,6 +180,15 @@ Manage decisions (add / supersede / list / graph).
 | `promote` | — |
 | `supersede` | Supersede an existing decision by another existing decision. |
 
+### `eawf dispatch`
+
+Pause and resume the dispatch loop (headless toggle of dispatch_paused).
+
+| Verb | Summary |
+|---|---|
+| `pause` | Pause the dispatch loop by setting ``dispatch_paused`` via ``agent.pause``. |
+| `resume` | Resume the dispatch loop by clearing ``dispatch_paused`` via ``agent.resume``. |
+
 ### `eawf doc`
 
 Read-only documentation drift + state-vs-doc cross-checks.
@@ -516,6 +525,7 @@ Manage phase / iter / wave specs (init / validate / promote / archive / show).
 | `init` | Scaffold a new spec via daemon proxy (or in-process fallback). |
 | `promote` | Forward-graduate DRAFT → READY → IMPLEMENTED through the daemon. |
 | `show` | Print a spec body (cache + on-disk; ``--from-git`` walks history). |
+| `sync` | Parse a wave spec body + materialise its criteria + gates onto state. |
 | `validate` | Re-hash the on-disk spec body + refresh the daemon cache row. |
 
 ### `eawf state`
