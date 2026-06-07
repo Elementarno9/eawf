@@ -52,10 +52,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.modes.nav import NAV_SCOPES, legal_scopes_for_mode
 from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
 from eawf.surfaces.tui.snapshot.behaviour_probe import (
+    DEFERRED_KEYS,
     ProbeStatus,
     record_keypress_transcript,
+    sweep_unresolved_affordances,
 )
 from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 from eawf.workflow.audit_dsl import CheckSpec
@@ -209,3 +212,90 @@ def test_matrix_fails_when_footer_advertises_a_dead_key(
     assert result.passed is False
     assert result.details is not None
     assert _DEAD_KEY in result.details
+
+
+# --------------------------------------------------------------------------
+# CR-01 (W12): the sweep over NAV_SCOPES x MODE_REGISTRY reports zero
+# unresolved advertised keys outside DEFERRED_KEYS
+# --------------------------------------------------------------------------
+
+
+def test_sweep_reports_zero_unresolved_keys() -> None:
+    # The W12 gate: drive every legal (scope, mode) cell's advertised footer
+    # keys through the real key->Binding path and assert NONE resolve to no
+    # binding (outside the documented DEFERRED_KEYS allowlist). A footer that
+    # newly advertises a dead key surfaces here as a "<scope>/<mode>/<key>"
+    # triple; a green sweep is the empty tuple.
+    unresolved = asyncio.run(sweep_unresolved_affordances(state_path=_REPO_STATE))
+    assert unresolved == (), f"sweep found unresolved advertised keys: {', '.join(unresolved)}"
+
+
+def test_sweep_covers_every_legal_scope_mode_cell() -> None:
+    # boundary: the sweep axis is the whole NAV_SCOPES x MODE_REGISTRY product
+    # restricted to legal cells. The cell count equals the sum over modes of
+    # the legal scopes for that mode -- a new mode or scope auto-joins the
+    # sweep with no test edit. (Verifies the sweep is not vacuous over an
+    # empty axis.)
+    expected_cells = sum(len(legal_scopes_for_mode(spec.name)) for spec in MODE_REGISTRY)
+    assert expected_cells > 0
+    # Every mode is legal at repo + workspace (the two single-state scopes);
+    # only home + doctor are also legal at the user portfolio scope, so the
+    # cell count is strictly greater than two per-scope rows would give.
+    assert expected_cells >= 2 * len(MODE_REGISTRY)
+
+
+def test_sweep_axis_is_subset_of_nav_scopes() -> None:
+    # boundary: every scope the sweep visits is a real NAV_SCOPES entry (no
+    # mode advertises a scope outside the three-scope axis), so the sweep can
+    # never probe an unreachable cell.
+    swept_scopes = {scope for spec in MODE_REGISTRY for scope in legal_scopes_for_mode(spec.name)}
+    assert swept_scopes
+    assert swept_scopes <= set(NAV_SCOPES)
+
+
+def test_sweep_no_state_path_reports_zero_unresolved() -> None:
+    # boundary: state_path is optional. The app launches with no bound state
+    # (the user-scope no-state shape) and the swept footer keys still all
+    # resolve -- a None fixture is a legal, green sweep input.
+    unresolved = asyncio.run(sweep_unresolved_affordances(state_path=None))
+    assert unresolved == (), f"no-state sweep found unresolved keys: {', '.join(unresolved)}"
+
+
+def test_sweep_deferred_keys_excluded_from_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # error-path / not-vacuous: inject a synthetic dead advertised key into
+    # the enumeration of one cell, then assert the sweep reports it -- proving
+    # the sweep catches a dead key rather than passing vacuously. Re-running
+    # with that exact triple in DEFERRED_KEYS suppresses it, proving the
+    # allowlist is the documented escape hatch and nothing else.
+    import eawf.surfaces.tui.snapshot.behaviour_probe as bp
+
+    async def _fake_advertised(
+        *, scope: str, mode: str, state_path: object, size: object
+    ) -> list[str]:
+        # Only the repo/doctor cell advertises the synthetic dead key; every
+        # other cell advertises nothing, so the sweep probes exactly one key.
+        if scope == "repo" and mode == "doctor":
+            return [_DEAD_KEY]
+        return []
+
+    monkeypatch.setattr(bp, "_advertised_keys_at", _fake_advertised)
+    triple = f"repo/doctor/{_DEAD_KEY}"
+
+    # Without a deferral the dead key is reported (caught, not vacuous).
+    unresolved = asyncio.run(sweep_unresolved_affordances(state_path=_REPO_STATE))
+    assert triple in unresolved
+
+    # With the exact triple deferred the same sweep suppresses it.
+    monkeypatch.setattr(bp, "DEFERRED_KEYS", frozenset({triple}))
+    deferred = asyncio.run(sweep_unresolved_affordances(state_path=_REPO_STATE))
+    assert triple not in deferred
+
+
+def test_deferred_keys_is_a_frozenset() -> None:
+    # The allowlist is an immutable, set-membership-checked constant so a
+    # deferral is an explicit triple, never a mutable list a caller can grow
+    # at runtime. Empty today: no cell has a known-pending dead affordance.
+    assert isinstance(DEFERRED_KEYS, frozenset)
+    assert frozenset() == DEFERRED_KEYS

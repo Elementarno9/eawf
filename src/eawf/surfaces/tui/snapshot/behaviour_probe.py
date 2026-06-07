@@ -74,10 +74,62 @@ from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from textual.pilot import Pilot
 
     from eawf.surfaces.tui.app import EaApp
+
+#: The default Pilot terminal size the affordance sweep mounts at. Wide
+#: enough that the full footer hint strip renders without clipping any
+#: advertised token (so no advertised key is dropped from the enumeration by
+#: a too-narrow frame), matching the affordance-parity check's default.
+_SWEEP_SIZE: tuple[int, int] = (120, 40)
+
+#: The provenance stamp the sweep records its probe transcripts against. The
+#: sweep drives the live tree rather than a recorded build, so a fixed
+#: sentinel keeps the transcript provenance field populated without claiming
+#: a build SHA the live run does not carry.
+_SWEEP_COMMIT: str = "affordance-sweep-live"
+
+#: Mapping from a footer hint *token* (the text before the first space in a
+#: ``render_hint_label`` fragment) to the Textual key string(s) a press
+#: drives. Multi-glyph tokens (the arrow pairs, the three-letter scope
+#: switch) map to every key they advertise; the punctuation glyphs map to
+#: their Textual key names. A token absent from this map is a single literal
+#: key (``a`` / ``c`` / ``H`` / ``space`` press as themselves). Kept aligned
+#: with the affordance-parity check's identical map so the sweep and the
+#: per-mode parity check enumerate the same key set from one footer strip.
+_TOKEN_KEYS: dict[str, tuple[str, ...]] = {
+    "↑↓": ("up", "down"),
+    "←→": ("left", "right"),
+    "Enter": ("enter",),
+    "Esc": ("escape",),
+    "F5": ("f5",),
+    "w/r/u": ("w", "r", "u"),
+    "/": ("slash",),
+    "?": ("question_mark",),
+}
+
+#: The advertised keys the sweep tolerates as still-unresolved -- the
+#: documented allowlist of known-pending affordances that cannot be made to
+#: resolve within the sweep's own scope (the probe module). The sweep fails
+#: on ANY unresolved advertised key NOT in this set, so a real regression
+#: (a footer that newly advertises a dead key) is caught; a deferral is an
+#: explicit, reviewable entry here, never a silent widening.
+#:
+#: Each entry is a ``"<scope>/<mode>/<key>"`` triple so a deferral is pinned
+#: to the exact cell it covers (a key dead in one scope but live in another
+#: is deferred only where it is genuinely dead).
+#:
+#: Empty: every mode/scope cell currently advertises only resolving keys --
+#: the recent per-mode parity waves (home/evidence/trust/research_board and
+#: the autopilot/doctor/feed/agent_watch panes) closed the dead-``c`` family,
+#: so there is no known-pending affordance to defer. A future cell that
+#: cannot resolve a newly-advertised key within probe scope adds its triple
+#: here with a one-line rationale rather than widening the allowlist
+#: wholesale.
+DEFERRED_KEYS: frozenset[str] = frozenset()
 
 
 class ProbeStatus(StrEnum):
@@ -404,11 +456,185 @@ def render_transcript_evidence(transcript: BehaviourTranscript) -> str:
     return "\n".join(lines)
 
 
+def _token_keys(token: str) -> tuple[str, ...]:
+    """Resolve a footer hint *token* to the Textual key string(s) it advertises.
+
+    Args:
+        token: The leading token of a footer hint fragment (e.g. ``"c"`` /
+            ``"↑↓"`` / ``"Enter"``).
+
+    Returns:
+        The key string(s) a press of the advertised affordance drives -- the
+        mapped tuple for a multi-glyph / named token, or the single literal
+        token otherwise.
+    """
+    return _TOKEN_KEYS.get(token, (token,))
+
+
+async def _advertised_keys_at(
+    *,
+    scope: str,
+    mode: str,
+    state_path: Path | None,
+    size: tuple[int, int],
+) -> list[str]:
+    """Mount the TUI at *scope* + *mode* and return its advertised footer keys.
+
+    Drives the live scope axis through the app's bound nav state machine
+    (``action_switch_scope``) so the sweep enumerates a mode's footer exactly
+    as the operator reaches it at that scope, then maps each advertised token
+    to its Textual key string(s) (:func:`_token_keys`), de-duplicated in
+    advertised order so a key advertised twice is probed once.
+
+    Args:
+        scope: The nav scope to switch to before enumerating (``repo`` /
+            ``workspace`` / ``user``).
+        mode: The mode name to switch to before enumerating the footer.
+        state_path: The fixture ``state.json`` to bind, or ``None``.
+        size: The Pilot terminal size.
+
+    Returns:
+        The advertised key strings, in first-advertised order.
+    """
+    from eawf.surfaces.tui.app import EaApp
+    from eawf.surfaces.tui.widgets.footer import Footer
+
+    app = EaApp(scope="repo", state_path=state_path)
+    async with app.run_test(size=size) as raw_pilot:
+        pilot = cast("Pilot[object]", raw_pilot)
+        await settle_screen(pilot)
+        app.action_switch_scope(scope)
+        await settle_screen(pilot)
+        await app.switch_mode(mode)
+        await settle_screen(pilot)
+        footers = app.screen.query(Footer)
+        keys: list[str] = []
+        if footers:
+            footer = footers.first(Footer)
+            for hint in footer.hints:
+                token = hint.split(" ", 1)[0]
+                keys.extend(_token_keys(token))
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for key in keys:
+        if key not in seen:
+            seen.add(key)
+            ordered.append(key)
+    return ordered
+
+
+async def _probe_key_at(
+    *,
+    scope: str,
+    mode: str,
+    key: str,
+    state_path: Path | None,
+    size: tuple[int, int],
+) -> ProbeStatus:
+    """Drive a single advertised *key* at *scope* + *mode* against a fresh mount.
+
+    Each key is probed against its OWN fresh app mount so a destructive
+    affordance (``q`` quit, a scope switch, a modal push) cannot bleed into
+    the next key's probe -- per-key isolation keeps the classification
+    deterministic and side-effect-free across the swept set.
+
+    Args:
+        scope: The nav scope to switch to before pressing the key.
+        mode: The mode name to switch to before pressing the key.
+        key: The Textual key string to drive.
+        state_path: The fixture ``state.json`` to bind, or ``None``.
+        size: The Pilot terminal size.
+
+    Returns:
+        The :class:`ProbeStatus` the key press classified.
+    """
+    from eawf.surfaces.tui.app import EaApp
+
+    app = EaApp(scope="repo", state_path=state_path)
+    async with app.run_test(size=size) as raw_pilot:
+        pilot = cast("Pilot[object]", raw_pilot)
+        await settle_screen(pilot)
+        app.action_switch_scope(scope)
+        await settle_screen(pilot)
+        await app.switch_mode(mode)
+        await settle_screen(pilot)
+        transcript = await record_keypress_transcript(pilot, [key], source_commit=_SWEEP_COMMIT)
+    return transcript.outcomes[0].status
+
+
+async def sweep_unresolved_affordances(
+    *,
+    state_path: Path | None = None,
+    size: tuple[int, int] = _SWEEP_SIZE,
+) -> tuple[str, ...]:
+    """Sweep every legal ``(scope, mode)`` cell + return the unresolved keys.
+
+    The W12 affordance-matrix sweep: iterates :data:`NAV_SCOPES` crossed with
+    :data:`MODE_REGISTRY`, restricted to the legal cells the nav state machine
+    permits (:func:`~eawf.surfaces.tui.modes.nav.legal_scopes_for_mode`), so
+    an illegal corner (the portfolio ``user`` scope crossed with a single-scope
+    data mode) is never probed -- it has no honest footer to advertise. For
+    each legal cell it enumerates the mode's advertised footer keys
+    (:func:`_advertised_keys_at`) and drives each through the real key->Binding
+    path (:func:`_probe_key_at`), collecting every key whose press classifies
+    :data:`ProbeStatus.UNRESOLVED` -- the dead affordance the footer promises
+    but no :class:`~textual.binding.Binding` answers.
+
+    The returned set is the unresolved keys MINUS the documented
+    :data:`DEFERRED_KEYS` allowlist, so a caller asserts the result is empty:
+    a known-pending deferral is excluded (its triple is in the allowlist) but
+    a newly-dead key (a real regression) surfaces. Each entry is a
+    ``"<scope>/<mode>/<key>"`` triple naming the exact offending cell.
+
+    A :data:`ProbeStatus.NO_OP` (a key that resolves to a binding but moves
+    none of the coarse observable signals -- an intra-pane cursor move, an F5
+    refresh, a scope re-select that lands the same scope) is NOT unresolved: a
+    resolving binding IS a present affordance, so the sweep keys on the
+    load-bearing dead-affordance shape (no binding at all), matching the
+    per-mode affordance-parity check's semantics.
+
+    Args:
+        state_path: The fixture ``state.json`` to bind for every cell, or
+            ``None`` (the user-scope launch with no bound state).
+        size: The Pilot terminal size to mount every cell at.
+
+    Returns:
+        A sorted tuple of ``"<scope>/<mode>/<key>"`` triples for every
+        advertised key that resolved to no binding and is not in
+        :data:`DEFERRED_KEYS`. Empty when every advertised key in every legal
+        cell resolves (the green sweep).
+    """
+    from eawf.surfaces.tui.modes.nav import legal_scopes_for_mode
+    from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
+
+    unresolved: list[str] = []
+    for spec in MODE_REGISTRY:
+        for scope in legal_scopes_for_mode(spec.name):
+            keys = await _advertised_keys_at(
+                scope=scope, mode=spec.name, state_path=state_path, size=size
+            )
+            for key in keys:
+                status = await _probe_key_at(
+                    scope=scope,
+                    mode=spec.name,
+                    key=key,
+                    state_path=state_path,
+                    size=size,
+                )
+                if status is ProbeStatus.UNRESOLVED:
+                    triple = f"{scope}/{spec.name}/{key}"
+                    if triple not in DEFERRED_KEYS:
+                        unresolved.append(triple)
+    return tuple(sorted(unresolved))
+
+
 __all__ = [
+    "DEFERRED_KEYS",
     "BehaviourTranscript",
     "ProbeOutcome",
     "ProbeStatus",
     "record_behaviour_transcript",
     "record_keypress_transcript",
     "render_transcript_evidence",
+    "sweep_unresolved_affordances",
 ]
