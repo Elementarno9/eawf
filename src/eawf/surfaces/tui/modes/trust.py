@@ -30,6 +30,8 @@ state plus the append-only stores under the resolved ``state.json``.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
@@ -40,6 +42,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from eawf.kernel.state.models import State
+from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.workflow.estimation.trust_scorecard import (
@@ -86,6 +89,22 @@ _TRUST_HINTS: tuple[str, ...] = (
 #: the visible contract).
 TRUST_REFRESH_S: float = 5.0
 
+#: The evidence-source family that counts as deterministic for the oracle-
+#: determinism ratio -- a code-gated falsifier (pytest, mypy, ruff), the
+#: cheapest oracle tier. A ``jury`` or ``attested`` row is scored but is NOT
+#: a deterministic pass.
+_DETERMINISTIC_KIND: str = "deterministic"
+
+#: The evidence statuses that count as "scored" toward the determinism ratio
+#: denominator -- a row that reached a terminal verdict. A row without one of
+#: these is not yet scored and does not enter the ratio.
+_SCORED_STATUSES: frozenset[str] = frozenset({"pass", "fail", "blocked", "waived"})
+
+#: Notice rendered in the oracle-determinism section when no evidence row has
+#: been scored yet -- the honest-empty path (the ratio's denominator is zero,
+#: so no ratio can be formed). Muted so it reads as "not measured yet".
+NO_SCORED_EVIDENCE: str = "no scored evidence yet"
+
 
 def is_data_starved(scorecard: TrustScorecard) -> bool:
     """Return whether *scorecard* lacks any signal to back a trust verdict.
@@ -107,6 +126,96 @@ def is_data_starved(scorecard: TrustScorecard) -> bool:
     has_store_rows = any(count > 0 for count in scorecard.store_record_counts.values())
     has_calibration = scorecard.eu_calibration.sample_count > 0
     return not (has_labels or has_store_rows or has_calibration)
+
+
+@dataclass(frozen=True)
+class OracleDeterminism:
+    """The oracle-determinism ratio over a scope's scored evidence rows.
+
+    The ratio answers "what fraction of the scored evidence was settled by
+    the cheapest deterministic oracle (a code gate) rather than a jury /
+    attestation?" -- a high ratio means most closed criteria were verified
+    by a falsifier the project re-runs for free, a low one means the verdict
+    leaned on the (idle, in v0.5) jury or an operator sign-off.
+
+    Attributes:
+        deterministic_passes: Count of scored rows that are a deterministic
+            pass (``evidence_kind == "deterministic"`` and ``status ==
+            "pass"``) -- the ratio numerator.
+        total_scored: Count of evidence rows that reached a terminal verdict
+            (status in :data:`_SCORED_STATUSES`) -- the ratio denominator.
+    """
+
+    deterministic_passes: int
+    total_scored: int
+
+    @property
+    def ratio(self) -> float | None:
+        """Return the deterministic-pass fraction, or ``None`` when unscored.
+
+        ``None`` (not ``0.0``) when :attr:`total_scored` is zero so an
+        unmeasured ratio is never mistaken for a measured zero.
+        """
+        if self.total_scored == 0:
+            return None
+        return self.deterministic_passes / self.total_scored
+
+
+def compute_oracle_determinism(records: Iterable[EvidenceRecord]) -> OracleDeterminism:
+    """Compute the oracle-determinism ratio over *records*.
+
+    Counts the scored evidence rows (a terminal status in
+    :data:`_SCORED_STATUSES`) as the denominator and the deterministic
+    passes (``evidence_kind == "deterministic"`` and ``status == "pass"``)
+    as the numerator. A row that has not reached a terminal verdict is
+    excluded from both -- it is not yet scored.
+
+    Args:
+        records: The scope's evidence rows (the EvidenceRecord rows the
+            closed criteria produced).
+
+    Returns:
+        The :class:`OracleDeterminism` tally; ``total_scored == 0`` on the
+        honest-empty path (no scored rows).
+    """
+    deterministic_passes = 0
+    total_scored = 0
+    for record in records:
+        if record.status not in _SCORED_STATUSES:
+            continue
+        total_scored += 1
+        if record.evidence_kind == _DETERMINISTIC_KIND and record.status == "pass":
+            deterministic_passes += 1
+    return OracleDeterminism(
+        deterministic_passes=deterministic_passes,
+        total_scored=total_scored,
+    )
+
+
+def render_oracle_determinism(determinism: OracleDeterminism) -> str:
+    """Render the oracle-determinism ratio section body.
+
+    Surfaces the ratio as a percentage plus the raw ``<passes>/<scored>``
+    fraction so the operator reads both the headline and the n behind it. An
+    unscored tally (no terminal-status rows) renders :data:`NO_SCORED_EVIDENCE`
+    rather than a fabricated ``0%`` that could read as a measured verdict.
+
+    Args:
+        determinism: The computed determinism tally.
+
+    Returns:
+        A content-markup section body.
+    """
+    ratio = determinism.ratio
+    if ratio is None:
+        return f"[$muted]{NO_SCORED_EVIDENCE}[/]"
+    return "\n".join(
+        [
+            f"ratio {ratio * 100.0:.0f}%",
+            f"deterministic passes {determinism.deterministic_passes}"
+            f" / {determinism.total_scored} scored",
+        ]
+    )
 
 
 def render_overview(scorecard: TrustScorecard) -> str:
@@ -352,6 +461,7 @@ class TrustModeScreen(ScopeScreen):
     SECTIONS: ClassVar[tuple[tuple[str, str], ...]] = (
         ("trust-section-overview", "TRUST"),
         ("trust-section-tiers", "TIERS"),
+        ("trust-section-determinism", "ORACLE DETERMINISM"),
         ("trust-section-stores", "SAMPLE SIZES"),
         ("trust-section-calibration", "EU CALIBRATION"),
         ("trust-section-verifier", "VERIFIER RELIABILITY"),
@@ -362,6 +472,19 @@ class TrustModeScreen(ScopeScreen):
     #: drives the overview border tint so the honest-negative state is
     #: visible at a glance. Watched so a refresh repaints the tint.
     starved: reactive[bool] = reactive(False, init=False)
+
+    def __init__(self) -> None:
+        """Construct the Trust mode screen with no externally bound evidence."""
+        super().__init__()
+        #: Externally supplied evidence rows for the oracle-determinism +
+        #: escape-ledger sections. ``None`` means "read the rows from the
+        #: store on refresh" (the live path); a non-``None`` tuple (pushed via
+        #: :meth:`set_evidence`) overrides the store read so a test / fixture
+        #: drives the sections without a live store. The render seam never
+        #: calls :func:`~eawf.workflow.verify.readiness.compute` (it spawns
+        #: live gate subprocesses) -- it reads the deterministic evidence
+        #: store or the pushed fixture only.
+        self._evidence_override: tuple[EvidenceRecord, ...] | None = None
 
     def compose_body(self) -> ComposeResult:
         """Yield the scrollable section column for the trust scorecard."""
@@ -416,6 +539,10 @@ class TrustModeScreen(ScopeScreen):
         Returns:
             The section's content-markup body.
         """
+        if section_id == "trust-section-determinism":
+            return render_oracle_determinism(
+                compute_oracle_determinism(self._current_evidence_records())
+            )
         if scorecard is None:
             return f"[$muted]{NO_DATA}[/]"
         if section_id == "trust-section-overview":
@@ -431,6 +558,57 @@ class TrustModeScreen(ScopeScreen):
         if section_id == "trust-section-labels":
             return render_output_labels(scorecard)
         return f"[$muted]{NO_DATA}[/]"
+
+    def set_evidence(self, records: Iterable[EvidenceRecord] | None) -> None:
+        """Bind evidence rows for the determinism + escape-ledger sections.
+
+        The render seam never calls
+        :func:`~eawf.workflow.verify.readiness.compute` (it spawns live gate
+        subprocesses), so the evidence rows that back the oracle-determinism
+        and escape-ledger sections are supplied externally here (a fixture
+        under test; the daemon close envelope at runtime). Passing ``None``
+        clears the override so the sections read the deterministic evidence
+        store again. Repaints the affected sections when the pane is mounted.
+
+        Args:
+            records: The evidence rows to bind, or ``None`` to fall back to
+                the store read.
+        """
+        self._evidence_override = None if records is None else tuple(records)
+        if self.is_mounted:
+            self._refresh_all()
+
+    def _current_evidence_records(self) -> tuple[EvidenceRecord, ...]:
+        """Return the evidence rows backing the determinism + escape sections.
+
+        Prefers the externally pushed override (:meth:`set_evidence`); when
+        none is bound, reads the deterministic evidence store under the
+        resolved ``state.json`` via
+        :func:`~eawf.workflow.estimation.trust_scorecard.read_store_projection`
+        (a pure JSONL read -- no subprocess, no live gate). A failed / absent
+        store read degrades to no rows so the sections render honest-empty
+        rather than crashing the mode.
+
+        Returns:
+            The evidence rows, empty on the honest-empty path.
+        """
+        if self._evidence_override is not None:
+            return self._evidence_override
+        state_path = self._resolved_state_path()
+        if state_path is None:
+            return ()
+        from eawf.workflow.estimation.trust_scorecard import read_store_projection
+
+        try:
+            projection = read_store_projection(state_path)
+        except (OSError, ValueError, TypeError) as exc:
+            logger.debug(f"_current_evidence_records store_read_failed cause={exc!r}")
+            return ()
+        records: list[EvidenceRecord] = []
+        for typed in projection.evidence:
+            if isinstance(typed.payload, EvidenceRecord):
+                records.append(typed.payload)
+        return tuple(records)
 
     def _current_state(self) -> State | None:
         """Return the host app's current read-only state, if loaded."""
@@ -477,10 +655,14 @@ class TrustModeScreen(ScopeScreen):
 __all__ = [
     "DATA_STARVED_NOTICE",
     "NO_DATA",
+    "NO_SCORED_EVIDENCE",
     "TRUST_REFRESH_S",
+    "OracleDeterminism",
     "TrustModeScreen",
+    "compute_oracle_determinism",
     "is_data_starved",
     "render_eu_calibration",
+    "render_oracle_determinism",
     "render_output_labels",
     "render_overview",
     "render_store_counts",
