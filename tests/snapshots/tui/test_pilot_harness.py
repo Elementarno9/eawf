@@ -57,6 +57,22 @@ def test_normalize_snapshot_noop_without_clock() -> None:
     assert normalize_snapshot(raw) == raw
 
 
+def test_normalize_snapshot_strips_daemon_degraded_banner() -> None:
+    # The daemon-degraded banner is env-dependent (rendered only when the
+    # daemon socket is unavailable) and embeds the runtime socket path, so it
+    # is dropped so snapshots stay byte-stable across machines + leak no path.
+    raw = (
+        "daemon socket unavailable; polling state.json | "
+        "socket=/run/user/1001/eawfd/eawfd.sock EAWF_RUNTIME_DIR=<unset>\n"
+        "real content row\n"
+    )
+    out = normalize_snapshot(raw)
+    assert "daemon socket unavailable" not in out
+    assert "/run/user/1001/eawfd" not in out
+    assert "real content row" in out
+    assert out.endswith("\n")
+
+
 # --------------------------------------------------------------------------
 # capture_screen_text — real app, ASCII text + trailing-blank trim
 # --------------------------------------------------------------------------
