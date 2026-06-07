@@ -3839,6 +3839,18 @@
       "scope_id": "P29-I13-W51",
       "status": "done",
       "updated_at": "2026-06-07T11:00:59.018076Z"
+    },
+    "P29-I13-W52": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W52",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W52",
+      "scope_id": "P29-I13-W52",
+      "status": "done",
+      "updated_at": "2026-06-07T11:34:19.062297Z"
     }
   },
   "agent_sessions": {
@@ -13441,6 +13453,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I13-W51",
       "updated_at": "2026-06-07T11:00:25.348710Z"
+    },
+    "P29-I13-W52": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W52-bucket-20260607T113418Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W52",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W52",
+      "updated_at": "2026-06-07T11:34:18.388870Z"
     }
   },
   "goals": {
@@ -14996,7 +15021,8 @@
         "P29-I13-W48",
         "P29-I13-W49",
         "P29-I13-W50",
-        "P29-I13-W51"
+        "P29-I13-W51",
+        "P29-I13-W52"
       ]
     }
   },
@@ -15821,7 +15847,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T11:00:59.018562Z",
+  "updated_at": "2026-06-07T11:34:19.062683Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -62710,6 +62736,38 @@
         }
       ],
       "title": "Drop cancelled campaigns from the research-board reader",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W52": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T11:34:18.388851Z",
+      "closed_at": "2026-06-07T11:34:19.062297Z",
+      "commit": "89f5c0218d4bbf81a354de9d25386432db31217b",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/integration/test_cli_dispatch.py",
+        "tests/test_smoke.py",
+        "tests/unit/test_cli_flags.py",
+        "tests/golden/plugin_install/**"
+      ],
+      "gates": [],
+      "id": "P29-I13-W52",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T11:33:37.159527Z",
+      "outcome": "version-coupled tests + plugin goldens updated to 0.5.0; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Update version-coupled tests and plugin goldens for 0.5.0",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
