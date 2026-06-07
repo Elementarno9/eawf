@@ -6,4 +6,4 @@ runtime: cc, config, daemon, hook, mcp, plugin, profile, skill
 ship: pr, release, sync, wiki
 ui: completion, help, render-output, status, tui, version
 vcs: clone-repo, coauthor, init, repo, state, store, wal, workspace
-worktrees: flow, worktree
+worktrees: dispatch, flow, worktree
