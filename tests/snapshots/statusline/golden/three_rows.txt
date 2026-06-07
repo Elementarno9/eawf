@@ -1,0 +1,3 @@
+P29-I13-W38 | feature/eawf-v0.5-p29
+ctx 42% | rate 18%
+mcp ok | mem 3

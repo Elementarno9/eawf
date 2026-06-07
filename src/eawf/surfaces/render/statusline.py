@@ -270,6 +270,41 @@ def render_segments(segments: list[StatuslineSegment], theme: StatuslineTheme) -
     return theme.separator.join(decorated)
 
 
+def render_rows(
+    rows_of_segments: list[list[StatuslineSegment]],
+    theme: StatuslineTheme,
+    *,
+    rows: int,
+) -> str:
+    """Render exactly *rows* statusline lines, newline-joined.
+
+    Each entry in *rows_of_segments* is one row's segment list, rendered
+    through :func:`render_segments` under *theme*. The output always carries
+    exactly *rows* lines: extra supplied rows beyond *rows* are dropped, and
+    a shortfall is padded with empty lines so the row count is stable for a
+    fixed-height statusline reader.
+
+    Args:
+        rows_of_segments: One segment list per row, in top-to-bottom order.
+        theme: Theme applied to every row.
+        rows: Number of lines to emit (> 0). Matches ``statusline.rows``.
+
+    Returns:
+        The rendered statusline of exactly *rows* newline-joined lines. No
+        trailing newline -- the caller decides how to write it.
+
+    Raises:
+        ValueError: When *rows* is not positive.
+    """
+    if rows <= 0:
+        raise ValueError(f"rows must be positive: {rows!r}")
+    lines: list[str] = []
+    for index in range(rows):
+        segments = rows_of_segments[index] if index < len(rows_of_segments) else []
+        lines.append(render_segments(segments, theme))
+    return "\n".join(lines)
+
+
 def terminal_supports_color() -> bool:
     """Return ``True`` when the active terminal can render ANSI colour.
 
@@ -357,6 +392,7 @@ __all__ = [
     "StatuslineSegment",
     "StatuslineTheme",
     "load_themes",
+    "render_rows",
     "render_segments",
     "resolve_color_mode",
     "resolve_glyph_mode",
