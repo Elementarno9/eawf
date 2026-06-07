@@ -9,6 +9,9 @@ Two surfaces today:
   the rendered line to ``~/.claude/statusline-cache/<session-id>.json``,
   exit ``0``. The cache is consulted by subsequent ``statusline`` runs
   when the same ``session_id`` is on stdin.
+- ``eawf cc statusline install`` — wire the statusline into the global
+  Claude Code ``settings.json`` (the wizard in
+  :mod:`eawf.surfaces.cli.commands.statusline`).
 
 Both commands always exit ``0`` from a successful pipeline; they never
 raise on a malformed Claude payload (decode/empty stdin → empty dict;
@@ -23,6 +26,7 @@ from typing import Annotated
 import typer
 
 from eawf.surfaces.cli._stdin import require_piped_stdin
+from eawf.surfaces.cli.commands.statusline import statusline_wizard_app
 from eawf.surfaces.cli.flags import GlobalFlags
 
 logger = logging.getLogger(__name__)
@@ -112,6 +116,8 @@ def statusline_prewarm(
         theme_name=theme,
     )
 
+
+statusline_app.add_typer(statusline_wizard_app, name="install")
 
 cc_app.add_typer(statusline_app, name="statusline")
 
