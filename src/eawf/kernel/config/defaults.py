@@ -394,6 +394,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "memory",
             "token_saving",
         ],
+        "glyph_mode": "auto",
+        "color_mode": "auto",
+        "rows": 1,
     },
     "docs": {
         "generated_default_dir": ".ea/artifacts/rendered",

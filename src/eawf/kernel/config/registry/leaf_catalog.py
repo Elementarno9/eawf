@@ -1391,6 +1391,32 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         default=(),
         writable_layers=_WRITABLE_GWR,
     ),
+    LeafKey(
+        key="statusline.glyph_mode",
+        domain="statusline",
+        type="literal",
+        default="auto",
+        writable_layers=("global", "workspace", "repo", "env"),
+        choices=("auto", "ascii", "unicode"),
+        description="Statusline glyph set: auto (downgrade on a no-color term) / ascii / unicode.",
+    ),
+    LeafKey(
+        key="statusline.color_mode",
+        domain="statusline",
+        type="literal",
+        default="auto",
+        writable_layers=("global", "workspace", "repo", "env"),
+        choices=("auto", "always", "never"),
+        description="Statusline ANSI colour: auto (off on a no-color term) / always / never.",
+    ),
+    LeafKey(
+        key="statusline.rows",
+        domain="statusline",
+        type="int",
+        default=1,
+        writable_layers=("global", "workspace", "repo", "env"),
+        description="Number of statusline rows the renderer emits (1..3).",
+    ),
     # --- docs --------------------------------------------------------------
     LeafKey(
         key="docs.generated_default_dir",
