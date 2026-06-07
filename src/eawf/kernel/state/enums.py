@@ -174,6 +174,21 @@ class OpenQuestionStatus(StrEnum):
     DROPPED = "dropped"
 
 
+class CampaignStatus(StrEnum):
+    """Lifecycle of a persisted research campaign record.
+
+    A staged campaign enters the store ``ACTIVE`` and stays there for the life
+    of the campaign. ``CANCELLED`` is the tombstone state: the operator
+    abandons the campaign, so the record is marked dead (with a cancel
+    timestamp + reason on the payload) rather than deleted, keeping the
+    append-only store traceable. A cancelled campaign no longer counts as live
+    research signal on the research board.
+    """
+
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+
+
 class Urgency(StrEnum):
     """Shared time-pressure ladder for operator-facing pauses and questions.
 

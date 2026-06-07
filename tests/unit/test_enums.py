@@ -212,6 +212,20 @@ def test_decision_status_rejects_unknown() -> None:
         enums.DecisionStatus("pending")
 
 
+# --- campaign.status ---
+
+
+def test_campaign_status_values() -> None:
+    expected = {"active", "cancelled"}
+    actual = {m.value for m in enums.CampaignStatus}
+    assert actual == expected
+
+
+def test_campaign_status_rejects_unknown() -> None:
+    with pytest.raises(ValueError):
+        enums.CampaignStatus("paused")
+
+
 # --- backlog.priority ---
 
 

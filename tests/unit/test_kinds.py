@@ -574,6 +574,66 @@ def test_research_campaign_rejects_over_max_dispatches() -> None:
         ResearchCampaignPayload.model_validate(_campaign_raw(too_many))
 
 
+def test_research_campaign_defaults_to_active_status() -> None:
+    """A campaign with no status field defaults to ACTIVE with no tombstone."""
+    from eawf.kernel.state.enums import CampaignStatus
+
+    payload = ResearchCampaignPayload.model_validate(_campaign_raw({"a": {}}))
+    assert payload.status is CampaignStatus.ACTIVE
+    assert payload.tombstone is None
+
+
+def test_research_campaign_cancelled_round_trip() -> None:
+    """A cancelled campaign carries its tombstone (cancel time + reason)."""
+    from eawf.kernel.state.enums import CampaignStatus
+
+    raw = _campaign_raw({"a": {}})
+    raw["status"] = "cancelled"
+    raw["tombstone"] = {
+        "cancelled_at": "2026-06-07T00:00:00+00:00",
+        "reason": "superseded by RC-002",
+    }
+    payload = ResearchCampaignPayload.model_validate(raw)
+    assert payload.status is CampaignStatus.CANCELLED
+    assert payload.tombstone is not None
+    assert payload.tombstone.cancelled_at == datetime(2026, 6, 7, tzinfo=UTC)
+    assert payload.tombstone.reason == "superseded by RC-002"
+
+
+def test_research_campaign_cancelled_without_tombstone_rejected() -> None:
+    """A cancelled campaign with no tombstone violates the status invariant."""
+    raw = _campaign_raw({"a": {}})
+    raw["status"] = "cancelled"
+    with pytest.raises(ValidationError, match="requires a tombstone"):
+        ResearchCampaignPayload.model_validate(raw)
+
+
+def test_research_campaign_active_with_tombstone_rejected() -> None:
+    """An active campaign carrying a tombstone violates the status invariant."""
+    raw = _campaign_raw({"a": {}})
+    raw["tombstone"] = {"cancelled_at": "2026-06-07T00:00:00+00:00", "reason": None}
+    with pytest.raises(ValidationError, match="must not carry a tombstone"):
+        ResearchCampaignPayload.model_validate(raw)
+
+
+def test_research_campaign_rejects_unknown_status() -> None:
+    """An out-of-vocabulary status is rejected by the closed enum."""
+    raw = _campaign_raw({"a": {}})
+    raw["status"] = "paused"
+    with pytest.raises(ValidationError):
+        ResearchCampaignPayload.model_validate(raw)
+
+
+def test_campaign_tombstone_rejects_over_long_reason() -> None:
+    """A cancel reason past the 280-char bound is rejected."""
+    from eawf.kernel.store.kinds.research_campaign import CampaignTombstone
+
+    with pytest.raises(ValidationError):
+        CampaignTombstone.model_validate(
+            {"cancelled_at": "2026-06-07T00:00:00+00:00", "reason": "x" * 281}
+        )
+
+
 # ---------------------------------------------------------------------------
 # Registry completeness
 # ---------------------------------------------------------------------------
