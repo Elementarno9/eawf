@@ -29,12 +29,12 @@
   │ no data                                                                                                        │
   └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  ┌─ VERIFIER RELIABILITY ─────────────────────────────────────────────────────────────────────────────────────────┐
-  │ no deterministic verifier evidence in window                                                                   │
+  ┌─ CALIBRATION READINESS ────────────────────────────────────────────────────────────────────────────────────────┐▆▆
+  │ captured waves 0 / 5                                                                                           │
+  │ calibration not-ready                                                                                          │
   └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  ┌─ OUTPUT LABELS ────────────────────────────────────────────────────────────────────────────────────────────────┐▇▇
-  │ P01-I01-W01 deferred_outcome outcome or actual store row not available yet                                     │
+  ┌─ VERIFIER RELIABILITY ─────────────────────────────────────────────────────────────────────────────────────────┐
 
  ↑↓ select  ·  K calibration  ·  v verifier  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  /   weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch

@@ -30,7 +30,7 @@ state plus the append-only stores under the resolved ``state.json``.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -41,11 +41,13 @@ from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.surfaces.tui.modals.calibration_drill import CalibrationSet
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.footer import render_hint_label
+from eawf.workflow.estimation.buckets import FIT_N_MIN, resolve_wave_actual
 from eawf.workflow.estimation.trust_scorecard import (
     TrustScorecard,
     compute_trust_scorecard,
@@ -122,6 +124,11 @@ NO_ESCAPES_NOTICE: str = "no escaped criteria"
 #: Cap on escape-ledger rows so a project with many waivers does not flood
 #: the section; an overflow count is appended past the cap.
 _MAX_ESCAPE_ROWS: int = 12
+
+#: Minimum count of closed waves with captured elapsed EU before the
+#: bucket re-fit (B069) can run. Mirrors :data:`eawf.workflow.estimation.buckets.FIT_N_MIN`
+#: so the readiness tile and the calibration fit agree on the same floor.
+_CALIBRATION_READY_THRESHOLD: int = FIT_N_MIN
 
 
 def is_data_starved(scorecard: TrustScorecard) -> bool:
@@ -305,6 +312,88 @@ def render_escape_ledger(escapes: tuple[EscapedCriterion, ...]) -> str:
     if overflow > 0:
         lines.append(f"[$muted]+{overflow} more[/]")
     return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class CalibrationReadiness:
+    """Whether enough captured elapsed EU backs a bucket re-fit (B069).
+
+    The bucket-drift re-fit reads each closed wave's measured
+    ``ActualSummary.elapsed_eu`` (the close path now records it from the
+    session runtime); the re-fit is only trustworthy once a floor of waves
+    carries that signal. This tile counts the captured waves against the
+    floor so the operator reads "how close is the calibration to having
+    enough data to act on".
+
+    Attributes:
+        captured_waves: Count of closed waves whose actual records a
+            positive ``elapsed_eu`` (the captured-runtime signal).
+        threshold: The minimum captured-wave count the re-fit needs.
+    """
+
+    captured_waves: int
+    threshold: int
+
+    @property
+    def ready(self) -> bool:
+        """Return whether the captured-wave count meets the floor."""
+        return self.captured_waves >= self.threshold
+
+
+def compute_calibration_readiness(
+    state: State,
+    *,
+    threshold: int = _CALIBRATION_READY_THRESHOLD,
+) -> CalibrationReadiness:
+    """Count closed waves with captured elapsed EU for the re-fit floor.
+
+    A wave contributes when it is CLOSED and its resolved
+    :class:`~eawf.kernel.state.models.ActualSummary` records a positive
+    ``elapsed_eu`` -- the measured-runtime signal the close path now
+    captures. This is a pure read over the typed state (no store read, no
+    subprocess), so the render seam can compute it without the live
+    readiness ``compute`` path.
+
+    Args:
+        state: Loaded typed :class:`State` snapshot (read-only).
+        threshold: The minimum captured-wave count the re-fit needs;
+            defaults to :data:`_CALIBRATION_READY_THRESHOLD`.
+
+    Returns:
+        The :class:`CalibrationReadiness` tally.
+    """
+    captured = 0
+    for wave in state.waves.values():
+        if wave.status != WaveStatus.CLOSED:
+            continue
+        actual = resolve_wave_actual(state, wave.id)
+        if actual is not None and actual.elapsed_eu > 0.0:
+            captured += 1
+    return CalibrationReadiness(captured_waves=captured, threshold=threshold)
+
+
+def render_calibration_readiness(readiness: CalibrationReadiness) -> str:
+    """Render the calibration-readiness tile body.
+
+    Shows the captured-wave count against the floor plus a ready /
+    not-ready verdict so the operator reads whether the bucket re-fit has
+    enough captured elapsed EU to act on. The verdict colour reflects the
+    state: ready is the green target, not-ready is the muted "collecting"
+    state (not a warning -- it is the expected early state).
+
+    Args:
+        readiness: The computed readiness tally.
+
+    Returns:
+        A content-markup tile body.
+    """
+    verdict = "[$ok]ready[/]" if readiness.ready else "[$muted]not-ready[/]"
+    return "\n".join(
+        [
+            f"captured waves {readiness.captured_waves} / {readiness.threshold}",
+            f"calibration {verdict}",
+        ]
+    )
 
 
 def render_overview(scorecard: TrustScorecard) -> str:
@@ -565,6 +654,7 @@ class TrustModeScreen(ScopeScreen):
         ("trust-section-escapes", "ESCAPE LEDGER"),
         ("trust-section-stores", "SAMPLE SIZES"),
         ("trust-section-calibration", "EU CALIBRATION"),
+        ("trust-section-calibration-readiness", "CALIBRATION READINESS"),
         ("trust-section-verifier", "VERIFIER RELIABILITY"),
         ("trust-section-labels", "OUTPUT LABELS"),
     )
@@ -591,6 +681,13 @@ class TrustModeScreen(ScopeScreen):
         #: predictions exist and the drill renders honest-empty. A fixture
         #: pushes a set via :meth:`set_calibration`.
         self._calibration: CalibrationSet | None = None
+        #: Externally supplied calibration-readiness tally for the CALIBRATION
+        #: READINESS tile. ``None`` means "compute it from the host state on
+        #: refresh" (the live path); a non-``None`` value (pushed via
+        #: :meth:`set_calibration_readiness`) overrides the compute so a test /
+        #: fixture drives the tile. The compute is a pure read over closed-wave
+        #: actuals -- the render seam never calls the live readiness compute.
+        self._calibration_readiness: CalibrationReadiness | None = None
 
     def compose_body(self) -> ComposeResult:
         """Yield the scrollable section column for the trust scorecard."""
@@ -634,6 +731,19 @@ class TrustModeScreen(ScopeScreen):
         window = scorecard.window if scorecard is not None else None
         logger.info(f"trust_refresh starved={self.starved} window={window!r}")
 
+    #: Dispatch from a scorecard-backed section id to its render helper. The
+    #: evidence-backed (determinism / escape) and state-backed (calibration
+    #: readiness) sections are handled ahead of this map because they read
+    #: their own data source rather than the scorecard.
+    _SCORECARD_RENDERERS: ClassVar[dict[str, Callable[[TrustScorecard], str]]] = {
+        "trust-section-overview": render_overview,
+        "trust-section-tiers": render_tier_counts,
+        "trust-section-stores": render_store_counts,
+        "trust-section-calibration": render_eu_calibration,
+        "trust-section-verifier": render_verifier_reliability,
+        "trust-section-labels": render_output_labels,
+    }
+
     def _section_body(self, section_id: str, scorecard: TrustScorecard | None) -> str:
         """Render *section_id*'s body from *scorecard*.
 
@@ -651,21 +761,15 @@ class TrustModeScreen(ScopeScreen):
             )
         if section_id == "trust-section-escapes":
             return render_escape_ledger(build_escape_ledger(self._current_evidence_records()))
-        if scorecard is None:
+        if section_id == "trust-section-calibration-readiness":
+            readiness = self._current_calibration_readiness()
+            if readiness is None:
+                return f"[$muted]{NO_DATA}[/]"
+            return render_calibration_readiness(readiness)
+        renderer = self._SCORECARD_RENDERERS.get(section_id)
+        if scorecard is None or renderer is None:
             return f"[$muted]{NO_DATA}[/]"
-        if section_id == "trust-section-overview":
-            return render_overview(scorecard)
-        if section_id == "trust-section-tiers":
-            return render_tier_counts(scorecard)
-        if section_id == "trust-section-stores":
-            return render_store_counts(scorecard)
-        if section_id == "trust-section-calibration":
-            return render_eu_calibration(scorecard)
-        if section_id == "trust-section-verifier":
-            return render_verifier_reliability(scorecard)
-        if section_id == "trust-section-labels":
-            return render_output_labels(scorecard)
-        return f"[$muted]{NO_DATA}[/]"
+        return renderer(scorecard)
 
     def set_evidence(self, records: Iterable[EvidenceRecord] | None) -> None:
         """Bind evidence rows for the determinism + escape-ledger sections.
@@ -683,6 +787,22 @@ class TrustModeScreen(ScopeScreen):
                 the store read.
         """
         self._evidence_override = None if records is None else tuple(records)
+        if self.is_mounted:
+            self._refresh_all()
+
+    def set_calibration_readiness(self, readiness: CalibrationReadiness | None) -> None:
+        """Bind the calibration-readiness tally for the CALIBRATION READINESS tile.
+
+        ``None`` clears the override so the tile computes its tally from the
+        host state on refresh (the live path); a non-``None`` value drives the
+        tile from a fixture without a live state. Repaints the affected section
+        when the pane is mounted.
+
+        Args:
+            readiness: The readiness tally to bind, or ``None`` to fall back to
+                the state-derived compute.
+        """
+        self._calibration_readiness = readiness
         if self.is_mounted:
             self._refresh_all()
 
@@ -771,6 +891,26 @@ class TrustModeScreen(ScopeScreen):
                 records.append(typed.payload)
         return tuple(records)
 
+    def _current_calibration_readiness(self) -> CalibrationReadiness | None:
+        """Return the calibration-readiness tally for the readiness tile.
+
+        Prefers the externally pushed override
+        (:meth:`set_calibration_readiness`); when none is bound, computes the
+        tally from the host state's closed-wave actuals via
+        :func:`compute_calibration_readiness` (a pure read -- no store, no
+        subprocess). Returns ``None`` before state loads so the tile renders
+        the awaiting placeholder rather than a fabricated zero.
+
+        Returns:
+            The readiness tally, or ``None`` before state loads.
+        """
+        if self._calibration_readiness is not None:
+            return self._calibration_readiness
+        state = self._current_state()
+        if state is None:
+            return None
+        return compute_calibration_readiness(state)
+
     def _current_state(self) -> State | None:
         """Return the host app's current read-only state, if loaded."""
         try:
@@ -819,12 +959,15 @@ __all__ = [
     "NO_ESCAPES_NOTICE",
     "NO_SCORED_EVIDENCE",
     "TRUST_REFRESH_S",
+    "CalibrationReadiness",
     "EscapedCriterion",
     "OracleDeterminism",
     "TrustModeScreen",
     "build_escape_ledger",
+    "compute_calibration_readiness",
     "compute_oracle_determinism",
     "is_data_starved",
+    "render_calibration_readiness",
     "render_escape_ledger",
     "render_eu_calibration",
     "render_oracle_determinism",
