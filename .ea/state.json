@@ -14852,7 +14852,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T04:20:10.557626Z",
+  "updated_at": "2026-06-07T04:23:59.424557Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -59776,7 +59776,7 @@
         },
         {
           "args": {
-            "mode": "research"
+            "mode": "research_board"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-02",
@@ -60031,7 +60031,7 @@
         },
         {
           "args": {
-            "mode": "config"
+            "mode": "home"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-02",
