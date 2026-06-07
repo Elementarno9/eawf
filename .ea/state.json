@@ -3360,6 +3360,18 @@
       "status": "done",
       "updated_at": "2026-06-07T04:20:10.557276Z"
     },
+    "P29-I13-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W12",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W12",
+      "scope_id": "P29-I13-W12",
+      "status": "done",
+      "updated_at": "2026-06-07T06:06:44.384149Z"
+    },
     "P29-I13-W13": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -3419,6 +3431,30 @@
       "scope_id": "P29-I13-W17",
       "status": "done",
       "updated_at": "2026-06-07T05:01:08.940978Z"
+    },
+    "P29-I13-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W18",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W18",
+      "scope_id": "P29-I13-W18",
+      "status": "done",
+      "updated_at": "2026-06-07T06:08:00.202017Z"
+    },
+    "P29-I13-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W19",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W19",
+      "scope_id": "P29-I13-W19",
+      "status": "done",
+      "updated_at": "2026-06-07T06:08:30.553420Z"
     },
     "P29-I13-W42": {
       "actual_cost_usd": 0.0,
@@ -12515,6 +12551,19 @@
       "scope_id": "P29-I13-W11",
       "updated_at": "2026-06-07T04:19:43.795923Z"
     },
+    "P29-I13-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W12-bucket-20260607T060035Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W12",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W12",
+      "updated_at": "2026-06-07T06:00:35.195342Z"
+    },
     "P29-I13-W13": {
       "confidence": "low",
       "current_store_record_id": "EST-P29-I13-W13-bucket-20260607T050007Z",
@@ -12579,6 +12628,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I13-W17",
       "updated_at": "2026-06-07T05:00:55.203780Z"
+    },
+    "P29-I13-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W18-bucket-20260607T060759Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I13-W18",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I13-W18",
+      "updated_at": "2026-06-07T06:07:59.463212Z"
+    },
+    "P29-I13-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W19-bucket-20260607T060801Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W19",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W19",
+      "updated_at": "2026-06-07T06:08:01.365776Z"
     },
     "P29-I13-W42": {
       "confidence": "low",
@@ -14977,7 +15052,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T05:01:08.941281Z",
+  "updated_at": "2026-06-07T06:08:30.553874Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -59716,10 +59791,10 @@
     "P29-I13-W12": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T05:35:32.776534Z",
+      "closed_at": "2026-06-07T06:06:44.384149Z",
+      "commit": "78d23c00910852244c565d5a2012ca250e35043d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -59737,7 +59812,8 @@
               "tests/snapshots/tui/test_affordance_matrix.py",
               "-q"
             ],
-            "scope": "touched"
+            "scope": "touched",
+            "timeout_class": "slow"
           },
           "cadence": "every-wave",
           "criterion_id": "CR-01",
@@ -59764,10 +59840,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:08.894923Z",
-      "outcome": null,
+      "outcome": "affordance-matrix sweep reports zero unresolved keys (DEFERRED_KEYS empty); home keys resolve; both gates green (gate timeout bumped to slow for the 352s sweep)",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -60094,10 +60170,10 @@
     "P29-I13-W18": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:07:59.463203Z",
+      "closed_at": "2026-06-07T06:08:00.202017Z",
+      "commit": "c4023828e4e5d86e88f9da7f8f8a1ac39d65aef2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -60110,10 +60186,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:13.038415Z",
-      "outcome": null,
+      "outcome": "adapter-enable + budget keys promoted to the config registry (layer-writability aware); advisory",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [],
       "title": "Promote the adapter-enable and budget keys to the config registry",
       "token_budget": null,
@@ -60123,10 +60199,10 @@
     "P29-I13-W19": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T06:08:01.365769Z",
+      "closed_at": "2026-06-07T06:08:30.553420Z",
+      "commit": "2569e9744a296e6fca5f2823be97aa6779623d33",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -60171,10 +60247,10 @@
       "intent": null,
       "iter_id": "P29-I13",
       "opened_at": "2026-06-07T01:48:13.724452Z",
-      "outcome": null,
+      "outcome": "config modal renders adapter-enable + budget keys read-only on forbidden layers; c config key resolves; both gates green",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
