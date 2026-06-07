@@ -3686,6 +3686,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-06-A54-P29-i11-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I11/ART-A54-P29-i11"
     },
+    "ART-A55-P29-i12": {
+      "created_at": "2026-06-07T01:07:47.660899Z",
+      "id": "ART-A55-P29-i12",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-07-A55-P29-i12-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P29-I12/ART-A55-P29-i12"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -4585,6 +4595,17 @@
       "scope_id": "P29-I11",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A55-P29-i12": {
+      "check_results": [],
+      "created_at": "2026-06-07T01:07:48.377836Z",
+      "id": "A55-P29-i12",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A55-P29-i12",
+      "scope_id": "P29-I12",
+      "status": "complete",
+      "verdict": "pass"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -6129,7 +6150,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P29-I12",
+    "iter_id": null,
     "phase_id": "P29",
     "project_code": "EAWF",
     "subproject_id": null
@@ -13600,16 +13621,16 @@
       ]
     },
     "P29-I12": {
-      "audit_id": null,
+      "audit_id": "A55-P29-i12",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-07T01:10:10.635369Z",
       "description": "Build the deterministic-gate storage + the spec-body criteria/gate authoring system that I13's in-band TUI waves require to close. Backend/advisory waves; authored via the current CLI.",
       "estimate_id": null,
       "id": "P29-I12",
       "intent": null,
       "opened_at": "2026-06-06T22:15:00.093423Z",
       "phase_id": "P29",
-      "status": "active",
+      "status": "closed",
       "title": "Spine-authoring bootstrap: gate-row storage + spec-body sync",
       "trigger": "none",
       "wave_ids": [
@@ -13787,6 +13808,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I11-close-A54-P29-i11",
       "summary": "iter P29-I11 closed with audit A54-P29-i11; waves closed=10; outcomes P29-I11-W01: run_oracle ordered-escalation runner (verify/oracle.py): sorts gates by gate-kind tier, exhau... | P29-I11-W02: Anti-drift generator (propose/generator.py): extract_units + deterministic coverage_diff over... | P29-I11-W03: Wired run_oracle per-criterion loop into the daemon wave-close gate past the enforce guard (b...",
+      "tier": "working"
+    },
+    "MEM-P29-I12-close-A55-P29-i12": {
+      "confidence": "high",
+      "id": "MEM-P29-I12-close-A55-P29-i12",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-07T01:10:10.635369Z",
+      "scope_id": "P29-I12",
+      "status": "active",
+      "store_record_id": "MEM-P29-I12-close-A55-P29-i12",
+      "summary": "iter P29-I12 closed with audit A55-P29-i12; waves closed=10; outcomes P29-I12-W01: integrated via cherry-pick; tests green per executor report | P29-I12-W02: integrated via cherry-pick; tests green per executor report | P29-I12-W03: integrated via cherry-pick; tests green per executor report",
       "tier": "working"
     }
   },
@@ -14453,7 +14485,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T01:05:18.445499Z",
+  "updated_at": "2026-06-07T01:10:10.635874Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
