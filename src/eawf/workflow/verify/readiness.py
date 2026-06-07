@@ -6,11 +6,14 @@ of three inputs:
 * typed :class:`~eawf.kernel.spec.common.CriterionSpec` /
   :class:`~eawf.kernel.spec.common.GateSpec` definitions attached to
   the scope, loaded via :func:`_load_criterion_specs` /
-  :func:`_load_gate_specs`. These loaders return ``[]`` in v0.4.0
-  because the on-disk spec persistence (per-phase cache +
-  ``.ea/specs/<phase>/[<iter>/]<wave|spec>.md`` body) cannot yet
-  round-trip typed criterion / gate rows; tests monkeypatch the
-  loaders to inject synthetic specs;
+  :func:`_load_gate_specs`. Both loaders read the typed wave row
+  directly — criteria from
+  :attr:`~eawf.kernel.state.models.Wave.success_criteria` (retyped at
+  ``1.6 -> 1.7``) and gates from
+  :attr:`~eawf.kernel.state.models.Wave.gates` (added at
+  ``1.7 -> 1.8``) — so the wave row IS the on-disk source of truth for
+  typed specs; tests may still monkeypatch the loaders to inject
+  synthetic specs without constructing a full wave row;
 * the legacy :attr:`~eawf.kernel.state.models.Wave.success_criteria`
   string list (still load-bearing in v0.4.0);
 * :class:`~eawf.kernel.store.kinds.evidence.EvidenceRecord` rows in
@@ -98,26 +101,33 @@ def _load_criterion_specs(scope_id: str, state: State) -> list[CriterionSpec]:
 def _load_gate_specs(scope_id: str, state: State) -> list[GateSpec]:
     """Return typed GateSpec rows attached to *scope_id*.
 
-    Symmetric to :func:`_load_criterion_specs` — returns ``[]`` today
-    because the spec-cache + spec-body persistence (authority-map row
-    10) cannot yet round-trip typed gate rows; the markdown body
-    parser arrives in a later wave. The daemon-side companion stub
-    :func:`eawf.runtime.daemon.methods.spec._extract_gate_specs` is the
-    canonical extraction site whose verdict will feed both this loader
-    and the W09 argv-policy promote check once the parser ships.
+    Symmetric to :func:`_load_criterion_specs` — reads the typed
+    :attr:`~eawf.kernel.state.models.Wave.gates` field directly: the
+    ``1.7 -> 1.8`` migration added it as ``list[GateSpec]`` (default
+    ``[]``), so the wave row IS the on-disk source of truth for gate
+    specs (no separate spec-cache round-trip is needed). A wave with no
+    gates yields ``[]``; a non-wave scope (iter / phase) likewise yields
+    ``[]`` until those scopes carry their own gates.
 
-    Tests monkeypatch this helper to exercise the deterministic-floor
-    integration (W08) without persisting typed gates on disk first.
+    The helper stays a separate function (rather than inlined into
+    :func:`compute` and the daemon close gate) so tests can still
+    monkeypatch it to feed synthetic specs into the deterministic-floor
+    integration (W08) and the criterion-gate-ref validation without
+    constructing a full wave row.
 
     Args:
-        scope_id: Wave / iter / phase URN. Reserved.
-        state: Validated state model. Reserved likewise.
+        scope_id: Wave / iter / phase URN. Only wave scopes carry gates
+            today; other scopes resolve to ``[]``.
+        state: Validated state model the wave row is read from.
 
     Returns:
-        Empty list in v0.4.0.
+        The wave's typed gate rows, or ``[]`` when the scope is not a
+        known wave or carries no gates.
     """
-    del scope_id, state  # unused until the body parser ships
-    return []
+    wave = state.waves.get(scope_id)
+    if wave is None:
+        return []
+    return list(wave.gates)
 
 
 def _read_evidence_rows(store_dir: Path) -> list[EvidenceRecord]:

@@ -241,6 +241,45 @@ def test_empty_wave_renders_ready_with_no_criteria_warning(tmp_path: Path) -> No
     assert result.warnings == ["no criteria attached to wave"]
 
 
+# ---- Direct loader pins (W02: un-idle _load_gate_specs) ---------------------
+
+
+def test_load_gate_specs_reads_wave_gates_without_monkeypatch() -> None:
+    """``_load_gate_specs`` returns the wave's typed ``gates`` rows directly.
+
+    Pins the W02 un-idle: the loader reads
+    :attr:`~eawf.kernel.state.models.Wave.gates` from the state row with no
+    test monkeypatching, mirroring :func:`_load_criterion_specs`.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    gate = _make_gate("GATE-direct", criterion_id="CRIT-direct")
+    state.waves[WAVE_ID].gates = [gate]
+
+    loaded = readiness_mod._load_gate_specs(WAVE_ID, state)
+
+    assert [g.id for g in loaded] == ["GATE-direct"]
+    assert loaded[0] is gate
+    # The loader returns a fresh list (not the underlying field) so callers
+    # cannot mutate the wave row through the return value.
+    assert loaded is not state.waves[WAVE_ID].gates
+
+
+def test_load_gate_specs_returns_empty_for_wave_without_gates() -> None:
+    """A seeded wave with no gates resolves to ``[]`` (default-empty field)."""
+    state = _empty_state()
+    _seed_wave(state)
+
+    assert readiness_mod._load_gate_specs(WAVE_ID, state) == []
+
+
+def test_load_gate_specs_returns_empty_for_unknown_scope() -> None:
+    """A non-wave / unknown scope id resolves to ``[]`` rather than raising."""
+    state = _empty_state()
+
+    assert readiness_mod._load_gate_specs("P99-I99-W99", state) == []
+
+
 def test_spec_wave_all_gates_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Spec wave with every gate ``pass`` rolls up to ``ready=True``."""
     state = _empty_state()
