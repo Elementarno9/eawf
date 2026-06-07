@@ -3,7 +3,7 @@
 ``eawf plugin install claude`` writes ``.claude/{skills,agents,hooks}/`` under
 the workspace root — project-local mode. Operators can *also* install the
 packaged plugin via ``/plugin marketplace add ./build/eawf-plugin`` +
-``/plugin install eawf@eawf-local``; that copy lives under
+``/plugin install eawf@eawf``; that copy lives under
 ``~/.claude/plugins/`` and is global to the user.
 
 Running both modes simultaneously makes Claude Code see every skill / agent /

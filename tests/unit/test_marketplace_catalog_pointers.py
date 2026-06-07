@@ -43,7 +43,7 @@ def test_claude_pointer_exists_and_parses() -> None:
     """The committed Claude pointer is present and valid JSON."""
     assert _CLAUDE_POINTER.is_file()
     body = json.loads(_CLAUDE_POINTER.read_text(encoding="utf-8"))
-    assert body["name"] == "eawf-local"
+    assert body["name"] == "eawf"
     assert isinstance(body["plugins"], list)
 
 
@@ -51,7 +51,7 @@ def test_codex_pointer_exists_and_parses() -> None:
     """The committed Codex pointer is present and valid JSON."""
     assert _CODEX_POINTER.is_file()
     body = json.loads(_CODEX_POINTER.read_text(encoding="utf-8"))
-    assert body["name"] == "eawf-local-codex"
+    assert body["name"] == "eawf-codex"
     assert isinstance(body["plugins"], list)
 
 

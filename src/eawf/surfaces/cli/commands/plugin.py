@@ -171,7 +171,7 @@ def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
         cli_errors.emit_error(
             cli_errors.UserError(
                 f"{message}. Rerun without --no-input to confirm, pass --force "
-                "to acknowledge, or `/plugin uninstall eawf@eawf-local` inside "
+                "to acknowledge, or `/plugin uninstall eawf@eawf` inside "
                 "Claude Code first.",
                 kind="InvalidInput",
             ),

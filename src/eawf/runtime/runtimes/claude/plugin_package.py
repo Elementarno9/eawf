@@ -2,7 +2,7 @@
 
 Per Phase 6 W05, ``eawf plugin package claude`` produces an installable
 plugin tree the user can register via ``/plugin marketplace add <path>``
-and install via ``/plugin install eawf@eawf-local``. The output layout
+and install via ``/plugin install eawf@eawf``. The output layout
 differs from :mod:`eawf.runtime.runtimes.claude.plugin_install`:
 
 ::

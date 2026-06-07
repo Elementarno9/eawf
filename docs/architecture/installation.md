@@ -329,10 +329,10 @@ Claude Code — add the marketplace by repo slug, then install from it:
 
 ```text
 /plugin marketplace add Elementarno9/eawf
-/plugin install eawf@eawf-local
+/plugin install eawf@eawf
 ```
 
-Codex — point `plugin marketplace add` at the repo; `marketplace add` registers the `eawf-local-codex` marketplace and auto-installs its plugin (Codex has no separate `plugin install`):
+Codex — point `plugin marketplace add` at the repo; `marketplace add` registers the `eawf-codex` marketplace and auto-installs its plugin (Codex has no separate `plugin install`):
 
 ```bash
 codex plugin marketplace add https://github.com/Elementarno9/eawf

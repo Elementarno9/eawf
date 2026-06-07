@@ -61,7 +61,7 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert "@" not in serialised
     assert "/Users/" not in serialised  # pragma: allowlist secret
     marketplace = json.loads((target / ".claude-plugin" / "marketplace.json").read_text())
-    assert marketplace["name"] == "eawf-local"
+    assert marketplace["name"] == "eawf"
     # Default publish_source keeps the relative dev source so
     # ``/plugin marketplace add <path>`` is unchanged; npm is opt-in.
     assert marketplace["plugins"][0]["source"] == "./"
@@ -191,7 +191,7 @@ def test_package_published_emits_npm_source(tmp_path: Path) -> None:
     package_plugin(target, publish_source=PublishSource.NPM)
     marketplace = json.loads((target / ".claude-plugin" / "marketplace.json").read_text())
     # Marketplace identity is unchanged; only the plugin source kind flips.
-    assert marketplace["name"] == "eawf-local"
+    assert marketplace["name"] == "eawf"
     source = marketplace["plugins"][0]["source"]
     assert source == {"source": "npm", "package": "eawf"}
 

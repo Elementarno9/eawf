@@ -28,10 +28,10 @@ def test_returns_none_when_no_eawf_named_entry(tmp_path: Path) -> None:
 
 
 def test_returns_conflict_on_eawf_named_dir(tmp_path: Path) -> None:
-    home = _make_home(tmp_path, "eawf-local")
+    home = _make_home(tmp_path, "eawf")
     result = detect_marketplace_install(home=home)
     assert isinstance(result, CCPluginConflict)
-    assert result.plugin_dir == home / ".claude" / "plugins" / "eawf-local"
+    assert result.plugin_dir == home / ".claude" / "plugins" / "eawf"
 
 
 def test_returns_conflict_case_insensitive(tmp_path: Path) -> None:

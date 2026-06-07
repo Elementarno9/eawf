@@ -2,7 +2,7 @@
   "interface": {
     "displayName": "E\u00e4 Workflow (local)"
   },
-  "name": "eawf-local-codex",
+  "name": "eawf-codex",
   "plugins": [
     {
       "category": "Productivity",

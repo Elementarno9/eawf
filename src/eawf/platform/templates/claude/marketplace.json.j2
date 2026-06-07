@@ -1,10 +1,10 @@
 {#- Claude Code local marketplace manifest. Single-plugin shape so the
     user can run ``/plugin marketplace add <path>`` and ``/plugin install
-    eawf@eawf-local``. Variables: author_name. The wrapper renderer
+    eawf@eawf``. Variables: author_name. The wrapper renderer
     re-serialises the JSON to canonicalise spacing. -#}
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "eawf-local",
+  "name": "eawf",
   "description": "Eä Workflow local marketplace (single-plugin)",
   "owner": {"name": {{ author_name | tojson }}},
   "plugins": [

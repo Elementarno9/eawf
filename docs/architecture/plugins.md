@@ -41,7 +41,7 @@ designed to coexist — pick the one that matches the audience.
 | Mode | Command | Output | Audience |
 |---|---|---|---|
 | Repo install | `eawf plugin install claude` | `<repo>/.claude/skills/`, `agents/`, `hooks/`, `settings.json` | Per-repo workspace wiring; pairs with `.ea/state.json` and the runtime hook router. |
-| Plugin package | `eawf plugin package claude` | `<target>/.claude-plugin/plugin.json` + `<target>/skills/` + `<target>/agents/` + optional `marketplace.json` + optional `README.md` | Standalone Claude Code marketplace install via `/plugin marketplace add <path>` then `/plugin install eawf@eawf-local`. |
+| Plugin package | `eawf plugin package claude` | `<target>/.claude-plugin/plugin.json` + `<target>/skills/` + `<target>/agents/` + optional `marketplace.json` + optional `README.md` | Standalone Claude Code marketplace install via `/plugin marketplace add <path>` then `/plugin install eawf@eawf`. |
 
 ### Repo install mode
 
@@ -165,14 +165,7 @@ runs:
 codex plugin marketplace add ./build/eawf-codex-marketplace
 ```
 
-`marketplace add` registers the marketplace and auto-installs its
-plugins. Codex has no separate `plugin install` subcommand — only
-`plugin marketplace {add,upgrade,remove}`. The
-`[plugins.eawf] enabled = true` block that `eawf plugin install codex`
-writes to `~/.codex/config.toml` activates the plugin once Codex
-discovers it. After registration, Codex caches the plugin under
-`~/.codex/plugins/cache/eawf-local-codex/eawf/<version>/` and loads it
-from there.
+`marketplace add` registers the marketplace and auto-installs its plugins. Codex has no separate `plugin install` subcommand — only `plugin marketplace {add,upgrade,remove}`. The `[plugins.eawf] enabled = true` block that `eawf plugin install codex` writes to `~/.codex/config.toml` activates the plugin once Codex discovers it. After registration, Codex caches the plugin under `~/.codex/plugins/cache/eawf-codex/eawf/<version>/` and loads it from there.
 
 ## Install from the committed marketplace
 
@@ -180,18 +173,18 @@ Eä ships its own marketplace pointers in the repo, so an operator installs the 
 
 ### Claude Code flow
 
-`.claude-plugin/marketplace.json` declares the `eawf-local` marketplace whose single `eawf` plugin resolves from the `eawf` npm package. Add the marketplace by repo slug, then install the plugin from it:
+`.claude-plugin/marketplace.json` declares the `eawf` marketplace whose single `eawf` plugin resolves from the `eawf` npm package. Add the marketplace by repo slug, then install the plugin from it:
 
 ```text
 /plugin marketplace add Elementarno9/eawf
-/plugin install eawf@eawf-local
+/plugin install eawf@eawf
 ```
 
 `marketplace add` reads `.claude-plugin/marketplace.json` from the repo's default branch; `install` pulls the published `eawf` npm package the pointer names. This is the cross-workspace path — it does not need `--scope user` (which the Claude adapter rejects) because Claude Code mounts the marketplace plugin under `~/.claude/plugins/...` for every workspace.
 
 ### Codex flow
 
-`.agents/plugins/marketplace.json` declares the `eawf-local-codex` marketplace whose single `eawf` plugin resolves from a `git-subdir` source: the `./plugins/eawf` subtree on the `plugins-dist` branch of the same repo. Point `codex plugin marketplace add` at the repo (Codex reads the committed `.agents/plugins/marketplace.json`):
+`.agents/plugins/marketplace.json` declares the `eawf-codex` marketplace whose single `eawf` plugin resolves from a `git-subdir` source: the `./plugins/eawf` subtree on the `plugins-dist` branch of the same repo. Point `codex plugin marketplace add` at the repo (Codex reads the committed `.agents/plugins/marketplace.json`):
 
 ```bash
 codex plugin marketplace add https://github.com/Elementarno9/eawf
