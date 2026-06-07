@@ -3215,6 +3215,18 @@
       "scope_id": "P29-I12-W09",
       "status": "done",
       "updated_at": "2026-06-07T00:46:37.400805Z"
+    },
+    "P29-I12-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W10",
+      "scope_id": "P29-I12-W10",
+      "status": "done",
+      "updated_at": "2026-06-07T01:05:18.445192Z"
     }
   },
   "agent_sessions": {
@@ -12109,6 +12121,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I12-W09",
       "updated_at": "2026-06-07T00:46:36.687488Z"
+    },
+    "P29-I12-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W10-bucket-20260607T010517Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I12-W10",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I12-W10",
+      "updated_at": "2026-06-07T01:05:17.743296Z"
     }
   },
   "goals": {
@@ -13596,7 +13621,8 @@
         "P29-I12-W06",
         "P29-I12-W07",
         "P29-I12-W08",
-        "P29-I12-W09"
+        "P29-I12-W09",
+        "P29-I12-W10"
       ]
     },
     "P29-I13": {
@@ -14427,7 +14453,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T00:46:37.401100Z",
+  "updated_at": "2026-06-07T01:05:18.445499Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -58340,6 +58366,50 @@
         }
       ],
       "title": "Align close-gate docstring with the wired gate loader",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-07T01:05:17.743288Z",
+      "closed_at": "2026-06-07T01:05:18.445192Z",
+      "commit": "ce4e2762335ed57260d41da8fbcdbe8642116aff",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/golden/cli/help_panels.golden.txt"
+      ],
+      "gates": [],
+      "id": "P29-I12-W10",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-07T01:04:56.912671Z",
+      "outcome": "help-panel golden regenerated for the dispatch group; test_help_panel_golden_matches passes",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the help_panels golden lists the dispatch group so test_help_panel_golden_matches passes after W08 registered the dispatch verbs",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the help_panels golden lists the dispatch group so test_help_panel_golden_matches passes after W08 registered the dispatch verbs",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Regen help-panel golden for the dispatch command group",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
