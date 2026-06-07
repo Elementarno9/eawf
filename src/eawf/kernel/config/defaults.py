@@ -140,6 +140,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "color": "auto",
         "glyphs": "auto",
         "refresh_ms": 1000,
+        "tour_completed": False,
         "dashboard_panes": [
             "state",
             "roadmap",

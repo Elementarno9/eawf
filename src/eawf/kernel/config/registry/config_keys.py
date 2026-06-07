@@ -559,6 +559,17 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
         choices=("off", "important", "all"),
     ),
     ConfigKey(
+        tab="ui",
+        key="ui.tour_completed",
+        label="First-run onboarding tour completed",
+        type="bool",
+        default=False,
+        description=(
+            "True once the operator has dismissed the first-run tour; the "
+            "tour modal sets this on dismissal so it does not re-open."
+        ),
+    ),
+    ConfigKey(
         tab="vcs",
         key="vcs.auto_commit",
         label="Auto-commit policy",

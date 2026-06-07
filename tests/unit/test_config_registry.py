@@ -423,3 +423,57 @@ def test_budget_multiplier_rejects_below_minimum() -> None:
     assert entry is not None
     with pytest.raises(UserError, match="below minimum"):
         coerce_and_validate(entry, "0.5")
+
+
+# --- W26: ui.tour_completed onboarding-state leaf ----------------------------
+
+
+def test_tour_completed_key_is_registered() -> None:
+    # The first-run tour-completed flag resolves to a CONFIG_REGISTRY entry so
+    # the operator-tunable menu + TUI config modal both surface it.
+    entry = registry_lookup("ui.tour_completed")
+    assert entry is not None
+    assert entry.key == "ui.tour_completed"
+    assert entry.type == "bool"
+    assert entry.tab == "ui"
+
+
+def test_tour_completed_default_is_false() -> None:
+    # boundary: a fresh install has not seen the tour, so the default is False
+    # (the tour opens on first run and flips this to True on dismissal).
+    entry = registry_lookup("ui.tour_completed")
+    assert entry is not None
+    assert entry.default is False
+    assert coerce_and_validate(entry, entry.default) is False
+
+
+def test_tour_completed_is_recognized_as_known() -> None:
+    # boundary: the leaf is reported known regardless of merged content, so a
+    # write to it from the tour-dismiss path is not rejected as an unknown key.
+    assert is_known_key({}, "ui.tour_completed")
+
+
+def test_tour_completed_is_layer_aware() -> None:
+    # The leaf is layer-aware: a leaf-catalog row declares its writable layers
+    # so the config-modal lock and the tour-dismiss writer both resolve it.
+    leaf = LEAF_KEY_REGISTRY.get("ui.tour_completed")
+    assert leaf is not None
+    assert leaf.type == "bool"
+    assert leaf.writable_layers
+
+
+def test_tour_completed_registry_and_leaf_defaults_agree() -> None:
+    # The registry default and the leaf-catalog default must agree so the
+    # modal's resolved value matches the daemon's built-in layer.
+    entry = registry_lookup("ui.tour_completed")
+    leaf = LEAF_KEY_REGISTRY.get("ui.tour_completed")
+    assert entry is not None and leaf is not None
+    assert entry.default == leaf.default
+
+
+def test_tour_completed_rejects_garbage_bool() -> None:
+    # error-path: a non-boolean value is rejected with the bool coercion error.
+    entry = registry_lookup("ui.tour_completed")
+    assert entry is not None
+    with pytest.raises(UserError, match="bool"):
+        coerce_and_validate(entry, "maybe")

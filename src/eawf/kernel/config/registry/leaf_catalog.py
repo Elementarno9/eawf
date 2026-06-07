@@ -376,6 +376,14 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         choices=("off", "important", "all"),
         description="Ambient state-change toast verbosity: off / important / all.",
     ),
+    LeafKey(
+        key="ui.tour_completed",
+        domain="ui",
+        type="bool",
+        default=False,
+        writable_layers=_WRITABLE_GWR,
+        description="True once the first-run onboarding tour has been dismissed.",
+    ),
     # --- telemetry (C09 surface) ------------------------------------------
     LeafKey(
         key="telemetry.enabled",
