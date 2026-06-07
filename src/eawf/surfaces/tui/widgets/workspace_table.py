@@ -259,6 +259,60 @@ def _sum_field(summaries: object, field: str) -> float:
     return total
 
 
+@dataclass(frozen=True)
+class PortfolioTotals:
+    """Workspace-wide roll-up of every repo row's wave + EU counts.
+
+    The summary-row inputs: the portfolio reducer folds the per-repo
+    :class:`RepoRow` wave counts and EU pairs into one totals row rendered
+    under the workspace table, so the operator reads the whole portfolio's
+    progress without summing the rows by eye.
+
+    Attributes:
+        repo_count: Number of repo rows folded into the totals.
+        wave_done: Summed closed-wave count across every repo's active
+            phase.
+        wave_total: Summed total-wave count across every repo's active
+            phase.
+        eu_consumed: Summed EU actuals across every repo.
+        eu_total: Summed EU estimate across every repo.
+    """
+
+    repo_count: int
+    wave_done: int
+    wave_total: int
+    eu_consumed: float
+    eu_total: float
+
+
+def portfolio_totals(rows: list[RepoRow]) -> PortfolioTotals:
+    """Fold *rows* into the workspace-wide :class:`PortfolioTotals` summary.
+
+    Pure reducer: sums each repo row's active-phase wave counts
+    (``phase_done`` / ``phase_total``) and EU pair (``eu_consumed`` /
+    ``eu_total``) into one totals value. An empty row list yields a
+    zero-valued totals (``repo_count == 0``) so the host renders an honest
+    empty summary rather than a fabricated ratio.
+
+    Args:
+        rows: The workspace table's repo rows (see :func:`build_repo_rows`).
+
+    Returns:
+        The folded :class:`PortfolioTotals`.
+    """
+    wave_done = sum(row.phase_done for row in rows)
+    wave_total = sum(row.phase_total for row in rows)
+    eu_consumed = sum(row.eu_consumed for row in rows)
+    eu_total = sum(row.eu_total for row in rows)
+    return PortfolioTotals(
+        repo_count=len(rows),
+        wave_done=wave_done,
+        wave_total=wave_total,
+        eu_consumed=eu_consumed,
+        eu_total=eu_total,
+    )
+
+
 def build_repo_rows(state: State | None) -> list[RepoRow]:
     """Build the workspace table's rows from a bound workspace *state*.
 
@@ -390,6 +444,59 @@ def _eu_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | Non
     if row.eu_total <= 0:
         return EMPTY_STATE
     return render_bar_rich(row.eu_consumed, row.eu_total, mode=mode, palette=palette)
+
+
+#: Row key for the portfolio totals summary row appended under the repo
+#: rows. The leading sentinel avoids colliding with any repo code (a repo
+#: code matches the project-code symbol pattern and never starts with this
+#: marker), so a totals row is never mistaken for a zoomable repo.
+TOTALS_ROW_KEY: str = "Σ-totals"
+
+#: Repo-column cell text for the totals summary row. The capital sigma
+#: reads as "sum across the portfolio" and keeps the row visually distinct
+#: from the per-repo rows above it.
+TOTALS_ROW_LABEL: str = "Σ"
+
+
+def _totals_phase_cell(totals: PortfolioTotals, *, mode: RenderMode) -> str:
+    """Render the totals row's phase cell: the summed completion bar.
+
+    Mirrors :func:`_phase_cell` shape (a leading label + a completion bar)
+    so the summary row lines up under the per-repo phase column. The label
+    is the repo count rather than a phase id, since the totals span every
+    repo's active phase.
+
+    Args:
+        totals: The folded :class:`PortfolioTotals`.
+        mode: The active bar render mode.
+
+    Returns:
+        The totals phase cell (``<repo_count> repos <bar> done/total``).
+    """
+    bar = render_completion_bar(totals.wave_done, totals.wave_total, width=6, mode=mode)
+    return f"{totals.repo_count} repos {bar}"
+
+
+def _totals_eu_cell(
+    totals: PortfolioTotals, *, mode: RenderMode, palette: Mapping[str, str] | None = None
+) -> str:
+    """Render the totals row's EU cell, or the empty sentinel.
+
+    Mirrors :func:`_eu_cell`: a status-tinted EU-burn bar over the summed
+    consumed / total EU, or the empty-state sentinel when no repo reported
+    an EU estimate.
+
+    Args:
+        totals: The folded :class:`PortfolioTotals`.
+        mode: The active bar render mode.
+        palette: Band-colour map (see :func:`_band_palette`).
+
+    Returns:
+        The totals EU bar markup, or the empty-state sentinel.
+    """
+    if totals.eu_total <= 0:
+        return EMPTY_STATE
+    return render_bar_rich(totals.eu_consumed, totals.eu_total, mode=mode, palette=palette)
 
 
 class WorkspaceTable(DataTable[str]):
@@ -574,7 +681,8 @@ class WorkspaceTable(DataTable[str]):
         try:
             self.clear()
             palette = _band_palette(self.app)
-            for row in self.rows_data():
+            rows = self.rows_data()
+            for row in rows:
                 git_cell = self._git_cells.get(row.code, GIT_PENDING_CELL)
                 self.add_row(
                     row.code,
@@ -584,8 +692,33 @@ class WorkspaceTable(DataTable[str]):
                     row.age,
                     key=row.code,
                 )
+            self._add_totals_row(rows, palette=palette)
         finally:
             self._rebuilding = False
+
+    def _add_totals_row(self, rows: list[RepoRow], *, palette: Mapping[str, str]) -> None:
+        """Append the portfolio-totals summary row under the repo rows.
+
+        Folds *rows* via :func:`portfolio_totals` and renders one summary
+        row whose phase + EU cells carry the portfolio-wide completion + EU
+        bars. The git + age columns are blank on the summary row (no live
+        probe spans the portfolio); the repo column carries the
+        :data:`TOTALS_ROW_LABEL` sigma so the row reads as a roll-up rather
+        than a repo.
+
+        Args:
+            rows: The repo rows already added above the totals row.
+            palette: Band-colour map for the EU bar (see :func:`_band_palette`).
+        """
+        totals = portfolio_totals(rows)
+        self.add_row(
+            TOTALS_ROW_LABEL,
+            _totals_phase_cell(totals, mode=self.render_mode),
+            _totals_eu_cell(totals, mode=self.render_mode, palette=palette),
+            "",
+            "",
+            key=TOTALS_ROW_KEY,
+        )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Post :class:`RowZoomed` for the Enter-selected row.
@@ -595,7 +728,7 @@ class WorkspaceTable(DataTable[str]):
                 the repo code used as the row key.
         """
         repo_code = event.row_key.value
-        if repo_code is not None:
+        if repo_code is not None and repo_code != TOTALS_ROW_KEY:
             self.post_message(self.RowZoomed(repo_code))
 
     def action_zoom_row(self) -> None:
@@ -629,10 +762,14 @@ __all__ = [
     "GIT_CACHE_TTL_S",
     "GIT_PENDING_CELL",
     "GIT_UNAVAILABLE_CELL",
+    "TOTALS_ROW_KEY",
+    "TOTALS_ROW_LABEL",
+    "PortfolioTotals",
     "RepoRow",
     "WorkspaceTable",
     "active_phase_completion",
     "build_repo_rows",
     "completion_pair",
     "eu_pair",
+    "portfolio_totals",
 ]
