@@ -33,6 +33,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -97,6 +98,14 @@ class RepoRow:
         eu_consumed: Effort units consumed (actuals) for the EU-burn bar.
         eu_total: Estimated effort units for the EU-burn bar.
         age: Human-readable last-touch age cell (or a dash).
+        blocker: ``True`` when the repo has a wave needing the operator
+            now (a failed wave or a blocked open question); drives the
+            attention chip.
+        stale: ``True`` when the repo's ``state.json`` has not been
+            touched within :data:`~eawf.platform.registry.staleness.STALE_AFTER`
+            (or could not be read); drives the attention chip.
+        open_prs: The repo's open-PR total for the PR-count column. ``0``
+            when no live source resolves a count (the honest-empty case).
     """
 
     code: str
@@ -107,8 +116,11 @@ class RepoRow:
     eu_total: float
     age: str
     # Defaulted (and therefore last in field order) so existing positional
-    # ``RepoRow(...)`` constructions stay valid; ``_repo_row`` always sets it.
+    # ``RepoRow(...)`` constructions stay valid; ``_repo_row`` always sets them.
     phase_id: str | None = None
+    blocker: bool = False
+    stale: bool = False
+    open_prs: int = 0
 
 
 def completion_pair(repo_state: dict[str, Any] | None) -> tuple[int, int]:
@@ -259,6 +271,121 @@ def _sum_field(summaries: object, field: str) -> float:
     return total
 
 
+#: Chip text rendered in the repo cell when a repo has a wave needing the
+#: operator now. The substring ``blocked`` is part of the attention-chip
+#: contract the host + snapshot tests assert on. Parenthesised (not
+#: bracketed) so the Rich-parsed DataTable cell never mistakes the chip
+#: for a ``[style]`` markup tag and swallows it -- matching the registry
+#: strip's ``(active)`` / ``(stale)`` chip convention.
+BLOCKER_CHIP: str = "(blocked)"
+
+#: Chip text rendered in the repo cell when a repo trips the stale-band
+#: threshold. The substring ``stale`` is part of the attention-chip
+#: contract the host + snapshot tests assert on. Parenthesised for the
+#: same Rich-markup-safety reason as :data:`BLOCKER_CHIP`.
+STALE_CHIP: str = "(stale)"
+
+
+def repo_has_blocker(repo_state: dict[str, Any] | None) -> bool:
+    """Return ``True`` when a repo has a wave / question needing the operator.
+
+    The blocker signal behind the row's attention chip: a repo trips it
+    when its decoded state carries either a ``failed`` wave or a
+    ``blocked`` open question -- the two point-in-time "needs you now"
+    signals the cross-repo band surfaces. A ``None`` / empty / malformed
+    state yields ``False`` so a broken state file never fabricates an
+    alarm.
+
+    Args:
+        repo_state: A decoded per-repo ``state.json`` dict, or ``None``.
+
+    Returns:
+        ``True`` when a failed wave or a blocked open question exists.
+    """
+    if not repo_state:
+        return False
+    waves = repo_state.get("waves")
+    if isinstance(waves, dict) and any(
+        isinstance(w, dict) and w.get("status") == "failed" for w in waves.values()
+    ):
+        return True
+    questions = repo_state.get("open_questions")
+    return isinstance(questions, dict) and any(
+        isinstance(q, dict) and q.get("status") == "blocked" for q in questions.values()
+    )
+
+
+def repo_is_stale(repo_path: Path, *, now: datetime | None = None) -> bool:
+    """Return ``True`` when *repo_path*'s state trips the stale-band threshold.
+
+    The stale signal behind the row's attention chip: a repo trips it when
+    its ``<repo_path>/.ea/state.json`` has not been touched within
+    :data:`~eawf.platform.registry.staleness.STALE_AFTER`, or could not be
+    read at all (a missing / unreadable state file is treated as stale,
+    matching the registry strip's OR-chain).
+
+    Args:
+        repo_path: The repo working-tree root.
+        now: Override for the current timestamp so freshness comparisons
+            stay deterministic in tests; defaults to :func:`datetime.now`.
+
+    Returns:
+        ``True`` when the state mtime is older than
+        :data:`~eawf.platform.registry.staleness.STALE_AFTER`, or the
+        state file is missing / unreadable.
+    """
+    from eawf.platform.registry.staleness import STALE_AFTER, repo_state_mtime
+
+    mtime = repo_state_mtime(repo_path)
+    if mtime is None:
+        return True
+    current = now if now is not None else datetime.now(UTC)
+    return (current - mtime) > STALE_AFTER
+
+
+def attention_chip(row: RepoRow) -> str | None:
+    """Return the repo row's attention-chip text, or ``None`` when calm.
+
+    A repo renders an attention chip when its blocker or stale-band
+    threshold trips. A row that trips both carries both chips
+    (``(blocked) (stale)``, blocker first since it is the more acute "needs
+    you now" signal); a row that trips neither returns ``None`` so the host
+    renders the plain repo code.
+
+    Args:
+        row: The repo row to inspect.
+
+    Returns:
+        The chip text (one or both chips, space-joined), or ``None`` when
+        the row trips neither threshold.
+    """
+    chips: list[str] = []
+    if row.blocker:
+        chips.append(BLOCKER_CHIP)
+    if row.stale:
+        chips.append(STALE_CHIP)
+    if not chips:
+        return None
+    return " ".join(chips)
+
+
+def _repo_cell(row: RepoRow) -> str:
+    """Render *row*'s repo-column cell: the code plus any attention chip.
+
+    A calm repo renders just its code; a repo tripping the blocker or
+    stale-band threshold renders ``<code> <chip>`` so the operator scans
+    which repo needs them without leaving the table-browse mode.
+
+    Args:
+        row: The repo row to render.
+
+    Returns:
+        The repo cell text.
+    """
+    chip = attention_chip(row)
+    return f"{row.code} {chip}" if chip is not None else row.code
+
+
 @dataclass(frozen=True)
 class PortfolioTotals:
     """Workspace-wide roll-up of every repo row's wave + EU counts.
@@ -363,6 +490,11 @@ def _repo_row(ref: WorkspaceRepoRef) -> RepoRow:
         eu_consumed=consumed,
         eu_total=eu_total,
         age=_repo_age(repo_path),
+        blocker=repo_has_blocker(repo_state),
+        stale=repo_is_stale(repo_path),
+        # No live PR source spans the workspace index; the open-PR count
+        # stays at the honest-empty default until a source resolves one.
+        open_prs=0,
     )
 
 
@@ -384,8 +516,6 @@ def _repo_age(repo_path: Path) -> str:
     mtime = repo_state_mtime(repo_path)
     if mtime is None:
         return "—"
-    from datetime import UTC, datetime
-
     elapsed = (datetime.now(UTC) - mtime).total_seconds()
     if elapsed < 3600:
         return f"{int(elapsed // 60)}m"
@@ -685,7 +815,7 @@ class WorkspaceTable(DataTable[str]):
             for row in rows:
                 git_cell = self._git_cells.get(row.code, GIT_PENDING_CELL)
                 self.add_row(
-                    row.code,
+                    _repo_cell(row),
                     _phase_cell(row, mode=self.render_mode),
                     _eu_cell(row, mode=self.render_mode, palette=palette),
                     git_cell,
@@ -759,17 +889,22 @@ def _git_cell_text(fields: object) -> str:
 
 
 __all__ = [
+    "BLOCKER_CHIP",
     "GIT_CACHE_TTL_S",
     "GIT_PENDING_CELL",
     "GIT_UNAVAILABLE_CELL",
+    "STALE_CHIP",
     "TOTALS_ROW_KEY",
     "TOTALS_ROW_LABEL",
     "PortfolioTotals",
     "RepoRow",
     "WorkspaceTable",
     "active_phase_completion",
+    "attention_chip",
     "build_repo_rows",
     "completion_pair",
     "eu_pair",
     "portfolio_totals",
+    "repo_has_blocker",
+    "repo_is_stale",
 ]
