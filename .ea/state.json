@@ -3863,6 +3863,18 @@
       "scope_id": "P29-I13-W53",
       "status": "done",
       "updated_at": "2026-06-07T12:16:25.096633Z"
+    },
+    "P29-I13-W54": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W54",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W54",
+      "scope_id": "P29-I13-W54",
+      "status": "done",
+      "updated_at": "2026-06-07T13:06:04.424115Z"
     }
   },
   "agent_sessions": {
@@ -13491,6 +13503,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I13-W53",
       "updated_at": "2026-06-07T12:16:24.353842Z"
+    },
+    "P29-I13-W54": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W54-bucket-20260607T130547Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W54",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W54",
+      "updated_at": "2026-06-07T13:05:47.375101Z"
     }
   },
   "goals": {
@@ -15048,7 +15073,8 @@
         "P29-I13-W50",
         "P29-I13-W51",
         "P29-I13-W52",
-        "P29-I13-W53"
+        "P29-I13-W53",
+        "P29-I13-W54"
       ]
     }
   },
@@ -15873,7 +15899,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T12:16:25.097110Z",
+  "updated_at": "2026-06-07T13:06:04.424517Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -62829,6 +62855,75 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Harden pre-existing xdist/timing-flaky tests for the CI matrix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W54": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T13:05:47.375097Z",
+      "closed_at": "2026-06-07T13:06:04.424115Z",
+      "commit": "ca817915826d59db1d74d7ee62c3c6b75eb70c60",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py",
+        "tests/snapshots/tui/test_pilot_harness.py",
+        "tests/perf/tui/test_perf_budget.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_pilot_harness.py",
+              "-q"
+            ],
+            "scope": "touched",
+            "timeout_class": "standard"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P29-I13-W54",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T13:05:04.496430Z",
+      "outcome": "snapshot daemon-banner stripped in normalize_snapshot + perf ceilings bumped for CI load; harness gate green",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "normalize_snapshot drops the daemon-socket-unavailable banner line (and its runtime socket path) so captures stay byte-stable regardless of daemon availability",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": null,
+          "text": "the snapshot normalizer strips the env-dependent daemon-degraded banner, asserted when the pilot-harness test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stabilize snapshot daemon-banner + perf ceilings under CI load",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
