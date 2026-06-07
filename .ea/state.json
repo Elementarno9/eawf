@@ -5147,6 +5147,17 @@
       "status": "complete",
       "verdict": "pass"
     },
+    "A56-P29-i13": {
+      "check_results": [],
+      "created_at": "2026-06-07T09:16:21.365288Z",
+      "id": "A56-P29-i13",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "P29-I13",
+      "status": "pending",
+      "verdict": null
+    },
     "P28-I03-audit": {
       "check_results": [
         {
@@ -7286,7 +7297,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -15654,7 +15665,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T09:04:29.633006Z",
+  "updated_at": "2026-06-07T09:16:21.365288Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
