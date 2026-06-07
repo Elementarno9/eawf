@@ -3827,6 +3827,18 @@
       "scope_id": "P29-I13-W50",
       "status": "done",
       "updated_at": "2026-06-07T10:37:49.906173Z"
+    },
+    "P29-I13-W51": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W51",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W51",
+      "scope_id": "P29-I13-W51",
+      "status": "done",
+      "updated_at": "2026-06-07T11:00:59.018076Z"
     }
   },
   "agent_sessions": {
@@ -13416,6 +13428,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P29-I13-W50",
       "updated_at": "2026-06-07T10:37:49.197054Z"
+    },
+    "P29-I13-W51": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W51-bucket-20260607T110025Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W51",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W51",
+      "updated_at": "2026-06-07T11:00:25.348710Z"
     }
   },
   "goals": {
@@ -14970,7 +14995,8 @@
         "P29-I13-W47",
         "P29-I13-W48",
         "P29-I13-W49",
-        "P29-I13-W50"
+        "P29-I13-W50",
+        "P29-I13-W51"
       ]
     }
   },
@@ -15795,7 +15821,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T10:37:49.906571Z",
+  "updated_at": "2026-06-07T11:00:59.018562Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -62617,6 +62643,73 @@
       "status": "closed",
       "success_criteria": [],
       "title": "Bump version to 0.5.0 and finalize the v0.5.0 changelog",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W51": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T10:51:13.623068Z",
+      "closed_at": "2026-06-07T11:00:59.018076Z",
+      "commit": "e6278cddab19a7a7b0093d43f9aca3a4d1b9f587",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_modes_research_board.py",
+              "-q"
+            ],
+            "scope": "touched",
+            "timeout_class": "standard"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P29-I13-W51",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T10:50:42.144024Z",
+      "outcome": "research-board reader collapses latest-per-campaign + drops cancelled; regression test green; PR-review fix",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "read_campaign_rows collapses latest-per-campaign_id and drops campaigns whose latest status is cancelled, leaving only live campaigns on the board",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the research-board reader drops cancelled campaigns, asserted when the research-board reader test exits zero under pytest",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Drop cancelled campaigns from the research-board reader",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
