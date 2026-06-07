@@ -43,6 +43,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
+from eawf.surfaces.tui.modals.calibration_drill import CalibrationSet
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.workflow.estimation.trust_scorecard import (
@@ -79,6 +80,7 @@ _MAX_REFS_PER_LABEL: int = 3
 _TRUST_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
     render_hint_label("v", "verifier"),
+    render_hint_label("K", "calibration"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
     render_hint_label("?", "help"),
@@ -545,6 +547,11 @@ class TrustModeScreen(ScopeScreen):
         # footer key resolves to a live binding even in the honest-empty mount
         # the affordance-parity gate probes.
         Binding("v", "verifier_drill", "verifier", show=False),
+        # ``K`` opens the jury-calibration drill (Brier + ECE). Likewise
+        # declared at the SCREEN level so the advertised ``K calibration``
+        # footer key resolves even with no calibration set bound (the common
+        # v0.5 path -- the jury is idle), which the affordance gate probes.
+        Binding("K", "calibration_drill", "calibration", show=False),
     ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _TRUST_HINTS
@@ -579,6 +586,11 @@ class TrustModeScreen(ScopeScreen):
         #: live gate subprocesses) -- it reads the deterministic evidence
         #: store or the pushed fixture only.
         self._evidence_override: tuple[EvidenceRecord, ...] | None = None
+        #: Externally supplied jury calibration set for the calibration drill.
+        #: ``None`` is the COMMON v0.5 path -- the jury is idle, so no graded
+        #: predictions exist and the drill renders honest-empty. A fixture
+        #: pushes a set via :meth:`set_calibration`.
+        self._calibration: CalibrationSet | None = None
 
     def compose_body(self) -> ComposeResult:
         """Yield the scrollable section column for the trust scorecard."""
@@ -688,6 +700,39 @@ class TrustModeScreen(ScopeScreen):
         from eawf.surfaces.tui.modals.verifier_drill import VerifierDrillModal
 
         modal = VerifierDrillModal(self._current_evidence_records())
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal)
+            return
+        self.app.push_screen(modal)
+
+    def set_calibration(self, calibration: CalibrationSet | None) -> None:
+        """Bind the jury calibration set for the calibration drill.
+
+        The jury is idle in v0.5 (no graded predictions land), so the COMMON
+        path leaves this ``None`` and the drill renders honest-empty. A
+        fixture (under test) or the calibration subsystem (once live) pushes
+        a :class:`~eawf.surfaces.tui.modals.calibration_drill.CalibrationSet`
+        here so the drill surfaces the Brier score + ECE.
+
+        Args:
+            calibration: The jury calibration set, or ``None`` to clear it
+                back to the honest-empty drill.
+        """
+        self._calibration = calibration
+
+    def action_calibration_drill(self) -> None:
+        """Open the jury-calibration drill modal (Brier + ECE).
+
+        Pushes the modal through the App's cap-aware ``push_modal`` (falling
+        back to ``push_screen`` under a bare harness). The binding always
+        resolves -- even with no calibration set bound (the common v0.5 path,
+        the jury is idle) -- so the advertised ``K calibration`` affordance is
+        never dead; the modal then renders its own honest-empty notice.
+        """
+        from eawf.surfaces.tui.modals.calibration_drill import CalibrationDrillModal
+
+        modal = CalibrationDrillModal(self._calibration)
         push_modal = getattr(self.app, "push_modal", None)
         if callable(push_modal):
             push_modal(modal)
