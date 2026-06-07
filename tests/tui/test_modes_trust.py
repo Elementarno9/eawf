@@ -436,20 +436,27 @@ def test_trust_pane_renders_populated_scorecard_fields(tmp_path: Path) -> None:
             await settle_screen(pilot)
             assert isinstance(app.screen, TrustModeScreen)
             assert app.screen.starved is False
-            frame = normalize_snapshot(capture_screen_text(app))
-            # Section headings + the populated signal are visible.
-            assert "TRUST" in frame
-            assert "verified" in frame  # tier count line
-            assert "P01-I01-W01" in frame  # per-output label
-            assert "n=1" in frame  # store sample size surfaced
+            # The top sections (TRUST overview + TIERS) render in the initial
+            # viewport. The pane now scrolls (the determinism + escape sections
+            # added below TIERS push the sample-size / verifier / label
+            # sections past the 40-row frame), so the lower-section assertions
+            # capture a second frame after scrolling the column to the end.
+            top_frame = normalize_snapshot(capture_screen_text(app))
+            assert "TRUST" in top_frame
+            assert "verified" in top_frame  # tier count line
+            # Honest-negative banner is absent on the populated path.
+            assert DATA_STARVED_NOTICE not in top_frame
+            await pilot.press("end")  # scroll the section column to the bottom
+            await settle_screen(pilot)
+            bottom_frame = normalize_snapshot(capture_screen_text(app))
+            assert "P01-I01-W01" in bottom_frame  # per-output label
+            assert "n=1" in bottom_frame  # store sample size surfaced
             # The evidence ref that backs the verified tier survives the
             # render (Textual content markup must not swallow the id -- a
             # square-bracketed ref would parse as a markup tag and vanish).
-            assert "EV-aaaaaaaaaaaa" in frame
+            assert "EV-aaaaaaaaaaaa" in bottom_frame
             # The verifier residual (pass-rate over the single det. row) shows.
-            assert "pass-rate" in frame
-            # Honest-negative banner is absent on the populated path.
-            assert DATA_STARVED_NOTICE not in frame
+            assert "pass-rate" in bottom_frame
 
     asyncio.run(body())
 
