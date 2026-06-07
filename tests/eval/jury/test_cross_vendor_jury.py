@@ -41,6 +41,7 @@ from eawf.observability.eval.cross_vendor_jury import (
 from eawf.observability.eval.jury import JuryAggregateOutcome
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.workflow.dispatch.llm_assist import SpawnFn
+from tests._criteria_helpers import legacy_criteria
 
 _WAVE_ID = "P29-I04-W08"
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
@@ -210,7 +211,9 @@ def _state_payload() -> dict[str, Any]:
                 "deps": [],
                 "blocks": [],
                 "file_scopes": ["src/eawf/observability/eval/cross_vendor_jury.py"],
-                "success_criteria": _CRITERIA,
+                "success_criteria": [
+                    c.model_dump(mode="json") for c in legacy_criteria(*_CRITERIA)
+                ],
                 "agent_role": "executor",
                 "effort_bucket": "L",
                 "claim_session_id": None,

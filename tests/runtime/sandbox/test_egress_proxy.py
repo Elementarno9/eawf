@@ -19,7 +19,10 @@ outbound-connect is ALWAYS a fake, so no real network is ever touched.
 from __future__ import annotations
 
 import asyncio
+import shutil
 import sys
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -33,6 +36,22 @@ from eawf.runtime.sandbox.egress_proxy import (
 )
 
 _CLAUDE: str = "claude"
+
+
+@pytest.fixture
+def short_socket_dir() -> Iterator[Path]:
+    """Yield a short-path 0700 dir for AF_UNIX binds.
+
+    The pytest ``tmp_path`` can exceed the ~104-char ``sun_path`` limit on
+    macOS, so a real UDS bind under it raises ``OSError: AF_UNIX path too
+    long``. A short ``/tmp`` dir keeps the socket path under the limit.
+    """
+    socket_dir = Path(tempfile.mkdtemp(prefix="egr", dir="/tmp"))
+    socket_dir.chmod(0o700)
+    try:
+        yield socket_dir
+    finally:
+        shutil.rmtree(socket_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -247,15 +266,13 @@ def test_handle_connection_allowed_host_opens_outbound_and_tunnels() -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UDS proxy is POSIX-only")
-def test_live_uds_proxy_refuses_denied_host_without_outbound(tmp_path: Path) -> None:
+def test_live_uds_proxy_refuses_denied_host_without_outbound(short_socket_dir: Path) -> None:
     """Bind a real UDS, connect a real client, request a DENIED host.
 
     Asserts the proxy replies ``DENY`` and never invokes the (faked)
     outbound connector -- the end-to-end enforcement seam W04 wires into.
     """
-    socket_dir = tmp_path / "rt"
-    socket_dir.mkdir(mode=0o700)
-    socket_path = socket_dir / "egress.sock"
+    socket_path = short_socket_dir / "egress.sock"
     connector, calls = _connector_spy()
 
     async def _run() -> bytes:
@@ -281,11 +298,9 @@ def test_live_uds_proxy_refuses_denied_host_without_outbound(tmp_path: Path) -> 
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UDS proxy is POSIX-only")
-def test_live_uds_proxy_allows_listed_host_via_fake_outbound(tmp_path: Path) -> None:
+def test_live_uds_proxy_allows_listed_host_via_fake_outbound(short_socket_dir: Path) -> None:
     """An allowed host gets ``OK`` and the faked outbound is dialled once."""
-    socket_dir = tmp_path / "rt"
-    socket_dir.mkdir(mode=0o700)
-    socket_path = socket_dir / "egress.sock"
+    socket_path = short_socket_dir / "egress.sock"
     calls: list[tuple[str, int]] = []
 
     async def _connect(host: str, port: int) -> tuple[_FakeReader, _FakeWriter]:
