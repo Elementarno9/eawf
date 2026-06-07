@@ -25,6 +25,7 @@ mounting Textual, mirroring the widget-catalog convention.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
@@ -41,7 +42,8 @@ from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
-    from eawf.workflow.verify.models import CloseReadiness
+    from eawf.kernel.store.kinds.evidence import EvidenceRecord
+    from eawf.workflow.verify.models import CloseReadiness, CriterionView
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +302,163 @@ def close_readiness_header(readiness: CloseReadiness) -> str:
     return f"criteria: {ready}/{total} ready"
 
 
+#: Column ids for the close-readiness ledger table, in display order. One
+#: row per typed criterion: its id, the rolled-up gate status, who produced
+#: the joined evidence, and the criterion's overall status.
+_LEDGER_COLUMNS: tuple[str, ...] = ("criterion", "gate", "produced_by", "status")
+
+#: Dash placeholder rendered in a ledger cell with no joined value -- a
+#: criterion with no gate results (gate column) or no joined evidence row
+#: (produced_by column). Kept ASCII per the source-glyph convention.
+_LEDGER_DASH: str = "-"
+
+#: Notice rendered in the ledger pane when no close-readiness view is bound
+#: -- the honest-empty path (no typed criteria to roll up into rows).
+LEDGER_EMPTY_NOTICE: str = "no close-readiness criteria"
+
+
+def gate_status_label(view: CriterionView) -> str:
+    """Return the rolled-up gate-status label for a criterion *view*.
+
+    Rolls the criterion's per-gate :class:`~eawf.workflow.verify.models.GateResult`
+    statuses into one cell: ``fail`` if any gate failed, else ``blocked`` if
+    any is blocked, else ``pass`` when every gate passed. A view with no gate
+    results (a legacy / floor criterion) yields :data:`_LEDGER_DASH`.
+
+    Args:
+        view: The criterion view whose gate results to roll up.
+
+    Returns:
+        The rolled-up gate status (``pass`` / ``fail`` / ``blocked``), or
+        :data:`_LEDGER_DASH` when the view carries no gate results.
+    """
+    results = view.gate_results
+    if not results:
+        return _LEDGER_DASH
+    statuses = {result.status for result in results}
+    if "fail" in statuses:
+        return "fail"
+    if "blocked" in statuses:
+        return "blocked"
+    return "pass"
+
+
+@dataclass(frozen=True)
+class LedgerRow:
+    """One close-readiness ledger row over a typed criterion.
+
+    Attributes:
+        criterion_id: The criterion id (e.g. ``CR-01``).
+        gate_status: The rolled-up gate status for the criterion
+            (:func:`gate_status_label`), or a dash when no gates exist.
+        produced_by: Who produced the joined evidence row for this criterion
+            (``human`` / ``agent`` / ``tool`` / ``canary``), or a dash when no
+            evidence row joins the criterion.
+        status: The criterion's overall rolled-up status.
+    """
+
+    criterion_id: str
+    gate_status: str
+    produced_by: str
+    status: str
+
+
+def build_evidence_ledger(
+    readiness: CloseReadiness,
+    records: Iterable[EvidenceRecord] = (),
+) -> tuple[LedgerRow, ...]:
+    """Build one ledger row per *readiness* criterion, joining evidence producers.
+
+    Emits exactly one :class:`LedgerRow` per criterion in the close-readiness
+    view, in view order. Each row carries the criterion id, the rolled-up gate
+    status (:func:`gate_status_label`), the ``produced_by`` of the joined
+    evidence row (matched by criterion id against *records*), and the
+    criterion's overall status. A criterion with no joined evidence renders a
+    dash in the ``produced_by`` column rather than dropping the row.
+
+    Args:
+        readiness: The derived close-readiness view for the active scope.
+        records: The scope's evidence rows, joined to criteria by id (an
+            ``EvidenceRecord`` matches a criterion when its ``refs`` or
+            ``metrics["criterion_id"]`` names the criterion id). Defaults to
+            no records, so every ``produced_by`` cell shows a dash.
+
+    Returns:
+        One ledger row per criterion, in close-readiness view order; empty
+        when the view carries no criteria.
+    """
+    producers = _producer_by_criterion(readiness, records)
+    rows = tuple(
+        LedgerRow(
+            criterion_id=view.id,
+            gate_status=gate_status_label(view),
+            produced_by=producers.get(view.id, _LEDGER_DASH),
+            status=view.status,
+        )
+        for view in readiness.criteria
+    )
+    logger.info(f"build_evidence_ledger criteria={len(rows)}")
+    return rows
+
+
+def _producer_by_criterion(
+    readiness: CloseReadiness,
+    records: Iterable[EvidenceRecord],
+) -> dict[str, str]:
+    """Map each criterion id to the ``produced_by`` of its joined evidence row.
+
+    A record joins a criterion when the criterion id appears in the record's
+    ``refs`` or its ``metrics["criterion_id"]``. The last matching record
+    wins, so a re-run's fresh row supersedes an earlier one. Only criteria in
+    *readiness* are mapped; an evidence row that names no in-view criterion is
+    ignored here (the orphan grouping is the W05 join's job).
+
+    Args:
+        readiness: The close-readiness view supplying the criterion id set.
+        records: The scope's evidence rows.
+
+    Returns:
+        A ``{criterion_id: produced_by}`` map over the joined criteria.
+    """
+    criterion_ids = {view.id for view in readiness.criteria}
+    producers: dict[str, str] = {}
+    for record in records:
+        for criterion_id in _record_criterion_ids(record):
+            if criterion_id in criterion_ids:
+                producers[criterion_id] = record.produced_by
+    return producers
+
+
+def _record_criterion_ids(record: EvidenceRecord) -> tuple[str, ...]:
+    """Return the criterion ids an evidence *record* names, in stable order.
+
+    A record names a criterion through its ``metrics["criterion_id"]`` entry
+    (the deterministic-gate producer stamps it there) and/or its ``refs``
+    list. Both sources are folded into one de-duplicated tuple so the join is
+    resilient to either shape.
+
+    Args:
+        record: The evidence record to inspect.
+
+    Returns:
+        The criterion ids the record references, de-duplicated in
+        ``metrics`` then ``refs`` order.
+    """
+    ids: list[str] = []
+    metrics = record.metrics or {}
+    metric_id = metrics.get("criterion_id")
+    if isinstance(metric_id, str):
+        ids.append(metric_id)
+    ids.extend(record.refs)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for criterion_id in ids:
+        if criterion_id not in seen:
+            seen.add(criterion_id)
+            ordered.append(criterion_id)
+    return tuple(ordered)
+
+
 class EvidenceModeScreen(ScopeScreen):
     """Evidence-mode base screen rendering the agent-report rollup.
 
@@ -325,6 +484,16 @@ class EvidenceModeScreen(ScopeScreen):
         height: 1;
         color: $accent;
         text-style: bold;
+    }
+    EvidenceModeScreen #evidence-ledger {
+        height: auto;
+        max-height: 10;
+        overflow-x: hidden;
+    }
+    EvidenceModeScreen .evidence-ledger-empty {
+        height: 1;
+        color: $text-muted;
+        text-style: italic;
     }
     EvidenceModeScreen .evidence-summary {
         height: 1;
@@ -365,11 +534,18 @@ class EvidenceModeScreen(ScopeScreen):
         #: (the daemon close envelope today, a fixture under test) via
         #: :meth:`set_readiness`.
         self._readiness: CloseReadiness | None = None
+        #: Evidence rows joined into the ledger's ``produced_by`` column,
+        #: supplied alongside the readiness view via :meth:`set_readiness`.
+        self._records: tuple[EvidenceRecord, ...] = ()
 
     def compose_body(self) -> ComposeResult:
-        """Yield the evidence pane body (readiness header + summary + table)."""
+        """Yield the evidence pane body (readiness header + ledger + rollup)."""
         with Vertical(id="evidence-body"):
             yield Static(NO_CRITERIA_NOTICE, id="evidence-readiness", classes="evidence-readiness")
+            yield Static(
+                LEDGER_EMPTY_NOTICE, id="evidence-ledger-empty", classes="evidence-ledger-empty"
+            )
+            yield DataTable(id="evidence-ledger", cursor_type="row", zebra_stripes=True)
             yield Static(EMPTY_NOTICE, id="evidence-summary", classes="evidence-summary")
             yield Static(EMPTY_NOTICE, id="evidence-empty", classes="evidence-empty")
             yield DataTable(id="evidence-table", cursor_type="row", zebra_stripes=True)
@@ -382,6 +558,9 @@ class EvidenceModeScreen(ScopeScreen):
         table = self.query_one("#evidence-table", DataTable)
         for column in _COLUMNS:
             table.add_column(column, key=column)
+        ledger = self.query_one("#evidence-ledger", DataTable)
+        for column in _LEDGER_COLUMNS:
+            ledger.add_column(column, key=column)
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
@@ -436,49 +615,81 @@ class EvidenceModeScreen(ScopeScreen):
         self._paint_readiness()
         logger.info(f"evidence_rebuild rows={len(rows)} has_rows={has_rows}")
 
-    def set_readiness(self, readiness: CloseReadiness | None) -> None:
-        """Bind a close-readiness view + repaint the ledger header.
+    def set_readiness(
+        self,
+        readiness: CloseReadiness | None,
+        records: Iterable[EvidenceRecord] = (),
+    ) -> None:
+        """Bind a close-readiness view (+ evidence rows) and repaint the ledger.
 
         The render seam never calls
         :func:`~eawf.workflow.verify.readiness.compute` (it spawns live gate
-        subprocesses), so the readiness view is supplied externally and pushed
-        in here. Repaints the header immediately when the pane is mounted.
+        subprocesses), so the readiness view + its evidence rows are supplied
+        externally and pushed in here. Repaints the header + the ledger table
+        immediately when the pane is mounted.
 
         Args:
             readiness: The derived close-readiness view to bind, or ``None``
-                to clear it back to the honest-empty header.
+                to clear it back to the honest-empty header + ledger.
+            records: The scope's evidence rows joined into the ledger's
+                ``produced_by`` column. Defaults to none.
         """
         self._readiness = readiness
+        self._records = tuple(records)
         if self.is_mounted:
             self._paint_readiness()
 
     def _paint_readiness(self) -> None:
-        """Repaint the close-readiness header from the bound readiness view.
+        """Repaint the close-readiness header + ledger from the bound view.
 
-        Renders :func:`close_readiness_header` over the bound view, or the
-        :data:`NO_CRITERIA_NOTICE` honest-empty header when no view is bound.
-        Guarded on mount: the header ``Static`` only exists after
-        :meth:`compose_body`.
+        Renders :func:`close_readiness_header` into the header row and one
+        :class:`LedgerRow` per criterion (:func:`build_evidence_ledger`) into
+        the ledger table; falls back to :data:`NO_CRITERIA_NOTICE` /
+        :data:`LEDGER_EMPTY_NOTICE` when no view is bound. Guarded on mount:
+        the header / table widgets only exist after :meth:`compose_body`.
         """
         headers = self.query("#evidence-readiness")
         if not headers:
             return
         header = headers.first(Static)
+        ledger = self.query_one("#evidence-ledger", DataTable)
+        empty = self.query_one("#evidence-ledger-empty", Static)
+        if not ledger.columns:
+            return
+        ledger.clear()
         if self._readiness is None:
             header.update(NO_CRITERIA_NOTICE)
+            ledger.display = False
+            empty.display = True
             return
         header.update(close_readiness_header(self._readiness))
+        ledger_rows = build_evidence_ledger(self._readiness, self._records)
+        for row in ledger_rows:
+            ledger.add_row(
+                row.criterion_id,
+                row.gate_status,
+                row.produced_by,
+                row.status,
+                key=row.criterion_id,
+            )
+        has_rows = bool(ledger_rows)
+        ledger.display = has_rows
+        empty.display = not has_rows
 
 
 __all__ = [
     "EMPTY_NOTICE",
+    "LEDGER_EMPTY_NOTICE",
     "NO_CRITERIA_NOTICE",
     "EvidenceModeScreen",
     "EvidenceRow",
+    "LedgerRow",
+    "build_evidence_ledger",
     "build_evidence_rows",
     "close_readiness_header",
     "criterion_ready_count",
     "evidence_summary_line",
+    "gate_status_label",
     "render_followups_block",
     "sort_evidence_rows",
 ]
