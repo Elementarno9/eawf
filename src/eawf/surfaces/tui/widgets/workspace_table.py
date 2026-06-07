@@ -60,8 +60,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Column ids in display order. ``repo`` and ``age`` are fixed-shape; the
-#: two bar columns + git absorb the middle of the row.
-_COLUMNS: tuple[str, ...] = ("repo", "phase", "eu", "git", "age")
+#: two bar columns + git absorb the middle of the row; ``pr`` carries the
+#: open-PR total per repo between the live git cell and the age cell.
+_COLUMNS: tuple[str, ...] = ("repo", "phase", "eu", "git", "pr", "age")
 
 #: Cell text rendered for a repo whose git probe could not resolve
 #: (timeout / missing binary / non-git path). The substring ``git?`` is
@@ -403,6 +404,7 @@ class PortfolioTotals:
             phase.
         eu_consumed: Summed EU actuals across every repo.
         eu_total: Summed EU estimate across every repo.
+        open_prs: Summed open-PR count across every repo.
     """
 
     repo_count: int
@@ -410,6 +412,7 @@ class PortfolioTotals:
     wave_total: int
     eu_consumed: float
     eu_total: float
+    open_prs: int
 
 
 def portfolio_totals(rows: list[RepoRow]) -> PortfolioTotals:
@@ -431,12 +434,14 @@ def portfolio_totals(rows: list[RepoRow]) -> PortfolioTotals:
     wave_total = sum(row.phase_total for row in rows)
     eu_consumed = sum(row.eu_consumed for row in rows)
     eu_total = sum(row.eu_total for row in rows)
+    open_prs = sum(row.open_prs for row in rows)
     return PortfolioTotals(
         repo_count=len(rows),
         wave_done=wave_done,
         wave_total=wave_total,
         eu_consumed=eu_consumed,
         eu_total=eu_total,
+        open_prs=open_prs,
     )
 
 
@@ -528,6 +533,22 @@ def _phase_cell(row: RepoRow, *, mode: RenderMode) -> str:
     """Render *row*'s active-phase id + completion bar cell (status-tinted)."""
     bar = render_completion_bar(row.phase_done, row.phase_total, width=6, mode=mode)
     return f"{row.phase_id or '—'} {bar}"
+
+
+def _pr_cell(open_prs: int) -> str:
+    """Render the open-PR total cell for a repo row or the totals row.
+
+    A repo with no open PRs renders a dash so a calm column reads as
+    honest-empty rather than a noisy ``0`` on every row; a positive count
+    renders the integer verbatim.
+
+    Args:
+        open_prs: The repo's (or the portfolio's) open-PR total.
+
+    Returns:
+        The PR-count cell text.
+    """
+    return str(open_prs) if open_prs > 0 else "—"
 
 
 def _band_palette(app: App[object]) -> dict[str, str]:
@@ -819,6 +840,7 @@ class WorkspaceTable(DataTable[str]):
                     _phase_cell(row, mode=self.render_mode),
                     _eu_cell(row, mode=self.render_mode, palette=palette),
                     git_cell,
+                    _pr_cell(row.open_prs),
                     row.age,
                     key=row.code,
                 )
@@ -831,10 +853,10 @@ class WorkspaceTable(DataTable[str]):
 
         Folds *rows* via :func:`portfolio_totals` and renders one summary
         row whose phase + EU cells carry the portfolio-wide completion + EU
-        bars. The git + age columns are blank on the summary row (no live
-        probe spans the portfolio); the repo column carries the
-        :data:`TOTALS_ROW_LABEL` sigma so the row reads as a roll-up rather
-        than a repo.
+        bars and whose PR cell carries the summed open-PR count. The git +
+        age columns are blank on the summary row (no live probe spans the
+        portfolio); the repo column carries the :data:`TOTALS_ROW_LABEL`
+        sigma so the row reads as a roll-up rather than a repo.
 
         Args:
             rows: The repo rows already added above the totals row.
@@ -846,6 +868,7 @@ class WorkspaceTable(DataTable[str]):
             _totals_phase_cell(totals, mode=self.render_mode),
             _totals_eu_cell(totals, mode=self.render_mode, palette=palette),
             "",
+            _pr_cell(totals.open_prs),
             "",
             key=TOTALS_ROW_KEY,
         )
