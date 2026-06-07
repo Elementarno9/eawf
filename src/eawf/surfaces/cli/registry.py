@@ -170,9 +170,10 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("plugin", "eawf.surfaces.cli.commands.plugin", "plugin_app"),
     GroupRow("cc", "eawf.surfaces.cli.commands.cc", "cc_app"),
     GroupRow("skill", "eawf.surfaces.cli.commands.skill", "skill_app"),
-    # Worktree dispatch + flow loop.
+    # Worktree dispatch + flow loop + headless dispatch pause/resume.
     GroupRow("worktree", "eawf.surfaces.cli.commands.worktree", "worktree_app"),
     GroupRow("flow", "eawf.surfaces.cli.commands.flow", "flow_app"),
+    GroupRow("dispatch", "eawf.surfaces.cli.commands.dispatch", "dispatch_app"),
     # MCP servers, plan render, research, draft.
     GroupRow("mcp", "eawf.surfaces.cli.commands.mcp", "mcp_app"),
     GroupRow("plan", "eawf.surfaces.cli.commands.plan", "plan_app"),

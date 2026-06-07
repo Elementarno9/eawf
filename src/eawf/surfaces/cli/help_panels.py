@@ -136,9 +136,10 @@ COMMAND_PANELS: dict[str, str] = {
     "wal": "vcs",
     "workspace": "vcs",
     # worktrees: per-wave worktree dispatch and the flow skill that drives
-    # the parallel-wave loop.
+    # the parallel-wave loop, plus the headless dispatch pause/resume toggle.
     "flow": "worktrees",
     "worktree": "worktrees",
+    "dispatch": "worktrees",
 }
 
 
