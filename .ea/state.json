@@ -3875,6 +3875,18 @@
       "scope_id": "P29-I13-W54",
       "status": "done",
       "updated_at": "2026-06-07T13:06:04.424115Z"
+    },
+    "P29-I13-W55": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I13-W55",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I13-W55",
+      "scope_id": "P29-I13-W55",
+      "status": "done",
+      "updated_at": "2026-06-07T13:52:23.230394Z"
     }
   },
   "agent_sessions": {
@@ -13516,6 +13528,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I13-W54",
       "updated_at": "2026-06-07T13:05:47.375101Z"
+    },
+    "P29-I13-W55": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I13-W55-bucket-20260607T135222Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P29-I13-W55",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P29-I13-W55",
+      "updated_at": "2026-06-07T13:52:22.544875Z"
     }
   },
   "goals": {
@@ -15074,7 +15099,8 @@
         "P29-I13-W51",
         "P29-I13-W52",
         "P29-I13-W53",
-        "P29-I13-W54"
+        "P29-I13-W54",
+        "P29-I13-W55"
       ]
     }
   },
@@ -15899,7 +15925,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T13:06:04.424517Z",
+  "updated_at": "2026-06-07T13:52:23.230774Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -62924,6 +62950,36 @@
         }
       ],
       "title": "Stabilize snapshot daemon-banner + perf ceilings under CI load",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I13-W55": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "op-p29-i13",
+      "claimed_at": "2026-06-07T13:52:22.544871Z",
+      "closed_at": "2026-06-07T13:52:23.230394Z",
+      "commit": "a25e3ffe9efbd045f78cc4a53551f81a07b1b628",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/snapshots/tui/conftest.py",
+        "tests/daemon/test_event_methods.py"
+      ],
+      "gates": [],
+      "id": "P29-I13-W55",
+      "intent": null,
+      "iter_id": "P29-I13",
+      "opened_at": "2026-06-07T13:52:15.767310Z",
+      "outcome": "snapshot daemon-banner suppressed via conftest + leaked socketpair transports closed; advisory",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [],
+      "title": "Suppress snapshot daemon banner + close leaked socketpair transports",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
