@@ -99,6 +99,34 @@ logger = logging.getLogger(__name__)
 DEGRADED_BANNER_ID = "degraded-banner"
 DEGRADED_BANNER_HIDDEN_CLASS = "degraded-banner--hidden"
 
+#: Widget id + hidden class for the stale-schema banner. The banner surfaces
+#: when the bound state's ``schema_version`` trails the live daemon schema --
+#: the on-disk file has not been migrated up to the current version yet -- so
+#: the operator knows the read-only view predates the live schema.
+STALE_SCHEMA_BANNER_ID = "stale-schema-banner"
+STALE_SCHEMA_BANNER_HIDDEN_CLASS = "stale-schema-banner--hidden"
+
+
+def stale_schema_banner_message(*, bound_version: str, live_version: str) -> str:
+    """Render the stale-schema banner text.
+
+    Pure render source -- unit-testable without mounting the App. Names the
+    bound state's schema version and the live daemon version so the operator
+    sees exactly how far the read-only view trails.
+
+    Args:
+        bound_version: The bound state's ``schema_version``.
+        live_version: The live daemon schema version (model-supported max).
+
+    Returns:
+        The one-line banner text.
+    """
+    return (
+        f"state schema {bound_version} trails live daemon schema {live_version}; "
+        "showing a migrated read-only view -- run eawf migrate to update the file"
+    )
+
+
 #: Cap on the App-owned live event ring buffer. The Feed pane renders this
 #: buffer newest-first; the bound mirrors the on-disk ``/events`` overlay
 #: ring (50) with headroom so a burst of pushes between mode switches stays
@@ -319,6 +347,12 @@ class EaApp(App[None]):
     #: banner off this flag.
     degraded: reactive[bool] = reactive(False, init=False)
 
+    #: ``True`` while the bound state's ``schema_version`` trails the live
+    #: daemon schema (the on-disk file has not been migrated up yet). The
+    #: stale-schema banner surfaces off this flag; recomputed on every state
+    #: refresh. ``init=False`` so the watcher only fires on a real change.
+    stale_schema: reactive[bool] = reactive(False, init=False)
+
     #: Count of open needs_user pauses across **all** scopes (not just the
     #: active one). The footer needs_user badge watches this to flip
     #: attention-coloured when > 0. Recomputed on every state refresh off
@@ -462,12 +496,22 @@ class EaApp(App[None]):
         # on-disk ``state.json``, so its synthesized state binds in
         # ``on_mount`` as before -- the disk-backed cold-mount race this
         # hoist closes does not apply there.
+        # ``True`` once the most recently bound state was seen to trail the
+        # live daemon schema. Tracked as a plain attribute (mirrored onto the
+        # ``stale_schema`` reactive at bind time) so the synchronous __init__
+        # bind below can record the verdict before the reactive's watcher is
+        # safe to fire. ``_bound_schema_version`` keeps the PRE-migration
+        # schema string for the banner text -- the bound state is migrated up
+        # in memory, so its post-migration ``schema_version`` reads as the live
+        # one and cannot name the trailing version on its own.
+        self._stale_schema_seen = False
+        self._bound_schema_version: str | None = None
         if self._scope != "user" and self._state_path is not None:
             from eawf.surfaces.tui.state_binding import load_state
 
             initial_state = load_state(self._state_path)
             if initial_state is not None:
-                self.state = initial_state
+                self.state = self._track_and_migrate_state(initial_state)
 
     async def on_mount(self) -> None:
         """Bind state read-only; the default (Home) mode auto-mounts.
@@ -512,6 +556,13 @@ class EaApp(App[None]):
             self._glyphs_policy, braille_ok=probe_braille_coverage()
         )
         self.call_after_refresh(self._sync_degraded_banner)
+        # Mirror the staleness verdict recorded during the synchronous
+        # __init__ bind onto the reactive now that the App is mounted, and
+        # paint the banner. The reactive write fires watch_stale_schema, which
+        # also syncs the banner -- the explicit call_after_refresh guarantees a
+        # paint even when the verdict did not change from its reactive default.
+        self.stale_schema = self._stale_schema_seen
+        self.call_after_refresh(self._sync_stale_schema_banner)
         self._maybe_open_init_wizard()
         # Follow a live system light/dark flip for /theme auto. The OSC 11
         # background probe can only run before .run() captured stdin, so the
@@ -530,6 +581,7 @@ class EaApp(App[None]):
         :class:`~eawf.surfaces.tui.state_binding.StateBinding` refresh because
         there is no daemon push bus yet.
         """
+        new_state = self._track_and_migrate_state(new_state)
         pauses = self._open_pauses_for_state(new_state)
         open_pause_count = len(pauses)
         self._toast_emitter.emit(
@@ -967,6 +1019,81 @@ class EaApp(App[None]):
             banner.set_class(True, DEGRADED_BANNER_HIDDEN_CLASS)
             banner.update("")
 
+    def _track_and_migrate_state(self, state: State) -> State:
+        """Record the staleness verdict for *state* and return it migrated.
+
+        The TUI binds state read-only, so a state written under an older
+        schema is migrated IN MEMORY up to the live daemon schema version
+        (:func:`~eawf.surfaces.tui.state_binding.migrate_bound_state`) before it
+        reaches the reactive, so every pane renders against the current shape.
+        The pre-migration staleness verdict is recorded on
+        :attr:`_stale_schema_seen` (and mirrored onto :attr:`stale_schema`
+        when the App is mounted) so the banner flags that the on-disk file
+        still predates the live schema.
+
+        Args:
+            state: The freshly loaded, validated state.
+
+        Returns:
+            The state migrated to the live daemon schema version (unchanged
+            when already current or the migration could not run).
+        """
+        from eawf.surfaces.tui.state_binding import (
+            is_state_schema_stale,
+            migrate_bound_state,
+        )
+
+        self._stale_schema_seen = is_state_schema_stale(state)
+        self._bound_schema_version = state.schema_version
+        # The App is "mounted" once its screen stack is populated -- the same
+        # guard the banner-sync uses. ``App.is_mounted`` is a method (unlike
+        # the Widget property), so the screen-stack check is the reliable seam.
+        if self.screen_stack:
+            self.stale_schema = self._stale_schema_seen
+        return migrate_bound_state(state)
+
+    def _sync_stale_schema_banner(self) -> None:
+        """Toggle the stale-schema banner visibility + text without remounting.
+
+        Mirrors :meth:`_sync_degraded_banner`: mounts the banner widget once,
+        then flips its hidden class + text off :attr:`stale_schema`. The
+        banner names the bound state's schema version and the live daemon
+        version so the operator reads how far the view trails.
+        """
+        if not self.screen_stack:
+            return
+        matches = self.screen.query(f"#{STALE_SCHEMA_BANNER_ID}")
+        if not matches:
+            self.screen.mount(
+                Static(
+                    "",
+                    id=STALE_SCHEMA_BANNER_ID,
+                    classes=f"stale-schema-banner {STALE_SCHEMA_BANNER_HIDDEN_CLASS}",
+                )
+            )
+            matches = self.screen.query(f"#{STALE_SCHEMA_BANNER_ID}")
+        matched = list(matches)
+        if not matched:
+            return
+        banner = cast(Static, matched[0])
+        if self.stale_schema:
+            from eawf.surfaces.tui.state_binding import live_schema_version
+
+            bound_version = self._bound_schema_version or "?"
+            banner.set_class(False, STALE_SCHEMA_BANNER_HIDDEN_CLASS)
+            banner.update(
+                stale_schema_banner_message(
+                    bound_version=bound_version, live_version=live_schema_version()
+                )
+            )
+        else:
+            banner.set_class(True, STALE_SCHEMA_BANNER_HIDDEN_CLASS)
+            banner.update("")
+
+    def watch_stale_schema(self) -> None:
+        """Repaint the stale-schema banner when the staleness verdict changes."""
+        self._sync_stale_schema_banner()
+
     def watch_render_mode(self, mode: RenderMode) -> None:
         """Propagate a bar-fill-mode flip to every mounted bar.
 
@@ -1084,20 +1211,51 @@ class EaApp(App[None]):
         if scope == "user":
             from eawf.surfaces.tui.scopes.user import synthesize_user_state
 
+            # The synthesized portfolio state is built at the live schema, so
+            # it never trails -- clear the staleness verdict before the bind.
+            self._stale_schema_seen = False
+            self._bound_schema_version = None
+            self.stale_schema = False
             self.state = synthesize_user_state()
         elif scope == "repo" and self._active_repo_path is not None:
             from eawf.surfaces.tui.state_binding import load_state
 
-            self.state = load_state(self._active_repo_path / ".ea" / "state.json")
+            self.state = self._bind_loaded_state(
+                load_state(self._active_repo_path / ".ea" / "state.json")
+            )
         elif self._state_path is not None:
             from eawf.surfaces.tui.state_binding import load_state
 
-            self.state = load_state(self._state_path)
+            self.state = self._bind_loaded_state(load_state(self._state_path))
         self._scope = scope  # type: ignore[assignment]
         self._ensure_switchable_base_screen()
         self.switch_screen(scope)
         self.call_after_refresh(self._sync_degraded_banner)
+        self.call_after_refresh(self._sync_stale_schema_banner)
         self._maybe_open_init_wizard()
+
+    def _bind_loaded_state(self, state: State | None) -> State | None:
+        """Track + migrate a freshly loaded state for a scope rebind.
+
+        Thin wrapper over :meth:`_track_and_migrate_state` that tolerates a
+        ``None`` load (an unreadable / missing ``state.json``): a ``None``
+        clears the staleness verdict and binds nothing, so the scope switch
+        degrades to the empty-scope placeholder rather than crashing.
+
+        Args:
+            state: The freshly loaded state, or ``None`` when no usable
+                state was on disk.
+
+        Returns:
+            The migrated state, or ``None`` when the load yielded none.
+        """
+        if state is None:
+            self._stale_schema_seen = False
+            self._bound_schema_version = None
+            if self.screen_stack:
+                self.stale_schema = False
+            return None
+        return self._track_and_migrate_state(state)
 
     def _ensure_switchable_base_screen(self) -> None:
         """Seed a result callback on a mode-initialised base screen.
@@ -1604,4 +1762,5 @@ __all__ = [
     "resolve_render_mode",
     "resolve_scope",
     "run_app",
+    "stale_schema_banner_message",
 ]

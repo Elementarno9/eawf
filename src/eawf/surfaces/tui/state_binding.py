@@ -114,6 +114,109 @@ def load_state(state_path: Path | None) -> State | None:
         return None
 
 
+def live_schema_version() -> str:
+    """Return the highest ``schema_version`` the live ``State`` model loads.
+
+    The live ``State`` model's accepted ``schema_version`` set is the
+    daemon's notion of "current" -- the daemon writes new states at this
+    version and the migrate chain bumps older ones up to it. The TUI binds
+    state read-only, so it never migrates the file; it surfaces a staleness
+    banner when the bound state trails this version instead.
+
+    Returns:
+        The model-supported max ``schema_version`` (e.g. ``"1.8"``).
+    """
+    from eawf.kernel.migrations import model_supported_max_version
+
+    return model_supported_max_version()
+
+
+def is_state_schema_stale(state: State, *, live_version: str | None = None) -> bool:
+    """Return whether *state*'s ``schema_version`` trails the live daemon schema.
+
+    A bound state is stale when it was written under an older schema than
+    the live ``State`` model loads -- the on-disk file has not been migrated
+    up to the current version yet. The TUI surfaces a staleness banner off
+    this verdict so the operator sees the bound view predates the live
+    schema.
+
+    Args:
+        state: The bound, validated state.
+        live_version: The live daemon schema version to compare against;
+            defaults to :func:`live_schema_version` (injectable for tests).
+
+    Returns:
+        ``True`` when ``state.schema_version`` is older than the live
+        version, ``False`` when it is current (or somehow ahead).
+    """
+    live = live_version if live_version is not None else live_schema_version()
+    return _version_key(state.schema_version) < _version_key(live)
+
+
+def migrate_bound_state(state: State, *, live_version: str | None = None) -> State:
+    """Return *state* re-validated at the live schema version (in-memory).
+
+    The TUI binds state read-only, so this never writes the file: it runs
+    the dict-level migration chain in memory to lift the bound state up to
+    the live schema version, then re-validates the migrated payload through
+    :meth:`State.model_validate`. A state already at (or ahead of) the live
+    version is returned unchanged. A migration failure degrades to the
+    original state -- the staleness banner still flags the drift, but a
+    broken chain never crashes the read-only bind.
+
+    Args:
+        state: The bound, validated state.
+        live_version: The live daemon schema version to migrate toward;
+            defaults to :func:`live_schema_version` (injectable for tests).
+
+    Returns:
+        The state migrated to the live schema version, or the original
+        state when it is already current or the migration could not run.
+    """
+    live = live_version if live_version is not None else live_schema_version()
+    if not is_state_schema_stale(state, live_version=live):
+        return state
+    from eawf.kernel.migrations import DEFAULT_REGISTRY, build_migration_chain
+
+    try:
+        steps = build_migration_chain(
+            DEFAULT_REGISTRY,
+            from_version=state.schema_version,
+            to_version=live,
+        )
+        payload = state.model_dump(mode="json")
+        for step in steps:
+            payload = step.apply(payload)
+        migrated = State.model_validate(payload)
+    except Exception as exc:
+        logger.warning(
+            f"migrate_bound_state degraded from={state.schema_version!r} to={live!r} cause={exc!r}"
+        )
+        return state
+    logger.info(f"migrate_bound_state from={state.schema_version!r} to={migrated.schema_version!r}")
+    return migrated
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """Return a sortable integer tuple for a dotted ``MAJOR.MINOR`` version.
+
+    Schema versions are dotted-numeric strings (``"1.0"`` / ``"1.8"``), so a
+    plain ``tuple(int, ...)`` orders them without a third-party parser.
+
+    Args:
+        version: A dotted-numeric schema version string.
+
+    Returns:
+        The per-segment integer tuple; ``(0,)`` for an unparseable string so
+        a malformed version sorts oldest rather than raising on the
+        read-only bind path.
+    """
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except ValueError:
+        return (0,)
+
+
 class StateBinding:
     """Read-only mtime-poll binder feeding the App's reactive state.
 
@@ -420,5 +523,8 @@ __all__ = [
     "DEFAULT_POLL_INTERVAL_S",
     "StateBinding",
     "StateBindingCallbacks",
+    "is_state_schema_stale",
+    "live_schema_version",
     "load_state",
+    "migrate_bound_state",
 ]

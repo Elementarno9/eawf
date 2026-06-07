@@ -161,3 +161,17 @@ Heartbeat.-degraded {
 .degraded-banner.degraded-banner--hidden {
     visibility: hidden;
 }
+
+/* --- stale-schema banner (bound state trails the live daemon schema) --- */
+.stale-schema-banner {
+    height: 1;
+    dock: top;
+    background: $warning;
+    color: $text;
+    text-style: bold;
+    visibility: visible;
+}
+
+.stale-schema-banner.stale-schema-banner--hidden {
+    visibility: hidden;
+}
