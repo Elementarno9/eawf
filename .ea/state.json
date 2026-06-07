@@ -3203,6 +3203,18 @@
       "scope_id": "P29-I12-W08",
       "status": "done",
       "updated_at": "2026-06-07T00:06:51.608937Z"
+    },
+    "P29-I12-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P29-I12-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P29-I12-W09",
+      "scope_id": "P29-I12-W09",
+      "status": "done",
+      "updated_at": "2026-06-07T00:46:37.400805Z"
     }
   },
   "agent_sessions": {
@@ -6000,6 +6012,19 @@
       "scope_id": "P29",
       "status": "open",
       "title": "Remove dead spec-jury close-path code or confirm retention"
+    },
+    "B100": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-07T00:39:10.979073Z",
+      "description": "P29-I12-W07 seeded a real svg golden so test_svg_oracle T5 runs; the _GOLDEN_PLACEHOLDER guard + skipif are now permanently dead scaffolding. Remove them (cosmetic; audit A55 I12 followup).",
+      "id": "B100",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Remove dead SVG golden placeholder guard in test_svg_oracle"
     },
     "B70": {
       "closed_at": null,
@@ -12071,6 +12096,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P29-I12-W08",
       "updated_at": "2026-06-07T00:06:50.881641Z"
+    },
+    "P29-I12-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P29-I12-W09-bucket-20260607T004636Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P29-I12-W09",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P29-I12-W09",
+      "updated_at": "2026-06-07T00:46:36.687488Z"
     }
   },
   "goals": {
@@ -13557,7 +13595,8 @@
         "P29-I12-W05",
         "P29-I12-W06",
         "P29-I12-W07",
-        "P29-I12-W08"
+        "P29-I12-W08",
+        "P29-I12-W09"
       ]
     },
     "P29-I13": {
@@ -14388,7 +14427,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-07T00:30:40.469149Z",
+  "updated_at": "2026-06-07T00:46:37.401100Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -58257,6 +58296,50 @@
         }
       ],
       "title": "Add eawf dispatch resume and pause CLI verbs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P29-I12-W09": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "operator-i12-integration",
+      "claimed_at": "2026-06-07T00:46:36.687479Z",
+      "closed_at": "2026-06-07T00:46:37.400805Z",
+      "commit": "1d76bfd3daf62d6c88f29d70253501e001508ea1",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py"
+      ],
+      "gates": [],
+      "id": "P29-I12-W09",
+      "intent": null,
+      "iter_id": "P29-I12",
+      "opened_at": "2026-06-07T00:44:21.417408Z",
+      "outcome": "stale close-gate docstring aligned with the W02/W06 wiring",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the _enforce_wave_close_gate docstring describes _load_gate_specs reading wave.gates instead of the stale returns-empty-today backlog claim",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the _enforce_wave_close_gate docstring describes _load_gate_specs reading wave.gates instead of the stale returns-empty-today backlog claim",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Align close-gate docstring with the wired gate loader",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
