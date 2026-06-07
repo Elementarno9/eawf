@@ -25,13 +25,18 @@ from eawf.kernel.spec.research_campaign import (
     ResearchProfileBlock,
     stage_campaign,
 )
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import CampaignStatus, StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.research import create_campaign, persist_campaign
+from eawf.runtime.daemon.methods.research import (
+    cancel_campaign,
+    create_campaign,
+    persist_campaign,
+    read_latest_campaign,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -218,3 +223,162 @@ def test_persist_campaign_empty_block_stages_zero_dispatches(tmp_path: Path) -> 
     rows = _read_campaign_rows(state_path)
     assert len(rows) == 1
     assert rows[0].campaign.dispatches == []
+
+
+# --------------------------------------------------------------------------
+# read_latest_campaign -- latest matching row wins
+# --------------------------------------------------------------------------
+
+
+def test_read_latest_campaign_none_when_store_absent(tmp_path: Path) -> None:
+    """No campaign store on disk yields None (the common pre-stage path)."""
+    assert read_latest_campaign(tmp_path / "state.json", "campaign-x") is None
+
+
+def test_read_latest_campaign_none_for_unknown_id(tmp_path: Path) -> None:
+    """A stored campaign whose id does not match yields None."""
+    state_path = tmp_path / "state.json"
+
+    async def body() -> None:
+        ctx = _build_ctx(state_path=state_path)
+        await create_campaign(ctx, _params("campaign-a"))
+
+    _run(body)
+    assert read_latest_campaign(state_path, "campaign-missing") is None
+
+
+def test_read_latest_campaign_returns_last_matching_row(tmp_path: Path) -> None:
+    """A re-appended campaign resolves to its most-recent payload."""
+    state_path = tmp_path / "state.json"
+    block = _block()
+    first = ResearchCampaignPayload(
+        campaign_id="campaign-dup",
+        config=block,
+        campaign=stage_campaign("first topic", block),
+    )
+    second = ResearchCampaignPayload(
+        campaign_id="campaign-dup",
+        config=block,
+        campaign=stage_campaign("second topic", block),
+    )
+    persist_campaign(state_path, first)
+    persist_campaign(state_path, second)
+    latest = read_latest_campaign(state_path, "campaign-dup")
+    assert latest is not None
+    assert latest.campaign.topic == "second topic"
+
+
+# --------------------------------------------------------------------------
+# cancel_campaign -- happy path tombstones the campaign
+# --------------------------------------------------------------------------
+
+
+def test_cancel_campaign_appends_tombstoned_row(tmp_path: Path) -> None:
+    """Cancelling an active campaign appends a cancelled copy with a tombstone."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _params("campaign-c"))
+        result: dict[str, Any] = await cancel_campaign(
+            ctx, {"campaign_id": "campaign-c", "reason": "superseded"}
+        )
+        assert result["id"] == "campaign-c"
+        assert result["status"] == "cancelled"
+        assert isinstance(result["cancelled_at"], str)
+        latest = read_latest_campaign(state_path, "campaign-c")
+        assert latest is not None
+        assert latest.status is CampaignStatus.CANCELLED
+        assert latest.tombstone is not None
+        assert latest.tombstone.reason == "superseded"
+        # The original active row stays in the append-only store.
+        rows = _read_campaign_rows(state_path)
+        assert len(rows) == 2
+        assert rows[0].status is CampaignStatus.ACTIVE
+        assert rows[1].status is CampaignStatus.CANCELLED
+
+    _run(body)
+
+
+def test_cancel_campaign_reason_optional(tmp_path: Path) -> None:
+    """Cancelling with no reason records a tombstone with reason None."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _params("campaign-noreason"))
+        await cancel_campaign(ctx, {"campaign_id": "campaign-noreason"})
+        latest = read_latest_campaign(state_path, "campaign-noreason")
+        assert latest is not None
+        assert latest.status is CampaignStatus.CANCELLED
+        assert latest.tombstone is not None
+        assert latest.tombstone.reason is None
+
+    _run(body)
+
+
+# --------------------------------------------------------------------------
+# cancel_campaign -- error paths
+# --------------------------------------------------------------------------
+
+
+def test_cancel_campaign_rejects_unknown_id(tmp_path: Path) -> None:
+    """Cancelling a campaign id that was never staged is rejected."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="unknown campaign"):
+            await cancel_campaign(ctx, {"campaign_id": "campaign-ghost"})
+
+    _run(body)
+
+
+def test_cancel_campaign_rejects_already_cancelled(tmp_path: Path) -> None:
+    """Cancelling an already-cancelled campaign is rejected (not re-tombstoned)."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _params("campaign-twice"))
+        await cancel_campaign(ctx, {"campaign_id": "campaign-twice"})
+        with pytest.raises(ValueError, match="not active"):
+            await cancel_campaign(ctx, {"campaign_id": "campaign-twice"})
+
+    _run(body)
+
+
+def test_cancel_campaign_rejects_extra_param(tmp_path: Path) -> None:
+    """An unknown param is rejected by extra='forbid' on the params model."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _params("campaign-extra"))
+        with pytest.raises(ValidationError):
+            await cancel_campaign(ctx, {"campaign_id": "campaign-extra", "rogue": True})
+
+    _run(body)
+
+
+def test_cancel_campaign_rejects_empty_id(tmp_path: Path) -> None:
+    """An empty campaign id violates the params min_length bound."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+
+    async def body() -> None:
+        with pytest.raises(ValidationError):
+            await cancel_campaign(ctx, {"campaign_id": ""})
+
+    _run(body)
+
+
+def test_cancel_campaign_raises_without_state_path() -> None:
+    """The handler raises when the daemon context has no state path."""
+    ctx = _build_ctx(state_path=None)
+
+    async def body() -> None:
+        with pytest.raises(RuntimeError, match="state_path not configured"):
+            await cancel_campaign(ctx, {"campaign_id": "campaign-x"})
+
+    _run(body)

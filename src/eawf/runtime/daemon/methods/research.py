@@ -22,13 +22,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.spec.research_campaign import ResearchProfileBlock, StagedCampaign
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import CampaignStatus, StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+from eawf.kernel.store.kinds.research_campaign import (
+    CampaignTombstone,
+    ResearchCampaignPayload,
+)
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.methods import MethodContext, register
 
@@ -145,9 +148,125 @@ async def create_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     return CreateCampaignResult(id=appended_id, appended_at=appended_at).model_dump(mode="json")
 
 
+class CancelCampaignParams(BaseModel):
+    """Params for :func:`cancel_campaign`.
+
+    Attributes:
+        campaign_id: Id of the campaign to cancel; must name an ACTIVE
+            campaign already present in the store.
+        reason: Optional short operator-supplied reason recorded on the
+            campaign's tombstone; ``None`` records no reason.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    campaign_id: str = Field(min_length=1)
+    reason: str | None = Field(default=None, max_length=280)
+
+
+class CancelCampaignResult(BaseModel):
+    """Result of :func:`cancel_campaign`.
+
+    Attributes:
+        id: The cancelled campaign's id (mirrors the input ``campaign_id``).
+        status: The campaign's new lifecycle status value (``"cancelled"``).
+        cancelled_at: ISO-8601 timestamp the tombstone records.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    status: str
+    cancelled_at: str
+
+
+def read_latest_campaign(state_path: Path, campaign_id: str) -> ResearchCampaignPayload | None:
+    """Return the most-recent persisted payload for *campaign_id*, or ``None``.
+
+    Walks the append-only ``research_campaign.jsonl`` store under *state_path*
+    in record order, validating each envelope + payload, and returns the LAST
+    row matching *campaign_id* so a campaign that has been re-appended (e.g. a
+    cancel that stamps a fresh tombstoned row) resolves to its current state.
+    Returns ``None`` when the store is absent or carries no row for the id.
+
+    Args:
+        state_path: Path to the scope's ``state.json``; the campaign store
+            resolves under its sibling ``store/`` directory.
+        campaign_id: The campaign id to resolve.
+
+    Returns:
+        The latest matching :class:`ResearchCampaignPayload`, or ``None``.
+    """
+    path = store_path(state_path, StoreKind.RESEARCH_CAMPAIGN)
+    if not path.exists():
+        return None
+    latest: ResearchCampaignPayload | None = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        envelope = Envelope.model_validate_json(raw_line)
+        payload = ResearchCampaignPayload.model_validate(envelope.payload)
+        if payload.campaign_id == campaign_id:
+            latest = payload
+    return latest
+
+
+@register("research.cancel_campaign")
+async def cancel_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Tombstone an ACTIVE campaign by appending a cancelled copy of its row.
+
+    The campaign store is append-only, so cancelling does not delete the
+    original row: the handler reads the campaign's most-recent payload
+    (:func:`read_latest_campaign`), requires it to be ACTIVE, and appends a
+    fresh copy carrying ``status=CANCELLED`` + a :class:`CampaignTombstone`
+    (cancel time + optional reason) via the shared :func:`persist_campaign`
+    writer. Re-cancelling an already-cancelled campaign is rejected so the
+    cancel is idempotent only by explicit operator intent.
+
+    Args:
+        ctx: Server context -- must carry ``state_path`` so the daemon can
+            resolve ``<state_dir>/store/research_campaign.jsonl``.
+        params: JSON-RPC params per :class:`CancelCampaignParams`.
+
+    Returns:
+        Dict matching :class:`CancelCampaignResult`.
+
+    Raises:
+        ValueError: When *params* does not validate, the campaign id names no
+            stored campaign, or the campaign is not ACTIVE. The server maps
+            this to ``-32602 invalid params``.
+        RuntimeError: When ``ctx.state_path`` is unset.
+    """
+    args = CancelCampaignParams.model_validate(params)
+    if ctx.state_path is None:
+        raise RuntimeError("state_path not configured on daemon context")
+    state_path = Path(ctx.state_path)
+    current = read_latest_campaign(state_path, args.campaign_id)
+    if current is None:
+        raise ValueError(f"unknown campaign: {args.campaign_id!r}")
+    if current.status is not CampaignStatus.ACTIVE:
+        raise ValueError(f"campaign not active: {args.campaign_id!r} is {current.status.value!r}")
+    cancelled_at = datetime.now(UTC)
+    tombstoned = current.model_copy(
+        update={
+            "status": CampaignStatus.CANCELLED,
+            "tombstone": CampaignTombstone(cancelled_at=cancelled_at, reason=args.reason),
+        }
+    )
+    persist_campaign(state_path, tombstoned)
+    logger.info(f"cancel_campaign id={args.campaign_id!r} reason={args.reason!r}")
+    return CancelCampaignResult(
+        id=args.campaign_id,
+        status=CampaignStatus.CANCELLED.value,
+        cancelled_at=cancelled_at.isoformat(),
+    ).model_dump(mode="json")
+
+
 __all__ = [
+    "CancelCampaignParams",
+    "CancelCampaignResult",
     "CreateCampaignParams",
     "CreateCampaignResult",
+    "cancel_campaign",
     "create_campaign",
     "persist_campaign",
+    "read_latest_campaign",
 ]
