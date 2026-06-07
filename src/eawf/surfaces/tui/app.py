@@ -1062,16 +1062,22 @@ class EaApp(App[None]):
         """
         if not self.screen_stack:
             return
-        matches = self.screen.query(f"#{STALE_SCHEMA_BANNER_ID}")
+        # Mount onto the BASE scope screen, never a modal overlay on top of it:
+        # ``self.screen`` is the topmost screen, so a refresh while a modal
+        # (help / palette / a drill) is open would otherwise mount the banner
+        # into the modal and disrupt its layout. The base screen is the
+        # bottom-most stack entry (a plain Screen, not a ModalScreen).
+        base_screen = self.screen_stack[0]
+        matches = base_screen.query(f"#{STALE_SCHEMA_BANNER_ID}")
         if not matches:
-            self.screen.mount(
+            base_screen.mount(
                 Static(
                     "",
                     id=STALE_SCHEMA_BANNER_ID,
                     classes=f"stale-schema-banner {STALE_SCHEMA_BANNER_HIDDEN_CLASS}",
                 )
             )
-            matches = self.screen.query(f"#{STALE_SCHEMA_BANNER_ID}")
+            matches = base_screen.query(f"#{STALE_SCHEMA_BANNER_ID}")
         matched = list(matches)
         if not matched:
             return

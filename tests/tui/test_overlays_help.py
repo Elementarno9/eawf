@@ -304,8 +304,10 @@ def test_help_renders_mode_action_and_reference_sections() -> None:
             assert "Autopilot" in shot
             assert "dispatch" in shot
             # The honest "(navigation only)" note appears for a mode that
-            # declares no own action keys (Doctor / Evidence / Feed).
-            container.scroll_to(y=30, animate=False)
+            # declares no own action keys (Doctor / Evidence / Feed). The
+            # offset accounts for the Trust mode's verifier + calibration
+            # action-key rows, which push the no-action modes further down.
+            container.scroll_to(y=38, animate=False)
             await pilot.pause()
             await app.workers.wait_for_complete()
             assert "(navigation only)" in capture_screen_text(app)

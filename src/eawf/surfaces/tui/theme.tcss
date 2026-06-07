@@ -162,10 +162,14 @@ Heartbeat.-degraded {
     visibility: hidden;
 }
 
-/* --- stale-schema banner (bound state trails the live daemon schema) --- */
+/* --- stale-schema banner (bound state trails the live daemon schema) ---
+   Docked to the BOTTOM (above the footer), not the top: the brand +
+   breadcrumb header must stay on row 0, so the informational staleness
+   banner never covers it (unlike the transport-critical degraded banner,
+   which docks top). */
 .stale-schema-banner {
     height: 1;
-    dock: top;
+    dock: bottom;
     background: $warning;
     color: $text;
     text-style: bold;
@@ -174,4 +178,5 @@ Heartbeat.-degraded {
 
 .stale-schema-banner.stale-schema-banner--hidden {
     visibility: hidden;
+    height: 0;
 }
