@@ -37,6 +37,7 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
 from eawf.kernel.state.ids import natural_key
+from eawf.platform.scrub import scan_text
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
@@ -44,6 +45,7 @@ from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
     from eawf.kernel.store.kinds.evidence import EvidenceRecord
+    from eawf.platform.scrub import ScrubFinding
     from eawf.workflow.verify.models import CloseReadiness, CriterionView
 
 logger = logging.getLogger(__name__)
@@ -524,6 +526,138 @@ def join_evidence_to_criteria(
     return EvidenceJoin(matched=frozen, orphans=tuple(orphans))
 
 
+# --------------------------------------------------------------------------
+# Scrub-gated evidence export -- a clean manifest, refusing host-path leaks
+# --------------------------------------------------------------------------
+
+
+class EvidenceScrubError(ValueError):
+    """Raised when an evidence export payload carries unscrubbed host tokens.
+
+    The export gate scans every text-bearing payload value with the project
+    scrub scanner (:func:`eawf.platform.scrub.scan_text`); a payload carrying
+    a host path (``/Users/...`` / ``/home/...``), a private IP, a local
+    hostname, or a non-allowlisted email is refused rather than emitted, so a
+    machine-local leak never rides an exported manifest off the operator's box.
+
+    Attributes:
+        findings: The scanner findings that tripped the refusal, in byte order.
+    """
+
+    def __init__(self, findings: list[ScrubFinding]) -> None:
+        """Build the error naming each offending token kind.
+
+        Args:
+            findings: The scrub findings that tripped the refusal.
+        """
+        self.findings = findings
+        kinds = ", ".join(sorted({finding.kind for finding in findings}))
+        super().__init__(f"evidence export carries unscrubbed token(s): {kinds}")
+
+
+def build_evidence_manifest(
+    readiness: CloseReadiness,
+    records: Iterable[EvidenceRecord] = (),
+) -> dict[str, object]:
+    """Build the exportable evidence manifest from a close-readiness view.
+
+    Assembles a plain ``dict`` -- one criterion entry per ledger row (id,
+    gate status, produced_by, status) plus the joined evidence rows (id,
+    produced_by, status, summary) -- so the manifest round-trips through JSON
+    losslessly. This is the raw payload; :func:`export_evidence_manifest`
+    applies the scrub gate before it is emitted.
+
+    Args:
+        readiness: The derived close-readiness view to export.
+        records: The scope's evidence rows, joined to criteria by id.
+
+    Returns:
+        The manifest dict (``{"criteria": [...], "evidence": [...]}``).
+    """
+    rows = list(records)
+    ledger = build_evidence_ledger(readiness, rows)
+    criteria = [
+        {
+            "id": row.criterion_id,
+            "gate_status": row.gate_status,
+            "produced_by": row.produced_by,
+            "status": row.status,
+        }
+        for row in ledger
+    ]
+    evidence = [
+        {
+            "id": record.id,
+            "produced_by": record.produced_by,
+            "status": record.status,
+            "summary": record.summary,
+        }
+        for record in rows
+    ]
+    return {"criteria": criteria, "evidence": evidence}
+
+
+def export_evidence_manifest(
+    readiness: CloseReadiness,
+    records: Iterable[EvidenceRecord] = (),
+) -> dict[str, object]:
+    """Emit a scrub-clean evidence manifest, refusing a host-path leak.
+
+    Builds the manifest (:func:`build_evidence_manifest`), scans every
+    text-bearing value through the project scrub scanner
+    (:func:`eawf.platform.scrub.scan_text`), and returns the manifest only when
+    it is clean. A payload carrying a host path, a private IP, a local
+    hostname, or a non-allowlisted email is refused -- so a machine-local leak
+    never rides an exported manifest off the operator's box.
+
+    Args:
+        readiness: The derived close-readiness view to export.
+        records: The scope's evidence rows, joined to criteria by id.
+
+    Returns:
+        The scrub-clean manifest dict.
+
+    Raises:
+        EvidenceScrubError: When any payload value carries an unscrubbed
+            host token. The error names each offending token kind and carries
+            the raw findings on :attr:`EvidenceScrubError.findings`.
+    """
+    manifest = build_evidence_manifest(readiness, records)
+    findings = _scan_manifest(manifest)
+    if findings:
+        logger.info(f"export_evidence_manifest refused findings={len(findings)}")
+        raise EvidenceScrubError(findings)
+    logger.info("export_evidence_manifest clean")
+    return manifest
+
+
+def _scan_manifest(manifest: dict[str, object]) -> list[ScrubFinding]:
+    """Scan every string value in *manifest* for unscrubbed host tokens.
+
+    Walks the manifest's nested ``criteria`` / ``evidence`` lists and scans
+    each string field with :func:`eawf.platform.scrub.scan_text`, accumulating
+    every finding so the refusal names all offending token kinds at once.
+
+    Args:
+        manifest: The manifest dict produced by :func:`build_evidence_manifest`.
+
+    Returns:
+        The scrub findings across every scanned string value (empty when the
+        manifest is clean).
+    """
+    findings: list[ScrubFinding] = []
+    for section in manifest.values():
+        if not isinstance(section, list):
+            continue
+        for entry in section:
+            if not isinstance(entry, dict):
+                continue
+            for value in entry.values():
+                if isinstance(value, str):
+                    findings.extend(scan_text(value))
+    return findings
+
+
 class EvidenceModeScreen(ScopeScreen):
     """Evidence-mode base screen rendering the agent-report rollup.
 
@@ -816,12 +950,15 @@ __all__ = [
     "EvidenceJoin",
     "EvidenceModeScreen",
     "EvidenceRow",
+    "EvidenceScrubError",
     "LedgerRow",
     "build_evidence_ledger",
+    "build_evidence_manifest",
     "build_evidence_rows",
     "close_readiness_header",
     "criterion_ready_count",
     "evidence_summary_line",
+    "export_evidence_manifest",
     "gate_status_label",
     "join_evidence_to_criteria",
     "render_followups_block",
