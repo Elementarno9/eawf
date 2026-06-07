@@ -33,6 +33,8 @@ from typing import Any, Literal
 
 import yaml
 
+from eawf.surfaces.render.bars import DEFAULT_WIDTH, render_block_bar
+
 logger = logging.getLogger(__name__)
 
 
@@ -305,6 +307,70 @@ def render_rows(
     return "\n".join(lines)
 
 
+_CONTEXT_USAGE_MODULE: str = "context_usage"
+"""Stable module id for the context-usage bar segment."""
+
+_RATE_WINDOW_MODULE: str = "rate_window"
+"""Stable module id for the rate-window bar segment."""
+
+
+def render_usage_bar(ratio: float, *, width: int = DEFAULT_WIDTH) -> str:
+    """Render a *ratio* as a block-eighths progress bar of *width* cells.
+
+    Thin wrapper over :func:`~eawf.surfaces.render.bars.render_block_bar` so
+    the statusline bars share the one canonical block-eighths primitive
+    rather than re-deriving the glyph run.
+
+    Args:
+        ratio: Fill ratio in the closed interval ``[0, 1]``.
+        width: Bar cell count (> 0). Defaults to the shared bar default.
+
+    Returns:
+        The block-eighths bar, exactly *width* cells wide.
+
+    Raises:
+        ValueError: When *ratio* is outside ``[0, 1]`` or *width* is not
+            positive (propagated from the bar primitive).
+    """
+    return render_block_bar(ratio, width=width)
+
+
+def context_usage_segment(ratio: float, *, width: int = DEFAULT_WIDTH) -> StatuslineSegment:
+    """Build the context-usage statusline segment as a block-eighths bar.
+
+    Args:
+        ratio: Context-window fill ratio in ``[0, 1]`` (used tokens / budget).
+        width: Bar cell count (> 0).
+
+    Returns:
+        A :class:`StatuslineSegment` whose text is the block-eighths bar.
+
+    Raises:
+        ValueError: When *ratio* is outside ``[0, 1]`` or *width* is not
+            positive (propagated from :func:`render_usage_bar`).
+    """
+    return StatuslineSegment(
+        module=_CONTEXT_USAGE_MODULE, text=render_usage_bar(ratio, width=width)
+    )
+
+
+def rate_window_segment(ratio: float, *, width: int = DEFAULT_WIDTH) -> StatuslineSegment:
+    """Build the rate-window statusline segment as a block-eighths bar.
+
+    Args:
+        ratio: Rate-limit window fill ratio in ``[0, 1]`` (spent / window).
+        width: Bar cell count (> 0).
+
+    Returns:
+        A :class:`StatuslineSegment` whose text is the block-eighths bar.
+
+    Raises:
+        ValueError: When *ratio* is outside ``[0, 1]`` or *width* is not
+            positive (propagated from :func:`render_usage_bar`).
+    """
+    return StatuslineSegment(module=_RATE_WINDOW_MODULE, text=render_usage_bar(ratio, width=width))
+
+
 def terminal_supports_color() -> bool:
     """Return ``True`` when the active terminal can render ANSI colour.
 
@@ -391,9 +457,12 @@ __all__ = [
     "SegmentStatus",
     "StatuslineSegment",
     "StatuslineTheme",
+    "context_usage_segment",
     "load_themes",
+    "rate_window_segment",
     "render_rows",
     "render_segments",
+    "render_usage_bar",
     "resolve_color_mode",
     "resolve_glyph_mode",
     "resolve_theme",
