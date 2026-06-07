@@ -146,11 +146,24 @@ _PARK_METHOD: str = "needs_user.park"
 _FOLLOWUP_METHOD: str = "research.followup"
 _SNAPSHOT_METHOD: str = "research.snapshot"
 
+#: Daemon JSON-RPC method the ``x`` (cancel-campaign) key routes through -- the
+#: real cancel-campaign tombstoner (the daemon is the canonical campaign-store
+#: mutator).
+_CANCEL_METHOD: str = "research.cancel_campaign"
+
+#: Intended daemon method the ``n`` (new-campaign) key routes through. Staging
+#: a campaign from the TUI has no callable seam yet (campaigns are staged
+#: through the ``eawf research campaign new`` CLI / ``research.create_campaign``
+#: RPC, which needs a full ``research:`` block the board cannot yet compose), so
+#: ``n`` surfaces the honest "not yet wired" line -- the idle-contract pattern,
+#: live for free once a TUI campaign-staging seam lands.
+_NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
+
 #: Drawer line before any checkpoint is open (the idle checkpoint surface).
 CHECKPOINT_IDLE: str = "no checkpoint -- nothing awaiting operator review"
 
 #: Action-result line before any action key is pressed.
-ACTION_IDLE: str = "enter peek  a approve  p park  r follow-up  s snapshot"
+ACTION_IDLE: str = "enter peek  n new  a approve  p park  r follow-up  s snapshot  x cancel"
 
 #: Action-result line when an approve / park has no checkpoint to act on.
 APPROVE_NO_CHECKPOINT: str = "approve: no checkpoint to approve"
@@ -159,6 +172,13 @@ PARK_NO_CHECKPOINT: str = "park: no checkpoint to park"
 #: Action-result line when a checkpoint action could not reach the daemon.
 APPROVE_NO_DAEMON: str = "approve: daemon unavailable -- request not issued"
 PARK_NO_DAEMON: str = "park: daemon unavailable -- request not issued"
+
+#: Action-result line when ``x`` cancel fires with no campaign node selected.
+CANCEL_NO_CAMPAIGN: str = "cancel: no campaign selected to cancel"
+
+#: Action-result line when the cancel-campaign request could not reach the
+#: daemon (the canonical campaign-store mutator).
+CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
 
 #: Honest "not yet wired" line for the keys whose engine runner does not exist
 #: yet (follow-up / snapshot). Formatted with the verb so each reads clearly.
@@ -179,10 +199,12 @@ _RESEARCH_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
     render_hint_label("Enter", "open"),
     render_hint_label("d", "brief"),
+    render_hint_label("n", "new"),
     render_hint_label("a", "approve"),
     render_hint_label("p", "park"),
     render_hint_label("r", "follow-up"),
     render_hint_label("s", "snapshot"),
+    render_hint_label("x", "cancel"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
     render_hint_label("?", "help"),
@@ -256,12 +278,17 @@ class TreeNode:
             question) driving the rendered indent.
         detail: A short honest peek line surfaced when the node is peeked
             (e.g. the campaign's domain count, or the question's status).
+        campaign_id: The id of the campaign this node belongs to, set on a
+            :attr:`NodeKind.CAMPAIGN` node so the ``x`` cancel action can
+            resolve a selected campaign to its store id; ``None`` on the
+            round / topic / question nodes.
     """
 
     kind: NodeKind
     label: str
     depth: int
     detail: str
+    campaign_id: str | None = None
 
 
 def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
@@ -363,6 +390,7 @@ def build_tree_nodes(
                 label=campaign.topic,
                 depth=0,
                 detail=f"{campaign.domain_count} staged topic(s), depth {campaign.default_depth}",
+                campaign_id=campaign.campaign_id,
             )
         )
         nodes.append(
@@ -685,10 +713,12 @@ class ResearchBoardModeScreen(ScopeScreen):
         Binding("down", "select_next", "down", show=False),
         Binding("enter", "peek_selected", "peek", show=False),
         Binding("d", "open_brief", "brief", show=False),
+        Binding("n", "new_campaign", "new", show=False),
         Binding("a", "approve_checkpoint", "approve", show=False),
         Binding("p", "park_checkpoint", "park", show=False),
         Binding("r", "followup", "follow-up", show=False),
         Binding("s", "snapshot", "snapshot", show=False),
+        Binding("x", "cancel_campaign", "cancel", show=False),
     ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _RESEARCH_HINTS
@@ -889,6 +919,36 @@ class ResearchBoardModeScreen(ScopeScreen):
         """
         self._issue_unwired(verb="snapshot", method=_SNAPSHOT_METHOD)
 
+    def action_new_campaign(self) -> None:
+        """Stage a new campaign (no TUI staging seam yet -- honest-unavailable).
+
+        Routes through the daemon-client seam to the intended
+        ``research.stage_campaign`` method. The board cannot yet compose the
+        full ``research:`` block ``research.create_campaign`` requires, so no
+        TUI-callable staging seam exists: the daemon answers method-not-found
+        and the action surfaces the honest "not yet wired" line -- it never
+        implies a campaign was staged. It goes live for free once a TUI
+        staging seam lands (the idle-contract pattern).
+        """
+        self._issue_unwired(verb="new-campaign", method=_NEW_CAMPAIGN_METHOD)
+
+    def action_cancel_campaign(self) -> None:
+        """Cancel the selected campaign via the real ``research.cancel_campaign`` RPC.
+
+        Resolves the selected tree node to its campaign id and routes a cancel
+        through the daemon-client seam (the daemon is the canonical campaign-
+        store mutator), surfacing the honest typed outcome. With no campaign
+        node selected there is nothing to cancel; when the daemon is unreachable
+        the result says so rather than implying a cancellation.
+        """
+        campaign_id = self._selected_campaign_id()
+        if campaign_id is None:
+            self._set_action(f"[$warn]{CANCEL_NO_CAMPAIGN}[/]")
+            return
+        result_line = self._issue_cancel(campaign_id)
+        self._set_action(result_line)
+        logger.info(f"action_cancel_campaign campaign={campaign_id!r} result={result_line!r}")
+
     def _issue_resolve(self, pause: OpenPause) -> str:
         """Issue ``needs_user.resolve`` for *pause* and return a result line.
 
@@ -958,6 +1018,38 @@ class ResearchBoardModeScreen(ScopeScreen):
         pauses = result.get("pauses", [])
         count = len(pauses) if isinstance(pauses, list) else 0
         return f"[$ok]park: left open[/] [$muted]{count} checkpoint(s) still open[/]"
+
+    def _issue_cancel(self, campaign_id: str) -> str:
+        """Issue ``research.cancel_campaign`` for *campaign_id* and return a result line.
+
+        Calls the daemon ``research.cancel_campaign`` method with the campaign
+        id through the same :class:`~eawf.surfaces.cli._daemon_client.DaemonClient`
+        seam the rest of the TUI mutates through, when a daemon socket is
+        available. A daemon that is unreachable, rejecting, or timing out yields
+        the honest unavailable / rejected line rather than a faked cancellation.
+
+        Args:
+            campaign_id: The id of the campaign to cancel.
+
+        Returns:
+            A content-markup result line describing the cancel outcome.
+        """
+        if not self._daemon_available():
+            return f"[$warn]{CANCEL_NO_DAEMON}[/]"
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                client.call(_CANCEL_METHOD, {"campaign_id": campaign_id})
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_cancel daemon_rejected message={exc.message!r}")
+            return (
+                f"[$warn]cancel: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+            )
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_cancel daemon_fallback cause={exc!r}")
+            return f"[$warn]{CANCEL_NO_DAEMON}[/]"
+        return f"[$ok]cancel: tombstoned[/] [$muted]campaign={escape_markup(campaign_id)}[/]"
 
     def _issue_unwired(self, *, verb: str, method: str) -> None:
         """Route a not-yet-wired action through the seam, honestly.
@@ -1089,6 +1181,32 @@ class ResearchBoardModeScreen(ScopeScreen):
             return None
         return self._tree[self.selected]
 
+    def _selected_campaign_id(self) -> str | None:
+        """Return the selected node's campaign id, or ``None``.
+
+        A campaign node carries its store id, so a selected campaign resolves
+        directly. A round / topic node under a campaign resolves to its parent
+        campaign by walking up the flat node list to the nearest preceding
+        campaign node. A selected question leaf (scope-wide, not pinned to one
+        campaign) or an empty tree yields ``None`` -- there is no campaign to
+        cancel.
+
+        Returns:
+            The campaign id of the selected node's campaign, or ``None``.
+        """
+        node = self._selected_node()
+        if node is None:
+            return None
+        if node.kind is NodeKind.QUESTION:
+            return None
+        if node.campaign_id is not None:
+            return node.campaign_id
+        for index in range(self.selected, -1, -1):
+            candidate = self._tree[index]
+            if candidate.kind is NodeKind.CAMPAIGN and candidate.campaign_id is not None:
+                return candidate.campaign_id
+        return None
+
     def _set_peek(self, line: str) -> None:
         """Update the peek-result line under the tree, if mounted."""
         self._update_one(PEEK_RESULT_ID, line)
@@ -1197,6 +1315,8 @@ __all__ = [
     "ACTION_IDLE",
     "APPROVE_NO_CHECKPOINT",
     "APPROVE_NO_DAEMON",
+    "CANCEL_NO_CAMPAIGN",
+    "CANCEL_NO_DAEMON",
     "CENTER_TABS",
     "CHECKPOINT_IDLE",
     "DRAWER_ID",

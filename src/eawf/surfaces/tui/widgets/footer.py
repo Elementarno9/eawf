@@ -100,12 +100,14 @@ CANONICAL_HINT_TOKENS: Final[frozenset[str]] = frozenset(
         "H",
         "k",
         "K",
+        "n",
         "p",
         "q",
         "r",
         "s",
         "S",
         "v",
+        "x",
         "space",
     }
 )
@@ -250,11 +252,13 @@ HINT_KEY_PRIORITY: Final[tuple[str, ...]] = (
     "H",
     "k",
     "K",
+    "n",
     "p",
     "r",
     "s",
     "S",
     "v",
+    "x",
     "space",
     # Global affordances (fixed tail order).
     "w/r/u",
