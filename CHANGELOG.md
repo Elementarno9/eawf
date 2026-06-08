@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.5.3]
+
+### Fixed
+- **`uv tool install` / `/plugin install` no longer crashes with `ModuleNotFoundError: No module named 'hypothesis'`.** The `transition_coverage` audit-check kind imported `hypothesis` (a dev/test-only dependency) at module top level, and the audit-DSL registry binds every check-kind eagerly at CLI startup — so importing the installed CLI pulled in a dependency that a runtime-only install (`uv tool install`, which omits the dev dependency-group) does not ship, crashing `eawf` before it could run. The import is now lazy: the Hypothesis state-machine is built inside `_make_machine` only on the machine-driven coverage path, so the CLI starts cleanly without `hypothesis`, and the kind degrades to a failed check (rather than aborting the audit) if the machine path runs without it.
+
+### Changed
+- **Release pipeline now gates publish on green CI and a runtime-only install smoke.** Two prevention gaps let v0.5.2 ship broken: the publish workflows (PyPI + plugin) triggered on the version tag independently of CI, so a red test run never blocked a publish; and CI always installs the dev dependency-group, so its tests could not see a runtime module reaching for a dev-only dependency. Both are closed: a new `tool-install-smoke` CI job installs the built wheel with runtime deps only and exercises the CLI, and the PyPI + plugin publish jobs now require the CI workflow to have concluded `success` for the tagged commit before they run.
+
 ## [0.5.2]
 
 ### Changed
