@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.5.2]
+
+### Changed
+- **Published npm package renamed to the scoped `@elementarno/eawf`.** The npm registry's name-similarity guard rejects the unscoped `eawf` name (deemed too close to an existing package), so the Claude plugin now publishes under the account-scoped `@elementarno/eawf`. This changes only the underlying npm artifact and the marketplace pointer's `source.package`; the plugin and marketplace names stay `eawf`, so the install command remains `/plugin install eawf@eawf`. The direct npm form is `npm install @elementarno/eawf`.
+
 ## [0.5.1]
 
 ### Changed
