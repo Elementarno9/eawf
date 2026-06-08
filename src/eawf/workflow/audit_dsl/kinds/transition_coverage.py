@@ -18,6 +18,14 @@ self-instruments: every ``@rule`` that applies a transition appends the
 The check passes iff ``covered_edges == table_edges``; otherwise it fails
 naming each uncovered edge so the gap is actionable.
 
+``hypothesis`` is a dev-only dependency, so the machine is built lazily
+inside :func:`_make_machine` rather than at module scope -- importing this
+kind (the audit-DSL registry binds every kind eagerly at CLI startup) must
+not require it. Only the machine-driven coverage path (``covered_edges``
+omitted) pulls ``hypothesis`` in; the deterministic ``covered_edges``-supplied
+path and the table-edge readers stay import-free. This honours the lazy-load
+contract the :mod:`eawf.workflow.audit_dsl.kinds` package docstring states.
+
 Edge normal form
 ----------------
 
@@ -52,10 +60,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
-
-from hypothesis import HealthCheck, settings
-from hypothesis import strategies as st
-from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 from eawf.kernel.state.enums import (
     IterStatus,
@@ -161,137 +165,162 @@ _OPEN_CTX = GuardContext(
 )
 
 
-class _LifecycleMachine(RuleBasedStateMachine):
-    """Hypothesis machine that explores a lifecycle FSM + records covered edges.
+def _resolve_machine_table(
+    name: str,
+) -> tuple[dict[Any, frozenset[tuple[Any, GuardName]]], Any, bool]:
+    """Resolve the ``(table, start_status, is_guarded)`` triple for table *name*.
 
-    The machine holds a current status and, on each step, records every
-    out-edge of that status into :attr:`covered` (each re-checked table-legal
-    via :func:`validate_transition`), then Hypothesis draws which out-edge to
-    traverse so the exploration keeps reaching new statuses. A terminal status
-    (no out-edges) resets the machine to the entry node so a single long run
-    re-explores every branch. Coverage is therefore a function of which
-    statuses are reached, so a run that reaches every status touches every
-    declared edge across a multi-example run.
-
-    Subclasses bind :attr:`_table`, :attr:`_start`, and :attr:`_is_guarded`
-    so one machine body covers all four lifecycle FSMs.
-    """
-
-    #: Bound per subclass: the guarded transition table to explore.
-    _table: dict[Any, frozenset[tuple[Any, GuardName]]]
-    #: Bound per subclass: the entry-node status the machine starts (+ resets)
-    #: at.
-    _start: Any
-    #: Bound per subclass: True when edges carry meaningful guards (wave),
-    #: False for the unguarded tables (phase / iter / spec) where every
-    #: edge normalises to the GuardName.NONE sentinel.
-    _is_guarded: bool
-
-    #: Accumulates every ``(frm, to, guard)`` edge the run applied. Shared
-    #: across all instances of a subclass so a multi-example run aggregates
-    #: coverage; reset by the kind / test before a fresh collection.
-    covered: set[Edge]
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.current: Any = self._start
-
-    def _out_edges(self) -> list[tuple[Any, GuardName]]:
-        """Return the sorted out-edges of the current status."""
-        return sorted(
-            self._table.get(self.current, frozenset()),
-            key=lambda pair: (pair[0].value, pair[1].value),
-        )
-
-    def _normalise_guard(self, guard: GuardName) -> str:
-        """Return the normal-form guard value for the bound table shape."""
-        return guard.value if self._is_guarded else GuardName.NONE.value
-
-    @rule(data=st.data())
-    def take_edge(self, data: st.DataObject) -> None:
-        """Record every out-edge of the current status, then traverse one.
-
-        Coverage of an edge ``(frm, to, guard)`` means the machine reached
-        ``frm`` and the edge is table-legal from there -- so on visiting a
-        status every one of its out-edges is recorded into :attr:`covered`
-        (each first re-checked table-legal via :func:`validate_transition`).
-        Hypothesis then draws which out-edge to traverse so the exploration
-        keeps reaching new statuses; on a terminal status (no out-edges) the
-        machine resets to the entry node. This makes coverage a function of
-        *which statuses are reached* rather than which random path is walked,
-        so a run that reaches every status deterministically covers every
-        declared edge.
-        """
-        edges = self._out_edges()
-        if not edges:
-            self.current = self._start
-            return
-        frm = self.current
-        for to, guard in edges:
-            validate_transition(
-                self._table,
-                frm,
-                to,
-                _OPEN_CTX,
-                illegal_message=f"machine took illegal edge {frm.value!r} -> {to.value!r}",
-            )
-            type(self).covered.add((frm.value, to.value, self._normalise_guard(guard)))
-        idx = data.draw(st.integers(min_value=0, max_value=len(edges) - 1))
-        to, _ = edges[idx]
-        self.current = to
-
-    @invariant()
-    def current_status_is_legal(self) -> None:
-        """Assert the machine never sits in a status absent from the table.
-
-        Every status the machine moves into is either the start node or a
-        target of an edge :meth:`take_edge` already validated via
-        :func:`validate_transition`, so the status must be a key of the table.
-        A status with no table entry would mean the machine drifted off the
-        FSM -- this invariant pins that the exploration stays inside the
-        declared status set.
-        """
-        assert self.current in self._table, f"machine reached off-table status {self.current!r}"
-
-
-def _make_machine(name: str) -> type[_LifecycleMachine]:
-    """Build the bound :class:`_LifecycleMachine` subclass for table *name*.
+    The unguarded SPEC table is normalised into the guarded shape (each plain
+    target paired with the :attr:`GuardName.NONE` sentinel) so one machine body
+    covers all four lifecycle FSMs.
 
     Args:
         name: One of ``"wave"`` / ``"phase"`` / ``"iter"`` / ``"spec"``.
 
     Returns:
-        A fresh subclass with a fresh :attr:`covered` set bound.
+        The bound transition table, its entry-node status, and whether the
+        table carries meaningful per-edge guards.
 
     Raises:
         ValueError: when *name* is not a known table name.
     """
     if name == "wave":
-        table: dict[Any, frozenset[tuple[Any, GuardName]]] = WAVE_TRANSITIONS
-        start: Any = _WAVE_START
-        is_guarded = True
-    elif name == "phase":
-        table = PHASE_TRANSITIONS
-        start = _PHASE_START
-        is_guarded = False
-    elif name == "iter":
-        table = ITER_TRANSITIONS
-        start = _ITER_START
-        is_guarded = False
-    elif name == "spec":
-        # Normalise the unguarded SPEC table into the guarded shape so the
-        # one machine body covers it too: each plain target gets the
-        # GuardName.NONE sentinel.
-        table = {
+        return WAVE_TRANSITIONS, _WAVE_START, True
+    if name == "phase":
+        return PHASE_TRANSITIONS, _PHASE_START, False
+    if name == "iter":
+        return ITER_TRANSITIONS, _ITER_START, False
+    if name == "spec":
+        spec_table = {
             frm: frozenset((to, GuardName.NONE) for to in targets)
             for frm, targets in SPEC_TRANSITIONS.items()
         }
-        start = _SPEC_START
-        is_guarded = False
-    else:
-        raise ValueError(f"unknown transition table: {name!r}")
+        return spec_table, _SPEC_START, False
+    raise ValueError(f"unknown transition table: {name!r}")
 
-    return type(
+
+def _make_machine(name: str) -> tuple[type[Any], Any]:
+    """Build the bound lifecycle machine subclass + run settings for *name*.
+
+    ``hypothesis`` is imported here, not at module scope, so importing this
+    kind (the audit-DSL registry binds every kind eagerly at CLI startup)
+    never requires the dev-only dependency -- only the machine-driven
+    coverage path pulls it in. The machine class is defined inside this
+    function for the same reason: its :class:`RuleBasedStateMachine` base and
+    the ``@rule`` / ``@invariant`` decorators evaluate at class-definition
+    time, which at module scope would force the import on load.
+
+    Args:
+        name: One of ``"wave"`` / ``"phase"`` / ``"iter"`` / ``"spec"``.
+
+    Returns:
+        A ``(machine_cls, run_settings)`` pair: a fresh
+        :class:`~hypothesis.stateful.RuleBasedStateMachine` subclass with a
+        fresh :attr:`covered` set bound, and the Hypothesis ``settings``
+        profile the coverage run drives the machine under.
+
+    Raises:
+        ValueError: when *name* is not a known table name.
+    """
+    from hypothesis import HealthCheck, settings
+    from hypothesis import strategies as st
+    from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
+
+    class _LifecycleMachine(RuleBasedStateMachine):
+        """Hypothesis machine that explores a lifecycle FSM + records covered edges.
+
+        The machine holds a current status and, on each step, records every
+        out-edge of that status into :attr:`covered` (each re-checked table-legal
+        via :func:`validate_transition`), then Hypothesis draws which out-edge to
+        traverse so the exploration keeps reaching new statuses. A terminal status
+        (no out-edges) resets the machine to the entry node so a single long run
+        re-explores every branch. Coverage is therefore a function of which
+        statuses are reached, so a run that reaches every status touches every
+        declared edge across a multi-example run.
+
+        Subclasses bind :attr:`_table`, :attr:`_start`, and :attr:`_is_guarded`
+        so one machine body covers all four lifecycle FSMs.
+        """
+
+        #: Bound per subclass: the guarded transition table to explore.
+        _table: dict[Any, frozenset[tuple[Any, GuardName]]]
+        #: Bound per subclass: the entry-node status the machine starts (+ resets)
+        #: at.
+        _start: Any
+        #: Bound per subclass: True when edges carry meaningful guards (wave),
+        #: False for the unguarded tables (phase / iter / spec) where every
+        #: edge normalises to the GuardName.NONE sentinel.
+        _is_guarded: bool
+
+        #: Accumulates every ``(frm, to, guard)`` edge the run applied. Shared
+        #: across all instances of a subclass so a multi-example run aggregates
+        #: coverage; reset by the kind / test before a fresh collection.
+        covered: set[Edge]
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.current: Any = self._start
+
+        def _out_edges(self) -> list[tuple[Any, GuardName]]:
+            """Return the sorted out-edges of the current status."""
+            return sorted(
+                self._table.get(self.current, frozenset()),
+                key=lambda pair: (pair[0].value, pair[1].value),
+            )
+
+        def _normalise_guard(self, guard: GuardName) -> str:
+            """Return the normal-form guard value for the bound table shape."""
+            return guard.value if self._is_guarded else GuardName.NONE.value
+
+        @rule(data=st.data())
+        def take_edge(self, data: st.DataObject) -> None:
+            """Record every out-edge of the current status, then traverse one.
+
+            Coverage of an edge ``(frm, to, guard)`` means the machine reached
+            ``frm`` and the edge is table-legal from there -- so on visiting a
+            status every one of its out-edges is recorded into :attr:`covered`
+            (each first re-checked table-legal via :func:`validate_transition`).
+            Hypothesis then draws which out-edge to traverse so the exploration
+            keeps reaching new statuses; on a terminal status (no out-edges) the
+            machine resets to the entry node. This makes coverage a function of
+            *which statuses are reached* rather than which random path is walked,
+            so a run that reaches every status deterministically covers every
+            declared edge.
+            """
+            edges = self._out_edges()
+            if not edges:
+                self.current = self._start
+                return
+            frm = self.current
+            for to, guard in edges:
+                validate_transition(
+                    self._table,
+                    frm,
+                    to,
+                    _OPEN_CTX,
+                    illegal_message=f"machine took illegal edge {frm.value!r} -> {to.value!r}",
+                )
+                type(self).covered.add((frm.value, to.value, self._normalise_guard(guard)))
+            idx = data.draw(st.integers(min_value=0, max_value=len(edges) - 1))
+            to, _ = edges[idx]
+            self.current = to
+
+        @invariant()
+        def current_status_is_legal(self) -> None:
+            """Assert the machine never sits in a status absent from the table.
+
+            Every status the machine moves into is either the start node or a
+            target of an edge :meth:`take_edge` already validated via
+            :func:`validate_transition`, so the status must be a key of the table.
+            A status with no table entry would mean the machine drifted off the
+            FSM -- this invariant pins that the exploration stays inside the
+            declared status set.
+            """
+            assert self.current in self._table, f"machine reached off-table status {self.current!r}"
+
+    table, start, is_guarded = _resolve_machine_table(name)
+
+    machine_cls = type(
         f"_LifecycleMachine_{name}",
         (_LifecycleMachine,),
         {
@@ -302,23 +331,23 @@ def _make_machine(name: str) -> type[_LifecycleMachine]:
         },
     )
 
-
-#: Hypothesis settings for the in-process coverage run. Modest budgets keep
-#: the stateful exploration finishing in seconds while still walking every
-#: branch of the small lifecycle FSMs.
-_COVERAGE_SETTINGS = settings(
-    max_examples=50,
-    stateful_step_count=20,
-    deadline=None,
-    suppress_health_check=[HealthCheck.too_slow],
-)
+    # Modest budgets keep the stateful exploration finishing in seconds while
+    # still walking every branch of the small lifecycle FSMs.
+    run_settings = settings(
+        max_examples=50,
+        stateful_step_count=20,
+        deadline=None,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    return machine_cls, run_settings
 
 
 def collect_covered_edges(name: str) -> frozenset[Edge]:
     """Run the in-process machine for table *name* + return the edges it covered.
 
-    Constructs the bound :class:`_LifecycleMachine` subclass, runs it under
-    :data:`_COVERAGE_SETTINGS`, and returns the accumulated covered-edge set.
+    Constructs the bound machine subclass + run settings via
+    :func:`_make_machine`, runs the machine, and returns the accumulated
+    covered-edge set.
 
     Args:
         name: One of ``"wave"`` / ``"phase"`` / ``"iter"`` / ``"spec"``.
@@ -328,9 +357,12 @@ def collect_covered_edges(name: str) -> frozenset[Edge]:
 
     Raises:
         ValueError: when *name* is not a known table name.
+        ImportError: when the dev-only ``hypothesis`` dependency is absent
+            (the machine path requires it; the deterministic
+            ``covered_edges``-supplied path does not).
     """
-    machine_cls = _make_machine(name)
-    machine_cls.TestCase.settings = _COVERAGE_SETTINGS
+    machine_cls, run_settings = _make_machine(name)
+    machine_cls.TestCase.settings = run_settings
     case = machine_cls.TestCase()
     case.runTest()
     return frozenset(machine_cls.covered)
@@ -409,6 +441,21 @@ def check_transition_coverage(spec: CheckSpec, cwd: Path) -> CheckResult:
             passed=False,
             status="fail",
             details=str(exc),
+        )
+    except ImportError as exc:
+        # The machine path imports the dev-only ``hypothesis`` dependency,
+        # absent from a runtime ``uv tool install``. Degrade to a failed check
+        # naming the missing dep rather than aborting the whole audit run.
+        logger.debug(f"check_transition_coverage missing-dep table={name!r} reason={exc!r}")
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=(
+                f"table={name} machine-coverage path needs the optional "
+                f"'hypothesis' dependency (dev extra), which is not installed"
+            ),
         )
     except LifecycleError as exc:
         # The machine asserts every applied edge is table-legal; an illegal
