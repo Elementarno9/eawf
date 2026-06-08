@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.5.4]
+
+### Fixed
+- **The Codex plugin loader no longer rejects four `SKILL.md` files with `invalid YAML: mapping values are not allowed in this context`.** The `SKILL.md`, agent, and OpenCode-command frontmatter emitted the `description:` value unquoted, so a description containing a `: ` (colon-space) — the `design`, `prep`, `spike`, and `math-explainer` skills each carry one — parsed as a nested mapping under a strict YAML loader. Claude Code's looser frontmatter parser tolerated it; Codex's did not, so those skills failed to load. Every frontmatter `description:` emit site now routes through a shared `json.dumps`-backed double-quoted-scalar helper (`eawf.surfaces.render.frontmatter.yaml_scalar`), and the `SKILL.md` frontmatter test now parses the block as strict YAML rather than only checking key presence — the gap that let the bug ship.
+
 ## [0.5.3]
 
 ### Fixed

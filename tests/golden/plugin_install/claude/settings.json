@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "7a9d2385e641fd55",
+    "hash": "296ab9c9eb1212ec",
     "hooks": [
       {
         "event_type": "pre_commit",
@@ -216,6 +216,6 @@
         "version": "1.0"
       }
     ],
-    "version": "0.5.3"
+    "version": "0.5.4"
   }
 }
