@@ -60,15 +60,69 @@ jobs:
         # always runs before publish.
         run: uvx twine check dist/*
 
+      - name: Fresh-install smoke (runtime deps only)
+        # Install the freshly built wheel with RUNTIME deps only (no dev
+        # group, mirroring a published `uv tool install eawf`) and run the
+        # CLI. A runtime module importing a dev-only dependency — the bug that
+        # broke v0.5.2's `uv tool install` with a `hypothesis` import — reds
+        # the build here, before publish-pypi (which `needs: build-wheel`)
+        # can ship the broken artifact.
+        run: |
+          set -euo pipefail
+          wheel="$(ls dist/*.whl)"
+          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --version
+          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --help >/dev/null
+          uv run --no-project --with "${wheel}" --python 3.14 -- python -c \
+            "import eawf.surfaces.cli, eawf.workflow.audit_dsl.registry; print('runtime import closure OK')"
+
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
 
+  require-green-ci:
+    name: Require green CI on the tagged commit
+    # Closes the gap that let v0.5.2 publish while its CI run was red: the
+    # publish job below `needs:` this gate, which refuses to proceed unless
+    # the CI workflow concluded `success` for this exact commit. The release
+    # commit lands on `main` (where ci.yaml runs) before the tag is pushed,
+    # so a CI run for the SHA already exists or is in flight — this gate waits
+    # for it, then asserts success. A `workflow_dispatch` dry-run skips it.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read # read the CI workflow's run conclusion for this SHA
+    steps:
+      - name: Assert ci.yaml concluded success for ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 1800 )) # wait up to 30 min for an in-flight run
+          while :; do
+            read -r status conclusion < <(
+              gh api "repos/${REPO}/actions/workflows/ci.yaml/runs?head_sha=${SHA}&per_page=1" \
+                --jq '.workflow_runs[0] | "\(.status // "missing") \(.conclusion // "none")"'
+            )
+            echo "ci.yaml for ${SHA:0:10}: status=${status} conclusion=${conclusion}"
+            if [ "${status}" = "completed" ]; then
+              [ "${conclusion}" = "success" ] && { echo "CI green — release may proceed"; exit 0; }
+              echo "refusing to publish: CI concluded '${conclusion}', not 'success'" >&2
+              exit 1
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "refusing to publish: timed out waiting for CI to complete on ${SHA}" >&2
+              exit 1
+            fi
+            sleep 30
+          done
+
   publish-pypi:
     name: Publish to PyPI
-    needs: build-wheel
+    needs: [build-wheel, require-green-ci]
     # Live publish, gated behind an explicit condition: only a real
     # ``v0.*`` tag push publishes. ``workflow_dispatch`` dry-runs build +
     # validate but never reach this job. Requires the ``pypi-publish``

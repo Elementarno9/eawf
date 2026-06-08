@@ -211,9 +211,48 @@ jobs:
           # trees -> codex cp fails, npm publishes an incomplete package).
           include-hidden-files: true
 
+  require-green-ci:
+    name: Require green CI on the tagged commit
+    # Closes the gap that let v0.5.2 publish while its CI run was red: the
+    # publish jobs below `needs:` this gate, which refuses to proceed unless
+    # the CI workflow concluded `success` for this exact commit. The release
+    # commit lands on `main` (where ci.yaml runs) before the tag is pushed,
+    # so a CI run for the SHA already exists or is in flight — this gate waits
+    # for it, then asserts success. A `workflow_dispatch` dry-run skips it.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read # read the CI workflow's run conclusion for this SHA
+    steps:
+      - name: Assert ci.yaml concluded success for ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 1800 )) # wait up to 30 min for an in-flight run
+          while :; do
+            read -r status conclusion < <(
+              gh api "repos/${REPO}/actions/workflows/ci.yaml/runs?head_sha=${SHA}&per_page=1" \
+                --jq '.workflow_runs[0] | "\(.status // "missing") \(.conclusion // "none")"'
+            )
+            echo "ci.yaml for ${SHA:0:10}: status=${status} conclusion=${conclusion}"
+            if [ "${status}" = "completed" ]; then
+              [ "${conclusion}" = "success" ] && { echo "CI green — release may proceed"; exit 0; }
+              echo "refusing to publish: CI concluded '${conclusion}', not 'success'" >&2
+              exit 1
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "refusing to publish: timed out waiting for CI to complete on ${SHA}" >&2
+              exit 1
+            fi
+            sleep 30
+          done
+
   publish-claude-npm:
     name: Publish Claude plugin to npm
-    needs: package-validate
+    needs: [package-validate, require-green-ci]
     # Live publish, gated on a real ``v*`` tag push. ``workflow_dispatch``
     # renders + validates in package-validate but never reaches publish.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -287,7 +326,7 @@ jobs:
 
   publish-codex-branch:
     name: Publish Codex tree to plugins-dist branch
-    needs: package-validate
+    needs: [package-validate, require-green-ci]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:

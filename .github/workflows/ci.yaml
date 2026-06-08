@@ -127,6 +127,47 @@ jobs:
       - name: Coverage floor (overall >=60)
         run: uv run coverage report
 
+  tool-install-smoke:
+    name: Fresh tool-install smoke (runtime deps only)
+    # The `test` matrix above always syncs the dev dependency-group, so its
+    # tests are structurally blind to a runtime module importing a dev-only
+    # dependency. A published `uv tool install eawf` gets RUNTIME deps only,
+    # so such an import crashes the installed CLI at startup while CI stays
+    # green (this is exactly how v0.5.2 shipped a `hypothesis` import that
+    # broke `uv tool install`). This job builds the wheel and exercises the
+    # CLI in a runtime-only environment so that class of break reds the PR.
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Build wheel
+        run: uv build --wheel --out-dir dist
+
+      - name: Smoke the wheel with runtime deps only
+        # `--no-project` ignores this repo's dev dependency-group; `--with
+        # <wheel>` installs the wheel plus its DECLARED runtime deps into an
+        # ephemeral env — the same dependency closure `uv tool install` sees.
+        # Importing the CLI app + the audit-DSL registry (which eagerly binds
+        # every check-kind at startup) reds here if any runtime module reaches
+        # for a dependency that is not in `[project.dependencies]`.
+        run: |
+          set -euo pipefail
+          wheel="$(ls dist/*.whl)"
+          echo "smoke-testing wheel: ${wheel}"
+          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --version
+          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --help >/dev/null
+          uv run --no-project --with "${wheel}" --python 3.14 -- python -c \
+            "import eawf.surfaces.cli, eawf.workflow.audit_dsl.registry; print('runtime import closure OK')"
+
   release-readiness:
     name: Release readiness / ${{ matrix.check }}
     # ci.yaml release-readiness matrix job: pins the release automation
