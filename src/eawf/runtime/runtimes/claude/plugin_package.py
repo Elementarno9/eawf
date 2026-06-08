@@ -80,8 +80,11 @@ _PLUGIN_NAME: str = "eawf"
 
 #: npm package the published Claude marketplace pointer references. The
 #: rendered Claude plugin ships as this npm artifact (analogous to the PyPI
-#: wheel); the name tracks the project / plugin name.
-_NPM_PACKAGE: str = _PLUGIN_NAME
+#: wheel). Scoped under the publishing account because the npm registry
+#: rejects the bare ``eawf`` name as too similar to an existing package; the
+#: plugin / marketplace name stays ``eawf`` so the install command is
+#: unchanged.
+_NPM_PACKAGE: str = "@elementarno/eawf"
 
 # File mode for hook wrapper scripts — POSIX rwxr-xr-x. Mirrors
 # :data:`eawf.runtime.runtimes.claude.plugin_install._HOOK_FILE_MODE` so the

@@ -10,7 +10,7 @@
       "category": "workflow",
       "name": "eawf",
       "source": {
-        "package": "eawf",
+        "package": "@elementarno/eawf",
         "source": "npm"
       }
     }

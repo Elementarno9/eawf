@@ -173,14 +173,14 @@ Eä ships its own marketplace pointers in the repo, so an operator installs the 
 
 ### Claude Code flow
 
-`.claude-plugin/marketplace.json` declares the `eawf` marketplace whose single `eawf` plugin resolves from the `eawf` npm package. Add the marketplace by repo slug, then install the plugin from it:
+`.claude-plugin/marketplace.json` declares the `eawf` marketplace whose single `eawf` plugin resolves from the `@elementarno/eawf` npm package. Add the marketplace by repo slug, then install the plugin from it:
 
 ```text
 /plugin marketplace add Elementarno9/eawf
 /plugin install eawf@eawf
 ```
 
-`marketplace add` reads `.claude-plugin/marketplace.json` from the repo's default branch; `install` pulls the published `eawf` npm package the pointer names. This is the cross-workspace path — it does not need `--scope user` (which the Claude adapter rejects) because Claude Code mounts the marketplace plugin under `~/.claude/plugins/...` for every workspace.
+`marketplace add` reads `.claude-plugin/marketplace.json` from the repo's default branch; `install` pulls the published `@elementarno/eawf` npm package the pointer names. This is the cross-workspace path — it does not need `--scope user` (which the Claude adapter rejects) because Claude Code mounts the marketplace plugin under `~/.claude/plugins/...` for every workspace.
 
 ### Codex flow
 

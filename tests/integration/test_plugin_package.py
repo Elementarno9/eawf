@@ -193,7 +193,7 @@ def test_package_published_emits_npm_source(tmp_path: Path) -> None:
     # Marketplace identity is unchanged; only the plugin source kind flips.
     assert marketplace["name"] == "eawf"
     source = marketplace["plugins"][0]["source"]
-    assert source == {"source": "npm", "package": "eawf"}
+    assert source == {"source": "npm", "package": "@elementarno/eawf"}
 
 
 def test_package_published_npm_has_no_pii(tmp_path: Path) -> None:
@@ -201,7 +201,10 @@ def test_package_published_npm_has_no_pii(tmp_path: Path) -> None:
     target = tmp_path / "eawf-plugin"
     package_plugin(target, publish_source=PublishSource.NPM)
     serialised = (target / ".claude-plugin" / "marketplace.json").read_text()
-    assert "@" not in serialised
+    # The scoped npm package name legitimately carries '@'; drop it so the
+    # email-leak heuristic still catches a real address.
+    residual = serialised.replace("@elementarno/eawf", "")
+    assert "@" not in residual
     assert "/Users/" not in serialised  # pragma: allowlist secret
 
 

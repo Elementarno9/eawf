@@ -5,8 +5,8 @@ name: Plugin Release
 # rendered runtime plugin trees to their self-hosted marketplace sources:
 #
 #   * Claude — the rendered ``.claude-plugin/`` tree is published to npm as
-#     the ``eawf`` package (the ``.claude-plugin/marketplace.json`` pointer
-#     W05 ships references ``{"source": "npm", "package": "eawf"}``).
+#     the ``@elementarno/eawf`` package (the ``.claude-plugin/marketplace.json``
+#     pointer references ``{"source": "npm", "package": "@elementarno/eawf"}``).
 #   * Codex  — the rendered ``plugins/eawf/`` sub-tree is force-written to a
 #     dedicated ``plugins-dist`` branch (the ref the Codex ``git-subdir``
 #     pointer references at ``path: ./plugins/eawf``, ``ref: plugins-dist``).
@@ -235,7 +235,9 @@ jobs:
         # The rendered Claude tree carries ``.claude-plugin/plugin.json``
         # (the Claude marketplace manifest) but no ``package.json``; npm
         # needs one. Synthesize a minimal manifest naming the package
-        # ``eawf`` (matching the W05 npm-source pointer ``package: "eawf"``)
+        # ``@elementarno/eawf`` (matching the npm-source pointer
+        # ``package: "@elementarno/eawf"`` — scoped because the registry
+        # rejects the bare ``eawf`` name as too similar to an existing one)
         # at the resolved version, bundling the whole rendered tree.
         env:
           PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
@@ -249,7 +251,7 @@ jobs:
 
           version = os.environ["PLUGIN_VERSION"]
           manifest = {
-              "name": "eawf",
+              "name": "@elementarno/eawf",
               "version": version,
               "description": (
                   "Eä Workflow — state-first, agent-driven development framework "
@@ -272,7 +274,7 @@ jobs:
           Path("package.json").write_text(
               json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
           )
-          print(f"wrote package.json name=eawf version={version}")
+          print(f"wrote package.json name=@elementarno/eawf version={version}")
           PY
 
       - name: Publish to npm
@@ -363,7 +365,7 @@ jobs:
           {
             echo "## Plugin distribution"
             echo
-            echo "- Claude: \`npm install eawf@${PLUGIN_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
+            echo "- Claude: \`npm install @elementarno/eawf@${PLUGIN_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
             echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
           } > plugin-notes.md
 

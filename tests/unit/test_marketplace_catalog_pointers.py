@@ -59,7 +59,7 @@ def test_claude_pointer_source_kind_is_npm() -> None:
     """The committed Claude pointer declares an npm source."""
     body = json.loads(_CLAUDE_POINTER.read_text(encoding="utf-8"))
     source = body["plugins"][0]["source"]
-    assert source == {"source": "npm", "package": "eawf"}
+    assert source == {"source": "npm", "package": "@elementarno/eawf"}
 
 
 def test_codex_pointer_source_is_git_subdir() -> None:
@@ -79,7 +79,10 @@ def test_pointers_carry_no_pii() -> None:
     """Neither committed pointer leaks an email or machine path."""
     for pointer in (_CLAUDE_POINTER, _CODEX_POINTER):
         text = pointer.read_text(encoding="utf-8")
-        assert "@" not in text, pointer
+        # The scoped npm package name legitimately carries '@'; drop it before
+        # the email-leak heuristic so a real address still trips the check.
+        residual = text.replace("@elementarno/eawf", "")
+        assert "@" not in residual, pointer
         assert "/Users/" not in text, pointer  # pragma: allowlist secret
 
 
