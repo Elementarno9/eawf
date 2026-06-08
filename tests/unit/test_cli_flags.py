@@ -16,6 +16,7 @@ from __future__ import annotations
 import pytest
 from typer.testing import CliRunner
 
+import eawf
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -24,7 +25,7 @@ runner = CliRunner()
 def test_json_flag_recognised() -> None:
     result = runner.invoke(app, ["--json", "version"])
     assert result.exit_code == 0
-    assert "0.5.0" in result.stdout
+    assert eawf.__version__ in result.stdout
 
 
 def test_plain_flag_disables_color() -> None:
