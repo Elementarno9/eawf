@@ -1,5 +1,5 @@
 ---
-description: Fresh-context verifier. Re-reads a finished wave or phase against its declared success criteria.
+description: "Fresh-context verifier. Re-reads a finished wave or phase against its declared success criteria."
 mode: subagent
 permission:
   read:

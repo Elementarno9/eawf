@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.surfaces.render.frontmatter import yaml_scalar
+
 if TYPE_CHECKING:
     from eawf.platform.lint.validate_prose import ProseReport
 
@@ -92,6 +94,7 @@ def _load_environment() -> Environment:
         keep_trailing_newline=False,
         autoescape=False,
     )
+    env.filters["yaml_scalar"] = yaml_scalar
     return env
 
 
@@ -189,7 +192,7 @@ def prose_check_rendered(text: str) -> ProseReport:
     if report.has_findings:
         codes = ",".join(sorted(report.codes()))
         logger.warning(
-            f"prose_check_rendered findings={len(report.findings)} codes={codes!r} (advisory)"
+            f"prose_check_rendered findings={len(report.findings)} codes={codes!r} advisory=true"
         )
     return report
 

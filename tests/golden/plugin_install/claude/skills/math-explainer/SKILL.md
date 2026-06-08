@@ -1,6 +1,6 @@
 ---
 name: math-explainer
-description: Author a verification-grounded math-explainer over typed MathClaim/MathExplainer rows: each claim pins intuition + a runnable CI-checked example gate + assumptions/regime + a canonical citation, run through an in-skill clarity loop (vale-prose + EAWF019 + draft validate). No state mutations.
+description: "Author a verification-grounded math-explainer over typed MathClaim/MathExplainer rows: each claim pins intuition + a runnable CI-checked example gate + assumptions/regime + a canonical citation, run through an in-skill clarity loop (vale-prose + EAWF019 + draft validate). No state mutations."
 argument-hint: "<explainer-slug> [--final] [--from-brief <path>]"
 user-invocable: true
 disable-model-invocation: true

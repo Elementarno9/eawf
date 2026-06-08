@@ -1,6 +1,6 @@
 ---
 name: security-review
-description: Run the security-audit DSL against a closed scope and emit findings.
+description: "Run the security-audit DSL against a closed scope and emit findings."
 argument-hint: "--spec=<path> [--cwd=<dir>]"
 user-invocable: true
 disable-model-invocation: false

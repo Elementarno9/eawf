@@ -1,6 +1,6 @@
 ---
 name: auditor
-description: Fresh-context verifier. Re-reads a finished wave or phase against its declared success criteria.
+description: "Fresh-context verifier. Re-reads a finished wave or phase against its declared success criteria."
 tools: [Read, Grep, Glob, Bash]
 model: opus
 color: red

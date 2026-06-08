@@ -28,6 +28,8 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.surfaces.render.frontmatter import yaml_scalar
+
 logger = logging.getLogger(__name__)
 
 
@@ -221,6 +223,7 @@ def _load_environment() -> Environment:
         keep_trailing_newline=False,
         autoescape=False,
     )
+    env.filters["yaml_scalar"] = yaml_scalar
     return env
 
 

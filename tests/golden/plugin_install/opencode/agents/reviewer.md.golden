@@ -1,5 +1,5 @@
 ---
-description: PR/diff reviewer. One line per finding, severity-tagged. No praise, no scope creep.
+description: "PR/diff reviewer. One line per finding, severity-tagged. No praise, no scope creep."
 mode: subagent
 permission:
   read:

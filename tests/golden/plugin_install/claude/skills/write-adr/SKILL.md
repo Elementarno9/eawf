@@ -1,6 +1,6 @@
 ---
 name: write-adr
-description: Model-only playbook for drafting an architecture decision record companion to a typed decision row.
+description: "Model-only playbook for drafting an architecture decision record companion to a typed decision row."
 argument-hint: ""
 user-invocable: false
 disable-model-invocation: false

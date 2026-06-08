@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: PR/diff reviewer. One line per finding, severity-tagged. No praise, no scope creep.
+description: "PR/diff reviewer. One line per finding, severity-tagged. No praise, no scope creep."
 tools: [Read, Grep, Bash]
 model: opus
 color: yellow

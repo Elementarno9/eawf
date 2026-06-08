@@ -69,7 +69,7 @@ def test_render_agent_md_includes_all_frontmatter_fields() -> None:
     output = render_agent_md(_ctx())
     assert "---\n" in output
     assert "\nname: researcher\n" in output
-    assert "\ndescription: one-sentence agent description\n" in output
+    assert '\ndescription: "one-sentence agent description"\n' in output
     assert "\nmodel: opus\n" in output
     assert "\ncolor: blue\n" in output
     assert "\nmemory: true\n" in output

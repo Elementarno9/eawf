@@ -1,5 +1,5 @@
 ---
-description: Compress the session conversation when context approaches the limit.
+description: "Compress the session conversation when context approaches the limit."
 ---
 
 # /compress

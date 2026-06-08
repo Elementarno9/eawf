@@ -1,5 +1,5 @@
 ---
-description: Repo-wide consistency sweeper. Aligns naming, docstring style, log fields, error message phrasing.
+description: "Repo-wide consistency sweeper. Aligns naming, docstring style, log fields, error message phrasing."
 mode: subagent
 permission:
   read:

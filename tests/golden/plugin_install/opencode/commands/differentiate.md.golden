@@ -1,5 +1,5 @@
 ---
-description: Recommend the cheapest experiment that discriminates between two or more candidate paths.
+description: "Recommend the cheapest experiment that discriminates between two or more candidate paths."
 ---
 
 # /differentiate

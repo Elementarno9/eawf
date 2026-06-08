@@ -1,6 +1,6 @@
 ---
 name: design
-description: Read-only design pass for an interactive surface: produces a statechart + action x context matrix + journey scenarios backed by an 11-rule lint contract. No state mutations.
+description: "Read-only design pass for an interactive surface: produces a statechart + action x context matrix + journey scenarios backed by an 11-rule lint contract. No state mutations."
 argument-hint: "<surface-slug> [--final] [--from-brief <path>]"
 user-invocable: true
 disable-model-invocation: true

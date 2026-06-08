@@ -1,6 +1,6 @@
 ---
 name: domain-specialist
-description: Project-specific domain agent. Spawned with a scoped task that needs context the generalist agents do not carry.
+description: "Project-specific domain agent. Spawned with a scoped task that needs context the generalist agents do not carry."
 tools: [Read, Grep, Glob, Bash, Skill]
 model: opus
 color: magenta

@@ -1,5 +1,5 @@
 ---
-description: Resolve the Co-Authored-By trailer policy for the active repo.
+description: "Resolve the Co-Authored-By trailer policy for the active repo."
 ---
 
 # /coauthor

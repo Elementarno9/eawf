@@ -1,6 +1,6 @@
 ---
 name: research
-description: Read-only investigation of an open question. Produces a research brief or surfaces findings inline; no code changes, no state mutations.
+description: "Read-only investigation of an open question. Produces a research brief or surfaces findings inline; no code changes, no state mutations."
 argument-hint: "<topic-slug> [--final]"
 user-invocable: true
 disable-model-invocation: false

@@ -1,5 +1,5 @@
 ---
-description: Read-only investigation of an open question. Produces a research brief or surfaces findings inline; no code changes, no state mutations.
+description: "Read-only investigation of an open question. Produces a research brief or surfaces findings inline; no code changes, no state mutations."
 ---
 
 # /research

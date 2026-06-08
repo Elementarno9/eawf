@@ -1,6 +1,6 @@
 ---
 name: init
-description: Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree.
+description: "Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree."
 argument-hint: "[--profile=<id>]"
 user-invocable: true
 disable-model-invocation: true

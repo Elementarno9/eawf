@@ -1,6 +1,6 @@
 ---
 name: add-property-test
-description: Model-only playbook for adding a property-based test that pins a function's invariant.
+description: "Model-only playbook for adding a property-based test that pins a function's invariant."
 argument-hint: ""
 user-invocable: false
 disable-model-invocation: false

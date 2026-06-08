@@ -1,6 +1,6 @@
 ---
 name: memory
-description: Save, list, or forget curated durable memory entries.
+description: "Save, list, or forget curated durable memory entries."
 argument-hint: "save|list|forget [<name>] [--tier=working|archival|retrieval]"
 user-invocable: true
 disable-model-invocation: true

@@ -1,6 +1,6 @@
 ---
 name: extract-module
-description: Model-only refactoring playbook for splitting a multi-concern file into layered modules.
+description: "Model-only refactoring playbook for splitting a multi-concern file into layered modules."
 argument-hint: ""
 user-invocable: false
 disable-model-invocation: false

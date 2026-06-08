@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Decomposes a phase into a wave DAG with explicit success criteria. Writes per-phase or per-wave specs.
+description: "Decomposes a phase into a wave DAG with explicit success criteria. Writes per-phase or per-wave specs."
 tools: [Read, Grep, Glob, Write, Edit]
 model: opus
 color: purple

@@ -1,6 +1,6 @@
 ---
 name: coauthor
-description: Resolve the Co-Authored-By trailer policy for the active repo.
+description: "Resolve the Co-Authored-By trailer policy for the active repo."
 argument-hint: "[--mode=runtime|project|disabled]"
 user-invocable: true
 disable-model-invocation: false

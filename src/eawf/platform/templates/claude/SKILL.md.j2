@@ -5,7 +5,7 @@
    no-op. -#}
 ---
 name: {{ skill_name }}
-description: {{ description }}
+description: {{ description | yaml_scalar }}
 argument-hint: "{{ argument_hint }}"
 user-invocable: {{ "true" if user_invocable else "false" }}
 disable-model-invocation: {{ "true" if disable_model_invocation else "false" }}

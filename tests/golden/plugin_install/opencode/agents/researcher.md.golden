@@ -1,5 +1,5 @@
 ---
-description: Read-only investigator. Surveys code, docs, git history, and external sources. Produces structured findings with citations.
+description: "Read-only investigator. Surveys code, docs, git history, and external sources. Produces structured findings with citations."
 mode: subagent
 permission:
   read:

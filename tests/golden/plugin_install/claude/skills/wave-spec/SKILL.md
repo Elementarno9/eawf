@@ -1,6 +1,6 @@
 ---
 name: wave-spec
-description: Scaffold or validate a WaveSpec deliverable for a claimed wave.
+description: "Scaffold or validate a WaveSpec deliverable for a claimed wave."
 argument-hint: "init|validate <wave-id> [--mockup-waiver-reason=<text>]"
 user-invocable: true
 disable-model-invocation: true

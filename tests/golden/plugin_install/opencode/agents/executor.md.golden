@@ -1,5 +1,5 @@
 ---
-description: Implements a wave per a written spec. Creates/edits files, writes tests, runs verification, commits.
+description: "Implements a wave per a written spec. Creates/edits files, writes tests, runs verification, commits."
 mode: subagent
 permission:
   read:

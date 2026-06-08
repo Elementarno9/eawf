@@ -1,6 +1,6 @@
 ---
 name: blitz
-description: Auto-chained research follow-up skill with recursion guard for residual unknowns.
+description: "Auto-chained research follow-up skill with recursion guard for residual unknowns."
 argument-hint: "[--residual-unknowns=<n>]"
 user-invocable: true
 disable-model-invocation: false

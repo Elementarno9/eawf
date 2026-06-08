@@ -1,6 +1,6 @@
 ---
 name: extract-function
-description: Model-only refactoring playbook for pulling a coherent block out of a long function into a named helper.
+description: "Model-only refactoring playbook for pulling a coherent block out of a long function into a named helper."
 argument-hint: ""
 user-invocable: false
 disable-model-invocation: false

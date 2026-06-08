@@ -1,5 +1,5 @@
 ---
-description: Dispatch a claimed wave to a runtime per the V8 session-reuse ladder.
+description: "Dispatch a claimed wave to a runtime per the V8 session-reuse ladder."
 ---
 
 # /agent-dispatch

@@ -1,6 +1,6 @@
 ---
 name: agent-dispatch
-description: Dispatch a claimed wave to a runtime per the V8 session-reuse ladder.
+description: "Dispatch a claimed wave to a runtime per the V8 session-reuse ladder."
 argument-hint: "<wave-id> [--runtime=<id>]"
 user-invocable: true
 disable-model-invocation: true

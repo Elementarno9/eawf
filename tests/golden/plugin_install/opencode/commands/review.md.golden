@@ -1,5 +1,5 @@
 ---
-description: Code review of an open PR or local diff. Surfaces issues with severity tags; no scope creep, no praise.
+description: "Code review of an open PR or local diff. Surfaces issues with severity tags; no scope creep, no praise."
 ---
 
 # /review

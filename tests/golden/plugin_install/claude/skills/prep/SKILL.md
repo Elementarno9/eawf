@@ -1,6 +1,6 @@
 ---
 name: prep
-description: Activate the next PLANNED phase: surface its DAG for operator approval, then run the activate_phase hard gate and dispatch subagents per wave.
+description: "Activate the next PLANNED phase: surface its DAG for operator approval, then run the activate_phase hard gate and dispatch subagents per wave."
 argument-hint: "<phase-id>"
 user-invocable: true
 disable-model-invocation: true

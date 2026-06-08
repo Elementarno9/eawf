@@ -1,5 +1,5 @@
 ---
-description: Run the security-audit DSL against a closed scope and emit findings.
+description: "Run the security-audit DSL against a closed scope and emit findings."
 ---
 
 # /security-review

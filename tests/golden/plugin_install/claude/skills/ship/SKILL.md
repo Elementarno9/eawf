@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Close out a phase by running the full local CI surface, opening the phase PR, and (after merge) advancing state.
+description: "Close out a phase by running the full local CI surface, opening the phase PR, and (after merge) advancing state."
 argument-hint: "<phase-id> [--dry-run]"
 user-invocable: true
 disable-model-invocation: true

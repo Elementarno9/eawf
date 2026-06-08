@@ -1,6 +1,6 @@
 ---
 name: mockup
-description: Author 2-4 UI mockups as ASCII layouts and surface them as side-by-side AskUserQuestion option previews to compare.
+description: "Author 2-4 UI mockups as ASCII layouts and surface them as side-by-side AskUserQuestion option previews to compare."
 argument-hint: "<surface-slug>"
 user-invocable: true
 disable-model-invocation: false

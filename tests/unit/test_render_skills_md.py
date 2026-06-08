@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 from jinja2 import UndefinedError
 
+from eawf.surfaces.render.frontmatter import yaml_scalar
 from eawf.surfaces.render.skills import (
     SKILL_REGISTRY,
     SkillTemplateContext,
@@ -80,7 +81,7 @@ def test_render_skill_md_includes_all_frontmatter_fields() -> None:
     output = render_skill_md(_ctx())
     assert "---\n" in output
     assert "\nname: research\n" in output
-    assert "\ndescription: one-sentence description for the loader\n" in output
+    assert '\ndescription: "one-sentence description for the loader"\n' in output
     assert '\nargument-hint: "<topic-slug>"\n' in output
     assert "\nuser-invocable: true\n" in output
     assert "\ndisable-model-invocation: true\n" in output
@@ -235,6 +236,12 @@ def test_render_skill_md_strict_undefined_catches_typos() -> None:
         keep_trailing_newline=False,
         autoescape=False,
     )
+    # The template routes ``description`` through the ``yaml_scalar`` filter
+    # (registered by the production env); register it here so the render
+    # reaches the StrictUndefined check rather than failing at filter lookup.
+    env.filters["yaml_scalar"] = yaml_scalar
     template = env.get_template("SKILL.md.j2")
+    # Supply the filtered field and leave a raw-interpolated one (argument_hint)
+    # undefined, so StrictUndefined raises on the bare interpolation.
     with pytest.raises(UndefinedError):
-        template.render(skill_name="research")
+        template.render(skill_name="research", description="x")

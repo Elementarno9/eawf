@@ -1,6 +1,6 @@
 ---
 name: operator
-description: Coordinates a phase by dispatching waves to specialised subagents. Should NOT touch code directly.
+description: "Coordinates a phase by dispatching waves to specialised subagents. Should NOT touch code directly."
 tools: [Agent, TaskCreate, TaskUpdate, TaskList, TaskGet, Read, Bash, Skill]
 model: opus
 color: orange

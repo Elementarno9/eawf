@@ -1,6 +1,6 @@
 ---
 name: roadmap
-description: Plan / revise / apply / drop / show PLANNED-scope phases on the eawf roadmap queue. Mutates state.json via the lifecycle transitions; one phase at a time.
+description: "Plan / revise / apply / drop / show PLANNED-scope phases on the eawf roadmap queue. Mutates state.json via the lifecycle transitions; one phase at a time."
 argument-hint: "propose|revise|apply|drop|show <phase-id> [flags]"
 user-invocable: true
 disable-model-invocation: true

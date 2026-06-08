@@ -1,6 +1,6 @@
 ---
 name: graduate-research-code
-description: Model-only playbook for promoting spike/research code into a typed, tested, maintained module.
+description: "Model-only playbook for promoting spike/research code into a typed, tested, maintained module."
 argument-hint: ""
 user-invocable: false
 disable-model-invocation: false

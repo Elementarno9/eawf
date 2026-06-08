@@ -1,6 +1,6 @@
 ---
 name: spike
-description: Read-only multi-axis direction investigation that unblocks /roadmap propose or /design: N rounds x M axis picks, optional postmortem + scope deltas. No state mutations.
+description: "Read-only multi-axis direction investigation that unblocks /roadmap propose or /design: N rounds x M axis picks, optional postmortem + scope deltas. No state mutations."
 argument-hint: "<spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>]"
 user-invocable: true
 disable-model-invocation: false

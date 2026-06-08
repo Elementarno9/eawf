@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Read-only investigator. Surveys code, docs, git history, and external sources. Produces structured findings with citations.
+description: "Read-only investigator. Surveys code, docs, git history, and external sources. Produces structured findings with citations."
 tools: [Read, Grep, Glob, WebFetch, WebSearch, Bash]
 model: opus
 color: blue

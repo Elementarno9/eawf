@@ -38,6 +38,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
@@ -105,6 +106,9 @@ def test_plugin_install_skill_md_parses_as_frontmatter(tmp_path: Path) -> None:
     We do not invoke the actual Claude Code skill loader here; instead
     we pin the on-disk shape (``--- ... ---`` block at the top) that
     the loader contracts on, mirroring the hand-written placeholders.
+    The frontmatter block must also parse as strict YAML — a description
+    carrying a ``: `` (colon-space) would otherwise parse as a nested
+    mapping and break a strict loader (e.g. the Codex plugin loader).
     """
     install_plugin(tmp_path, persist_manifest=False)
     skills_dir = tmp_path / ".claude" / "skills"
@@ -114,15 +118,22 @@ def test_plugin_install_skill_md_parses_as_frontmatter(tmp_path: Path) -> None:
         # Frontmatter terminates with another ``---`` line.
         rest = text[len("---\n") :]
         assert "\n---\n" in rest, f"{skill_md} missing frontmatter closer"
-        # Required keys are present.
+        block = rest[: rest.index("\n---\n")]
+        meta = yaml.safe_load(block)
+        assert isinstance(meta, dict), f"{skill_md} frontmatter is not a YAML mapping"
+        # Required keys are present and parse as scalars.
         for key in (
-            "name:",
-            "description:",
-            "argument-hint:",
-            "user-invocable:",
-            "disable-model-invocation:",
+            "name",
+            "description",
+            "argument-hint",
+            "user-invocable",
+            "disable-model-invocation",
         ):
-            assert key in text, f"{skill_md} missing {key!r} frontmatter line"
+            assert key in meta, f"{skill_md} missing {key!r} frontmatter key"
+        assert isinstance(meta["description"], str), (
+            f"{skill_md} description did not parse as a string — "
+            "an unquoted ``: `` likely made it a nested mapping"
+        )
 
 
 # Regenerate-helper visibility: the fixture path lives next to this test.

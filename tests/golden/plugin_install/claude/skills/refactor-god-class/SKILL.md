@@ -1,6 +1,6 @@
 ---
 name: refactor-god-class
-description: Model-only playbook for splitting a multi-responsibility class into single-purpose collaborators.
+description: "Model-only playbook for splitting a multi-responsibility class into single-purpose collaborators."
 argument-hint: ""
 user-invocable: false
 disable-model-invocation: false

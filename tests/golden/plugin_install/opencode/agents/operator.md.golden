@@ -1,5 +1,5 @@
 ---
-description: Coordinates a phase by dispatching waves to specialised subagents. Should NOT touch code directly.
+description: "Coordinates a phase by dispatching waves to specialised subagents. Should NOT touch code directly."
 mode: subagent
 permission:
   read:

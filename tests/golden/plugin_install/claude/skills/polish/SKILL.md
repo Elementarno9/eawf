@@ -1,6 +1,6 @@
 ---
 name: polish
-description: Repo-wide consistency sweep. Aligns naming, docstring style, log fields, error message phrasing, and removes dead code.
+description: "Repo-wide consistency sweep. Aligns naming, docstring style, log fields, error message phrasing, and removes dead code."
 argument-hint: "[--scope=<dir|file>]"
 user-invocable: true
 disable-model-invocation: true

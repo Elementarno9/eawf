@@ -1,6 +1,6 @@
 ---
 name: compress
-description: Compress the session conversation when context approaches the limit.
+description: "Compress the session conversation when context approaches the limit."
 argument-hint: "[--tokens-before=<n>] [--tokens-after=<n>] [--runtime=<id>]"
 user-invocable: true
 disable-model-invocation: false

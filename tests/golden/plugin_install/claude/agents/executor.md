@@ -1,6 +1,6 @@
 ---
 name: executor
-description: Implements a wave per a written spec. Creates/edits files, writes tests, runs verification, commits.
+description: "Implements a wave per a written spec. Creates/edits files, writes tests, runs verification, commits."
 tools: [Read, Edit, Write, Bash, Skill]
 model: opus
 color: green

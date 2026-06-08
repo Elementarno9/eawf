@@ -5,7 +5,7 @@
    existing placeholder files use. -#}
 ---
 name: {{ role }}
-description: {{ description }}
+description: {{ description | yaml_scalar }}
 tools: [{{ tools | join(", ") }}]
 model: {{ model }}
 color: {{ color }}

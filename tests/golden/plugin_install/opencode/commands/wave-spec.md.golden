@@ -1,5 +1,5 @@
 ---
-description: Scaffold or validate a WaveSpec deliverable for a claimed wave.
+description: "Scaffold or validate a WaveSpec deliverable for a claimed wave."
 ---
 
 # /wave-spec

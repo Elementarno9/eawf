@@ -1,6 +1,6 @@
 ---
 name: flow
-description: Run /research → /prep → /audit → /polish → /ship sequentially; review folds into /ship as the PR-review pass. Short-circuit on any non-ok status.
+description: "Run /research → /prep → /audit → /polish → /ship sequentially; review folds into /ship as the PR-review pass. Short-circuit on any non-ok status."
 argument-hint: "<task-slug> [--auto-accept=<stage>[,<stage>...]]"
 user-invocable: true
 disable-model-invocation: true

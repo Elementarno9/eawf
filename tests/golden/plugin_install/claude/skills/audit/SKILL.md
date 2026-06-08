@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Fresh-context verification of a phase deliverable or wave outcome. Spawns a fresh auditor subagent that re-reads the diff against the success criteria.
+description: "Fresh-context verification of a phase deliverable or wave outcome. Spawns a fresh auditor subagent that re-reads the diff against the success criteria."
 argument-hint: "<phase-id|wave-id|commit-range>"
 user-invocable: true
 disable-model-invocation: false

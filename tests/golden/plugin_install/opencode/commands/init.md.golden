@@ -1,5 +1,5 @@
 ---
-description: Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree.
+description: "Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree."
 ---
 
 # /init

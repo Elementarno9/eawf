@@ -412,7 +412,7 @@ def test_install_emits_commands_for_invocable_skills(
         assert cmd_path.is_file(), cmd_path
         body = cmd_path.read_text(encoding="utf-8")
         assert body.startswith("---\n")
-        assert f"description: {spec.description}" in body
+        assert f"description: {json.dumps(spec.description, ensure_ascii=False)}" in body
     assert len(result.commands) == len(invocable)
 
 

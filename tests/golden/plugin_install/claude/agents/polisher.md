@@ -1,6 +1,6 @@
 ---
 name: polisher
-description: Repo-wide consistency sweeper. Aligns naming, docstring style, log fields, error message phrasing.
+description: "Repo-wide consistency sweeper. Aligns naming, docstring style, log fields, error message phrasing."
 tools: [Read, Grep, Glob, Edit, Bash]
 model: opus
 color: cyan

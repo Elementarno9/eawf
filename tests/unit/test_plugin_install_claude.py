@@ -197,7 +197,7 @@ def test_install_plugin_renders_skill_md_with_correct_frontmatter(tmp_path: Path
     install_plugin(tmp_path)
     body = (tmp_path / ".claude" / "skills" / "research" / "SKILL.md").read_text(encoding="utf-8")
     spec = next(s for s in SKILL_REGISTRY if s.skill_name == "research")
-    assert f"description: {spec.description}\n" in body
+    assert f"description: {json.dumps(spec.description, ensure_ascii=False)}\n" in body
 
 
 def test_install_plugin_renders_hook_with_correct_event(tmp_path: Path) -> None:

@@ -43,6 +43,7 @@ from typing import Any, Literal
 import eawf
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
+from eawf.surfaces.render.frontmatter import yaml_scalar
 from eawf.surfaces.render.manifest import (
     Manifest,
     ManifestEntry,
@@ -393,7 +394,7 @@ def _render_opencode_agent_md(spec: AgentSpec) -> str:
     """
     lines = [
         "---",
-        f"description: {spec.description}",
+        f"description: {yaml_scalar(spec.description)}",
         "mode: subagent",
     ]
     _render_mapping_yaml(lines, "permission", _opencode_permission_acl(spec))
@@ -421,7 +422,7 @@ def _render_opencode_command_md(spec: SkillSpec) -> str:
     """
     lines = [
         "---",
-        f"description: {spec.description}",
+        f"description: {yaml_scalar(spec.description)}",
         "---",
         "",
         spec.body.rstrip(),
