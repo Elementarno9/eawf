@@ -50,30 +50,121 @@ from eawf.surfaces.tui.palette.verbs import (
     split_verb_args,
     visible_verbs,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 if TYPE_CHECKING:
     from textual.app import App
 
 logger = logging.getLogger(__name__)
 
-#: The leading token the palette input is seeded with — pressing ``/``
+#: The leading token the palette input is seeded with -- pressing ``/``
 #: opens the palette already primed so the operator types the verb tail
 #: directly.
 PALETTE_PREFIX: str = "/"
 
+#: Verb names that advance the workflow lifecycle (open phase / iter /
+#: wave, run the verdict step). They render under the ``Lifecycle``
+#: section wearing the stage sigil so the operator reads them as the
+#: state-mutating moves, distinct from the navigation / chrome verbs.
+LIFECYCLE_VERB_NAMES: frozenset[str] = frozenset({"/roadmap", "/audit", "/init"})
 
-def _option_label(verb: PaletteVerb) -> str:
-    """Render a verb's palette row: ``name  grammar — hint``.
+#: The section headers, in display order. ``Recent`` surfaces the verbs
+#: the operator ran most recently; ``Lifecycle`` the stage-sigil-bearing
+#: lifecycle verbs; ``All`` the remaining navigation / chrome verbs.
+SECTION_RECENT: str = "Recent"
+SECTION_LIFECYCLE: str = "Lifecycle"
+SECTION_ALL: str = "All"
+
+#: The frozen no-match prompt. The separator between ``matches`` and
+#: ``Esc`` is a real EM-DASH (U+2014) intentional UI DATA, not an ASCII
+#: hyphen, and it carries no trailing period (a prompt is a label, not a
+#: sentence). The em-dash is between two ASCII spaces so ruff's
+#: ambiguous-unicode lint does not flag it.
+NO_MATCH_PROMPT: str = "no verb matches — Esc to cancel"
+
+
+def _stage_glyph(app: App[None] | None) -> str:
+    """Return the stage (running) lifecycle sigil for the app's render mode.
+
+    The lifecycle section prefixes each verb with this mark so the
+    operator reads those rows as the active stage-advancing moves. The
+    render mode is read off the host App (defaulting to the unicode
+    column under a bare harness with no resolved mode).
+
+    Args:
+        app: The host App, or ``None`` under a bare harness.
+
+    Returns:
+        The single-cell stage sigil glyph in the resolved render column.
+    """
+    mode = getattr(app, "render_mode", "unicode")
+    return glyph(Sigil.RUNNING, mode=mode)
+
+
+def _option_label(verb: PaletteVerb, *, stage_sigil: str = "") -> str:
+    """Render a verb's palette row: ``[sigil] name  grammar -- hint``.
 
     Args:
         verb: The verb to label.
+        stage_sigil: A leading stage sigil glyph for a lifecycle verb;
+            empty for a non-lifecycle verb (no prefix).
 
     Returns:
-        A single-line label combining the verb name, its (optional)
-        argument grammar, and the one-line hint.
+        A single-line label combining the optional stage sigil, the verb
+        name, its (optional) argument grammar, and the one-line hint.
     """
     head = verb.name if not verb.args_grammar else f"{verb.name} {verb.args_grammar}"
-    return f"{head}  —  {verb.hint}"
+    body = f"{head}  —  {verb.hint}"
+    return f"{stage_sigil} {body}" if stage_sigil else body
+
+
+def group_verbs(
+    verbs: list[PaletteVerb],
+    recents: tuple[str, ...] = (),
+) -> list[tuple[str, list[PaletteVerb]]]:
+    """Partition *verbs* into the Recent / Lifecycle / All sections.
+
+    The partition preserves the input order of *verbs* within each
+    section so the palette's pre-filter display order stays stable. A
+    verb appears in exactly one section: ``Recent`` claims it first (when
+    its name is in *recents*), then ``Lifecycle`` (when its name is in
+    :data:`LIFECYCLE_VERB_NAMES`), else ``All``. Empty sections are
+    dropped so the rendered list carries no header without rows beneath
+    it.
+
+    Args:
+        verbs: The visible, fuzzy-ranked verbs to partition.
+        recents: Verb names the operator ran most recently, in
+            most-recent-first order; a name not present in *verbs* is
+            ignored.
+
+    Returns:
+        The non-empty ``(section_title, verbs)`` groups in display order:
+        ``Recent`` (if any recents resolve), then ``Lifecycle``, then
+        ``All``.
+    """
+    by_name = {verb.name: verb for verb in verbs}
+    recent_names = [name for name in recents if name in by_name]
+    recent_set = set(recent_names)
+
+    recent = [by_name[name] for name in recent_names]
+    lifecycle = [
+        verb for verb in verbs if verb.name not in recent_set and verb.name in LIFECYCLE_VERB_NAMES
+    ]
+    rest = [
+        verb
+        for verb in verbs
+        if verb.name not in recent_set and verb.name not in LIFECYCLE_VERB_NAMES
+    ]
+
+    groups: list[tuple[str, list[PaletteVerb]]] = []
+    if recent:
+        groups.append((SECTION_RECENT, recent))
+    if lifecycle:
+        groups.append((SECTION_LIFECYCLE, lifecycle))
+    if rest:
+        groups.append((SECTION_ALL, rest))
+    return groups
 
 
 class CommandPalette(ModalScreen[None]):
@@ -124,10 +215,22 @@ class CommandPalette(ModalScreen[None]):
         Binding("tab", "autocomplete", "autocomplete", show=False),
     ]
 
-    def __init__(self) -> None:
-        """Construct the palette resolving the host App's scope on mount."""
+    #: How many recently-run verbs the ``Recent`` section surfaces. Small
+    #: so the section stays a quick-access shortlist rather than a second
+    #: full list.
+    RECENT_CAP: ClassVar[int] = 5
+
+    def __init__(self, recents: tuple[str, ...] = ()) -> None:
+        """Construct the palette resolving the host App's scope on mount.
+
+        Args:
+            recents: Verb names the operator ran most recently, in
+                most-recent-first order; surfaced under the ``Recent``
+                section. Defaults to empty (no Recent section).
+        """
         super().__init__()
         self._scope: ScopeName = "repo"
+        self._recents: tuple[str, ...] = recents[: self.RECENT_CAP]
 
     def compose(self) -> ComposeResult:
         """Yield the input + option-list box."""
@@ -175,11 +278,19 @@ class CommandPalette(ModalScreen[None]):
         return rank_verbs(candidates, query)
 
     def _refresh_options(self, query: str) -> None:
-        """Repopulate the option list from the ranked verbs for *query*.
+        """Repopulate the option list, grouped Recent / Lifecycle / All.
 
-        Each option's id is the verb name so ``Enter`` / ``Tab`` resolve
-        the selection without re-ranking. Clearing then re-adding keeps
-        the highlight on the first (best) match.
+        The ranked verbs for *query* are partitioned into the
+        :func:`group_verbs` sections; each section renders a disabled
+        header row, then its verb rows, separated by a rule. Lifecycle
+        verbs carry the stage sigil prefix (resolved against the host
+        App's render mode). A verb option's id is the verb name so
+        ``Enter`` / ``Tab`` resolve the selection without re-ranking;
+        header rows are disabled so they never take the highlight. When
+        no verb matches a non-trivial query, the frozen
+        :data:`NO_MATCH_PROMPT` renders as a single disabled row.
+        Clearing then re-adding keeps the highlight on the first
+        selectable (best) match.
 
         Args:
             query: The current palette input text.
@@ -187,10 +298,40 @@ class CommandPalette(ModalScreen[None]):
         option_list = self.query_one("#palette-options", OptionList)
         option_list.clear_options()
         verbs = self.current_verbs(query)
-        for verb in verbs:
-            option_list.add_option(Option(_option_label(verb), id=verb.name))
-        if verbs:
-            option_list.highlighted = 0
+        if not verbs:
+            if query.strip() not in ("", PALETTE_PREFIX):
+                option_list.add_option(Option(NO_MATCH_PROMPT, disabled=True))
+            return
+        stage_sigil = _stage_glyph(self.app)
+        groups = group_verbs(verbs, self._recents)
+        for index, (section, section_verbs) in enumerate(groups):
+            if index:
+                option_list.add_option(None)
+            option_list.add_option(Option(section, disabled=True))
+            sigil = stage_sigil if section == SECTION_LIFECYCLE else ""
+            for verb in section_verbs:
+                option_list.add_option(Option(_option_label(verb, stage_sigil=sigil), id=verb.name))
+        option_list.highlighted = self._first_selectable_index(option_list)
+
+    @staticmethod
+    def _first_selectable_index(option_list: OptionList) -> int | None:
+        """Return the index of the first non-disabled option, or ``None``.
+
+        Section headers (and the no-match prompt) are added as disabled
+        options so they never take the highlight; this scans past them to
+        the first real, runnable verb row.
+
+        Args:
+            option_list: The populated option list.
+
+        Returns:
+            The index of the first enabled option, or ``None`` when every
+            option is disabled (all-headers / no-match).
+        """
+        for index in range(option_list.option_count):
+            if not option_list.get_option_at_index(index).disabled:
+                return index
+        return None
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Re-rank the option list as the operator types.
@@ -282,6 +423,7 @@ class CommandPalette(ModalScreen[None]):
             self.app.notify(f"unknown verb: {verb_name}", severity="warning")
             return
         app = self.app
+        _record_recent(app, verb.name)
         self.dismiss(None)
         logger.info(f"palette_run verb={verb.name!r} args={args!r}")
         verb.handler(app, args)
@@ -306,27 +448,73 @@ class CommandPalette(ModalScreen[None]):
         self.dismiss(None)
 
 
+#: The host-App attribute the palette stashes its recently-run verb
+#: names on, most-recent-first. App-local (never persisted to
+#: ``state.json``): the Recent section is a within-session convenience,
+#: so the list lives on the running App and resets on relaunch.
+_RECENTS_ATTR: str = "_palette_recents"
+
+
+def _read_recents(app: App[None]) -> tuple[str, ...]:
+    """Return the host App's recently-run palette verb names.
+
+    Args:
+        app: The running App.
+
+    Returns:
+        The recorded verb names, most-recent-first; empty when none have
+        run this session (or under a bare harness with no recents attr).
+    """
+    recents = getattr(app, _RECENTS_ATTR, ())
+    return tuple(recents)
+
+
+def _record_recent(app: App[None], verb_name: str) -> None:
+    """Record *verb_name* as the most-recently-run palette verb on *app*.
+
+    Moves *verb_name* to the front of the host App's recents list (de-
+    duplicating an earlier run) so the next palette open surfaces it
+    first under the ``Recent`` section. The list is capped at
+    :data:`CommandPalette.RECENT_CAP`.
+
+    Args:
+        app: The running App.
+        verb_name: The verb name just run.
+    """
+    prior = [name for name in _read_recents(app) if name != verb_name]
+    updated = (verb_name, *prior)[: CommandPalette.RECENT_CAP]
+    setattr(app, _RECENTS_ATTR, updated)
+
+
 def open_palette(app: App[None]) -> None:
     """Push the command palette onto *app*'s screen stack (cap-checked).
 
     The shared :class:`~eawf.surfaces.tui.scopes.ScopeScreen` ``open_palette``
-    action calls this. It routes through the App's modal-cap-aware
-    ``push_modal`` helper when present (so the modal-stack depth limit is
-    enforced), falling back to a plain ``push_screen`` under a bare
-    harness that has no such helper.
+    action calls this. It seeds the palette with the host App's recently-
+    run verbs (the ``Recent`` section) and routes through the App's
+    modal-cap-aware ``push_modal`` helper when present (so the modal-stack
+    depth limit is enforced), falling back to a plain ``push_screen`` under
+    a bare harness that has no such helper.
 
     Args:
         app: The running App.
     """
+    palette = CommandPalette(recents=_read_recents(app))
     push_modal = getattr(app, "push_modal", None)
     if callable(push_modal):
-        push_modal(CommandPalette())
+        push_modal(palette)
         return
-    app.push_screen(CommandPalette())
+    app.push_screen(palette)
 
 
 __all__ = [
+    "LIFECYCLE_VERB_NAMES",
+    "NO_MATCH_PROMPT",
     "PALETTE_PREFIX",
+    "SECTION_ALL",
+    "SECTION_LIFECYCLE",
+    "SECTION_RECENT",
     "CommandPalette",
+    "group_verbs",
     "open_palette",
 ]

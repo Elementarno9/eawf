@@ -1,0 +1,21 @@
+
+
+            ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+            │   /                                                                                          │
+            │  Recent                                                                                      │
+            │  /theme <name>  —  theme dark/light/cb/auto                                                  │
+            │  /find <query>  —  fuzzy ID + title search                                                   │
+            │  ────────────────────────────────────────────────────────────────────────────────────────    │
+            │  Lifecycle                                                                                   │
+            │  ◆ /audit  —  audit the current scope                                                        │
+            │  ◆ /init  —  init wizard                                                                     │
+            │  ◆ /roadmap <sub-verb> ...  —  roadmap action (sub-verb)                                     │
+            │  ────────────────────────────────────────────────────────────────────────────────────────▁▁  │
+            │  All                                                                                         │
+            │  /agent_watch  —  switch to Watch mode                                                       │
+            │  /autopilot  —  switch to Autopilot mode                                                     │
+            │  /config  —  config window (registry-driven)                                                 │
+            │  /doctor  —  switch to Doctor mode                                                           │
+            │  /events  —  last 50 events overlay                                                          │
+            │  /evidence  —  switch to Evidence mode                                                       │
+            └──────────────────────────────────────────────────────────────────────────────────────────────┘

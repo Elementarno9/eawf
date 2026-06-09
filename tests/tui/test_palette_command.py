@@ -76,14 +76,24 @@ def test_palette_filters_as_operator_types() -> None:
             await pilot.press("t", "h", "e", "m", "e")
             await pilot.pause()
             option_list = app.screen.query_one(OptionList)
-            assert option_list.option_count == 1
-            assert option_list.get_option_at_index(0).id == "/theme"
+            # The sole match renders under its section header (a disabled
+            # row), so the runnable verb is the only selectable option.
+            ids = [option_list.get_option_at_index(i).id for i in range(option_list.option_count)]
+            assert "/theme" in ids
+            selectable = [
+                option_list.get_option_at_index(i).id
+                for i in range(option_list.option_count)
+                if not option_list.get_option_at_index(i).disabled
+            ]
+            assert selectable == ["/theme"]
 
     asyncio.run(body())
 
 
-def test_palette_no_match_empties_list() -> None:
+def test_palette_no_match_shows_frozen_prompt() -> None:
     async def body() -> None:
+        from eawf.surfaces.tui.palette.command_palette import NO_MATCH_PROMPT
+
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
@@ -91,7 +101,11 @@ def test_palette_no_match_empties_list() -> None:
             await pilot.press("z", "z", "z", "z")
             await pilot.pause()
             option_list = app.screen.query_one(OptionList)
-            assert option_list.option_count == 0
+            # No verb matches: a single disabled row pins the frozen prompt.
+            assert option_list.option_count == 1
+            prompt = option_list.get_option_at_index(0)
+            assert str(prompt.prompt) == NO_MATCH_PROMPT
+            assert prompt.disabled is True
 
     asyncio.run(body())
 
