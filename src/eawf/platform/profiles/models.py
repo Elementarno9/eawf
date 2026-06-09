@@ -462,3 +462,35 @@ class ComposedProfile(BaseModel):
     provenance: dict[str, list[str]] = {}
     override_audit: dict[str, list[str]] = {}
     conflict_warnings: list[str] = []
+
+    def partition_render_blocks_by_tier(
+        self,
+        target: str,
+    ) -> tuple[list[RenderBlock], list[RenderBlock]]:
+        """Split the *target*-bound render_blocks into ``(tier0, reference)`` lists.
+
+        Walks :attr:`render_blocks` once in source order, keeping only blocks
+        whose :attr:`RenderBlock.target` equals *target*, and routes each into
+        the tier0 list (always-on Zone 1) or the reference list (lazy Zone 2)
+        per its :attr:`RenderBlock.tier`. Relative order within each tier is the
+        source-declared order, so a renderer can emit Zone 1 then Zone 2 while
+        preserving the author's intra-tier sequencing.
+
+        Args:
+            target: Destination filename to filter on (e.g. ``"AGENTS.md"``).
+
+        Returns:
+            A ``(tier0_blocks, reference_blocks)`` pair. Either list is empty
+            when no targeted block carries that tier; the renderer relies on
+            the empty case to suppress an empty zone.
+        """
+        tier0: list[RenderBlock] = []
+        reference: list[RenderBlock] = []
+        for block in self.render_blocks:
+            if block.target != target:
+                continue
+            if block.tier == "tier0":
+                tier0.append(block)
+            else:
+                reference.append(block)
+        return tier0, reference

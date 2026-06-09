@@ -20,9 +20,12 @@ from unittest.mock import patch
 import pytest
 
 from eawf.platform.profiles.models import ComposedProfile, RenderBlock
+from eawf.platform.render_block import RenderBlockTier
 from eawf.surfaces.render import regions
 from eawf.surfaces.render.agents_md import (
     ENTITY_TITLE_MAX,
+    ZONE_REFERENCE_REGION_ID,
+    ZONE_TIER0_REGION_ID,
     RenderResult,
     lint_entity_title,
     render_agents_md,
@@ -46,9 +49,10 @@ def _block(
     *,
     target: str = "AGENTS.md",
     version: str = "1.0",
+    tier: RenderBlockTier = "reference",
 ) -> RenderBlock:
     """Build a RenderBlock whose body_template is the literal *body* string."""
-    return RenderBlock(id=region_id, target=target, body_template=body, version=version)
+    return RenderBlock(id=region_id, target=target, body_template=body, version=version, tier=tier)
 
 
 def test_render_agents_md_writes_managed_regions_for_each_block(tmp_path: Path) -> None:
@@ -66,13 +70,16 @@ def test_render_agents_md_writes_managed_regions_for_each_block(tmp_path: Path) 
     text = target.read_text(encoding="utf-8")
     parsed = regions.find_regions(text)
     found = {r.id: r for r in parsed}
-    assert set(found.keys()) == {"rules", "style"}
+    # Both blocks are reference-tier (the default), so they land in Zone 2
+    # behind its boundary marker; no Zone-1 marker is emitted.
+    assert set(found.keys()) == {ZONE_REFERENCE_REGION_ID, "rules", "style"}
+    assert ZONE_TIER0_REGION_ID not in found
     assert found["rules"].body == "## Rules\n\n- one\n- two"
     assert found["style"].body == "## Style\n\n- f-strings only"
     # Hashes match — declared on marker == compute_hash(body).
     assert found["rules"].declared_hash == regions.compute_hash(found["rules"].body)
     assert found["style"].declared_hash == regions.compute_hash(found["style"].body)
-    assert result.regions_added == ["rules", "style"]
+    assert result.regions_added == [ZONE_REFERENCE_REGION_ID, "rules", "style"]
     assert result.regions_updated == []
     assert result.regions_unchanged == []
 
@@ -95,7 +102,9 @@ def test_render_agents_md_re_render_preserves_user_content(tmp_path: Path) -> No
     assert "## User notes" in after
     assert "This paragraph was hand-written." in after
     assert result.hand_edits_preserved is True
-    assert result.regions_unchanged == ["rules"]
+    # The zone-boundary marker rides the same insert-or-replace path, so a
+    # no-op re-render reports it unchanged alongside the block.
+    assert result.regions_unchanged == [ZONE_REFERENCE_REGION_ID, "rules"]
 
 
 def test_render_agents_md_updates_manifest(tmp_path: Path) -> None:
@@ -115,10 +124,15 @@ def test_render_agents_md_updates_manifest(tmp_path: Path) -> None:
         generator="profile:test",
     )
 
-    # Keys are stored in POSIX form for cross-platform stability.
+    # Keys are stored in POSIX form for cross-platform stability. The Zone-2
+    # boundary marker is a managed region too, so it earns a manifest entry.
     target_str = target.as_posix()
     keys = set(manifest.generated.keys())
-    assert keys == {f"{target_str}::alpha", f"{target_str}::beta"}
+    assert keys == {
+        f"{target_str}::{ZONE_REFERENCE_REGION_ID}",
+        f"{target_str}::alpha",
+        f"{target_str}::beta",
+    }
 
     alpha_entry = manifest.generated[f"{target_str}::alpha"]
     assert alpha_entry.target == target_str
@@ -150,10 +164,13 @@ def test_render_agents_md_filters_by_target(tmp_path: Path) -> None:
 
     text = target.read_text(encoding="utf-8")
     region_ids = {r.id for r in regions.find_regions(text)}
-    assert region_ids == {"rules"}
-    assert result.regions_added == ["rules"]
-    # Manifest only holds the AGENTS.md region.
-    assert set(manifest.generated.keys()) == {f"{target.as_posix()}::rules"}
+    assert region_ids == {ZONE_REFERENCE_REGION_ID, "rules"}
+    assert result.regions_added == [ZONE_REFERENCE_REGION_ID, "rules"]
+    # Manifest only holds the AGENTS.md regions (the Zone-2 marker + the block).
+    assert set(manifest.generated.keys()) == {
+        f"{target.as_posix()}::{ZONE_REFERENCE_REGION_ID}",
+        f"{target.as_posix()}::rules",
+    }
 
 
 def test_render_agents_md_atomic_write(tmp_path: Path) -> None:
@@ -189,7 +206,7 @@ def test_render_agents_md_unchanged_no_update_needed(tmp_path: Path) -> None:
     _, manifest = render_agents_md(composed, target, Manifest(version=1, generated={}))
     result, _ = render_agents_md(composed, target, manifest)
 
-    assert sorted(result.regions_unchanged) == ["alpha", "beta"]
+    assert sorted(result.regions_unchanged) == sorted([ZONE_REFERENCE_REGION_ID, "alpha", "beta"])
     assert result.regions_updated == []
     assert result.regions_added == []
 
@@ -204,7 +221,8 @@ def test_render_agents_md_updated_when_body_changes(tmp_path: Path) -> None:
     result, _ = render_agents_md(composed_v2, target, manifest)
 
     assert result.regions_updated == ["rules"]
-    assert result.regions_unchanged == []
+    # The Zone-2 boundary marker body did not change, so it stays unchanged.
+    assert result.regions_unchanged == [ZONE_REFERENCE_REGION_ID]
     assert result.regions_added == []
     text = target.read_text(encoding="utf-8")
     region = regions.extract_region(text, "rules")
@@ -280,7 +298,7 @@ def test_render_agents_md_structured_block_emits_triad_layout(tmp_path: Path) ->
     assert "Claims must be backed by evidence." in body
     assert "Read source, grep call sites, inspect fixtures." in body
     assert "Quote the implementation, not the design doc." in body
-    assert result.regions_added == ["verify-rule"]
+    assert result.regions_added == [ZONE_REFERENCE_REGION_ID, "verify-rule"]
 
 
 def test_render_agents_md_structured_block_is_byte_stable_on_rerender(tmp_path: Path) -> None:
@@ -304,7 +322,7 @@ def test_render_agents_md_structured_block_is_byte_stable_on_rerender(tmp_path: 
     after = target.read_text(encoding="utf-8")
 
     assert before == after
-    assert result.regions_unchanged == ["verify-rule"]
+    assert result.regions_unchanged == [ZONE_REFERENCE_REGION_ID, "verify-rule"]
     assert result.regions_updated == []
     assert result.regions_added == []
 
@@ -331,7 +349,113 @@ def test_render_agents_md_mixed_prose_and_structured_blocks(tmp_path: Path) -> N
     assert regions.extract_region(text, "rules").body == "## Rules\n\n- one"  # type: ignore[union-attr]
     structured_body = regions.extract_region(text, "verify-rule").body  # type: ignore[union-attr]
     assert "### Rationale" in structured_body
-    assert result.regions_added == ["rules", "verify-rule"]
+    assert result.regions_added == [ZONE_REFERENCE_REGION_ID, "rules", "verify-rule"]
+
+
+def _region_spans(text: str) -> dict[str, tuple[int, int]]:
+    """Return ``{region_id: (start, end)}`` byte spans for every parsed region."""
+    return {r.id: r.span for r in regions.find_regions(text)}
+
+
+def test_render_agents_md_partitions_tier0_into_zone1_reference_into_zone2(
+    tmp_path: Path,
+) -> None:
+    """Mixed tier0 + reference blocks land in their own zones (affordance_parity both ways).
+
+    The renderer must put every ``tier0`` block id in the Zone-1 region (after
+    the Zone-1 marker, before the Zone-2 marker) and every ``reference`` block
+    id in the Zone-2 region (after the Zone-2 marker). Neither direction may
+    leak: no tier0 id appears in the Zone-2 span, and no reference id appears in
+    the Zone-1 span.
+    """
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [
+            # Deliberately interleaved in source order to prove the partition
+            # is keyed on tier, not on declaration order.
+            _block("ref-a", "## Ref A", tier="reference"),
+            _block("t0-a", "## Tier0 A", tier="tier0"),
+            _block("ref-b", "## Ref B", tier="reference"),
+            _block("t0-b", "## Tier0 B", tier="tier0"),
+        ]
+    )
+
+    result, _ = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    text = target.read_text(encoding="utf-8")
+    spans = _region_spans(text)
+    # Both zone markers are emitted (each tier is non-empty).
+    assert ZONE_TIER0_REGION_ID in spans
+    assert ZONE_REFERENCE_REGION_ID in spans
+
+    zone1_start = spans[ZONE_TIER0_REGION_ID][0]
+    zone2_start = spans[ZONE_REFERENCE_REGION_ID][0]
+    assert zone1_start < zone2_start, "Zone 1 must render before Zone 2"
+
+    tier0_ids = {"t0-a", "t0-b"}
+    reference_ids = {"ref-a", "ref-b"}
+
+    # Affordance parity, forward: every composed tier0 block id is present in
+    # the Zone-1 region (between the Zone-1 marker and the Zone-2 marker).
+    for block_id in tier0_ids:
+        assert block_id in spans, f"tier0 block {block_id!r} dropped from render"
+        assert zone1_start < spans[block_id][0] < zone2_start, (
+            f"tier0 block {block_id!r} did not land in the Zone-1 region"
+        )
+
+    # Affordance parity, reverse: no tier0 block id leaks into the Zone-2 span,
+    # and every reference block id sits after the Zone-2 marker.
+    for block_id in reference_ids:
+        assert block_id in spans, f"reference block {block_id!r} dropped from render"
+        assert spans[block_id][0] > zone2_start, (
+            f"reference block {block_id!r} did not land in the Zone-2 region"
+        )
+    for block_id in tier0_ids:
+        assert spans[block_id][0] < zone2_start, (
+            f"tier0 block {block_id!r} leaked into the Zone-2 region"
+        )
+
+    # The render order reflects the partition: Zone-1 marker, tier0 blocks,
+    # Zone-2 marker, reference blocks. Source order is preserved within a tier.
+    assert result.regions_added == [
+        ZONE_TIER0_REGION_ID,
+        "t0-a",
+        "t0-b",
+        ZONE_REFERENCE_REGION_ID,
+        "ref-a",
+        "ref-b",
+    ]
+
+
+def test_render_agents_md_zero_tier0_emits_no_empty_zone1_region(tmp_path: Path) -> None:
+    """A profile with zero tier0 blocks emits no Zone-1 region; no tier0 leaks into Zone 2.
+
+    The negative path: when every targeted block is reference-tier, the
+    renderer must not stamp an empty Zone-1 boundary marker. The reference
+    blocks still render behind the Zone-2 marker, and no ``tier0`` region id
+    appears anywhere in the output.
+    """
+    target = tmp_path / "AGENTS.md"
+    composed = _make_composed(
+        [
+            _block("ref-a", "## Ref A", tier="reference"),
+            _block("ref-b", "## Ref B", tier="reference"),
+        ]
+    )
+
+    result, _ = render_agents_md(composed, target, Manifest(version=1, generated={}))
+
+    text = target.read_text(encoding="utf-8")
+    spans = _region_spans(text)
+    # No Zone-1 region at all — not even an empty one.
+    assert ZONE_TIER0_REGION_ID not in spans
+    assert ZONE_TIER0_REGION_ID not in result.regions_added
+    # Zone 2 exists and holds both reference blocks behind its marker.
+    assert ZONE_REFERENCE_REGION_ID in spans
+    zone2_start = spans[ZONE_REFERENCE_REGION_ID][0]
+    assert spans["ref-a"][0] > zone2_start
+    assert spans["ref-b"][0] > zone2_start
+    assert result.regions_added == [ZONE_REFERENCE_REGION_ID, "ref-a", "ref-b"]
 
 
 def test_render_agents_md_empty_compose_no_regions(tmp_path: Path) -> None:

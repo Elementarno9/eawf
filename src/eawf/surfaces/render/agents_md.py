@@ -5,7 +5,12 @@ Per ``docs/policy/agents-claude-md.md``:
 - Take a :class:`~eawf.platform.profiles.models.ComposedProfile` whose ``render_blocks``
   list declares the regions that should appear on disk.
 - Filter to ``target == "AGENTS.md"`` blocks (other targets — ``.claude/...``
-  skill/agent files — are handled by sibling renderers in W05+).
+  skill/agent files — are handled by sibling renderers in W05+), then split
+  them by :attr:`RenderBlock.tier` into Zone 1 (the always-on ``tier0`` layer)
+  and Zone 2 (the lazy ``reference`` layer). Zone 1 renders first, Zone 2
+  second; each zone is introduced by a managed boundary marker that is emitted
+  only when that tier has at least one block, so a tier0-free profile never
+  carries an empty Zone-1 region.
 - For each block: render its body via Jinja2 against the bundled
   ``AGENTS.md.j2`` template (prose ``body_template`` verbatim, or a fixed
   ``Rationale``/``Mechanism``/``Verification`` layout for structured triad
@@ -65,6 +70,27 @@ logger = logging.getLogger(__name__)
 _TARGET_FILENAME: str = "AGENTS.md"
 _TEMPLATE_NAME: str = "AGENTS.md.j2"
 _TEMPLATES_PACKAGE: str = "eawf.platform.templates"
+
+#: Managed-region id marking the start of Zone 1 (the always-on ``tier0``
+#: layer). Emitted only when at least one ``tier0`` block targets AGENTS.md so a
+#: tier0-free profile never renders an empty Zone-1 region. Its body is a fixed
+#: heading line so the boundary is human-scannable in the rendered file; being a
+#: managed region keeps it off the unmanaged-hand-edit round-trip accounting.
+ZONE_TIER0_REGION_ID: str = "zone-tier0"
+
+#: Managed-region id marking the start of Zone 2 (the lazy ``reference`` layer).
+#: Emitted only when at least one ``reference`` block targets AGENTS.md.
+ZONE_REFERENCE_REGION_ID: str = "zone-reference"
+
+#: Version stamped on the two zone-boundary marker regions. Bumped only when the
+#: rendered boundary body itself changes shape.
+ZONE_REGION_VERSION: str = "1.0"
+
+#: Fixed body of the Zone-1 boundary region.
+ZONE_TIER0_BODY: str = "<!-- Zone 1: always-on (tier0) -->"
+
+#: Fixed body of the Zone-2 boundary region.
+ZONE_REFERENCE_BODY: str = "<!-- Zone 2: reference (lazy) -->"
 
 #: Managed-region id under which the typed-Decisions section is rendered.
 #: Stable so re-renders update in place (and so hand-edits outside the BEGIN…END
@@ -150,9 +176,59 @@ def _render_block_body(env: Environment, block: RenderBlock, composed: ComposedP
     return template.render(block=block, composed=composed)
 
 
-def _extract_targeted_blocks(composed: ComposedProfile) -> list[RenderBlock]:
-    """Return only render_blocks targeting the AGENTS.md file, in caller order."""
-    return [b for b in composed.render_blocks if b.target == _TARGET_FILENAME]
+@dataclass
+class _RegionEmitter:
+    """Accumulate managed-region writes against a growing document string.
+
+    One :meth:`emit` call inserts-or-replaces a single managed region (a zone
+    boundary marker, a render block, or the typed Decisions injection) via
+    :func:`~eawf.surfaces.render.regions.replace_region`, classifies it against
+    the pre-render snapshot in :attr:`existing` as added / updated / unchanged,
+    and records its body + version for downstream manifest emission. Pulling
+    this state into a small object keeps :func:`render_agents_md` flat: the
+    caller drives the tier partition and the emitter owns the bookkeeping.
+
+    Attributes:
+        text: The document under construction; each :meth:`emit` reassigns it.
+        existing: Pre-render regions keyed by id, used to classify deltas.
+        added: Region ids absent before this render.
+        updated: Region ids whose body or version changed.
+        unchanged: Region ids whose body+version matched the prior render.
+        bodies: Rendered body per region id (manifest hash input).
+        versions: Emitted version per region id (manifest version field).
+    """
+
+    text: str
+    existing: dict[str, regions.Region]
+    added: list[str] = field(default_factory=list)
+    updated: list[str] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
+    bodies: dict[str, str] = field(default_factory=dict)
+    versions: dict[str, str] = field(default_factory=dict)
+
+    def emit(self, region_id: str, version: str, body: str) -> None:
+        """Insert-or-replace region *region_id* and record its delta class.
+
+        Args:
+            region_id: Managed-region id to write.
+            version: ``<major>.<minor>`` version stamped on the BEGIN marker.
+            body: Rendered region body (no markers, no boundary newlines).
+        """
+        self.bodies[region_id] = body
+        self.versions[region_id] = version
+        prev = self.existing.get(region_id)
+        if prev is None:
+            self.added.append(region_id)
+        elif prev.body == body and prev.version == version:
+            self.unchanged.append(region_id)
+        else:
+            self.updated.append(region_id)
+        self.text = regions.replace_region(
+            self.text,
+            id=region_id,
+            version=version,
+            body=body,
+        )
 
 
 def render_decisions_section(
@@ -439,10 +515,14 @@ def render_agents_md(
     Workflow:
 
     1. Read existing *target* if present (so unmanaged content can round-trip).
-    2. Filter ``composed.render_blocks`` to ``target == "AGENTS.md"``.
-    3. For each block, render its body via Jinja2 + ``replace_region`` —
-       insertions append, updates rewrite the BEGIN…END span, untouched
-       regions are no-ops.
+    2. Filter ``composed.render_blocks`` to ``target == "AGENTS.md"`` and
+       partition the result by :attr:`RenderBlock.tier` into Zone 1
+       (``tier0``) and Zone 2 (``reference``).
+    3. Emit Zone 1 then Zone 2. Each zone is introduced by a managed boundary
+       marker (emitted only when its tier is non-empty), followed by that
+       tier's blocks rendered via Jinja2 + ``replace_region`` — insertions
+       append, updates rewrite the BEGIN…END span, untouched regions are
+       no-ops.
     4. When *state* is supplied, append/replace a managed
        ``DECISIONS_REGION_ID`` region whose body is produced by
        :func:`render_decisions_section` against the typed
@@ -489,7 +569,7 @@ def render_agents_md(
     # for repos shared between platforms.
     target_str = target.as_posix()
 
-    blocks = _extract_targeted_blocks(composed)
+    tier0_blocks, reference_blocks = composed.partition_render_blocks_by_tier(_TARGET_FILENAME)
 
     existing_text = ""
     if target.exists():
@@ -500,60 +580,42 @@ def render_agents_md(
     existing_regions = {r.id: r for r in regions.find_regions(existing_text)}
 
     env = _load_environment()
-    new_text = existing_text
-    added: list[str] = []
-    updated: list[str] = []
-    unchanged: list[str] = []
     timestamp = datetime.now(UTC).isoformat()
-    rendered_bodies: dict[str, str] = {}
-    # Track per-region versions for manifest emission. Profile-driven blocks
-    # use ``block.version``; the typed Decisions injection uses the module
-    # constant ``DECISIONS_REGION_VERSION``.
-    rendered_versions: dict[str, str] = {}
+    emitter = _RegionEmitter(text=existing_text, existing=existing_regions)
 
-    for block in blocks:
-        body = _render_block_body(env, block, composed)
-        rendered_bodies[block.id] = body
-        rendered_versions[block.id] = block.version
-        prev = existing_regions.get(block.id)
-        if prev is None:
-            added.append(block.id)
-        elif prev.body == body and prev.version == block.version:
-            unchanged.append(block.id)
-        else:
-            updated.append(block.id)
-        new_text = regions.replace_region(
-            new_text,
-            id=block.id,
-            version=block.version,
-            body=body,
-        )
+    # Zone 1 (always-on tier0) is rendered first, Zone 2 (lazy reference)
+    # second. The zone-boundary marker for a tier is emitted only when that
+    # tier has at least one block, so a tier0-free profile never carries an
+    # empty Zone-1 region. The marker is itself a managed region: it rides the
+    # same insert-or-replace path, so the affordance-parity invariant holds in
+    # both directions (every tier0 block id lands after the Zone-1 marker and
+    # before the Zone-2 marker; no tier0 id leaks into the Zone-2 span).
+    if tier0_blocks:
+        emitter.emit(ZONE_TIER0_REGION_ID, ZONE_REGION_VERSION, ZONE_TIER0_BODY)
+        for block in tier0_blocks:
+            emitter.emit(block.id, block.version, _render_block_body(env, block, composed))
+
+    # A reference zone is needed when there are reference blocks OR when the
+    # typed Decisions section is being injected (it is reference-tier content
+    # and must never land among the tier0 blocks).
+    needs_reference_zone = bool(reference_blocks) or state is not None
+    if needs_reference_zone:
+        emitter.emit(ZONE_REFERENCE_REGION_ID, ZONE_REGION_VERSION, ZONE_REFERENCE_BODY)
+        for block in reference_blocks:
+            emitter.emit(block.id, block.version, _render_block_body(env, block, composed))
 
     if state is not None:
         decisions_body = render_decisions_section(
             state.decisions,
             scope_id=decisions_scope_id,
         )
-        rendered_bodies[DECISIONS_REGION_ID] = decisions_body
-        rendered_versions[DECISIONS_REGION_ID] = DECISIONS_REGION_VERSION
-        prev = existing_regions.get(DECISIONS_REGION_ID)
-        if prev is None:
-            added.append(DECISIONS_REGION_ID)
-        elif prev.body == decisions_body and prev.version == DECISIONS_REGION_VERSION:
-            unchanged.append(DECISIONS_REGION_ID)
-        else:
-            updated.append(DECISIONS_REGION_ID)
-        new_text = regions.replace_region(
-            new_text,
-            id=DECISIONS_REGION_ID,
-            version=DECISIONS_REGION_VERSION,
-            body=decisions_body,
-        )
+        emitter.emit(DECISIONS_REGION_ID, DECISIONS_REGION_VERSION, decisions_body)
 
     # Ensure POSIX-compliant single trailing newline so end-of-file-fixer is a
     # no-op on the rendered file and re-renders stay byte-stable. Idempotent:
     # if the last region's END marker block already ends with '\n', this is a
     # no-op; otherwise we append exactly one '\n'.
+    new_text = emitter.text
     if not new_text.endswith("\n"):
         new_text = new_text + "\n"
 
@@ -563,12 +625,12 @@ def render_agents_md(
     new_generated: dict[str, ManifestEntry] = {
         key: entry for key, entry in manifest.generated.items() if entry.target != target_str
     }
-    for region_id, body in rendered_bodies.items():
+    for region_id, body in emitter.bodies.items():
         composite_key = f"{target_str}::{region_id}"
         new_generated[composite_key] = ManifestEntry(
             target=target_str,
             region_id=region_id,
-            version=rendered_versions[region_id],
+            version=emitter.versions[region_id],
             hash=regions.compute_hash(body),
             generator=generator,
             generated_at=timestamp,
@@ -577,14 +639,15 @@ def render_agents_md(
     updated_manifest = Manifest(version=manifest.version, generated=new_generated)
     result = RenderResult(
         target=target,
-        regions_added=added,
-        regions_updated=updated,
-        regions_unchanged=unchanged,
+        regions_added=emitter.added,
+        regions_updated=emitter.updated,
+        regions_unchanged=emitter.unchanged,
         hand_edits_preserved=hand_edits_preserved,
     )
     logger.info(
         f"render_agents_md target={target} "
-        f"added={len(added)} updated={len(updated)} unchanged={len(unchanged)} "
+        f"added={len(emitter.added)} updated={len(emitter.updated)} "
+        f"unchanged={len(emitter.unchanged)} "
         f"hand_edits_preserved={hand_edits_preserved} "
         f"decisions_injected={state is not None}"
     )
