@@ -61,6 +61,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
 )
 from eawf.surfaces.tui.widgets.heartbeat import PULSE_INTERVAL_S, pulse_glyph
 from eawf.surfaces.tui.widgets.markup import escape_markup, style_labeled_line
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.variance_tile import render_variance_plain
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 
@@ -71,6 +72,16 @@ logger = logging.getLogger(__name__)
 
 #: Placeholder shown when a pointer (phase / iter) is unset.
 DASH: str = "—"
+
+#: The single dim line the EFFORT block collapses to before any measured
+#: burn exists. The three metric names are joined by a U+00B7 middle dot
+#: (written as a ``\uXXXX`` escape so the source stays ASCII-clean) and the
+#: trailing clause is set off by a plain ``--`` dash (deliberately em-dash
+#: -free so the dim line reads as one quiet awaiting-data row, not a
+#: per-metric value). The moment any of effort / variance / velocity has
+#: data the block expands to per-metric rows instead (see
+#: :func:`_effort_lines`).
+EFFORT_AWAITING: str = "effort \u00b7 variance \u00b7 velocity -- awaiting first wave"
 
 #: The four section header literals, recognised by ``_repaint`` so each
 #: gets the bold-accent span whether it lands in a single- or two-column
@@ -109,6 +120,44 @@ _GATE_ASCII: dict[str, str] = {
     GATE_RUNNING: "~",
     GATE_PENDING: "-",
 }
+
+#: The lifecycle sigil that marks a "live" row (waves / audits / worktrees /
+#: gate). These rows track in-flight activity, so the running mark
+#: (:attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.RUNNING`) flags them as the
+#: live, moving counters -- distinct from the static project / phase / iter
+#: pointer rows that carry no leading sigil. The glyph is resolved through the
+#: shared :func:`~eawf.surfaces.tui.widgets.sigils.glyph` helper so the mark
+#: honours the active render mode (unicode diamond vs ASCII ``*``).
+_LIVE_ROW_SIGIL: Sigil = Sigil.RUNNING
+
+#: The ``<sigil> `` prefixes a live row carries, one per render mode. Resolved
+#: from the shared sigils table so the styling layer recognises either column
+#: without re-hardcoding the glyph. Used by ``_style_cell`` (which has no
+#: render-mode handle) to peel the leading sigil off a live row before tinting
+#: the remaining ``label: value`` body.
+_LIVE_ROW_PREFIXES: tuple[str, ...] = (
+    f"{glyph(_LIVE_ROW_SIGIL, mode='unicode')} ",
+    f"{glyph(_LIVE_ROW_SIGIL, mode='ascii')} ",
+)
+
+
+def _live_row(label_line: str, *, mode: RenderMode) -> str:
+    """Prefix a live ``label: value`` *line* with the leading live sigil.
+
+    The sigil reads as the row's primary "this counter is live" mark,
+    mirroring the roadmap tree's ``<glyph> <body>`` convention. The label
+    column on a live row therefore sits one glyph + one space to the right of
+    the static pointer rows, which is the intended visual differentiation.
+
+    Args:
+        label_line: The raw ``label: value`` line to mark.
+        mode: Active render mode (``"unicode"`` or ``"ascii"``); selects the
+            sigil's glyph column.
+
+    Returns:
+        The line prefixed with ``<sigil><space>``.
+    """
+    return f"{glyph(_LIVE_ROW_SIGIL, mode=mode)} {label_line}"
 
 
 def _active_phase_id(state: State) -> str | None:
@@ -438,14 +487,19 @@ def _lifecycle_lines(state: State | None, *, mode: RenderMode) -> list[str]:
         phase = state.current.phase_id or DASH
         iter_id = state.current.iter_id or DASH
     progress = render_completion_bar(counts["waves_closed"], counts["waves_total"], mode=mode)
+    waves = f"waves:     {counts['waves_in_progress']} active · {counts['waves_pending']} pending"
+    audits = f"audits:    {counts['audits_running']} running · {counts['audits_total']} total"
+    worktrees = f"worktrees: {counts['worktrees_active']} active"
     lines = [
         f"project:   {project}",
         f"phase:     {phase}",
         f"iter:      {iter_id}",
-        f"waves:     {counts['waves_in_progress']} active · {counts['waves_pending']} pending",
+        # The live counters carry a leading sigil; the static pointer rows
+        # above (project / phase / iter) and the progress bar below do not.
+        _live_row(waves, mode=mode),
         f"progress:  {progress}",
-        f"audits:    {counts['audits_running']} running · {counts['audits_total']} total",
-        f"worktrees: {counts['worktrees_active']} active",
+        _live_row(audits, mode=mode),
+        _live_row(worktrees, mode=mode),
     ]
     blocked = counts["waves_failed"]
     if blocked:
@@ -473,17 +527,24 @@ def _has_effort_actuals(state: State | None) -> bool:
 def _effort_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     """Build the EFFORT section lines (EU burn, variance, velocity, ETA).
 
-    Shows consumed/estimate EU as a bar, the signed variance %, an EU/day
-    velocity sparkline, and an ETA from the current burn. Every metric
-    falls back to its empty-state sentinel (``— no data`` / ``—``) when no
-    estimate or actual is in scope — never a fabricated 0 % bar.
+    Before any measured burn exists the three present-vs-absent metrics
+    (effort / variance / velocity) carry no data, so the block collapses to
+    the single dim :data:`EFFORT_AWAITING` line rather than three stacked
+    ``— no data`` rows -- one quiet awaiting-data line reads as "nothing has
+    run yet", whereas three identical dashes read as three broken metrics.
+    The moment ANY of the three has data the block expands back to its
+    per-metric rows (consumed/estimate bar, signed variance %, EU/day
+    velocity sparkline, ETA), so a selectively-absent metric still shows its
+    OWN ``— no data`` / ``—`` dash beside the metrics that do carry data --
+    never a fabricated 0 % bar.
 
     Args:
         state: The bound state, or ``None``.
-        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        mode: Active render mode (``"unicode"`` or ``"ascii"``).
 
     Returns:
-        The ordered EFFORT lines (no section header).
+        The single collapsed awaiting-data line when none of the three
+        metrics carries data, else the four per-metric EFFORT rows.
     """
     consumed, estimate = _effort_eu(state)
     # Consumed EU is honest-empty until a *measured* actual exists. With no
@@ -492,21 +553,29 @@ def _effort_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     # actuals come from measured sources only (the wall-clock auto-record was
     # retired in P27-I05-W28).
     has_actuals = _has_effort_actuals(state)
+    series = build_velocity_eu_per_day(state)
+    variance_pct = _variance_pct(consumed, estimate) if has_actuals else None
+    velocity = _render_sparkline(series, mode=mode)
+    # The three present-vs-absent metrics: effort needs a measured actual,
+    # variance needs both an actual and a positive estimate, velocity needs a
+    # non-empty burn series. None present == no wave has run yet.
+    effort_present = has_actuals
+    variance_present = variance_pct is not None
+    velocity_present = velocity != EMPTY_STATE
+    if not (effort_present or variance_present or velocity_present):
+        return [EFFORT_AWAITING]
     # When the wave-session rollup is empty or telemetry is unhealthy the
-    # ``effort`` line collapses to :data:`EMPTY_STATE` rather than rendering a
+    # ``effort`` line shows :data:`EMPTY_STATE` rather than rendering a
     # ``-/<estimate>  ----- 0%`` row — a 0 % bar reads as "no work done" when
-    # the real signal is "no rollup yet". The variance / velocity / ETA rows
-    # already empty-state on the same condition; this keeps the four EFFORT
-    # rows consistent.
-    if has_actuals:
+    # the real signal is "no rollup yet". Each metric carries its own dash so
+    # a selectively-absent one stays visible beside the present metrics.
+    if effort_present:
         effort = render_eu_bar_plain(consumed, estimate, mode=mode)
         if estimate > 0:
             effort = f"{consumed:.1f}/{estimate:.1f}  {effort}"
     else:
         effort = EMPTY_STATE
-    variance = render_variance_plain(_variance_pct(consumed, estimate) if has_actuals else None)
-    series = build_velocity_eu_per_day(state)
-    velocity = _render_sparkline(series, mode=mode)
+    variance = render_variance_plain(variance_pct)
     eta = _eta_line(consumed, estimate, series) if has_actuals else DASH
     return [
         f"effort:    {effort}",
@@ -532,14 +601,14 @@ def _gate_glyph(passed: object, *, mode: RenderMode) -> str:
         The single-character glyph for the check's reported state.
     """
     if passed is True:
-        glyph = GATE_PASS
+        mark = GATE_PASS
     elif passed is False:
-        glyph = GATE_FAIL
+        mark = GATE_FAIL
     elif passed is None:
-        glyph = GATE_RUNNING
+        mark = GATE_RUNNING
     else:
-        glyph = GATE_PENDING
-    return _GATE_ASCII[glyph] if mode == "ascii" else glyph
+        mark = GATE_PENDING
+    return _GATE_ASCII[mark] if mode == "ascii" else mark
 
 
 def _check_passed(check: object) -> object:
@@ -572,16 +641,16 @@ def _gate_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     """
     audit = _active_audit(state)
     if audit is None:
-        return [f"gate:      {EMPTY_STATE}"]
+        return [_live_row(f"gate:      {EMPTY_STATE}", mode=mode)]
     if audit.verdict is not None:
-        return [f"gate:      {audit.id} {audit.verdict.value}"]
+        return [_live_row(f"gate:      {audit.id} {audit.verdict.value}", mode=mode)]
     checks = list(audit.check_results)
     total = len(checks)
     done = sum(1 for c in checks if _check_passed(c) in (True, False))
     glyphs = " ".join(_gate_glyph(_check_passed(c), mode=mode) for c in checks)
     tally = f"{done}/{total}" if total else EMPTY_STATE
     suffix = f"  {glyphs}" if glyphs else ""
-    return [f"gate:      {tally}{suffix}"]
+    return [_live_row(f"gate:      {tally}{suffix}", mode=mode)]
 
 
 def _active_audit(state: State | None) -> Audit | None:
@@ -1113,14 +1182,20 @@ class StatusPane(Static):
         bar/sparkline glyphs honour the app's live :attr:`render_mode`;
         the DISPATCH dot honours the live pulse phase.
         """
+        width = self.content_size.width
         rows = build_status_columns(
             self.state,
             mode=self._render_mode(),
             pulse_lit=self._pulse_lit,
             pulse_paused=self._pulse_paused,
-            width=self.content_size.width,
+            width=width,
         )
-        rendered = [self._style_row(row) for row in rows]
+        # The layout choice is authoritative for the per-cell split: in
+        # single-column mode a row is never re-split, so a long single-column
+        # line (the EFFORT awaiting-data collapse line) keeps its full text
+        # instead of losing the cells at the left-column boundary.
+        two_column = width >= TWO_COLUMN_THRESHOLD
+        rendered = [self._style_row(row, two_column=two_column) for row in rows]
         self.update("\n".join(rendered))
 
     @staticmethod
@@ -1128,9 +1203,11 @@ class StatusPane(Static):
         """Style one cell by kind, markup-escaping the content throughout.
 
         Section headers get the bold accent span; a blocked line gets the
-        palette error colour; a DISPATCH band label (``NOW`` / ``NEXT`` /
-        ``WAIT``) gets the accent tint on its leading token; every other
-        ``label: value`` row gets the accent label tint
+        palette error colour; the EFFORT awaiting-data collapse line gets the
+        muted (dim) span; a live row (leading sigil + ``label: value``) gets
+        the accent tint on its sigil and its label; a DISPATCH band label
+        (``NOW`` / ``NEXT`` / ``WAIT``) gets the accent tint on its leading
+        token; every other ``label: value`` row gets the accent label tint
         (:func:`~eawf.surfaces.tui.widgets.markup.style_labeled_line`), matching the
         detail modal. The cell text is markup-escaped throughout so
         user-derived text never opens a stray markup span.
@@ -1143,29 +1220,44 @@ class StatusPane(Static):
         """
         if cell in _SECTION_HEADERS:
             return f"[b $accent]{escape_markup(cell)}[/]"
+        if cell == EFFORT_AWAITING:
+            return f"[$muted]{escape_markup(cell)}[/]"
         if cell.startswith("blocked:"):
             return f"[$err]{escape_markup(cell)}[/]"
+        for prefix in _LIVE_ROW_PREFIXES:
+            if cell.startswith(prefix):
+                # Tint the leading sigil with the accent then style the
+                # remaining ``label: value`` body so its label still highlights.
+                sigil = prefix[:-1]
+                body = cell[len(prefix) :]
+                return f"[$accent]{escape_markup(sigil)}[/] {style_labeled_line(body)}"
         head, gap, rest = cell.partition("  ")
         if head in _DISPATCH_BANDS:
             return f"[$accent]{head}[/]{gap}{escape_markup(rest)}"
         return style_labeled_line(cell)
 
-    def _style_row(self, row: str) -> str:
+    def _style_row(self, row: str, *, two_column: bool) -> str:
         """Style a row's cells, splitting a two-column row into its two cells.
 
-        A single-column row is styled as one cell. A two-column row (one
-        wider than :data:`LEFT_COLUMN_WIDTH`) is split at the left-column
-        offset so the left and right cells each get header / blocked
-        styling, then re-joined preserving the original gap width.
+        In single-column mode a row is always styled as one cell, so a long
+        single-column line (the EFFORT awaiting-data collapse line, which is
+        wider than :data:`LEFT_COLUMN_WIDTH`) keeps its whole text rather than
+        losing the cells that straddle the left-column boundary. In two-column
+        mode a row wider than the left column is split at the left-column
+        offset so the left and right cells each get header / blocked styling,
+        then re-joined preserving the original gap width; a short two-column
+        row (one column shorter than the split) is styled as a single cell.
 
         Args:
             row: The composed plain-text row.
+            two_column: ``True`` when the pane laid out in two columns, so a
+                wide row carries a re-splittable left + right cell.
 
         Returns:
             The markup-styled row.
         """
         split = LEFT_COLUMN_WIDTH + COLUMN_GAP
-        if len(row) <= split:
+        if not two_column or len(row) <= split:
             return self._style_cell(row)
         left_cell = row[:LEFT_COLUMN_WIDTH].rstrip()
         right_cell = row[split:]
@@ -1182,6 +1274,7 @@ __all__ = [
     "DEFAULT_MAX_PARALLEL_WAVES",
     "DEFAULT_PROJECT_CODE",
     "DISPATCH_IDLE",
+    "EFFORT_AWAITING",
     "GATE_FAIL",
     "GATE_PASS",
     "GATE_PENDING",

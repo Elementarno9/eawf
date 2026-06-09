@@ -29,12 +29,14 @@ from eawf.surfaces.tui.widgets.heartbeat import (
     HEARTBEAT_GLYPH_ASCII,
     HEARTBEAT_GLYPH_DIM,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.status_pane import (
     COLUMN_GAP,
     DASH,
     DEFAULT_MAX_PARALLEL_WAVES,
     DEFAULT_PROJECT_CODE,
     DISPATCH_IDLE,
+    EFFORT_AWAITING,
     GATE_FAIL,
     GATE_PASS,
     GATE_RUNNING,
@@ -372,6 +374,18 @@ def _section(lines: list[str], header: str) -> list[str]:
     return out
 
 
+def _row(lines: list[str], label: str) -> str:
+    """Return the rendered row whose ``label: value`` body matches *label*.
+
+    A live row (waves / audits / worktrees / gate) carries a leading sigil
+    glyph + space before its label, so a bare ``startswith(label)`` would
+    miss it. This matches the *label* anywhere a single-glyph + space prefix
+    could sit, so the helper finds both the un-prefixed static rows and the
+    sigil-prefixed live rows.
+    """
+    return next(line for line in lines if line.startswith(label) or line[2:].startswith(label))
+
+
 # --------------------------------------------------------------------------
 # summary_counts — boundary (None / empty) + populated
 # --------------------------------------------------------------------------
@@ -637,7 +651,7 @@ def test_build_status_lines_empty_repo_no_blocked_line() -> None:
 def test_build_status_lines_waves_line_scoped_to_active_phase() -> None:
     """The rendered waves line shows the active-phase count, not the global one."""
     lines = build_status_lines(_state_with_archived_phase_pending_waves())
-    waves_line = next(line for line in lines if line.startswith("waves:"))
+    waves_line = _row(lines, "waves:")
     assert "1 active · 0 pending" in waves_line
 
 
@@ -783,29 +797,33 @@ def test_build_status_lines_effort_shows_eta_date() -> None:
     datetime.strptime(body, "%Y-%m-%d")  # parses as an ISO date
 
 
-def test_build_status_lines_effort_no_data_empty_state() -> None:
-    """No estimate / actuals → ``— no data``, never a fabricated 0 % bar."""
+def test_build_status_lines_effort_all_absent_collapses_to_awaiting() -> None:
+    """No estimate / actuals → the single dim awaiting-first-wave collapse line.
+
+    With none of effort / variance / velocity carrying data the EFFORT block
+    collapses to the one :data:`EFFORT_AWAITING` line rather than three
+    stacked ``— no data`` rows -- and never a fabricated 0 % bar. The
+    per-metric ``effort:`` / ``variance:`` / ``velocity:`` rows are absent.
+    """
     lines = build_status_lines(_load(_PHASE_ITER_WAVE))
-    effort = next(line for line in lines if line.startswith("effort:"))
-    variance = next(line for line in lines if line.startswith("variance:"))
-    velocity = next(line for line in lines if line.startswith("velocity:"))
-    eta = next(line for line in lines if line.startswith("eta:"))
-    assert EMPTY_STATE in effort
-    assert "0%" not in effort  # not a fake 0 % bar
-    assert EMPTY_STATE in variance
-    assert EMPTY_STATE in velocity
-    assert eta.split("eta:")[1].strip() == DASH
+    effort = _section(lines, "EFFORT")
+    assert effort == [EFFORT_AWAITING]
+    assert "0%" not in EFFORT_AWAITING  # not a fake 0 % bar
+    assert not any(line.startswith("effort:") for line in lines)
+    assert not any(line.startswith("variance:") for line in lines)
+    assert not any(line.startswith("velocity:") for line in lines)
 
 
-def test_build_status_lines_effort_estimate_only_no_actuals_empty_state() -> None:
-    """Estimate present but no measured actual → ``— no data`` on every EFFORT row.
+def test_build_status_lines_effort_estimate_only_no_actuals_collapses() -> None:
+    """Estimate present but no measured actual → the awaiting-first-wave collapse.
 
     The regression A42 surfaced: when the WaveSessionRollup is empty or
     telemetry is unhealthy the bar used to render ``-/<estimate>  ----- 0%``,
-    which reads as "no work done" rather than "no rollup yet". The fix
-    collapses the ``effort:`` line to the same empty-state sentinel the
-    variance / velocity / ETA rows already use so the four EFFORT rows stay
-    consistent.
+    which reads as "no work done" rather than "no rollup yet". An estimate
+    alone (a bucketed-but-unrun wave) is not measured DATA for the three
+    present-vs-absent metrics, so the EFFORT block still collapses to the one
+    dim :data:`EFFORT_AWAITING` line -- never a fabricated 0 % bar against the
+    live estimate.
     """
     # Splice an effort_bucket onto fixture-03's wave so the live denominator
     # is positive (XL == 3.5 EU) but no actual exists — the gap A42 flagged.
@@ -813,16 +831,41 @@ def test_build_status_lines_effort_estimate_only_no_actuals_empty_state() -> Non
     payload["waves"]["P01-I01-W01"]["effort_bucket"] = "XL"
     state = State.model_validate(payload)
     lines = build_status_lines(state)
-    effort = next(line for line in lines if line.startswith("effort:"))
-    variance = next(line for line in lines if line.startswith("variance:"))
-    velocity = next(line for line in lines if line.startswith("velocity:"))
-    eta = next(line for line in lines if line.startswith("eta:"))
-    assert EMPTY_STATE in effort
-    assert "0%" not in effort  # not a fake 0 % bar against the live estimate
-    assert "/" not in effort.split("effort:")[1]  # no ``-/3.5`` prefix either
-    assert EMPTY_STATE in variance
-    assert EMPTY_STATE in velocity
-    assert eta.split("eta:")[1].strip() == DASH
+    effort = _section(lines, "EFFORT")
+    assert effort == [EFFORT_AWAITING]
+    assert "0%" not in EFFORT_AWAITING  # not a fake 0 % bar against the live estimate
+    assert "/" not in EFFORT_AWAITING  # no ``-/3.5`` prefix either
+    assert not any(line.startswith(("effort:", "variance:", "velocity:")) for line in lines)
+
+
+def test_build_status_lines_effort_present_metric_expands_with_selective_dash() -> None:
+    """One present metric expands the block; an absent metric shows its OWN dash.
+
+    Fixture-03's wave carries an actual (so velocity has a populated day --
+    present) but no ``effort_bucket`` (so the estimate is 0 -- variance has no
+    baseline). The presence of ANY metric expands the block back to its
+    per-metric rows, where the selectively-absent variance still renders its
+    own ``— no data`` dash rather than dragging the whole block back to the
+    collapsed line.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    _add_actual(
+        payload,
+        actual_id="ACT-A",
+        scope_id="P01-I01-W01",
+        elapsed_eu=1.2,
+        updated_at="2026-05-08T09:00:00Z",
+    )
+    lines = build_status_lines(State.model_validate(payload), mode="unicode")
+    effort = _section(lines, "EFFORT")
+    # The block is expanded (not the collapsed awaiting line).
+    assert effort != [EFFORT_AWAITING]
+    velocity = _row(lines, "velocity:")
+    variance = _row(lines, "variance:")
+    # Velocity is present (a populated burn day), variance shows its own dash.
+    assert EMPTY_STATE not in velocity
+    assert any(g in velocity for g in ("▁", "█", "▇"))
+    assert EMPTY_STATE in variance  # selectively-absent metric keeps its own dash
 
 
 def test_build_status_lines_effort_ascii_mode() -> None:
@@ -873,8 +916,9 @@ def test_effort_eu_no_bucket_waves_zero_denominator() -> None:
     _consumed, estimate = _effort_eu(state)
     assert estimate == pytest.approx(0.0)
     lines = build_status_lines(state)
-    effort = next(line for line in lines if line.startswith("effort:"))
-    assert EMPTY_STATE in effort
+    # No bucket + no actuals → the whole EFFORT block collapses to the one
+    # dim awaiting-first-wave line (no per-metric ``effort:`` row).
+    assert _section(lines, "EFFORT") == [EFFORT_AWAITING]
 
 
 def test_effort_eu_no_active_phase_returns_zero_pair() -> None:
@@ -1041,7 +1085,7 @@ def test_velocity_eu_per_day_rejects_non_positive_days() -> None:
 def test_build_status_lines_gate_empty_state_when_no_audit() -> None:
     """No audit on the active iter → the GATES block shows the empty state."""
     lines = build_status_lines(_load(_PHASE_ITER_WAVE))
-    gate = next(line for line in lines if line.startswith("gate:"))
+    gate = _row(lines, "gate:")
     assert EMPTY_STATE in gate
 
 
@@ -1057,7 +1101,7 @@ def test_build_status_lines_gate_shows_n_of_m_progress() -> None:
         verdict=None,
     )
     lines = build_status_lines(state, mode="unicode")
-    gate = next(line for line in lines if line.startswith("gate:"))
+    gate = _row(lines, "gate:")
     assert "2/3" in gate  # two reported (pass + fail), one still running
     assert GATE_PASS in gate
     assert GATE_FAIL in gate
@@ -1076,7 +1120,7 @@ def test_build_status_lines_gate_collapses_to_verdict() -> None:
         audit_id="A12-P01",
     )
     lines = build_status_lines(state)
-    gate = next(line for line in lines if line.startswith("gate:"))
+    gate = _row(lines, "gate:")
     assert "A12-P01 pass" in gate
     assert "/" not in gate.split("gate:")[1]  # no N/M once collapsed
 
@@ -1092,10 +1136,56 @@ def test_build_status_lines_gate_ascii_mode() -> None:
         verdict=None,
     )
     lines = build_status_lines(state, mode="ascii")
-    gate = next(line for line in lines if line.startswith("gate:"))
+    gate = _row(lines, "gate:")
     assert "2/2" in gate  # both checks reported (pass + fail)
     assert GATE_PASS not in gate and GATE_FAIL not in gate  # no Unicode glyphs
     assert "P" in gate and "x" in gate
+
+
+# --------------------------------------------------------------------------
+# Live-row sigils — waves / audits / worktrees / gate gain a leading sigil
+# --------------------------------------------------------------------------
+
+
+def _gate_audit_state() -> State:
+    """Fixture-03 with a running iter-attached audit so a ``gate:`` row exists."""
+    return _state_with_audit(
+        status="running",
+        check_results=[{"name": "ruff_clean", "passed": True, "details": None}],
+        verdict=None,
+    )
+
+
+@pytest.mark.parametrize("label", ["waves:", "audits:", "worktrees:", "gate:"])
+def test_live_rows_carry_leading_sigil_unicode(label: str) -> None:
+    """Each live row opens with the unicode running sigil + a space."""
+    lines = build_status_lines(_gate_audit_state(), mode="unicode")
+    row = _row(lines, label)
+    prefix = f"{glyph(Sigil.RUNNING, mode='unicode')} "
+    assert row.startswith(prefix), f"{label!r} row missing leading sigil: {row!r}"
+    assert row[len(prefix) :].startswith(label)
+
+
+@pytest.mark.parametrize("label", ["waves:", "audits:", "worktrees:", "gate:"])
+def test_live_rows_carry_leading_sigil_ascii(label: str) -> None:
+    """ASCII mode swaps the sigil for its ASCII column glyph + a space."""
+    lines = build_status_lines(_gate_audit_state(), mode="ascii")
+    row = _row(lines, label)
+    prefix = f"{glyph(Sigil.RUNNING, mode='ascii')} "
+    assert row.startswith(prefix), f"{label!r} row missing leading sigil: {row!r}"
+    assert row[len(prefix) :].startswith(label)
+
+
+def test_static_pointer_rows_carry_no_sigil() -> None:
+    """The static project / phase / iter / progress rows carry no leading sigil.
+
+    The sigil is the live-row marker; the static pointer rows above it (and
+    the progress bar) keep their bare ``label:`` start so the sigil reads as
+    a contrast, not chrome on every row.
+    """
+    lines = build_status_lines(_load(_PHASE_ITER_WAVE), mode="unicode")
+    for label in ("project:", "phase:", "iter:", "progress:"):
+        assert any(line.startswith(label) for line in lines), label
 
 
 # --------------------------------------------------------------------------
