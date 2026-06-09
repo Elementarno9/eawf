@@ -17,6 +17,7 @@ import logging
 from collections import Counter
 from datetime import UTC, datetime
 
+from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     Confidence,
@@ -29,6 +30,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State, Wave
 from eawf.kernel.state.mutations import Mutation, MutationKind, apply_memory_add
+from eawf.observability.metrics.odr import iter_odr_advisory
 from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
 from eawf.workflow.lifecycle.spec import ITER_TRANSITIONS, validate_transition
 
@@ -120,11 +122,63 @@ def close_iter(state: State, *, iter_id: str, audit_id: str) -> Iter:
     it.closed_at = closed_at
     it.audit_id = audit_id
     _record_iter_close_memory(state, it=it, audit_id=audit_id, closed_at=closed_at)
+    _emit_iter_odr_advisory(state, iter_id=iter_id)
     if state.current.iter_id == iter_id:
         state.current.iter_id = None
         state.current.active_wave_ids = []
     logger.info(f"close_iter id={iter_id} audit={audit_id}")
     return it
+
+
+def _aggregate_closed_wave_criteria(state: State, *, iter_id: str) -> list[CriterionSpec]:
+    """Collect the typed success criteria of an iter's CLOSED waves.
+
+    Walks every wave under *iter_id* whose status is CLOSED and flattens
+    their :attr:`Wave.success_criteria` into one list. The ODR is computed
+    over the close-gating criteria, so only CLOSED waves contribute -- an
+    abandoned or never-claimed wave never gated the iter's verdict. The
+    result is the input to :func:`iter_odr_advisory`.
+
+    Args:
+        state: The state holding the wave rows.
+        iter_id: Canonical iter id whose closed waves are aggregated.
+
+    Returns:
+        The flattened criterion rows; an empty list when the iter has no
+        closed wave with typed criteria.
+    """
+    criteria: list[CriterionSpec] = []
+    for wave in state.waves.values():
+        if wave.iter_id == iter_id and wave.status is WaveStatus.CLOSED:
+            criteria.extend(wave.success_criteria)
+    return criteria
+
+
+def _emit_iter_odr_advisory(state: State, *, iter_id: str) -> None:
+    """Score the closing iter's criteria and surface an ODR advisory finding.
+
+    Aggregates the iter's CLOSED-wave criteria and delegates the floor
+    decision to :func:`iter_odr_advisory`, which logs the WARNING advisory
+    line when the Oracle-Determinism-Ratio falls below floor. When a finding
+    is returned this also emits a structured advisory finding line on the
+    iter-close result so the bit and ratio surface at close time. The path is
+    advisory only: an empty / all-deterministic criteria set takes the
+    sentinel path (``iter_odr_advisory`` returns ``None``) and nothing is
+    logged, and a sub-floor set never raises or blocks the close.
+
+    Args:
+        state: The state holding the wave rows.
+        iter_id: Canonical iter id being closed.
+    """
+    criteria = _aggregate_closed_wave_criteria(state, iter_id=iter_id)
+    advisory = iter_odr_advisory(criteria, scope_id=iter_id)
+    if advisory is None:
+        return
+    logger.warning(
+        f"emit_iter_odr_advisory iter={iter_id} odr={advisory.odr:.4f} "
+        f"floor={advisory.floor:.4f} required={advisory.required} "
+        f"finding=odr_below_floor severity=advisory"
+    )
 
 
 def _record_iter_close_memory(

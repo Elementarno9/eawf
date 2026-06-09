@@ -29,7 +29,9 @@ from eawf.observability.metrics.odr import (
     EMPTY_RATIO,
     EscapeFinding,
     EscapeStage,
+    OdrAdvisory,
     escape_rate,
+    iter_odr_advisory,
     odr_below_floor,
     oracle_determinism_ratio,
 )
@@ -178,6 +180,65 @@ def test_odr_below_floor_at_or_above_floor_is_silent(
 
 def test_odr_below_floor_default_floor_is_eighty_hundredths() -> None:
     assert pytest.approx(0.80) == DEFAULT_ODR_FLOOR
+
+
+# --- iter_odr_advisory: binding seam --------------------------------------
+
+
+def test_iter_odr_advisory_below_floor_returns_finding(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # ODR = 1 / 3 ~= 0.33, below the 0.80 default floor.
+    criteria = [
+        _criterion("CR-01", tier=OracleTier.T1_STATIC),
+        _criterion("CR-02", tier=OracleTier.T7_JURY),
+        _criterion("CR-03", tier=OracleTier.T7_JURY),
+    ]
+    with caplog.at_level(logging.WARNING, logger="eawf.observability.metrics.odr"):
+        advisory = iter_odr_advisory(criteria, scope_id="P03-I01")
+    assert advisory is not None
+    assert isinstance(advisory, OdrAdvisory)
+    assert advisory.scope_id == "P03-I01"
+    assert advisory.odr == pytest.approx(1 / 3)
+    assert advisory.floor == pytest.approx(DEFAULT_ODR_FLOOR)
+    assert advisory.required == 3
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "odr_below_floor" in warnings[0].getMessage()
+
+
+def test_iter_odr_advisory_at_or_above_floor_returns_none(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    criteria = [
+        _criterion("CR-01", tier=OracleTier.T1_STATIC),
+        _criterion("CR-02", tier=OracleTier.T4_CONTRACT),
+    ]
+    with caplog.at_level(logging.WARNING, logger="eawf.observability.metrics.odr"):
+        advisory = iter_odr_advisory(criteria, scope_id="P03-I01")
+    assert advisory is None
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def test_iter_odr_advisory_empty_criteria_returns_none(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Sentinel path: zero criteria -> EMPTY_RATIO (1.0) -> no advisory, no log.
+    with caplog.at_level(logging.WARNING, logger="eawf.observability.metrics.odr"):
+        advisory = iter_odr_advisory([], scope_id="P03-I01")
+    assert advisory is None
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def test_iter_odr_advisory_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        OdrAdvisory(
+            scope_id="P03-I01",
+            odr=0.5,
+            floor=0.8,
+            required=2,
+            severity="advisory",  # type: ignore[call-arg]
+        )
 
 
 # --- escape ledger --------------------------------------------------------

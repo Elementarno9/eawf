@@ -7,6 +7,7 @@ authoritative spec for the parent guards, idempotency, and closure rules.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 import pytest
@@ -15,6 +16,7 @@ from pydantic import ValidationError
 from eawf.kernel.spec.common import (
     CriterionSpec,
     ObserveVerb,
+    OracleTier,
     ProofLocus,
     QualityDimension,
     ResponseClause,
@@ -37,6 +39,7 @@ from eawf.kernel.state.models import (
     Decision,
     Project,
     State,
+    Wave,
 )
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
@@ -352,6 +355,112 @@ def test_close_iter_happy() -> None:
     it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
     assert it.status == IterStatus.CLOSED
     assert state.current.iter_id is None
+
+
+def _odr_criterion(cid: str, *, tier: OracleTier | None) -> CriterionSpec:
+    """Build a minimal required CriterionSpec carrying a given oracle tier."""
+    return CriterionSpec(
+        id=cid,
+        text=f"criterion {cid} succeeds and is observable",
+        kind="deterministic",
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="a deterministic check produces a bit verdict",
+        required=True,
+        oracle_tier=tier,
+    )
+
+
+def _insert_closed_wave(
+    state: State,
+    *,
+    wave_id: str,
+    iter_id: str,
+    criteria: list[CriterionSpec],
+) -> None:
+    """Insert a CLOSED wave under *iter_id* carrying typed *criteria*."""
+    now = datetime.now(UTC)
+    state.waves[wave_id] = Wave(
+        id=wave_id,
+        iter_id=iter_id,
+        title="w",
+        status=WaveStatus.CLOSED,
+        file_scopes=["src/"],
+        success_criteria=criteria,
+        opened_at=now,
+        closed_at=now,
+    )
+
+
+def test_close_iter_low_determinism_criteria_emits_odr_advisory(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    # ODR = 1 / 3 ~= 0.33, below the 0.80 default floor.
+    _insert_closed_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        criteria=[
+            _odr_criterion("CR-01", tier=OracleTier.T1_STATIC),
+            _odr_criterion("CR-02", tier=OracleTier.T7_JURY),
+            _odr_criterion("CR-03", tier=OracleTier.T7_JURY),
+        ],
+    )
+    with caplog.at_level(logging.WARNING):
+        it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    # Advisory never blocks the close.
+    assert it.status == IterStatus.CLOSED
+    messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    # The odr module logs the WARNING; close_iter surfaces the finding line.
+    assert any("odr_below_floor" in m and "scope='P01-I01'" in m for m in messages)
+    assert any(
+        "emit_iter_odr_advisory" in m and "iter=P01-I01" in m and "finding=odr_below_floor" in m
+        for m in messages
+    )
+
+
+def test_close_iter_all_deterministic_criteria_emits_no_advisory(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    _insert_closed_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        criteria=[
+            _odr_criterion("CR-01", tier=OracleTier.T1_STATIC),
+            _odr_criterion("CR-02", tier=OracleTier.T4_CONTRACT),
+        ],
+    )
+    with caplog.at_level(logging.WARNING):
+        it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    assert it.status == IterStatus.CLOSED
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def test_close_iter_zero_criteria_takes_sentinel_path_no_advisory(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    # A closed wave with no typed criteria -> sentinel (EMPTY_RATIO) path.
+    _insert_closed_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        criteria=[],
+    )
+    with caplog.at_level(logging.WARNING):
+        it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    assert it.status == IterStatus.CLOSED
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
 
 def test_edit_iter_plan_planned() -> None:

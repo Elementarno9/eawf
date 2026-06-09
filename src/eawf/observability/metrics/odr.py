@@ -166,6 +166,69 @@ def odr_below_floor(
     return True
 
 
+class OdrAdvisory(BaseModel):
+    """One advisory finding row surfaced when the ODR falls below floor.
+
+    Produced by :func:`iter_odr_advisory` and surfaced in an iter-close
+    result so a low-determinism criterion set is visible at close time. The
+    finding is advisory by construction -- it records the under-determined
+    ratio for an operator to read, it never gates the close. The model is
+    strict and frozen so a malformed advisory fails at construction rather
+    than skewing a downstream rollup.
+
+    Attributes:
+        scope_id: The iter (or wave / phase) the advisory was computed for.
+        odr: The computed Oracle-Determinism-Ratio in ``[0.0, 1.0]``.
+        floor: The advisory floor the ratio fell below.
+        required: Count of ``required`` criteria scored for the ratio.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scope_id: str
+    odr: float
+    floor: float
+    required: int
+
+
+def iter_odr_advisory(
+    criteria: list[CriterionSpec],
+    *,
+    scope_id: str,
+    floor: float = DEFAULT_ODR_FLOOR,
+) -> OdrAdvisory | None:
+    """Score *criteria* and return an advisory finding when below *floor*.
+
+    The binding seam between :func:`odr_below_floor` and an iter-close
+    result. Delegates the floor decision (and the WARNING log line) to
+    :func:`odr_below_floor`, then wraps a sub-floor verdict in a typed
+    :class:`OdrAdvisory`. When the ratio meets or exceeds the floor -- which
+    includes the sentinel empty / no-required-criteria path, where the ratio
+    is :data:`EMPTY_RATIO` (``1.0``) -- nothing is logged and ``None`` is
+    returned. The result is purely advisory: a caller surfaces the finding,
+    it never blocks the close.
+
+    Args:
+        criteria: The closing scope's typed criterion rows (e.g. the
+            aggregated criteria of an iter's closed waves).
+        scope_id: The iter / wave / phase id the advisory is attributed to.
+        floor: The advisory floor. Defaults to :data:`DEFAULT_ODR_FLOOR`.
+
+    Returns:
+        An :class:`OdrAdvisory` when the ODR is strictly below *floor*;
+        ``None`` otherwise (including the empty / no-required-criteria
+        sentinel path).
+    """
+    if not odr_below_floor(criteria, floor, scope_id=scope_id):
+        return None
+    return OdrAdvisory(
+        scope_id=scope_id,
+        odr=oracle_determinism_ratio(criteria),
+        floor=floor,
+        required=sum(1 for c in criteria if c.required),
+    )
+
+
 def escape_rate(findings: Iterable[EscapeFinding]) -> float:
     """Return the fraction of findings caught after the close gate.
 
@@ -192,7 +255,9 @@ __all__ = [
     "EMPTY_RATIO",
     "EscapeFinding",
     "EscapeStage",
+    "OdrAdvisory",
     "escape_rate",
+    "iter_odr_advisory",
     "odr_below_floor",
     "oracle_determinism_ratio",
 ]
