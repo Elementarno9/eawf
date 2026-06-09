@@ -269,6 +269,24 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: skill-prose-symbol-gate
+        name: skill-prose-symbol-gate
+        entry: uv run python tools/skill_prose_symbol_gate.py
+        language: system
+        # Prose-vs-symbol drift oracle for the frozen skill registry: parses
+        # every per-skill body string in
+        # src/eawf/surfaces/render/skills/registry.py and asserts each dotted
+        # module.attr / slash-form module reference it names imports
+        # (importlib) and each src/eawf path it names exists. A drifted
+        # reference (a renamed/moved symbol the prose still cites, a deleted
+        # path) fails the commit naming the offending token + the carrying
+        # skill. The matcher is conservative: bare prose nouns, --flags, and
+        # slash-joined option phrases are skipped (no false positive). Reads
+        # the live registry in-process and mutates nothing — so always-run
+        # with no file filter. BLOCKS: a drifted reference fails the commit.
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: jury-discrimination-gate
         name: jury-discrimination-gate
         entry: uv run python tools/jury_discrimination_gate.py
