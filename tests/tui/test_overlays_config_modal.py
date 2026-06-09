@@ -1751,7 +1751,11 @@ def test_config_enter_expands_multichoice_checklist() -> None:
             # Every declared choice renders as a checklist line.
             for choice in entry.choices or ():
                 assert choice in text
-            assert "[ ]" in text  # the empty default seeds all-cleared
+            # The empty default seeds all-cleared: every row wears the
+            # chrome check_off hollow square (reskin replaced "[ ]").
+            from eawf.surfaces.tui.widgets.sigils import chrome
+
+            assert chrome("check_off", mode="unicode") in text
 
     asyncio.run(body())
 

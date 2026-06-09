@@ -42,6 +42,7 @@ from eawf.surfaces.tui.app import (
     _swap_root_logging_to_textual,
     resolve_scope,
 )
+from eawf.surfaces.tui.snapshot import capture_screen_text
 from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks, load_state
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
@@ -722,8 +723,10 @@ def test_eaapp_first_paint_renders_brand() -> None:
             # The real RepoScreen now composes the shared chassis Header.
             header = app.screen.query_one(Header)
             assert BRAND in str(header.render())
-            # SVG screenshot is a true end-to-end paint proof.
-            assert BRAND in app.export_screenshot()
+            # Plain-text screen capture is the end-to-end paint proof; the
+            # SVG export splits the two-tone wordmark across text spans so
+            # the contiguous brand pair only survives in the text capture.
+            assert BRAND in capture_screen_text(app)
 
     asyncio.run(body())
 

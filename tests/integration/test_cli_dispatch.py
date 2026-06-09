@@ -37,11 +37,14 @@ def test_bare_invocation_prints_banner() -> None:
 
     Off-TTY (CliRunner has no real terminal) the TUI falls back to the
     deterministic status text — its first byte is the ``Eä`` brand per
-    the W10 contract.
+    the W10 contract. The reskinned wordmark is two-tone: an accent SGR
+    sits between the ``E`` and the ``ä``, so the brand is asserted as the
+    leading ``E`` followed by a tinted ``ä`` rather than a contiguous pair.
     """
     result = runner.invoke(app, [])
     assert result.exit_code == 0
-    assert "Eä" in result.stdout
+    assert result.stdout.startswith("E")
+    assert "ä" in result.stdout
 
 
 def test_version_text_envelope() -> None:

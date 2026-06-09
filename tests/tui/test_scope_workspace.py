@@ -30,6 +30,7 @@ from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import RepoScreen, ScopeScreen, WorkspaceScreen
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
+from eawf.surfaces.tui.snapshot import capture_screen_text
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
 from eawf.surfaces.tui.widgets.git_pane import DASH, GitFields
@@ -577,7 +578,10 @@ def test_workspace_screen_first_paint_renders_brand() -> None:
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
             await app.workers.wait_for_complete()
-            rendered = app.export_screenshot()
+            # Plain-text capture: the SVG export splits the two-tone
+            # wordmark across text spans, so the contiguous brand pair
+            # only survives in the text capture.
+            rendered = capture_screen_text(app)
             assert BRAND in rendered
             assert "workspace" in rendered
 

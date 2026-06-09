@@ -45,6 +45,7 @@ from eawf.kernel.state.models import State
 from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT
 from eawf.surfaces.tui.widgets.header import Header
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -159,16 +160,19 @@ def test_header_brand_renders_green_accent(theme_name: str) -> None:
 
 @pytest.mark.parametrize("theme_name", ["ea-dark", "ea-cb", "ea-light"])
 def test_closed_wave_row_renders_green_status_closed(theme_name: str) -> None:
-    """A CLOSED wave row's ``#`` glyph carries the green Wong ``status-closed``.
+    """A CLOSED wave row's sigil carries the green Wong ``status-closed``.
 
     The roadmap tree's Rich-parsed labels resolve their tint from the
     canonical Wong palette, so the closed glyph is the Wong green
-    ``#009e73`` on every theme (see the module docstring).
+    ``#009e73`` on every theme (see the module docstring). The glyph is
+    resolved through the sigils home (ASCII column -- the bare harness app
+    carries no ``render_mode`` so the tree falls back to ASCII) so a future
+    shape change cannot silently un-pin the colour assert.
     """
 
     async def body() -> None:
         _header_map, tree_map = await _capture_for_theme(theme_name)
-        closed_glyph_fg = tree_map.get("#")
+        closed_glyph_fg = tree_map.get(glyph(Sigil.CLOSED, mode="ascii"))
         assert closed_glyph_fg is not None, "closed-wave glyph not rendered"
         assert _WONG_STATUS_CLOSED in closed_glyph_fg
 

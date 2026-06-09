@@ -14,6 +14,7 @@ from pathlib import Path
 
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import RepoScreen, ScopeScreen
+from eawf.surfaces.tui.snapshot import capture_screen_text
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
 from eawf.surfaces.tui.widgets.git_pane import GitPane
@@ -85,7 +86,10 @@ def test_repo_screen_first_paint_renders_brand_and_data() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
-            rendered = app.export_screenshot()
+            # Plain-text capture: the SVG export splits the two-tone
+            # wordmark across text spans, so the contiguous brand pair
+            # only survives in the text capture.
+            rendered = capture_screen_text(app)
             assert BRAND in rendered
             # Status pane + roadmap tree both surface the project code.
             assert "QR" in rendered

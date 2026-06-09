@@ -277,6 +277,7 @@ Dispatch hook events through the Eä hook runner.
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
 | `plugin-doctor-drift` | Fail when ``plugin doctor --strict`` reports drift in the plugin tree. |
 | `run` | Dispatch a hook event read from stdin and emit the result envelope. |
+| `sigil-totality` | Assert every TUI-render status value resolves to a real ratified glyph. |
 | `vale-prose` | Run the Vale prose linter over Markdown and emit the findings. |
 | `validate-prose` | Compose every Layer-2 prose check over changed Markdown — the chokepoint. |
 
