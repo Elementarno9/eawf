@@ -4427,6 +4427,42 @@
       "scope_id": "P30-I02-W34",
       "status": "done",
       "updated_at": "2026-06-09T22:46:59.959008Z"
+    },
+    "P30-I03-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W01",
+      "scope_id": "P30-I03-W01",
+      "status": "done",
+      "updated_at": "2026-06-09T23:06:17.542697Z"
+    },
+    "P30-I03-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W04",
+      "scope_id": "P30-I03-W04",
+      "status": "done",
+      "updated_at": "2026-06-09T23:06:33.837099Z"
+    },
+    "P30-I03-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W07",
+      "scope_id": "P30-I03-W07",
+      "status": "done",
+      "updated_at": "2026-06-09T23:06:41.209484Z"
     }
   },
   "agent_sessions": {
@@ -14732,6 +14768,45 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I02-W34",
       "updated_at": "2026-06-09T22:46:35.917819Z"
+    },
+    "P30-I03-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W01-bucket-20260609T230553Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I03-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I03-W01",
+      "updated_at": "2026-06-09T23:05:53.103797Z"
+    },
+    "P30-I03-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W04-bucket-20260609T230554Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I03-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I03-W04",
+      "updated_at": "2026-06-09T23:05:54.527206Z"
+    },
+    "P30-I03-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W07-bucket-20260609T230556Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I03-W07",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I03-W07",
+      "updated_at": "2026-06-09T23:05:56.076979Z"
     }
   },
   "goals": {
@@ -17603,7 +17678,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T22:53:16.797622Z",
+  "updated_at": "2026-06-09T23:06:41.209833Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -68288,10 +68363,10 @@
       "blocks": [
         "P30-I03-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T22:54:31.587495Z",
+      "closed_at": "2026-06-09T23:06:17.542697Z",
+      "commit": "bb2d81ac1bae75a3e9723166da387c11126fd3bb",
       "deps": [],
       "description": "Relocate the 17-entry skill-name to body-model map from the CLI into the library so the engine can bind it without an upward import (CLI-is-dispatch). Add a canonical SKILL_BODY_MODELS dict plus a body_model_for lookup in workflow/skills/bodies; the CLI _skill_body_models becomes a thin re-export so skill list keeps its byte-stable fingerprint column.",
       "dispatch_history": [],
@@ -68300,28 +68375,60 @@
         "src/eawf/workflow/skills/bodies/__init__.py",
         "src/eawf/surfaces/cli/commands/skill.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/test_skill_body_registry.py",
+              "tests/unit/test_cli_skill.py",
+              "tests/unit/test_cli_skill_list_payload.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W01",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.758593Z",
-      "outcome": null,
+      "outcome": "SKILL_BODY_MODELS + body_model_for live in workflow/skills/bodies; CLI _skill_body_models re-exports the identical object (fingerprint byte-stable); KeyError on unknown name; 7 new + 33 CLI tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W01-C1",
-          "kind": "structural",
-          "measurable_signal": "pytest test_body_model_for_returns_registered_model and test_body_model_for_unknown_name_raises both pass; skill list golden unchanged",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_skill_body_registry.py asserts every canonical name resolves to a BaseModel subclass, KeyError names the unknown skill, and the CLI re-export is the identical object; the skill-list CLI suites stay green; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "A canonical SKILL_BODY_MODELS dict and a body_model_for(name) lookup live in the library under workflow/skills/bodies; the CLI _skill_body_models re-exports it and skill list's fingerprint column stays byte-stable. body_model_for resolves every canonical skill name to a BaseModel subclass and raises (never returns None) on an unknown name.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the body-registry + skill-list CLI suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A canonical SKILL_BODY_MODELS dict and a body_model_for(name) lookup live in the library under workflow/skills/bodies; the CLI _skill_body_models re-exports the same object so skill list's fingerprint column stays byte-stable; body_model_for resolves every canonical skill name to a BaseModel subclass and raises KeyError (never returns None) on an unknown name.",
           "waiver_reason": null
         }
       ],
@@ -68433,10 +68540,10 @@
     "P30-I03-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T22:54:32.072423Z",
+      "closed_at": "2026-06-09T23:06:33.837099Z",
+      "commit": "4d40c200abb0dec41e7302623b72333df474d244",
       "deps": [],
       "description": "Add a typed OutputStyle StrEnum (lean default, explain) and a frozen extra-forbid OutputStylePreset keyed off the six NEWCOMER_TEST_DIMENSIONS in clarity.py. lean = terse senior-dev prose (not caveman caps); explain toggles why_present + jargon_defined verbose. Resolves via the config chain as output.style and renders the house-style directive shipped into each vendor slot at plugin install. No L3 judge wired; pin the verbosity-bias landmine in a code docstring contract.",
       "dispatch_history": [],
@@ -68445,28 +68552,58 @@
         "src/eawf/platform/profiles/clarity.py",
         "src/eawf/platform/profiles/models.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/test_output_style.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W04",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.758976Z",
-      "outcome": null,
+      "outcome": "OutputStyle StrEnum (lean default, explain) + frozen extra-forbid OutputStylePreset over the six clarity dimensions; output.style via OutputBlock on ProfileBody with ValidationError on unknown; render_style_directive; verbosity-bias landmine pinned in docstring; 15 tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W04-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "pytest test_output_style_default_is_lean, test_output_style_explain_adds_why, test_output_style_unknown_value_raises, test_output_style_preset_extra_forbid, test_lean_preset_not_caveman_caps pass",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "measurable_signal": "test_output_style.py asserts lean default, explain-only why/jargon clauses, ValidationError on an unknown style, extra-key rejection on the preset, and the no-all-caps-fragment regex over the lean directive; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "OutputStyle resolves to lean by default; explain renders a directive with why/jargon clauses absent from lean; an unknown config output.style value raises ValidationError at load; OutputStylePreset is extra-forbid; and the lean directive asserts readable sentences (no all-caps fragment markers), pinning the not-caveman-caps clause.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the output-style preset suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "OutputStyle resolves to lean by default; explain renders a directive with why/jargon clauses absent from lean; an unknown config output.style value raises ValidationError at load; OutputStylePreset is extra-forbid and frozen; and the lean directive asserts readable sentences (no all-caps fragment markers), pinning the not-caveman-caps clause.",
           "waiver_reason": null
         }
       ],
@@ -68579,10 +68716,10 @@
       "blocks": [
         "P30-I03-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T22:54:32.550008Z",
+      "closed_at": "2026-06-09T23:06:41.209484Z",
+      "commit": "1cd8f13598990a57560fd234c839ef05733e078d",
       "deps": [],
       "description": "Bring registry.py per-skill prose to the /math-explainer bar against SHIPPED P29 symbols: fix the IntentBrief resolution error to kernel/spec/intent (P1), drop stale v0.4 stamps (P2), add advisory-by-default oracle/jury/wave-close-gate prose (P3), typed CriterionSpec + assign_oracle_tier (P4), the QualityDimension enum (P5), EAWF021/022 lints (P6), the live trust scorecard (P7), enforced EviBound at promotion (P8). Shipped reality only.",
       "dispatch_history": [],
@@ -68590,28 +68727,59 @@
       "file_scopes": [
         "src/eawf/surfaces/render/skills/registry.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "-k",
+              "registry and skill",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W07",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.759360Z",
-      "outcome": null,
+      "outcome": "registry.py prose reconciled to shipped P29 symbols (P1-P8): IntentBrief at kernel/spec/intent, v0.4 stamps dropped, advisory-by-default oracle/jury prose, CriterionSpec + QualityDimension + EAWF021/022 + trust scorecard + EviBound described as shipped; paired golden trees regenerated; 964 tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W07-C1",
-          "kind": "structural",
-          "measurable_signal": "tools/skill_prose_symbol_gate.py over reconciled registry.py exits 0; no v0.4 stamp remains on listed landed skills (grep)",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the registry/skill render suites plus the paired plugin-install golden trees pass against the reconciled prose; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "registry.py prose names live P29 symbols: the IntentBrief reference resolves to kernel/spec/intent, v0.4 stamps are dropped from landed skills, and the verify/trust/depth surface (run_oracle, cross-vendor jury, CriterionSpec, QualityDimension, EAWF021/022, trust scorecard, EviBound) is described as it ships today, with enforcement framed advisory-by-default. The SKILL-8 oracle over the reconciled prose exits 0.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the registry render + plugin-install golden suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "registry.py prose names live P29 symbols: the IntentBrief reference resolves to kernel/spec/intent, v0.4 stamps are dropped from landed skills, and the verify/trust/depth surface (run_oracle, cross-vendor jury, CriterionSpec, QualityDimension, EAWF021/022, trust scorecard, EviBound) is described as it ships today, with enforcement framed advisory-by-default; the paired plugin-install golden trees match the reconciled render.",
           "waiver_reason": null
         }
       ],
