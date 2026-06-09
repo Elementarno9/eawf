@@ -14,10 +14,14 @@ This module owns both:
   plain-text frame for ``workspace registry-status`` (and its JSON
   envelope's ``rendered`` field). Strictly read-only over the registry.
 
-Both renderers reuse the canonical brand literal (:data:`eawf.surfaces.render.brand.BRAND_LITERAL`)
-and the typed-state breadcrumb (:func:`eawf.surfaces.tui.widgets.header.build_breadcrumb`)
-so the headless surface stays byte-consistent with the interactive header.
-``width`` is honoured via :func:`textwrap.fill` so narrow callers wrap.
+Both renderers head their daemon-down brand frame with the SAME two-tone
+green ``Eä`` wordmark the interactive header paints, emitted via the shared
+:func:`eawf.surfaces.render.brand.render_wordmark_ansi` ANSI channel (the
+``E`` plain, the ``ä`` carrying the reskin-green accent) and threaded through
+:func:`~eawf.surfaces.tui.widgets.header.build_breadcrumb` for the trailing
+scope breadcrumb -- so the headless splash stays visually identical to the
+live header rather than the old colourless / teal head. ``width`` is honoured
+via :func:`textwrap.fill` so narrow callers wrap the body lines.
 
 This module replaces the two live consumers of the deleted legacy
 ``src/eawf/surfaces/tui/`` tree (its ``run_tui`` offline mode + its workspace
@@ -33,7 +37,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from eawf.surfaces.render.brand import BRAND_LITERAL
+from eawf.surfaces.render.brand import render_wordmark_ansi
 from eawf.surfaces.tui.state_binding import load_state
 from eawf.surfaces.tui.widgets.footer import DEFAULT_HINTS, format_hints
 from eawf.surfaces.tui.widgets.header import DEFAULT_PROJECT_CODE, build_breadcrumb
@@ -52,6 +56,31 @@ _BRAND_GAP: str = "  "
 #: missing or fails to load. The substring ``registry unavailable`` is
 #: part of the ``workspace registry-status`` text contract.
 _REGISTRY_UNAVAILABLE: str = "registry unavailable (read failed)"
+
+
+def _brand_head(breadcrumb: str) -> str:
+    """Render the offline daemon-down brand head ``Eä  <breadcrumb>``.
+
+    The headless brand frame paints the SAME two-tone green ``Eä`` wordmark
+    the interactive header (:func:`eawf.surfaces.tui.widgets.header.render_header`)
+    renders -- the ``E`` plain, the ``ä`` carrying the reskin-green accent --
+    so the daemon-down splash and the live app are visually identical rather
+    than the old colourless / teal head. The wordmark is emitted via the
+    shared :func:`eawf.surfaces.render.brand.render_wordmark_ansi` ANSI channel
+    (the header threads the same accent through its markup channel), so both
+    surfaces draw from one accent token and cannot drift apart. The visible
+    glyphs stay the ``Eä`` brand literal; only the accent layer wraps the
+    umlaut.
+
+    Args:
+        breadcrumb: The pre-rendered scope breadcrumb that trails the brand,
+            joined to the wordmark by the canonical two-space gap.
+
+    Returns:
+        ``"E<accent>ä<reset>  <breadcrumb>"`` -- the two-tone green wordmark,
+        the canonical gap, then the breadcrumb.
+    """
+    return f"{render_wordmark_ansi()}{_BRAND_GAP}{breadcrumb}"
 
 
 def _status_counts(state: State | None) -> dict[str, int]:
@@ -97,7 +126,8 @@ def build_status_text(state: State | None) -> str:
     The three-line frame is the non-TTY fallback contract for bare
     ``eawf`` / ``eawf tui``:
 
-    1. ``Eä  <breadcrumb>`` — brand outside-left of the scope breadcrumb.
+    1. ``Eä  <breadcrumb>`` — the two-tone green brand wordmark (the ``ä``
+       carries the reskin accent) outside-left of the scope breadcrumb.
     2. ``  project=<code> phases_open=N iters_open=N ...`` — a one-line
        lifecycle-count summary.
     3. ``keymap: <hints>`` — the shared footer key hints.
@@ -114,7 +144,7 @@ def build_status_text(state: State | None) -> str:
     if state is not None and state.project is not None:
         code = state.project.code
     return (
-        f"{BRAND_LITERAL}{_BRAND_GAP}{breadcrumb}\n"
+        f"{_brand_head(breadcrumb)}\n"
         f"  project={code} "
         f"phases_open={counts['phases_open']} "
         f"iters_open={counts['iters_open']} "
@@ -294,9 +324,12 @@ def offline_render(
     repo_count = len(registry.repos) if registry is not None else 0
     active = registry.active_code if registry is not None else None
 
+    # Body lines wrap to ``width``; the two-tone brand head is rendered
+    # separately and prepended verbatim. Its embedded ANSI accent escape
+    # carries no display width, so feeding it through ``textwrap.fill`` would
+    # mis-count the invisible bytes against the column budget -- the brand
+    # splash head is a fixed one-line label, not wrap-eligible prose.
     lines: list[str] = [
-        f"{BRAND_LITERAL}{_BRAND_GAP}{breadcrumb}",
-        "",
         "workspace",
         _strip_line(registry, is_stale_at=is_stale_at),
         _totals_line(registry),
@@ -318,7 +351,7 @@ def offline_render(
         f"keymap: {format_hints(DEFAULT_HINTS)}",
     ]
 
-    wrapped: list[str] = []
+    wrapped: list[str] = [_brand_head(breadcrumb), ""]
     for line in lines:
         if not line:
             wrapped.append("")

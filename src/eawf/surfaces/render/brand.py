@@ -63,6 +63,12 @@ ACCENT_HEX: str = "#16b384"
 _BOLD_ON: str = "\x1b[1m"
 _BOLD_OFF: str = "\x1b[22m"
 
+# ANSI SGR reset for the foreground colour layer only (``ESC[39m`` -- the
+# default-foreground select). Emitted by :func:`render_wordmark_ansi` to
+# close the accent span without resetting bold or background, mirroring the
+# scoped close ``[/]`` the markup channel uses.
+_FG_DEFAULT: str = "\x1b[39m"
+
 # Filesystem path to the committed Ea Seal mark (the single-colour
 # ``currentColor`` SVG with the evenodd-knockout disc + radiant star). It
 # is resolved relative to this module so a consumer reads the asset without
@@ -214,6 +220,66 @@ def render_wordmark_markup(accent_hex: str = ACCENT_HEX) -> str:
     return f"E[{accent_hex}]ä[/]"
 
 
+def accent_sgr(accent_hex: str = ACCENT_HEX) -> str:
+    """Return the ANSI 24-bit foreground SGR open sequence for *accent_hex*.
+
+    This is the single canonical translation of the ``#rrggbb`` accent into a
+    truecolor ``ESC[38;2;R;G;Bm`` select-graphic-rendition open code. Both the
+    plain-text wordmark channel (:func:`render_wordmark_ansi`) and any caller
+    that wants the offline frame's accent to match the interactive header's
+    :data:`ACCENT_HEX` route through here, so the accent token has exactly one
+    home and the two surfaces cannot drift to different greens.
+
+    Args:
+        accent_hex: A ``#rrggbb`` colour. Defaults to :data:`ACCENT_HEX` (the
+            reskin green) so the bare call matches the header wordmark.
+
+    Returns:
+        The ANSI SGR open sequence ``"\\x1b[38;2;R;G;Bm"`` with the three
+        decimal channel values parsed from *accent_hex*.
+
+    Raises:
+        ValueError: If *accent_hex* is not a ``#rrggbb`` 6-hex-digit literal.
+    """
+    if len(accent_hex) != 7 or not accent_hex.startswith("#"):
+        raise ValueError(f"accent_hex must be a #rrggbb literal: {accent_hex!r}")
+    try:
+        red = int(accent_hex[1:3], 16)
+        green = int(accent_hex[3:5], 16)
+        blue = int(accent_hex[5:7], 16)
+    except ValueError as exc:
+        raise ValueError(f"accent_hex carries non-hex digits: {accent_hex!r}") from exc
+    return f"\x1b[38;2;{red};{green};{blue}m"
+
+
+def render_wordmark_ansi(accent_hex: str = ACCENT_HEX) -> str:
+    """Render the two-tone Eä wordmark as an ANSI 24-bit colour string.
+
+    The plain-text counterpart to :func:`render_wordmark_markup`: the ``E``
+    (U+0045) stays in the default foreground and only the ``ä`` (U+00E4)
+    carries the accent, emitted as a truecolor SGR span so a terminal paints
+    the umlaut in the reskin green. This is the channel a non-Textual,
+    non-markup sink (the headless offline brand frame) consumes — a console
+    that does not interpret Rich markup would print ``render_wordmark_markup``
+    brackets literally, so the offline frame uses this ANSI form instead while
+    threading the same :data:`ACCENT_HEX` accent token via :func:`accent_sgr`.
+
+    Args:
+        accent_hex: The ``#rrggbb`` accent the ``ä`` carries. Defaults to
+            :data:`ACCENT_HEX` (the reskin green) so the offline frame matches
+            the interactive header.
+
+    Returns:
+        ``"E\\x1b[38;2;R;G;Bmä\\x1b[39m"`` — the ``E`` plain, the ``ä`` wrapped
+        in a truecolor foreground span closed by the foreground-default reset.
+
+    Raises:
+        ValueError: If *accent_hex* is not a ``#rrggbb`` 6-hex-digit literal
+            (propagated from :func:`accent_sgr`).
+    """
+    return f"E{accent_sgr(accent_hex)}ä{_FG_DEFAULT}"
+
+
 def ascii_wordmark() -> str:
     """Return the plain ASCII channel wordmark ``"Ea"`` — never coloured.
 
@@ -237,10 +303,12 @@ __all__ = [
     "NERD_FONT_GLYPHS",
     "SEAL_ASSET_PATH",
     "GlyphSet",
+    "accent_sgr",
     "ascii_wordmark",
     "bold",
     "is_tty",
     "render_breadcrumb_head",
+    "render_wordmark_ansi",
     "render_wordmark_markup",
     "select_glyphs",
 ]

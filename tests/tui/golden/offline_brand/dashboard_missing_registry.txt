@@ -1,0 +1,21 @@
+E[38;2;22;179;132mä[39m  EAWF
+
+workspace
+registry unavailable (read failed)
+Σ 0 repos  waves 0/0  EU —  PR —
+
+roadmap
+  repos: 0
+  active: -
+
+status
+  project: EAWF
+  registry: unavailable
+
+git
+  branch: -
+
+backlog
+  repos tracked: 0
+
+keymap: ↑↓ select  ·  Enter open  ·  w/r/u scope  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit

@@ -17,8 +17,14 @@ from pathlib import Path
 import orjson
 
 from eawf.kernel.state.models import State
-from eawf.surfaces.render.brand import BRAND_LITERAL
+from eawf.surfaces.render.brand import render_wordmark_ansi
 from eawf.surfaces.tui.offline import build_status_text, emit_status, offline_render
+
+#: The two-tone green brand head every offline frame now leads with. Asserting
+#: the full wordmark (not the bare ``Eä`` literal) keeps these contracts in
+#: lockstep with the W32 reskin -- the bare literal is no longer contiguous
+#: because the ANSI accent escape sits between the ``E`` and the ``ä``.
+_WORDMARK = render_wordmark_ansi()
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -35,7 +41,7 @@ def _load(path: Path) -> State:
 
 def test_build_status_text_none_state_carries_brand_and_keymap() -> None:
     text = build_status_text(None)
-    assert text.startswith(BRAND_LITERAL)
+    assert text.startswith(_WORDMARK)
     assert "keymap:" in text
     # Fresh-workspace placeholder code + all-zero counts.
     assert "project=EAWF" in text
@@ -45,7 +51,7 @@ def test_build_status_text_none_state_carries_brand_and_keymap() -> None:
 
 def test_build_status_text_active_fixture_counts() -> None:
     text = build_status_text(_load(_PHASE_ITER_WAVE))
-    assert text.startswith(BRAND_LITERAL)
+    assert text.startswith(_WORDMARK)
     assert "project=QR" in text
     assert "phases_open=1" in text
     assert "iters_open=1" in text
@@ -58,7 +64,7 @@ def test_build_status_text_active_fixture_counts() -> None:
 def test_build_status_text_has_three_lines() -> None:
     lines = build_status_text(None).split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith(BRAND_LITERAL)
+    assert lines[0].startswith(_WORDMARK)
     assert lines[2].startswith("keymap:")
 
 
@@ -71,7 +77,7 @@ def test_emit_status_missing_state_returns_zero(tmp_path: Path, capsys: object) 
     rc = emit_status(workspace=tmp_path, no_input=False, plain=True)
     assert rc == 0
     captured = capsys.readouterr()  # type: ignore[attr-defined]
-    assert BRAND_LITERAL in captured.out
+    assert _WORDMARK in captured.out
     assert "keymap:" in captured.out
 
 
@@ -111,7 +117,7 @@ def _write_registry(tmp_path: Path, *, active: str | None) -> Path:
 def test_offline_render_carries_brand_and_section_titles(tmp_path: Path) -> None:
     target = _write_registry(tmp_path, active="EAWF")
     rendered = offline_render(registry_path=target, now=datetime.now(UTC))
-    assert BRAND_LITERAL in rendered
+    assert _WORDMARK in rendered
     assert "EAWF" in rendered
     # Quadrant section titles the CLI contract asserts on.
     assert "roadmap" in rendered
@@ -122,7 +128,7 @@ def test_offline_render_carries_brand_and_section_titles(tmp_path: Path) -> None
 def test_offline_render_missing_registry_placeholder(tmp_path: Path) -> None:
     rendered = offline_render(registry_path=tmp_path / "absent.json")
     assert "registry unavailable" in rendered
-    assert BRAND_LITERAL in rendered
+    assert _WORDMARK in rendered
     # Section titles still render so the frame stays deterministic.
     assert "roadmap" in rendered
     assert "backlog" in rendered

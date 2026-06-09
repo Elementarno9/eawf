@@ -23,8 +23,16 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
+from eawf.surfaces.render.brand import render_wordmark_ansi
 
 runner = CliRunner()
+
+#: The two-tone green brand wordmark the offline frames head with. The rendered
+#: frame (text stdout AND the JSON ``rendered`` field) carries the ANSI accent
+#: escape between the ``E`` and the ``ä``, so the bare ``Eä`` literal is no
+#: longer contiguous; assert the full wordmark to stay in lockstep with the
+#: W32 offline reskin.
+_WORDMARK = render_wordmark_ansi()
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +193,9 @@ def test_registry_status_emits_rendered_frame(tmp_path: Path) -> None:
     )
     result = runner.invoke(app, ["workspace", "registry-status", "--registry-path", str(target)])
     assert result.exit_code == 0, result.stdout
+    # The CLI text branch routes through ``typer.echo``, which strips the
+    # wordmark's ANSI accent escape on a non-TTY stream, so the rendered
+    # terminal output carries the bare ``Eä`` glyphs contiguously.
     assert "Eä" in result.stdout
     assert "EAWF" in result.stdout
     # Quadrant pane titles must surface in the rendered frame.
@@ -211,7 +222,9 @@ def test_registry_status_json_envelope_carries_rendered(tmp_path: Path) -> None:
     assert payload["active_code"] == "EAWF"
     assert payload["count"] == 1
     assert "rendered" in payload
-    assert "Eä" in payload["rendered"]
+    # The raw JSON frame carries the two-tone wordmark (ANSI accent intact),
+    # so the bare ``Eä`` literal is non-contiguous; assert the full wordmark.
+    assert _WORDMARK in payload["rendered"]
 
 
 def test_registry_status_missing_registry_returns_placeholder_frame(tmp_path: Path) -> None:
@@ -227,6 +240,8 @@ def test_registry_status_missing_registry_returns_placeholder_frame(tmp_path: Pa
     )
     assert result.exit_code == 0
     assert "registry unavailable" in result.stdout
+    # ``typer.echo`` strips the wordmark's ANSI accent on a non-TTY stream, so
+    # the bare ``Eä`` glyphs remain contiguous in the terminal output.
     assert "Eä" in result.stdout
 
 

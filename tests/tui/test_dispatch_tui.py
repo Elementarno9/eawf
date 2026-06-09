@@ -20,10 +20,17 @@ from typer.testing import CliRunner
 
 import eawf.surfaces.cli.app as cli_app
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.render.brand import BRAND_LITERAL
+from eawf.surfaces.render.brand import render_wordmark_ansi
 
 if TYPE_CHECKING:
     pass
+
+#: The two-tone green brand wordmark the non-TTY status frame now heads with.
+#: Asserting the full wordmark (not the bare ``Eä`` literal) keeps the dispatch
+#: contract in lockstep with the W32 offline reskin -- the bare literal is no
+#: longer contiguous because the ANSI accent escape sits between the ``E`` and
+#: the ``ä``.
+_WORDMARK = render_wordmark_ansi()
 
 
 def _stub_dispatch(
@@ -113,7 +120,7 @@ def test_bare_cli_non_tty_emits_status(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--plain", "-w", str(tmp_path)])
     assert result.exit_code == 0
-    assert BRAND_LITERAL in result.stdout
+    assert _WORDMARK in result.stdout
     assert "keymap:" in result.stdout
 
 
@@ -121,7 +128,7 @@ def test_tui_subcommand_non_tty_emits_status(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["-w", str(tmp_path), "--plain", "tui"])
     assert result.exit_code == 0
-    assert BRAND_LITERAL in result.stdout
+    assert _WORDMARK in result.stdout
     assert "keymap:" in result.stdout
 
 
@@ -129,4 +136,4 @@ def test_bare_cli_no_input_emits_status(tmp_path: Path) -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--no-input", "-w", str(tmp_path)])
     assert result.exit_code == 0
-    assert BRAND_LITERAL in result.stdout
+    assert _WORDMARK in result.stdout

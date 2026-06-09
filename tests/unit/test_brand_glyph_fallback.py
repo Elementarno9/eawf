@@ -23,10 +23,12 @@ from eawf.surfaces.render.brand import (
     ASCII_GLYPHS,
     BRAND_LITERAL,
     NERD_FONT_GLYPHS,
+    accent_sgr,
     ascii_wordmark,
     bold,
     is_tty,
     render_breadcrumb_head,
+    render_wordmark_ansi,
     render_wordmark_markup,
     select_glyphs,
 )
@@ -199,3 +201,79 @@ def test_wordmark_markup_re_exported() -> None:
     """The new wordmark helpers are re-exported from the module surface."""
     assert brand.render_wordmark_markup is render_wordmark_markup
     assert brand.ascii_wordmark is ascii_wordmark
+
+
+# --------------------------------------------------------------------------
+# P30-I02-W32: ANSI accent channel for the headless offline brand frame
+# --------------------------------------------------------------------------
+
+
+def test_accent_sgr_translates_reskin_green_to_truecolor_open() -> None:
+    """``accent_sgr`` emits the ANSI 24-bit foreground open for the accent.
+
+    ``#16b384`` -> R=0x16=22, G=0xb3=179, B=0x84=132 in the
+    ``ESC[38;2;R;G;Bm`` select-graphic-rendition open sequence.
+    """
+    assert accent_sgr() == "\x1b[38;2;22;179;132m"
+    # The bare call defaults to ACCENT_HEX, so the two forms agree.
+    assert accent_sgr(ACCENT_HEX) == accent_sgr()
+
+
+def test_accent_sgr_accepts_arbitrary_hex() -> None:
+    """A caller may translate any ``#rrggbb`` accent (boundary: pure black/white)."""
+    assert accent_sgr("#000000") == "\x1b[38;2;0;0;0m"
+    assert accent_sgr("#ffffff") == "\x1b[38;2;255;255;255m"
+
+
+def test_accent_sgr_rejects_non_hash_prefixed_literal() -> None:
+    """Error path -- a literal without the ``#`` prefix raises ``ValueError``."""
+    with pytest.raises(ValueError, match="must be a #rrggbb literal"):
+        accent_sgr("16b384")
+
+
+def test_accent_sgr_rejects_wrong_length_literal() -> None:
+    """Error path -- a short / long literal raises ``ValueError``."""
+    with pytest.raises(ValueError, match="must be a #rrggbb literal"):
+        accent_sgr("#16b")
+    with pytest.raises(ValueError, match="must be a #rrggbb literal"):
+        accent_sgr("#16b384ff")
+
+
+def test_accent_sgr_rejects_non_hex_digits() -> None:
+    """Error path -- a 6-char body with non-hex digits raises ``ValueError``."""
+    with pytest.raises(ValueError, match="non-hex digits"):
+        accent_sgr("#zzggbb")
+
+
+def test_wordmark_ansi_carries_green_on_umlaut_not_on_e() -> None:
+    """The ANSI wordmark colours the ``ae`` green and leaves ``E`` plain.
+
+    The plain-text sibling of :func:`render_wordmark_markup`: the accent SGR
+    opens after the bare ``E`` and the foreground resets after the umlaut.
+    """
+    out = render_wordmark_ansi()
+    assert out == "E\x1b[38;2;22;179;132mä\x1b[39m"
+    # The E precedes the accent open, so it carries no accent.
+    assert out.startswith("E")
+    assert not out.startswith(accent_sgr())
+    # The accent open wraps the umlaut; the foreground-default closes it.
+    assert out == f"E{accent_sgr()}ä\x1b[39m"
+
+
+def test_wordmark_ansi_accepts_theme_resolved_accent() -> None:
+    """A caller may pass a theme-resolved accent to track the active palette."""
+    out = render_wordmark_ansi("#1a9988")
+    assert out == f"E{accent_sgr('#1a9988')}ä\x1b[39m"
+    assert accent_sgr() not in out
+
+
+def test_wordmark_ansi_propagates_bad_hex_validation() -> None:
+    """Error path -- a malformed accent hex propagates the ``ValueError``."""
+    with pytest.raises(ValueError, match="must be a #rrggbb literal"):
+        render_wordmark_ansi("not-a-hex")
+
+
+def test_ansi_helpers_re_exported() -> None:
+    """The new ANSI brand helpers are re-exported from the module surface."""
+    assert brand.accent_sgr is accent_sgr
+    assert brand.render_wordmark_ansi is render_wordmark_ansi
