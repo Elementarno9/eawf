@@ -4044,6 +4044,78 @@
       "status": "done",
       "updated_at": "2026-06-09T16:14:02.586392Z"
     },
+    "P30-I02-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W04",
+      "scope_id": "P30-I02-W04",
+      "status": "done",
+      "updated_at": "2026-06-09T16:57:21.222336Z"
+    },
+    "P30-I02-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W05",
+      "scope_id": "P30-I02-W05",
+      "status": "done",
+      "updated_at": "2026-06-09T16:48:20.944759Z"
+    },
+    "P30-I02-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W08",
+      "scope_id": "P30-I02-W08",
+      "status": "done",
+      "updated_at": "2026-06-09T16:48:25.667363Z"
+    },
+    "P30-I02-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W09",
+      "scope_id": "P30-I02-W09",
+      "status": "done",
+      "updated_at": "2026-06-09T16:57:27.661272Z"
+    },
+    "P30-I02-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W11",
+      "scope_id": "P30-I02-W11",
+      "status": "done",
+      "updated_at": "2026-06-09T16:49:09.820304Z"
+    },
+    "P30-I02-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W13",
+      "scope_id": "P30-I02-W13",
+      "status": "done",
+      "updated_at": "2026-06-09T16:49:23.831746Z"
+    },
     "P30-I02-W29": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -13924,6 +13996,84 @@
       "scope_id": "P30-I02-W02",
       "updated_at": "2026-06-09T16:13:59.508277Z"
     },
+    "P30-I02-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W04-bucket-20260609T164800Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W04",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W04",
+      "updated_at": "2026-06-09T16:48:00.237026Z"
+    },
+    "P30-I02-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W05-bucket-20260609T164804Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I02-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I02-W05",
+      "updated_at": "2026-06-09T16:48:04.992704Z"
+    },
+    "P30-I02-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W08-bucket-20260609T164821Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W08",
+      "updated_at": "2026-06-09T16:48:21.467796Z"
+    },
+    "P30-I02-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W09-bucket-20260609T164826Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W09",
+      "updated_at": "2026-06-09T16:48:26.182944Z"
+    },
+    "P30-I02-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W11-bucket-20260609T164832Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W11",
+      "updated_at": "2026-06-09T16:48:32.627904Z"
+    },
+    "P30-I02-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W13-bucket-20260609T164909Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W13",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W13",
+      "updated_at": "2026-06-09T16:49:09.923142Z"
+    },
     "P30-I02-W29": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I02-W29-bucket-20260609T161409Z",
@@ -15883,7 +16033,9 @@
         "P30-I14-W04",
         "P30-I14-W06",
         "P30-I14-W07",
-        "P30-I14-W09"
+        "P30-I14-W09",
+        "P30-I14-W10",
+        "P30-I14-W11"
       ]
     },
     "P30-I15": {
@@ -16793,7 +16945,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T16:14:11.459021Z",
+  "updated_at": "2026-06-09T16:57:27.661624Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -65009,10 +65161,10 @@
     "P30-I02-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:48:00.237018Z",
+      "closed_at": "2026-06-09T16:57:21.222336Z",
+      "commit": "d1ca9459bf84874a947ebecbb38ce29443b9ee16",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W02"
@@ -65024,27 +65176,57 @@
         "src/eawf/surfaces/tui/widgets/footer.py",
         "src/eawf/surfaces/tui/widgets/heartbeat.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_footer_heartbeat_green_accent_capture.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W04",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.789285Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W04-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts footer + heartbeat tokens resolve the rotated accent/warn/err vars.",
-          "oracle_tier": null,
+          "measurable_signal": "test_footer_heartbeat_green_accent_capture captures the footer active-mode token at #16b384, the needs_user badge at warn, and the heartbeat dot at accent/err via per-cell truecolor; reverting to teal #56b6c2 reds the gate; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the footer + heartbeat rotated-accent capture suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the footer active-mode token resolves the rotated accent, the needs_user badge resolves warn, and the heartbeat dot resolves accent/err through the rotated vars.",
           "waiver_reason": null
         }
@@ -65061,10 +65243,10 @@
         "P30-I02-W07",
         "P30-I02-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:48:04.992697Z",
+      "closed_at": "2026-06-09T16:48:20.944759Z",
+      "commit": "faa2442fe06159952e4d9152b30abcd65e938f50",
       "deps": [
         "P30-I02-W01"
       ],
@@ -65075,27 +65257,59 @@
         "src/eawf/surfaces/tui/widgets/eu_bar.py",
         "src/eawf/surfaces/tui/app.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_widgets_eu_bar.py",
+              "tests/snapshots/tui/test_bar_swap.py",
+              "tests/snapshots/tui/test_render_mode_flip.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W05",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.771005Z",
-      "outcome": null,
+      "outcome": "Reskin wave closed; gate G-01 over its scoped snapshot/Pilot test (deterministic T4).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W05-C1",
-          "kind": "structural",
-          "measurable_signal": "Bar pytest suite exits zero; importing render_bar_braille / BRAILLE_* raises ImportError; snapshot-pair on roadmap/status/workspace bar surfaces stays green.",
-          "oracle_tier": null,
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "eu_bar + bar_swap + render_mode_flip assert the unicode/ascii flip swaps every block glyph and the completion bar renders full block cells + the ascii ratio; the deletion proof asserts the removed BRAILLE_* names raise ImportError; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the eu_bar unit + bar-swap + render-mode-flip suites incl the Braille deletion proof",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "Re-pointed bar-swap and render-mode-flip tests assert the unicode/ascii flip swaps every block glyph and a completion bar renders full block cells (unicode) and the ascii ratio; the deletion proof asserts importing the removed BRAILLE_* names and render_bar_braille raises ImportError and the retired Braille test block is gone.",
           "waiver_reason": null
         }
@@ -65206,10 +65420,10 @@
     "P30-I02-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:48:21.467789Z",
+      "closed_at": "2026-06-09T16:48:25.667363Z",
+      "commit": "a83a937e436cb578cf42e52027b1bf108a2b64c8",
       "deps": [
         "P30-I02-W02"
       ],
@@ -65220,28 +65434,58 @@
         "src/eawf/surfaces/tui/widgets/attention_feed.py",
         "src/eawf/surfaces/tui/attention.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_attention_feed_hero.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W08",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.790872Z",
-      "outcome": null,
+      "outcome": "Reskin wave closed; gate G-01 over its scoped snapshot/Pilot test (deterministic T4).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W08-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden pins the calm idle vs needs-you warn-band copy; affordance_parity confirms Enter over an acute row fires its action.",
-          "oracle_tier": null,
+          "measurable_signal": "test_attention_feed_hero: zero-acute pins the calm nothing-needs-you literal + next-action sub-line and no warn band; one HIGH pause + one incident name each with its sigil + Enter to review, the footer badge agrees, and Enter fires the row action; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
-          "text": "A Pilot test with zero acute items asserts the calm idle render pinning the literal \"nothing needs you\" plus the next-action sub-line; a test with one HIGH pause and one open incident asserts the warn band names each with its sigil and shows Enter to review, the footer badge agrees, Enter over an acute row fires its action, and an idle feed never renders a warn band.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the two-state attention-feed hero Pilot suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A Pilot test with zero acute items asserts the calm idle render pinning the literal nothing needs you plus the next-action sub-line; a test with one HIGH pause and one open incident asserts the warn band names each with its sigil and shows Enter to review, the footer badge agrees, Enter over an acute row fires its action, and an idle feed never renders a warn band.",
           "waiver_reason": null
         }
       ],
@@ -65253,10 +65497,10 @@
     "P30-I02-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:48:26.182938Z",
+      "closed_at": "2026-06-09T16:57:27.661272Z",
+      "commit": "77e8b4f1873dc99a54655a805ebafc42d58f8961",
       "deps": [
         "P30-I02-W02"
       ],
@@ -65267,27 +65511,58 @@
         "src/eawf/surfaces/tui/widgets/git_pane.py",
         "src/eawf/surfaces/tui/widgets/backlog_table.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_widgets_git_pane.py",
+              "tests/tui/test_widgets_backlog_table.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W09",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.791363Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W09-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts backlog priority tint + leading sigil and git add/remove/change tint.",
-          "oracle_tier": null,
+          "measurable_signal": "test_widgets_backlog_table asserts priority-tinted rows (P0 err -> P2 muted) with a leading sigil; test_widgets_git_pane asserts the added/removed/changed counts tint through the rotated vars via per-cell truecolor; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the backlog-table + git-pane tint capture suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the backlog rows render priority-tinted with a leading sigil and the git pane renders the added/removed/changed tint through the rotated vars.",
           "waiver_reason": null
         }
@@ -65350,10 +65625,10 @@
         "P30-I02-W30",
         "P30-I13-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:48:32.627897Z",
+      "closed_at": "2026-06-09T16:49:09.820304Z",
+      "commit": "074fa87d5b1e8edadf1a8c3a8cb35dcaa867a8c8",
       "deps": [
         "P30-I02-W02"
       ],
@@ -65363,27 +65638,58 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/autopilot.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_autopilot_split.py",
+              "tests/tui/test_modes_autopilot.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W11",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.792465Z",
-      "outcome": null,
+      "outcome": "Reskin wave closed; gate G-01 over its scoped snapshot/Pilot test (deterministic T4).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W11-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts ready/blocked split + dispatch arrow; affordance_parity confirms the dispatch key fires.",
-          "oracle_tier": null,
+          "measurable_signal": "test_autopilot_split asserts the ready/blocked split (blocked rows name their dep), the dispatch chrome arrow + multi-select look via snapshot golden, and affordance_parity that d->dispatch_selected resolves to a live Binding and fires; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the autopilot ready/blocked split snapshot + affordance-parity suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the autopilot renders the ready/blocked split with blocked rows naming their dep, the dispatch chrome arrow, and the multi-select look; affordance_parity confirms the dispatch action key resolves to a live Binding and fires.",
           "waiver_reason": null
         }
@@ -65442,10 +65748,10 @@
     "P30-I02-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:49:09.923134Z",
+      "closed_at": "2026-06-09T16:49:23.831746Z",
+      "commit": "0416f1fa7cf60a7b321eee21cdf09cb9fc6e89d0",
       "deps": [
         "P30-I02-W02"
       ],
@@ -65455,27 +65761,57 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/trust.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_trust_jury_authority.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W13",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.793398Z",
-      "outcome": null,
+      "outcome": "Reskin wave closed; gate G-01 over its scoped snapshot/Pilot test (deterministic T4).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W13-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts the sigil scorecard + the literal honest-negative starved/no-data copy.",
-          "oracle_tier": null,
+          "measurable_signal": "test_trust_jury_authority asserts the scorecard renders sigil rows, number-based metric rows with dashes + sample counts, the overridden marker only on the authority row, and pins the literal starved/no-data copy with no fabricated trust number; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the trust JURY AUTHORITY scorecard snapshot suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the trust scorecard renders sigil rows where the mock shows them, keeps the number-based metric rows with dashes + sample counts, places the overridden marker only on the advisory-authority row, and pins the literal starved / no-data copy rather than a fabricated trust number.",
           "waiver_reason": null
         }
@@ -73341,6 +73677,225 @@
         }
       ],
       "title": "CLEAN-3B close-time spec-archive cascade behind an opt-in knob",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I14-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave_sha.py",
+        "tests/**/test_wave_sha*.py"
+      ],
+      "gates": [],
+      "id": "P30-I14-W10",
+      "intent": {
+        "desired_outcome": "one git pass builds a reused prefix->SHA index so drift scan is sub-2s and flat as waves grow; deterministic ref scope means kept worktrees never inject false drift; feeds I15 SHIP-4 audit",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "drift scan spawns one git log --all --grep per closed wave (754->~28s); --all lets worktree twin commits shadow the integration SHA so phantom pinned_mismatch flaps every run",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I14",
+      "opened_at": "2026-06-09T16:37:45.751872Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "detect_git_state_drift over the full 932-wave state runs under 2s (was ~28s) proven by a timed test asserting a single git log subprocess on the bulk path rather than one per closed wave",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "detect_git_state_drift over the full 932-wave state runs under 2s (was ~28s) proven by a timed test asserting a single git log subprocess on the bulk path rather than one per closed wave",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "a new build_wave_sha_index(repo_root) builds the prefix-and-trailer to SHA map in one git log pass and detect_git_state_drift + scan_commit_pins + derive_wave_sha all consume it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a new build_wave_sha_index(repo_root) builds the prefix-and-trailer to SHA map in one git log pass and detect_git_state_drift + scan_commit_pins + derive_wave_sha all consume it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "resolution is deterministic under twin commits so a wave subject on both an integration ref and a transient worktree/agent ref resolves to the integration SHA; a regression seeds a twin and asserts no phantom pinned_mismatch",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "resolution is deterministic under twin commits so a wave subject on both an integration ref and a transient worktree/agent ref resolves to the integration SHA; a regression seeds a twin and asserts no phantom pinned_mismatch",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "existing semantics preserved (canonical-then-alt prefix form + Eawf-Wave trailer fallback + most-recent-wins) with all existing wave_sha tests green plus boundary tests for empty history and git-absent graceful None",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "existing semantics preserved (canonical-then-alt prefix form + Eawf-Wave trailer fallback + most-recent-wins) with all existing wave_sha tests green plus boundary tests for empty history and git-absent graceful None",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "eawf wave verify-commits and wave show --commit output stays byte-stable for clean pins",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf wave verify-commits and wave show --commit output stays byte-stable for clean pins",
+          "waiver_reason": null
+        }
+      ],
+      "title": "CLEAN-4 batch wave-SHA derive in one git pass + deterministic scope",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I14-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/state/models.py",
+        "tests/**/*iter*",
+        "tests/**/*roadmap*"
+      ],
+      "gates": [],
+      "id": "P30-I14-W11",
+      "intent": {
+        "desired_outcome": "a model field-validator normalizes wave_ids to natural id order so state is canonical and self-heals on next write; all consumers get sorted order with no render-site sort to maintain",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "iter.wave_ids stores append order so 30 iters are non-monotonic; every display consumer iterates it raw and reads unsorted and raw state.json itself is out of id order",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I14",
+      "opened_at": "2026-06-09T16:51:47.569167Z",
+      "outcome": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Iter.wave_ids gains a field_validator that normalizes the list to natural_key id order on every model validation",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Iter.wave_ids gains a field_validator that normalizes the list to natural_key id order on every model validation",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "an iter with non-monotonic stored wave_ids (the P29-I01 shape) re-validates to ascending id order proven by a unit test on the validator",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "an iter with non-monotonic stored wave_ids (the P29-I01 shape) re-validates to ascending id order proven by a unit test on the validator",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "normalization is self-healing so loading then persisting state through the daemon rewrites the 30 divergent iters to ascending order with no separate migration script",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "normalization is self-healing so loading then persisting state through the daemon rewrites the 30 divergent iters to ascending order with no separate migration script",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "the TUI roadmap tree and eawf roadmap show --md render waves ascending by id with no render-site change since both already iterate iter.wave_ids",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the TUI roadmap tree and eawf roadmap show --md render waves ascending by id with no render-site change since both already iterate iter.wave_ids",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "add_wave_plan append plus the claim-order monotonic gate and DAG deps stay unchanged and affected snapshot goldens are regenerated with the full suite green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "add_wave_plan append plus the claim-order monotonic gate and DAG deps stay unchanged and affected snapshot goldens are regenerated with the full suite green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Normalize Iter.wave_ids to natural id order via model field-validator",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
