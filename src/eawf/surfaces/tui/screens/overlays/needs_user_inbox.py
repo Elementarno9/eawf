@@ -39,6 +39,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import Urgency
 from eawf.surfaces.tui.attention import AttentionKind, format_time_ago
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -46,6 +47,11 @@ if TYPE_CHECKING:
     from eawf.workflow.skills.needs_user import OpenPause
 
 logger = logging.getLogger(__name__)
+
+#: Render-mode label threaded into the sigil helpers when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
 
 
 def _pause_dismiss_key(pause: OpenPause) -> str:
@@ -125,29 +131,37 @@ def _row_label(pause: OpenPause) -> str:
     return pause.scope_id
 
 
-def _render_row(pause: OpenPause, *, now: datetime) -> str:
+def _render_row(pause: OpenPause, *, now: datetime, mode: str) -> str:
     """Render one pause as a single content-markup line.
 
-    The urgency token is tinted to draw the eye to the more-immediate
-    rows: ``URGENT`` / ``HIGH`` render in the ``$warn`` attention colour,
-    the calmer tiers in ``$text-muted``. A muted relative ``time-ago`` of
-    the pause's raise time trails right-aligned (blank when the pause has
-    no recorded raise timestamp). The colours resolve against the active
-    theme at render time via Textual content markup.
+    The row leads with the shared ``attention`` chrome sigil (the triangle,
+    or the ASCII ``!`` fallback) in the ``$warn`` attention colour so each
+    open pause is marked at a glance through the single
+    :mod:`~eawf.surfaces.tui.widgets.sigils` home. The urgency token is
+    tinted to draw the eye to the more-immediate rows: ``URGENT`` / ``HIGH``
+    render in ``$warn``, the calmer tiers in ``$text-muted``. The pause's
+    scope / session label names it in the green ``$accent`` and a muted
+    relative ``time-ago`` of the pause's raise time trails right-aligned
+    (blank when the pause has no recorded raise timestamp). The colours
+    resolve against the active theme at render time via Textual content
+    markup.
 
     Args:
         pause: The pause row to render.
         now: The reference instant the ``time-ago`` is measured from.
+        mode: The App's resolved render-mode label (``"ascii"`` or unicode),
+            selecting the attention sigil's glyph column.
 
     Returns:
         A content-markup string for one :class:`~textual.widgets.Static`.
     """
+    sigil = chrome("attention", mode=mode)
     cell = f"{pause.urgency.value:<8}"
     tier = f"[$warn]{cell}[/]" if _is_attention(pause.urgency) else cell
     label = _row_label(pause)
     ago = format_time_ago(pause.occurred_at, now)
     ago_cell = f"  [$text-muted]{ago:>8}[/]" if ago else ""
-    return f"{tier} [$accent]{label}[/]  {pause.question.question}{ago_cell}"
+    return f"[$warn]{sigil}[/] {tier} [$accent]{label}[/]  {pause.question.question}{ago_cell}"
 
 
 def _is_attention(urgency: Urgency) -> bool:
@@ -252,14 +266,25 @@ class NeedsUserInbox(ModalScreen[None]):
         self._now = now if now is not None else datetime.now(UTC)
 
     def compose(self) -> ComposeResult:
-        """Yield the titled card, the ranked pause list (or note), and hint."""
+        """Yield the titled card, the ranked pause list (or note), and hint.
+
+        When the pause set is empty the list collapses to the literal
+        :data:`EMPTY_INBOX_TEXT` calm note -- no fabricated pause row is
+        emitted, so an empty inbox never paints a hollow card masquerading
+        as an open pause.
+        """
+        mode = self._render_mode()
+        sigil = chrome("attention", mode=mode)
         with VerticalScroll(id="inbox-card"):
-            yield Static(f"needs_user inbox - {len(self._pauses)}", classes="inbox-title")
+            yield Static(
+                f"[$warn]{sigil}[/] [$accent]needs_user inbox[/] - {len(self._pauses)}",
+                classes="inbox-title",
+            )
             with VerticalScroll(id="inbox-list"):
                 if self._pauses:
                     for index, pause in enumerate(self._pauses):
                         yield Static(
-                            _render_row(pause, now=self._now),
+                            _render_row(pause, now=self._now, mode=mode),
                             classes="inbox-row",
                             id=f"inbox-row-{index}",
                         )
@@ -270,11 +295,35 @@ class NeedsUserInbox(ModalScreen[None]):
             )
 
     def on_mount(self) -> None:
-        """Paint the initial highlight on the first row (when any)."""
+        """Paint the initial highlight, then watch for a render-mode flip.
+
+        Wires a ``render_mode`` watcher so a unicode <-> ASCII flip repaints
+        the inbox glyphs (the title + per-row attention sigils) through the
+        same row rebuild a dismiss drives.
+        """
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         if not self._pauses:
             self.selected = -1
             return
         self._repaint_selection()
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the inbox glyphs when the App's render mode flips."""
+        self.run_worker(self._rebuild_rows(), exclusive=True)
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the attention glyph to its
+        ASCII column; falls back to the unicode column under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
 
     def watch_selected(self) -> None:
         """Repaint the row highlight when the selection moves."""
@@ -350,15 +399,23 @@ class NeedsUserInbox(ModalScreen[None]):
         ``inbox-row-*`` ids cannot collide with the outgoing ones
         (``DuplicateIds``), mirroring the Home band's rebuild discipline.
         """
+        mode = self._render_mode()
+        sigil = chrome("attention", mode=mode)
         listing = self.query_one("#inbox-list", VerticalScroll)
         await listing.remove_children()
-        self.query_one(".inbox-title", Static).update(f"needs_user inbox - {len(self._pauses)}")
+        self.query_one(".inbox-title", Static).update(
+            f"[$warn]{sigil}[/] [$accent]needs_user inbox[/] - {len(self._pauses)}"
+        )
         if not self._pauses:
             await listing.mount(Static(EMPTY_INBOX_TEXT, classes="inbox-empty"))
             return
         await listing.mount_all(
             [
-                Static(_render_row(pause, now=self._now), classes="inbox-row", id=f"inbox-row-{i}")
+                Static(
+                    _render_row(pause, now=self._now, mode=mode),
+                    classes="inbox-row",
+                    id=f"inbox-row-{i}",
+                )
                 for i, pause in enumerate(self._pauses)
             ]
         )

@@ -35,10 +35,17 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.sigils import chrome
+
 if TYPE_CHECKING:
     from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 logger = logging.getLogger(__name__)
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
 
 
 class NeedsUserModal(ModalScreen[str]):
@@ -72,7 +79,7 @@ class NeedsUserModal(ModalScreen[str]):
     }
     NeedsUserModal .needs-user-option {
         height: auto;
-        color: $text-muted;
+        color: $accent;
         padding: 0 1;
     }
     NeedsUserModal .needs-user-option.-selected {
@@ -119,19 +126,61 @@ class NeedsUserModal(ModalScreen[str]):
         self._labels: tuple[str, ...] = tuple(opt.label for opt in question.options)
 
     def compose(self) -> ComposeResult:
-        """Yield the question, the option list, and the keymap hint."""
+        """Yield the sigil-marked question, the option chips, and the hint.
+
+        The question header leads with the shared ``attention`` chrome sigil
+        (the triangle, or the ASCII ``!`` fallback) in the ``$warn``
+        attention colour so the prompt reads as a pause demanding the
+        operator's eye, resolved through the single
+        :mod:`~eawf.surfaces.tui.widgets.sigils` home. Each option renders as
+        a green ``$accent`` chip prefixed with a leading dot marker.
+        """
+        mode = self._render_mode()
+        sigil = chrome("attention", mode=mode)
         with Vertical(id="needs-user-box"):
-            yield Static(self._question.question, classes="needs-user-question")
+            yield Static(
+                f"[$warn]{sigil}[/] {self._question.question}",
+                classes="needs-user-question",
+            )
             with VerticalScroll():
                 for index, option in enumerate(self._question.options):
-                    yield Static(option.label, classes="needs-user-option", id=f"option-{index}")
+                    yield Static(
+                        f"- {option.label}", classes="needs-user-option", id=f"option-{index}"
+                    )
                     if option.description:
                         yield Static(option.description, classes="needs-user-desc")
             yield Static("[ ↑/↓ select · Enter choose · Esc defer ]", classes="needs-user-hint")
 
     def on_mount(self) -> None:
-        """Paint the initial highlight on the first option."""
+        """Paint the initial highlight, then watch for a render-mode flip.
+
+        Wires a ``render_mode`` watcher so a unicode <-> ASCII flip repaints
+        the question header's attention sigil.
+        """
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._repaint_options()
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the question header sigil when the App's render mode flips."""
+        mode = self._render_mode()
+        sigil = chrome("attention", mode=mode)
+        self.query_one(".needs-user-question", Static).update(
+            f"[$warn]{sigil}[/] {self._question.question}"
+        )
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the attention glyph to its
+        ASCII column; falls back to the unicode column under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
 
     def watch_selected(self) -> None:
         """Repaint the option highlight when the selection moves."""
