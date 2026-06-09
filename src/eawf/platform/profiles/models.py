@@ -47,6 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.audit import AuditCadence
 from eawf.kernel.spec.research_campaign import ResearchProfileBlock
+from eawf.platform.profiles.clarity import DEFAULT_OUTPUT_STYLE, OutputStyle
 from eawf.platform.render_block import DEFAULT_RENDER_BLOCK_TIER, RenderBlockTier
 
 
@@ -280,6 +281,35 @@ class VerifyBlock(BaseModel):
     checkpoint: CheckpointBlock = Field(default_factory=CheckpointBlock)
 
 
+class OutputBlock(BaseModel):
+    """Profile-fed house output-style configuration.
+
+    Mounted on :attr:`ProfileBody.output` and resolved through the config
+    chain as ``output.style``. The single ``style`` leaf selects the house
+    output style the directive renderer
+    (:func:`eawf.platform.profiles.clarity.render_style_directive`) ships into
+    each vendor slot at plugin install. Both styles cover the same six
+    newcomer-test dimensions; they differ only in directive verbosity.
+
+    The field is a closed :class:`~eawf.platform.profiles.clarity.OutputStyle`
+    enum, so an unknown ``output.style`` token in a profile YAML fails the
+    profile load with a :class:`ValidationError` rather than silently
+    defaulting. The default is
+    :data:`~eawf.platform.profiles.clarity.DEFAULT_OUTPUT_STYLE`
+    (``lean``), so a profile that omits ``output:`` resolves to the terse
+    senior-developer style.
+
+    Attributes:
+        style: House output style token. Defaults to ``lean``; ``explain``
+            opts into the verbose directive. An unknown token raises
+            :class:`ValidationError` at the load boundary.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    style: OutputStyle = DEFAULT_OUTPUT_STYLE
+
+
 class InstrumentReq(BaseModel):
     """A single external-tool requirement declared by a profile.
 
@@ -402,6 +432,13 @@ class ProfileBody(BaseModel):
     participate in last-non-``None``-wins composition, mirroring
     ``dispatch_session_policy`` (a downstream profile that sets the block
     wins).
+
+    ``output`` (P30-I03-W04) mounts the typed :class:`OutputBlock`, resolved
+    through the config chain as ``output.style``. It selects the house output
+    style the directive renderer ships into each vendor slot at plugin
+    install. Defaults to a ``lean`` block via the default factory, so a
+    profile that omits ``output:`` resolves to the terse style; an unknown
+    ``output.style`` token raises :class:`ValidationError` at load.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -421,6 +458,7 @@ class ProfileBody(BaseModel):
     dispatch_session_policy: Literal["fresh", "continue", "hybrid"] | None = None
     verify: VerifyBlock | None = None
     research: ResearchProfileBlock | None = None
+    output: OutputBlock = Field(default_factory=OutputBlock)
 
 
 class ComposedProfile(BaseModel):

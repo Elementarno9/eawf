@@ -39,9 +39,10 @@ place, and ``extra="forbid"`` keeps a typo in a future blocklist row a
 from __future__ import annotations
 
 import re
+from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 #: The single gate the whole doc-clarity standard reduces to. Rendered
 #: verbatim in the ``clarity-contract`` core-profile block and quoted by the
@@ -106,6 +107,141 @@ NEWCOMER_TEST_DIMENSIONS: tuple[ClarityDimension, ...] = (
         blocking_for_description=True,
     ),
 )
+
+
+class OutputStyle(StrEnum):
+    """Closed set of house output styles a profile selects via ``output.style``.
+
+    The string values are the on-the-wire / config / CLI tokens; the enum is
+    the single source the config leaf, the directive renderer, and any future
+    style consumer resolve against. Both members tune the same six
+    :data:`NEWCOMER_TEST_DIMENSIONS` — they differ only in how verbose the
+    rendered house-style directive is, not in which dimensions it covers.
+
+    Members:
+        LEAN: Terse senior-developer prose (the default). Every dimension is
+            stated in one tight clause; no clause is expanded into a worked
+            example. This is NOT caveman / all-caps shorthand: the directive
+            still reads as ordinary readable sentences a newcomer parses
+            without decoding fragment markers.
+        EXPLAIN: Verbose variant that expands the ``why_present`` and
+            ``jargon_defined`` dimensions with an extra "why this matters"
+            clause each. Useful when the audience is brand new and benefits
+            from the motivation spelled out, at the cost of more tokens.
+    """
+
+    LEAN = "lean"
+    EXPLAIN = "explain"
+
+
+#: Canonical default house output style. The ``output.style`` config leaf and
+#: any caller that omits a style fall back to this value, so the resolved
+#: style is :attr:`OutputStyle.LEAN` until a profile opts into ``explain``.
+DEFAULT_OUTPUT_STYLE: OutputStyle = OutputStyle.LEAN
+
+
+class OutputStylePreset(BaseModel):
+    """House-style preset keyed off the six :data:`NEWCOMER_TEST_DIMENSIONS`.
+
+    One preset per :class:`OutputStyle` member. The preset carries, per
+    clarity-dimension key, the directive clause shipped into each vendor slot
+    at plugin install (the text :func:`render_style_directive` joins into one
+    house-style directive string). Keying the clauses off the dimension keys
+    keeps the directive and the scored newcomer test in lockstep: a clause
+    exists for exactly the dimensions the test scores, so adding a dimension
+    is a typed prompt to add its clause rather than a silently missing rule.
+
+    The ``explain`` preset deliberately biases toward verbosity: it expands
+    the ``why_present`` and ``jargon_defined`` clauses with extra motivation
+    prose. That bias is a feature for a brand-new audience but a hazard for an
+    automated selector. THE VERBOSITY-BIAS CONTRACT: the ``explain`` style
+    must never be auto-selected by an L3 (or any) judge — a judge that scores
+    "more thorough" prose higher would always prefer ``explain`` and inflate
+    token cost fleet-wide. Style selection stays an explicit, operator-owned
+    ``output.style`` config choice; no scoring path may flip it.
+
+    Attributes:
+        style: The :class:`OutputStyle` this preset renders the directive
+            for. Recorded so a caller holding a preset can recover its style.
+        clauses: Per-dimension directive clause, keyed by
+            :attr:`ClarityDimension.key`. Every key in
+            :data:`NEWCOMER_TEST_DIMENSIONS` is present; each value is one
+            readable sentence (not an all-caps fragment).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    style: OutputStyle
+    clauses: dict[str, str] = Field(min_length=1)
+
+
+#: Per-style directive clauses keyed by clarity-dimension key. The ``lean``
+#: column is one terse senior-dev sentence per dimension; the ``explain``
+#: column is the same sentence with an extra motivation clause folded into the
+#: ``why_present`` and ``jargon_defined`` rows so those two read verbose while
+#: the rest stay terse. Both columns are readable sentences, never all-caps
+#: fragment markers — the ``lean`` directive is terse, not caveman.
+_LEAN_CLAUSES: dict[str, str] = {
+    "audience_fit": "Write for a newcomer, not an insider.",
+    "jargon_defined": "Gloss each internal code on first use.",
+    "why_present": "State the motivation, not only the change.",
+    "scannable": "Keep paragraphs short; use headings and lists.",
+    "reference_hygiene": "Cite with dense [N] markers, not inline path soup.",
+    "not_a_title_duplicate": "Make the description add to the title, not repeat it.",
+}
+_EXPLAIN_CLAUSES: dict[str, str] = {
+    "audience_fit": "Write for a newcomer, not an insider.",
+    "jargon_defined": (
+        "Gloss each internal code on first use, because a reader who has not "
+        "seen the code cannot recover its meaning from the prose alone."
+    ),
+    "why_present": (
+        "State the motivation, not only the change, because the why is what a "
+        "future reader needs to decide whether the change still applies."
+    ),
+    "scannable": "Keep paragraphs short; use headings and lists.",
+    "reference_hygiene": "Cite with dense [N] markers, not inline path soup.",
+    "not_a_title_duplicate": "Make the description add to the title, not repeat it.",
+}
+
+
+#: The shipped preset per :class:`OutputStyle` member. Built from the clause
+#: tables above so each preset's keys are exactly the
+#: :data:`NEWCOMER_TEST_DIMENSIONS` keys.
+OUTPUT_STYLE_PRESETS: dict[OutputStyle, OutputStylePreset] = {
+    OutputStyle.LEAN: OutputStylePreset(style=OutputStyle.LEAN, clauses=_LEAN_CLAUSES),
+    OutputStyle.EXPLAIN: OutputStylePreset(style=OutputStyle.EXPLAIN, clauses=_EXPLAIN_CLAUSES),
+}
+
+
+def render_style_directive(style: OutputStyle = DEFAULT_OUTPUT_STYLE) -> str:
+    """Render the house-style directive string for *style*.
+
+    This is the text shipped into each vendor slot at plugin install. It walks
+    :data:`NEWCOMER_TEST_DIMENSIONS` in rendered order and joins the preset's
+    per-dimension clause into one directive, so the directive always covers
+    every scored dimension and never drifts from the newcomer test.
+
+    The ``explain`` directive carries the verbose ``why_present`` /
+    ``jargon_defined`` clauses absent from the ``lean`` directive; the
+    ``lean`` directive is terse but still made of readable sentences (no
+    all-caps fragment markers) per the not-caveman-caps contract on
+    :class:`OutputStylePreset`.
+
+    Args:
+        style: The house output style to render. Defaults to
+            :data:`DEFAULT_OUTPUT_STYLE` (:attr:`OutputStyle.LEAN`).
+
+    Returns:
+        A newline-joined directive string, one ``- `` bullet per clarity
+        dimension, prefixed by a one-line house-style header.
+    """
+    preset = OUTPUT_STYLE_PRESETS[style]
+    header = f"House style ({style.value}): write to the newcomer test."
+    lines = [header]
+    for dimension in NEWCOMER_TEST_DIMENSIONS:
+        lines.append(f"- {preset.clauses[dimension.key]}")
+    return "\n".join(lines)
 
 
 #: Glossary of terms a newcomer-facing artifact may use without first
@@ -289,11 +425,16 @@ def internal_codes_in(text: str) -> list[str]:
 __all__ = [
     "APPROVED_TERMS",
     "COMMIT_SUBJECT_PREFIX_EXEMPT",
+    "DEFAULT_OUTPUT_STYLE",
     "INTERNAL_CODE_BLOCKLIST",
     "NEWCOMER_TEST",
     "NEWCOMER_TEST_DIMENSIONS",
+    "OUTPUT_STYLE_PRESETS",
     "ClarityDimension",
     "InternalCodePattern",
+    "OutputStyle",
+    "OutputStylePreset",
     "internal_codes_in",
     "is_approved_term",
+    "render_style_directive",
 ]
