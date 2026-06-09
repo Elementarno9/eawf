@@ -22,7 +22,6 @@ from eawf.surfaces.render.bars import BLOCK_EIGHTHS
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
 from eawf.surfaces.tui.widgets.eu_bar import (
-    BRAILLE_BASE,
     EMPTY_STATE,
     render_bar_plain,
     render_size_bar,
@@ -1074,11 +1073,6 @@ def test_bars_flush_right_align_across_depths() -> None:
 # --------------------------------------------------------------------------
 
 
-def _has_braille(text: str) -> bool:
-    """Return ``True`` if *text* carries any Braille-Patterns glyph."""
-    return any(BRAILLE_BASE <= ord(ch) <= BRAILLE_BASE + 0xFF for ch in text)
-
-
 def _has_block(text: str) -> bool:
     """Return ``True`` if *text* carries any block-eighths glyph."""
     return any(ch in BLOCK_EIGHTHS for ch in text)
@@ -1161,7 +1155,7 @@ def _write_state(state: State, tmp_path: Path) -> Path:
     return state_path
 
 
-def test_wave_burn_bar_braille_mode_via_app(tmp_path: Path) -> None:
+def test_wave_burn_bar_unicode_mode_via_app(tmp_path: Path) -> None:
     """Under the real :class:`EaApp` (unicode mode) the burn bar uses block-eighths."""
     state_path = _write_state(_state_wave_token_burn(), tmp_path)
 
@@ -1169,7 +1163,7 @@ def test_wave_burn_bar_braille_mode_via_app(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            app.render_mode = "braille"
+            app.render_mode = "unicode"
             await settle_screen(pilot)
             tree = app.screen.query_one(RoadmapTree)
             label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
@@ -1190,7 +1184,7 @@ def test_wave_burn_bar_ascii_mode_via_app(tmp_path: Path) -> None:
             await settle_screen(pilot)
             tree = app.screen.query_one(RoadmapTree)
             label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]
-            assert not _has_braille(label)  # no braille glyphs in ascii mode
+            assert not _has_block(label)  # no block-eighths glyphs in ascii mode
             assert "#" in label  # the ascii fill glyph
 
     asyncio.run(body())
@@ -1338,7 +1332,7 @@ def test_wave_row_size_bar_repaints_on_render_mode_flip(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            app.render_mode = "braille"
+            app.render_mode = "unicode"
             await settle_screen(pilot)
             tree = app.screen.query_one(RoadmapTree)
             block_label = str(_node_by_data(tree, "P01-I01-W01").label)  # type: ignore[attr-defined]

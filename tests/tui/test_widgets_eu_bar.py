@@ -15,22 +15,20 @@ from rich.text import Text
 from textual.app import ComposeResult
 
 import eawf.surfaces.tui.app as eaapp_mod
+import eawf.surfaces.tui.widgets.eu_bar as eu_bar_mod
 from eawf.surfaces.render.bars import BLOCK_FULL
 from eawf.surfaces.tui.app import EaApp, probe_braille_coverage, resolve_render_mode
 from eawf.surfaces.tui.widgets.eu_bar import (
     _BUCKET_FIELD_WIDTH,
     BAR_CELLS,
-    BRAILLE_BASE,
-    BRAILLE_LEFT_COL,
-    BRAILLE_RIGHT_COL,
-    BRAILLE_SUBCOLS,
+    COMPLETION_FULL,
+    COMPLETION_REMAINDER,
     DEFAULT_BAND_PALETTE,
     EMPTY_STATE,
     GLYPH_EMPTY,
     GLYPH_FULL,
     EUBar,
     band_var,
-    render_bar_braille,
     render_bar_markup,
     render_bar_plain,
     render_bar_rich,
@@ -40,10 +38,6 @@ from eawf.surfaces.tui.widgets.eu_bar import (
 )
 
 from ._palette_harness import PaletteHarnessApp
-
-_BRAILLE_FULL = chr(BRAILLE_BASE | BRAILLE_LEFT_COL | BRAILLE_RIGHT_COL)
-_BRAILLE_LEFT = chr(BRAILLE_BASE | BRAILLE_LEFT_COL)
-_BRAILLE_EMPTY = chr(BRAILLE_BASE)
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _EMPTY_REPO = (
@@ -313,99 +307,64 @@ def test_empty_state_constant_is_stable() -> None:
 
 
 # --------------------------------------------------------------------------
-# render_bar_braille — Braille dot-matrix fill (U+2800-U+28FF, 2x sub-res)
+# Braille retirement — the dead path is gone (deletion proof)
 # --------------------------------------------------------------------------
 
 
-def test_render_bar_braille_constants_are_in_braille_block() -> None:
-    # The full / half / empty cell glyphs all sit in the Braille block.
-    for cell in (_BRAILLE_FULL, _BRAILLE_LEFT, _BRAILLE_EMPTY):
-        assert 0x2800 <= ord(cell) <= 0x28FF
-    # U+28FF (all dots), U+2847 (left column), U+2800 (no dots).
-    assert ord(_BRAILLE_FULL) == 0x28FF
-    assert ord(_BRAILLE_LEFT) == 0x2847
-    assert ord(_BRAILLE_EMPTY) == 0x2800
+@pytest.mark.parametrize(
+    "name",
+    [
+        "render_bar_braille",
+        "_braille_subcells",
+        "BRAILLE_BASE",
+        "BRAILLE_LEFT_COL",
+        "BRAILLE_RIGHT_COL",
+        "BRAILLE_SUBCOLS",
+    ],
+)
+def test_retired_braille_symbol_is_gone(name: str) -> None:
+    # The dead Braille path was deleted: every removed symbol raises on a
+    # ``getattr`` so a stray import / call fails loudly rather than resurrecting
+    # the unreachable machinery.
+    with pytest.raises(AttributeError):
+        getattr(eu_bar_mod, name)
 
 
-def test_braille_subcell_fill() -> None:
-    # 5 cells x 2 sub-columns = 10 sub-units. frac=0.5 -> 5 sub-columns ->
-    # 2 full cells + 1 left-column half cell + 2 empty cells.
-    bar = render_bar_braille(0.5)
-    assert bar == f"{_BRAILLE_FULL * 2}{_BRAILLE_LEFT}{_BRAILLE_EMPTY * 2}"
-    assert all(0x2800 <= ord(c) <= 0x28FF for c in bar)
-
-
-def test_render_bar_braille_zero_all_empty() -> None:
-    bar = render_bar_braille(0.0)
-    assert bar == _BRAILLE_EMPTY * BAR_CELLS
-
-
-def test_render_bar_braille_full_all_filled() -> None:
-    bar = render_bar_braille(1.0)
-    assert bar == _BRAILLE_FULL * BAR_CELLS
-
-
-def test_render_bar_braille_over_budget_clamps_to_full() -> None:
-    # Over-budget clamps the glyph run to a full bar; the colour band
-    # carries the over-budget signal, not the fill.
-    assert render_bar_braille(1.8) == _BRAILLE_FULL * BAR_CELLS
-
-
-def test_render_bar_braille_negative_clamps_to_empty() -> None:
-    assert render_bar_braille(-0.5) == _BRAILLE_EMPTY * BAR_CELLS
-
-
-def test_render_bar_braille_lights_first_subcell_at_half_subcell() -> None:
-    # 10 sub-units: half a sub-unit = 0.05; round-half-up lights the first
-    # left-column sub-cell at >= 0.05, off below.
-    just_below = render_bar_braille(0.04)
-    assert just_below == _BRAILLE_EMPTY * BAR_CELLS
-    at_boundary = render_bar_braille(0.05)
-    assert at_boundary.startswith(_BRAILLE_LEFT)
-
-
-def test_render_bar_braille_off_by_one_subcell_rounding() -> None:
-    # 0.15 over 10 sub-units = 1.5 -> round-half-up -> 2 sub-units -> the
-    # first cell is fully lit (both sub-columns), the rest empty.
-    bar = render_bar_braille(0.15)
-    assert bar == f"{_BRAILLE_FULL}{_BRAILLE_EMPTY * 4}"
-
-
-def test_render_bar_braille_custom_width_doubles_resolution() -> None:
-    # width=3 -> 6 sub-units; frac=1/6 -> 1 sub-unit -> one half cell.
-    bar = render_bar_braille(1 / 6, width=3)
-    assert bar == f"{_BRAILLE_LEFT}{_BRAILLE_EMPTY * 2}"
-    assert len(bar) == 3
-    # Resolution is 2x the cell count.
-    assert BRAILLE_SUBCOLS == 2
+def test_retired_braille_symbol_not_importable() -> None:
+    # The removed names are not re-exported either: an ``import`` of the dead
+    # symbol raises ImportError.
+    with pytest.raises(ImportError):
+        from eawf.surfaces.tui.widgets.eu_bar import (  # noqa: F401
+            render_bar_braille,
+        )
 
 
 # --------------------------------------------------------------------------
-# render_mode flip — braille vs ascii across every bar renderer
+# render_mode flip — unicode vs ascii across every bar renderer
 # --------------------------------------------------------------------------
 
 
-def test_render_bar_markup_braille_mode_status_tinted() -> None:
+def test_render_bar_markup_unicode_mode_status_tinted() -> None:
     # Block-eighths glyphs wrapped in the status-tint band span (bar hue ==
     # the row's status hue). 80% -> warn band, full block-eighths fill front.
-    markup = render_bar_markup(4.0, 5.0, mode="braille")
+    markup = render_bar_markup(4.0, 5.0, mode="unicode")
     assert markup.startswith("[$ok]")  # 80% is the $ok upper bound
     assert BLOCK_FULL in markup
     assert "80%" in markup
 
 
-def test_render_bar_markup_braille_tint_tracks_band() -> None:
-    # Over-budget -> $err tint on the braille run (status-tinted).
-    markup = render_bar_markup(6.0, 5.0, mode="braille")
+def test_render_bar_markup_unicode_tint_tracks_band() -> None:
+    # Over-budget -> $err tint on the block run (status-tinted).
+    markup = render_bar_markup(6.0, 5.0, mode="unicode")
     assert markup.startswith("[$err]")
     assert "120%" in markup
 
 
-def test_ascii_fallback_when_no_braille() -> None:
-    # render_mode=ascii renders the #/- glyph set, never the braille block.
+def test_ascii_fallback_when_no_unicode() -> None:
+    # render_mode=ascii renders the #/- glyph set, never the block-eighths run.
     markup = render_bar_markup(2.5, 5.0, mode="ascii")
     assert f"{GLYPH_FULL * 3}{GLYPH_EMPTY * 2}" in markup
-    assert all(ord(c) < 0x2800 or ord(c) > 0x28FF for c in markup)
+    assert all(ord(c) < 0x2580 or ord(c) > 0x259F for c in markup)
 
 
 def test_ascii_mode_matches_legacy_default() -> None:
@@ -431,7 +390,7 @@ def test_render_bar_rich_is_rich_parseable_across_bands() -> None:
     # Regression: [$ok|$warn|$err] vars crash Text.from_markup; resolved hex
     # must parse for the ok, warn, and over-budget err bands alike.
     for consumed, total in ((1.0, 5.0), (4.5, 5.0), (12.0, 5.0)):
-        Text.from_markup(render_bar_rich(consumed, total, mode="braille"))
+        Text.from_markup(render_bar_rich(consumed, total, mode="unicode"))
 
 
 def test_render_bar_rich_honours_custom_palette() -> None:
@@ -446,32 +405,50 @@ def test_render_bar_rich_falls_back_on_missing_band_key() -> None:
 
 
 def test_render_bar_plain_honours_mode() -> None:
-    assert BLOCK_FULL in render_bar_plain(5.0, 5.0, mode="braille")
+    assert BLOCK_FULL in render_bar_plain(5.0, 5.0, mode="unicode")
     assert render_bar_plain(5.0, 5.0, mode="ascii") == f"{GLYPH_FULL * 5}  100%"
 
 
 def test_render_eu_bar_plain_honours_mode() -> None:
-    assert BLOCK_FULL in render_eu_bar_plain(4.0, 4.0, mode="braille")
+    assert BLOCK_FULL in render_eu_bar_plain(4.0, 4.0, mode="unicode")
     assert GLYPH_FULL in render_eu_bar_plain(4.0, 4.0, mode="ascii")
     # Empty-state guard is mode-independent.
-    assert render_eu_bar_plain(0.0, 0.0, mode="braille") == EMPTY_STATE
+    assert render_eu_bar_plain(0.0, 0.0, mode="unicode") == EMPTY_STATE
 
 
 def test_render_completion_bar_honours_mode() -> None:
-    block = render_completion_bar(3, 6, mode="braille")
+    block = render_completion_bar(3, 6, mode="unicode")
     assert block.endswith("      3/6")
     assert BLOCK_FULL in block
     ascii_bar = render_completion_bar(3, 6, mode="ascii")
     assert ascii_bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}      3/6"
 
 
+def test_render_completion_bar_unicode_full_block_cells_with_ratio() -> None:
+    # The success-criterion shape: a fully-closed iter paints all FULL BLOCK
+    # cells (no remainder) with the right-aligned n/n counter, and the ascii
+    # fallback paints the #/- ratio with the same counter.
+    block = render_completion_bar(6, 6, width=10, mode="unicode")
+    assert block == f"{COMPLETION_FULL * 10}      6/6"
+    ascii_bar = render_completion_bar(6, 6, width=10, mode="ascii")
+    assert ascii_bar == f"{GLYPH_FULL * 10}      6/6"
+
+
+def test_render_completion_bar_unicode_partial_uses_shade_remainder() -> None:
+    # A partial ratio paints a FULL BLOCK fill run over a MEDIUM SHADE track
+    # so the unfilled tail reads as track, not blank space.
+    block = render_completion_bar(3, 6, width=10, mode="unicode")
+    assert block == f"{COMPLETION_FULL * 5}{COMPLETION_REMAINDER * 5}      3/6"
+    assert COMPLETION_REMAINDER == "▒"
+
+
 def test_render_completion_bar_empty_state_mode_independent() -> None:
-    assert render_completion_bar(0, 0, mode="braille") == EMPTY_STATE
+    assert render_completion_bar(0, 0, mode="unicode") == EMPTY_STATE
     assert render_completion_bar(0, 0, mode="ascii") == EMPTY_STATE
 
 
 def test_render_size_bar_honours_mode() -> None:
-    block = render_size_bar("M", mode="braille")
+    block = render_size_bar("M", mode="unicode")
     assert block.endswith(f"  {'M':>{_BUCKET_FIELD_WIDTH}}")
     assert BLOCK_FULL in block
     ascii_bar = render_size_bar("M", mode="ascii")
@@ -479,7 +456,7 @@ def test_render_size_bar_honours_mode() -> None:
 
 
 def test_render_size_bar_unknown_bucket_empty_state_both_modes() -> None:
-    assert render_size_bar("ZZ", mode="braille") == EMPTY_STATE
+    assert render_size_bar("ZZ", mode="unicode") == EMPTY_STATE
     assert render_size_bar("ZZ", mode="ascii") == EMPTY_STATE
 
 
@@ -528,13 +505,13 @@ def test_resolve_render_mode_ascii_glyphs_forces_ascii() -> None:
     assert resolve_render_mode("ascii", braille_ok=True) == "ascii"
 
 
-def test_resolve_render_mode_unicode_braille_when_covered() -> None:
-    assert resolve_render_mode("unicode", braille_ok=True) == "braille"
+def test_resolve_render_mode_unicode_when_covered() -> None:
+    assert resolve_render_mode("unicode", braille_ok=True) == "unicode"
     assert resolve_render_mode("unicode", braille_ok=False) == "ascii"
 
 
 def test_resolve_render_mode_auto_tracks_coverage() -> None:
-    assert resolve_render_mode("auto", braille_ok=True) == "braille"
+    assert resolve_render_mode("auto", braille_ok=True) == "unicode"
     assert resolve_render_mode("auto", braille_ok=False) == "ascii"
 
 
@@ -559,7 +536,7 @@ def test_eaapp_render_mode_falls_back_to_ascii_on_font_no_braille(
     asyncio.run(body())
 
 
-def test_eaapp_render_mode_braille_when_coverage_ok(
+def test_eaapp_render_mode_unicode_when_coverage_ok(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("FONT_NO_BRAILLE", raising=False)
@@ -571,9 +548,9 @@ def test_eaapp_render_mode_braille_when_coverage_ok(
             await pilot.pause()
             await app.workers.wait_for_complete()
             await pilot.pause()
-            assert app.render_mode == "braille"
+            assert app.render_mode == "unicode"
             for bar in app.query(EUBar):
-                assert bar.render_mode == "braille"
+                assert bar.render_mode == "unicode"
 
     asyncio.run(body())
 

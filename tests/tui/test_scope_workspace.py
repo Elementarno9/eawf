@@ -184,8 +184,8 @@ def test_phase_and_eu_cells_render_bars() -> None:
         eu_total=12.0,
         age="2h",
     )
-    phase_cell = _phase_cell(row, mode="braille")
-    eu_cell = _eu_cell(row, mode="braille")
+    phase_cell = _phase_cell(row, mode="unicode")
+    eu_cell = _eu_cell(row, mode="unicode")
     assert "      3/6" in phase_cell  # counter right-aligned in a fixed 7-cell field
     # The EU bar is status-tinted with a resolved hex (not a Textual $var):
     # the cell is Rich-parsed, so the markup must contain a #rrggbb span and
@@ -213,7 +213,7 @@ def test_eu_cell_markup_is_rich_parseable_across_bands() -> None:
             eu_total=total,
             age="1h",
         )
-        cell = _eu_cell(row, mode="braille")
+        cell = _eu_cell(row, mode="unicode")
         assert "$" not in cell
         Text.from_markup(cell)  # must not raise
 
@@ -229,7 +229,7 @@ def test_eu_cell_zero_total_is_empty_sentinel() -> None:
         eu_total=0.0,
         age="—",
     )
-    assert "no data" in _eu_cell(row, mode="braille")
+    assert "no data" in _eu_cell(row, mode="unicode")
 
 
 # --------------------------------------------------------------------------

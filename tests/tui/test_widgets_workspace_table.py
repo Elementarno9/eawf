@@ -211,9 +211,9 @@ def test_active_phase_completion_malformed_current_falls_back_to_scan() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_phase_cell_prefixes_phase_id_braille() -> None:
-    """The phase cell starts with the phase id + a space in braille mode."""
-    cell = _phase_cell(_repo_row("P27", 119, 143), mode="braille")
+def test_phase_cell_prefixes_phase_id_unicode() -> None:
+    """The phase cell starts with the phase id + a space in unicode mode."""
+    cell = _phase_cell(_repo_row("P27", 119, 143), mode="unicode")
     assert cell.startswith("P27 ")
     assert "119/143" in cell
 
@@ -227,7 +227,7 @@ def test_phase_cell_prefixes_phase_id_ascii() -> None:
 
 def test_phase_cell_dash_prefix_when_no_active_phase() -> None:
     """A ``None`` phase id renders the em-dash prefix, not a blank, in both modes."""
-    for mode in ("braille", "ascii"):
+    for mode in ("unicode", "ascii"):
         cell = _phase_cell(_repo_row(None, 0, 0), mode=mode)  # type: ignore[arg-type]
         assert cell.startswith("— ")
         assert EMPTY_STATE in cell

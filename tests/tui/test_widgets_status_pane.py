@@ -671,15 +671,15 @@ def test_build_status_lines_progress_line_none_state_empty_state() -> None:
 def test_build_status_columns_narrow_equals_single_column() -> None:
     """Below the threshold the layout is byte-identical to the flat list."""
     state = _load(_PHASE_ITER_WAVE)
-    rows = build_status_columns(state, mode="braille", width=TWO_COLUMN_THRESHOLD - 1)
-    assert rows == build_status_lines(state, mode="braille")
+    rows = build_status_columns(state, mode="unicode", width=TWO_COLUMN_THRESHOLD - 1)
+    assert rows == build_status_lines(state, mode="unicode")
 
 
 def test_build_status_columns_zero_width_falls_back_to_single() -> None:
     """A pre-layout width of 0 falls back to the single column (no crash)."""
     state = _load(_PHASE_ITER_WAVE)
-    rows = build_status_columns(state, mode="braille", width=0)
-    assert rows == build_status_lines(state, mode="braille")
+    rows = build_status_columns(state, mode="unicode", width=0)
+    assert rows == build_status_lines(state, mode="unicode")
 
 
 def test_build_status_columns_wide_pairs_headers_side_by_side() -> None:
@@ -690,7 +690,7 @@ def test_build_status_columns_wide_pairs_headers_side_by_side() -> None:
     left-column pad + gap.
     """
     state = _load(_PHASE_ITER_WAVE)
-    rows = build_status_columns(state, mode="braille", width=120)
+    rows = build_status_columns(state, mode="unicode", width=120)
     assert rows[0].startswith("LIFECYCLE")
     assert "EFFORT" in rows[0]
     # The right cell begins exactly at the left-column + gap offset.
@@ -700,7 +700,7 @@ def test_build_status_columns_wide_pairs_headers_side_by_side() -> None:
 def test_build_status_columns_wide_left_column_carries_lifecycle_and_gates() -> None:
     """The left column stacks LIFECYCLE then GATES; the right EFFORT + DISPATCH."""
     state = _load(_PHASE_ITER_WAVE)
-    rows = build_status_columns(state, mode="braille", width=120)
+    rows = build_status_columns(state, mode="unicode", width=120)
     left_cells = [row[:LEFT_COLUMN_WIDTH].rstrip() for row in rows]
     right_cells = [row[LEFT_COLUMN_WIDTH + COLUMN_GAP :] for row in rows]
     assert "LIFECYCLE" in left_cells
@@ -715,7 +715,7 @@ def test_build_status_columns_wide_left_column_carries_lifecycle_and_gates() -> 
 def test_build_status_columns_wide_right_content_after_left_pad() -> None:
     """Each two-column row's right cell starts past the left-pad + gap column."""
     state = _load(_PHASE_ITER_WAVE)
-    rows = build_status_columns(state, mode="braille", width=120)
+    rows = build_status_columns(state, mode="unicode", width=120)
     # A row carrying right-column content must be wider than the left column.
     populated = [r for r in rows if len(r) > LEFT_COLUMN_WIDTH + COLUMN_GAP]
     assert populated  # the right column does carry content
@@ -727,9 +727,9 @@ def test_build_status_columns_wide_right_content_after_left_pad() -> None:
 def test_build_status_columns_threshold_boundary() -> None:
     """``threshold - 1`` → single column; ``threshold`` → two columns."""
     state = _load(_PHASE_ITER_WAVE)
-    narrow = build_status_columns(state, mode="braille", width=TWO_COLUMN_THRESHOLD - 1)
-    wide = build_status_columns(state, mode="braille", width=TWO_COLUMN_THRESHOLD)
-    assert narrow == build_status_lines(state, mode="braille")
+    narrow = build_status_columns(state, mode="unicode", width=TWO_COLUMN_THRESHOLD - 1)
+    wide = build_status_columns(state, mode="unicode", width=TWO_COLUMN_THRESHOLD)
+    assert narrow == build_status_lines(state, mode="unicode")
     assert wide != narrow
     # The wide layout pairs two headers onto its first row.
     assert wide[0].startswith("LIFECYCLE") and "EFFORT" in wide[0]
@@ -737,7 +737,7 @@ def test_build_status_columns_threshold_boundary() -> None:
 
 def test_build_status_columns_wide_none_state() -> None:
     """A ``None`` state still lays out two columns at a wide width (no crash)."""
-    rows = build_status_columns(None, mode="braille", width=120)
+    rows = build_status_columns(None, mode="unicode", width=120)
     assert rows[0].startswith("LIFECYCLE")
     assert "EFFORT" in rows[0]
 
@@ -766,7 +766,7 @@ def test_build_status_lines_effort_shows_signed_variance_pct() -> None:
 
 def test_build_status_lines_effort_shows_velocity_sparkline() -> None:
     """EFFORT surfaces an EU/day velocity sparkline glyph run (Braille mode)."""
-    lines = build_status_lines(_load(_ESTIMATES_ACTUALS), mode="braille")
+    lines = build_status_lines(_load(_ESTIMATES_ACTUALS), mode="unicode")
     velocity = next(line for line in lines if line.startswith("velocity:"))
     # One actual carrying 1.2 EU → a single populated day → not empty state.
     assert EMPTY_STATE not in velocity
@@ -1056,7 +1056,7 @@ def test_build_status_lines_gate_shows_n_of_m_progress() -> None:
         ],
         verdict=None,
     )
-    lines = build_status_lines(state, mode="braille")
+    lines = build_status_lines(state, mode="unicode")
     gate = next(line for line in lines if line.startswith("gate:"))
     assert "2/3" in gate  # two reported (pass + fail), one still running
     assert GATE_PASS in gate
@@ -1240,7 +1240,7 @@ def test_dispatch_slice_dangling_only_blocker_drops_wait() -> None:
 
 def test_dispatch_lines_now_rows_show_role_and_dot() -> None:
     """NOW rows carry the pulsing dot, the agent role, and a burn bar."""
-    lines = _dispatch_lines(_dispatch_scenario_state(), mode="braille")
+    lines = _dispatch_lines(_dispatch_scenario_state(), mode="unicode")
     assert lines[0] == "NOW"
     w03_row = next(line for line in lines if "W03" in line)
     assert HEARTBEAT_GLYPH in w03_row  # lit dot (default lit=True)
@@ -1250,7 +1250,7 @@ def test_dispatch_lines_now_rows_show_role_and_dot() -> None:
 
 def test_dispatch_lines_no_budget_shows_empty_state() -> None:
     """A NOW wave with no token_budget shows the burn empty-state sentinel."""
-    lines = _dispatch_lines(_dispatch_scenario_state(), mode="braille")
+    lines = _dispatch_lines(_dispatch_scenario_state(), mode="unicode")
     w04_row = next(line for line in lines if "W04" in line)
     assert EMPTY_STATE in w04_row  # W04 carries no token_budget
 
@@ -1260,21 +1260,21 @@ def test_dispatch_lines_idle_when_no_active_waves() -> None:
     payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
     payload["current"]["active_wave_ids"] = []
     payload["waves"]["P01-I01-W01"]["status"] = "pending"
-    empty_lines = _dispatch_lines(State.model_validate(payload), mode="braille")
+    empty_lines = _dispatch_lines(State.model_validate(payload), mode="unicode")
     assert empty_lines[0] == "NOW"
     assert f"  {DISPATCH_IDLE}" in empty_lines
 
 
 def test_dispatch_lines_none_state_idle() -> None:
     """A ``None`` state renders the DISPATCH band as idle, not a crash."""
-    lines = _dispatch_lines(None, mode="braille")
+    lines = _dispatch_lines(None, mode="unicode")
     assert lines[0] == "NOW"
     assert f"  {DISPATCH_IDLE}" in lines
 
 
 def test_dispatch_lines_next_wait_collapsed_inline() -> None:
     """NEXT lists the ready batch; WAIT lists blocked waves with ``←`` edges."""
-    lines = _dispatch_lines(_dispatch_scenario_state(), mode="braille")
+    lines = _dispatch_lines(_dispatch_scenario_state(), mode="unicode")
     next_line = next(line for line in lines if line.startswith("NEXT"))
     wait_line = next(line for line in lines if line.startswith("WAIT"))
     assert "W05" in next_line and "W07" in next_line
@@ -1289,7 +1289,7 @@ def test_dispatch_lines_next_overflow_suffix() -> None:
     payload["current"]["active_wave_ids"] = []
     for n in range(2, 11):
         _wave_payload(payload, wave_id=f"P01-I01-W{n:02d}", status="pending")
-    lines = _dispatch_lines(State.model_validate(payload), mode="braille")
+    lines = _dispatch_lines(State.model_validate(payload), mode="unicode")
     next_line = next(line for line in lines if line.startswith("NEXT"))
     assert f"+{9 - DEFAULT_MAX_PARALLEL_WAVES} more" in next_line
 
@@ -1302,8 +1302,8 @@ def test_dispatch_dot_pulse_frame() -> None:
     cosmetic-only.
     """
     state = _dispatch_scenario_state()
-    lit_lines = _dispatch_lines(state, mode="braille", lit=True)
-    dim_lines = _dispatch_lines(state, mode="braille", lit=False)
+    lit_lines = _dispatch_lines(state, mode="unicode", lit=True)
+    dim_lines = _dispatch_lines(state, mode="unicode", lit=False)
     lit_row = next(line for line in lit_lines if "W03" in line)
     dim_row = next(line for line in dim_lines if "W03" in line)
     assert HEARTBEAT_GLYPH in lit_row
@@ -1328,9 +1328,9 @@ def test_dispatch_lines_ascii_static_dot() -> None:
 
 
 def test_dispatch_lines_paused_static_dot() -> None:
-    """A paused pulse (SUSPEND) renders a static dot even in braille mode."""
+    """A paused pulse (SUSPEND) renders a static dot even in unicode mode."""
     state = _dispatch_scenario_state()
-    paused = _dispatch_lines(state, mode="braille", lit=False, paused=True)
+    paused = _dispatch_lines(state, mode="unicode", lit=False, paused=True)
     row = next(line for line in paused if "W03" in line)
     assert HEARTBEAT_GLYPH_ASCII in row
     assert HEARTBEAT_GLYPH_DIM not in row

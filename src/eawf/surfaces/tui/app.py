@@ -244,19 +244,21 @@ def resolve_render_mode(glyphs: str, *, braille_ok: bool) -> RenderMode:
     Args:
         glyphs: The ``ui.glyphs`` policy (``"auto"`` / ``"ascii"`` /
             ``"unicode"``).
-        braille_ok: The :func:`probe_braille_coverage` verdict.
+        braille_ok: The :func:`probe_braille_coverage` verdict (the
+            block-glyph coverage probe; the env var name is retained for
+            back-compat).
 
     Returns:
         ``"ascii"`` when ``glyphs == "ascii"`` or the coverage probe
-        failed; ``"braille"`` when ``glyphs`` resolves to unicode and the
+        failed; ``"unicode"`` when ``glyphs`` resolves to unicode and the
         probe passed.
     """
     if glyphs == "ascii":
         return "ascii"
     if glyphs == "unicode":
-        return "braille" if braille_ok else "ascii"
-    # auto: braille when the coverage probe passes, else ascii.
-    return "braille" if braille_ok else "ascii"
+        return "unicode" if braille_ok else "ascii"
+    # auto: unicode when the coverage probe passes, else ascii.
+    return "unicode" if braille_ok else "ascii"
 
 
 class EaApp(App[None]):
@@ -360,13 +362,13 @@ class EaApp(App[None]):
     #: watcher only fires on a real change.
     pending_pauses: reactive[int] = reactive(0, init=False)
 
-    #: Active bar fill mode (Braille dot-matrix vs ASCII ``#``/``-``).
-    #: Seeded ``braille`` per the operator pick; flipped to ``ascii`` in
-    #: ``on_mount`` when the Braille coverage probe fails
+    #: Active bar fill mode (unicode block-eighths vs ASCII ``#``/``-``).
+    #: Seeded ``unicode`` per the operator pick; flipped to ``ascii`` in
+    #: ``on_mount`` when the block-glyph coverage probe fails
     #: (``FONT_NO_BRAILLE``) or ``ui.glyphs=ascii`` is persisted. A flip
     #: is watched (:meth:`watch_render_mode`) so every mounted bar
     #: rerenders in the other glyph set in one pass.
-    render_mode: reactive[RenderMode] = reactive[RenderMode]("braille", init=False)
+    render_mode: reactive[RenderMode] = reactive[RenderMode]("unicode", init=False)
 
     #: Focused repo root published by the workspace / user zoom lifecycle.
     #: ``r`` uses this while zoomed so repo-scope rebinding follows the
@@ -1103,7 +1105,7 @@ class EaApp(App[None]):
     def watch_render_mode(self, mode: RenderMode) -> None:
         """Propagate a bar-fill-mode flip to every mounted bar.
 
-        A single flip (Braille ↔ ASCII) rerenders the whole surface: every
+        A single flip (unicode <-> ASCII) rerenders the whole surface: every
         :class:`~eawf.surfaces.tui.widgets.eu_bar.EUBar` repaints in the new glyph
         set. Bars rendered as plain strings inside other widgets (the
         roadmap tree, status pane, tables) read the mode off this reactive

@@ -4,7 +4,7 @@ Asserts the W24 swap: in the unicode render mode each of the three bar-
 carrying widgets paints the W20 block-eighths bar
 (:data:`~eawf.surfaces.render.bars.BLOCK_EIGHTHS`) in place of the prior
 braille glyph. Each widget is mounted under a host that carries the
-``render_mode`` reactive (seeded to the unicode ``"braille"`` mode), and a
+``render_mode`` reactive (seeded to the ``"unicode"`` mode), and a
 populated state drives a non-empty fill so a block-eighths glyph is present.
 """
 
@@ -62,7 +62,7 @@ class _UnicodeHostApp(App[None]):
     """
 
     CSS_PATH = str(_THEME)
-    render_mode: reactive[RenderMode] = reactive[RenderMode]("braille")
+    render_mode: reactive[RenderMode] = reactive[RenderMode]("unicode")
 
     def __init__(self, widget: object) -> None:
         super().__init__()

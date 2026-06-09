@@ -158,7 +158,7 @@ def test_live_flip_removes_every_block_bar(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            app.render_mode = "braille"  # the live app's unicode mode
+            app.render_mode = "unicode"  # the live app's unicode mode
             await settle_screen(pilot)
             pane = app.screen.query_one(StatusPane)
             tree = app.screen.query_one(RoadmapTree)

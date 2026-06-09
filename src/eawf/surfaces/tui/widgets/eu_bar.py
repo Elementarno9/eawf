@@ -35,20 +35,21 @@ from eawf.surfaces.render.bars import render_block_bar
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 from eawf.workflow.estimation.thresholds import OK_BAND_CEILING, OVER_BUDGET_CEILING
 
-#: Bar render mode: ``"braille"`` uses the Braille-Patterns dot-matrix
-#: fill (2x horizontal sub-resolution per cell); ``"ascii"`` is the
-#: ``#``/``-`` fallback for fonts lacking Braille coverage or
-#: ``ui.glyphs=ascii``. The active mode lives on
-#: :attr:`eawf.surfaces.tui.app.EaApp.render_mode`; every renderer below honours it
-#: via a ``mode`` argument so a single flip rerenders every bar.
-RenderMode = Literal["braille", "ascii"]
+#: Bar render mode: ``"unicode"`` uses the block-eighths fill
+#: (:func:`~eawf.surfaces.render.bars.render_block_bar`, one-eighth-cell
+#: sub-resolution); ``"ascii"`` is the ``#``/``-`` fallback for fonts
+#: lacking block-glyph coverage or ``ui.glyphs=ascii``. The active mode
+#: lives on :attr:`eawf.surfaces.tui.app.EaApp.render_mode`; every renderer
+#: below honours it via a ``mode`` argument so a single flip rerenders every
+#: bar.
+RenderMode = Literal["unicode", "ascii"]
 
 #: Default mode for the pure render helpers when no caller threads one
 #: through. Kept ``"ascii"`` so a caller not yet wired to
 #: :attr:`eawf.surfaces.tui.app.EaApp.render_mode` (a tree / status-pane row a
 #: consuming wave has not yet updated) keeps the safe ``#``/``-`` set
-#: rather than emitting Braille on a font that may lack coverage. The
-#: live :class:`EUBar` widget and the App reactive seed ``"braille"``
+#: rather than emitting block glyphs on a font that may lack coverage. The
+#: live :class:`EUBar` widget and the App reactive seed ``"unicode"``
 #: (the operator pick) explicitly and propagate the flip.
 DEFAULT_RENDER_MODE: RenderMode = "ascii"
 
@@ -64,24 +65,15 @@ GLYPH_FULL: str = "#"
 #: Empty-cell glyph.
 GLYPH_EMPTY: str = "-"
 
-#: Braille Patterns block base code point (U+2800 — the all-dots-off
-#: cell). Every Braille glyph in the bar is this base OR-ed with the dot
-#: bits for the sub-columns that are filled.
-BRAILLE_BASE: int = 0x2800
+#: Completion-bar full-fill glyph (U+2588 FULL BLOCK) for the unicode
+#: render mode. The closed-share of an iter / phase paints this; the
+#: remainder paints :data:`COMPLETION_REMAINDER`.
+COMPLETION_FULL: str = "█"
 
-#: Dot-bit mask lighting every dot in a Braille cell's LEFT column
-#: (dots 1·2·3·7). OR-ing this onto :data:`BRAILLE_BASE` fills the left
-#: half of one cell — the first of the two horizontal sub-columns.
-BRAILLE_LEFT_COL: int = 0x47
-
-#: Dot-bit mask lighting every dot in a Braille cell's RIGHT column
-#: (dots 4·5·6·8). OR-ing this onto :data:`BRAILLE_BASE` fills the right
-#: half of one cell — the second of the two horizontal sub-columns.
-BRAILLE_RIGHT_COL: int = 0xB8
-
-#: Horizontal sub-columns each Braille cell encodes. The bar resolves to
-#: ``BAR_CELLS * BRAILLE_SUBCOLS`` fillable sub-units -- 2x the cell count.
-BRAILLE_SUBCOLS: int = 2
+#: Completion-bar remainder glyph (U+2592 MEDIUM SHADE) for the unicode
+#: render mode -- a dim shade so the unfilled tail reads as track rather
+#: than empty space.
+COMPLETION_REMAINDER: str = "▒"
 
 #: Consumed-fraction upper bound (inclusive) for the ``ok`` colour band.
 #: Aliases the canonical :data:`~eawf.workflow.estimation.thresholds.OK_BAND_CEILING`
@@ -151,61 +143,6 @@ def _fill_cells(fraction: float) -> int:
     return int(clamped * BAR_CELLS + 0.5)
 
 
-def _braille_subcells(fraction: float, *, width: int) -> int:
-    """Return the filled sub-column count for *fraction* of a Braille bar.
-
-    A Braille bar of *width* cells resolves to ``width *
-    BRAILLE_SUBCOLS`` fillable horizontal sub-columns (2x the cell count).
-    The fraction is clamped into ``[0, 1]`` and rounded half-up against
-    the sub-column grid, so the first sub-column lights once the fraction
-    reaches half a sub-column (``0.5 / (width * BRAILLE_SUBCOLS)``).
-
-    Args:
-        fraction: Consumed / total ratio (over-budget clamps to full;
-            negative clamps to empty).
-        width: Bar cell count (≥ 0).
-
-    Returns:
-        Integer sub-column count in ``[0, width * BRAILLE_SUBCOLS]``.
-    """
-    clamped = min(max(fraction, 0.0), 1.0)
-    subcols = width * BRAILLE_SUBCOLS
-    return int(clamped * subcols + 0.5)
-
-
-def render_bar_braille(fraction: float, *, width: int = BAR_CELLS) -> str:
-    """Render a Braille dot-matrix fill bar for *fraction*.
-
-    Fills left-to-right via the Braille Patterns block (U+2800-U+28FF) at
-    2x horizontal sub-resolution: each of the *width* cells encodes two
-    horizontal sub-columns (the cell's left dot column then its right dot
-    column), so the bar resolves to ``width * BRAILLE_SUBCOLS`` fillable
-    sub-units. A whole cell to the left of the fill front is the all-dots
-    glyph U+28FF; a half-filled cell shows only its left column
-    (U+2847); an empty cell is U+2800.
-
-    This is the glyph string only — it carries no colour. The caller wraps
-    it in a status-tint span (see :func:`render_bar_braille_markup`) so the
-    bar hue matches the row's lifecycle/status glyph hue.
-
-    Args:
-        fraction: Consumed / total ratio (over-budget clamps to a full
-            bar; negative clamps to empty). The colour band carries the
-            over-budget signal, not the glyph run.
-        width: Bar cell count. Defaults to :data:`BAR_CELLS`.
-
-    Returns:
-        A Braille glyph run of exactly *width* characters.
-    """
-    filled = _braille_subcells(fraction, width=width)
-    full_cells, half = divmod(filled, BRAILLE_SUBCOLS)
-    cells = [chr(BRAILLE_BASE | BRAILLE_LEFT_COL | BRAILLE_RIGHT_COL)] * full_cells
-    if half:
-        cells.append(chr(BRAILLE_BASE | BRAILLE_LEFT_COL))
-    cells += [chr(BRAILLE_BASE)] * (width - len(cells))
-    return "".join(cells)
-
-
 def _ascii_glyphs(filled: int, width: int) -> str:
     """Return the ``#``/``-`` ASCII fill run of *width* cells."""
     return GLYPH_FULL * filled + GLYPH_EMPTY * (width - filled)
@@ -231,12 +168,12 @@ def _mode_glyphs(fraction: float, *, width: int, mode: RenderMode) -> str:
         fraction: Consumed / total ratio (over-budget clamps to full;
             negative clamps to empty).
         width: Bar cell count.
-        mode: ``"braille"`` (the unicode block-eighths fill) or ``"ascii"``.
+        mode: ``"unicode"`` (the block-eighths fill) or ``"ascii"``.
 
     Returns:
         The block-eighths or ASCII glyph run, *width* cells wide.
     """
-    if mode == "braille":
+    if mode == "unicode":
         clamped = min(max(fraction, 0.0), 1.0)
         return render_block_bar(clamped, width=width)
     return _ascii_glyphs(_fill_cells_width(fraction, width), width)
@@ -281,13 +218,13 @@ def _bar_parts(consumed_eu: float, total_eu: float, *, mode: RenderMode) -> tupl
 
     Single source of the fill maths shared by the plain + markup
     renderers. A zero *total_eu* yields an empty bar at ``0%`` rather than
-    dividing by zero. The glyph run honours *mode* (Braille vs ASCII) so
+    dividing by zero. The glyph run honours *mode* (unicode vs ASCII) so
     every caller flips with :attr:`eawf.surfaces.tui.app.EaApp.render_mode`.
 
     Args:
         consumed_eu: Effort units consumed so far (≥ 0).
         total_eu: Total estimated effort units (≥ 0).
-        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        mode: Active render mode (``"unicode"`` or ``"ascii"``).
 
     Returns:
         The glyph run, the integer percentage, and the palette colour var.
@@ -312,12 +249,12 @@ def render_bar_plain(
     Args:
         consumed_eu: Effort units consumed so far (≥ 0).
         total_eu: Total estimated effort units (≥ 0).
-        mode: Active render mode (``"braille"`` or ``"ascii"``). Threaded
+        mode: Active render mode (``"unicode"`` or ``"ascii"``). Threaded
             from :attr:`eawf.surfaces.tui.app.EaApp.render_mode`.
 
     Returns:
         A plain string of the form ``#####  120%`` (ASCII) or
-        ``⣿⣿⣿⣿⣿  120%`` (Braille).
+        ``█████  120%`` (unicode).
     """
     glyphs, pct, _ = _bar_parts(consumed_eu, total_eu, mode=mode)
     return f"{glyphs}  {pct}%"
@@ -338,7 +275,7 @@ def render_eu_bar_plain(
         consumed_eu: Effort units consumed so far (≥ 0).
         total_eu: Total estimated effort units (≥ 0). ``<= 0`` yields the
             empty-state sentinel.
-        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        mode: Active render mode (``"unicode"`` or ``"ascii"``).
 
     Returns:
         The plain bar string, or :data:`EMPTY_STATE` when *total_eu* is
@@ -374,18 +311,36 @@ def render_completion_bar(
         total: Total child count. ``<= 0`` yields :data:`EMPTY_STATE` (an
             entity with no children has no completion to show).
         width: Bar cell count. Defaults to ``10`` (one cell per 10 %).
-        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        mode: Active render mode (``"unicode"`` or ``"ascii"``).
+
+    The unicode fill is a discrete ``█`` (:data:`COMPLETION_FULL`) run over a
+    ``▒`` (:data:`COMPLETION_REMAINDER`) track so the unfilled tail reads as
+    a dim track rather than blank space; the ASCII fallback keeps the
+    ``#``/``-`` glyph set. A full ratio paints ``██████████`` (no remainder).
+
+    Args:
+        done: Completed child count (e.g. closed waves). Negative inputs
+            clamp to ``0``.
+        total: Total child count. ``<= 0`` yields :data:`EMPTY_STATE` (an
+            entity with no children has no completion to show).
+        width: Bar cell count. Defaults to ``10`` (one cell per 10 %).
+        mode: Active render mode (``"unicode"`` or ``"ascii"``).
 
     Returns:
-        A plain string of the form ``#####-----      3/6`` (50 %, 3 of 6
-        done, counter right-aligned in a 7-cell field), or :data:`EMPTY_STATE`
-        when *total* is non-positive.
+        A plain string of the form ``#####-----      3/6`` (ASCII, 50 %, 3 of
+        6 done, counter right-aligned in a 7-cell field) or
+        ``█████▒▒▒▒▒      3/6`` (unicode), or :data:`EMPTY_STATE` when *total*
+        is non-positive.
     """
     if total <= 0:
         return EMPTY_STATE
     done_clamped = min(max(done, 0), total)
     fraction = done_clamped / total
-    glyphs = _mode_glyphs(fraction, width=width, mode=mode)
+    if mode == "unicode":
+        filled = _fill_cells_width(fraction, width)
+        glyphs = COMPLETION_FULL * filled + COMPLETION_REMAINDER * (width - filled)
+    else:
+        glyphs = _mode_glyphs(fraction, width=width, mode=mode)
     counter = f"{done_clamped}/{total}"
     return f"{glyphs}  {counter:>{_COUNTER_FIELD_WIDTH}}"
 
@@ -409,7 +364,7 @@ def render_size_bar(bucket: str, *, width: int = 5, mode: RenderMode = DEFAULT_R
             ``"L"`` / ``"XL"``). Any other value yields the empty state.
         width: Bar cell count. Defaults to ``5`` (one cell per bucket
             step). Buckets fill at most ``width`` cells.
-        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        mode: Active render mode (``"unicode"`` or ``"ascii"``).
 
     Returns:
         A plain string of the form ``###--   M`` / ``#----  XS`` (label
@@ -443,12 +398,12 @@ def render_bar_markup(
     Args:
         consumed_eu: Effort units consumed so far (≥ 0).
         total_eu: Total estimated effort units (≥ 0).
-        mode: Active render mode (``"braille"`` or ``"ascii"``). Threaded
+        mode: Active render mode (``"unicode"`` or ``"ascii"``). Threaded
             from :attr:`eawf.surfaces.tui.app.EaApp.render_mode`.
 
     Returns:
         A content-markup string of the form ``[$ok]#####[/]  120%`` (ASCII)
-        or ``[$ok]⣿⣿⣿⣿⣿[/]  120%`` (Braille).
+        or ``[$ok]█████[/]  120%`` (unicode).
     """
     glyphs, pct, band = _bar_parts(consumed_eu, total_eu, mode=mode)
     return f"[{band}]{glyphs}[/]  {pct}%"
@@ -483,13 +438,13 @@ def render_bar_rich(
     Args:
         consumed_eu: Effort units consumed so far (≥ 0).
         total_eu: Total estimated effort units (≥ 0).
-        mode: Active render mode (``"braille"`` or ``"ascii"``).
+        mode: Active render mode (``"unicode"`` or ``"ascii"``).
         palette: Maps band keys (``"ok"`` / ``"warn"`` / ``"err"``) to a hex
             colour. Falls back to :data:`DEFAULT_BAND_PALETTE` when omitted
             or missing a key.
 
     Returns:
-        A Rich-markup string of the form ``[#009e73]⣿⣿⣿⣿⣿[/]  120%``.
+        A Rich-markup string of the form ``[#009e73]█████[/]  120%``.
     """
     glyphs, pct, band = _bar_parts(consumed_eu, total_eu, mode=mode)
     key = band.removeprefix("$")
@@ -520,11 +475,11 @@ class EUBar(Static):
     #: Total estimated effort units. Watched so assignment repaints.
     total_eu: reactive[float] = reactive(0.0)
 
-    #: Active fill mode. Seeded ``"braille"`` (the operator pick); the
+    #: Active fill mode. Seeded ``"unicode"`` (the operator pick); the
     #: App's :meth:`eawf.surfaces.tui.app.EaApp.watch_render_mode` propagates a
     #: coverage-probe / ``ui.glyphs`` flip here. Watched so the propagated
     #: flip repaints the bar in the other glyph set.
-    render_mode: reactive[RenderMode] = reactive[RenderMode]("braille")
+    render_mode: reactive[RenderMode] = reactive[RenderMode]("unicode")
 
     def set_eu(self, consumed_eu: float, total_eu: float) -> None:
         """Set both EU values in one shot and repaint.
@@ -545,7 +500,7 @@ class EUBar(Static):
         self._repaint()
 
     def watch_render_mode(self) -> None:
-        """Repaint when the fill mode flips (Braille ↔ ASCII)."""
+        """Repaint when the fill mode flips (unicode <-> ASCII)."""
         self._repaint()
 
     def _repaint(self) -> None:
@@ -555,10 +510,8 @@ class EUBar(Static):
 
 __all__ = [
     "BAR_CELLS",
-    "BRAILLE_BASE",
-    "BRAILLE_LEFT_COL",
-    "BRAILLE_RIGHT_COL",
-    "BRAILLE_SUBCOLS",
+    "COMPLETION_FULL",
+    "COMPLETION_REMAINDER",
     "DEFAULT_BAND_PALETTE",
     "DEFAULT_RENDER_MODE",
     "EMPTY_STATE",
@@ -569,7 +522,6 @@ __all__ = [
     "EUBar",
     "RenderMode",
     "band_var",
-    "render_bar_braille",
     "render_bar_markup",
     "render_bar_plain",
     "render_bar_rich",

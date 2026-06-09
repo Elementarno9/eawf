@@ -45,7 +45,7 @@ class _HostApp(App[None]):
     """Bare themed host carrying the ``render_mode`` reactive the table reads."""
 
     CSS_PATH = str(_THEME)
-    render_mode: reactive[RenderMode] = reactive[RenderMode]("braille")
+    render_mode: reactive[RenderMode] = reactive[RenderMode]("unicode")
 
     def __init__(self, widget: object) -> None:
         super().__init__()
