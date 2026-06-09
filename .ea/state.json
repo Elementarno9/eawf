@@ -4019,6 +4019,18 @@
       "scope_id": "P30-I01-W11",
       "status": "done",
       "updated_at": "2026-06-09T14:12:48.386900Z"
+    },
+    "P30-I02-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W01",
+      "scope_id": "P30-I02-W01",
+      "status": "done",
+      "updated_at": "2026-06-09T16:05:39.980649Z"
     }
   },
   "agent_sessions": {
@@ -13861,6 +13873,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I01-W11",
       "updated_at": "2026-06-09T14:12:47.704960Z"
+    },
+    "P30-I02-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W01-bucket-20260609T160458Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I02-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I02-W01",
+      "updated_at": "2026-06-09T16:04:58.099905Z"
     }
   },
   "goals": {
@@ -16718,7 +16743,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T15:36:34.972302Z",
+  "updated_at": "2026-06-09T16:05:39.981118Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -64656,10 +64681,10 @@
         "P30-I02-W31",
         "P30-I02-W32"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T15:45:54.609180Z",
+      "closed_at": "2026-06-09T16:05:39.980649Z",
+      "commit": "b5836402a110026351acfdd0aa569fe1aa9150c4",
       "deps": [],
       "description": "Move accent/primary teal to green per contracts section 4 in the three per-theme variable maps and Theme constructors, in status_tint BAND_HEX, and in brand.py ACCENT_HEX with the two-tone wordmark applying the accent to the ae umlaut only. Lifecycle status-* tints stay byte-identical (colourblind no-regression); status-claimed stays cool. Root of the iter: every surface renders against the rotated vars.",
       "dispatch_history": [],
@@ -64669,41 +64694,104 @@
         "src/eawf/surfaces/tui/widgets/status_tint.py",
         "src/eawf/surfaces/render/brand.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_theme_green_accent_capture.py",
+              "tests/unit/test_brand_glyph_fallback.py",
+              "tests/tui/test_status_tint_baseline.py",
+              "tests/tui/test_palette_theme.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_cvd_distinctness.py",
+              "tests/snapshots/svg/test_status_legend_golden.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W01",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.757824Z",
-      "outcome": null,
+      "outcome": "Rotated accent+primary teal->green across the three theme variable maps + Theme ctors (WONG #16b384, IBM #1a9988, LIGHT #007a52); status-* tints byte-identical, status-claimed stays cool. brand.py ACCENT_HEX->#16b384 + new two-tone render_wordmark_markup (accent on the umlaut) + ascii_wordmark plain Ea. New widgets/cvd.py Vienot-1999 deut/protan sim + EA_CB status-tint legend SVG exporter. Gates: per-theme green-accent capture + brand wordmark + status-tint baseline (G-01), CVD pairwise-distinctness + svg_pixel_diff legend golden (G-02).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W01-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Three theme-swap snapshot goldens assert the green accent on brand + closed row; status-* tint bytes equal the prior baseline (colourblind discrimination re-check passes).",
-          "oracle_tier": null,
+          "measurable_signal": "test_theme_green_accent_capture pins the per-theme green accent on the header brand + green status-closed row + /theme pure-rebind; test_brand_glyph_fallback asserts #16b384 on the umlaut and ascii_wordmark plain Ea; test_status_tint_baseline pins tints byte-identical; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the per-theme green-accent capture, brand wordmark, status-tint baseline, and palette-theme suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "Per-theme snapshot goldens (dark/cb/light) assert the header brand and a closed-wave row render the green accent and that /theme swaps as a pure var rebind with no recolour gap; a brand.py unit test asserts the rendered wordmark carries green on the ae and the ASCII channel stays plain Ea; the Wong/IBM status-* tints are byte-identical to the prior baseline.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W01-C2",
-          "kind": "svg_pixel_diff",
-          "measurable_signal": "test_cb_palette_hue_distinct asserts pairwise-distinct CVD-simulated hues over EA_CB; an svg_pixel_diff golden of the tint-legend SVG export matches and reds on a collapsed band",
-          "oracle_tier": null,
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_cvd_distinctness asserts every EA_CB status-band pair stays above the collapse epsilon under Vienot-1999 deuteranopia + protanopia; test_status_legend_golden pins the legend SVG via the svg_pixel_diff resvg byte-equality golden; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the CVD pairwise-distinctness unit and the status-tint legend svg_pixel_diff golden",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "The colourblind theme's status-* band hexes are proven pairwise hue-distinct, not just byte-stable: an SVG export of the status-tint legend pins an svg_pixel_diff golden and a unit asserts every EA_CB band hex is pairwise-distinct under a CVD (deuteranopia/protanopia) simulation, so a future palette edit that collapses two bands reds the gate.",
           "waiver_reason": null
         }
