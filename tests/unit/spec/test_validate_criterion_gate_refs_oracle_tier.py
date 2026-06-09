@@ -129,3 +129,50 @@ def test_validate_criterion_gate_refs_author_set_oracle_tier_rejected() -> None:
 
     with pytest.raises(ValueError, match="oracle_tier must not be author-set"):
         validate_criterion_gate_refs([criterion], [])
+
+
+def test_validate_criterion_gate_refs_allow_computed_tier_accepts_recompute_match() -> None:
+    """The close re-validation accepts a tier this function itself persisted.
+
+    ``spec.sync`` computes + PERSISTS ``oracle_tier`` in place; the close path
+    re-runs the validator over the state-loaded criterion, which now carries
+    that tier. With ``allow_computed_tier=True`` a non-None tier that equals
+    the recomputed value is accepted (idempotent re-validation) rather than
+    tripping the author-set guard on the function's own output.
+    """
+    criterion = _criterion(
+        response=ResponseClause(
+            observe=ObserveVerb.EXITS,
+            object="the gauntlet command exits zero",
+            locus=ProofLocus.CLI_EXIT,
+        ),
+    )
+    # First pass (the spec.sync input boundary) computes + persists the tier.
+    validate_criterion_gate_refs([criterion], [])
+    assert criterion.oracle_tier is OracleTier.T2_STRUCTURAL
+
+    # Second pass (the close re-validation) over the now-tiered criterion is a
+    # no-op accept, not a false author-set rejection.
+    validate_criterion_gate_refs([criterion], [], allow_computed_tier=True)
+    assert criterion.oracle_tier is OracleTier.T2_STRUCTURAL
+
+
+def test_validate_criterion_gate_refs_allow_computed_tier_rejects_mismatch() -> None:
+    """Even on the close path a tier that differs from the recompute is rejected.
+
+    ``allow_computed_tier`` is not a blanket bypass: a persisted tier that does
+    NOT equal the value the response recomputes (a corrupted or injected tier)
+    still raises, so the author-never-owns-the-tier invariant holds against
+    tampering even on re-validation.
+    """
+    criterion = _criterion(
+        response=ResponseClause(
+            observe=ObserveVerb.EXITS,
+            object="the gauntlet command exits zero",
+            locus=ProofLocus.CLI_EXIT,
+        ),
+    )
+    criterion.oracle_tier = OracleTier.T7_JURY  # response recomputes T2, not T7
+
+    with pytest.raises(ValueError, match="oracle_tier must not be author-set"):
+        validate_criterion_gate_refs([criterion], [], allow_computed_tier=True)

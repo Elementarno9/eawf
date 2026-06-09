@@ -725,7 +725,11 @@ def _validate_wave_close_gate_refs(state: State, mutation: Mutation) -> None:
         return
     wave = state.waves[wave_id]
     try:
-        validate_criterion_gate_refs(list(wave.success_criteria), _load_gate_specs(wave_id, state))
+        validate_criterion_gate_refs(
+            list(wave.success_criteria),
+            _load_gate_specs(wave_id, state),
+            allow_computed_tier=True,
+        )
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 

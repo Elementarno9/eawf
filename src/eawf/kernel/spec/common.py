@@ -553,6 +553,8 @@ class GateSpec(_StrictModel):
 def validate_criterion_gate_refs(
     criteria: list[CriterionSpec],
     gates: list[GateSpec],
+    *,
+    allow_computed_tier: bool = False,
 ) -> None:
     """Reject a criterion/gate set whose cross-references do not resolve.
 
@@ -575,24 +577,41 @@ def validate_criterion_gate_refs(
 
     Author-set tier rejection + server-side compute: the tier is owned by
     :func:`assign_oracle_tier`, never authored on input, so a non-``None``
-    :attr:`CriterionSpec.oracle_tier` on a close mutation indicates a
-    malformed spec and is rejected. After that check, every criterion that
-    carries a :class:`ResponseClause` has its tier computed in place from
-    the clause -- ``JUDGED`` + non-human locus computes ``T7_JURY``, a
-    ``command_exit_zero`` ``gate_ref`` computes ``T4_CONTRACT`` per the
-    gate-kind tier map -- so ``JUDGED`` becomes the only path to the jury
-    and the value is authoritative rather than vaporware ``None``.
+    :attr:`CriterionSpec.oracle_tier` on an INPUT criterion (the spec-body
+    parse / ``spec.sync`` path) indicates a malformed spec and is rejected.
+    After that check, every criterion that carries a :class:`ResponseClause`
+    has its tier computed in place from the clause -- ``JUDGED`` + non-human
+    locus computes ``T7_JURY``, a ``command_exit_zero`` ``gate_ref`` computes
+    ``T4_CONTRACT`` per the gate-kind tier map -- so ``JUDGED`` becomes the
+    only path to the jury and the value is authoritative rather than
+    vaporware ``None``.
+
+    Because the function PERSISTS the computed tier in place, a later
+    re-validation of the same criteria (the close path re-runs this over
+    state-loaded criteria that already carry the tier ``spec.sync``
+    computed) would otherwise trip the author-set guard on its own output.
+    ``allow_computed_tier`` resolves that: when ``True`` a non-``None`` tier
+    is accepted iff it equals the value this function recomputes from the
+    response (a tier IT persisted), and still rejected when it differs (a
+    corrupted or injected tier). The strict default keeps the input
+    boundary (``spec.sync``) rejecting any author-set tier.
 
     Args:
         criteria: The wave's typed criterion rows. Each is mutated in
             place so its computed ``oracle_tier`` is populated.
         gates: The wave's typed gate rows.
+        allow_computed_tier: When ``True`` (the close re-validation path) a
+            non-``None`` ``oracle_tier`` that matches the recomputed tier is
+            accepted as this function's own persisted output rather than
+            rejected as author-set. Defaults to ``False`` for the input
+            boundary, which rejects any non-``None`` tier.
 
     Raises:
         ValueError: When a criterion references an unknown gate id, a
             gate references an unknown criterion id, a deterministic
             criterion's gate fails to compile, a criterion carries an
-            author-set ``oracle_tier``, or a criterion's response clause
+            author-set ``oracle_tier`` (a non-``None`` tier that is not an
+            accepted recompute match), or a criterion's response clause
             is malformed (e.g. a ``JUDGED`` clause with an empty
             ``jury_reason`` or a ``gate_ref`` naming an unknown gate kind).
     """
@@ -604,10 +623,15 @@ def validate_criterion_gate_refs(
     gate_ids = {g.id for g in gates}
 
     for criterion in criteria:
-        if criterion.oracle_tier is not None:
+        computed = (
+            assign_oracle_tier(criterion.response) if criterion.response is not None else None
+        )
+        if criterion.oracle_tier is not None and not (
+            allow_computed_tier and criterion.oracle_tier == computed
+        ):
             raise ValueError(f"oracle_tier must not be author-set: criterion={criterion.id!r}")
-        if criterion.response is not None:
-            criterion.oracle_tier = assign_oracle_tier(criterion.response)
+        if computed is not None:
+            criterion.oracle_tier = computed
         for ref in criterion.gate_ids:
             if ref not in gate_ids:
                 raise ValueError(f"criterion {criterion.id!r} references unknown gate id: {ref!r}")
