@@ -15,7 +15,7 @@
 
                          ┌────────────────────────────────────────────────────────────────────┐
                          │                                                                    │
-                         │  jury calibration: Brier + ECE                                     │
+                         │  ⎔ jury calibration: Brier + ECE                                   │
                          │    Brier score 0.125                                               │
                          │    ECE 0.062                                                       │
                          │    samples 20                                                      │

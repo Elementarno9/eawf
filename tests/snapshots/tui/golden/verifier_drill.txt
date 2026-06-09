@@ -14,7 +14,7 @@
 
                   ┌──────────────────────────────────────────────────────────────────────────────────┐
                   │                                                                                  │
-                  │  verifier: oracle tier + producer                                                │
+                  │  ≡ verifier: oracle tier + producer                                              │
                   │                                                                                  │
                   │  scope  tier  producer  status                                                   │
                   │    P29-I13-W01 T1 tool pass                                                      │
