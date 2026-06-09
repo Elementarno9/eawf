@@ -19,6 +19,14 @@ appears once a tier label, a store row, or a calibration sample actually
 backs it. Every populated tier surfaces its residuals: the calibration
 drift percent, the verifier pass-rate, and the per-output evidence refs.
 
+The jury-authority section is the same honesty discipline applied to the
+cross-vendor jury: the jury is held ADVISORY (its veto is logged, the close
+still proceeds) until the I07 validation pass earns it block authority, so
+the pane renders that literal advisory state -- a number-based scorecard of
+dashes plus sample-count / cohort notes, never a fabricated trust number --
+with the validation metrics pinned as ``[needs I07]`` placeholders the next
+roadmap owns.
+
 The render half is a set of pure, content-markup-returning helpers (one
 per scorecard section) so the composition is unit-testable without
 mounting Textual; the screen is a thin :class:`ScopeScreen` body over
@@ -35,6 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
@@ -46,7 +55,9 @@ from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.surfaces.tui.modals.calibration_drill import CalibrationSet
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 from eawf.workflow.estimation.buckets import FIT_N_MIN, resolve_wave_actual
 from eawf.workflow.estimation.trust_scorecard import (
     TrustScorecard,
@@ -109,6 +120,36 @@ _SCORED_STATUSES: frozenset[str] = frozenset({"pass", "fail", "blocked", "waived
 #: been scored yet -- the honest-empty path (the ratio's denominator is zero,
 #: so no ratio can be formed). Muted so it reads as "not measured yet".
 NO_SCORED_EVIDENCE: str = "no scored evidence yet"
+
+#: Authority verdict the cross-vendor jury currently carries: it is held
+#: ADVISORY (its veto is logged, the close still proceeds) until the I07
+#: validation pass earns it block authority. The pane renders this literal,
+#: never a fabricated "trusted / blocking" verdict, so the operator reads the
+#: jury's real, un-validated state. The amber attention sigil leads the line.
+JURY_AUTHORITY_ADVISORY: str = "advisory"
+
+#: The placeholder marker pinned beside every jury-validation metric whose
+#: real value the I07 validation reducer (Fleiss kappa, Brier / ECE,
+#: known-bad catch) owns. Rendered LITERALLY rather than as a fabricated
+#: number so a not-yet-built metric reads as "another roadmap owns this", not
+#: as a measured zero. Honest-negative is sacred: no fake green trust number.
+NEEDS_I07_PLACEHOLDER: str = "[needs I07]"
+
+#: The honest-negative copy pinned on each jury-validation metric row whose
+#: backing data does not exist yet -- a dash plus the literal reason the value
+#: is absent. None of these is a fabricated trust number; each is a dash and a
+#: sample-count / cohort note so the row reads "no signal yet", never
+#: "trusted". The golden pins these literals verbatim.
+JURY_ECE_STARVED: str = "-- starved"
+JURY_VARIANCE_STARVED: str = "-- starved"
+JURY_FLEISS_NEED_COHORT: str = "-- need cohort"
+JURY_KNOWN_BAD_NEED_LABELS: str = "-- need labels"
+
+#: The Wilson lower-bound row renders the current score against the bar it must
+#: clear before the jury earns block authority. Both sides are number-based
+#: (no fabricated trust verdict): a measured ``0.00`` against the ``0.75``
+#: floor the I07 staged authority gate enforces.
+JURY_WILSON_FLOOR: float = 0.75
 
 #: The evidence status that marks a criterion as escaped -- an operator
 #: waiver cleared it rather than a gate passing it. The escape ledger lists
@@ -419,6 +460,55 @@ def render_overview(scorecard: TrustScorecard) -> str:
     return f"window {scorecard.window}\nlabelled outputs {total}"
 
 
+def render_jury_authority(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Render the cross-vendor jury's advisory-to-block authority scorecard.
+
+    Surfaces the jury's CURRENT authority state honestly: the jury is held
+    ADVISORY (its veto is logged, the close still proceeds) until the I07
+    validation pass earns it block authority. The section renders as a
+    number-based scorecard whose validation metrics (Fleiss kappa, ECE,
+    variance, known-bad catch, Wilson lower-bound) are dashes plus their
+    sample-count / cohort notes -- never a fabricated trust number, because
+    the I07 validation reducer owns the real values. A :data:`NEEDS_I07_PLACEHOLDER`
+    marker pins each metric the next roadmap owns.
+
+    The leading banner wears the attention sigil (``glyph`` via the
+    :func:`~eawf.surfaces.tui.widgets.sigils.chrome` helper) so the advisory
+    state reads as "needs attention", never as a pending ring. The OVERRIDDEN
+    marker (the half-filled :data:`~eawf.surfaces.tui.widgets.sigils.Sigil.CLAIMED`
+    sigil) lands ONLY on the authority row, marking that the jury's verdict is
+    currently held / overridden to advisory.
+
+    Args:
+        mode: The App's resolved render-mode label, threaded so the sigils
+            resolve their ASCII / unicode column; defaults to
+            :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE`.
+
+    Returns:
+        A content-markup section body: the advisory banner sigil row, the
+        number-based validation-metric rows (dashes + sample counts), and
+        the overridden-marked authority row.
+    """
+    attention = chrome("attention", mode=mode)
+    overridden = glyph(Sigil.CLAIMED, mode=mode)
+    return "\n".join(
+        [
+            f"[$warn]{attention} jury held {JURY_AUTHORITY_ADVISORY} until validated[/]",
+            f"[$muted]Fleiss kappa[/] {JURY_FLEISS_NEED_COHORT}",
+            f"[$muted]ECE[/] {JURY_ECE_STARVED}",
+            f"[$muted]variance[/] {JURY_VARIANCE_STARVED}",
+            f"[$muted]known-bad catch[/] {JURY_KNOWN_BAD_NEED_LABELS}",
+            f"[$muted]Wilson-LB[/] 0.00 / {JURY_WILSON_FLOOR:.2f}",
+            f"[$warn]authority {JURY_AUTHORITY_ADVISORY} {overridden}[/]"
+            f" [$muted]overridden -- veto logged, close proceeds[/]",
+            # The placeholder's leading ``[`` is escaped so Textual content
+            # markup renders the literal ``[needs I07]`` rather than parsing it
+            # as a markup tag and swallowing the text.
+            f"[$muted]validation reducer {escape(NEEDS_I07_PLACEHOLDER)}[/]",
+        ]
+    )
+
+
 def render_tier_counts(scorecard: TrustScorecard) -> str:
     """Render the per-tier output counts (verified / attested / ...).
 
@@ -649,6 +739,7 @@ class TrustModeScreen(ScopeScreen):
     #: order. :meth:`_section_body` dispatches each id to its render helper.
     SECTIONS: ClassVar[tuple[tuple[str, str], ...]] = (
         ("trust-section-overview", "TRUST"),
+        ("trust-section-authority", "JURY AUTHORITY"),
         ("trust-section-tiers", "TIERS"),
         ("trust-section-determinism", "ORACLE DETERMINISM"),
         ("trust-section-escapes", "ESCAPE LEDGER"),
@@ -755,6 +846,8 @@ class TrustModeScreen(ScopeScreen):
         Returns:
             The section's content-markup body.
         """
+        if section_id == "trust-section-authority":
+            return render_jury_authority(mode=self._render_mode())
         if section_id == "trust-section-determinism":
             return render_oracle_determinism(
                 compute_oracle_determinism(self._current_evidence_records())
@@ -952,9 +1045,30 @@ class TrustModeScreen(ScopeScreen):
             return None
         return state_path if isinstance(state_path, Path) else None
 
+    def _render_mode(self) -> RenderMode:
+        """Return the host app's live render mode, or the safe default.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the sigil
+        helpers so an ASCII / unicode flip rerenders the jury-authority sigil
+        rows. Falls back to
+        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` under a
+        bare harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The active ``"unicode"`` / ``"ascii"`` mode.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
 
 __all__ = [
     "DATA_STARVED_NOTICE",
+    "JURY_AUTHORITY_ADVISORY",
+    "JURY_ECE_STARVED",
+    "JURY_FLEISS_NEED_COHORT",
+    "JURY_KNOWN_BAD_NEED_LABELS",
+    "JURY_VARIANCE_STARVED",
+    "JURY_WILSON_FLOOR",
+    "NEEDS_I07_PLACEHOLDER",
     "NO_DATA",
     "NO_ESCAPES_NOTICE",
     "NO_SCORED_EVIDENCE",
@@ -970,6 +1084,7 @@ __all__ = [
     "render_calibration_readiness",
     "render_escape_ledger",
     "render_eu_calibration",
+    "render_jury_authority",
     "render_oracle_determinism",
     "render_output_labels",
     "render_overview",

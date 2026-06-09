@@ -220,6 +220,11 @@ def test_trust_pane_shows_calibration_readiness_tile() -> None:
             assert isinstance(screen, TrustModeScreen)
             screen.set_calibration_readiness(CalibrationReadiness(captured_waves=3, threshold=5))
             await settle_screen(pilot)
+            # The CALIBRATION READINESS tile sits low in the section column (the
+            # W13 JURY AUTHORITY section now precedes the lower tiles), so scroll
+            # the column to the end to bring it into the captured viewport.
+            await pilot.press("end")
+            await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
             assert "CALIBRATION READINESS" in frame
             assert "captured waves 3 / 5" in frame
