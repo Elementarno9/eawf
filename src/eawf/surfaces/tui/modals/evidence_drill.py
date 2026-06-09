@@ -29,6 +29,9 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.sigils import chrome
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -179,8 +182,12 @@ class EvidenceDrillModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         """Yield the scrollable drill card with the criterion evidence chain."""
+        gate = chrome("gate", mode=getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
         with VerticalScroll(id="drill-box"):
-            yield Static(f"why: {self._view.id} :: {self._view.status}", classes="drill-title")
+            yield Static(
+                f"[$accent]{gate}[/] why: {self._view.id} :: {self._view.status}",
+                classes="drill-title",
+            )
             yield Static("Gate outcomes", classes="drill-section")
             for line in gate_outcome_lines(self._view):
                 yield Static(f"  {line}", classes="drill-row")

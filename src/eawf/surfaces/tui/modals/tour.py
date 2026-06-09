@@ -27,6 +27,9 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.surfaces.tui.modals.tour_cards import TourCard, render_tour_card
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -37,11 +40,24 @@ logger = logging.getLogger(__name__)
 TOUR_COMPLETED_KEY: str = "ui.tour_completed"
 
 #: The default first-run deck -- a short ordered walk through the dashboard's
-#: top-level concepts. Kept brief so the operator can step through it fast.
+#: top-level concepts, written in the cosmic-terminal reskin language so the
+#: operator meets the sigil + green vocabulary on first launch. Kept brief so
+#: the operator can step through it fast.
 _DEFAULT_DECK: tuple[TourCard, ...] = (
     TourCard(
         title="Welcome to Ea",
-        body="This is the eawf dashboard. It shows your phases, waves, and what needs you.",
+        body=(
+            "This is the eawf dashboard. It shows your phases, waves, and what needs you, "
+            "lit in the cosmic-terminal green."
+        ),
+    ),
+    TourCard(
+        title="Sigils",
+        body=(
+            "Lifecycle marks lead each row: a hollow ring is pending, a half-filled ring "
+            "claimed, a diamond running, a filled circle closed, a cross failed. The green "
+            "accent threads the live state."
+        ),
     ),
     TourCard(
         title="Modes",
@@ -183,9 +199,17 @@ class TourModal(ModalScreen[None]):
             self._repaint_card()
 
     def _repaint_card(self) -> None:
-        """Update the title / body / progress for the current card."""
+        """Update the title / body / progress for the current card.
+
+        The title leads with the shared dispatch sigil
+        (:func:`~eawf.surfaces.tui.widgets.sigils.chrome`) tinted ``$accent``
+        green so the carousel reads in the cosmic-terminal reskin language;
+        the card body is escaped so an arbitrary card text renders verbatim
+        through Textual content markup.
+        """
+        cursor = chrome("dispatch", mode=getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
         title, body = render_tour_card(self._deck[self.index])
-        self.query_one("#tour-title", Static).update(title)
+        self.query_one("#tour-title", Static).update(f"[$accent]{cursor}[/] {escape_markup(title)}")
         self.query_one("#tour-body", Static).update(body)
         self.query_one("#tour-progress", Static).update(
             f"card {self.index + 1} of {len(self._deck)}"

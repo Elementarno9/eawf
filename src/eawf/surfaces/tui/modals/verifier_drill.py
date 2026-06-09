@@ -29,6 +29,9 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.sigils import chrome
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -213,8 +216,12 @@ class VerifierDrillModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         """Yield the scrollable drill card with the per-row tier + producer."""
+        overview = chrome("overview", mode=getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
         with VerticalScroll(id="verifier-drill-box"):
-            yield Static("verifier: oracle tier + producer", classes="verifier-drill-title")
+            yield Static(
+                f"[$accent]{overview}[/] verifier: oracle tier + producer",
+                classes="verifier-drill-title",
+            )
             yield Static("scope  tier  producer  status", classes="verifier-drill-section")
             for line in render_verifier_rows(self._rows).splitlines():
                 yield Static(f"  {line}", classes="verifier-drill-row")

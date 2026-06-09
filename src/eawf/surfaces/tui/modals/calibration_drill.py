@@ -30,6 +30,9 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.sigils import chrome
+
 logger = logging.getLogger(__name__)
 
 #: Rendered when no jury calibration set is bound -- the COMMON path in
@@ -148,8 +151,12 @@ class CalibrationDrillModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         """Yield the scrollable drill card with the calibration metrics."""
+        gate = chrome("gate", mode=getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
         with VerticalScroll(id="calibration-drill-box"):
-            yield Static("jury calibration: Brier + ECE", classes="calibration-drill-title")
+            yield Static(
+                f"[$accent]{gate}[/] jury calibration: Brier + ECE",
+                classes="calibration-drill-title",
+            )
             for line in render_calibration_lines(self._calibration):
                 yield Static(f"  {line}", classes="calibration-drill-row")
             yield Static("[ Esc to close ]", classes="calibration-drill-hint")

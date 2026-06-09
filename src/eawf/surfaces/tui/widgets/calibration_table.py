@@ -1,4 +1,14 @@
-"""Calibration-table render helpers for the metrics TUI."""
+"""Calibration-table render helpers for the metrics TUI.
+
+The per-role fit grid is the SHAPE the metrics dashboard's sixth tile and
+its drilldown render. The drilldown header carries the cosmic-terminal
+reskin language: the shared attention sigil
+(:func:`~eawf.surfaces.tui.widgets.sigils.chrome`) marks the nudge column
+so a drifting bucket reads as "needs attention" rather than a bare ``!``,
+and the legend tints it the Wong-green ``$accent`` accent. The numeric
+cells stay honest -- an unfitted bucket renders a dash, never a fabricated
+fit value.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +16,8 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
+from eawf.surfaces.tui.widgets.sigils import chrome
 from eawf.workflow.estimation.buckets import BucketCalibration, CalibrationReport
 
 _NO_DATA = "[$text-muted]no per-role calibration data[/]"
@@ -31,17 +43,36 @@ def render_role_calibration_tile(rows: Sequence[RoleCalibrationRow]) -> str:
     return "\n".join(lines)
 
 
-def render_role_calibration_drilldown(rows: Sequence[RoleCalibrationRow]) -> str:
-    """Render the full per-role calibration drilldown body."""
+def render_role_calibration_drilldown(
+    rows: Sequence[RoleCalibrationRow], *, mode: RenderMode = DEFAULT_RENDER_MODE
+) -> str:
+    """Render the full per-role calibration drilldown body.
+
+    The legend marks the nudge column with the shared attention sigil
+    (:func:`~eawf.surfaces.tui.widgets.sigils.chrome`) tinted ``$accent`` so
+    a drifting bucket reads as "needs attention" in the reskin language. The
+    numeric fit cells stay honest -- an unfitted bucket renders a dash.
+
+    Args:
+        rows: The per-role calibration projection rows.
+        mode: The App's resolved render-mode label, threaded so the attention
+            sigil resolves its ASCII / unicode column; defaults to
+            :data:`DEFAULT_RENDER_MODE`.
+
+    Returns:
+        The content-markup drilldown body, or the honest-empty no-data notice
+        when no role calibration row exists.
+    """
     if not rows:
         return _NO_DATA
     first_report = rows[0].report
+    nudge_mark = chrome("attention", mode=mode)
     lines = [
         "fit EU by role and bucket",
         *_fit_grid(rows, role_width=_DRILL_ROLE_WIDTH, max_roles=None),
         "",
         f"window {first_report.window_days}d | nudge threshold "
-        f"{first_report.drift_threshold_pct:.0f}% | ! = nudge",
+        f"{first_report.drift_threshold_pct:.0f}% | [$accent]{nudge_mark}[/] = nudge",
         "",
         "details",
     ]

@@ -22,10 +22,12 @@ from eawf.surfaces.tui.screens.overlays.events import (
     EVENT_RING_SIZE,
     EventRow,
     EventsModal,
+    event_row_sigil,
     filter_rows,
     load_recent_events,
     next_filter,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -105,6 +107,39 @@ def test_event_row_is_report_when_type_has_report() -> None:
     plain = EventRow("EV-4", "t", "wave close", "ok", "s")
     assert report.is_report is True
     assert plain.is_report is False
+
+
+# --------------------------------------------------------------------------
+# event_row_sigil — the migrated sigil event log lifecycle marks
+# --------------------------------------------------------------------------
+
+
+def test_event_row_sigil_ok_is_closed_circle() -> None:
+    # An ``ok`` row reads as a completed transition -> the CLOSED circle.
+    assert event_row_sigil(EventRow("EV-1", "t", "wave close", "ok", "s")) is Sigil.CLOSED
+
+
+def test_event_row_sigil_closed_word_is_closed_circle() -> None:
+    assert event_row_sigil(EventRow("EV-1", "t", "wave close", "closed", "s")) is Sigil.CLOSED
+
+
+def test_event_row_sigil_claimed_is_half_ring() -> None:
+    assert event_row_sigil(EventRow("EV-1", "t", "wave claim", "claimed", "s")) is Sigil.CLAIMED
+
+
+def test_event_row_sigil_failed_word_is_cross() -> None:
+    assert event_row_sigil(EventRow("EV-1", "t", "dispatch", "failed", "s")) is Sigil.FAILED
+
+
+def test_event_row_sigil_unknown_error_status_falls_back_to_failed() -> None:
+    # A non-``ok`` status word that maps onto no lifecycle term still reads as
+    # a failure (the FAILED cross), so an errored row is never marked running.
+    assert event_row_sigil(EventRow("EV-2", "t", "dispatch cost", "fail", "boom")) is Sigil.FAILED
+
+
+def test_event_row_sigil_generic_event_is_running_diamond() -> None:
+    # An empty / unrecognised, non-error status reads as in-flight activity.
+    assert event_row_sigil(EventRow("EV-3", "t", "heartbeat", "", "s")) is Sigil.RUNNING
 
 
 # --------------------------------------------------------------------------

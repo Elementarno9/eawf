@@ -52,6 +52,8 @@ from eawf.surfaces.tui.widgets.calibration_table import (
     render_role_calibration_drilldown,
     render_role_calibration_tile,
 )
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
+from eawf.surfaces.tui.widgets.sigils import chrome
 from eawf.surfaces.tui.widgets.variance_tile import render_variance_markup
 from eawf.workflow.estimation.metrics import compute_wave_elapsed
 
@@ -68,6 +70,14 @@ DEFAULT_WINDOW: MetricsWindow = "7d"
 
 #: Telemetry-projection refresh cadence in seconds (5 s tick).
 METRICS_REFRESH_S: float = 5.0
+
+#: The frozen honest-negative footer the dashboard pins until EU capture lands
+#: (I04). The middle dot (U+00B7) is string DATA -- it separates the
+#: honest-negative banner from its "lights up after EU capture" promise.
+#: Phrased so the empty dashboard reads as "not measured yet", never a
+#: fabricated metric: the outer eawf harness does not yet instrument EU, so
+#: every telemetry-backed tile is honestly dark until the capture wave lands.
+METRICS_HONEST_NEGATIVE: str = "honest-negative · lights up after EU capture"
 
 #: Placeholder body when no state snapshot is available yet.
 _AWAITING: str = "[$text-muted]awaiting telemetry projection[/]"
@@ -360,10 +370,14 @@ class MetricsModal(ModalScreen[None]):
     MetricsModal .metric-tile.-focused {
         border: solid $primary;
     }
-    MetricsModal .metrics-hint {
+    MetricsModal .metrics-honest {
         color: $text-muted;
         height: 1;
         margin-top: 1;
+    }
+    MetricsModal .metrics-hint {
+        color: $text-muted;
+        height: 1;
     }
     """
 
@@ -403,10 +417,12 @@ class MetricsModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Yield the titled card, the 3x2 tile grid, and the close hint."""
         scope_suffix = f" · {self._args.scope_filter}" if self._args.scope_filter else ""
+        mode = self._render_mode()
+        overview = chrome("overview", mode=mode)
         projection = self._current_projection()
         with Grid(id="metrics-card"):
             yield Static(
-                f"Metrics · window {self._args.window}{scope_suffix}",
+                f"[$accent]{overview}[/] Metrics · window {self._args.window}{scope_suffix}",
                 classes="metrics-title",
             )
             with Grid(id="metrics-grid"):
@@ -419,9 +435,27 @@ class MetricsModal(ModalScreen[None]):
                     tile.border_title = spec.title
                     yield tile
             yield Static(
+                f"[$text-muted]{METRICS_HONEST_NEGATIVE}[/]",
+                classes="metrics-honest",
+            )
+            yield Static(
                 "[ arrows select · Enter drill · tiles refresh every 5s · Esc close ]",
                 classes="metrics-hint",
             )
+
+    def _render_mode(self) -> RenderMode:
+        """Resolve the host App's render mode, defaulting under a bare harness.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helpers so the chrome glyphs resolve their ASCII / unicode
+        column. Falls back to :data:`DEFAULT_RENDER_MODE` under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The App's ``render_mode`` when present, else
+            :data:`DEFAULT_RENDER_MODE`.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def _tile_body(self, spec: TileSpec, projection: MetricsProjection | None) -> str:
         """Render *spec*'s tile body from *projection*.
@@ -599,13 +633,16 @@ class CalibrationDrillModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Yield the title, calibration grid, details, and close hint."""
         scope_suffix = f" · {self._args.scope_filter}" if self._args.scope_filter else ""
+        mode: RenderMode = getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+        overview = chrome("overview", mode=mode)
         with VerticalScroll(id="calibration-card"):
             yield Static(
-                f"Role calibration · window {self._args.window}{scope_suffix}",
+                f"[$accent]{overview}[/] Role calibration · window "
+                f"{self._args.window}{scope_suffix}",
                 classes="calibration-title",
             )
             yield Static(
-                render_role_calibration_drilldown(self._rows),
+                render_role_calibration_drilldown(self._rows, mode=mode),
                 classes="calibration-body",
             )
             yield Static("[ Esc close ]", classes="calibration-hint")
@@ -663,9 +700,11 @@ class VarianceDrillModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Yield title, variance rows, and close hint."""
         scope_suffix = f" · {self._args.scope_filter}" if self._args.scope_filter else ""
+        overview = chrome("overview", mode=getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
         with VerticalScroll(id="variance-card"):
             yield Static(
-                f"Variance by bucket · window {self._args.window}{scope_suffix}",
+                f"[$accent]{overview}[/] Variance by bucket · window "
+                f"{self._args.window}{scope_suffix}",
                 classes="variance-title",
             )
             yield Static(
@@ -705,6 +744,7 @@ def open_metrics(app: App[None], metrics_args: MetricsArgs | None = None) -> boo
 
 __all__ = [
     "DEFAULT_WINDOW",
+    "METRICS_HONEST_NEGATIVE",
     "METRICS_REFRESH_S",
     "METRIC_WINDOWS",
     "TILE_SPECS",

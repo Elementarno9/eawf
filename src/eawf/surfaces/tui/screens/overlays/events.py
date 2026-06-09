@@ -35,6 +35,10 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
+from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
+
 if TYPE_CHECKING:
     from textual.app import App
 
@@ -58,6 +62,29 @@ _OK_STATUS: str = "ok"
 #: ``event_type`` substring that marks an agent-report event for the
 #: reports-only filter (report events carry ``report`` in their type).
 _REPORT_MARKER: str = "report"
+
+#: Lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` keyed off a
+#: lowercased event-status word. A claim transition wears the half-filled
+#: CLAIMED ring, a completed / ok transition the filled CLOSED circle, a
+#: failure the FAILED cross, an in-flight transition the RUNNING diamond.
+#: The SHAPE comes from the shared sigils home; no glyph is invented here.
+#: Mirrors the Feed pane's status->sigil map so the two event surfaces read
+#: the same lifecycle vocabulary.
+_STATUS_SIGIL: dict[str, Sigil] = {
+    "pending": Sigil.PENDING,
+    "claimed": Sigil.CLAIMED,
+    "running": Sigil.RUNNING,
+    "in_progress": Sigil.RUNNING,
+    "closed": Sigil.CLOSED,
+    "ok": Sigil.CLOSED,
+    "failed": Sigil.FAILED,
+    "error": Sigil.FAILED,
+}
+
+#: The lifecycle sigil a row with no recognisable status word wears: a
+#: generic event reads as in-flight activity (the RUNNING diamond) rather
+#: than a terminal mark.
+_DEFAULT_SIGIL: Sigil = Sigil.RUNNING
 
 #: The single UTC timestamp format every row is normalized to. The event
 #: store mixes two ISO-8601 spellings (``...Z`` and ``...+00:00``, with or
@@ -229,24 +256,62 @@ def next_filter(current: EventFilter) -> EventFilter:
     return EVENT_FILTERS[(index + 1) % len(EVENT_FILTERS)]
 
 
-def _render_row(row: EventRow) -> str:
-    """Render one :class:`EventRow` as a content-markup line.
+def event_row_sigil(row: EventRow) -> Sigil:
+    """Return the lifecycle :class:`Sigil` naming *row*'s event state.
 
-    Error rows are tinted with the ``$error`` theme var (resolved by
-    Textual content markup at render time so the colour follows the active
-    theme); healthy rows render plain.
+    The lifecycle is read off the row's lowercased ``status`` word via
+    :data:`_STATUS_SIGIL`: a claim transition wears the CLAIMED ring, a
+    completed / ok transition the CLOSED circle, a failure the FAILED cross.
+    A row with a non-empty status word that maps onto nothing but is still an
+    error (:attr:`EventRow.is_error` -- a non-``ok`` status the errors filter
+    keeps) wears the FAILED cross, so a failed row reads as failed even when
+    its status spelling is novel. A row with no status word at all defaults to
+    the in-flight :data:`_DEFAULT_SIGIL` (RUNNING) -- a missing status is no
+    signal, so it reads as live activity rather than a fabricated failure.
+
+    Args:
+        row: The event row whose lifecycle sigil to resolve.
+
+    Returns:
+        The lifecycle :class:`Sigil` the row's leading mark renders.
+    """
+    status = row.status.strip().lower()
+    if status in _STATUS_SIGIL:
+        return _STATUS_SIGIL[status]
+    if status and row.is_error:
+        return Sigil.FAILED
+    return _DEFAULT_SIGIL
+
+
+def _render_row(row: EventRow, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Render one :class:`EventRow` as a tinted, sigil-led content-markup line.
+
+    Leads with a two-cell lifecycle-sigil column (the shared SHAPE
+    :func:`~eawf.surfaces.tui.widgets.sigils.glyph` tinted by its Wong status
+    hue via :func:`~eawf.surfaces.tui.widgets.sigils.tint`), then the
+    timestamp / type / status / summary tail. The tail is markup-escaped so an
+    arbitrary summary (which may carry literal ``[`` brackets) renders verbatim
+    through Textual's content-markup parser. Error rows keep their ``$error``
+    tint on the tail; healthy rows render the tail plain. The sigil + tint
+    speak the same cosmic-terminal language the Feed pane's event rows do.
 
     Args:
         row: The row to render.
+        mode: The App's resolved render-mode label, threaded so the sigil
+            resolves its ASCII / unicode column; defaults to
+            :data:`DEFAULT_RENDER_MODE`.
 
     Returns:
         A content-markup string for a single :class:`~textual.widgets.Static`.
     """
+    sigil = event_row_sigil(row)
+    mark = escape_markup(glyph(sigil, mode=mode))
+    hex_tint = tint(sigil)
+    mark_cell = f"[{hex_tint}]{mark}[/]" if hex_tint is not None else mark
     head = f"{row.timestamp:<{_TS_WIDTH}}  {row.event_type:<24} {row.status}"
-    body = f"{head}  {row.summary}" if row.summary else head
-    if row.is_error:
-        return f"[$error]{body}[/]"
-    return body
+    tail = f"{head}  {row.summary}" if row.summary else head
+    body = f"[$error]{escape_markup(tail)}[/]" if row.is_error else escape_markup(tail)
+    return f"{mark_cell} {body}"
 
 
 class EventsModal(ModalScreen[None]):
@@ -322,10 +387,28 @@ class EventsModal(ModalScreen[None]):
                 classes="events-hint",
             )
 
+    def _render_mode(self) -> RenderMode:
+        """Resolve the host App's render mode, defaulting under a bare harness.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the sigil
+        helpers so the leading lifecycle marks resolve their ASCII / unicode
+        column. Falls back to :data:`DEFAULT_RENDER_MODE` under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The App's ``render_mode`` when present, else
+            :data:`DEFAULT_RENDER_MODE`.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
     def _title(self) -> str:
-        """Return the heading line (event count + active filter)."""
+        """Return the heading line (overview sigil + event count + filter)."""
+        overview = chrome("overview", mode=self._render_mode())
         shown = len(filter_rows(self._rows, self.event_filter))
-        return f"Events · {shown}/{len(self._rows)} · filter {self.event_filter}"
+        return (
+            f"[$accent]{overview}[/] Events · {shown}/{len(self._rows)} "
+            f"· filter {self.event_filter}"
+        )
 
     def _row_widgets(self) -> list[Static]:
         """Build the Static widgets for the filtered rows (or an empty note).
@@ -337,7 +420,8 @@ class EventsModal(ModalScreen[None]):
         filtered = filter_rows(self._rows, self.event_filter)
         if not filtered:
             return [Static("(no events)", classes="events-empty")]
-        return [Static(_render_row(row), classes="events-row") for row in filtered]
+        mode = self._render_mode()
+        return [Static(_render_row(row, mode=mode), classes="events-row") for row in filtered]
 
     def action_cycle_filter(self) -> None:
         """Advance the ``f`` filter cycle (all → errors → reports → all)."""
@@ -386,6 +470,7 @@ __all__ = [
     "EventFilter",
     "EventRow",
     "EventsModal",
+    "event_row_sigil",
     "filter_rows",
     "load_recent_events",
     "next_filter",

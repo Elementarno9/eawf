@@ -391,16 +391,18 @@ def test_metrics_verb_args_split() -> None:
     assert args == "--window 30d"
 
 
-def test_metrics_hint_has_top_margin() -> None:
-    # W15 polish: the close-hint sits flush against the tile grid without a
-    # gap; a top margin separates it (mirrors the DetailModal hint gap).
+def test_metrics_honest_line_has_top_margin() -> None:
+    # W15 polish (reskinned in W23): the footer block sits flush against the
+    # tile grid without a gap; a top margin separates it. The cosmic-terminal
+    # reskin pins the frozen honest-negative line directly under the grid, so
+    # the gap-separation now rides that line (the hint sits flush under it).
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause()
             app.push_modal(MetricsModal())
             await pilot.pause()
-            hint = app.screen.query_one(".metrics-hint", Static)
-            assert hint.styles.margin.top == 1
+            honest = app.screen.query_one(".metrics-honest", Static)
+            assert honest.styles.margin.top == 1
 
     asyncio.run(body())

@@ -37,6 +37,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.surfaces.tui.palette.verbs import ScopeName, visible_verbs
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 logger = logging.getLogger(__name__)
 
@@ -338,8 +340,9 @@ class HelpScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Yield the scrollable help card with each keymap section."""
         self._scope = self._resolve_scope()
+        overview = chrome("overview", mode=getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
         with VerticalScroll(id="help-container"):
-            yield Static("Eä TUI — Help", classes="help-title")
+            yield Static(f"[$accent]{overview}[/] Eä TUI — Help", classes="help-title")
             yield Static("Global keys", classes="help-section")
             for key, action in global_key_rows():
                 yield Static(f"  {key:<10} {action}", classes="help-row")
@@ -374,17 +377,20 @@ class HelpScreen(ModalScreen[None]):
     def _mode_key_widgets(self) -> ComposeResult:
         """Yield the mode digit-key rows, highlighting the active mode.
 
-        The row whose mode is the App's :attr:`current_mode` is marked with a
-        ``>`` cursor + an ``(active)`` tag and carries the ``help-row-active``
-        style class, so the operator reads at a glance which mode they are in.
-        The marker is plain text so it survives the text-only snapshot capture
-        (the CSS style would not appear in the captured frame on its own).
+        The row whose mode is the App's :attr:`current_mode` is marked with
+        the shared dispatch sigil
+        (:func:`~eawf.surfaces.tui.widgets.sigils.chrome`) cursor + an
+        ``(active)`` tag and carries the ``help-row-active`` style class, so
+        the operator reads at a glance which mode they are in. The marker is
+        plain text so it survives the text-only snapshot capture (the CSS
+        style would not appear in the captured frame on its own).
         """
         current_mode = self._resolve_current_mode()
+        cursor = chrome("dispatch", mode=getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
         for key, action, is_active in mode_key_rows_active(current_mode):
             if is_active:
                 yield Static(
-                    f"> {key:<10} {action} (active)",
+                    f"{cursor} {key:<10} {action} (active)",
                     classes="help-row help-row-active",
                 )
             else:
