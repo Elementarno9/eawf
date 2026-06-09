@@ -4440,6 +4440,18 @@
       "status": "done",
       "updated_at": "2026-06-09T23:06:17.542697Z"
     },
+    "P30-I03-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W02",
+      "scope_id": "P30-I03-W02",
+      "status": "done",
+      "updated_at": "2026-06-09T23:24:25.036391Z"
+    },
     "P30-I03-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4463,6 +4475,18 @@
       "scope_id": "P30-I03-W07",
       "status": "done",
       "updated_at": "2026-06-09T23:06:41.209484Z"
+    },
+    "P30-I03-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W08",
+      "scope_id": "P30-I03-W08",
+      "status": "done",
+      "updated_at": "2026-06-09T23:24:27.033832Z"
     }
   },
   "agent_sessions": {
@@ -14782,6 +14806,19 @@
       "scope_id": "P30-I03-W01",
       "updated_at": "2026-06-09T23:05:53.103797Z"
     },
+    "P30-I03-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W02-bucket-20260609T232405Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I03-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I03-W02",
+      "updated_at": "2026-06-09T23:24:05.813992Z"
+    },
     "P30-I03-W04": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I03-W04-bucket-20260609T230554Z",
@@ -14807,6 +14844,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I03-W07",
       "updated_at": "2026-06-09T23:05:56.076979Z"
+    },
+    "P30-I03-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W08-bucket-20260609T232407Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I03-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I03-W08",
+      "updated_at": "2026-06-09T23:24:07.387767Z"
     }
   },
   "goals": {
@@ -17678,7 +17728,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T23:06:41.209833Z",
+  "updated_at": "2026-06-09T23:24:27.034223Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -68444,10 +68494,10 @@
         "P30-I03-W05",
         "P30-I03-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T23:10:03.631393Z",
+      "closed_at": "2026-06-09T23:24:25.036391Z",
+      "commit": "67605abd1b4ddf4b693bb3a1fa3ca2dbd4faf237",
       "deps": [
         "P30-I03-W01"
       ],
@@ -68458,28 +68508,60 @@
         "src/eawf/workflow/skills/engine.py",
         "src/eawf/surfaces/render/envelope.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/test_skill_engine_body_validation.py",
+              "tests/unit/test_skills_engine.py",
+              "tests/unit/test_cli_skill.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W02",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.771821Z",
-      "outcome": null,
+      "outcome": "run_skill validates registered dict bodies via model_validate pre-envelope: drifted extra-forbid dict raises ValidationError on emit, str bodies + unregistered skills bypass; two pre-existing non-conforming test stubs made conforming; 455 workflow tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W02-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "pytest test_run_skill_validates_typed_body_on_emit, test_run_skill_rejects_drifted_body_dict, test_run_skill_string_body_skips_validation pass",
-          "oracle_tier": null,
-          "quality_dimension": "reliability",
+          "measurable_signal": "test_skill_engine_body_validation.py asserts the conforming-dict emit, the drifted-dict ValidationError naming the extra key, the str-body bypass, and the unregistered-skill bypass; the engine + CLI skill suites stay green; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "run_skill validates a registered dict body via model_validate before building the OutputEnvelope: a conforming dict emits a normal envelope, a drifted dict (extra-forbid key) raises pydantic.ValidationError on the success/emit path, and a raw markdown string body emits unchanged (str branch is not gated).",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the engine body-validation + skill suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "run_skill validates a registered dict body via model_validate before building the OutputEnvelope: a conforming dict emits a normal envelope, a drifted dict (extra-forbid key) raises pydantic.ValidationError on the success/emit path naming the offending key, and a raw markdown string body emits unchanged (the str branch is not gated); a skill name with no registered model is ungated.",
           "waiver_reason": null
         }
       ],
@@ -68791,10 +68873,10 @@
     "P30-I03-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T23:10:04.164838Z",
+      "closed_at": "2026-06-09T23:24:27.033832Z",
+      "commit": "15f25e0da7fa8616da9c5b1f68a4a380001b8deb",
       "deps": [
         "P30-I03-W07"
       ],
@@ -68805,28 +68887,58 @@
         "src/eawf/platform/lint/validate_prose.py",
         "src/eawf/surfaces/render/skills/registry.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_skill_prose_symbol_gate.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W08",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.772222Z",
-      "outcome": null,
+      "outcome": "skill_prose_symbol_gate.py drift oracle (importlib + filesystem resolution over backticked refs, conservative bare-noun skip) wired as blocking pre-commit hook sibling to idle-contract-gate; live registry exits 0; 14 unit tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W08-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "pytest test_skill_prose_symbol_gate_passes_on_reconciled_registry, test_skill_prose_symbol_gate_fails_on_unresolvable_symbol, test_skill_prose_symbol_gate_skips_non_symbol_backticks pass",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "measurable_signal": "skill_prose_symbol_gate.py exits 0 on the live registry; test_skill_prose_symbol_gate.py asserts the fixture fail names token + skill and the bare-noun / boundary blocks yield no findings; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "The gate over the reconciled registry.py exits 0 (every named dotted symbol/path resolves); a fixture prose block naming the unresolvable kernel.spec.research.IntentBrief makes the gate exit non-zero with the offending token plus skill name; and a block with bare prose nouns (IntentBrief, --depth, gate) produces no findings (no false positive).",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the prose-symbol gate suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The skill-prose-symbol gate over the reconciled registry.py exits 0 (every backticked dotted symbol and src/eawf path resolves via import / filesystem); a fixture prose block naming the unresolvable kernel.spec.research.IntentBrief makes the gate exit non-zero naming the offending token plus the carrying skill; and a block with bare prose nouns (IntentBrief, --depth, gate) produces no findings; the gate runs as a blocking pre-commit hook sibling to idle-contract-gate.",
           "waiver_reason": null
         }
       ],
