@@ -13,6 +13,13 @@ import asyncio
 from textual.app import App, ComposeResult
 
 from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
+from eawf.surfaces.tui.widgets.sigils import chrome
+
+# The bare ``App[None]`` harness exposes no ``render_mode`` reactive, so the
+# checklist falls back to the unicode column: the filled ``check_on``
+# lozenge and the hollow ``check_off`` square.
+_CHECK_ON = chrome("check_on", mode="unicode")
+_CHECK_OFF = chrome("check_off", mode="unicode")
 
 # A realistic ``ConfigModal._meta_line`` prefix: three-cell lead (caret +
 # dirty + separator), the key, then the padded ``[type]`` cell + trailing
@@ -74,8 +81,9 @@ def test_header_is_the_first_line() -> None:
             checklist = app.query_one("#mc", MultichoiceChecklist)
             lines = _rendered(checklist).splitlines()
             assert lines[0].strip() == "ui.dashboard_panes [multichoice]"
-            # Header carries no checkbox; the option rows do.
-            assert "[" not in lines[0].replace("[multichoice]", "")
+            # Header carries no toggle mark; the option rows do.
+            assert _CHECK_ON not in lines[0]
+            assert _CHECK_OFF not in lines[0]
             assert len(lines) == 1 + len(_CHOICES)  # header + one row per choice
 
     asyncio.run(body())
@@ -97,7 +105,7 @@ def test_option_rows_carry_no_prefix() -> None:
                 assert "[multichoice]" not in line
                 # The row indents under the value column the header sets up.
                 assert line.startswith(indent)
-                assert "[ ]" in line or "[X]" in line
+                assert _CHECK_OFF in line or _CHECK_ON in line
 
     asyncio.run(body())
 
@@ -166,7 +174,7 @@ def test_cursor_clamps_at_first_and_last() -> None:
 
 
 def test_space_toggles_focused_choice_membership() -> None:
-    """``space`` flips the focused choice's ``[X]`` mark + selected-items."""
+    """``space`` flips the focused choice's filled mark + selected-items."""
 
     async def body() -> None:
         app = _Harness()
@@ -178,9 +186,9 @@ def test_space_toggles_focused_choice_membership() -> None:
             await pilot.press("space")  # toggle the first choice ON
             await pilot.pause()
             assert checklist.selected_items() == ["state"]
-            # The first option row now shows the filled mark.
+            # The first option row now shows the filled check_on mark.
             first_option = _rendered(checklist).splitlines()[1]
-            assert "[X]" in first_option
+            assert _CHECK_ON in first_option
             await pilot.press("space")  # toggle it back OFF
             await pilot.pause()
             assert checklist.selected_items() == []
@@ -233,7 +241,7 @@ def test_commit_posts_selected_items() -> None:
 
 
 def test_pre_selected_choice_renders_filled_mark() -> None:
-    """A pre-selected choice seeds the ``[X]`` mark on its option row."""
+    """A pre-selected choice seeds the filled check_on mark on its option row."""
 
     async def body() -> None:
         app = _Harness(selected=["backlog"])
@@ -242,7 +250,7 @@ def test_pre_selected_choice_renders_filled_mark() -> None:
             checklist = app.query_one("#mc", MultichoiceChecklist)
             lines = _rendered(checklist).splitlines()
             backlog_line = next(line for line in lines if "backlog" in line)
-            assert "[X]" in backlog_line
+            assert _CHECK_ON in backlog_line
             assert checklist.selected_items() == ["backlog"]
 
     asyncio.run(body())

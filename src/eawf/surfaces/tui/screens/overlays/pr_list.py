@@ -41,10 +41,17 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.sigils import chrome
+
 if TYPE_CHECKING:
     from textual.app import App
 
 logger = logging.getLogger(__name__)
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
 
 #: The ``gh pr list`` cache TTL in seconds — 60 s balances freshness
 #: against the ~200-500 ms ``gh pr list`` cost per repo.
@@ -284,17 +291,29 @@ def _gh_view_web(number: int) -> None:
         logger.debug(f"_gh_view_web number={number} failed cause={exc!r}")
 
 
-def _render_row(row: PrRow) -> str:
-    """Render one :class:`PrRow` as a single content-markup line.
+def _render_row(row: PrRow, *, mode: str = _DEFAULT_RENDER_MODE) -> str:
+    """Render one :class:`PrRow` as a single narrow-sigil content-markup line.
+
+    The cosmic-terminal reskin leads each row with the shared ``dispatch``
+    chrome sigil drawn through the single
+    :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home -- a single-cell
+    glyph in the ``$accent`` green, so it never strands against the
+    ``-selected`` reverse rectangle the way a wide marker would. The grid
+    then reads sigil + ``#number`` + title + ``@author`` + state count, each
+    column a fixed lead so a highlighted row's reverse fill lands cleanly.
 
     Args:
         row: The PR row to render.
+        mode: The App's resolved render-mode label -- ``"ascii"`` selects
+            the ASCII sigil column, any other value the unicode column.
 
     Returns:
         A content-markup string for one :class:`~textual.widgets.Static`.
     """
+    sigil = chrome("dispatch", mode=mode)
     author = f" @{row.author}" if row.author else ""
-    return f"[$accent]#{row.number}[/]  {row.title}{author}"
+    state = f"  [$text-muted]{row.state}[/]" if row.state else ""
+    return f"[$accent]{sigil}[/] [$accent]#{row.number}[/]  {row.title}{author}{state}"
 
 
 #: Placeholder shown when ``gh`` ran and returned zero open PRs.
@@ -393,14 +412,23 @@ class PrListModal(ModalScreen[None]):
         return _EMPTY_OK_TEXT
 
     def compose(self) -> ComposeResult:
-        """Yield the titled card, the PR list (or placeholder), and hint."""
+        """Yield the titled card, the narrow-sigil PR grid (or placeholder), + hint.
+
+        Each PR row is drawn by :func:`_render_row` in the App's resolved
+        render mode so the leading ``dispatch`` sigil tracks a unicode <->
+        ASCII flip; the title leads with the shared ``overview`` sigil so the
+        card head reads as a list surface, resolved through the single
+        :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home.
+        """
+        mode = self._render_mode()
+        title_sigil = chrome("overview", mode=mode)
         with VerticalScroll(id="pr-card"):
-            yield Static(f"Open PRs · {len(self._rows)}", classes="pr-title")
+            yield Static(f"{title_sigil} Open PRs · {len(self._rows)}", classes="pr-title")
             with VerticalScroll(id="pr-list"):
                 if self._rows:
                     for index, row in enumerate(self._rows):
                         yield Static(
-                            _render_row(row),
+                            _render_row(row, mode=mode),
                             classes="pr-row",
                             id=f"pr-row-{index}",
                         )
@@ -409,11 +437,40 @@ class PrListModal(ModalScreen[None]):
             yield Static("[ Enter open in browser · Esc to close ]", classes="pr-hint")
 
     def on_mount(self) -> None:
-        """Paint the initial highlight on the first row (when any)."""
+        """Paint the initial highlight, then watch for a render-mode flip.
+
+        Wires a ``render_mode`` watcher so a unicode <-> ASCII flip repaints
+        the title + every PR row's leading sigil in the active glyph column.
+        """
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         if not self._rows:
             self.selected = -1
             return
         self._repaint_selection()
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the title + PR rows when the App's render mode flips."""
+        mode = self._render_mode()
+        title_sigil = chrome("overview", mode=mode)
+        self.query_one(".pr-title", Static).update(f"{title_sigil} Open PRs · {len(self._rows)}")
+        for index, row in enumerate(self._rows):
+            self.query_one(f"#pr-row-{index}", Static).update(_render_row(row, mode=mode))
+        if self._rows:
+            self._repaint_selection()
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the row sigils to their ASCII
+        column; falls back to the unicode column under a bare test harness
+        whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
 
     def watch_selected(self) -> None:
         """Repaint the row highlight when the selection moves."""

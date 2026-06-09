@@ -1,4 +1,4 @@
-"""``MultichoiceChecklist`` — inline ``[X]`` / ``[ ]`` editor for a multichoice key.
+"""``MultichoiceChecklist`` -- inline filled / empty toggle editor for a multichoice key.
 
 Extracted from :mod:`eawf.surfaces.tui.screens.overlays.config_modal` so the config
 overlay module stays under the EAWF010 module-length budget: the checklist
@@ -9,6 +9,14 @@ than a class buried in the modal file. The modal imports it and handles its
 / :class:`~MultichoiceChecklist.Toggled` messages; the message classes keep
 their ``MultichoiceChecklist`` qualname so the modal's
 ``on_multichoice_checklist_*`` handler names resolve unchanged.
+
+The cosmic-terminal reskin draws the per-line toggle marks through the
+shared :func:`~eawf.surfaces.tui.widgets.sigils.chrome` SHAPE home -- the
+filled ``check_on`` lozenge for a selected choice and the hollow
+``check_off`` square for a cleared one -- so the marks track the App's
+render mode (the unicode lozenges under a unicode surface, the ``[x]`` /
+``[ ]`` ASCII fallback under an ``ascii`` flip) instead of a local
+hardcode.
 """
 
 from __future__ import annotations
@@ -20,14 +28,23 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.sigils import chrome
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
+
 
 class MultichoiceChecklist(Static):
-    """Inline ``[X]`` / ``[ ]`` checklist for a ``multichoice`` config key.
+    """Inline filled / empty toggle checklist for a ``multichoice`` config key.
 
     Mounted in place of the focused field row when the operator presses
-    ``Enter`` on a ``multichoice`` field. Each declared choice renders as a
-    ``[X]`` (selected) or ``[ ]`` (cleared) line; a ``>`` caret marks the
-    focused line. The widget owns the keyboard while open:
+    ``Enter`` on a ``multichoice`` field. Each declared choice renders the
+    shared ``check_on`` filled mark (selected) or ``check_off`` empty mark
+    (cleared) drawn through the :mod:`~eawf.surfaces.tui.widgets.sigils`
+    SHAPE home; a ``>`` caret marks the focused line. The widget owns the
+    keyboard while open:
 
     * ``↑`` / ``↓`` move the line focus (clamped, no wrap).
     * ``Space`` toggles the focused line's membership.
@@ -122,9 +139,33 @@ class MultichoiceChecklist(Static):
         self._prefix = prefix
 
     def on_mount(self) -> None:
-        """Paint the initial checklist and focus the widget."""
+        """Paint the initial checklist, focus, then watch for a render flip.
+
+        Wires a ``render_mode`` watcher so a unicode <-> ASCII flip repaints
+        the filled / empty toggle marks in the active glyph column.
+        """
         self._repaint()
         self.focus()
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the toggle marks when the App's render mode flips."""
+        if self.is_mounted:
+            self._repaint()
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the toggle marks to their
+        ASCII column; falls back to the unicode column under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
 
     def selected_items(self) -> list[str]:
         """Return the selected choices in declaration order."""
@@ -137,15 +178,20 @@ class MultichoiceChecklist(Static):
         config modal) renders **once** as a header row above the checklist,
         not on every option line. Repeating it per row turned a 7-choice
         field into seven ``ui.dashboard_panes [multichoice]`` echoes. Each
-        option line (caret + ``[X]`` / ``[ ]`` + choice) is indented by the
-        prefix width so it aligns under the value column the header sets up.
+        option line (caret + filled / empty toggle mark + choice) is indented
+        by the prefix width so it aligns under the value column the header
+        sets up. The toggle marks come from the shared ``check_on`` /
+        ``check_off`` chrome roles so they track the App's render mode.
         """
+        mode = self._render_mode()
+        check_on = chrome("check_on", mode=mode)
+        check_off = chrome("check_off", mode=mode)
         indent = " " * len(self._prefix)
         lines: list[str] = [self._prefix.rstrip()]
         for index, choice in enumerate(self._choices):
             caret = ">" if index == self.line_index else " "
-            mark = "X" if choice in self._selected else " "
-            lines.append(f"{indent}{caret} [{mark}] {choice}")
+            mark = check_on if choice in self._selected else check_off
+            lines.append(f"{indent}{caret} {mark} {choice}")
         self.update("\n".join(lines))
 
     def watch_line_index(self) -> None:

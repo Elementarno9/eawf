@@ -61,11 +61,17 @@ from eawf.surfaces.tui.screens.overlays.pr_list import (
     fetch_open_prs,
 )
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App
 
 logger = logging.getLogger(__name__)
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
 
 #: A per-repo PR fetcher: ``(cwd) -> PrFetch``. Defaults to the
 #: single-repo :func:`~eawf.surfaces.tui.screens.overlays.pr_list.fetch_open_prs`
@@ -311,21 +317,44 @@ class CrossRepoPrModal(ModalScreen[None]):
         return bool(self._groups)
 
     def compose(self) -> ComposeResult:
-        """Yield the titled card, the grouped PR rows (or placeholder), + hint."""
+        """Yield the titled card, the narrow-sigil grouped PR grid (or placeholder), + hint.
+
+        Each per-PR row is drawn by
+        :func:`~eawf.surfaces.tui.screens.overlays.pr_list._render_row` in the
+        App's resolved render mode so its leading ``dispatch`` sigil tracks a
+        unicode <-> ASCII flip; the card title leads with the shared
+        ``overview`` sigil, resolved through the single
+        :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home.
+        """
+        mode = self._render_mode()
+        title_sigil = chrome("overview", mode=mode)
         total = total_open_prs(self._groups)
         with VerticalScroll(id="xpr-card"):
             yield Static(
-                f"Cross-repo PRs * {len(self._groups)} repos * {total} open",
+                f"{title_sigil} Cross-repo PRs * {len(self._groups)} repos * {total} open",
                 classes="xpr-title",
             )
             with VerticalScroll(id="xpr-list"):
-                yield from self._compose_body()
+                yield from self._compose_body(mode=mode)
             yield Static(
                 "[ Enter open in browser * Esc to close * read-only ]",
                 classes="xpr-hint",
             )
 
-    def _compose_body(self) -> ComposeResult:
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the title + row sigils to
+        their ASCII column; falls back to the unicode column under a bare
+        test harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
+
+    def _compose_body(self, *, mode: str) -> ComposeResult:
         """Yield the grouped repo rows, or the honest-empty placeholder.
 
         Walks the groups in order, emitting a header per repo and a row per
@@ -338,21 +367,28 @@ class CrossRepoPrModal(ModalScreen[None]):
         if not self._has_any_repo():
             yield Static(_EMPTY_NO_REPOS_TEXT, classes="xpr-empty")
             return
-        yield from self._compose_groups()
+        yield from self._compose_groups(mode=mode)
         if not self._flat:
             # Every registered repo was checked but none has an open PR --
             # the per-group lines above already say so; this is the
             # aggregate honest-empty summary.
             yield Static(_EMPTY_NO_PRS_TEXT, classes="xpr-empty")
 
-    def _compose_groups(self) -> ComposeResult:
-        """Yield each repo group's header + its PR / status rows.
+    def _compose_groups(self, *, mode: str) -> ComposeResult:
+        """Yield each repo group's header + its narrow-sigil PR / status rows.
 
         Walks the groups in order. Each group emits a header line; an
         unavailable repo follows with its honest hint line, an OK repo with
         zero PRs follows with the empty-repo line, and an OK repo with PRs
         follows with one row per PR carrying a stable ``#xpr-row-<index>``
-        id matching :attr:`_flat`.
+        id matching :attr:`_flat`. Each PR row is drawn through the shared
+        narrow-sigil :func:`~eawf.surfaces.tui.screens.overlays.pr_list._render_row`
+        in *mode* so the leading sigil never strands against the selection
+        rectangle.
+
+        Args:
+            mode: The App's resolved render-mode label threaded into the row
+                sigil helper.
         """
         flat_index = 0
         for group in self._groups:
@@ -365,18 +401,38 @@ class CrossRepoPrModal(ModalScreen[None]):
                 continue
             for row in group.rows:
                 yield Static(
-                    f"  {_render_row(row)}",
+                    f"  {_render_row(row, mode=mode)}",
                     classes="xpr-row",
                     id=f"xpr-row-{flat_index}",
                 )
                 flat_index += 1
 
     def on_mount(self) -> None:
-        """Paint the initial highlight on the first PR row (when any)."""
+        """Paint the initial highlight, then watch for a render-mode flip.
+
+        Wires a ``render_mode`` watcher so a unicode <-> ASCII flip repaints
+        the title + every flattened PR row's leading sigil in the active
+        glyph column.
+        """
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         if not self._flat:
             self.selected = -1
             return
         self._repaint_selection()
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the title + flattened PR rows when the render mode flips."""
+        mode = self._render_mode()
+        title_sigil = chrome("overview", mode=mode)
+        total = total_open_prs(self._groups)
+        self.query_one(".xpr-title", Static).update(
+            f"{title_sigil} Cross-repo PRs * {len(self._groups)} repos * {total} open"
+        )
+        for index, (_code, row) in enumerate(self._flat):
+            self.query_one(f"#xpr-row-{index}", Static).update(f"  {_render_row(row, mode=mode)}")
+        if self._flat:
+            self._repaint_selection()
 
     def watch_selected(self) -> None:
         """Repaint the row highlight when the selection moves."""

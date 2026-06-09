@@ -30,6 +30,8 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.sigils import chrome
+
 if TYPE_CHECKING:
     from textual.app import App
 
@@ -40,6 +42,16 @@ logger = logging.getLogger(__name__)
 INIT_ACTION_QUICK = "quick-init"
 INIT_ACTION_REGISTER = "register-repo"
 INIT_ACTION_WORKSPACE_LINK = "workspace-link"
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
+
+#: The key-hint footer vocab, mirroring the other reskin overlays: a
+#: middle-dot-separated chord list wrapped in brackets so the affordances
+#: read in one calm line under the option list.
+_KEY_HINT: str = "[ ↑/↓ select · Enter choose · Esc close ]"
 
 
 @dataclass(frozen=True)
@@ -326,16 +338,25 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         self._options = build_init_wizard_options(context)
 
     def compose(self) -> ComposeResult:
-        """Yield title, options, command previews, and key hint."""
+        """Yield the sigil-marked title, options, previews, and key hint.
+
+        The title leads with the shared ``dispatch`` chrome sigil (the heavy
+        right-angle quote, or the ASCII ``>`` fallback) so the bootstrap
+        chooser reads as a launch action, resolved through the single
+        :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home. The footer
+        renders the key-hint chord vocab shared across the reskin overlays.
+        """
+        mode = self._render_mode()
+        sigil = chrome("dispatch", mode=mode)
         with Vertical(id="init-wizard-box"):
-            yield Static("Initialize EAWF", classes="init-title")
+            yield Static(f"{sigil} Initialize EAWF", classes="init-title")
             yield Static(self._subtitle(), classes="init-subtitle")
             with VerticalScroll():
                 for index, option in enumerate(self._options):
                     yield Static(option.label, classes="init-option", id=f"init-option-{index}")
                     yield Static(option.description, classes="init-description")
                     yield Static(format_command(option.command), classes="init-command")
-            yield Static("[ ↑/↓ select · Enter choose · Esc close ]", classes="init-hint")
+            yield Static(_KEY_HINT, classes="init-hint")
 
     def _subtitle(self) -> str:
         """Return the context line under the title."""
@@ -344,8 +365,33 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         return f"Scope: {self._wizard_context.scope}. Pick a bootstrap path."
 
     def on_mount(self) -> None:
-        """Paint the initial option highlight."""
+        """Paint the initial option highlight, then watch for a render flip.
+
+        Wires a ``render_mode`` watcher so a unicode <-> ASCII flip repaints
+        the title's dispatch sigil in the active glyph column.
+        """
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._repaint_options()
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the title sigil when the App's render mode flips."""
+        mode = self._render_mode()
+        sigil = chrome("dispatch", mode=mode)
+        self.query_one(".init-title", Static).update(f"{sigil} Initialize EAWF")
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the dispatch glyph to its
+        ASCII column; falls back to the unicode column under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
 
     def watch_selected(self) -> None:
         """Repaint the option highlight when the selection moves."""

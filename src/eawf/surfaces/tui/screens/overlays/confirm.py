@@ -26,11 +26,23 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets.sigils import chrome
+
 logger = logging.getLogger(__name__)
 
 #: The two confirmation choices, ordered left-to-right for the arrow
 #: toggle. Index ``0`` (``No``) is the safe default highlight.
 _CHOICES: tuple[str, ...] = ("No", "Yes")
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
+
+#: The key-hint footer vocab, mirroring the other reskin overlays: a
+#: middle-dot-separated chord list wrapped in brackets so the affordances
+#: read in one calm line under the choice toggle.
+_KEY_HINT: str = "[ ←/→ select · Enter confirm · Esc cancel ]"
 
 
 class ConfirmModal(ModalScreen[bool]):
@@ -72,6 +84,11 @@ class ConfirmModal(ModalScreen[bool]):
         color: $accent;
         text-style: bold reverse;
     }
+    ConfirmModal .confirm-hint {
+        color: $text-muted;
+        height: 1;
+        margin-top: 1;
+    }
     """
 
     #: ``←`` / ``→`` toggle, ``Enter`` confirms, ``Esc`` cancels. Vim
@@ -98,16 +115,52 @@ class ConfirmModal(ModalScreen[bool]):
         self._prompt = prompt
 
     def compose(self) -> ComposeResult:
-        """Yield the prompt + the two arrow-toggle choice cells."""
+        """Yield the sigil-marked prompt, the choice cells, and the key hint.
+
+        The prompt leads with the shared ``attention`` chrome sigil (the
+        triangle, or the ASCII ``!`` fallback) in the ``$warn`` attention
+        colour so a destructive confirm reads as a pause demanding the
+        operator's eye, resolved through the single
+        :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home. The footer
+        renders the key-hint chord vocab shared across the reskin overlays.
+        """
+        mode = self._render_mode()
+        sigil = chrome("attention", mode=mode)
         with Vertical(id="confirm-box"):
-            yield Static(self._prompt, classes="confirm-prompt")
+            yield Static(f"[$warn]{sigil}[/] {self._prompt}", classes="confirm-prompt")
             with Horizontal(id="confirm-choices"):
                 for index, label in enumerate(_CHOICES):
                     yield Static(label, classes="confirm-choice", id=f"choice-{index}")
+            yield Static(_KEY_HINT, classes="confirm-hint")
 
     def on_mount(self) -> None:
-        """Paint the initial highlight on the safe default (``No``)."""
+        """Paint the initial highlight, then watch for a render-mode flip.
+
+        Wires a ``render_mode`` watcher so a unicode <-> ASCII flip repaints
+        the prompt's attention sigil in the active glyph column.
+        """
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._repaint_choices()
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the prompt sigil when the App's render mode flips."""
+        mode = self._render_mode()
+        sigil = chrome("attention", mode=mode)
+        self.query_one(".confirm-prompt", Static).update(f"[$warn]{sigil}[/] {self._prompt}")
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the attention glyph to its
+        ASCII column; falls back to the unicode column under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
 
     def watch_selected(self) -> None:
         """Repaint the choice highlight when the selection moves."""
