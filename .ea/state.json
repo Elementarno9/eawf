@@ -3899,6 +3899,90 @@
       "scope_id": "P30-I01-W01",
       "status": "done",
       "updated_at": "2026-06-09T13:09:09.777412Z"
+    },
+    "P30-I01-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W02",
+      "scope_id": "P30-I01-W02",
+      "status": "done",
+      "updated_at": "2026-06-09T14:14:13.321301Z"
+    },
+    "P30-I01-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W03",
+      "scope_id": "P30-I01-W03",
+      "status": "done",
+      "updated_at": "2026-06-09T13:40:53.480860Z"
+    },
+    "P30-I01-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W04",
+      "scope_id": "P30-I01-W04",
+      "status": "done",
+      "updated_at": "2026-06-09T13:40:54.166079Z"
+    },
+    "P30-I01-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W05",
+      "scope_id": "P30-I01-W05",
+      "status": "done",
+      "updated_at": "2026-06-09T13:40:54.871368Z"
+    },
+    "P30-I01-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W07",
+      "scope_id": "P30-I01-W07",
+      "status": "done",
+      "updated_at": "2026-06-09T14:15:07.535806Z"
+    },
+    "P30-I01-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W10",
+      "scope_id": "P30-I01-W10",
+      "status": "done",
+      "updated_at": "2026-06-09T13:40:56.505323Z"
+    },
+    "P30-I01-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W11",
+      "scope_id": "P30-I01-W11",
+      "status": "done",
+      "updated_at": "2026-06-09T14:12:48.386900Z"
     }
   },
   "agent_sessions": {
@@ -13587,6 +13671,97 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I01-W01",
       "updated_at": "2026-06-09T12:59:00.841621Z"
+    },
+    "P30-I01-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W02-bucket-20260609T140612Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I01-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I01-W02",
+      "updated_at": "2026-06-09T14:06:12.844638Z"
+    },
+    "P30-I01-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W03-bucket-20260609T131127Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I01-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I01-W03",
+      "updated_at": "2026-06-09T13:11:27.234113Z"
+    },
+    "P30-I01-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W04-bucket-20260609T131127Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I01-W04",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I01-W04",
+      "updated_at": "2026-06-09T13:11:27.737182Z"
+    },
+    "P30-I01-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W05-bucket-20260609T131128Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I01-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I01-W05",
+      "updated_at": "2026-06-09T13:11:28.230914Z"
+    },
+    "P30-I01-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W07-bucket-20260609T140613Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I01-W07",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I01-W07",
+      "updated_at": "2026-06-09T14:06:13.332814Z"
+    },
+    "P30-I01-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W10-bucket-20260609T131129Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I01-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I01-W10",
+      "updated_at": "2026-06-09T13:11:29.281920Z"
+    },
+    "P30-I01-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W11-bucket-20260609T141247Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I01-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I01-W11",
+      "updated_at": "2026-06-09T14:12:47.704960Z"
     }
   },
   "goals": {
@@ -15172,7 +15347,8 @@
         "P30-I01-W10",
         "P30-I01-W06",
         "P30-I01-W08",
-        "P30-I01-W09"
+        "P30-I01-W09",
+        "P30-I01-W11"
       ]
     },
     "P30-I02": {
@@ -16432,7 +16608,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T13:09:09.777871Z",
+  "updated_at": "2026-06-09T14:15:07.536203Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -63555,10 +63731,10 @@
         "P30-I01-W06",
         "P30-I01-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T13:11:26.722515Z",
+      "closed_at": "2026-06-09T14:14:13.321301Z",
+      "commit": "cd86d7e3140ca5762d38bfd06f9c9fc8f250f3d0",
       "deps": [],
       "description": "EAWF021 (measurable criterion) and EAWF022 (propose coverage) exist but fire only on the daemon spec.sync path; the dominant authoring path add_wave_plan and the roadmap propose render never call them. Bind them so plan-drift dies at the root, reusing the daemon helpers _run_measurability_lint / _run_coverage_lint (DRY).",
       "dispatch_history": [],
@@ -63570,41 +63746,102 @@
         "src/eawf/platform/lint/eawf021_measurable_criterion.py",
         "src/eawf/platform/lint/eawf022_propose_coverage.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_lifecycle_transitions.py",
+              "tests/platform/lint/test_eawf021_022.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/propose/test_generator_coverage.py",
+              "tests/integration/test_cli_roadmap.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I01-W02",
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.755396Z",
-      "outcome": null,
+      "outcome": "EAWF021 wired into plan_wave/edit_wave_plan (raises LifecycleError on unmeasurable; grandfathered exempt); EAWF022 check_coverage in roadmap propose (advisory) + apply (blocking) via shared coverage_gaps. Criteria bound to command_exit_zero gates over the lifecycle/lint + propose/apply suites; scored T2/T4 deterministic, no jury.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I01-W02-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_add_wave_plan_rejects_unmeasurable_criterion raises LifecycleError citing EAWF021; accepts_measurable_criterion + grandfathered_bypasses pass",
-          "oracle_tier": null,
+          "measurable_signal": "test_plan_wave_rejects_unmeasurable_criterion and test_edit_wave_plan_rejects_unmeasurable_criterion raise LifecycleError citing EAWF021 while the measurable insert and grandfathered-legacy insert pass under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
-          "text": "add_wave_plan / edit_wave_plan runs EAWF021 over each CriterionSpec before the wave is inserted and raises LifecycleError on an unmeasurable criterion; a well-formed measurable criterion inserts with no finding and a GRANDFATHERED_KIND legacy row still inserts (the lint exempts legacy rows so existing waves round-trip).",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the lifecycle-transition and EAWF021 lint test suites covering plan_wave/edit_wave_plan measurability enforcement",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "plan_wave / edit_wave_plan runs EAWF021 over each CriterionSpec before the wave is inserted and raises LifecycleError on an unmeasurable criterion; a well-formed measurable criterion inserts with no finding and a GRANDFATHERED_KIND legacy row still inserts (the lint exempts legacy rows so existing waves round-trip).",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I01-W02-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "behavioral",
-          "measurable_signal": "test_propose_render_surfaces_coverage_gap asserts the propose envelope carries one EAWF022 finding for an uncovered planned_steps span",
-          "oracle_tier": null,
+          "measurable_signal": "test_roadmap_apply_propose_render_surfaces_coverage_gap_advisory and test_roadmap_apply_approve_blocks_on_coverage_gap assert the EAWF022 coverage gap is advisory at propose and blocking at apply under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the propose-coverage and roadmap-apply test suites covering the EAWF022 advisory-at-propose blocking-at-apply gap",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "The roadmap propose render runs EAWF022 check_coverage over the staged waves' criteria vs their planned_steps and surfaces coverage gaps in the needs_user envelope (advisory at propose, blocking at apply).",
           "waiver_reason": null
         }
@@ -63617,10 +63854,10 @@
     "P30-I01-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T13:11:27.234106Z",
+      "closed_at": "2026-06-09T13:40:53.480860Z",
+      "commit": "2e599095c62d3ecd60923fce4c978d506c589ab0",
       "deps": [],
       "description": "assign_oracle_tier is total and tested but has no production caller, so CriterionSpec.oracle_tier is always None and the JUDGED-is-the-only-path-to-the-jury guarantee is vaporware. Bind it into criterion validation at spec.sync and validate_criterion_gate_refs to compute the tier server-side, keeping the existing author-set rejection.",
       "dispatch_history": [],
@@ -63634,10 +63871,10 @@
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.755843Z",
-      "outcome": null,
+      "outcome": "assign_oracle_tier bound into validate_criterion_gate_refs (both spec.sync + wave-close paths) so oracle_tier computed server-side: JUDGED+non-human=T7_JURY, command_exit_zero=T4_CONTRACT; empty jury_reason + author-set tier both raise ValueError. Tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -63678,10 +63915,10 @@
       "blocks": [
         "P30-I01-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T13:11:27.737175Z",
+      "closed_at": "2026-06-09T13:40:54.166079Z",
+      "commit": "f385c69ce73f93b72835120214439c2bb68eb4ed",
       "deps": [],
       "description": "odr_below_floor computes the ratio and logs the WARNING advisory but has no caller, so it never fires at iter-close. Bind it into close_iter to aggregate the closing iter's wave criteria and surface the advisory bit plus ratio in the iter-close envelope (advisory, never a block).",
       "dispatch_history": [],
@@ -63695,10 +63932,10 @@
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.756261Z",
-      "outcome": null,
+      "outcome": "odr_below_floor bound into close_iter via iter_odr_advisory: low-determinism closed-wave criteria fire WARNING + finding; all-deterministic silent; zero-criteria sentinel no-crash. Advisory only, never blocks. Tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -63725,10 +63962,10 @@
       "blocks": [
         "P30-I01-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T13:11:28.230907Z",
+      "closed_at": "2026-06-09T13:40:54.871368Z",
+      "commit": "c3626de9a9b335bb1792bf05d478b6dbc409ae9b",
       "deps": [],
       "description": "Add a checkpoint leaf to VerifyBlock so the drift cadence is one knob (optimistic default / barrier) plus the drift-budget units BIND-6 reads, and reframe _compute_iter_bump_hints from reactive did-something-go-wrong toward the budget-pulse cadence. No checkpoint.mode field exists today.",
       "dispatch_history": [],
@@ -63742,10 +63979,10 @@
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.756665Z",
-      "outcome": null,
+      "outcome": "VerifyBlock gains CheckpointBlock leaf (checkpoint_mode optimistic|barrier default optimistic + drift_budget_waves/eu, extra=forbid); agent_driven resolves optimistic, downstream barrier wins composition; yolo/-1 raise ValidationError. iter-bump hint reframed to budget-pulse cadence. Tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -63849,10 +64086,10 @@
       "blocks": [
         "P30-I01-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T13:11:28.764277Z",
+      "closed_at": "2026-06-09T14:15:07.535806Z",
+      "commit": "7ab7a026b58d03d746a0e7b20ea6e612c08fb33e",
       "deps": [],
       "description": "render_agents_md filters blocks by target but not by tier, so every AGENTS.md block (tier0 + reference) renders into one file. Make the renderer tier-aware so Zone 1 (tier0, always-on, under the 1200-token budget) is a distinct rendered region from Zone 2 (reference, lazy), preserving the existing round-trip of unmanaged hand-edits.",
       "dispatch_history": [],
@@ -63861,41 +64098,100 @@
         "src/eawf/surfaces/render/agents_md.py",
         "src/eawf/platform/profiles/models.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_render_agents_md.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_render_agents_md.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I01-W07",
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.757053Z",
-      "outcome": null,
+      "outcome": "render_agents_md partitions blocks on RenderBlock.tier into Zone-1 (tier0) + Zone-2 (reference) via partition_render_blocks_by_tier; affordance_parity holds both directions; zero-tier0 emits no empty Zone-1; goldens regenerated. Criteria bound to command_exit_zero gate over test_render_agents_md (T2 deterministic, no jury).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I01-W07-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_render_agents_md_partitions_tier0_into_zone1 and empty_tier0_renders_no_zone1 both pass",
-          "oracle_tier": null,
+          "measurable_signal": "the tier-partition and zero-tier0 cases in test_render_agents_md assert tier0 ids land in Zone-1 and a zero-tier0 profile emits no empty Zone-1 region under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the render_agents_md test suite asserting tier0 ids partition into Zone-1 and a zero-tier0 profile emits no empty Zone-1 region",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "render_agents_md partitions output keyed on RenderBlock.tier: tier0 block ids appear in the Zone-1 region and reference block ids appear in Zone-2; a profile with zero tier0 blocks emits no empty Zone-1 region.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I01-W07-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "structural",
-          "measurable_signal": "test_render_agents_md_tier0_affordance_parity and no_tier0_leak_into_reference both pass",
-          "oracle_tier": null,
+          "measurable_signal": "the affordance-parity and no-tier0-leak cases in test_render_agents_md assert every tier0 id is present in Zone-1 and no tier0 id leaks into the Zone-2 reference region under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the render_agents_md test suite asserting affordance parity holds and no tier0 id leaks into the Zone-2 reference region",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "The affordance_parity invariant holds: every composed tier0 block id is present in the rendered Zone-1 region (no dropped affordance) and no tier0 block id leaks into the Zone-2 reference region.",
           "waiver_reason": null
         }
@@ -64033,10 +64329,10 @@
     "P30-I01-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T13:11:29.281914Z",
+      "closed_at": "2026-06-09T13:40:56.505323Z",
+      "commit": "bf3073d416393cc8c9b0a69220a8bccb7430130f",
       "deps": [],
       "description": "The live holistic jury blocks band-scoped closes today without ever being validated on eawf's distribution. Add an interim jury_block_authority placeholder at the run_oracle T7 branch returning advisory unconditionally until I07 TRUST-4 supplies the earned-authority computation, sharing the same binding point; also delete the orphaned _enforce_cross_vendor_jury_gate.",
       "dispatch_history": [],
@@ -64050,10 +64346,10 @@
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.757439Z",
-      "outcome": null,
+      "outcome": "run_oracle jury veto held advisory via jury_block_authority placeholder (WARNING log, close proceeds, no LifecycleError) until I07 TRUST-4; orphaned _enforce_cross_vendor_jury_gate removed (superseded by P29-I11-W03). Deterministic-gate block path unaffected. Tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -64085,6 +64381,93 @@
         }
       ],
       "title": "BIND-10 hold the run_oracle jury advisory until TRUST-4 validates it",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T14:12:47.704952Z",
+      "closed_at": "2026-06-09T14:12:48.386900Z",
+      "commit": "9bf47f00ee5897768372195f7cfe15044609b24a",
+      "deps": [],
+      "description": "Dogfooding the W02/W07 spec-sync-then-close path surfaced that W03's validate_criterion_gate_refs persists the computed oracle_tier in place yet its author-set guard then rejects any non-None tier, so the close re-validation tripped on the validator's own spec.sync output. Add allow_computed_tier so the close accepts a persisted tier that equals the recompute while the input boundary stays strict.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/kernel/spec/common.py",
+        "src/eawf/runtime/daemon/methods/state.py"
+      ],
+      "gates": [],
+      "id": "P30-I01-W11",
+      "intent": null,
+      "iter_id": "P30-I01",
+      "opened_at": "2026-06-09T14:12:02.509337Z",
+      "outcome": "validate_criterion_gate_refs gains allow_computed_tier so the close re-validation accepts a persisted tier matching the recompute (idempotent across spec.sync + close) while the input boundary stays strict; mismatched tier still raises. Binding-proof + negative-path tests green (89 passed).",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "validate_criterion_gate_refs is idempotent across spec.sync and close: a criterion whose oracle_tier was computed and persisted on the first pass re-validates without raising when allow_computed_tier is true",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "validate_criterion_gate_refs is idempotent across spec.sync and close: a criterion whose oracle_tier was computed and persisted on the first pass re-validates without raising when allow_computed_tier is true",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "asserted when test_validate_criterion_gate_refs_allow_computed_tier_accepts_recompute_match exits zero under pytest.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "asserted when test_validate_criterion_gate_refs_allow_computed_tier_accepts_recompute_match exits zero under pytest.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "the allow_computed_tier accept is not a blanket bypass: a persisted tier that differs from the response recompute still raises ValueError citing author-set",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the allow_computed_tier accept is not a blanket bypass: a persisted tier that differs from the response recompute still raises ValueError citing author-set",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "asserted when test_validate_criterion_gate_refs_allow_computed_tier_rejects_mismatch exits zero under pytest.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "asserted when test_validate_criterion_gate_refs_allow_computed_tier_rejects_mismatch exits zero under pytest.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make criterion-gate-ref validation idempotent across sync and close",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
