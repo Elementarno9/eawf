@@ -394,15 +394,27 @@ def _has_wave_with_many_blockers(state: State, phase_wave_ids: list[str]) -> boo
 
 
 def _compute_iter_bump_hints(state: State, *, phase_id: str) -> list[str]:
-    """Heuristic iter-bump trigger detection. Returns a list of hint tags.
+    """Drift-budget pulse signals for the iter cadence. Returns hint tags.
 
-    Triggers:
-    - ``previous_iter_audit_failed``: any closed iter in *phase_id* whose
-      audit verdict is not ``pass``.
-    - ``wave_with_many_blockers``: any active wave in the phase has
-      more than 3 unresolved deps (deps that are not in ``closed`` status).
-    - ``phase_scope_expanded``: phase already has at least one closed
-      iter AND its total wave count exceeds 6.
+    These hints are read as a budget pulse, not a damage report. The
+    optimistic drift cadence (see
+    :class:`~eawf.platform.profiles.models.CheckpointBlock`) lets
+    independent waves keep flowing and reconciles accumulated drift at
+    the next checkpoint; each tag below marks a place where the drift
+    budget has been spent, so opening a fresh iter is the natural pulse
+    that draws a line and resets the window. Under a ``barrier``
+    checkpoint mode the same signals fire at a hard stop instead.
+
+    Pulse signals:
+    - ``previous_iter_audit_failed``: a closed iter in *phase_id* carries
+      an audit verdict other than ``pass`` -- drift the next iter
+      reconciles.
+    - ``wave_with_many_blockers``: an active wave in the phase has more
+      than 3 unresolved deps (deps not in ``closed`` status), so the
+      dep frontier has drifted past the per-wave budget.
+    - ``phase_scope_expanded``: the phase already has at least one closed
+      iter AND its total wave count exceeds 6 -- scope has grown past the
+      drift-budget waves window.
     """
     hints: list[str] = []
     iter_ids = [iid for iid, it in state.iters.items() if it.phase_id == phase_id]

@@ -21,7 +21,14 @@ from pydantic import ValidationError
 
 from eawf.kernel.spec.audit import AUDIT_CADENCE_VALUES
 from eawf.kernel.state.models import Wave
-from eawf.platform.profiles import FloorCheck, ProfileBody, VerifyBlock, list_profiles, load_profile
+from eawf.platform.profiles import (
+    CheckpointBlock,
+    FloorCheck,
+    ProfileBody,
+    VerifyBlock,
+    list_profiles,
+    load_profile,
+)
 from eawf.workflow.lifecycle.waivers import DEFAULT_WAIVER_MODE, resolve_waiver_mode
 from eawf.workflow.verify.compile import compile_floor_pack
 from eawf.workflow.verify.readiness import _merge_verify_blocks, resolve_wave_verify_block
@@ -582,3 +589,101 @@ def test_verify_block_waiver_mode_default_is_b() -> None:
     """The W11 default IS mode B per the typed field default."""
     assert VerifyBlock().waiver_mode == "B"
     assert DEFAULT_WAIVER_MODE == "B"
+
+
+# ---- P30-I01-W05: checkpoint drift-cadence dial -----------------------------
+
+
+def test_checkpoint_block_defaults_to_optimistic_with_budget() -> None:
+    """A freshly-constructed :class:`CheckpointBlock` defaults to the optimistic cadence.
+
+    The default shape is the shift-left v0.6 cadence: ``optimistic`` mode plus
+    non-negative drift budgets a later wave reads to size the pulse window.
+    """
+    checkpoint = CheckpointBlock()
+    assert checkpoint.checkpoint_mode == "optimistic"
+    assert checkpoint.drift_budget_waves >= 0
+    assert checkpoint.drift_budget_eu >= 0.0
+
+
+def test_verify_block_carries_optimistic_checkpoint_by_default() -> None:
+    """A fresh :class:`VerifyBlock` mounts an optimistic checkpoint via the factory."""
+    block = VerifyBlock()
+    assert block.checkpoint.checkpoint_mode == "optimistic"
+    assert block.checkpoint.drift_budget_waves >= 0
+    assert block.checkpoint.drift_budget_eu >= 0.0
+
+
+def test_agent_driven_profile_resolves_optimistic_checkpoint() -> None:
+    """The ``agent_driven`` profile resolves the optimistic checkpoint default.
+
+    The shipped ``agent_driven`` verify block sets ``enforce: true`` but
+    declares no ``checkpoint`` leaf, so the default factory resolves the
+    optimistic cadence -- the binding-proof for the criterion's positive
+    direction.
+    """
+    body = load_profile("agent_driven")
+    assert body.verify is not None
+    assert body.verify.checkpoint.checkpoint_mode == "optimistic"
+    assert body.verify.checkpoint.drift_budget_waves >= 0
+    assert body.verify.checkpoint.drift_budget_eu >= 0.0
+
+
+def test_merge_verify_blocks_downstream_barrier_wins_over_optimistic() -> None:
+    """A downstream ``barrier`` checkpoint wins composition over an upstream optimistic.
+
+    ``_merge_verify_blocks`` takes the last contributor's ``checkpoint`` dial,
+    so a downstream profile setting ``barrier`` overrides an upstream default
+    ``optimistic`` block -- the binding-proof for the criterion's composition
+    direction.
+    """
+    upstream = VerifyBlock()  # default optimistic checkpoint
+    downstream = VerifyBlock(checkpoint=CheckpointBlock(checkpoint_mode="barrier"))
+    merged = _merge_verify_blocks([upstream, downstream])
+    assert merged is not None
+    assert merged.checkpoint.checkpoint_mode == "barrier"
+    # The default drift budgets survive the composition.
+    assert merged.checkpoint.drift_budget_waves >= 0
+    assert merged.checkpoint.drift_budget_eu >= 0.0
+
+
+def test_merge_verify_blocks_keeps_optimistic_when_no_barrier() -> None:
+    """An all-optimistic active set yields an optimistic merged checkpoint."""
+    merged = _merge_verify_blocks([VerifyBlock(), VerifyBlock()])
+    assert merged is not None
+    assert merged.checkpoint.checkpoint_mode == "optimistic"
+
+
+def test_checkpoint_block_rejects_invalid_mode() -> None:
+    """``checkpoint_mode`` is a closed Literal -- ``yolo`` raises at the boundary."""
+    with pytest.raises(ValidationError):
+        CheckpointBlock.model_validate({"checkpoint_mode": "yolo"})
+
+
+def test_verify_block_rejects_invalid_checkpoint_mode() -> None:
+    """A profile leaf with ``checkpoint_mode: yolo`` fails the ``VerifyBlock`` load."""
+    with pytest.raises(ValidationError):
+        VerifyBlock.model_validate({"checkpoint": {"checkpoint_mode": "yolo"}})
+
+
+def test_checkpoint_block_rejects_negative_drift_budget_waves() -> None:
+    """``drift_budget_waves`` is ``Field(ge=0)`` -- a negative budget raises."""
+    with pytest.raises(ValidationError):
+        CheckpointBlock.model_validate({"drift_budget_waves": -1})
+
+
+def test_checkpoint_block_rejects_negative_drift_budget_eu() -> None:
+    """``drift_budget_eu`` is ``Field(ge=0)`` -- a negative budget raises."""
+    with pytest.raises(ValidationError):
+        CheckpointBlock.model_validate({"drift_budget_eu": -0.5})
+
+
+def test_checkpoint_block_rejects_unknown_field() -> None:
+    """Strict Pydantic v2 -- an extra key on :class:`CheckpointBlock` raises."""
+    with pytest.raises(ValidationError):
+        CheckpointBlock.model_validate(
+            {
+                "checkpoint_mode": "optimistic",
+                "phantom_field": True,
+            }
+        )

@@ -173,3 +173,20 @@ def test_phase_scope_expansion_hint() -> None:
 def test_unknown_phase_returns_empty() -> None:
     state = _empty_state()
     assert _compute_iter_bump_hints(state, phase_id="P99") == []
+
+
+def test_compute_iter_bump_hints_docstring_reframed_to_budget_pulse() -> None:
+    """The reframed docstring reads as a budget pulse, not a reactive damage report.
+
+    P30-I01-W05 reframes the hint text toward the drift-budget pulse cadence:
+    the docstring now references the drift budget and the checkpoint mode
+    instead of the prior "something went wrong" framing. The behavioral tags
+    are unchanged; this pins the prose reframe so it cannot silently regress.
+    """
+    doc = _compute_iter_bump_hints.__doc__
+    assert doc is not None
+    lowered = doc.lower()
+    assert "drift" in lowered
+    assert "budget" in lowered
+    assert "pulse" in lowered
+    assert "checkpoint" in lowered

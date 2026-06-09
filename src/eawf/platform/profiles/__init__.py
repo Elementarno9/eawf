@@ -62,6 +62,7 @@ from eawf.platform.profiles.loader import (
     load_profile,
 )
 from eawf.platform.profiles.models import (
+    CheckpointBlock,
     ComposedProfile,
     FloorCheck,
     InstrumentReq,
@@ -78,6 +79,7 @@ __all__ = [
     "NEWCOMER_TEST",
     "NEWCOMER_TEST_DIMENSIONS",
     "STRICTEST_KEYS",
+    "CheckpointBlock",
     "ClarityDimension",
     "ComposedProfile",
     "ConflictResolution",

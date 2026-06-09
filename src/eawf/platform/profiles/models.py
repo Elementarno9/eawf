@@ -117,6 +117,55 @@ class FloorCheck(BaseModel):
     timeout_class: Literal["quick", "standard", "slow", "very_slow"] = "standard"
 
 
+class CheckpointBlock(BaseModel):
+    """Drift-cadence dial mounted on :attr:`VerifyBlock.checkpoint`.
+
+    Folds the drift cadence into a single knob so a profile expresses
+    "how often the verify spine pulses against accumulated drift" once,
+    rather than scattering the decision across several seams. The
+    ``checkpoint_mode`` picks the cadence shape; the two ``drift_budget_*``
+    leaves carry the units a later wave reads to size the pulse window.
+
+    The two cadence shapes:
+
+    * ``optimistic`` (the default) — drift is tolerated between
+      checkpoints and reconciled at the budget pulse, so independent
+      waves keep flowing and the spine only stops the line when the
+      accumulated drift crosses the budget. This is the shift-left
+      default the v0.6 cadence ships.
+    * ``barrier`` — every checkpoint is a hard stop: the spine blocks
+      until drift is reconciled before the next wave proceeds. A
+      downstream profile opts into the stricter shape by setting
+      ``checkpoint_mode: barrier``, which wins composition over an
+      upstream ``optimistic``.
+
+    The drift budget is the slack the optimistic cadence spends before
+    it must reconcile. ``drift_budget_waves`` counts waves that may
+    accumulate drift before a pulse; ``drift_budget_eu`` is the same
+    bound expressed in estimated-units so a slate of small waves and a
+    slate of large waves get comparable windows. Both are non-negative;
+    ``0`` means "reconcile every wave" (the strictest optimistic shape,
+    equivalent in cadence to a barrier without the hard block).
+
+    Attributes:
+        checkpoint_mode: Drift-cadence shape — ``optimistic`` (default,
+            reconcile at the budget pulse) or ``barrier`` (hard stop at
+            every checkpoint). A downstream ``barrier`` wins composition.
+        drift_budget_waves: Number of waves that may accumulate drift
+            before the optimistic cadence pulses. ``Field(ge=0)`` rejects
+            a negative budget at the load boundary.
+        drift_budget_eu: Estimated-units of drift the optimistic cadence
+            tolerates before a pulse. ``Field(ge=0)`` rejects a negative
+            budget at the load boundary.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    checkpoint_mode: Literal["optimistic", "barrier"] = "optimistic"
+    drift_budget_waves: int = Field(default=3, ge=0)
+    drift_budget_eu: float = Field(default=3.5, ge=0.0)
+
+
 class VerifyBlock(BaseModel):
     """Profile-fed verify spine configuration.
 
@@ -207,6 +256,12 @@ class VerifyBlock(BaseModel):
             oracle (T6/T7); when the computed ratio falls below this
             floor the close seam surfaces an ADVISORY finding (log only)
             but never blocks. Defaults to ``0.80``.
+        checkpoint: Drift-cadence dial — one :class:`CheckpointBlock`
+            knob carrying the cadence shape (``optimistic`` default /
+            ``barrier``) plus the drift-budget units a later wave reads
+            to size the pulse window. Defaults to an optimistic block
+            via the default factory; a downstream profile that sets
+            ``checkpoint.checkpoint_mode: barrier`` wins composition.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -222,6 +277,7 @@ class VerifyBlock(BaseModel):
     uiux_bands: list[str] = Field(default_factory=list)
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
     odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)
+    checkpoint: CheckpointBlock = Field(default_factory=CheckpointBlock)
 
 
 class InstrumentReq(BaseModel):

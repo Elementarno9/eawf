@@ -503,10 +503,13 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     ``argv_allowlist`` / ``uiux_bands`` / ``jury_vendors`` deduplicated,
     first-occurrence order preserved), OR-folds the boolean gating bits
     (``enforce`` / ``cross_vendor_jury``), and takes the last contributor's
-    ``waiver_mode`` + ``timeout_class_seconds`` overrides. The merged
-    ``enforce`` is the *fleet* opt-in; band-conditional resolution
-    (:func:`resolve_wave_verify_block`) narrows it per wave at the close
-    seam so a single enforcing profile does not gate every wave.
+    ``waiver_mode`` + ``timeout_class_seconds`` + ``checkpoint`` overrides.
+    Because the ``checkpoint`` dial is last-contributor-wins, a downstream
+    profile that sets ``checkpoint.checkpoint_mode: barrier`` overrides an
+    upstream ``optimistic`` block. The merged ``enforce`` is the *fleet*
+    opt-in; band-conditional resolution (:func:`resolve_wave_verify_block`)
+    narrows it per wave at the close seam so a single enforcing profile does
+    not gate every wave.
     """
     if not blocks:
         return None
@@ -520,6 +523,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
     timeout_class_seconds: dict[Literal["quick", "standard", "slow", "very_slow"], int] = {}
     has_timeout_overrides = False
     waiver_mode: Literal["A", "B", "C"] = "B"
+    checkpoint = blocks[-1].checkpoint
     enforce = False
     cross_vendor_jury = False
     for block in blocks:
@@ -554,6 +558,7 @@ def _merge_verify_blocks(blocks: list[VerifyBlock]) -> VerifyBlock | None:
         cross_vendor_jury=cross_vendor_jury,
         uiux_bands=uiux_bands,
         jury_vendors=jury_vendors,
+        checkpoint=checkpoint,
     )
 
 
