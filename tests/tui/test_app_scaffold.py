@@ -30,6 +30,8 @@ from eawf.surfaces.tui.app import (
     DEFAULT_PROJECT_CODE,
     DEGRADED_BANNER_HIDDEN_CLASS,
     DEGRADED_BANNER_ID,
+    STALE_SCHEMA_BANNER_HIDDEN_CLASS,
+    STALE_SCHEMA_BANNER_ID,
     EaApp,
     Header,
     RepoScreen,
@@ -41,6 +43,7 @@ from eawf.surfaces.tui.app import (
     resolve_scope,
 )
 from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks, load_state
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
@@ -615,7 +618,12 @@ def test_eaapp_degraded_banner_stays_mounted_and_toggles_visibility() -> None:
             assert len(app.screen.query(f".{DEGRADED_BANNER_ID}")) == 1
             assert banner.styles.height.value == 1
             assert not banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
-            assert "daemon socket unavailable; polling state.json" in str(banner.render())
+            # The reskinned banner leads with the FAIL sigil + calm copy, then
+            # trails the diagnostics the normaliser keys on.
+            rendered = str(banner.render())
+            assert glyph(Sigil.FAILED, mode="unicode") in rendered
+            assert "daemon unreachable, reconnecting" in rendered
+            assert "daemon socket unavailable" in rendered
 
             await app._on_degraded(False)
             await pilot.pause()
@@ -628,6 +636,66 @@ def test_eaapp_degraded_banner_stays_mounted_and_toggles_visibility() -> None:
     asyncio.run(body())
 
 
+def test_eaapp_degraded_banner_leads_with_fail_sigil_and_calm_copy() -> None:
+    """Daemon unreachable: the banner widget leads with the FAIL sigil + calm copy.
+
+    The W25 close-gate criterion as a NON-normalised Pilot test: the snapshot
+    normaliser strips the daemon-state-dependent degraded line, so the
+    reskinned banner is pinned by querying the mounted banner widget and
+    asserting the FAIL sigil leads its rendered content + the calm
+    "daemon unreachable, reconnecting" copy follows. Driven through the same
+    ``_on_degraded`` hook the binder fires.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_EMPTY_REPO)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await app._on_degraded(True)
+            await pilot.pause()
+            banner = app.screen.query_one(f"#{DEGRADED_BANNER_ID}")
+            assert not banner.has_class(DEGRADED_BANNER_HIDDEN_CLASS)
+            rendered = str(banner.render())
+            # The FAIL sigil (the reskin's terminal cross) LEADS the calm copy.
+            mark = glyph(Sigil.FAILED, mode="unicode")
+            assert mark in rendered
+            assert rendered.index(mark) < rendered.index("daemon unreachable, reconnecting")
+
+    asyncio.run(body())
+
+
+def test_eaapp_healthy_mounts_neither_banner(tmp_path: Path) -> None:
+    """A healthy app (live daemon, current schema) mounts neither banner visibly.
+
+    The W25 close-gate negative: with no degraded flip and a state re-stamped
+    to the live schema, the degraded banner and the stale-schema banner are
+    both either unmounted or hidden, so a healthy operator sees the clean
+    chrome.
+    """
+    from eawf.surfaces.tui.state_binding import live_schema_version
+
+    payload = orjson.loads(_EMPTY_REPO.read_bytes())
+    payload["schema_version"] = live_schema_version()
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_bytes(orjson.dumps(State.model_validate(payload).model_dump(mode="json")))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app.degraded is False
+            assert app.stale_schema is False
+            degraded = app.screen.query(f"#{DEGRADED_BANNER_ID}")
+            if degraded:
+                assert degraded.first().has_class(DEGRADED_BANNER_HIDDEN_CLASS)
+            stale = app.screen.query(f"#{STALE_SCHEMA_BANNER_ID}")
+            if stale:
+                assert stale.first().has_class(STALE_SCHEMA_BANNER_HIDDEN_CLASS)
+
+    asyncio.run(body())
+
+
 def test_eaapp_degraded_banner_message_includes_socket_diagnostics(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -636,7 +704,8 @@ def test_eaapp_degraded_banner_message_includes_socket_diagnostics(
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime_dir))
     app = EaApp(scope="repo", state_path=_EMPTY_REPO)
     message = app._degraded_banner_message()
-    assert "daemon socket unavailable; polling state.json" in message
+    assert "daemon unreachable, reconnecting" in message
+    assert "daemon socket unavailable" in message
     assert f"{runtime_dir / 'eawfd.sock'}" in message
 
 

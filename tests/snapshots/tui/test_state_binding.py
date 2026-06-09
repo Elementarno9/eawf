@@ -57,6 +57,7 @@ from eawf.surfaces.tui.state_binding import (
     migrate_bound_state,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 _SIZE = (120, 40)
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "states" / "valid"
@@ -176,6 +177,16 @@ def test_stale_schema_banner_message_names_both_versions() -> None:
     assert "1.8" in text
 
 
+def test_stale_schema_banner_message_leads_with_warn_sigil() -> None:
+    """The banner LEADS with the WARN (attention-triangle) sigil, per column."""
+    unicode_text = stale_schema_banner_message(
+        bound_version="1.0", live_version="1.8", mode="unicode"
+    )
+    assert unicode_text.startswith(chrome("attention", mode="unicode"))
+    ascii_text = stale_schema_banner_message(bound_version="1.0", live_version="1.8", mode="ascii")
+    assert ascii_text.startswith(chrome("attention", mode="ascii"))
+
+
 # --------------------------------------------------------------------------
 # Pilot-driven banner -- stale shows it, current hides it
 # --------------------------------------------------------------------------
@@ -191,8 +202,17 @@ def test_stale_schema_banner_shows_when_bound_trails_live() -> None:
             assert app.stale_schema is True
             banner = app.screen.query_one(f"#{STALE_SCHEMA_BANNER_ID}", Static)
             assert not banner.has_class(STALE_SCHEMA_BANNER_HIDDEN_CLASS)
+            # Belt-and-braces over the banner widget: the WARN sigil leads (NOT
+            # the FAIL cross) + the version delta names both versions, pinned
+            # independently of the coupled full-app golden below (which sibling
+            # reskin waves also drift).
+            rendered = str(banner.render())
+            assert glyph(Sigil.FAILED, mode="unicode") not in rendered
+            assert chrome("attention", mode="unicode") in rendered
+            assert "1.0" in rendered
+            assert live_schema_version() in rendered
+            assert "trails live daemon schema" in rendered
             frame = normalize_snapshot(capture_screen_text(app))
-            # The banner names both the trailing bound version and the live one.
             assert "1.0" in frame
             assert live_schema_version() in frame
             assert "trails live daemon schema" in frame

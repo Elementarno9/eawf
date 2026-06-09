@@ -94,8 +94,10 @@ WATCH_ROW_CLASS: str = FEED_ROW_CLASS
 EMPTY_NOTICE: str = "no active dispatched session"
 
 #: Notice when the App is degraded (daemon unreachable) so the operator knows
-#: the stream is not flowing rather than merely quiet.
-WATCH_DEGRADED: str = "daemon unreachable -- session stream paused until it returns"
+#: the stream is not flowing rather than merely quiet. Voiced to match the
+#: global degraded banner's calm "daemon unreachable, reconnecting" lead, then
+#: states the pane-specific consequence.
+WATCH_DEGRADED: str = "daemon unreachable, reconnecting -- session stream paused until it returns"
 
 #: Result line before any cancel has been issued (the idle cancel surface).
 CANCEL_IDLE: str = "press k to cancel the watched session"

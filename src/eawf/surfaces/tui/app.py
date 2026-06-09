@@ -90,6 +90,8 @@ from eawf.surfaces.tui.widgets.header import (
     Header,
     build_breadcrumb,
 )
+from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 if TYPE_CHECKING:
     from eawf.surfaces.tui.modes.feed import FeedListener
@@ -107,23 +109,33 @@ STALE_SCHEMA_BANNER_ID = "stale-schema-banner"
 STALE_SCHEMA_BANNER_HIDDEN_CLASS = "stale-schema-banner--hidden"
 
 
-def stale_schema_banner_message(*, bound_version: str, live_version: str) -> str:
-    """Render the stale-schema banner text.
+def stale_schema_banner_message(
+    *, bound_version: str, live_version: str, mode: str = "unicode"
+) -> str:
+    """Render the stale-schema banner content markup.
 
-    Pure render source -- unit-testable without mounting the App. Names the
-    bound state's schema version and the live daemon version so the operator
-    sees exactly how far the read-only view trails.
+    Pure render source -- unit-testable without mounting the App. The banner
+    LEADS with the attention (WARN) sigil -- the up-pointing triangle the
+    reskin reserves for a degraded-but-not-failed state -- so the staleness
+    reads as a warn-shaped advisory rather than alarming, then names the
+    version delta so the operator sees exactly how far the read-only view
+    trails. The banner widget's CSS paints the row the rotated ``$warn`` band,
+    so the leading sigil resolves through that var.
 
     Args:
         bound_version: The bound state's ``schema_version``.
         live_version: The live daemon schema version (model-supported max).
+        mode: The App's resolved render-mode label -- ``"ascii"`` selects the
+            ASCII sigil column, any other value the unicode column.
 
     Returns:
-        The one-line banner text.
+        A content-markup one-line banner string leading with the WARN sigil.
     """
+    sigil = escape_markup(chrome("attention", mode=mode))
     return (
-        f"state schema {bound_version} trails live daemon schema {live_version}; "
-        "showing a migrated read-only view -- run eawf migrate to update the file"
+        f"{sigil} state schema {bound_version} trails live daemon schema "
+        f"{live_version}; showing a migrated read-only view -- run eawf "
+        "migrate to update the file"
     )
 
 
@@ -929,12 +941,25 @@ class EaApp(App[None]):
             return False
 
     def _degraded_banner_message(self) -> str:
-        """Render the transport-warning banner text with resolved diagnostics."""
+        """Render the transport-degraded banner content markup with diagnostics.
+
+        The banner LEADS with the FAIL sigil (the reskin's terminal cross) +
+        a calm "daemon unreachable, reconnecting" line so the operator reads
+        the lost-transport state at a glance without alarm, then trails the
+        resolved socket diagnostics. The banner widget's CSS paints the row
+        the rotated ``$err`` band, so the leading sigil resolves through that
+        var. The diagnostics tail retains the ``daemon socket unavailable`` /
+        ``EAWF_RUNTIME_DIR=`` tokens the snapshot normaliser keys on, so the
+        env-dependent banner stays stripped from goldens (and never leaks the
+        runtime path into one).
+        """
+        mark = escape_markup(glyph(Sigil.FAILED, mode=self.render_mode))
         sock_path = runtime_dir() / "eawfd.sock"
         eawf_runtime_dir = os.environ.get("EAWF_RUNTIME_DIR")
         xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
         return (
-            f"daemon socket unavailable; polling state.json | socket={sock_path!s} "
+            f"{mark} daemon unreachable, reconnecting -- polling state.json | "
+            f"daemon socket unavailable: socket={sock_path!s} "
             f"EAWF_RUNTIME_DIR={eawf_runtime_dir or '<unset>'} "
             f"XDG_RUNTIME_DIR={xdg_runtime_dir or '<unset>'} "
             "hint: ensure daemon and TUI share the same runtime environment "
@@ -1091,7 +1116,9 @@ class EaApp(App[None]):
             banner.set_class(False, STALE_SCHEMA_BANNER_HIDDEN_CLASS)
             banner.update(
                 stale_schema_banner_message(
-                    bound_version=bound_version, live_version=live_schema_version()
+                    bound_version=bound_version,
+                    live_version=live_schema_version(),
+                    mode=self.render_mode,
                 )
             )
         else:
