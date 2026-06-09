@@ -5431,6 +5431,17 @@
       "status": "complete",
       "verdict": "minor"
     },
+    "A58-P30-i01": {
+      "check_results": [],
+      "created_at": "2026-06-09T15:29:40.726578Z",
+      "id": "A58-P30-i01",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": null,
+      "scope_id": "P30-I01",
+      "status": "pending",
+      "verdict": null
+    },
     "P28-I03-audit": {
       "check_results": [
         {
@@ -6987,7 +6998,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I01",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -15413,16 +15424,16 @@
       ]
     },
     "P30-I01": {
-      "audit_id": null,
+      "audit_id": "A58-P30-i01",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-09T15:29:41.285867Z",
       "description": "Bootstraps the meta-gate and shift-left prevention every later P30 iter runs under, mechanizing the one rule: never ship an idle contract again. A wave is done only when its contract is BOUND to a real call path with a binding-proof test that asserts it fires and a negative-path test that asserts it blocks when violated. This is a binding iter, not a build iter: it wires already-built contracts onto the paths they were specified for and proves they fire. Ten waves, 13.5 EU.",
       "estimate_id": null,
       "id": "P30-I01",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753182Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "P30 I01 cadence and binding floor (BIND-*)",
       "trigger": "none",
       "wave_ids": [
@@ -15992,6 +16003,17 @@
       "status": "active",
       "store_record_id": "MEM-P29-I13-close-A56-P29-i13",
       "summary": "iter P29-I13 closed with audit A56-P29-i13; waves closed=55; outcomes P29-I13-W01: stale-schema banner surfaces on TUI bind when bound state schema_version trails the live daem... | P29-I13-W02: config + repo hygiene tuned for I13: agent_driven+quality enabled, researchcfg committed, cov... | P29-I13-W03: close-readiness header renders passed/total criterion count in evidence mode; snapshot gate g...",
+      "tier": "working"
+    },
+    "MEM-P30-I01-close-A58-P30-i01": {
+      "confidence": "high",
+      "id": "MEM-P30-I01-close-A58-P30-i01",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-09T15:29:41.285867Z",
+      "scope_id": "P30-I01",
+      "status": "active",
+      "store_record_id": "MEM-P30-I01-close-A58-P30-i01",
+      "summary": "iter P30-I01 closed with audit A58-P30-i01; waves closed=11; outcomes P30-I01-W01: Generalized idle_contract_gate.py into a new-contract meta-gate: detect_idle_contracts(diff_r... | P30-I01-W02: EAWF021 wired into plan_wave/edit_wave_plan (raises LifecycleError on unmeasurable; grandfath... | P30-I01-W03: assign_oracle_tier bound into validate_criterion_gate_refs (both spec.sync + wave-close paths...",
       "tier": "working"
     }
   },
@@ -16696,7 +16718,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T15:21:17.518295Z",
+  "updated_at": "2026-06-09T15:29:41.286643Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
