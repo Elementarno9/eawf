@@ -4044,6 +4044,18 @@
       "status": "done",
       "updated_at": "2026-06-09T16:14:02.586392Z"
     },
+    "P30-I02-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W03",
+      "scope_id": "P30-I02-W03",
+      "status": "done",
+      "updated_at": "2026-06-09T17:36:25.645717Z"
+    },
     "P30-I02-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4067,6 +4079,30 @@
       "scope_id": "P30-I02-W05",
       "status": "done",
       "updated_at": "2026-06-09T16:48:20.944759Z"
+    },
+    "P30-I02-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W06",
+      "scope_id": "P30-I02-W06",
+      "status": "done",
+      "updated_at": "2026-06-09T17:36:35.065341Z"
+    },
+    "P30-I02-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W07",
+      "scope_id": "P30-I02-W07",
+      "status": "done",
+      "updated_at": "2026-06-09T17:36:37.844777Z"
     },
     "P30-I02-W08": {
       "actual_cost_usd": 0.0,
@@ -4092,6 +4128,18 @@
       "status": "done",
       "updated_at": "2026-06-09T16:57:27.661272Z"
     },
+    "P30-I02-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W10",
+      "scope_id": "P30-I02-W10",
+      "status": "done",
+      "updated_at": "2026-06-09T17:36:40.465357Z"
+    },
     "P30-I02-W11": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4104,6 +4152,18 @@
       "status": "done",
       "updated_at": "2026-06-09T16:49:09.820304Z"
     },
+    "P30-I02-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W12",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W12",
+      "scope_id": "P30-I02-W12",
+      "status": "done",
+      "updated_at": "2026-06-09T17:36:51.881082Z"
+    },
     "P30-I02-W13": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4115,6 +4175,18 @@
       "scope_id": "P30-I02-W13",
       "status": "done",
       "updated_at": "2026-06-09T16:49:23.831746Z"
+    },
+    "P30-I02-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W14",
+      "scope_id": "P30-I02-W14",
+      "status": "done",
+      "updated_at": "2026-06-09T17:36:57.453839Z"
     },
     "P30-I02-W29": {
       "actual_cost_usd": 0.0,
@@ -13996,6 +14068,19 @@
       "scope_id": "P30-I02-W02",
       "updated_at": "2026-06-09T16:13:59.508277Z"
     },
+    "P30-I02-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W03-bucket-20260609T173548Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W03",
+      "updated_at": "2026-06-09T17:35:48.383102Z"
+    },
     "P30-I02-W04": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I02-W04-bucket-20260609T164800Z",
@@ -14021,6 +14106,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I02-W05",
       "updated_at": "2026-06-09T16:48:04.992704Z"
+    },
+    "P30-I02-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W06-bucket-20260609T173548Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I02-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I02-W06",
+      "updated_at": "2026-06-09T17:35:48.927476Z"
+    },
+    "P30-I02-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W07-bucket-20260609T173549Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W07",
+      "updated_at": "2026-06-09T17:35:49.438249Z"
     },
     "P30-I02-W08": {
       "confidence": "low",
@@ -14048,6 +14159,19 @@
       "scope_id": "P30-I02-W09",
       "updated_at": "2026-06-09T16:48:26.182944Z"
     },
+    "P30-I02-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W10-bucket-20260609T173550Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I02-W10",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I02-W10",
+      "updated_at": "2026-06-09T17:35:50.001751Z"
+    },
     "P30-I02-W11": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I02-W11-bucket-20260609T164832Z",
@@ -14061,6 +14185,19 @@
       "scope_id": "P30-I02-W11",
       "updated_at": "2026-06-09T16:48:32.627904Z"
     },
+    "P30-I02-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W12-bucket-20260609T173550Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W12",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W12",
+      "updated_at": "2026-06-09T17:35:50.551360Z"
+    },
     "P30-I02-W13": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I02-W13-bucket-20260609T164909Z",
@@ -14073,6 +14210,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I02-W13",
       "updated_at": "2026-06-09T16:49:09.923142Z"
+    },
+    "P30-I02-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W14-bucket-20260609T173551Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W14",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W14",
+      "updated_at": "2026-06-09T17:35:51.093936Z"
     },
     "P30-I02-W29": {
       "confidence": "low",
@@ -16945,7 +17095,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T16:57:27.661624Z",
+  "updated_at": "2026-06-09T17:36:57.454210Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -65113,10 +65263,10 @@
       "blocks": [
         "P30-I02-W32"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T17:35:48.383092Z",
+      "closed_at": "2026-06-09T17:36:25.645717Z",
+      "commit": "8bbad2b99597b32b14b56681b22bcf9bb468cfaf",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W02"
@@ -65128,27 +65278,58 @@
         "src/eawf/surfaces/tui/widgets/header.py",
         "src/eawf/surfaces/render/brand.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_header_wordmark_two_tone.py",
+              "tests/tui/test_widgets_header.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W03",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.788724Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W03-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts the two-tone Eae brand + idle runtime cell render; affordance_parity n/a.",
-          "oracle_tier": null,
+          "measurable_signal": "test_header_wordmark_two_tone asserts the umlaut cell resolves #16b384 while the E cell does not (two-tone via render_wordmark_markup), the idle runtime cell renders the harmony glyph + idle with no runtime label, and the breadcrumb is byte-equal to the builder; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the header two-tone wordmark + idle-cell + breadcrumb-unchanged suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the header renders the two-tone Eae wordmark with the accent on the ae and an idle runtime cell rendering the harmony chrome glyph + idle (no runtime label), with the breadcrumb unchanged.",
           "waiver_reason": null
         }
@@ -65324,10 +65505,10 @@
       "blocks": [
         "P30-I02-W30"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T17:35:48.927464Z",
+      "closed_at": "2026-06-09T17:36:35.065341Z",
+      "commit": "0eca0d043bc1aee8e1bbe0dcafb87e83a42b5458",
       "deps": [
         "P30-I02-W02",
         "P30-I02-W05"
@@ -65338,27 +65519,57 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/roadmap_tree.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_widgets_roadmap_tree.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W06",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.789906Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W06-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts each lifecycle row renders its sigil + the closed iter renders ten full block cells with the n/m ratio (closed-iter-full-bar regression pinned).",
-          "oracle_tier": null,
+          "measurable_signal": "test_widgets_roadmap_tree mounts pending/claimed/running/closed/failed waves and asserts each row's lifecycle sigil; a 55/55 closed iter renders ten full block cells + the n/m ratio (no remainder) and a fully-empty roadmap renders EMPTY_STATE not a fabricated bar; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the roadmap-tree sigil + completion-bar + empty-state suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot/Pilot test mounts a fixture roadmap with pending/claimed/running/closed/failed waves and asserts each row renders its lifecycle sigil and a closed iter renders a full block bar with the n/m ratio; the closed-iter-full-bar regression asserts a 55/55 iter renders ten full cells and a fully-empty roadmap renders EMPTY_STATE, not a fabricated bar.",
           "waiver_reason": null
         }
@@ -65373,10 +65584,10 @@
       "blocks": [
         "P30-I02-W30"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T17:35:49.438242Z",
+      "closed_at": "2026-06-09T17:36:37.844777Z",
+      "commit": "87ce596ba18d7926efe5e81d31152c60677bd514",
       "deps": [
         "P30-I02-W02",
         "P30-I02-W05"
@@ -65387,27 +65598,58 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/widgets/status_pane.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_widgets_status_pane.py",
+              "tests/snapshots/tui/test_status_pane_reskin.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W07",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.790393Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W07-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts the all-absent collapse line vs the per-metric expansion with leading sigils.",
-          "oracle_tier": null,
+          "measurable_signal": "test_status_pane_reskin + test_widgets_status_pane assert the all-absent collapse to one dim awaiting-first-wave line, expansion to per-metric rows with a selectively-absent metric keeping its own dash, and a leading sigil on live rows; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the status-pane collapse/expand + sigil-row suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the all-absent state collapses to the single dim awaiting-first-wave line, that any present metric expands to per-metric rows with a selectively-absent metric showing its own dash, and that live rows render a leading sigil.",
           "waiver_reason": null
         }
@@ -65575,10 +65817,10 @@
     "P30-I02-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T17:35:50.001744Z",
+      "closed_at": "2026-06-09T17:36:40.465357Z",
+      "commit": "932ccfcaf3e35ddcf7712f5661c93f053c35a213",
       "deps": [
         "P30-I02-W05"
       ],
@@ -65589,27 +65831,58 @@
         "src/eawf/surfaces/tui/widgets/variance_tile.py",
         "src/eawf/surfaces/tui/widgets/progress.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_progress_widget.py",
+              "tests/snapshots/tui/test_variance_tile_widget.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W10",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.791855Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W10-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts the block cell-bar in variance + progress and the EMPTY_STATE sentinel on no data.",
-          "oracle_tier": null,
+          "measurable_signal": "test_progress_widget + test_variance_tile_widget assert both widgets render the unified eu_bar block cell-bar and that the no-data path renders EMPTY_STATE with no block glyph (no fabricated bar); render-mode flip honoured; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the progress + variance unified-bar suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the variance tile and progress widget render the unified block cell-bar and that the no-data path renders the EMPTY_STATE sentinel, not a fabricated bar.",
           "waiver_reason": null
         }
@@ -65702,10 +65975,10 @@
     "P30-I02-W12": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T17:35:50.551354Z",
+      "closed_at": "2026-06-09T17:36:51.881082Z",
+      "commit": "914abd9fed55b3e29ce81d8eb55b00ba519af864",
       "deps": [
         "P30-I02-W02"
       ],
@@ -65715,27 +65988,58 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/research_board.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_research_board_reskin.py",
+              "tests/tui/test_modes_research_board.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W12",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.792972Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W12-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts the sigil-per-claim lifecycle layout + the literal empty-state copy.",
-          "oracle_tier": null,
+          "measurable_signal": "test_research_board_reskin asserts the lifecycle layout with a sigil per claim (glyphs migrated to the sigils helper, no .value word, no ? fallthrough) and pins the literal empty-state headline + press-n sub-line copy from the mock; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the research-board lifecycle-layout + sigil-claim + empty-state suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the research board renders the lifecycle layout with a sigil per claim (hardcoded glyphs migrated to the sigils helper) and pins the literal empty-state headline plus the press-n sub-line copy from the mock.",
           "waiver_reason": null
         }
@@ -65824,10 +66128,10 @@
     "P30-I02-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T17:35:51.093930Z",
+      "closed_at": "2026-06-09T17:36:57.453839Z",
+      "commit": "973244ae21f9b9ca558ea11a43fc855d200ac4c7",
       "deps": [
         "P30-I02-W02"
       ],
@@ -65837,27 +66141,57 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/doctor.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_modes_doctor.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W14",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.793822Z",
-      "outcome": null,
+      "outcome": "Reskin wave; gate G-01 scored deterministically in-process.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W14-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden asserts grouped checks + per-check ok/warn/fail sigils + the N checks, M warn header.",
-          "oracle_tier": null,
+          "measurable_signal": "test_modes_doctor asserts install/state/drift grouping, the ok/warn/fail sigil per check (warn renders the attention triangle distinct from the pending ring), and the header reads N checks, M warn; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the doctor grouped-checks + per-check-sigil suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A snapshot golden asserts the doctor groups install/state/drift checks, renders the ok/warn/fail sigil per check (warn distinct from pending), and the header reads N checks, M warn.",
           "waiver_reason": null
         }
