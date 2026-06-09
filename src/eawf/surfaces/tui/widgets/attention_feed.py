@@ -16,9 +16,19 @@ read), so the feed never disagrees with the badge. Only the needs_user
 rows are directly actionable from the band: ``Enter`` on a pause row posts
 :class:`AttentionFeed.PauseSelected`, which the host routes through the
 shared ``open_needs_user_pause`` so the modal-cap + resume path is reused.
-An empty feed renders the honest-empty
-:data:`~eawf.surfaces.tui.attention.EMPTY_FEED_TEXT` note rather than a blank
-strip.
+
+The band is a two-state hero (the Home overview's calm-vs-alarm signal):
+
+* **idle** -- nothing acute. A calm ``$accent`` render that pins the
+  literal :data:`~eawf.surfaces.tui.attention.EMPTY_FEED_TEXT`
+  (``"nothing needs you"``) under the CLOSED (all-clear) sigil, plus a
+  verb-led next-action sub-line. An idle feed renders **no** warn band.
+* **needs-you** -- at least one acute item (any open pause, failed wave,
+  open incident, or blocking question; advisory ready-to-claim waves are
+  not acute). A ``$warn`` band that NAMES each acute item with its sigil
+  (failed=cross, everything else=attention triangle) and shows an
+  ``Enter to review`` affordance; the footer needs_user badge, fed by the
+  same open-pause source, agrees.
 
 The ranking + item derivation live in the pure reducer module so the order
 is unit-testable without a Textual mount; this widget only renders the
@@ -43,7 +53,10 @@ from eawf.surfaces.tui.attention import (
     AttentionKind,
     build_attention_feed,
     format_time_ago,
+    has_acute,
+    idle_next_action,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -52,46 +65,96 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Per-kind row glyph (ASCII only -- no en-dash / non-ASCII per the source
-#: hygiene rule). Draws the eye to the source category at a glance.
-_KIND_GLYPH: dict[AttentionKind, str] = {
-    AttentionKind.NEEDS_USER: "?",
-    AttentionKind.FAILED_WAVE: "x",
-    AttentionKind.INCIDENT: "!",
-    AttentionKind.OPEN_QUESTION: "?",
-    AttentionKind.READY_WAVE: ">",
-}
+#: The render-mode label threaded into the sigil helpers when the host App
+#: exposes no ``render_mode`` (a bare standalone test harness). The unicode
+#: column is the default surface; ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
 
-#: Urgency values that render in the warn-attention tint (the rest stay
-#: muted). Mirrors the needs_user inbox attention band.
-_ATTENTION_URGENCIES: frozenset[str] = frozenset({"high", "urgent"})
+#: The needs-you band's per-acute-row review affordance, appended after each
+#: named acute item so the operator knows ``Enter`` over the highlighted row
+#: re-opens / inspects it. ASCII-only per the source hygiene rule.
+_REVIEW_HINT: str = "Enter to review"
+
+#: Chrome roles vs lifecycle sigils name each acute kind in the needs-you
+#: band: a failed wave wears the FAILED lifecycle sigil (the cross), every
+#: other acute kind wears the shared ``attention`` chrome mark (the
+#: triangle). A ready wave is advisory (never in the needs-you band), so it
+#: is absent here.
+_FAILED_KIND: AttentionKind = AttentionKind.FAILED_WAVE
 
 
-def _render_row(item: AttentionItem, *, now: datetime) -> str:
-    """Render one attention item as a single content-markup line.
+def _kind_glyph(kind: AttentionKind, *, mode: str) -> str:
+    """Return the sigil/chrome glyph naming an acute *kind* in *mode*.
 
-    The urgency token is tinted to draw the eye to the more-immediate rows
-    (``HIGH`` / ``URGENT`` in the ``$warn`` colour, the calmer tiers in
-    ``$text-muted``); the kind glyph leads, the muted detail follows, and a
-    muted relative ``time-ago`` trails right-aligned (blank when the row has
-    no source clock). A portfolio (cross-repo) row prefixes its repo code so
-    the operator sees which repo needs them. The colours resolve against the
-    active theme at render time via Textual content markup.
+    A :attr:`~eawf.surfaces.tui.attention.AttentionKind.FAILED_WAVE` wears
+    the FAILED lifecycle sigil (the multiplication cross); every other acute
+    kind (pause / incident / blocking question) wears the shared
+    ``attention`` chrome triangle. The mark column (unicode vs ASCII) is
+    chosen by *mode* through the single :mod:`~eawf.surfaces.tui.widgets.sigils`
+    home, so no glyph is invented locally.
 
     Args:
-        item: The attention item to render.
+        kind: The acute source category to name.
+        mode: The App's resolved render-mode label (``"ascii"`` or unicode).
+
+    Returns:
+        The single-cell glyph string for *kind* in the resolved column.
+    """
+    if kind is _FAILED_KIND:
+        return glyph(Sigil.FAILED, mode=mode)
+    return chrome("attention", mode=mode)
+
+
+def _kind_mark_markup(kind: AttentionKind, *, mode: str) -> str:
+    """Return the tinted leading-mark content markup naming an acute *kind*.
+
+    Each acute kind is tinted by its sigil: a failed wave wears the FAILED
+    lifecycle cross in the concrete FAILED tint hex (the COLOUR layer's red),
+    so it stands out from the rest of the band; every other acute kind wears
+    the shared ``attention`` chrome triangle in the band's ``$warn`` colour.
+    Both columns (unicode / ASCII) resolve through the single
+    :mod:`~eawf.surfaces.tui.widgets.sigils` home.
+
+    Args:
+        kind: The acute source category to mark.
+        mode: The App's resolved render-mode label (``"ascii"`` or unicode).
+
+    Returns:
+        A content-markup string for the row's tinted leading mark.
+    """
+    mark = _kind_glyph(kind, mode=mode)
+    if kind is _FAILED_KIND:
+        hex_tint = tint(Sigil.FAILED)
+        return f"[{hex_tint}]{mark}[/]" if hex_tint else mark
+    return f"[$warn]{mark}[/]"
+
+
+def _render_acute_row(item: AttentionItem, *, now: datetime, mode: str) -> str:
+    """Render one acute item as a named ``$warn``-band content-markup line.
+
+    The leading mark is the item's sigil/chrome glyph (failed=cross,
+    everything else=attention triangle), tinted by its sigil; the item's
+    title NAMES the wave / incident / pause; the muted detail and a muted
+    relative ``time-ago`` follow; and a muted ``Enter to review`` affordance
+    trails so the operator knows the highlighted row is actionable. A
+    portfolio (cross-repo) row prefixes its repo code.
+
+    Args:
+        item: The acute attention item to render.
         now: The reference instant the row's ``time-ago`` is measured from.
+        mode: The App's resolved render-mode label (``"ascii"`` or unicode).
 
     Returns:
         A content-markup string for one :class:`~textual.widgets.Static`.
     """
-    glyph = _KIND_GLYPH.get(item.kind, "-")
-    cell = f"{item.urgency.value:<7}"
-    tier = f"[$warn]{cell}[/]" if item.urgency.value in _ATTENTION_URGENCIES else cell
+    mark_cell = _kind_mark_markup(item.kind, mode=mode)
     repo = f"[$accent]{item.repo_tag}[/] " if item.repo_tag else ""
     ago = format_time_ago(item.occurred_at, now)
     ago_cell = f"  [$text-muted]{ago:>8}[/]" if ago else ""
-    return f"{glyph} {tier} {repo}{item.title}  [$text-muted]{item.detail}[/]{ago_cell}"
+    return (
+        f"{mark_cell} {repo}[$warn]{item.title}[/]  [$text-muted]{item.detail}[/]"
+        f"{ago_cell}  [$text-muted]{_REVIEW_HINT}[/]"
+    )
 
 
 class AttentionFeed(VerticalScroll):
@@ -124,6 +187,14 @@ class AttentionFeed(VerticalScroll):
         text-style: bold reverse;
     }
     AttentionFeed .attention-empty {
+        color: $text-muted;
+        height: 1;
+    }
+    AttentionFeed .attention-idle {
+        color: $accent;
+        height: 1;
+    }
+    AttentionFeed .attention-idle-sub {
         color: $text-muted;
         height: 1;
     }
@@ -185,17 +256,28 @@ class AttentionFeed(VerticalScroll):
         self._rebuild_pending = False
 
     def on_mount(self) -> None:
-        """Seed from app state and watch for revisions, then build the feed."""
+        """Seed from app state and watch for revisions, then build the feed.
+
+        Also wires a ``render_mode`` watcher so a unicode <-> ASCII flip
+        repaints the band's sigil glyphs through the same DOM rebuild the
+        state revisions drive.
+        """
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._rebuild()
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this widget's reactive."""
         self.state = new_state
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the band when the App's render mode flips."""
+        self._rebuild()
 
     def watch_state(self) -> None:
         """Rebuild the feed when the bound state changes.
@@ -244,6 +326,19 @@ class AttentionFeed(VerticalScroll):
         if callable(resolver):
             return frozenset(resolver())
         return frozenset()
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helpers so an ``ascii`` flip swaps every band glyph to its
+        ASCII column; falls back to the unicode column under a bare test
+        harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
 
     def _now(self) -> datetime:
         """Resolve the time-ago reference instant from the host app.
@@ -325,35 +420,75 @@ class AttentionFeed(VerticalScroll):
         self.run_worker(self._rebuild_dom(), exclusive=False)
 
     async def _rebuild_dom(self) -> None:
-        """Repaint the feed rows, awaiting the prior removal before mounting.
+        """Repaint the two-state hero, awaiting the prior removal before mounting.
 
         Awaiting ``remove_children`` (a Textual ``AwaitComplete``) before the
         re-mount guarantees the previous ``attention-row-*`` ids are gone from
         the child ``NodeList`` first, so the mount cannot trip
         ``DuplicateIds``. Re-runs once when a request coalesced mid-rebuild.
+
+        The hero has two states keyed off :func:`has_acute`:
+
+        * **needs-you** (at least one acute item): one ``$warn``
+          ``attention-row`` per item naming it with its sigil + the
+          ``Enter to review`` affordance.
+        * **idle** (no acute item -- empty, or only advisory ready waves): a
+          calm ``$accent`` line pinning :data:`EMPTY_FEED_TEXT` under the
+          CLOSED (all-clear) sigil, plus a verb-led next-action sub-line, and
+          **no** warn band.
         """
         try:
             while True:
                 await self.remove_children()
-                if not self._items:
-                    await self.mount(Static(EMPTY_FEED_TEXT, classes="attention-empty"))
-                else:
-                    await self.mount_all(
-                        [
-                            Static(
-                                _render_row(item, now=self._now_at),
-                                classes="attention-row",
-                                id=f"attention-row-{index}",
-                            )
-                            for index, item in enumerate(self._items)
-                        ]
-                    )
+                if has_acute(self._items):
+                    await self._mount_needs_you()
                     self._repaint_selection()
+                else:
+                    await self._mount_idle()
                 if not self._rebuild_pending:
                     return
                 self._rebuild_pending = False
         finally:
             self._rebuilding = False
+
+    async def _mount_needs_you(self) -> None:
+        """Mount the ``$warn`` needs-you band -- one named acute row per item."""
+        mode = self._render_mode()
+        await self.mount_all(
+            [
+                Static(
+                    _render_acute_row(item, now=self._now_at, mode=mode),
+                    classes="attention-row",
+                    id=f"attention-row-{index}",
+                )
+                for index, item in enumerate(self._items)
+            ]
+        )
+
+    async def _mount_idle(self) -> None:
+        """Mount the calm idle hero -- the all-clear literal + next-action sub-line.
+
+        Pins :data:`EMPTY_FEED_TEXT` under the CLOSED (all-clear) sigil on a
+        ``$accent`` line, then a muted verb-led next-action sub-line. The
+        primary line keeps the legacy ``attention-empty`` class so the
+        honest-empty contract (and the cold-mount gates) still resolves it.
+        """
+        mode = self._render_mode()
+        clear = glyph(Sigil.CLOSED, mode=mode)
+        clear_tint = tint(Sigil.CLOSED)
+        mark = f"[{clear_tint}]{clear}[/]" if clear_tint else clear
+        await self.mount_all(
+            [
+                Static(
+                    f"{mark} [$accent]{EMPTY_FEED_TEXT}[/]",
+                    classes="attention-empty attention-idle",
+                ),
+                Static(
+                    f"  [$text-muted]{idle_next_action(self._items)}[/]",
+                    classes="attention-idle-sub",
+                ),
+            ]
+        )
 
     def watch_selected(self) -> None:
         """Repaint the row highlight when the selection moves."""

@@ -76,8 +76,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Honest-empty band text shown when nothing needs the operator.
+#: Honest-empty band text shown when nothing needs the operator. Also the
+#: literal the two-state hero pins on its calm idle render (the band has no
+#: acute item), so the operator reads one consistent "all clear" phrase.
 EMPTY_FEED_TEXT: str = "nothing needs you"
+
+#: The idle hero's next-action sub-line when the active iter has a
+#: ready-to-claim wave waiting -- a calm nudge toward the unblocked next
+#: move rather than an attention-grabbing band. Leads with a verb.
+IDLE_NEXT_ACTION_READY: str = "claim a ready wave"
+
+#: The idle hero's next-action sub-line when nothing is ready to claim --
+#: the operator's calm default move is to look over the roadmap. Leads with
+#: a verb.
+IDLE_NEXT_ACTION_DEFAULT: str = "review the roadmap"
 
 
 class AttentionKind(StrEnum):
@@ -157,6 +169,23 @@ class AttentionItem:
     def actionable(self) -> bool:
         """``True`` when selecting the row opens something (a pause modal)."""
         return self.pause_urn is not None and self.question is not None
+
+    @property
+    def is_acute(self) -> bool:
+        """``True`` when the row is something that needs the operator now.
+
+        Acute rows are everything the operator is on the hook for -- open
+        ``needs_user`` pauses (any urgency, so the band agrees with the
+        footer badge, which counts every open pause), failed waves, open
+        incidents, and blocking questions. Only an advisory
+        :attr:`AttentionKind.READY_WAVE` is **not** acute: a ready-to-claim
+        wave is the calm next move, not an interrupt, so a feed carrying
+        only ready waves stays in the idle (no warn band) hero state.
+
+        Returns:
+            ``True`` for every kind except :attr:`AttentionKind.READY_WAVE`.
+        """
+        return self.kind is not AttentionKind.READY_WAVE
 
     @property
     def dismiss_key(self) -> str:
@@ -525,11 +554,55 @@ def _retag(item: AttentionItem, repo_code: str) -> AttentionItem:
     return replace(item, repo_tag=repo_code)
 
 
+def has_acute(items: Iterable[AttentionItem]) -> bool:
+    """Return whether *items* carries at least one acute (needs-you) row.
+
+    Drives the two-state hero render: ``True`` selects the ``$warn``
+    needs-you band, ``False`` the calm idle render. A feed of only advisory
+    ready-to-claim waves (or an empty feed) is **not** acute, so it stays
+    idle.
+
+    Args:
+        items: The ranked attention items to scan.
+
+    Returns:
+        ``True`` when any item is acute (any kind except
+        :attr:`AttentionKind.READY_WAVE`).
+    """
+    return any(item.is_acute for item in items)
+
+
+def idle_next_action(items: Iterable[AttentionItem]) -> str:
+    """Return the calm idle hero's next-action sub-line for *items*.
+
+    The idle render pins :data:`EMPTY_FEED_TEXT` plus this verb-led
+    sub-line so the operator always sees a next move even when nothing is
+    acute. When a ready-to-claim wave is waiting the nudge points at it
+    (:data:`IDLE_NEXT_ACTION_READY`); otherwise the calm default is to look
+    over the roadmap (:data:`IDLE_NEXT_ACTION_DEFAULT`).
+
+    Args:
+        items: The ranked attention items (only the ready-wave presence is
+            read; acute items belong to the needs-you band, not the idle
+            render).
+
+    Returns:
+        The verb-led next-action sub-line literal.
+    """
+    if any(item.kind is AttentionKind.READY_WAVE for item in items):
+        return IDLE_NEXT_ACTION_READY
+    return IDLE_NEXT_ACTION_DEFAULT
+
+
 __all__ = [
     "EMPTY_FEED_TEXT",
+    "IDLE_NEXT_ACTION_DEFAULT",
+    "IDLE_NEXT_ACTION_READY",
     "AttentionItem",
     "AttentionKind",
     "build_attention_feed",
     "build_portfolio_attention_feed",
     "format_time_ago",
+    "has_acute",
+    "idle_next_action",
 ]
