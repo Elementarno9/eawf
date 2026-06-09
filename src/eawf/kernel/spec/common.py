@@ -573,20 +573,28 @@ def validate_criterion_gate_refs(
        non-``None`` runnable spec) -- an orphan deterministic gate that
        cannot compile would silently never falsify the criterion.
 
-    Additionally rejects an author-set
-    :attr:`CriterionSpec.oracle_tier`: the tier is computed server-side
-    by :func:`assign_oracle_tier`, never authored on input, so a
-    non-``None`` value on a close mutation indicates a malformed spec.
+    Author-set tier rejection + server-side compute: the tier is owned by
+    :func:`assign_oracle_tier`, never authored on input, so a non-``None``
+    :attr:`CriterionSpec.oracle_tier` on a close mutation indicates a
+    malformed spec and is rejected. After that check, every criterion that
+    carries a :class:`ResponseClause` has its tier computed in place from
+    the clause -- ``JUDGED`` + non-human locus computes ``T7_JURY``, a
+    ``command_exit_zero`` ``gate_ref`` computes ``T4_CONTRACT`` per the
+    gate-kind tier map -- so ``JUDGED`` becomes the only path to the jury
+    and the value is authoritative rather than vaporware ``None``.
 
     Args:
-        criteria: The wave's typed criterion rows.
+        criteria: The wave's typed criterion rows. Each is mutated in
+            place so its computed ``oracle_tier`` is populated.
         gates: The wave's typed gate rows.
 
     Raises:
         ValueError: When a criterion references an unknown gate id, a
             gate references an unknown criterion id, a deterministic
-            criterion's gate fails to compile, or a criterion carries an
-            author-set ``oracle_tier``.
+            criterion's gate fails to compile, a criterion carries an
+            author-set ``oracle_tier``, or a criterion's response clause
+            is malformed (e.g. a ``JUDGED`` clause with an empty
+            ``jury_reason`` or a ``gate_ref`` naming an unknown gate kind).
     """
     # Local import keeps the module-level layer thin and avoids a cycle:
     # the compile layer imports CriterionSpec / GateSpec from this module.
@@ -598,6 +606,8 @@ def validate_criterion_gate_refs(
     for criterion in criteria:
         if criterion.oracle_tier is not None:
             raise ValueError(f"oracle_tier must not be author-set: criterion={criterion.id!r}")
+        if criterion.response is not None:
+            criterion.oracle_tier = assign_oracle_tier(criterion.response)
         for ref in criterion.gate_ids:
             if ref not in gate_ids:
                 raise ValueError(f"criterion {criterion.id!r} references unknown gate id: {ref!r}")
