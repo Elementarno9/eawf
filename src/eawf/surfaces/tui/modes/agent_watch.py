@@ -60,8 +60,10 @@ from textual.widgets import Static
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -103,6 +105,81 @@ CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
 
 #: Result line when there is no session to cancel.
 CANCEL_NO_TARGET: str = "cancel: no session to cancel"
+
+#: The watched session's lifecycle status -> the lifecycle :class:`Sigil` its
+#: header mark draws from. An ACTIVE session wears the RUNNING diamond (the
+#: stream may still be flowing); a CHECKPOINTED session the half-filled claimed
+#: mark (paused mid-flight, resumable); a CLOSED session the closed dot; a
+#: FAILED one the failed cross; a STALE session the inert pending dot (the
+#: spawn dropped off the live stream) so the header never implies a flowing
+#: stream that has gone quiet.
+_SESSION_SIGIL: dict[AgentSessionStatus, Sigil] = {
+    AgentSessionStatus.ACTIVE: Sigil.RUNNING,
+    AgentSessionStatus.CHECKPOINTED: Sigil.CLAIMED,
+    AgentSessionStatus.CLOSED: Sigil.CLOSED,
+    AgentSessionStatus.STALE: Sigil.PENDING,
+    AgentSessionStatus.FAILED: Sigil.FAILED,
+}
+
+
+def _sigil_markup(sigil: Sigil, *, mode: RenderMode) -> str:
+    """Return *sigil*'s shape tinted by its lifecycle status.
+
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and
+    the COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) from the sigils
+    helper so a status renders as a tinted lifecycle mark rather than a raw
+    status word; a sigil whose mapped status has no tint falls back to the
+    muted span so the mark still renders.
+
+    Args:
+        sigil: The lifecycle mark to render.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the tinted (or muted) lifecycle glyph.
+    """
+    mark = escape_markup(glyph(sigil, mode=mode))
+    hue = tint(sigil)
+    if hue is None:
+        return f"[$muted]{mark}[/]"
+    return f"[{hue}]{mark}[/]"
+
+
+def cancel_mark(*, mode: RenderMode) -> str:
+    """Return the cancel affordance's failed-look mark for *mode*.
+
+    The cancel control wears the FAILED sigil (the multiplication-x in unicode,
+    ``x`` in ASCII) so the kill verb reads as the destructive / failed look
+    rather than a neutral key letter. Tinted the failed hue via :func:`tint`.
+
+    Args:
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the tinted failed-x cancel mark.
+    """
+    return _sigil_markup(Sigil.FAILED, mode=mode)
+
+
+def session_sigil_markup(status: AgentSessionStatus, *, mode: RenderMode) -> str:
+    """Return the watched session's lifecycle sigil markup for *status*.
+
+    Maps the session status onto its lifecycle sigil (:data:`_SESSION_SIGIL`)
+    and renders the tinted shape via :func:`_sigil_markup`, so the watch header
+    leads with a sigil (the RUNNING diamond for an ACTIVE stream) rather than
+    relying on the raw status word alone.
+
+    Args:
+        status: The watched session's lifecycle status.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the session status's tinted lifecycle sigil.
+    """
+    return _sigil_markup(_SESSION_SIGIL[status], mode=mode)
 
 
 @dataclass(frozen=True)
@@ -199,23 +276,29 @@ def _latest_attempt(state: State, *, wave_id: str) -> int:
     return max(wave.sessions)
 
 
-def render_watch_header(target: WatchTarget | None) -> str:
+def render_watch_header(
+    target: WatchTarget | None, *, mode: RenderMode = DEFAULT_RENDER_MODE
+) -> str:
     """Render the watched-session header line above the stream.
 
-    When a session is being watched the header names the wave, the runtime,
-    and the session status so the operator reads the target at a glance; when
-    there is no target it leads with the honest-empty banner.
+    When a session is being watched the header LEADS with the session's
+    lifecycle sigil (the RUNNING diamond for an ACTIVE stream) then names the
+    wave, the runtime, and the session status so the operator reads the target
+    at a glance; when there is no target it leads with the honest-empty banner.
 
     Args:
         target: The watched session, or ``None`` when none is being watched.
+        mode: The App's resolved render-mode label -- selects the session
+            sigil's ASCII / unicode column.
 
     Returns:
         A content-markup header string.
     """
     if target is None:
         return f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]no dispatched executor session to stream[/]"
+    sigil = session_sigil_markup(target.status, mode=mode)
     return (
-        f"[$accent]watching[/] {escape_markup(target.wave_id)} "
+        f"{sigil} [$accent]watching[/] {escape_markup(target.wave_id)} "
         f"[$muted]{escape_markup(target.runtime)}[/] "
         f"[$accent]{escape_markup(target.status.value)}[/]"
     )
@@ -309,21 +392,27 @@ class AgentWatchModeScreen(ScopeScreen):
     #: The session being watched, resolved on mount from the bound state.
     target: reactive[WatchTarget | None] = reactive(None, init=False)
 
+    #: Whether a cancel has been issued, so a render-mode flip repaints the
+    #: still-idle cancel line but never clobbers an issued cancel's result.
+    _cancel_issued: bool = False
+
     def compose_body(self) -> ComposeResult:
         """Yield the watched-session header, the stream column, and the result.
 
-        The header names the watched target (or the honest-empty banner); the
-        stream list starts with a single live-waiting / honest-empty notice
-        that :meth:`on_mount` replaces with the seeded rows and
-        :meth:`append_event` prepends live ones to; the result line carries
-        the cancel surface (idle until ``k`` is pressed).
+        The header leads with the watched target's lifecycle sigil (or the
+        honest-empty banner); the stream list starts with a single live-waiting
+        / honest-empty notice that :meth:`on_mount` replaces with the seeded
+        rows and :meth:`append_event` prepends live ones to; the result line
+        carries the cancel surface (the idle cancel-look line until ``k`` is
+        pressed).
         """
         self.target = self._pick_target()
+        mode = self._render_mode()
         with Vertical(id="watch-body"):
-            yield Static(render_watch_header(self.target), id=WATCH_HEADER_ID)
+            yield Static(render_watch_header(self.target, mode=mode), id=WATCH_HEADER_ID)
             with VerticalScroll(id=WATCH_LIST_ID):
                 yield Static(self._empty_notice(), id=WATCH_EMPTY_ID, classes="watch-empty")
-            yield Static(CANCEL_IDLE, id=WATCH_RESULT_ID)
+            yield Static(self._cancel_idle_line(), id=WATCH_RESULT_ID)
 
     def on_mount(self) -> None:
         """Register on the live-event seam and seed the watched session's stream.
@@ -336,6 +425,8 @@ class AgentWatchModeScreen(ScopeScreen):
         degrades to an empty live pane.
         """
         super().on_mount()
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         register = getattr(self.app, "register_feed_listener", None)
         if callable(register):
             register(self)
@@ -343,6 +434,26 @@ class AgentWatchModeScreen(ScopeScreen):
         for envelope in buffer:
             if is_watched_event(envelope, self.target):
                 self._render_event(envelope)
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the mode-sensitive chrome when the App's render mode flips.
+
+        Swaps the header's session sigil and the idle cancel-look mark between
+        their unicode and ASCII columns; the streamed event rows are not
+        mode-sensitive (the Feed row formatter owns their glyphs), so only the
+        header + the still-idle result line repaint. A no-op once a cancel has
+        been issued (the result line is no longer the idle cancel-look line).
+        """
+        if not self.is_mounted:
+            return
+        mode = self._render_mode()
+        header = self.query(f"#{WATCH_HEADER_ID}")
+        if header:
+            header.first(Static).update(render_watch_header(self.target, mode=mode))
+        if not self._cancel_issued:
+            result = self.query(f"#{WATCH_RESULT_ID}")
+            if result:
+                result.first(Static).update(self._cancel_idle_line())
 
     def on_unmount(self) -> None:
         """Unregister from the App fan-out so a torn-down pane gets no pushes."""
@@ -467,7 +578,8 @@ class AgentWatchModeScreen(ScopeScreen):
         logger.debug(f"_render_event id={envelope.id!r} kind={envelope.kind.value!r}")
 
     def _set_result(self, line: str) -> None:
-        """Update the cancel-result line, if mounted."""
+        """Update the cancel-result line, if mounted, marking a cancel issued."""
+        self._cancel_issued = True
         result = self.query(f"#{WATCH_RESULT_ID}")
         if result:
             result.first(Static).update(line)
@@ -485,6 +597,32 @@ class AgentWatchModeScreen(ScopeScreen):
         if getattr(self.app, "degraded", False):
             return WATCH_DEGRADED
         return f"watching {self.target.label} -- waiting for session events..."
+
+    def _cancel_idle_line(self) -> str:
+        """Return the idle cancel-result line wearing the failed-look mark.
+
+        Leads the idle :data:`CANCEL_IDLE` copy with the failed-x cancel mark
+        (:func:`cancel_mark`) so the destructive kill verb reads with the
+        failed look the rest of the reskin uses, in the active render column.
+
+        Returns:
+            A content-markup result line: the cancel mark + the idle copy.
+        """
+        return f"{cancel_mark(mode=self._render_mode())} [$muted]{CANCEL_IDLE}[/]"
+
+    def _render_mode(self) -> RenderMode:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the sigil
+        helpers so an ``ascii`` flip swaps the header sigil + the cancel mark
+        to their ASCII column; falls back to
+        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` under a
+        bare test harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or ``"unicode"``).
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def _pick_target(self) -> WatchTarget | None:
         """Resolve the default watch target from the bound read-only state."""
@@ -528,7 +666,9 @@ __all__ = [
     "WATCH_ROW_CLASS",
     "AgentWatchModeScreen",
     "WatchTarget",
+    "cancel_mark",
     "is_watched_event",
     "pick_watch_target",
     "render_watch_header",
+    "session_sigil_markup",
 ]

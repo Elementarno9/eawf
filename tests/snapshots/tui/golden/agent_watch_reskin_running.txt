@@ -1,0 +1,40 @@
+ Eä  repo ❯ QR ❯ _default    ≈ idle    HH:MM UTC
+
+  ◆ watching P01-I01-W01 claude active
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │watching P01-I01-W01 / claude -- waiting for session events...                                                    │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  ✕ press k to cancel the watched session
+
+ ↑↓ select  ·  k cancel  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  · weekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
