@@ -11,11 +11,19 @@ shipped ``quality`` profile turns it on for a non-empty UI/UX band. This gate
 makes "wired + band-scoped, not idle, not global" a CHECKED invariant rather
 than a hope.
 
-Two gates run from :func:`main`, in precedence order, and either failing
+Three gates run from :func:`main`, in precedence order, and any failing
 exits non-zero:
 
 - :func:`check_idle_contract` -- the original single B091 spec-jury contract
   described below.
+- :func:`check_skill_body_binding` -- a *binding-proof* probe that drives a
+  deliberately drifted dict body through ``run_skill`` and asserts the emit
+  path RAISES ``pydantic.ValidationError``. The drift is an extra-forbid key
+  against a registered body model, so a working binding rejects it before the
+  envelope is built. If a later refactor lets the body-validation-at-emit
+  binding regress to idle, the drifted body would emit silently and this probe
+  stops raising -- failing the gate. This is the meta-binding that keeps the
+  emit-validation binding from silently going dead.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
   flags any newly-defined contract (a ``check_*`` / ``*_gate`` / ``*_lint``
   function, a ``CheckKind`` runner registration, an ``OracleTier`` dispatch
@@ -25,7 +33,7 @@ exits non-zero:
   contract a diff introduces, so a fresh dead verifier is caught the same
   commit it lands.
 
-Two independent contracts are asserted, in precedence order:
+Three independent contracts are asserted, in precedence order:
 
 - **not-idle** -- the producer is importable AND at least one shipped profile
   enables it via a non-empty :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`
@@ -38,23 +46,31 @@ Two independent contracts are asserted, in precedence order:
   ``.../render/``) AND to ``enforce=False`` for a non-UI probe wave (e.g.
   ``src/eawf/kernel/...``). A profile that flips enforcement on fleet-wide
   fails this contract because it would gate every wave, not just the band.
+- **emit-validation not-idle** -- a drifted dict body (an extra-forbid key on a
+  registered body model) driven through ``run_skill`` RAISES
+  ``pydantic.ValidationError`` before the envelope is built. A regression that
+  drops the emit-time body-validation chokepoint would emit the drift silently;
+  this contract (:func:`check_skill_body_binding`) fails on exactly that.
 
-Both probe waves are pure in-process objects -- the gate never mutates state,
-never writes a file, never runs a mutating ``eawf`` command.
+Both band-probe waves and the body-binding probe are pure in-process objects --
+the gate never mutates state, never writes a file, never runs a mutating
+``eawf`` command.
 
 The checks are injectable: :func:`check_idle_contract` takes the candidate
-profile list and the resolver as parameters (defaulting to the shipped
-profiles + the real resolver) so the failure modes are testable without
-editing shipped profiles. :func:`check_idle_contract` returns a typed
-:class:`GateResult` and the thin :func:`main` CLI maps it onto an exit code.
+profile list and the resolver as parameters, and
+:func:`check_skill_body_binding` takes the ``run_skill`` callable (each
+defaulting to the live production value) so the failure modes are testable
+without editing shipped profiles or the engine. Each returns a typed
+:class:`GateResult` and the thin :func:`main` CLI maps them onto an exit code.
 
 Invocation:
 
     python3 tools/idle_contract_gate.py
 
 Exit codes:
-- ``0`` -- the producer is importable, wired on for a non-empty band, and that
-  band profile resolves band-scoped (not global).
+- ``0`` -- the producer is importable + wired on for a non-empty band that
+  resolves band-scoped (not global), AND the emit-time body validation rejects
+  a drifted body, AND no newly-defined contract in the staged diff ships idle.
 - ``1`` -- a contract failed (the failure is named on stderr).
 """
 
@@ -69,11 +85,21 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
+import pydantic
+
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import Wave
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
+from eawf.surfaces.render.envelope import OutputEnvelope
 from eawf.workflow.dispatch.spec_jury import produce_spec_jury_verdict  # noqa: F401
+from eawf.workflow.skills.engine import (
+    ProbeOutcome,
+    Skill,
+    SkillContext,
+    SkillResult,
+)
+from eawf.workflow.skills.engine import run_skill as _run_skill
 from eawf.workflow.verify.readiness import resolve_wave_verify_block
 
 #: A resolver with the shape of
@@ -104,6 +130,7 @@ class GateFailure(StrEnum):
 
     PRODUCER_IDLE = "producer_idle"
     BAND_ENFORCES_GLOBALLY = "band_enforces_globally"
+    BODY_VALIDATION_IDLE = "body_validation_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +286,122 @@ def check_idle_contract(
         message=(
             f"idle-contract gate: ok (spec-jury producer wired on by [{band_names}]; "
             "band resolves enforce=True for UI, enforce=False for non-UI)"
+        ),
+    )
+
+
+# =========================================================================== #
+# Binding-proof probe: emit-time body validation must reject a drifted body.
+# =========================================================================== #
+
+#: A ``run_skill`` with the shape of
+#: :func:`eawf.workflow.skills.engine.run_skill`. Injected so the
+#: body-validation-idle failure mode is testable: a stub that returns an
+#: envelope without validating the body makes the probe stop raising.
+type RunSkillFn = Callable[[Skill, SkillContext], OutputEnvelope]
+
+#: The registered skill the binding probe drifts. ``/audit`` resolves to
+#: :class:`~eawf.workflow.skills.bodies.audit.AuditBody`, whose only required
+#: fields are ``scope_id`` and ``kind`` -- a minimal valid body that an extra
+#: key drifts unambiguously.
+_PROBE_SKILL_NAME = "/audit"
+
+#: The extra-forbid key the probe injects to drift the body. It is not a field
+#: on any registered body model, so an ``extra="forbid"`` model rejects it.
+_DRIFT_KEY = "__idle_contract_probe_drift__"
+
+#: Pure in-process probe context. The scope / session are well-formed URN-shaped
+#: strings; the probe never reads ``.ea/`` or persists anything, so they only
+#: need to satisfy the envelope header's type, not resolve to real state.
+_PROBE_SCOPE = "urn:eawf:v1:state:QR/P00"
+_PROBE_SESSION = "urn:eawf:v1:store:QR/sessions/SES-PROBE"
+
+
+class _DriftedBodySkill(Skill):
+    """Pure in-process probe skill that emits a deliberately drifted dict body.
+
+    The skill's :meth:`probe` always succeeds with a synthetic instrument map
+    (it never shells out, so the binding probe stays hermetic), and its
+    :meth:`action` returns a :class:`SkillResult` whose ``body`` is a dict that
+    is valid for :class:`~eawf.workflow.skills.bodies.audit.AuditBody` except
+    for one extra-forbid key. Driving this skill through ``run_skill`` exercises
+    exactly the emit-time body-validation chokepoint: a live binding rejects the
+    drift with :class:`pydantic.ValidationError` before the envelope is built.
+    """
+
+    name = _PROBE_SKILL_NAME
+
+    def probe(self, ctx: SkillContext) -> ProbeOutcome:
+        """Return an always-ok probe with a synthetic instrument map (no shell)."""
+        return ProbeOutcome(ok=True, instrument_probe={"git": "ok"})
+
+    def action(self, ctx: SkillContext) -> SkillResult:
+        """Return an ``ok`` result whose dict body carries one extra-forbid key."""
+        body: dict[str, object] = {
+            "scope_id": _PROBE_SCOPE,
+            "kind": "evaluation",
+            _DRIFT_KEY: "this key is not a field on AuditBody",
+        }
+        return SkillResult(status="ok", body=body)
+
+
+def check_skill_body_binding(
+    *,
+    run_skill_fn: RunSkillFn = _run_skill,
+) -> GateResult:
+    """Assert the emit-time body-validation binding rejects a drifted dict body.
+
+    Builds a pure in-process :class:`_DriftedBodySkill` whose action returns a
+    dict body that is valid for the registered ``/audit`` body model except for
+    one :data:`_DRIFT_KEY` extra-forbid key, then drives it through
+    *run_skill_fn*. A live emit-time binding (the
+    :func:`~eawf.workflow.skills.engine._validate_body` chokepoint that
+    ``run_skill`` invokes before building the envelope) raises
+    :class:`pydantic.ValidationError` on the drift -- proving the binding is
+    not idle.
+
+    The probe is the meta-binding for the W02/W03/W05 emit-validation work: if a
+    later refactor drops the ``_validate_body`` call (or neuters it to a no-op),
+    *run_skill_fn* returns an envelope WITHOUT raising, this check fails
+    :attr:`GateFailure.BODY_VALIDATION_IDLE`, and the gate exits non-zero. The
+    failure-mode injection seam is *run_skill_fn*: a test passes a stub that
+    skips validation to prove the gate bites when the binding is removed.
+
+    The probe mutates nothing -- it never writes a file, never touches
+    ``.ea/``, and never runs a mutating ``eawf`` command. The synthetic scope /
+    session strings exist only to satisfy the envelope header's type.
+
+    Args:
+        run_skill_fn: The skill engine under test. Defaults to
+            :func:`eawf.workflow.skills.engine.run_skill`; a test injects a
+            no-validation stub to exercise the idle failure mode.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when
+        *run_skill_fn* raised :class:`pydantic.ValidationError` on the drifted
+        body; otherwise ``failure`` is :attr:`GateFailure.BODY_VALIDATION_IDLE`.
+    """
+    skill = _DriftedBodySkill()
+    ctx = SkillContext(scope=_PROBE_SCOPE, session=_PROBE_SESSION)
+    try:
+        run_skill_fn(skill, ctx)
+    except pydantic.ValidationError:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (emit-time body validation rejected a "
+                f"drifted {_PROBE_SKILL_NAME} body with pydantic.ValidationError)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.BODY_VALIDATION_IDLE,
+        message=(
+            "emit-time body validation is idle: a drifted dict body (an "
+            f"extra-forbid key on the {_PROBE_SKILL_NAME} body model) was emitted "
+            "through run_skill WITHOUT raising pydantic.ValidationError; the "
+            "body-validation-at-emit binding regressed to a no-op"
         ),
     )
 
@@ -566,12 +709,51 @@ class _DiffContractParser:
             self.defs.append(_ContractDef(symbol=symbol, module=self._current_file))
 
 
+def _wired_through_own_main(symbol: str, defining_module: str, read_fn: ReadFn) -> bool:
+    """Return whether a ``tools/`` gate script wires *symbol* through its own ``main``.
+
+    A ``src/`` contract proves it runs via a production caller in another module,
+    but a ``tools/`` gate script's production caller IS its own ``main`` (the
+    pre-commit hook invokes ``python tools/<gate>.py``, which runs ``main``).
+    A gate-check function referenced inside that module's ``main`` body is
+    therefore genuinely wired on, not idle -- so this same-module wiring counts
+    as a call-site for a ``tools/`` script (and only there; a ``src/`` module's
+    ``main`` does not, since shipped contracts must run from production code).
+
+    Args:
+        symbol: The contract symbol to chase.
+        defining_module: The repo-relative path of the file that defines it.
+        read_fn: Reader for a repo-relative path.
+
+    Returns:
+        ``True`` when *defining_module* is a ``tools/`` script whose ``main``
+        function body references *symbol*.
+    """
+    if not defining_module.startswith("tools/"):
+        return False
+    text = read_fn(defining_module)
+    main_match = re.search(r"^def main\(", text, flags=re.MULTILINE)
+    if main_match is None:
+        return False
+    # The main body runs to the next top-level def/class or the module guard.
+    tail = text[main_match.start() :]
+    end_match = re.search(r"\n(?:def |class |if __name__)", tail[1:])
+    main_body = tail if end_match is None else tail[: end_match.start() + 1]
+    needle = re.compile(rf"\b{re.escape(symbol)}\b")
+    # The def line itself is not a call; only a reference in the body counts.
+    body_after_signature = main_body.split("\n", 1)[1] if "\n" in main_body else ""
+    return needle.search(body_after_signature) is not None
+
+
 def _has_call_site(symbol: str, defining_module: str, tree: Iterable[str], read_fn: ReadFn) -> bool:
     """Return whether *symbol* is referenced in a non-test file other than its module.
 
     A call-site outside the defining module proves the contract runs in
-    production (a same-module self-reference does not discharge it, and a test
-    reference is counted separately as the asserting-test discharge).
+    production (a same-module self-reference does not discharge a ``src/``
+    contract, and a test reference is counted separately as the asserting-test
+    discharge). The one same-module exception is a ``tools/`` gate script that
+    wires the check through its own ``main`` -- that IS the production caller for
+    a gate script (see :func:`_wired_through_own_main`).
 
     Args:
         symbol: The contract symbol to chase.
@@ -580,8 +762,11 @@ def _has_call_site(symbol: str, defining_module: str, tree: Iterable[str], read_
         read_fn: Reader for a repo-relative path.
 
     Returns:
-        ``True`` when some non-test, non-defining file references *symbol*.
+        ``True`` when some non-test, non-defining file references *symbol*, or
+        when a ``tools/`` gate script wires it through its own ``main``.
     """
+    if _wired_through_own_main(symbol, defining_module, read_fn):
+        return True
     needle = re.compile(rf"\b{re.escape(symbol)}\b")
     for path in tree:
         if path == defining_module:
@@ -698,11 +883,13 @@ def _render_findings(findings: Sequence[IdleContractFinding]) -> str:
 
 
 def main(argv: list[str]) -> int:
-    """Run both idle-contract gates over the staged diff and current tree.
+    """Run all three idle-contract gates over the staged diff and current tree.
 
     The original B091 single-contract check (:func:`check_idle_contract`) runs
-    first, then the meta-gate (:func:`detect_idle_contracts`) over the staged
-    diff. Both must pass; the exit code is non-zero when either fails.
+    first, then the emit-validation binding-proof probe
+    (:func:`check_skill_body_binding`), then the meta-gate
+    (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
+    exit code is non-zero when any fails.
 
     Args:
         argv: Process argv. ``argv[1]``, when present, overrides the default
@@ -710,7 +897,7 @@ def main(argv: list[str]) -> int:
             for a CI range check).
 
     Returns:
-        ``0`` when both gates pass; ``1`` when either fails.
+        ``0`` when all three gates pass; ``1`` when any fails.
     """
     diff_range = argv[1] if len(argv) > 1 else "--cached"
 
@@ -720,6 +907,17 @@ def main(argv: list[str]) -> int:
         print(result.message)
     else:
         print(result.message, file=sys.stderr)
+        failed = True
+
+    # Pass the module-level run_skill explicitly so a test (or a future caller)
+    # can patch it via attribute assignment -- a default-bound parameter would
+    # snapshot the unpatched function at def time (see the same pattern below
+    # for the meta-gate's diff / tree / read sources).
+    binding = check_skill_body_binding(run_skill_fn=_run_skill)
+    if binding.passed:
+        print(binding.message)
+    else:
+        print(binding.message, file=sys.stderr)
         failed = True
 
     # Pass the module-level default sources explicitly so a test (or a future
