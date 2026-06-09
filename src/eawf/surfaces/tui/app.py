@@ -48,9 +48,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 from textual.app import App
 from textual.binding import Binding, BindingType
+from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
-from textual.widget import AwaitMount
+from textual.widget import AwaitMount, Widget
 from textual.widgets import Static
 
 from eawf.kernel.state.enums import ScopeKind
@@ -137,6 +138,223 @@ def stale_schema_banner_message(
         f"{live_version}; showing a migrated read-only view -- run eawf "
         "migrate to update the file"
     )
+
+
+#: The crash-frame headline -- the calm one-liner the per-pane error
+#: boundary leads with when a swappable pane's content build raises. Held as
+#: a named constant so the literal copy (mirroring the reskin mock) stays
+#: pinned and the golden cannot silently drift.
+PANE_CRASH_HEADLINE: str = "Couldn't render this pane"
+
+#: The crash-frame reassurance line. Names the offending widget (filled in at
+#: render time) then states, in the calm honest voice, that the operator's
+#: work is safe because the daemon -- the canonical mutator -- never paused
+#: when the read-only pane failed to paint.
+PANE_CRASH_REASSURE: str = (
+    "{widget} raised mid-paint. Your work is safe -- the daemon kept running."
+)
+
+#: The crash-frame affordance hints -- the literal ``r`` / ``l`` / ``Esc``
+#: chord copy the boundary advertises, each resolving to a live boundary
+#: Binding (retry rebuild / view log / dismiss). Mirrors the reskin mock's
+#: hint row; kept literal (not routed through the footer hint vocab) because
+#: it is part of the pinned crash-frame copy, not a footer strip.
+PANE_CRASH_HINTS: str = "r retry  l view log  Esc dismiss"
+
+
+def render_pane_crash_frame(widget_name: str, *, mode: str = "unicode") -> str:
+    """Render the per-pane crash-frame content markup.
+
+    Pure render source -- unit-testable without mounting the App. The frame
+    LEADS with the FAIL sigil (the reskin's terminal cross) so a render
+    failure reads in the shared lifecycle vocabulary as failed (not pending,
+    not degraded), then the calm :data:`PANE_CRASH_HEADLINE` headline, the
+    :data:`PANE_CRASH_REASSURE` reassurance naming the offending widget, and
+    the literal :data:`PANE_CRASH_HINTS` affordance row. The copy mirrors the
+    cosmic-terminal reskin mock byte-for-byte so a neighbouring pane that
+    paints fine never bleeds the crash voice, and the failed pane reads as an
+    isolated, recoverable frame rather than a fatal panic screen.
+
+    Args:
+        widget_name: The class name of the widget whose content build raised
+            -- interpolated into the reassurance line so the operator sees
+            which pane failed. Markup-escaped so a bracketed name renders
+            literally.
+        mode: The App's resolved render-mode label -- ``"ascii"`` selects the
+            ASCII fail glyph (``x``), any other value the unicode cross.
+
+    Returns:
+        A multi-line content-markup string: the FAIL-sigil headline, the
+        reassurance line, and the literal affordance hints.
+    """
+    mark = escape_markup(glyph(Sigil.FAILED, mode=mode))
+    safe_name = escape_markup(widget_name)
+    reassure = PANE_CRASH_REASSURE.format(widget=safe_name)
+    return "\n".join(
+        [
+            f"[$err]{mark} {PANE_CRASH_HEADLINE}[/]",
+            reassure,
+            f"[$muted]{PANE_CRASH_HINTS}[/]",
+        ]
+    )
+
+
+class PaneErrorBoundary(Vertical):
+    """App-authored render-exception boundary for one swappable pane.
+
+    Textual has no native per-widget error boundary: an uncaught widget
+    ``render()`` / content-build exception propagates to
+    :meth:`~textual.app.App._handle_exception` and takes the whole App into
+    a fatal :meth:`~textual.app.App.panic` screen. This widget generalises
+    the codebase's existing honest-empty fallback-mount idiom (a data-failure
+    ``try``/``except`` that mounts an empty notice) from *data*-failure to
+    *render*-exception: :meth:`build_content` runs the pane's content builder
+    inside a ``try``/``except`` and, on any exception, mounts the calm
+    crash frame (:func:`render_pane_crash_frame`) IN PLACE of the content --
+    so the exception never reaches the App and the neighbouring panes keep
+    rendering. It is plain app code, not a missing Textual capability.
+
+    The boundary binds three affordances the crash frame advertises:
+
+    * ``r`` -- :meth:`action_retry` re-runs the stored builder (the failed
+      pane may render clean once a transient cause clears).
+    * ``l`` -- :meth:`action_view_log` opens the live event feed so the
+      operator can read what the daemon recorded around the failure.
+    * ``Esc`` -- :meth:`action_dismiss` clears the crash frame, leaving the
+      boundary empty (the operator chose to stop looking at it).
+    """
+
+    #: The boundary is focusable so its recovery bindings (``r`` / ``l`` /
+    #: ``Esc``) resolve when the operator focuses a crashed pane -- a
+    #: non-focusable container would never receive the key events, leaving the
+    #: advertised affordances dead. Focus is the natural shape: the operator
+    #: tabs to the failed pane to act on it. Matches the base ``Widget``
+    #: declaration form (a plain ``bool``, not a ``ClassVar``).
+    can_focus: bool = True
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("r", "retry", "retry", show=False),
+        Binding("l", "view_log", "view log", show=False),
+        Binding("escape", "dismiss", "dismiss", show=False),
+    ]
+
+    def __init__(self, *, builder: Callable[[], Widget], pane_id: str) -> None:
+        """Construct a boundary that renders *builder*'s widget, guarded.
+
+        Args:
+            builder: A zero-arg callable returning the pane's content widget.
+                Stored so :meth:`action_retry` can re-run it after a failure.
+            pane_id: The owning pane id (e.g. ``"roadmap"``), used in the
+                boundary's own id + the crash-frame log lines so a failure is
+                attributable to its pane.
+        """
+        super().__init__(id=f"pane-boundary-{pane_id}")
+        self._builder = builder
+        self._pane_id = pane_id
+
+    def on_mount(self) -> None:
+        """Build the guarded content once the boundary is mounted."""
+        self.build_content()
+
+    def build_content(self) -> bool:
+        """Run the stored builder, mounting the crash frame on any exception.
+
+        Removes any existing children first (a retry replaces the prior
+        content or crash frame), then runs the builder inside a
+        ``try``/``except``. On success the built widget is mounted; on ANY
+        exception the calm crash frame is mounted in its place -- the
+        exception is logged and SWALLOWED so it never propagates to
+        :meth:`~textual.app.App._handle_exception` / the fatal panic screen,
+        and the neighbouring panes (siblings of this boundary) keep painting.
+
+        Returns:
+            ``True`` when the builder succeeded and its widget was mounted,
+            ``False`` when the build raised and the crash frame was mounted.
+        """
+        self.remove_children()
+        try:
+            content = self._builder()
+        except Exception as exc:
+            # Broad-by-design: a render exception is any failure raised while
+            # building the pane's content widget. Swallowing it here is the
+            # whole point of the boundary -- escalating would panic the App.
+            logger.warning(f"build_content pane={self._pane_id!r} render_failed cause={exc!r}")
+            self.mount(self._crash_frame())
+            return False
+        self.mount(content)
+        return True
+
+    def _crash_frame(self) -> Static:
+        """Build the crash-frame :class:`Static` for the failed builder.
+
+        Names the offending pane in the reassurance line and threads the
+        App's resolved render mode so the FAIL sigil resolves its ASCII /
+        unicode glyph column. Carries the ``pane-crash-frame`` class so the
+        theme paints it the rotated ``$err`` band.
+
+        Returns:
+            The crash-frame notice widget.
+        """
+        widget_name = self._failed_widget_name()
+        return Static(
+            render_pane_crash_frame(widget_name, mode=self._render_mode()),
+            classes="pane-crash-frame",
+        )
+
+    def _failed_widget_name(self) -> str:
+        """Return a human name for the widget whose build raised.
+
+        The builder is a closure, so it has no useful ``__name__``; the pane
+        id is the stable, attributable label (e.g. ``"roadmap"``), which the
+        reassurance line interpolates so the operator sees which pane failed.
+
+        Returns:
+            The owning pane id.
+        """
+        return self._pane_id
+
+    def _render_mode(self) -> str:
+        """Return the host App's live render mode, or the unicode default.
+
+        Falls back to ``"unicode"`` under a bare harness whose host App
+        carries no ``render_mode`` attribute, so the crash frame still
+        resolves a glyph column off-app.
+
+        Returns:
+            The active ``"unicode"`` / ``"ascii"`` mode label.
+        """
+        return getattr(self.app, "render_mode", "unicode")
+
+    def action_retry(self) -> None:
+        """Rebuild the guarded content (the ``r`` affordance).
+
+        Re-runs the stored builder through :meth:`build_content`: a pane that
+        failed on a transient cause may render clean on the retry; a
+        persistent failure re-mounts the crash frame.
+        """
+        logger.info(f"action_retry pane={self._pane_id!r}")
+        self.build_content()
+
+    def action_view_log(self) -> None:
+        """Open the live event feed (the ``l`` affordance).
+
+        Switches the App to the ``feed`` mode so the operator can read what
+        the daemon recorded around the failure. A no-op under a bare harness
+        whose host App exposes no ``switch_mode``.
+        """
+        logger.info(f"action_view_log pane={self._pane_id!r}")
+        switch_mode = getattr(self.app, "switch_mode", None)
+        if callable(switch_mode):
+            switch_mode("feed")
+
+    def action_dismiss(self) -> None:
+        """Clear the crash frame (the ``Esc`` affordance).
+
+        Leaves the boundary empty so the operator can stop looking at a pane
+        they have decided not to retry; the neighbouring panes are untouched.
+        """
+        logger.info(f"action_dismiss pane={self._pane_id!r}")
+        self.remove_children()
 
 
 #: Cap on the App-owned live event ring buffer. The Feed pane renders this
@@ -660,6 +878,34 @@ class EaApp(App[None]):
             The current :class:`~eawf.surfaces.tui.modes.NavPosition`.
         """
         return self._nav.position
+
+    def pane_boundary(self, *, builder: Callable[[], Widget], pane_id: str) -> PaneErrorBoundary:
+        """Wrap a swappable pane's content build in a render-exception boundary.
+
+        The app-authored seam a swappable pane mounts its content through:
+        instead of yielding the content widget directly (whose ``render()`` /
+        content-build exception would propagate to
+        :meth:`_handle_exception` and panic the whole App), the pane yields
+        this boundary, which runs *builder* guarded
+        (:meth:`PaneErrorBoundary.build_content`) and -- on any exception --
+        mounts the calm crash frame (the FAIL sigil + the literal recovery
+        copy + the ``r`` / ``l`` / ``Esc`` affordances) in place of the
+        content. The exception is swallowed inside the boundary, so a single
+        failed pane never escalates to the fatal panic screen and its
+        neighbouring panes keep painting. This generalises the codebase's
+        existing honest-empty fallback-mount idiom from a *data* failure to a
+        *render* exception; it is plain app code, not a missing Textual
+        capability.
+
+        Args:
+            builder: A zero-arg callable returning the pane's content widget.
+            pane_id: The owning pane id (e.g. ``"roadmap"``), used to id the
+                boundary + attribute a failure to its pane.
+
+        Returns:
+            The :class:`PaneErrorBoundary` to mount in place of the content.
+        """
+        return PaneErrorBoundary(builder=builder, pane_id=pane_id)
 
     def register_feed_listener(self, listener: FeedListener) -> None:
         """Register *listener* to receive each live envelope on arrival.
@@ -1783,9 +2029,13 @@ def resolve_scope(scope_kind: ScopeKind) -> ScopeName:
 __all__ = [
     "BRAND",
     "DEFAULT_PROJECT_CODE",
+    "PANE_CRASH_HEADLINE",
+    "PANE_CRASH_HINTS",
+    "PANE_CRASH_REASSURE",
     "REFERENCE_HISTORY_MAX",
     "EaApp",
     "Header",
+    "PaneErrorBoundary",
     "RepoScreen",
     "ScopeName",
     "UserScreen",
@@ -1794,6 +2044,7 @@ __all__ = [
     "_swap_root_logging_to_textual",
     "build_breadcrumb",
     "probe_braille_coverage",
+    "render_pane_crash_frame",
     "resolve_render_mode",
     "resolve_scope",
     "run_app",
