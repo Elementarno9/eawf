@@ -162,9 +162,9 @@ def tab_label(tab_id: str, *, mode: RenderMode) -> str:
 
 
 #: Lifecycle-status string -> the :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
-#: whose glyph prefixes the overview ``status`` row. The five entity kinds
+#: whose glyph prefixes the overview ``status`` row. The entity kinds
 #: (wave / iter / phase / backlog) span more status words than the closed
-#: five-member :class:`Sigil` enum, so the planning / active / open /
+#: six-member :class:`Sigil` enum, so the planning / active / open /
 #: archived / deferred / abandoned strings fold onto the nearest lifecycle
 #: shape rather than crashing on an unmapped key.
 _STATUS_SIGIL: dict[str, Sigil] = {

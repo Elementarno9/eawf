@@ -43,7 +43,7 @@ from eawf.platform.scrub import scan_text
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 
@@ -101,34 +101,21 @@ NO_CRITERIA_NOTICE: str = "criteria: none"
 #: below the table.
 _COLUMNS: tuple[str, ...] = ("report", "verdict", "eu")
 
-#: Map each typed agent-report verdict to the lifecycle :class:`Sigil` shape
-#: whose mark + Wong tint reads its meaning at a glance, so the verdict
-#: column never prints a raw enum word. A clean ``pass`` (and the
-#: ``pass-with-followups`` pass-with-a-tail) wears the CLOSED filled circle
-#: (closed green); a ``fail`` wears the FAILED multiplication cross (failed
-#: red); a ``blocked`` verdict -- a withheld, not-terminal call -- wears the
-#: muted PENDING ring so it reads as held back rather than as a clean pass
-#: or a hard fail. Shape comes from the single sigils home; no pane invents
-#: a glyph of its own.
-_VERDICT_SIGIL: dict[AgentReportVerdict, Sigil] = {
-    AgentReportVerdict.PASS: Sigil.CLOSED,
-    AgentReportVerdict.PASS_WITH_FOLLOWUPS: Sigil.CLOSED,
-    AgentReportVerdict.FAIL: Sigil.FAILED,
-    AgentReportVerdict.BLOCKED: Sigil.PENDING,
-}
-
 
 def verdict_sigil(verdict: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> Text:
-    """Return the tinted lifecycle-shaped sigil for an agent-report *verdict*.
+    """Return the tinted ratified sigil for an agent-report *verdict*.
 
-    Resolves the verdict string to its lifecycle :class:`Sigil` shape via
-    :data:`_VERDICT_SIGIL` and renders the shape's glyph (in render *mode*)
-    tinted with the shape's own Wong hex (:func:`~eawf.surfaces.tui.widgets.sigils.tint`)
-    into a :class:`~rich.text.Text` -- the cell form a
+    Resolves the verdict string through the single extended resolver
+    (:func:`~eawf.surfaces.tui.widgets.sigils.status_sigil`) so the verdict
+    column wears the same ratified glyph + tint (+ follow-up badge) every
+    other pane renders for :class:`~eawf.kernel.state.enums.AgentReportVerdict`
+    -- a ``blocked`` verdict wears the warn-tinted withheld mark, not a
+    pending ring, and ``pass-with-followups`` trails its badge. The result
+    is a :class:`~rich.text.Text` -- the cell form a
     :class:`~textual.widgets.DataTable` styles without a content-markup parse.
-    A verdict string outside the closed :class:`~eawf.kernel.state.enums.AgentReportVerdict`
-    set falls back to the muted PENDING ring rather than raising, so a row
-    never crashes the pane on an unrecognised verdict.
+    A verdict string outside the closed enum set falls back to the muted
+    PENDING ring rather than raising, so a row never crashes the pane on an
+    unrecognised verdict.
 
     Args:
         verdict: The report verdict string (an
@@ -137,15 +124,13 @@ def verdict_sigil(verdict: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> Te
             helper; defaults to the ASCII column for a bare standalone render.
 
     Returns:
-        A tinted single-cell :class:`~rich.text.Text` for the verdict sigil.
+        A tinted :class:`~rich.text.Text` for the verdict sigil.
     """
     try:
-        sigil = _VERDICT_SIGIL[AgentReportVerdict(verdict)]
+        resolved = status_sigil(AgentReportVerdict(verdict))
     except ValueError:
-        sigil = Sigil.PENDING
-    mark = glyph(sigil, mode=mode)
-    hex_tint = tint(sigil)
-    return Text(mark, style=hex_tint or "")
+        return Text(glyph(Sigil.PENDING, mode=mode), style=tint(Sigil.PENDING) or "")
+    return Text(resolved.render(mode=mode), style=resolved.tint_hex or "")
 
 
 #: Footer hints for the Evidence mode (arrows primary). The mode digits are

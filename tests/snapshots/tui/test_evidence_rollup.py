@@ -3,9 +3,9 @@
 The Evidence mode (digit ``6``) renders the typed agent-report rollup as a
 table keyed by the WAVE each report advanced: a ``report`` column carrying the
 wave label joined to the producing role, a ``verdict`` column carrying the
-tinted lifecycle-shaped verdict sigil (pass -> filled circle, fail ->
-multiplication cross, blocked -> muted ring), and an ``eu`` column carrying the
-wave's bucket-derived effort-unit estimate.
+ratified verdict sigil from the extended ``status_sigil`` home (pass -> filled
+circle, fail -> multiplication cross, blocked -> warn-tinted withheld mark),
+and an ``eu`` column carrying the wave's bucket-derived effort-unit estimate.
 
 Two paths are pinned:
 
@@ -67,7 +67,7 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 
 _SIZE = (120, 40)
@@ -270,10 +270,13 @@ def test_verdict_sigil_pass_wears_closed_filled_circle() -> None:
     assert text.style == tint(Sigil.CLOSED)
 
 
-def test_verdict_sigil_pass_with_followups_also_wears_closed() -> None:
-    """A pass-with-a-tail still reads as a pass (CLOSED shape)."""
+def test_verdict_sigil_pass_with_followups_wears_closed_plus_badge() -> None:
+    """A pass-with-a-tail reads as a pass (CLOSED shape) trailing its badge."""
     text = verdict_sigil("pass-with-followups", mode="unicode")
-    assert text.plain == glyph(Sigil.CLOSED, mode="unicode")
+    resolved = status_sigil(AgentReportVerdict.PASS_WITH_FOLLOWUPS)
+    assert text.plain == resolved.render(mode="unicode")
+    assert text.plain.startswith(glyph(Sigil.CLOSED, mode="unicode"))
+    assert len(text.plain) > 1  # the follow-up badge trails the shape
 
 
 def test_verdict_sigil_fail_wears_failed_cross() -> None:
@@ -283,10 +286,18 @@ def test_verdict_sigil_fail_wears_failed_cross() -> None:
     assert text.style == tint(Sigil.FAILED)
 
 
-def test_verdict_sigil_blocked_wears_muted_pending_ring() -> None:
-    """A withheld blocked verdict wears the muted PENDING ring, not a fail."""
+def test_verdict_sigil_blocked_wears_warn_withheld_mark() -> None:
+    """A withheld blocked verdict wears the ratified warn-tinted withheld mark.
+
+    Resolved through the extended :func:`status_sigil` home -- neither the
+    pending ring (blocked is not not-yet-run) nor the fail cross (blocked is
+    not a verdict on the work).
+    """
     text = verdict_sigil("blocked", mode="unicode")
-    assert text.plain == glyph(Sigil.PENDING, mode="unicode")
+    resolved = status_sigil(AgentReportVerdict.BLOCKED)
+    assert text.plain == resolved.render(mode="unicode")
+    assert text.style == (resolved.tint_hex or "")
+    assert text.plain != glyph(Sigil.PENDING, mode="unicode")
     assert text.plain != glyph(Sigil.FAILED, mode="unicode")
 
 
@@ -375,9 +386,11 @@ def test_evidence_rollup_snapshot(tmp_path: Path) -> None:
             assert "Reskin Evidence" in frame
             assert "executor" in frame
             assert "reviewer" in frame
-            # Verdict column: the lifecycle sigils (closed pass, muted block).
+            # Verdict column: the ratified sigils (closed pass, warn-tinted
+            # withheld block) from the extended status_sigil home.
             assert glyph(Sigil.CLOSED, mode=app.render_mode) in frame
-            assert glyph(Sigil.PENDING, mode=app.render_mode) in frame
+            blocked_mark = status_sigil(AgentReportVerdict.BLOCKED).render(mode=app.render_mode)
+            assert blocked_mark in frame
             # EU column: the M bucket's EU.
             assert "1.00" in frame
             assert EMPTY_NOTICE not in frame

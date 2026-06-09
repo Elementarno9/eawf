@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 
 import eawf
 from eawf.surfaces.cli.app import app
+from eawf.surfaces.render.brand import ACCENT_HEX, accent_sgr
 
 runner = CliRunner()
 
@@ -37,14 +38,13 @@ def test_bare_invocation_prints_banner() -> None:
 
     Off-TTY (CliRunner has no real terminal) the TUI falls back to the
     deterministic status text — its first byte is the ``Eä`` brand per
-    the W10 contract. The reskinned wordmark is two-tone: an accent SGR
-    sits between the ``E`` and the ``ä``, so the brand is asserted as the
-    leading ``E`` followed by a tinted ``ä`` rather than a contiguous pair.
+    the W10 contract. The reskinned wordmark is two-tone: the brand accent
+    SGR sits between the ``E`` and the ``ä``, so the assert pins the exact
+    ``E<accent-sgr>ä`` byte run the brand renderer emits.
     """
     result = runner.invoke(app, [])
     assert result.exit_code == 0
-    assert result.stdout.startswith("E")
-    assert "ä" in result.stdout
+    assert result.stdout.startswith(f"E{accent_sgr(ACCENT_HEX)}ä")
 
 
 def test_version_text_envelope() -> None:

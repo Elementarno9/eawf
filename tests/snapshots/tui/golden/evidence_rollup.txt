@@ -4,7 +4,7 @@
  2 reports - 0 followup(s)
   report                                   verdict  eu
   P30-I02-W15 Reskin Evidence :: executor  ●        1.00
-  P30-I02-W15 Reskin Evidence :: reviewer  ◌        1.00
+  P30-I02-W15 Reskin Evidence :: reviewer  ⊘        1.00
 
 
 
