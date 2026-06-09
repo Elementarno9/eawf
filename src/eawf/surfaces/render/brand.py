@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 # The Eä logotype. Two characters: ``E`` (U+0045) + ``ä`` (U+00E4). Treat
 # this as a literal string in every test and renderer — it is *not* a
@@ -61,6 +62,15 @@ ACCENT_HEX: str = "#16b384"
 # don't have to remember the escape codes.
 _BOLD_ON: str = "\x1b[1m"
 _BOLD_OFF: str = "\x1b[22m"
+
+# Filesystem path to the committed Ea Seal mark (the single-colour
+# ``currentColor`` SVG with the evenodd-knockout disc + radiant star). It
+# is resolved relative to this module so a consumer reads the asset without
+# a hardcoded literal path -- the SVG ships inside the package tree under
+# ``assets/`` and travels with the wheel like ``theme.tcss`` and the bundled
+# schema JSON. Resolve to an absolute path so the constant is stable
+# regardless of the caller's working directory.
+SEAL_ASSET_PATH: Path = (Path(__file__).parent / "assets" / "ea-seal.svg").resolve()
 
 
 @dataclass(frozen=True)
@@ -225,6 +235,7 @@ __all__ = [
     "ASCII_GLYPHS",
     "BRAND_LITERAL",
     "NERD_FONT_GLYPHS",
+    "SEAL_ASSET_PATH",
     "GlyphSet",
     "ascii_wordmark",
     "bold",
