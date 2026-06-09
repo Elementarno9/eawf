@@ -52,6 +52,19 @@ RECENT_COMMIT_COUNT: int = 3
 GIT_CACHE_TTL_S: float = 1.0
 
 
+#: Content-markup palette vars the working-tree status segments tint
+#: through. ``added`` reads through the green-rotated ``$ok`` (the same
+#: family the reskin's accent rotation lands on), ``removed`` through the
+#: ``$err`` red, and ``changed`` through the ``$warn`` amber -- a salience
+#: ladder that lets the operator scan the dirty summary by hue. They are
+#: ``$`` palette vars (not concrete hex) because the pane renders through
+#: Textual content markup, which resolves the vars against the live theme,
+#: so a ``/theme`` swap recolours the segments for free.
+ADDED_VAR: str = "$ok"
+REMOVED_VAR: str = "$err"
+CHANGED_VAR: str = "$warn"
+
+
 @dataclass(frozen=True)
 class GitFields:
     """Parsed git context for the pane.
@@ -60,6 +73,9 @@ class GitFields:
         branch: Current branch name, or :data:`DASH` when undetermined.
         dirty: Working-tree dirty summary (``"clean"`` /
             ``"N changed"`` / :data:`DASH`).
+        added: Count of added (staged-new / untracked) working-tree paths.
+        removed: Count of removed (deleted) working-tree paths.
+        changed: Count of modified / renamed / copied working-tree paths.
         ahead_behind: Upstream divergence (``"up-to-date"`` /
             ``"+A / -B"`` / :data:`DASH` when no upstream).
         recent_commits: Up to :data:`RECENT_COMMIT_COUNT` recent commit
@@ -70,6 +86,9 @@ class GitFields:
     dirty: str
     ahead_behind: str
     recent_commits: tuple[str, ...]
+    added: int = 0
+    removed: int = 0
+    changed: int = 0
 
 
 def _git_run(args: list[str], *, cwd: Path) -> str | None:
@@ -102,6 +121,42 @@ def _git_run(args: list[str], *, cwd: Path) -> str | None:
     return completed.stdout.strip()
 
 
+def classify_porcelain(porcelain: str) -> tuple[int, int, int]:
+    """Tally ``git status --porcelain`` lines into (added, removed, changed).
+
+    Each porcelain line opens with a two-char ``XY`` code (index status +
+    worktree status) followed by the path. A path is counted once, by the
+    most salient code across its two status columns:
+
+    * **added** -- a staged-new (``A``) path or an untracked (``??``) path.
+    * **removed** -- a deleted (``D``) path in either column.
+    * **changed** -- a modified / renamed / copied / type-changed path
+      (``M`` / ``R`` / ``C`` / ``T``) when it is neither added nor removed.
+
+    Deletion and addition dominate a plain modification when both codes are
+    present (a rename surfaces ``R`` -> changed; a delete-then-readd is rare
+    and counted as removed) so the ladder stays unambiguous.
+
+    Args:
+        porcelain: The raw ``git status --porcelain`` stdout (may be empty).
+
+    Returns:
+        The ``(added, removed, changed)`` path counts.
+    """
+    added = removed = changed = 0
+    for line in porcelain.splitlines():
+        if not line:
+            continue
+        code = line[:2]
+        if "D" in code:
+            removed += 1
+        elif code == "??" or "A" in code:
+            added += 1
+        elif any(ch in code for ch in "MRCT"):
+            changed += 1
+    return added, removed, changed
+
+
 def gather_git_fields(cwd: Path) -> GitFields:
     """Probe *cwd* via short ``git`` shell-outs into a :class:`GitFields`.
 
@@ -115,13 +170,15 @@ def gather_git_fields(cwd: Path) -> GitFields:
     """
     branch = _git_run(["rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd) or DASH
     porcelain = _git_run(["status", "--porcelain"], cwd=cwd)
+    added = removed = changed = 0
     if porcelain is None:
         dirty = DASH
     elif not porcelain:
         dirty = "clean"
     else:
-        changed = sum(1 for line in porcelain.splitlines() if line)
-        dirty = f"{changed} changed"
+        added, removed, changed = classify_porcelain(porcelain)
+        total = sum(1 for line in porcelain.splitlines() if line)
+        dirty = f"{total} changed"
     ahead = _git_run(["rev-list", "--count", "@{u}..HEAD"], cwd=cwd)
     behind = _git_run(["rev-list", "--count", "HEAD..@{u}"], cwd=cwd)
     if ahead is None or behind is None:
@@ -138,6 +195,9 @@ def gather_git_fields(cwd: Path) -> GitFields:
     return GitFields(
         branch=branch,
         dirty=dirty,
+        added=added,
+        removed=removed,
+        changed=changed,
         ahead_behind=ahead_behind,
         recent_commits=recent,
     )
@@ -164,6 +224,41 @@ def format_git_lines(fields: GitFields) -> list[str]:
         lines.append("recent:")
         lines.extend(f"  {subject}" for subject in fields.recent_commits)
     return lines
+
+
+def format_status_markup(fields: GitFields, *, label_style: str = "$accent") -> str:
+    """Build the ``status:`` line as tinted Textual content markup.
+
+    The label token keeps the accent tint (matching the other
+    :func:`~eawf.surfaces.tui.widgets.markup.style_labeled_line` rows), and
+    the working-tree breakdown is rendered as three hue-tinted segments
+    through the rotated palette vars: ``+A`` added in :data:`ADDED_VAR`,
+    ``-R`` removed in :data:`REMOVED_VAR`, and ``C changed`` in
+    :data:`CHANGED_VAR`. When the tree is ``clean`` / :data:`DASH` (no
+    counts) the value is the plain summary string, untinted, so the no-change
+    cases stay quiet.
+
+    Pure helper (no widget mount) so the rendered markup is unit-testable;
+    the ``$`` vars resolve against the live theme when the pane renders, so
+    a ``/theme`` swap recolours the segments without re-parsing.
+
+    Args:
+        fields: The parsed git context.
+        label_style: The content-markup style for the leading ``status:``
+            label token; defaults to the theme accent var.
+
+    Returns:
+        The content-markup string for the pane's ``status:`` line.
+    """
+    label = f"[{label_style}]status:[/]"
+    if fields.added == 0 and fields.removed == 0 and fields.changed == 0:
+        return f"{label}   {fields.dirty}"
+    segments = [
+        f"[{ADDED_VAR}]+{fields.added}[/]",
+        f"[{REMOVED_VAR}]-{fields.removed}[/]",
+        f"[{CHANGED_VAR}]{fields.changed} changed[/]",
+    ]
+    return f"{label}   {' / '.join(segments)}"
 
 
 class GitPane(Static):
@@ -234,21 +329,36 @@ class GitPane(Static):
         subjects (which may contain ``[P##-W##]`` brackets) are
         markup-escaped so Textual renders them literally rather than
         parsing the bracket run as a style tag.
+
+        The ``status:`` line is the exception: its working-tree breakdown
+        renders through :func:`format_status_markup` so the added / removed
+        / changed counts carry the rotated palette-var tints, not the plain
+        accent-label-only styling the other rows use.
         """
         if self._fields is None:
             self.update(escape_markup(DASH))
             return
-        lines = format_git_lines(self._fields)
-        self.update("\n".join(style_labeled_line(line) for line in lines))
+        rendered: list[str] = []
+        for line in format_git_lines(self._fields):
+            if line.startswith("status:"):
+                rendered.append(format_status_markup(self._fields))
+            else:
+                rendered.append(style_labeled_line(line))
+        self.update("\n".join(rendered))
 
 
 __all__ = [
+    "ADDED_VAR",
+    "CHANGED_VAR",
     "DASH",
     "GIT_CACHE_TTL_S",
     "GIT_SUBPROCESS_TIMEOUT_S",
     "RECENT_COMMIT_COUNT",
+    "REMOVED_VAR",
     "GitFields",
     "GitPane",
+    "classify_porcelain",
     "format_git_lines",
+    "format_status_markup",
     "gather_git_fields",
 ]

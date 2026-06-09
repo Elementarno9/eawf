@@ -13,12 +13,16 @@ from pathlib import Path
 
 import orjson
 import pytest
+from rich.text import Text
 from textual.app import ComposeResult
 
+from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.models import BacklogItem, State
+from eawf.surfaces.tui.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.backlog_table import (
     _COLUMN_LABELS,
     _ELLIPSIS,
+    _SIGIL_PREFIX_WIDTH,
     _SORT_GLYPH,
     _TITLE_MIN_WIDTH,
     SORT_KEYS,
@@ -28,9 +32,13 @@ from eawf.surfaces.tui.widgets.backlog_table import (
     column_label,
     filter_items,
     next_sort_key,
+    priority_tint,
+    row_cells,
     sort_items,
+    status_sigil_glyph,
     title_budget,
 )
+from eawf.surfaces.tui.widgets.sigils import ASCII_MODE, Sigil, glyph
 
 from ._palette_harness import PaletteHarnessApp
 
@@ -371,9 +379,11 @@ def test_fixed_columns_width_uses_header_floor_when_empty() -> None:
 def test_fixed_columns_width_grows_with_widest_cell() -> None:
     items = [_item("BL-LONG-0001", "P0", "in_progress", "t")]
     width = _fixed_columns_width(items)
-    # id widens to the 12-char id; status widens to "in_progress" (11); the
-    # priority column floors at the glyph-suffixed "pri v" header (5).
-    assert width == len("BL-LONG-0001") + len("pri v") + len("in_progress")
+    # id widens to the 12-char id PLUS the 2-cell leading-sigil prefix
+    # (W09); status widens to "in_progress" (11); the priority column floors
+    # at the glyph-suffixed "pri v" header (5).
+    expected_id = len("BL-LONG-0001") + _SIGIL_PREFIX_WIDTH
+    assert width == expected_id + len("pri v") + len("in_progress")
 
 
 def test_fixed_columns_width_priority_label_short_when_not_sorted() -> None:
@@ -392,8 +402,18 @@ def test_fixed_columns_width_priority_label_short_when_not_sorted() -> None:
 _LONG_TITLE = "A very long backlog title that overflows any reasonable column"
 
 
+def _plain_cell(table: BacklogTable, item_id: str, column: str) -> str:
+    """Return a cell's plain text, stripped of its priority-tint markup.
+
+    Each cell is a ``[#rrggbb]...[/]`` content-markup string (the row tint),
+    so reading the rendered text back means parsing the markup and taking
+    the plain payload.
+    """
+    return Text.from_markup(str(table.get_cell(item_id, column))).plain
+
+
 def _rendered_title(table: BacklogTable, item_id: str) -> str:
-    return str(table.get_cell(item_id, "title"))
+    return _plain_cell(table, item_id, "title")
 
 
 def test_table_renders_short_title_untouched() -> None:
@@ -571,5 +591,172 @@ def test_table_s_key_moves_header_glyph_to_new_column() -> None:
             assert table.sort_key == "id"
             assert _header_label(table, "id") == f"id {_SORT_GLYPH}"
             assert _SORT_GLYPH not in _header_label(table, "priority")
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Priority tint + leading sigil (P30-I02-W09)
+# --------------------------------------------------------------------------
+
+#: The dark-theme (harness default) priority-tint hexes, read off the
+#: canonical Wong palette so the assertion reds when the palette is reverted
+#: to the old teal/pre-reskin set.
+_P0_HEX = WONG_VARIABLES["err"]
+_P1_HEX = WONG_VARIABLES["warn"]
+_P2_HEX = WONG_VARIABLES["muted"]
+
+
+def test_priority_tint_descends_err_warn_muted() -> None:
+    """The priority ladder tints P0 err, P1 warn, P2/P3 the muted floor."""
+    assert priority_tint(BacklogPriority.P0) == _P0_HEX
+    assert priority_tint(BacklogPriority.P1) == _P1_HEX
+    assert priority_tint(BacklogPriority.P2) == _P2_HEX
+    assert priority_tint(BacklogPriority.P3) == _P2_HEX
+
+
+def test_priority_tint_covers_every_priority() -> None:
+    """Every BacklogPriority member resolves a tint (no KeyError drift)."""
+    for priority in BacklogPriority:
+        assert priority_tint(priority).startswith("#")
+
+
+def test_status_sigil_glyph_maps_each_status() -> None:
+    """Backlog status maps onto the lifecycle sigil glyph in the active mode."""
+    assert status_sigil_glyph(BacklogStatus.OPEN, mode=ASCII_MODE) == glyph(
+        Sigil.PENDING, mode=ASCII_MODE
+    )
+    assert status_sigil_glyph(BacklogStatus.IN_PROGRESS, mode=ASCII_MODE) == glyph(
+        Sigil.RUNNING, mode=ASCII_MODE
+    )
+    assert status_sigil_glyph(BacklogStatus.CLOSED, mode=ASCII_MODE) == glyph(
+        Sigil.CLOSED, mode=ASCII_MODE
+    )
+    assert status_sigil_glyph(BacklogStatus.DEFERRED, mode=ASCII_MODE) == glyph(
+        Sigil.PENDING, mode=ASCII_MODE
+    )
+
+
+def test_status_sigil_glyph_covers_every_status() -> None:
+    """Every BacklogStatus member resolves a sigil glyph (no KeyError drift)."""
+    for status in BacklogStatus:
+        assert status_sigil_glyph(status, mode=ASCII_MODE)
+
+
+def test_row_cells_lead_with_sigil_and_carry_priority_tint() -> None:
+    """The id cell leads with the status sigil; every cell carries the tint."""
+    item = _item("BL-001", "P0", "open", "Wire init")
+    id_cell, pri_cell, status_cell, title_cell = row_cells(item, "Wire init", mode=ASCII_MODE)
+    expected_sigil = glyph(Sigil.PENDING, mode=ASCII_MODE)
+    # The id cell is a tint-wrapped markup string leading with the sigil; the
+    # plain payload drops the markup.
+    assert Text.from_markup(id_cell).plain == f"{expected_sigil} BL-001"
+    # Every cell wraps its text in the P0 err tint span (no hardcoded hex in
+    # the widget -- the value is read off the canonical Wong palette).
+    for cell in (id_cell, pri_cell, status_cell, title_cell):
+        assert cell.startswith(f"[{_P0_HEX}]")
+        assert cell.endswith("[/]")
+
+
+def test_row_cells_sigil_flips_with_render_mode() -> None:
+    """The leading sigil glyph swaps columns between ascii and unicode mode."""
+    item = _item("BL-002", "P1", "in_progress", "x")
+    ascii_id = Text.from_markup(row_cells(item, "x", mode=ASCII_MODE)[0]).plain
+    unicode_id = Text.from_markup(row_cells(item, "x", mode="unicode")[0]).plain
+    assert ascii_id != unicode_id  # different glyph columns
+    assert ascii_id.startswith(glyph(Sigil.RUNNING, mode=ASCII_MODE))
+    assert unicode_id.startswith(glyph(Sigil.RUNNING, mode="unicode"))
+
+
+def _row_fg_hexes(table: BacklogTable, marker: str) -> set[str | None]:
+    """Return the foreground hexes of the rendered row whose line holds *marker*.
+
+    Scoping the capture to a single row's strip (rather than the whole
+    screen) lets the assertion read one priority's tint without other rows'
+    hues bleeding into a shared character bucket.
+    """
+    strips = table.screen._compositor.render_strips()  # type: ignore[attr-defined]
+    for strip in strips:
+        line = "".join(seg.text for seg in strip._segments)
+        if marker not in line:
+            continue
+        out: set[str | None] = set()
+        for segment in strip._segments:
+            if not segment.text.strip():
+                continue
+            style = segment.style
+            if style is not None and style.color is not None:
+                trip = style.color.get_truecolor()
+                out.add(f"#{trip.red:02x}{trip.green:02x}{trip.blue:02x}")
+            else:
+                out.add(None)
+        return out
+    raise AssertionError(f"no rendered row holds {marker!r}")
+
+
+def test_rendered_rows_carry_priority_tint_per_cell() -> None:
+    """The compositor renders each priority's row in its descending hue.
+
+    Colour-aware capture (not a colourless ``.txt`` golden): mounts three
+    rows P0 / P1 / P2 under the real palette and reads the per-row foreground
+    off the compositor. The row cursor highlights whichever row it sits on
+    (overriding that row's tint), so the cursor is parked away from the row
+    under assertion -- proving every priority renders its ladder hex, and a
+    revert to the pre-reskin palette reds this gate.
+    """
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(120, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.show_closed = True  # keep the closed row visible
+            table.state = _state_with_backlog(
+                [
+                    _item("BL-001", "P0", "open", "P-zero"),
+                    _item("BL-002", "P1", "in_progress", "P-one"),
+                    _item("BL-003", "P2", "closed", "P-two"),
+                ]
+            )
+            await pilot.pause()
+            # Park the cursor on the last row so the P0 / P1 rows show their
+            # true tint (the cursor row's highlight masks its own tint).
+            table.move_cursor(row=2)
+            await pilot.pause()
+            assert _P0_HEX in _row_fg_hexes(table, "BL-001")
+            assert _P1_HEX in _row_fg_hexes(table, "BL-002")
+            # Move the cursor off the P2 row to read its true tint.
+            table.move_cursor(row=0)
+            await pilot.pause()
+            assert _P2_HEX in _row_fg_hexes(table, "BL-003")
+
+    asyncio.run(body())
+
+
+def test_rendered_rows_lead_with_status_sigil() -> None:
+    """The rendered rows show the leading lifecycle sigil glyph per status.
+
+    Pairs the colour proof with the SHAPE proof: an OPEN row leads with the
+    PENDING sigil, an IN_PROGRESS row with the RUNNING sigil. Colour is
+    additive on top of the shape (colour-blind safe), so both axes are
+    asserted.
+    """
+
+    async def body() -> None:
+        app = _Harness()  # bare harness -> ascii render mode
+        async with app.run_test(size=(120, 12)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#bt", BacklogTable)
+            table.state = _state_with_backlog(
+                [
+                    _item("BL-001", "P0", "open", "P-zero"),
+                    _item("BL-002", "P1", "in_progress", "P-one"),
+                ]
+            )
+            await pilot.pause()
+            open_id = _plain_cell(table, "BL-001", "id")
+            running_id = _plain_cell(table, "BL-002", "id")
+            assert open_id == f"{glyph(Sigil.PENDING, mode=ASCII_MODE)} BL-001"
+            assert running_id == f"{glyph(Sigil.RUNNING, mode=ASCII_MODE)} BL-002"
 
     asyncio.run(body())

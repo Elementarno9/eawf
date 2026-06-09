@@ -35,11 +35,16 @@ from textual.widgets import DataTable
 
 from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.ids import natural_key
+from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 if TYPE_CHECKING:
     from textual.events import Resize
 
     from eawf.kernel.state.models import BacklogItem, State
+    from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +69,37 @@ _PRIORITY_RANK: dict[BacklogPriority, int] = {
 #: can audit the closure trail without scrolling past them by default.
 _CLOSED_STATUSES: frozenset[BacklogStatus] = frozenset({BacklogStatus.CLOSED})
 
+#: Priority -> concrete glyph/cell tint hex. The visual vocabulary tints a
+#: backlog row by its urgency: ``P0`` reads as an error (the ``err`` red),
+#: ``P1`` as a warning (the ``warn`` amber), and the lower priorities fade
+#: to the ``muted`` grey -- a descending salience ladder from the top
+#: priority down. The hexes are read off the canonical Wong dark palette
+#: (:data:`~eawf.surfaces.tui.theme.WONG_VARIABLES`) because a DataTable
+#: ``str`` cell is Rich-parsed and cannot resolve the ``$err`` / ``$warn``
+#: / ``$muted`` palette vars (see the shared
+#: :mod:`~eawf.surfaces.tui.widgets.status_tint` helper's docstring); the
+#: hex is the same value the live theme resolves those vars to, so the tint
+#: tracks the palette rather than re-typing a literal.
+_PRIORITY_TINT: dict[BacklogPriority, str] = {
+    BacklogPriority.P0: WONG_VARIABLES["err"],
+    BacklogPriority.P1: WONG_VARIABLES["warn"],
+    BacklogPriority.P2: WONG_VARIABLES["muted"],
+    BacklogPriority.P3: WONG_VARIABLES["muted"],
+}
+
+#: Backlog status -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: rendered as the row's leading mark. The shape signals the item's
+#: lifecycle stage independently of the priority hue (colour is additive on
+#: top of the glyph, colour-blind safe): an OPEN item is PENDING work, an
+#: IN_PROGRESS item is RUNNING, a CLOSED item is CLOSED, and a DEFERRED item
+#: reuses the PENDING hollow mark (deferred work is still un-started).
+_STATUS_SIGIL: dict[BacklogStatus, Sigil] = {
+    BacklogStatus.OPEN: Sigil.PENDING,
+    BacklogStatus.IN_PROGRESS: Sigil.RUNNING,
+    BacklogStatus.CLOSED: Sigil.CLOSED,
+    BacklogStatus.DEFERRED: Sigil.PENDING,
+}
+
 #: Column ids in display order. The free-text ``title`` is last so the
 #: three fixed-shape columns (id / priority / status) absorb a deterministic
 #: width and the title takes the remaining budget.
@@ -81,6 +117,13 @@ _COLUMN_LABELS: dict[str, str] = {"priority": "pri"}
 #: (and, via the ``s`` key, change) which key the rows are ordered by. ``v``
 #: reads as a downward marker and is ASCII-stable for the ``--plain`` path.
 _SORT_GLYPH: str = "v"
+
+#: Rendered cells the row's leading sigil + its trailing space claim on the
+#: id column. Each backlog row prefixes its id cell with ``<sigil><space>``
+#: so the lifecycle shape mark leads the row; the two cells widen the id
+#: column, so the fixed-columns width sum folds this in to keep the trailing
+#: ``title`` budget exact.
+_SIGIL_PREFIX_WIDTH: int = 2
 
 #: The non-title columns whose rendered width is subtracted from the
 #: content area to size the ``title`` budget. Kept in sync with
@@ -100,6 +143,85 @@ _ELLIPSIS: str = "…"
 def _priority_rank(priority: BacklogPriority) -> int:
     """Return the numeric rank for *priority* (``P0`` lowest = first)."""
     return _PRIORITY_RANK.get(priority, len(_PRIORITY_RANK))
+
+
+def priority_tint(priority: BacklogPriority) -> str:
+    """Return the concrete cell-tint hex for *priority*.
+
+    Reads the descending salience ladder (:data:`_PRIORITY_TINT`): ``P0``
+    the ``err`` red, ``P1`` the ``warn`` amber, the lower priorities the
+    ``muted`` grey. The hex is the canonical Wong dark value the live theme
+    resolves the matching ``$`` var to, since a DataTable ``str`` cell is
+    Rich-parsed and cannot resolve the palette var directly.
+
+    Args:
+        priority: The backlog item's priority.
+
+    Returns:
+        A concrete ``#rrggbb`` hex string for the row's tint.
+
+    Raises:
+        KeyError: If *priority* is not a member of :class:`BacklogPriority`
+            (an enum that drifted past :data:`_PRIORITY_TINT`).
+    """
+    return _PRIORITY_TINT[priority]
+
+
+def status_sigil_glyph(status: BacklogStatus, *, mode: str) -> str:
+    """Return the leading sigil glyph for a backlog *status* in *mode*.
+
+    Maps the backlog status to its lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+    (:data:`_STATUS_SIGIL`) and resolves the glyph in the active render
+    mode, so the row carries a single-cell shape mark whose meaning does
+    not depend on the priority hue.
+
+    Args:
+        status: The backlog item's status.
+        mode: The App's resolved render-mode label (``"ascii"`` selects the
+            ASCII glyph column; any other label the unicode column).
+
+    Returns:
+        The single-cell sigil glyph string for *status*.
+
+    Raises:
+        KeyError: If *status* is not a member of :class:`BacklogStatus` (an
+            enum that drifted past :data:`_STATUS_SIGIL`).
+    """
+    return glyph(_STATUS_SIGIL[status], mode=mode)
+
+
+def row_cells(item: BacklogItem, title: str, *, mode: str) -> tuple[str, str, str, str]:
+    """Build the four priority-tinted content-markup cells for *item*.
+
+    Every cell is a Rich content-markup ``str`` wrapping its text in a
+    ``[#rrggbb]...[/]`` priority-tint span (:func:`priority_tint`) so the
+    whole row reads at its urgency hue. A :class:`~textual.widgets.DataTable`
+    ``str`` cell is Rich-parsed and cannot resolve the ``$err`` / ``$warn``
+    / ``$muted`` palette vars, so the concrete hex is baked into the span --
+    the same convention the sibling
+    :func:`~eawf.surfaces.tui.widgets.workspace_table._eu_cell` uses. The id
+    cell leads with the lifecycle sigil glyph (:func:`status_sigil_glyph`)
+    plus a space, so the row's shape mark precedes its id; colour is additive
+    on top of that glyph (colour-blind safe). Dynamic text (id, title) is
+    markup-escaped so a ``[`` in the value renders literally rather than
+    parsing as a tag. The *title* is the already width-truncated string.
+
+    Args:
+        item: The backlog item whose id / priority / status / title render.
+        title: The pre-truncated title string for the trailing cell.
+        mode: The App's resolved render-mode label, threaded into the
+            leading-sigil glyph lookup.
+
+    Returns:
+        The ``(id, priority, status, title)`` tinted markup cells in order.
+    """
+    tint = priority_tint(item.priority)
+    sigil = status_sigil_glyph(item.status, mode=mode)
+    id_cell = f"[{tint}]{sigil} {escape_markup(item.id)}[/]"
+    priority_cell = f"[{tint}]{item.priority.value}[/]"
+    status_cell = f"[{tint}]{item.status.value}[/]"
+    title_cell = f"[{tint}]{escape_markup(title)}[/]"
+    return id_cell, priority_cell, status_cell, title_cell
 
 
 def column_label(column_key: str, sort_key: str) -> str:
@@ -271,7 +393,9 @@ def _fixed_columns_width(items: list[BacklogItem], sort_key: str = SORT_KEYS[0])
     """Return the combined text width of the id / priority / status columns.
 
     Each fixed column auto-sizes to the wider of its **rendered** header
-    label and its widest cell value across *items*. The header label is the
+    label and its widest cell value across *items*. The id cell carries a
+    leading ``<sigil><space>`` prefix (:data:`_SIGIL_PREFIX_WIDTH`), so the
+    id column's per-cell width folds that prefix in. The header label is the
     short display name (``"pri"`` for the priority key) plus the sort glyph
     on the active sort column, so the width tracks what the header actually
     renders (the short ``"pri"`` reclaims the space the 8-char ``"priority"``
@@ -288,7 +412,8 @@ def _fixed_columns_width(items: list[BacklogItem], sort_key: str = SORT_KEYS[0])
     Returns:
         The total text width claimed by the fixed columns.
     """
-    id_width = max([len(column_label("id", sort_key)), *(len(it.id) for it in items)])
+    id_cell_widths = [len(it.id) + _SIGIL_PREFIX_WIDTH for it in items]
+    id_width = max([len(column_label("id", sort_key)), *id_cell_widths])
     priority_width = max(
         [len(column_label("priority", sort_key)), *(len(it.priority.value) for it in items)]
     )
@@ -392,11 +517,36 @@ class BacklogTable(DataTable[str]):
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._rebuild()
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this widget's reactive."""
         self.state = new_state
+
+    def _on_render_mode(self, _mode: RenderMode) -> None:
+        """Rebuild rows so the leading sigil repaints in the flipped glyph set.
+
+        The row's leading lifecycle sigil is baked into the rendered id
+        cell, so a unicode <-> ascii flip must re-run :meth:`_rebuild` to
+        swap each sigil's glyph column.
+        """
+        self._rebuild()
+
+    def _render_mode(self) -> str:
+        """Return the app's live render mode, or the safe default.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the
+        leading-sigil glyph lookup so a unicode <-> ascii flip repaints the
+        rows. Falls back to
+        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` under a
+        bare harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The active render-mode label.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def watch_state(self) -> None:
         """Rebuild rows when the bound state changes."""
@@ -530,14 +680,10 @@ class BacklogTable(DataTable[str]):
             self.clear()
             items = self.visible_items()
             budget = self._title_budget(items)
+            mode = self._render_mode()
             for item in items:
-                self.add_row(
-                    item.id,
-                    item.priority.value,
-                    item.status.value,
-                    _truncate(item.title, budget),
-                    key=item.id,
-                )
+                cells = row_cells(item, _truncate(item.title, budget), mode=mode)
+                self.add_row(*cells, key=item.id)
         finally:
             self._rebuilding = False
 
@@ -587,6 +733,9 @@ __all__ = [
     "filter_items",
     "hide_closed",
     "next_sort_key",
+    "priority_tint",
+    "row_cells",
     "sort_items",
+    "status_sigil_glyph",
     "title_budget",
 ]
