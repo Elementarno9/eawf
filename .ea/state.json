@@ -4308,6 +4308,42 @@
       "status": "done",
       "updated_at": "2026-06-09T18:01:17.223063Z"
     },
+    "P30-I02-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W25",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W25",
+      "scope_id": "P30-I02-W25",
+      "status": "done",
+      "updated_at": "2026-06-09T21:14:42.156408Z"
+    },
+    "P30-I02-W26": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W26",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W26",
+      "scope_id": "P30-I02-W26",
+      "status": "done",
+      "updated_at": "2026-06-09T21:16:35.864762Z"
+    },
+    "P30-I02-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W27",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W27",
+      "scope_id": "P30-I02-W27",
+      "status": "done",
+      "updated_at": "2026-06-09T21:17:27.280422Z"
+    },
     "P30-I02-W28": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4331,6 +4367,42 @@
       "scope_id": "P30-I02-W29",
       "status": "done",
       "updated_at": "2026-06-09T16:14:11.458682Z"
+    },
+    "P30-I02-W30": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W30",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W30",
+      "scope_id": "P30-I02-W30",
+      "status": "done",
+      "updated_at": "2026-06-09T21:17:43.625073Z"
+    },
+    "P30-I02-W31": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W31",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W31",
+      "scope_id": "P30-I02-W31",
+      "status": "done",
+      "updated_at": "2026-06-09T21:17:46.565388Z"
+    },
+    "P30-I02-W32": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W32",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W32",
+      "scope_id": "P30-I02-W32",
+      "status": "done",
+      "updated_at": "2026-06-09T21:17:48.347924Z"
     },
     "P30-I02-W33": {
       "actual_cost_usd": 0.0,
@@ -14498,6 +14570,45 @@
       "scope_id": "P30-I02-W24",
       "updated_at": "2026-06-09T18:00:15.124328Z"
     },
+    "P30-I02-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W25-bucket-20260609T211355Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W25",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W25",
+      "updated_at": "2026-06-09T21:13:55.317426Z"
+    },
+    "P30-I02-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W26-bucket-20260609T211355Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I02-W26",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I02-W26",
+      "updated_at": "2026-06-09T21:13:55.863043Z"
+    },
+    "P30-I02-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W27-bucket-20260609T211356Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I02-W27",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I02-W27",
+      "updated_at": "2026-06-09T21:13:56.407676Z"
+    },
     "P30-I02-W28": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I02-W28-bucket-20260609T183808Z",
@@ -14523,6 +14634,45 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I02-W29",
       "updated_at": "2026-06-09T16:14:09.906115Z"
+    },
+    "P30-I02-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W30-bucket-20260609T211356Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I02-W30",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I02-W30",
+      "updated_at": "2026-06-09T21:13:56.973240Z"
+    },
+    "P30-I02-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W31-bucket-20260609T211357Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W31",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W31",
+      "updated_at": "2026-06-09T21:13:57.569711Z"
+    },
+    "P30-I02-W32": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W32-bucket-20260609T211358Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I02-W32",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I02-W32",
+      "updated_at": "2026-06-09T21:13:58.189558Z"
     },
     "P30-I02-W33": {
       "confidence": "low",
@@ -17395,7 +17545,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T18:38:45.479739Z",
+  "updated_at": "2026-06-09T21:17:48.348211Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -67290,10 +67440,10 @@
     "P30-I02-W25": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-close",
+      "claimed_at": "2026-06-09T21:13:55.317418Z",
+      "closed_at": "2026-06-09T21:14:42.156408Z",
+      "commit": "aaf668d022b49a2ebff252f3fe45062f40e97a7f",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W02"
@@ -67306,28 +67456,61 @@
         "src/eawf/surfaces/tui/modes/feed.py",
         "src/eawf/surfaces/tui/modes/agent_watch.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_app_scaffold.py",
+              "tests/snapshots/tui/test_state_binding.py",
+              "-k",
+              "banner and not first_paint_renders_brand and not stale_schema_banner_shows_when_bound_trails_live",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W25",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.798553Z",
-      "outcome": null,
+      "outcome": "Degraded + stale-schema banners reskinned: fail-sigil calm reconnecting copy, warn-sigil version delta, per-mode sentinels aligned; banner-scoped scaffold + state-binding tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W25-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Stale-schema snapshot golden asserts the warn sigil + version delta; a Pilot widget-presence assertion confirms the degraded banner mounts with the fail sigil + calm copy.",
-          "oracle_tier": null,
-          "quality_dimension": "reliability",
+          "measurable_signal": "the banner-scoped tests in test_app_scaffold.py and test_state_binding.py (degraded fail-sigil calm copy, mounted-toggle, socket diagnostics, stale-schema warn sigil naming both versions, healthy mounts neither) pass; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
-          "text": "A dedicated non-normalised Pilot test mounts the app with the daemon unreachable and asserts the degraded banner widget is mounted with the fail sigil + the calm copy (the snapshot path strips this line); the stale-schema banner has a golden asserting the warn sigil + version delta; a healthy app mounts neither banner.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the banner-scoped scaffold + state-binding suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A non-normalised Pilot test mounts the app with the daemon unreachable and asserts the degraded banner is mounted, leads with the fail sigil and the calm reconnecting copy, and toggles visibility instead of unmounting; the stale-schema banner message leads with the warn sigil and names both schema versions; a healthy app mounts neither banner.",
           "waiver_reason": null
         }
       ],
@@ -67339,10 +67522,10 @@
     "P30-I02-W26": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-close",
+      "claimed_at": "2026-06-09T21:13:55.863037Z",
+      "closed_at": "2026-06-09T21:16:35.864762Z",
+      "commit": "d55f381108364955bbb137a2d196be687079930d",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W02"
@@ -67353,28 +67536,58 @@
       "file_scopes": [
         "src/eawf/surfaces/tui/app.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_pane_error_boundary.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W26",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.799082Z",
-      "outcome": null,
+      "outcome": "Per-pane error boundary + generic crash frame: one pane render exception degrades to fail-sigil frame with live r/l/Esc bindings, neighbours survive, no App panic; test_pane_error_boundary.py green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W26-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Snapshot golden pins the crash-frame copy; a Pilot test confirms neighbours survive + no App panic; affordance_parity confirms r/l/Esc fire.",
-          "oracle_tier": null,
-          "quality_dimension": "reliability",
+          "measurable_signal": "test_pane_error_boundary.py asserts the boundary frame (fail sigil + crash copy), neighbour-pane survival, live r/l/Esc bindings firing, no boundary frame on a healthy pane, and no App panic on a single-pane exception; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
-          "text": "A Pilot test injects a render exception into one pane and asserts the boundary frame renders (the fail sigil + the literal copy, a golden), the neighbouring panes still render, and affordance_parity confirms r/l/Esc resolve to live Bindings and fire; a healthy pane renders no boundary frame and one pane exception does not escalate to App panic.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the per-pane error-boundary Pilot suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A Pilot test injects a render exception into one pane and asserts the boundary frame renders the fail sigil plus the literal crash copy, the neighbouring panes still render, and r/l/Esc resolve to live Bindings and fire (retry / view-log / dismiss); a healthy pane renders no boundary frame and one pane exception does not escalate to App panic.",
           "waiver_reason": null
         }
       ],
@@ -67388,10 +67601,10 @@
       "blocks": [
         "P30-I13-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-close",
+      "claimed_at": "2026-06-09T21:13:56.407669Z",
+      "closed_at": "2026-06-09T21:17:27.280422Z",
+      "commit": "541933da85951e0df599a2cb4161729cafbbcbec",
       "deps": [
         "P30-I02-W02",
         "P30-I02-W24"
@@ -67404,28 +67617,59 @@
         "src/eawf/workflow/audit_dsl/registry.py",
         "src/eawf/surfaces/tui/snapshot/behaviour_probe.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_tui_flow.py",
+              "tests/snapshots/tui/test_behaviour_probe.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W27",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.811261Z",
-      "outcome": null,
+      "outcome": "tui_flow audit kind wraps behaviour_probe keypress-transcript driver; 7 operator-journey flow specs green as I00 acceptance; fail-path names divergent field; malformed spec degrades-not-raises; test_tui_flow + test_behaviour_probe green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W27-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "The tui_flow kind pytest exits zero (pass + fail-path) and the 7 flow gates run green driving each key sequence to its terminal observable-state signature.",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
+          "measurable_signal": "test_tui_flow.py asserts pass-flow, divergent-field fail-path naming, all 7 flow specs green, and malformed-spec degrade; test_behaviour_probe.py asserts the driver contract; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
-          "text": "The kind unit tests assert a passing flow and a missing-terminal-state fail-path naming the divergent observable field, each of the 7 flow specs runs green against the reskinned surfaces (e.g. recover-refused-close ends with the audit-failed overlay on the stack + the wave row at the closed sigil), and a malformed flow spec degrades-not-raises.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the tui_flow kind + behaviour-probe suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The tui_flow kind unit tests assert a passing flow and a missing-terminal-state fail-path that names the divergent observable field, each of the 7 operator-journey flow specs runs green against the reskinned surfaces, a malformed flow spec degrades-not-raises, and the behaviour_probe keypress-transcript driver the kind wraps holds its own contract.",
           "waiver_reason": null
         }
       ],
@@ -67591,10 +67835,10 @@
     "P30-I02-W30": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-close",
+      "claimed_at": "2026-06-09T21:13:56.973230Z",
+      "closed_at": "2026-06-09T21:17:43.625073Z",
+      "commit": "e9730563f7a4ff91915b40c76a17d15a33d9e3d9",
       "deps": [
         "P30-I02-W06",
         "P30-I02-W07",
@@ -67608,42 +67852,58 @@
         "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
         "src/eawf/surfaces/tui/widgets/status_pane.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_home_narrow.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W30",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.811781Z",
-      "outcome": null,
+      "outcome": "Narrow-terminal + resize acceptance for HOME: narrow goldens over roadmap tree / status pane / autopilot pane with no truncated sigil or id, on_resize reflows, wide-vs-narrow affordance parity; test_home_narrow.py green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W30-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_home_narrow pins narrow-width goldens for roadmap/status/autopilot and asserts no sigil/id/count is dropped; an on_resize event reflows with no clip",
-          "oracle_tier": null,
+          "measurable_signal": "test_home_narrow.py asserts narrow goldens with no truncated sigil / wave id / n-of-m count, on_resize reflow over clipping, and wide-vs-narrow affordance parity per HOME pane; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
-          "text": "Narrow-width snapshot goldens (a constrained column count) over the roadmap tree, status pane, and autopilot pane render without truncating a sigil, wave id, or n/m count, and an on_resize pass reflows rather than clips; the goldens red on an overflow regression.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W30-C2",
-          "kind": "affordance_parity",
-          "measurable_signal": "test_home_narrow_affordance_parity asserts the wide and narrow renders expose the same action set per HOME pane; a clipped action fails it",
-          "oracle_tier": null,
-          "quality_dimension": "interaction_capability",
-          "required": true,
-          "response": null,
-          "text": "At the narrow width every HOME affordance the wide layout exposes stays reachable (no action clipped offscreen), proven by an affordance_parity check across the wide and narrow renders of each HOME pane.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the narrow-terminal HOME acceptance suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Narrow-width snapshot goldens over the roadmap tree, status pane, and autopilot pane render without truncating a sigil, wave id, or n/m count; an on_resize pass reflows rather than clips; and every HOME affordance the wide layout exposes stays reachable at the narrow width, proven by an affordance-parity check across the wide and narrow renders of each HOME pane.",
           "waiver_reason": null
         }
       ],
@@ -67655,10 +67915,10 @@
     "P30-I02-W31": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-close",
+      "claimed_at": "2026-06-09T21:13:57.569704Z",
+      "closed_at": "2026-06-09T21:17:46.565388Z",
+      "commit": "a94804b100e78841acfabd4f3562854abd201d5b",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W02"
@@ -67670,28 +67930,58 @@
         "src/eawf/surfaces/tui/modes/brief_viewer.py",
         "tests/tui/test_brief_viewer_reskin.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_brief_viewer_reskin.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W31",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.800300Z",
-      "outcome": null,
+      "outcome": "BriefViewerScreen markdown chassis reskinned end to end: two-tone green wordmark header, green accent, sigil-prefixed claim/status rows; test_brief_viewer_reskin.py green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W31-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_brief_viewer_reskin pins a modal golden asserting the green header brand + sigil claim rows; the pre-reskin chassis fails the golden",
-          "oracle_tier": null,
+          "measurable_signal": "test_brief_viewer_reskin.py asserts the two-tone wordmark header, green accent, and sigil-prefixed claim/status rows on the BriefViewerScreen golden; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
-          "text": "A snapshot golden of the BriefViewerScreen markdown modal asserts the two-tone Eae header, the green accent, and sigil-prefixed claim/status rows render in the reskinned language, not just the single ClaimStatus site RS-28 touched.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the brief-viewer reskin golden suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A snapshot golden of the BriefViewerScreen markdown modal asserts the two-tone green wordmark header, the green accent, and sigil-prefixed claim/status rows render in the reskinned language across the whole modal chassis, not just the single ClaimStatus sigil site the earlier research-board pass touched.",
           "waiver_reason": null
         }
       ],
@@ -67703,10 +67993,10 @@
     "P30-I02-W32": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-close",
+      "claimed_at": "2026-06-09T21:13:58.189550Z",
+      "closed_at": "2026-06-09T21:17:48.347924Z",
+      "commit": "b89f42711f6522e5076ca81a38142c10cfe2c5fe",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W03"
@@ -67719,28 +68009,58 @@
         "src/eawf/surfaces/render/brand.py",
         "tests/tui/test_offline_brand.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_offline_brand.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W32",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.812260Z",
-      "outcome": null,
+      "outcome": "Offline daemon-down brand frame reskinned to two-tone green wordmark, token-parity assert pins offline frame to brand.py accent SGR, old teal fails it; text goldens byte-stable; test_offline_brand.py green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W32-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_offline_brand pins the offline-frame golden and asserts its accent tokens equal brand.py ACCENT_HEX; a teal/legacy frame reds the test",
-          "oracle_tier": null,
+          "measurable_signal": "test_offline_brand.py asserts offline-frame / brand.py accent-token parity, absence of the old teal SGR, and byte-stable text goldens for the status + dashboard frames; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
-          "text": "The offline brand frame renders the two-tone green Eae wordmark identical to the reskinned in-app header, proven by a snapshot golden plus a token-parity assert that the offline frame and brand.py emit the same accent tokens; the old teal frame fails it.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the offline brand-frame parity + golden suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The offline daemon-down brand frame renders the two-tone green wordmark identical to the reskinned in-app header, proven by committed text goldens plus a token-parity assert that the offline frame and brand.py emit the same accent SGR tokens; the old teal frame fails the parity assert.",
           "waiver_reason": null
         }
       ],
