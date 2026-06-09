@@ -14,10 +14,16 @@ spec-jury QC gate against the B091 idle-verifier regression:
 - the happy path (producer wired + band present + band-scoped resolver) passes
   explicitly.
 
+It also covers the :func:`detect_idle_contracts` meta-gate that generalizes
+the B091 lesson: parse the contract-family symbols a diff adds, then flag any
+that ships idle (no call-site outside its module AND/OR no asserting test). The
+diff / tree / read sources are injectable so these cases feed a synthetic diff
++ tree without a git repo.
+
 The gate module is loaded via :mod:`importlib` because ``tools/`` is excluded
 from the package and so is not importable by name. The checks are injectable
-(``profiles`` / ``resolve_fn``) so the failure cases never touch shipped
-profiles.
+(``profiles`` / ``resolve_fn`` / ``diff_fn`` / ``tree_fn`` / ``read_fn``) so
+the failure cases never touch shipped profiles or the real tree.
 """
 
 from __future__ import annotations
@@ -216,3 +222,253 @@ def test_make_probe_wave_is_validated(mod) -> None:
     assert wave.file_scopes == [mod._UI_SCOPE]
     assert isinstance(wave.opened_at, datetime)
     assert wave.opened_at.tzinfo is UTC
+
+
+# --------------------------------------------------------------------------- #
+# Meta-gate: detect a newly-defined contract that ships idle in a diff.
+# --------------------------------------------------------------------------- #
+
+
+def _diff_adding(path: str, lines: list[str]) -> str:
+    """Build a minimal unified diff that ADDS *lines* to *path*.
+
+    The header is the ``+++ b/<path>`` marker the parser keys file scope on;
+    each body line is a ``+`` added line. ``--unified=0`` style (no context).
+    """
+    body = "\n".join(f"+{line}" for line in lines)
+    return f"--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{len(lines)} @@\n{body}\n"
+
+
+def _tree_from(files: dict[str, str]):
+    """Return injectable ``tree_fn`` / ``read_fn`` over a synthetic *files* map.
+
+    *files* maps a repo-relative path to its full text. ``tree_fn`` lists the
+    keys; ``read_fn`` returns the text (empty for an unknown path, mirroring an
+    absent working-tree file).
+    """
+
+    def tree_fn() -> list[str]:
+        return sorted(files)
+
+    def read_fn(path: str) -> str:
+        return files.get(path, "")
+
+    return tree_fn, read_fn
+
+
+def test_detect_idle_contracts_flags_orphan_def(mod) -> None:
+    # A new check_* contract with NO call-site and NO asserting test is an
+    # orphan: exactly one finding naming the symbol + both discharges missing.
+    defining = "src/eawf/platform/lint/foo.py"
+    diff = _diff_adding(defining, ["def check_widget_parity(node):", "    return True"])
+    tree_fn, read_fn = _tree_from({defining: "def check_widget_parity(node):\n    return True\n"})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.symbol == "check_widget_parity"
+    assert finding.module == defining
+    assert finding.missing is mod.MissingDischarge.BOTH
+
+
+def test_detect_idle_contracts_clean_with_call_and_test(mod) -> None:
+    # The SAME def WITH a call-site outside its module AND an asserting test
+    # yields zero findings -- the contract is fully discharged.
+    defining = "src/eawf/platform/lint/foo.py"
+    diff = _diff_adding(defining, ["def check_widget_parity(node):", "    return True"])
+    tree_fn, read_fn = _tree_from(
+        {
+            defining: "def check_widget_parity(node):\n    return True\n",
+            "src/eawf/platform/lint/runner.py": (
+                "from .foo import check_widget_parity\n"
+                "def run(node):\n    return check_widget_parity(node)\n"
+            ),
+            "tests/unit/test_foo.py": (
+                "from eawf.platform.lint.foo import check_widget_parity\n"
+                "def test_it():\n    assert check_widget_parity(None) is True\n"
+            ),
+        }
+    )
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert findings == []
+
+
+def test_detect_idle_contracts_caller_but_no_test_still_fires(mod) -> None:
+    # A call-site alone does NOT discharge the contract: with a caller but no
+    # asserting test, exactly one finding flags the missing test discharge.
+    defining = "src/eawf/platform/lint/foo.py"
+    diff = _diff_adding(defining, ["def check_widget_parity(node):", "    return True"])
+    tree_fn, read_fn = _tree_from(
+        {
+            defining: "def check_widget_parity(node):\n    return True\n",
+            "src/eawf/platform/lint/runner.py": (
+                "from .foo import check_widget_parity\n"
+                "def run(node):\n    return check_widget_parity(node)\n"
+            ),
+        }
+    )
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert len(findings) == 1
+    assert findings[0].missing is mod.MissingDischarge.NO_ASSERTING_TEST
+
+
+def test_detect_idle_contracts_ignores_internal_helper(mod) -> None:
+    # A plain internal helper is NOT a contract family, so even an orphan
+    # ``_coerce_row`` yields zero findings -- the detector is tightly scoped.
+    defining = "src/eawf/platform/lint/foo.py"
+    diff = _diff_adding(defining, ["def _coerce_row(row):", "    return dict(row)"])
+    tree_fn, read_fn = _tree_from({defining: "def _coerce_row(row):\n    return dict(row)\n"})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert findings == []
+
+
+def test_detect_idle_contracts_recognizes_gate_and_lint_families(mod) -> None:
+    # The ``*_gate`` and ``*_lint`` families are recognized alongside
+    # ``check_*``; each orphan yields its own finding.
+    defining = "tools/widget_gate.py"
+    diff = _diff_adding(
+        defining,
+        ["def widget_gate(diff):", "    return []", "def widget_lint(node):", "    return []"],
+    )
+    tree_fn, read_fn = _tree_from({defining: ""})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    symbols = {f.symbol for f in findings}
+    assert symbols == {"widget_gate", "widget_lint"}
+
+
+def test_detect_idle_contracts_recognizes_checkkind_runner(mod) -> None:
+    # A ``@register(...CheckKind...)`` decorated def registers a CheckKind
+    # runner; the decorated name is the contract and an orphan one fires.
+    defining = "src/eawf/workflow/audit_dsl/kinds/widget.py"
+    diff = _diff_adding(
+        defining,
+        [
+            '@register_check("widget_parity", kind=CheckKind)',
+            "def run_widget(spec):",
+            "    return []",
+        ],
+    )
+    tree_fn, read_fn = _tree_from({defining: ""})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert len(findings) == 1
+    assert findings[0].symbol == "run_widget"
+
+
+def test_detect_idle_contracts_recognizes_oracle_tier_arm(mod) -> None:
+    # A new ``OracleTier.T<n>_<NAME>`` dispatch arm is an oracle-tier branch;
+    # an orphan tier member fires.
+    defining = "src/eawf/workflow/verify/oracle.py"
+    diff = _diff_adding(
+        defining,
+        ["    if tier == OracleTier.T8_WIDGET:", "        return _resolve_widget()"],
+    )
+    tree_fn, read_fn = _tree_from({defining: ""})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert len(findings) == 1
+    assert findings[0].symbol == "T8_WIDGET"
+
+
+def test_detect_idle_contracts_recognizes_lint_rule_module(mod) -> None:
+    # A new ``eawf0##_*.py`` module under the lint package is a contract family
+    # keyed on the file path; the rule id is the symbol.
+    defining = "src/eawf/platform/lint/eawf099_widget.py"
+    diff = _diff_adding(defining, ["def run(node):", "    return []"])
+    tree_fn, read_fn = _tree_from({defining: ""})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert len(findings) == 1
+    assert findings[0].symbol == "eawf099"
+
+
+def test_detect_idle_contracts_ignores_contract_token_in_test_file(mod) -> None:
+    # A contract-shaped token added under tests/ is a fixture, not a new
+    # contract, so the parser skips it -- this is what keeps the meta-gate
+    # from flagging its own synthetic fixtures.
+    test_path = "tests/unit/test_widget.py"
+    diff = _diff_adding(
+        test_path,
+        ["def check_widget_parity(node):", "    return True"],
+    )
+    tree_fn, read_fn = _tree_from({test_path: "def check_widget_parity(node):\n    return True\n"})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert findings == []
+
+
+def test_detect_idle_contracts_empty_diff_yields_nothing(mod) -> None:
+    # A diff that adds no contract symbol yields zero findings (and never even
+    # scans the tree).
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: "",
+        tree_fn=lambda: [],
+        read_fn=lambda _p: "",
+    )
+    assert findings == []
+
+
+def test_main_returns_nonzero_on_orphan_contract(mod, monkeypatch) -> None:
+    # End-to-end binding proof: an orphan contract in the staged diff makes the
+    # meta-gate fire and main() exit non-zero (the B091 check still passes).
+    # Patch the injectable default sources so main()'s real detect path runs
+    # against a synthetic diff + tree (no git, no real tree).
+    defining = "src/eawf/platform/lint/foo.py"
+    diff = _diff_adding(defining, ["def check_widget_parity(node):", "    return True"])
+    tree_fn, read_fn = _tree_from({defining: "def check_widget_parity(node):\n    return True\n"})
+    monkeypatch.setattr(mod, "_default_diff", lambda _r: diff)
+    monkeypatch.setattr(mod, "_default_tree", tree_fn)
+    monkeypatch.setattr(mod, "_default_read", read_fn)
+    code = mod.main(["idle_contract_gate.py"])
+    assert code == 1
+
+
+def test_main_returns_zero_when_no_orphan_contract(mod, monkeypatch) -> None:
+    # The negative path end-to-end: an empty meta-gate result + a passing B091
+    # check makes main() exit 0. An empty diff adds no contract symbol.
+    monkeypatch.setattr(mod, "_default_diff", lambda _r: "")
+    monkeypatch.setattr(mod, "_default_tree", lambda: [])
+    monkeypatch.setattr(mod, "_default_read", lambda _p: "")
+    code = mod.main(["idle_contract_gate.py"])
+    assert code == 0

@@ -11,6 +11,20 @@ shipped ``quality`` profile turns it on for a non-empty UI/UX band. This gate
 makes "wired + band-scoped, not idle, not global" a CHECKED invariant rather
 than a hope.
 
+Two gates run from :func:`main`, in precedence order, and either failing
+exits non-zero:
+
+- :func:`check_idle_contract` -- the original single B091 spec-jury contract
+  described below.
+- :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
+  flags any newly-defined contract (a ``check_*`` / ``*_gate`` / ``*_lint``
+  function, a ``CheckKind`` runner registration, an ``OracleTier`` dispatch
+  arm, or an ``eawf0##_*.py`` lint module) that ships idle: no call-site
+  outside its own module AND no asserting test references it. The meta-gate
+  generalizes the B091 lesson from one hardcoded contract to *every* future
+  contract a diff introduces, so a fresh dead verifier is caught the same
+  commit it lands.
+
 Two independent contracts are asserted, in precedence order:
 
 - **not-idle** -- the producer is importable AND at least one shipped profile
@@ -46,11 +60,14 @@ Exit codes:
 
 from __future__ import annotations
 
+import re
+import subprocess
 import sys
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import Wave
@@ -246,14 +263,459 @@ def check_idle_contract(
     )
 
 
+# =========================================================================== #
+# Meta-gate: detect a newly-defined contract that ships idle in a diff.
+# =========================================================================== #
+
+#: Repo root, derived once from this file's location (``tools/`` is a sibling
+#: of ``src/`` and ``tests/``). The tree-scan default reads files relative to
+#: this root so the gate works from any cwd.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+#: Contract-family detectors over a single added source line. The meta-gate is
+#: scoped tightly to these families so a plain internal helper (e.g.
+#: ``def _coerce_row(...)``) is never flagged. Each pattern captures the
+#: contract symbol name in group ``sym`` so the finding can name the orphan.
+#:
+#: - ``check_*`` / ``*_gate`` / ``*_lint`` function defs are the gate / lint /
+#:   validator family.
+#: - a ``@register(...)`` / ``@register_check(...)`` decorator whose argument is
+#:   a ``CheckKind`` string token registers a check runner; the decorated name
+#:   is the contract.
+#: - a new ``OracleTier.T<n>_*`` dispatch arm is an oracle-tier branch.
+_CONTRACT_DEF_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^\s*def\s+(?P<sym>check_[A-Za-z0-9_]+)\s*\("),
+    re.compile(r"^\s*def\s+(?P<sym>[A-Za-z0-9_]+_gate)\s*\("),
+    re.compile(r"^\s*def\s+(?P<sym>[A-Za-z0-9_]+_lint)\s*\("),
+)
+
+#: A ``CheckKind``-runner registration: a ``@register(...)`` /
+#: ``@register_check(...)`` decorator line that names a ``CheckKind`` token. The
+#: decorated def on the following added line carries the contract symbol.
+_CHECKKIND_DECORATOR_RE = re.compile(r"^\s*@register(?:_check)?\s*\(.*CheckKind.*\)\s*$")
+
+#: A decorated def line (used to recover the symbol a ``CheckKind`` decorator
+#: registers).
+_DECORATED_DEF_RE = re.compile(r"^\s*def\s+(?P<sym>[A-Za-z0-9_]+)\s*\(")
+
+#: A new oracle-tier dispatch arm: a reference to an ``OracleTier.T<n>_<NAME>``
+#: member in an added line. The member token is the contract symbol.
+_ORACLE_TIER_RE = re.compile(r"OracleTier\.(?P<sym>T\d+_[A-Z0-9_]+)")
+
+#: A new ``eawf0##_*.py`` lint rule module under the lint package. The file's
+#: rule id (``eawf0##``) is the contract symbol.
+_LINT_MODULE_RE = re.compile(r"^src/eawf/platform/lint/(?P<sym>eawf0\d\d)_[A-Za-z0-9_]+\.py$")
+
+#: A unified-diff hunk-header carrying the file path of the *added* side.
+_DIFF_FILE_RE = re.compile(r"^\+\+\+ b/(?P<path>.+)$")
+
+#: Repo-relative path prefixes a contract may legitimately be DEFINED under.
+#: A contract is defined in shipped source (``src/``) or a gate script
+#: (``tools/``); a ``tests/`` file that constructs a contract-shaped token is a
+#: test fixture (or the discharge itself), never a new contract, so the parser
+#: ignores added lines in test files to avoid flagging its own fixtures.
+_SOURCE_PREFIXES: tuple[str, ...] = ("src/", "tools/")
+
+#: An added line in a unified diff (``+`` prefix, but not the ``+++`` header).
+_ADDED_LINE_RE = re.compile(r"^\+(?!\+\+ )(?P<body>.*)$")
+
+
+class MissingDischarge(StrEnum):
+    """Which idle-contract discharge a finding reports as missing.
+
+    A contract is discharged only when it is both *called* (a call-site outside
+    its defining module proves it runs in production) AND *asserted* (a test
+    references it so a regression is caught). The order is informational only.
+    """
+
+    NO_CALL_SITE = "no_call_site"
+    NO_ASSERTING_TEST = "no_asserting_test"
+    BOTH = "both"
+
+
+@dataclass(frozen=True, slots=True)
+class IdleContractFinding:
+    """A newly-defined contract that ships idle (an orphan).
+
+    Attributes:
+        symbol: The contract symbol name (function / tier member / rule id).
+        module: The repo-relative path of the file defining the contract.
+        missing: Which discharge is absent -- no call-site, no asserting test,
+            or both.
+    """
+
+    symbol: str
+    module: str
+    missing: MissingDischarge
+
+
+@dataclass(frozen=True, slots=True)
+class _ContractDef:
+    """An added contract definition parsed out of a diff (internal).
+
+    Attributes:
+        symbol: The contract symbol name to chase for discharges.
+        module: The repo-relative path of the defining file.
+    """
+
+    symbol: str
+    module: str
+
+
+#: A diff source: returns the unified-diff text for a rev range. Injected so
+#: tests feed a synthetic diff without a git repo (mirrors how
+#: :func:`check_idle_contract` injects ``profiles`` / ``resolve_fn``).
+type DiffFn = Callable[[str], str]
+
+#: A tree-scan source: returns the repo-relative paths of every source / test
+#: file in the working tree. Injected alongside :data:`ReadFn` so tests feed a
+#: synthetic tree without touching the real one.
+type TreeFn = Callable[[], Sequence[str]]
+
+#: A file-read source: returns the text of a repo-relative path. Injected so
+#: the discharge scan reads the synthetic tree the test built.
+type ReadFn = Callable[[str], str]
+
+
+def _default_diff(diff_range: str) -> str:
+    """Return the unified diff for *diff_range* via git.
+
+    Args:
+        diff_range: A git rev range (``HEAD~1..HEAD``) or a flag the diff
+            subcommand accepts (``--cached``).
+
+    Returns:
+        The unified-diff text. Empty when the range has no changes.
+    """
+    proc = subprocess.run(
+        ["git", "diff", "--unified=0", diff_range],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return proc.stdout
+
+
+def _default_tree() -> list[str]:
+    """Return the repo-relative paths of tracked Python sources and tests.
+
+    Returns:
+        Every ``.py`` path under ``src/`` and ``tests/`` plus the ``tools/``
+        gate scripts, repo-relative and sorted.
+    """
+    paths: list[str] = []
+    for top in ("src", "tests", "tools"):
+        root = _REPO_ROOT / top
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.py"):
+            paths.append(str(path.relative_to(_REPO_ROOT)))
+    return sorted(paths)
+
+
+def _default_read(path: str) -> str:
+    """Return the text of repo-relative *path*, or empty if it is unreadable.
+
+    Args:
+        path: A repo-relative file path.
+
+    Returns:
+        The file text, or ``""`` when the file is absent (e.g. a path that was
+        renamed away after the diff was taken).
+    """
+    target = _REPO_ROOT / path
+    if not target.is_file():
+        return ""
+    return target.read_text(encoding="utf-8", errors="replace")
+
+
+def _family_symbols_on_line(body: str) -> list[str]:
+    """Return the contract symbols a single added source line defines.
+
+    Recognizes a :data:`_CONTRACT_DEF_PATTERNS` ``def`` family (``check_*`` /
+    ``*_gate`` / ``*_lint``) and an :data:`_ORACLE_TIER_RE` tier arm. A plain
+    helper line matches nothing, so it yields an empty list.
+
+    Args:
+        body: The added line's text (the ``+`` prefix already stripped).
+
+    Returns:
+        The contract symbol names found on the line, in detection order.
+    """
+    symbols: list[str] = []
+    for pattern in _CONTRACT_DEF_PATTERNS:
+        family = pattern.match(body)
+        if family is not None:
+            symbols.append(family.group("sym"))
+            break
+    tier = _ORACLE_TIER_RE.search(body)
+    if tier is not None:
+        symbols.append(tier.group("sym"))
+    return symbols
+
+
+def _parse_added_contract_defs(diff_text: str) -> list[_ContractDef]:
+    """Parse the contract-family symbols newly defined in *diff_text*.
+
+    Only added lines (``+`` prefixed) under a :data:`_SOURCE_PREFIXES` path are
+    considered, and only those that match a :data:`_CONTRACT_DEF_PATTERNS`
+    family, a ``CheckKind``-runner decorator, an :data:`_ORACLE_TIER_RE` arm, or
+    a new :data:`_LINT_MODULE_RE` module. Plain helpers never match, and added
+    lines under ``tests/`` are skipped (a contract-shaped token in a test is a
+    fixture, not a new contract), so neither becomes a finding.
+
+    Args:
+        diff_text: A unified diff (``git diff`` output).
+
+    Returns:
+        The de-duplicated contract definitions, in first-seen order.
+    """
+    parser = _DiffContractParser()
+    for raw in diff_text.splitlines():
+        parser.feed(raw)
+    return parser.defs
+
+
+@dataclass(slots=True)
+class _DiffContractParser:
+    """A line-at-a-time state machine that collects added contract defs.
+
+    The diff walk is a small state machine: a ``+++ b/<path>`` header sets the
+    file scope (and may itself name a lint-module contract), then each added
+    line in a source file is matched against the contract families. The
+    ``CheckKind`` decorator/def pairing spans two lines, so the pending flag
+    carries that one bit of state between :meth:`feed` calls.
+
+    Attributes:
+        defs: The de-duplicated contract definitions collected so far.
+    """
+
+    defs: list[_ContractDef] = field(default_factory=list)
+    _seen: set[tuple[str, str]] = field(default_factory=set)
+    _current_file: str = ""
+    _pending_checkkind: bool = False
+
+    def feed(self, raw: str) -> None:
+        """Advance the state machine by one raw diff line.
+
+        Args:
+            raw: A single line of unified-diff text.
+        """
+        file_match = _DIFF_FILE_RE.match(raw)
+        if file_match is not None:
+            self._enter_file(file_match.group("path"))
+            return
+
+        # Only added lines in shipped source / gate scripts define a contract;
+        # a contract-shaped token added under tests/ is a fixture, never a new
+        # contract (this is what keeps the meta-gate from flagging itself).
+        if not self._current_file.startswith(_SOURCE_PREFIXES):
+            return
+        added = _ADDED_LINE_RE.match(raw)
+        if added is not None:
+            self._feed_added(added.group("body"))
+
+    def _enter_file(self, path: str) -> None:
+        self._current_file = path
+        self._pending_checkkind = False
+        lint_match = _LINT_MODULE_RE.match(path)
+        if lint_match is not None:
+            self._record(lint_match.group("sym"))
+
+    def _feed_added(self, body: str) -> None:
+        # A def on the line right after a CheckKind decorator is the registered
+        # runner; a non-def line breaks the adjacency and falls through.
+        if self._pending_checkkind:
+            self._pending_checkkind = False
+            decorated = _DECORATED_DEF_RE.match(body)
+            if decorated is not None:
+                self._record(decorated.group("sym"))
+                return
+        if _CHECKKIND_DECORATOR_RE.match(body) is not None:
+            self._pending_checkkind = True
+            return
+        for symbol in _family_symbols_on_line(body):
+            self._record(symbol)
+
+    def _record(self, symbol: str) -> None:
+        key = (symbol, self._current_file)
+        if key not in self._seen:
+            self._seen.add(key)
+            self.defs.append(_ContractDef(symbol=symbol, module=self._current_file))
+
+
+def _has_call_site(symbol: str, defining_module: str, tree: Iterable[str], read_fn: ReadFn) -> bool:
+    """Return whether *symbol* is referenced in a non-test file other than its module.
+
+    A call-site outside the defining module proves the contract runs in
+    production (a same-module self-reference does not discharge it, and a test
+    reference is counted separately as the asserting-test discharge).
+
+    Args:
+        symbol: The contract symbol to chase.
+        defining_module: The repo-relative path of the file that defines it.
+        tree: The repo-relative paths to scan.
+        read_fn: Reader for a repo-relative path.
+
+    Returns:
+        ``True`` when some non-test, non-defining file references *symbol*.
+    """
+    needle = re.compile(rf"\b{re.escape(symbol)}\b")
+    for path in tree:
+        if path == defining_module:
+            continue
+        if path.startswith("tests/") or "/tests/" in path:
+            continue
+        if needle.search(read_fn(path)):
+            return True
+    return False
+
+
+def _has_asserting_test(symbol: str, tree: Iterable[str], read_fn: ReadFn) -> bool:
+    """Return whether a test file references *symbol*.
+
+    Pragmatically, a test under ``tests/`` that imports or references the
+    symbol name discharges the asserting-test contract: the symbol is pulled
+    into a test module's namespace, so a regression has somewhere to fail.
+
+    Args:
+        symbol: The contract symbol to chase.
+        tree: The repo-relative paths to scan.
+        read_fn: Reader for a repo-relative path.
+
+    Returns:
+        ``True`` when some ``tests/`` file references *symbol*.
+    """
+    needle = re.compile(rf"\b{re.escape(symbol)}\b")
+    for path in tree:
+        if not (path.startswith("tests/") or "/tests/" in path):
+            continue
+        if needle.search(read_fn(path)):
+            return True
+    return False
+
+
+def detect_idle_contracts(
+    diff_range: str = "--cached",
+    *,
+    diff_fn: DiffFn = _default_diff,
+    tree_fn: TreeFn = _default_tree,
+    read_fn: ReadFn = _default_read,
+) -> list[IdleContractFinding]:
+    """Flag every newly-defined contract in *diff_range* that ships idle.
+
+    The meta-gate parses the contract-family symbols a diff adds (see
+    :func:`_parse_added_contract_defs`), then for each chases two discharges in
+    the resulting working tree: a call-site outside the defining module
+    (proves it runs) and an asserting test that references it (proves a
+    regression is caught). A contract missing either discharge is an orphan and
+    yields one :class:`IdleContractFinding`; a contract with BOTH yields none.
+
+    The diff, tree, and read sources are injectable so tests feed a synthetic
+    diff + tree without a git repo, mirroring how :func:`check_idle_contract`
+    injects its ``profiles`` / ``resolve_fn``. The function mutates nothing --
+    it only reads.
+
+    Args:
+        diff_range: A git rev range (``HEAD~1..HEAD``) or the staged-diff flag
+            (``--cached``, the default so the pre-commit hook needs no args).
+        diff_fn: Diff source; defaults to ``git diff --unified=0 <range>``.
+        tree_fn: Tree-scan source; defaults to the tracked ``src`` / ``tests``
+            / ``tools`` Python files.
+        read_fn: File reader; defaults to reading the working-tree file.
+
+    Returns:
+        One :class:`IdleContractFinding` per orphan contract, in the order the
+        defs appear in the diff. Empty when every added contract is discharged
+        (or the diff adds no contract).
+    """
+    contract_defs = _parse_added_contract_defs(diff_fn(diff_range))
+    if not contract_defs:
+        return []
+
+    tree = list(tree_fn())
+    findings: list[IdleContractFinding] = []
+    for contract in contract_defs:
+        has_call = _has_call_site(contract.symbol, contract.module, tree, read_fn)
+        has_test = _has_asserting_test(contract.symbol, tree, read_fn)
+        if has_call and has_test:
+            continue
+        if not has_call and not has_test:
+            missing = MissingDischarge.BOTH
+        elif not has_call:
+            missing = MissingDischarge.NO_CALL_SITE
+        else:
+            missing = MissingDischarge.NO_ASSERTING_TEST
+        findings.append(
+            IdleContractFinding(
+                symbol=contract.symbol,
+                module=contract.module,
+                missing=missing,
+            )
+        )
+    return findings
+
+
+def _render_findings(findings: Sequence[IdleContractFinding]) -> str:
+    """Render *findings* as a human-readable multi-line failure message.
+
+    Args:
+        findings: The orphan contracts to describe.
+
+    Returns:
+        One line per finding, each naming the symbol, its module, and the
+        missing discharge.
+    """
+    lines = [f"idle-contract meta-gate: {len(findings)} new contract(s) ship idle:"]
+    for finding in findings:
+        lines.append(
+            f"  - {finding.symbol} (in {finding.module}) is missing {finding.missing.value}; "
+            "a new contract needs a call-site outside its module AND an asserting test"
+        )
+    return "\n".join(lines)
+
+
 def main(argv: list[str]) -> int:
-    del argv  # the gate reads no arguments; the shipped tree is the input
+    """Run both idle-contract gates over the staged diff and current tree.
+
+    The original B091 single-contract check (:func:`check_idle_contract`) runs
+    first, then the meta-gate (:func:`detect_idle_contracts`) over the staged
+    diff. Both must pass; the exit code is non-zero when either fails.
+
+    Args:
+        argv: Process argv. ``argv[1]``, when present, overrides the default
+            ``--cached`` diff range fed to the meta-gate (e.g. ``HEAD~1..HEAD``
+            for a CI range check).
+
+    Returns:
+        ``0`` when both gates pass; ``1`` when either fails.
+    """
+    diff_range = argv[1] if len(argv) > 1 else "--cached"
+
+    failed = False
     result = check_idle_contract()
     if result.passed:
         print(result.message)
-        return 0
-    print(result.message, file=sys.stderr)
-    return 1
+    else:
+        print(result.message, file=sys.stderr)
+        failed = True
+
+    # Pass the module-level default sources explicitly so a test (or a future
+    # caller) can patch them via attribute assignment -- a default-bound
+    # parameter would snapshot the unpatched function at def time.
+    findings = detect_idle_contracts(
+        diff_range,
+        diff_fn=_default_diff,
+        tree_fn=_default_tree,
+        read_fn=_default_read,
+    )
+    if findings:
+        print(_render_findings(findings), file=sys.stderr)
+        failed = True
+    else:
+        print("idle-contract meta-gate: ok (no new contract ships idle)")
+
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
