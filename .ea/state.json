@@ -6842,8 +6842,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "iter_id": "P30-I01",
+    "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
   },
@@ -15134,7 +15134,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753182Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "P30 I01 cadence and binding floor (BIND-*)",
       "trigger": "none",
       "wave_ids": [
@@ -16369,7 +16369,7 @@
         "2026-06-08-p30-pre-promotion-checklist",
         "2026-06-09-p30-coverage-finalization"
       ],
-      "status": "planned",
+      "status": "active",
       "subproject_id": null,
       "title": "The binding pass — turn on what P29 built, prove it fires"
     }
@@ -16407,7 +16407,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T12:35:58.127936Z",
+  "updated_at": "2026-06-09T12:54:30.374220Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
