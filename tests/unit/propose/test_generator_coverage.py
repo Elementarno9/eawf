@@ -12,7 +12,12 @@ from eawf.kernel.spec.common import (
     SourceUnit,
     grandfather_criterion,
 )
-from eawf.workflow.propose.coverage import coverage_gaps, significant_tokens
+from eawf.kernel.spec.intent import IntentBrief, source_brief_units
+from eawf.workflow.propose.coverage import (
+    coverage_gaps,
+    significant_tokens,
+    source_brief_coverage_gaps,
+)
 from eawf.workflow.propose.generator import coverage_diff, extract_units
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "tui_drift_brief.md"
@@ -165,3 +170,136 @@ def test_coverage_gaps_no_planned_steps_is_noop() -> None:
     """A wave with no planned steps has nothing to cover (clean no-op)."""
     criteria = [grandfather_criterion("anything at all", index=1)]
     assert coverage_gaps(criteria, planned_steps=[]) == []
+
+
+# ---- source_brief_units: extraction over referenced brief documents ----------
+
+_BRIEF_BODY = "Implement the parser tokeniser module.\nWire the telemetry dashboard exporter.\n"
+
+
+def _write_brief(tmp_path: Path, *, name: str = "brief.md") -> Path:
+    """Write the two-deliverable brief document and return its path."""
+    brief = tmp_path / name
+    brief.write_text(_BRIEF_BODY, encoding="utf-8")
+    return brief
+
+
+def test_source_brief_units_extracts_units_from_referenced_document(tmp_path: Path) -> None:
+    """Each deliverable line of a referenced brief becomes one source unit."""
+    brief = _write_brief(tmp_path)
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        source_brief_ids=[str(brief)],
+    )
+    units = source_brief_units(intent, repo_root=tmp_path)
+    assert [u.span_id for u in units] == ["U-000", "U-001"]
+    assert "parser tokeniser module" in units[0].quote
+    assert "telemetry dashboard exporter" in units[1].quote
+
+
+def test_source_brief_units_skips_unresolvable_ref(tmp_path: Path) -> None:
+    """A source-brief id with no on-disk document contributes no units."""
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        source_brief_ids=["RES-no-such-brief", "docs/missing.md"],
+    )
+    assert source_brief_units(intent, repo_root=tmp_path) == []
+
+
+def test_source_brief_units_remints_monotonic_ids_across_documents(tmp_path: Path) -> None:
+    """Two briefs never collide on a span id (re-minted monotonic sequence)."""
+    first = _write_brief(tmp_path, name="first.md")
+    second = _write_brief(tmp_path, name="second.md")
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        source_brief_ids=[str(first), str(second)],
+    )
+    units = source_brief_units(intent, repo_root=tmp_path)
+    assert [u.span_id for u in units] == ["U-000", "U-001", "U-002", "U-003"]
+
+
+# ---- source_brief_coverage_gaps: brief-document coverage diff ----------------
+
+
+def test_source_brief_coverage_gaps_flags_dropped_deliverable(tmp_path: Path) -> None:
+    """A source-brief deliverable no criterion covers is exactly one finding."""
+    brief = _write_brief(tmp_path)
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        source_brief_ids=[str(brief)],
+    )
+    # Cover only the first deliverable; the exporter line is silently dropped.
+    criteria = [grandfather_criterion("implement parser tokeniser module", index=1)]
+    findings = source_brief_coverage_gaps(criteria, intent=intent, repo_root=tmp_path)
+    assert len(findings) == 1
+    assert findings[0].code == "EAWF022"
+    assert findings[0].snippet == "U-001"
+
+
+def test_source_brief_coverage_gaps_required_intent_empty_planned_steps(tmp_path: Path) -> None:
+    """A required-intent wave with empty planned_steps still diffs the brief."""
+    brief = _write_brief(tmp_path)
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        planned_steps=[],
+        source_brief_ids=[str(brief)],
+    )
+    # No criterion covers either deliverable; both lines are findings even with
+    # zero planned steps -- the no-op short-circuit no longer hides the drift.
+    criteria = [grandfather_criterion("unrelated bookkeeping change", index=1)]
+    findings = source_brief_coverage_gaps(criteria, intent=intent, repo_root=tmp_path)
+    assert {f.snippet for f in findings} == {"U-000", "U-001"}
+
+
+def test_source_brief_coverage_gaps_deferred_unit_is_clean(tmp_path: Path) -> None:
+    """The dropped deliverable marked deferred yields zero findings."""
+    brief = _write_brief(tmp_path)
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        source_brief_ids=[str(brief)],
+    )
+    criteria = [grandfather_criterion("implement parser tokeniser module", index=1)]
+    deferrals = [
+        DeferredDeliverable(
+            span_id="U-001",
+            reason="exporter is filed to the next phase backlog item",
+            target="B999",
+        )
+    ]
+    assert (
+        source_brief_coverage_gaps(criteria, intent=intent, repo_root=tmp_path, deferrals=deferrals)
+        == []
+    )
+
+
+def test_source_brief_coverage_gaps_fully_covered_is_clean(tmp_path: Path) -> None:
+    """A brief whose every deliverable is covered yields zero findings."""
+    brief = _write_brief(tmp_path)
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        source_brief_ids=[str(brief)],
+    )
+    criteria = [
+        grandfather_criterion("implement parser tokeniser module", index=1),
+        grandfather_criterion("wire telemetry dashboard exporter", index=2),
+    ]
+    assert source_brief_coverage_gaps(criteria, intent=intent, repo_root=tmp_path) == []
+
+
+def test_source_brief_coverage_gaps_not_required_intent_is_noop(tmp_path: Path) -> None:
+    """A brief with no source_brief_ids has no document to diff (clean no-op)."""
+    intent = IntentBrief(
+        problem="parser is missing",
+        desired_outcome="parser ships",
+        planned_steps=["implement parser tokeniser module"],
+    )
+    assert intent.is_required_intent is False
+    criteria = [grandfather_criterion("unrelated change", index=1)]
+    assert source_brief_coverage_gaps(criteria, intent=intent, repo_root=tmp_path) == []

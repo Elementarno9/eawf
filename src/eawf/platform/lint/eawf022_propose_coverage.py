@@ -108,6 +108,56 @@ def check_coverage(
     return violations
 
 
+def check_source_brief_coverage(
+    units: list[SourceUnit],
+    covered_span_ids: set[str],
+    deferrals: list[DeferredDeliverable],
+) -> list[CoverageGapViolation]:
+    """Return one EAWF022 finding per source-brief unit no wave accounts for.
+
+    The brief-document counterpart to :func:`check_coverage`. Where
+    :func:`check_coverage` diffs a wave's authored criteria against its own
+    ``planned_steps``, this surface diffs the units extracted from the
+    *referenced source-brief document* against the union of every wave's
+    criteria / planned steps / backlog refs (the cover set the caller
+    derives) plus the explicit deferral list. The TUI brief-criteria-drift
+    incident lost a source-brief deliverable the planner never wrote a
+    planned step for, so the ``planned_steps`` diff could not see it; this
+    surface closes that boundary by extracting units from the brief itself.
+
+    The diff is identical to :func:`check_coverage` -- a unit covered by the
+    cover set or named by a :class:`DeferredDeliverable` is clean; a unit in
+    neither is a finding -- so both share one ``coverage_diff`` core and one
+    finding shape. The two surfaces differ only in WHERE the units come from:
+    the wave's planned steps versus the source-brief document.
+
+    Args:
+        units: The source-brief units (from
+            :func:`eawf.kernel.spec.intent.source_brief_units`).
+        covered_span_ids: Unit span ids the wave set accounts for (a
+            criterion / planned step / backlog ref topically maps to each).
+        deferrals: Explicit deferral rows; each names a unit span id, a
+            rationale, and a filing target.
+
+    Returns:
+        One :class:`CoverageGapViolation` per uncovered source-brief unit, in
+        ``coverage_diff`` (source) order. An empty list when every unit is
+        covered or deferred.
+    """
+    report = coverage_diff(units, covered_span_ids, deferrals)
+    violations = [
+        CoverageGapViolation(
+            lineno=index,
+            col_offset=0,
+            snippet=span_id,
+            reason="source-brief unit dropped with no covering criterion and no deferral",
+        )
+        for index, span_id in enumerate(report.uncovered, start=1)
+    ]
+    logger.debug(f"check_source_brief_coverage uncovered={len(violations)} units={len(units)}")
+    return violations
+
+
 def check_source(source: str) -> list[CoverageGapViolation]:
     """Return EAWF022 findings over a Markdown prose surface (always empty).
 
@@ -131,4 +181,5 @@ __all__ = [
     "CoverageGapViolation",
     "check_coverage",
     "check_source",
+    "check_source_brief_coverage",
 ]

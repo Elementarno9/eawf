@@ -309,6 +309,15 @@ _LINT_MODULE_RE = re.compile(r"^src/eawf/platform/lint/(?P<sym>eawf0\d\d)_[A-Za-
 #: A unified-diff hunk-header carrying the file path of the *added* side.
 _DIFF_FILE_RE = re.compile(r"^\+\+\+ b/(?P<path>.+)$")
 
+#: The unified-diff ``--- /dev/null`` old-side marker, present only when the
+#: file is genuinely added (a modified file's old side is ``--- a/<path>``).
+#: The lint-module path detector keys on this so a mere edit of an existing
+#: ``eawf0##_*.py`` module is not mistaken for a new lint contract -- only a
+#: brand-new module file registers the rule-id contract. ``git diff`` also
+#: emits a ``new file mode`` line for an addition, but ``--- /dev/null`` is the
+#: portable signal both real git and the test fixtures carry.
+_NEW_FILE_OLD_SIDE_RE = re.compile(r"^--- /dev/null$")
+
 #: Repo-relative path prefixes a contract may legitimately be DEFINED under.
 #: A contract is defined in shipped source (``src/``) or a gate script
 #: (``tools/``); a ``tests/`` file that constructs a contract-shaped token is a
@@ -480,11 +489,13 @@ def _parse_added_contract_defs(diff_text: str) -> list[_ContractDef]:
 class _DiffContractParser:
     """A line-at-a-time state machine that collects added contract defs.
 
-    The diff walk is a small state machine: a ``+++ b/<path>`` header sets the
-    file scope (and may itself name a lint-module contract), then each added
-    line in a source file is matched against the contract families. The
-    ``CheckKind`` decorator/def pairing spans two lines, so the pending flag
-    carries that one bit of state between :meth:`feed` calls.
+    The diff walk is a small state machine: a ``--- /dev/null`` old-side marker
+    flags the next file as a genuine addition, a ``+++ b/<path>`` header sets
+    the file scope (and, when the file is newly added, may itself name a
+    lint-module contract), then each added line in a source file is matched
+    against the contract families. The ``CheckKind`` decorator/def pairing
+    spans two lines, so the pending flag carries that one bit of state between
+    :meth:`feed` calls.
 
     Attributes:
         defs: The de-duplicated contract definitions collected so far.
@@ -494,6 +505,7 @@ class _DiffContractParser:
     _seen: set[tuple[str, str]] = field(default_factory=set)
     _current_file: str = ""
     _pending_checkkind: bool = False
+    _next_file_is_new: bool = False
 
     def feed(self, raw: str) -> None:
         """Advance the state machine by one raw diff line.
@@ -501,6 +513,9 @@ class _DiffContractParser:
         Args:
             raw: A single line of unified-diff text.
         """
+        if _NEW_FILE_OLD_SIDE_RE.match(raw) is not None:
+            self._next_file_is_new = True
+            return
         file_match = _DIFF_FILE_RE.match(raw)
         if file_match is not None:
             self._enter_file(file_match.group("path"))
@@ -518,6 +533,13 @@ class _DiffContractParser:
     def _enter_file(self, path: str) -> None:
         self._current_file = path
         self._pending_checkkind = False
+        # A lint-module contract is keyed on the file path, so it is "new" only
+        # when the module file itself is newly added -- editing an existing
+        # eawf0##_*.py module adds no new rule-id contract.
+        is_new = self._next_file_is_new
+        self._next_file_is_new = False
+        if not is_new:
+            return
         lint_match = _LINT_MODULE_RE.match(path)
         if lint_match is not None:
             self._record(lint_match.group("sym"))

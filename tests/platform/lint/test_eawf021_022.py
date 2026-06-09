@@ -39,6 +39,7 @@ from eawf.platform.lint.eawf022_propose_coverage import (
 )
 from eawf.platform.lint.eawf022_propose_coverage import (
     check_coverage,
+    check_source_brief_coverage,
 )
 from eawf.platform.lint.eawf022_propose_coverage import (
     check_source as check_eawf022_source,
@@ -247,6 +248,44 @@ def test_check_coverage_over_extracted_brief_spans() -> None:
 def test_check_eawf022_source_is_a_noop_over_prose() -> None:
     # Coverage needs typed inputs; the prose adapter is always empty.
     assert check_eawf022_source("any prose with a dropped detail\n") == []
+
+
+# ---- EAWF022: source-brief coverage gate ------------------------------------
+
+
+def test_check_source_brief_coverage_flags_uncovered_unit() -> None:
+    # Error-path: a source-brief unit covered by neither a criterion-span cover
+    # set nor a deferral surfaces as exactly one finding naming the dropped id.
+    units = [
+        SourceUnit(span_id="U-000", quote="covered deliverable", char_offset=0),
+        SourceUnit(span_id="U-001", quote="dropped deliverable", char_offset=20),
+    ]
+    findings = check_source_brief_coverage(units, covered_span_ids={"U-000"}, deferrals=[])
+    assert len(findings) == 1
+    assert findings[0].code == EAWF022_CODE
+    assert findings[0].snippet == "U-001"
+    assert "source-brief unit" in findings[0].reason
+
+
+def test_check_source_brief_coverage_deferred_unit_is_not_a_finding() -> None:
+    # Negative-path: the same uncovered unit marked deferred yields zero findings.
+    units = [SourceUnit(span_id="U-001", quote="dropped deliverable", char_offset=0)]
+    deferral = DeferredDeliverable(
+        span_id="U-001",
+        reason="tracked in the next phase backlog item",
+        target="B999",
+    )
+    assert check_source_brief_coverage(units, covered_span_ids=set(), deferrals=[deferral]) == []
+
+
+def test_check_source_brief_coverage_clean_when_all_units_covered() -> None:
+    # Negative-path: a fully-covered brief yields zero findings.
+    units = [
+        SourceUnit(span_id="U-000", quote="first deliverable", char_offset=0),
+        SourceUnit(span_id="U-001", quote="second deliverable", char_offset=20),
+    ]
+    findings = check_source_brief_coverage(units, covered_span_ids={"U-000", "U-001"}, deferrals=[])
+    assert findings == []
 
 
 # ---- composition behind validate_prose --------------------------------------

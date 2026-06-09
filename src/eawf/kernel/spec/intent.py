@@ -29,9 +29,16 @@ downstream consumer can depend on today.
 
 from __future__ import annotations
 
-from typing import Annotated
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from eawf.kernel.spec.common import SourceUnit
+
+logger = logging.getLogger(__name__)
 
 
 class IntentBrief(BaseModel):
@@ -90,7 +97,77 @@ class IntentBrief(BaseModel):
     evidence_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     source_brief_ids: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
 
+    @property
+    def is_required_intent(self) -> bool:
+        """Return whether the brief was distilled from a source-brief document.
+
+        A required-intent brief carries at least one ``source_brief_ids``
+        entry: the wave was synthesised ``--from-briefs`` so the source-brief
+        document is itself an authoritative deliverable list the wave's
+        criteria must account for. For such a wave, an empty ``planned_steps``
+        is not a clean no-op -- the source brief still enumerates deliverables
+        -- so the source-brief coverage gate runs against the brief document
+        rather than short-circuiting on the empty step list.
+
+        Returns:
+            ``True`` when ``source_brief_ids`` is non-empty, else ``False``.
+        """
+        return bool(self.source_brief_ids)
+
+
+def source_brief_units(intent: IntentBrief, *, repo_root: Path) -> list[SourceUnit]:
+    """Extract source units from each referenced source-brief document.
+
+    Reads every ``source_brief_ids`` entry that resolves to an on-disk file
+    under *repo_root* (a repo-relative or absolute path) and splits each
+    document into :class:`~eawf.kernel.spec.common.SourceUnit` rows via
+    :func:`~eawf.workflow.propose.generator.extract_units`. The per-document
+    units are concatenated in ``source_brief_ids`` order and re-minted with a
+    single monotonic span id sequence so two briefs never collide on a span
+    id and a coverage finding traces back to a stable ordinal.
+
+    A ``source_brief_ids`` entry that does not resolve to a file (a bare URN
+    or an id with no on-disk document) contributes no units rather than
+    raising: the entry is a pointer, not a guaranteed local artifact, and the
+    coverage gate keys on the documents it can actually read.
+
+    Args:
+        intent: The brief whose ``source_brief_ids`` documents are read.
+        repo_root: The repo working-tree root that a repo-relative
+            ``source_brief_ids`` entry resolves under.
+
+    Returns:
+        The concatenated source units across every resolvable source-brief
+        document, with re-minted monotonic span ids. An empty list when the
+        brief names no resolvable document.
+    """
+    from eawf.kernel.spec.common import SourceUnit
+    from eawf.workflow.propose.generator import extract_units
+
+    units: list[SourceUnit] = []
+    index = 0
+    for raw_ref in intent.source_brief_ids:
+        ref_path = Path(raw_ref)
+        if not ref_path.is_absolute():
+            ref_path = repo_root / ref_path
+        if not ref_path.is_file():
+            logger.debug(f"source_brief_units skip_unresolvable ref={raw_ref!r}")
+            continue
+        text = ref_path.read_text(encoding="utf-8")
+        for unit in extract_units(text):
+            units.append(
+                SourceUnit(
+                    span_id=f"U-{index:03d}",
+                    quote=unit.quote,
+                    char_offset=unit.char_offset,
+                )
+            )
+            index += 1
+    logger.debug(f"source_brief_units refs={len(intent.source_brief_ids)} units={len(units)}")
+    return units
+
 
 __all__ = [
     "IntentBrief",
+    "source_brief_units",
 ]

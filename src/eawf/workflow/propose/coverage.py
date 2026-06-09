@@ -19,11 +19,18 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Final
 
-from eawf.platform.lint.eawf022_propose_coverage import CoverageGapViolation, check_coverage
+from eawf.platform.lint.eawf022_propose_coverage import (
+    CoverageGapViolation,
+    check_coverage,
+    check_source_brief_coverage,
+)
 from eawf.workflow.propose.generator import extract_units
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from eawf.kernel.spec.common import CriterionSpec, DeferredDeliverable
+    from eawf.kernel.spec.intent import IntentBrief
 
 #: Minimum length for a "significant" token in the coverage overlap check.
 #: Tokens shorter than this (``the``, ``a``, ``to``, ``via``, ``and``, ...)
@@ -102,7 +109,74 @@ def coverage_gaps(
     return check_coverage(units, covered_span_ids=cover_set, deferrals=deferrals)
 
 
+def source_brief_coverage_gaps(
+    criteria: list[CriterionSpec],
+    *,
+    intent: IntentBrief,
+    repo_root: Path,
+    deferrals: list[DeferredDeliverable] | None = None,
+) -> list[CoverageGapViolation]:
+    """Return every uncovered unit of a wave's source-brief document(s).
+
+    Closes the boundary the per-wave :func:`coverage_gaps` diff cannot see: a
+    source-brief deliverable the planner never wrote a ``planned_steps`` entry
+    for. The units come from the referenced source-brief document itself (via
+    :func:`~eawf.kernel.spec.intent.source_brief_units`), and a unit is COVERED
+    when it shares a significant token (see :func:`significant_tokens`) with at
+    least one criterion (``text`` or ``measurable_signal``), planned step, or
+    explicit ``backlog_ids`` token. A unit covered by none and named by no
+    :class:`~eawf.kernel.spec.common.DeferredDeliverable` is a finding.
+
+    Unlike :func:`coverage_gaps`, an empty ``planned_steps`` is NOT a clean
+    no-op for a required-intent brief: the source-brief document still
+    enumerates deliverables, so the diff runs against the brief even when the
+    planner authored no steps. When the brief is not required-intent (no
+    ``source_brief_ids``) the gate is a clean no-op -- there is no source-brief
+    document to diff against.
+
+    The cover-set is decided by deterministic token overlap, never by an LLM's
+    self-report, so the diff is reproducible over identical input.
+
+    Args:
+        criteria: The wave's authored criterion rows.
+        intent: The wave's :class:`~eawf.kernel.spec.intent.IntentBrief`; its
+            ``source_brief_ids`` documents are the unit source.
+        repo_root: The repo working-tree root the ``source_brief_ids`` paths
+            resolve under.
+        deferrals: Explicit deferral rows suppressing named source-brief
+            units. ``None`` (the default) means no unit is deferred.
+
+    Returns:
+        One finding per uncovered source-brief unit; empty when every unit is
+        covered, deferred, or the brief names no resolvable source document.
+    """
+    from eawf.kernel.spec.intent import source_brief_units
+
+    if not intent.is_required_intent:
+        return []
+    units = source_brief_units(intent, repo_root=repo_root)
+    if not units:
+        return []
+    target_tokens = [
+        significant_tokens(f"{criterion.text} {criterion.measurable_signal}")
+        for criterion in criteria
+    ]
+    target_tokens += [significant_tokens(step) for step in intent.planned_steps]
+    cover_set = {
+        unit.span_id
+        for unit in units
+        if (unit_tokens := significant_tokens(unit.quote))
+        and any(unit_tokens & ttokens for ttokens in target_tokens)
+    }
+    return check_source_brief_coverage(
+        units,
+        covered_span_ids=cover_set,
+        deferrals=list(deferrals) if deferrals is not None else [],
+    )
+
+
 __all__ = [
     "coverage_gaps",
     "significant_tokens",
+    "source_brief_coverage_gaps",
 ]

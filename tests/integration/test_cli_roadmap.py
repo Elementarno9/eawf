@@ -758,6 +758,114 @@ def test_roadmap_apply_advisory_clean_when_wave_has_no_intent(workspace: Path) -
     assert body["coverage_gaps"] == []
 
 
+def _write_source_brief(workspace: Path, *, rel: str, body: str) -> None:
+    """Write a source-brief document under *workspace* at the repo-relative path."""
+    brief = workspace / rel
+    brief.parent.mkdir(parents=True, exist_ok=True)
+    brief.write_text(body, encoding="utf-8")
+
+
+def _add_wave_with_uncovered_source_brief(workspace: Path, *, rel: str) -> None:
+    """Add a P21-W01 with empty planned steps + a source brief it never covers.
+
+    The wave is required-intent (its ``--intent-source-brief-ids`` names the
+    on-disk brief) but carries no planned steps, so only the source-brief
+    coverage leg can see the dropped ``telemetry dashboard exporter``
+    deliverable enumerated in the brief.
+    """
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "Foo handling",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+            "--success",
+            "implement parser tokeniser module returning tokens",
+            "--intent-problem",
+            "parser drift",
+            "--intent-desired-outcome",
+            "parser covered",
+            "--intent-source-brief-ids",
+            rel,
+        ],
+    )
+
+
+def test_roadmap_apply_approve_blocks_on_source_brief_gap(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--approve` refuses an uncovered source-brief unit (empty planned_steps)."""
+    monkeypatch.chdir(workspace)
+    rel = ".ea/local/research/2026-06-09-brief.md"
+    _write_source_brief(
+        workspace,
+        rel=rel,
+        body=(
+            "Implement the parser tokeniser module returning tokens.\n"
+            "Wire the telemetry dashboard exporter for live metrics.\n"
+        ),
+    )
+    _add_wave_with_uncovered_source_brief(workspace, rel=rel)
+    res = runner.invoke(app, ["roadmap", "apply", "P21", "--approve"])
+    assert res.exit_code != 0
+    combined = f"{res.stdout}{res.stderr}"
+    assert "EAWF022" in combined
+    # No apply EVENT lands when the blocking gate refuses.
+    events = [e for e in _read_events(workspace) if e["payload"]["command"] == "roadmap apply"]
+    assert not events
+
+
+def test_roadmap_apply_approve_passes_when_source_brief_fully_covered(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A wave whose criteria cover every source-brief deliverable applies cleanly."""
+    monkeypatch.chdir(workspace)
+    rel = ".ea/local/research/2026-06-09-brief.md"
+    _write_source_brief(
+        workspace,
+        rel=rel,
+        body="Implement the parser tokeniser module returning tokens.\n",
+    )
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "Foo handling",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+            "--success",
+            "implement parser tokeniser module returning tokens",
+            "--intent-problem",
+            "parser drift",
+            "--intent-desired-outcome",
+            "parser covered",
+            "--intent-source-brief-ids",
+            rel,
+        ],
+    )
+    res = runner.invoke(app, ["--json", "roadmap", "apply", "P21", "--approve"])
+    assert res.exit_code == 0, res.output
+    body = orjson.loads(res.stdout)
+    assert body["status"] == "ok"
+
+
 def test_roadmap_apply_non_planned_phase_rejected(workspace: Path) -> None:
     """Apply on a non-PLANNED phase is rejected (only PLANNED can apply)."""
     _propose_with_wave(workspace)

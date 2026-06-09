@@ -109,17 +109,23 @@ def _wrap_body(yaml_block: str) -> str:
     )
 
 
-def _state_payload(*, status: str, planned_steps: list[str]) -> dict[str, Any]:
+def _state_payload(
+    *, status: str, planned_steps: list[str], source_brief_ids: list[str] | None = None
+) -> dict[str, Any]:
     """A minimal valid State with one wave under P29-I12 in *status*.
 
     The wave carries an :class:`IntentBrief` whose ``planned_steps`` are the
     per-wave brief spans the EAWF022 coverage lint scores the criteria
-    against. Pass ``planned_steps=[]`` to make the coverage lint a no-op.
+    against. Pass ``planned_steps=[]`` to make the planned-step coverage leg a
+    no-op. Pass ``source_brief_ids`` to make the wave required-intent so the
+    source-brief coverage leg reads the referenced document(s) even when
+    ``planned_steps`` is empty.
     """
     intent = {
         "problem": "materialise parsed criteria + gates onto the wave row",
         "desired_outcome": "the wave row carries typed criteria + gates from its spec body",
         "planned_steps": list(planned_steps),
+        "source_brief_ids": list(source_brief_ids) if source_brief_ids is not None else [],
     }
     return {
         "schema_version": "1.0",
@@ -351,6 +357,50 @@ def test_sync_rejects_uncovered_span(tmp_path: Path) -> None:
         _state_payload(
             status="pending",
             planned_steps=["recalibrate the telemetry sampler histogram buckets"],
+        ),
+    )
+    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError) as exc:
+            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        assert "EAWF022" in str(exc.value)
+
+    _run(body)
+    wave = _load_wave(state_path)
+    assert wave.success_criteria == []
+    assert wave.gates == []
+
+
+# --------------------------------------------------------------------------- #
+# EAWF022 source-brief — a required-intent wave with empty planned_steps still
+# diffs the source-brief document; an uncovered deliverable is rejected.
+# --------------------------------------------------------------------------- #
+def test_sync_rejects_uncovered_source_brief_unit_with_empty_planned_steps(
+    tmp_path: Path,
+) -> None:
+    """An uncovered source-brief deliverable trips EAWF022 even with no steps.
+
+    The wave is required-intent (its ``source_brief_ids`` names an on-disk
+    brief) but carries no ``planned_steps``, so the legacy planned-step no-op
+    would have short-circuited the coverage check. The source-brief leg reads
+    the brief document, whose ``recalibrate the telemetry sampler histogram
+    buckets`` deliverable shares no significant token with the ``_GOOD_YAML``
+    criterion, so EAWF022 surfaces it; no state write lands.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    brief = repo_root / ".ea" / "local" / "research" / "brief.md"
+    brief.parent.mkdir(parents=True, exist_ok=True)
+    brief.write_text("Recalibrate the telemetry sampler histogram buckets.\n", encoding="utf-8")
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(
+            status="pending",
+            planned_steps=[],
+            source_brief_ids=[".ea/local/research/brief.md"],
         ),
     )
     _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))

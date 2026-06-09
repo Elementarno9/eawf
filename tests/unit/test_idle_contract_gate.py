@@ -418,6 +418,35 @@ def test_detect_idle_contracts_recognizes_lint_rule_module(mod) -> None:
     assert findings[0].symbol == "eawf099"
 
 
+def _diff_modifying(path: str, lines: list[str]) -> str:
+    """Build a minimal unified diff that MODIFIES *path* (no file addition).
+
+    The old side is ``--- a/<path>`` (not ``/dev/null``), so the parser sees a
+    modification rather than an addition; this is the shape ``git diff`` emits
+    for an edit to an existing file.
+    """
+    body = "\n".join(f"+{line}" for line in lines)
+    return f"--- a/{path}\n+++ b/{path}\n@@ -110,0 +111,{len(lines)} @@\n{body}\n"
+
+
+def test_detect_idle_contracts_ignores_edit_of_existing_lint_module(mod) -> None:
+    # Editing an existing eawf0##_*.py module (adding a helper, NOT a new
+    # check_*/_gate/_lint def) is not a new lint contract: the rule-id symbol
+    # is keyed on the file path, so it registers only when the module is newly
+    # added. A modification diff (old side ``--- a/...``, not ``/dev/null``)
+    # yields zero findings.
+    defining = "src/eawf/platform/lint/eawf099_widget.py"
+    diff = _diff_modifying(defining, ["    extra = 1", "    return extra"])
+    tree_fn, read_fn = _tree_from({defining: ""})
+    findings = mod.detect_idle_contracts(
+        "HEAD~1..HEAD",
+        diff_fn=lambda _r: diff,
+        tree_fn=tree_fn,
+        read_fn=read_fn,
+    )
+    assert findings == []
+
+
 def test_detect_idle_contracts_ignores_contract_token_in_test_file(mod) -> None:
     # A contract-shaped token added under tests/ is a fixture, not a new
     # contract, so the parser skips it -- this is what keeps the meta-gate

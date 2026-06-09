@@ -259,29 +259,44 @@ def _collect_pending_waves(state: State, phase_id: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _collect_coverage_gaps(state: State, phase_id: str) -> list[dict[str, Any]]:
+def _collect_coverage_gaps(
+    state: State, phase_id: str, *, repo_root: Path | None = None
+) -> list[dict[str, Any]]:
     """Project EAWF022 coverage gaps over a phase's PENDING waves.
 
     For each PENDING wave that carries an
-    :class:`~eawf.kernel.spec.intent.IntentBrief` with ``planned_steps``, runs
-    :func:`eawf.workflow.propose.coverage.coverage_gaps` over the wave's
-    authored success criteria vs those steps. A wave with no intent or no
-    planned steps has nothing to cover, so it contributes no rows. The diff is
-    the same deterministic token-overlap one the daemon ``spec.sync`` path runs,
+    :class:`~eawf.kernel.spec.intent.IntentBrief`, runs two coverage diffs:
+
+    - :func:`eawf.workflow.propose.coverage.coverage_gaps` over the wave's
+      authored success criteria vs its ``planned_steps`` -- a step no criterion
+      topically covers is a gap.
+    - :func:`eawf.workflow.propose.coverage.source_brief_coverage_gaps` over the
+      wave's referenced source-brief document(s) -- a source-brief deliverable
+      no criterion / step covers is a gap. This leg fires even when
+      ``planned_steps`` is empty for a required-intent wave (one that names a
+      ``source_brief_ids`` document), closing the boundary the planned-step
+      diff cannot see.
+
+    A wave with no intent contributes no rows; a wave with neither planned
+    steps nor a source brief likewise has nothing to diff. The diffs are the
+    same deterministic token-overlap ones the daemon ``spec.sync`` path runs,
     so the propose render surfaces the gap the sync would later reject.
 
     Args:
         state: The validated state document holding the ``iters`` / ``waves``
             maps.
         phase_id: The target phase id (assumed present in ``state.phases``).
+        repo_root: The repo working-tree root the source-brief paths resolve
+            under; defaults to :func:`pathlib.Path.cwd`.
 
     Returns:
         One row per gapped wave, each carrying the ``wave_id`` and the list of
-        uncovered planned-step span ids; empty when every staged wave's steps
-        are covered.
+        uncovered span ids; empty when every staged wave's brief detail is
+        covered.
     """
-    from eawf.workflow.propose.coverage import coverage_gaps
+    from eawf.workflow.propose.coverage import coverage_gaps, source_brief_coverage_gaps
 
+    root = repo_root if repo_root is not None else Path.cwd()
     gaps: list[dict[str, Any]] = []
     phase = state.phases[phase_id]
     for iter_id in phase.iter_ids:
@@ -292,12 +307,11 @@ def _collect_coverage_gaps(state: State, phase_id: str) -> list[dict[str, Any]]:
             wave = state.waves.get(wave_id)
             if wave is None or wave.status != WaveStatus.PENDING:
                 continue
-            if wave.intent is None or not wave.intent.planned_steps:
+            if wave.intent is None:
                 continue
-            findings = coverage_gaps(
-                list(wave.success_criteria),
-                planned_steps=list(wave.intent.planned_steps),
-            )
+            criteria = list(wave.success_criteria)
+            findings = coverage_gaps(criteria, planned_steps=list(wave.intent.planned_steps))
+            findings += source_brief_coverage_gaps(criteria, intent=wave.intent, repo_root=root)
             if findings:
                 gaps.append(
                     {

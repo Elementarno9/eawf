@@ -53,6 +53,7 @@ from eawf.kernel.spec.common import (
     GateSpec,
     validate_criterion_gate_refs,
 )
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.spec.promotion import (
     SpecPromoteValidationError,
     validate_argv_gates,
@@ -84,7 +85,7 @@ from eawf.runtime.daemon.methods.state import (
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
-from eawf.workflow.propose.coverage import coverage_gaps
+from eawf.workflow.propose.coverage import coverage_gaps, source_brief_coverage_gaps
 
 logger = logging.getLogger(__name__)
 
@@ -963,28 +964,42 @@ def _run_measurability_lint(criteria: list[CriterionSpec]) -> list[Measurability
 def _run_coverage_lint(
     criteria: list[CriterionSpec],
     *,
-    planned_steps: list[str],
+    intent: IntentBrief | None,
+    repo_root: Path,
 ) -> list[CoverageGapViolation]:
-    """Return every EAWF022 coverage gap of *planned_steps* by *criteria*.
+    """Return every EAWF022 coverage gap of a wave's brief detail by *criteria*.
 
-    Thin daemon-side delegate to
-    :func:`eawf.workflow.propose.coverage.coverage_gaps` so the sync path and
-    the ``/roadmap propose`` render run one implementation. The wave's
-    :class:`~eawf.kernel.spec.intent.IntentBrief` ``planned_steps`` are the
-    per-wave brief spans the authored criteria must account for; a span no
-    criterion topically addresses is a hard finding so a silently-dropped
-    planned step fails the sync rather than the close gate.
+    Thin daemon-side delegate to the
+    :mod:`eawf.workflow.propose.coverage` diffs so the sync path and the
+    ``/roadmap propose`` render run one implementation. Two diffs run:
+
+    - :func:`~eawf.workflow.propose.coverage.coverage_gaps` over the wave's
+      ``planned_steps``: a planned step no criterion topically addresses is a
+      finding so a silently-dropped step fails the sync.
+    - :func:`~eawf.workflow.propose.coverage.source_brief_coverage_gaps` over
+      the referenced source-brief document(s): a source-brief deliverable the
+      planner never wrote a step for is a finding too. This leg closes the
+      boundary the ``planned_steps`` diff cannot see -- and, for a
+      required-intent wave, an empty ``planned_steps`` no longer short-circuits
+      the coverage check, because the source brief still enumerates
+      deliverables.
 
     Args:
         criteria: The parsed criterion rows from the spec body.
-        planned_steps: The wave's ``IntentBrief.planned_steps`` (empty
-            when the wave carries no intent or no steps).
+        intent: The wave's :class:`~eawf.kernel.spec.intent.IntentBrief`, or
+            ``None`` when the wave carries no intent.
+        repo_root: The repo working-tree root the brief's ``source_brief_ids``
+            paths resolve under.
 
     Returns:
-        One finding per uncovered planned-step span; empty when every
-        step is covered.
+        One finding per uncovered planned-step span and per uncovered
+        source-brief unit; empty when every brief detail is covered.
     """
-    return coverage_gaps(criteria, planned_steps=planned_steps)
+    planned_steps = list(intent.planned_steps) if intent is not None else []
+    findings = coverage_gaps(criteria, planned_steps=planned_steps)
+    if intent is not None:
+        findings += source_brief_coverage_gaps(criteria, intent=intent, repo_root=repo_root)
+    return findings
 
 
 def _render_lint_findings(
@@ -1094,6 +1109,7 @@ async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 args=args,
                 criteria=criteria,
                 gates=gates,
+                repo_root=repo_root,
                 state_path=state_path,
                 event_path=event_path,
                 wal_path=wal_path,
@@ -1137,6 +1153,7 @@ def _apply_sync_locked(
     args: SyncParams,
     criteria: list[CriterionSpec],
     gates: list[GateSpec],
+    repo_root: Path,
     state_path: Path,
     event_path: Path,
     wal_path: Path,
@@ -1155,6 +1172,9 @@ def _apply_sync_locked(
         args: The validated sync params.
         criteria: Parsed + lint-pending criterion rows.
         gates: Parsed gate rows.
+        repo_root: The repo working-tree root the wave's
+            ``IntentBrief.source_brief_ids`` paths resolve under (read by the
+            EAWF022 source-brief coverage leg).
         state_path: Path to ``state.json``.
         event_path: Path to the event JSONL store.
         wal_path: Path to the daemon WAL directory.
@@ -1179,9 +1199,8 @@ def _apply_sync_locked(
             f"(status={wave.status.value!r}); only PENDING waves accept a spec sync"
         )
 
-    planned_steps = list(wave.intent.planned_steps) if wave.intent is not None else []
     measurability = _run_measurability_lint(criteria)
-    coverage = _run_coverage_lint(criteria, planned_steps=planned_steps)
+    coverage = _run_coverage_lint(criteria, intent=wave.intent, repo_root=repo_root)
     if measurability or coverage:
         raise DaemonValidationError(_render_lint_findings(measurability, coverage))
 
