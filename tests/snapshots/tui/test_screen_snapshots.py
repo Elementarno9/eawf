@@ -465,7 +465,7 @@ def _bucketed_wave_state() -> tuple[State, str]:
 
 
 def test_detail_overlay_iter_metrics_snapshot() -> None:
-    """The enlarged iter modal on its ``m`` tab shows the completion bar."""
+    """The enlarged iter modal on its ``runtime`` tab shows the completion bar."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO_STATE)
@@ -477,7 +477,7 @@ def test_detail_overlay_iter_metrics_snapshot() -> None:
             modal = DetailModal(resolve_detail(state, iter_id))
             app.push_modal(modal)
             await settle_screen(pilot)
-            modal.query_one(TabbedContent).active = "detail-tab-m"
+            modal.query_one(TabbedContent).active = "detail-tab-runtime"
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "detail_overlay_iter_metrics.txt")
 
@@ -485,7 +485,7 @@ def test_detail_overlay_iter_metrics_snapshot() -> None:
 
 
 def test_detail_overlay_wave_size_snapshot() -> None:
-    """The enlarged wave modal on its ``m`` tab shows the effort-size bar."""
+    """The enlarged wave modal on its ``runtime`` tab shows the effort-size bar."""
 
     async def body() -> None:
         state, wave_id = _bucketed_wave_state()
@@ -495,7 +495,7 @@ def test_detail_overlay_wave_size_snapshot() -> None:
             modal = DetailModal(resolve_detail(state, wave_id))
             app.push_modal(modal)
             await settle_screen(pilot)
-            modal.query_one(TabbedContent).active = "detail-tab-m"
+            modal.query_one(TabbedContent).active = "detail-tab-runtime"
             await settle_screen(pilot)
             assert_screen_snapshot(app, _GOLDEN / "detail_overlay_wave_size.txt")
 

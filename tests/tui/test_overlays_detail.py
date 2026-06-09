@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import orjson
-from textual.widgets import Markdown, Static, TabbedContent
+from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
@@ -33,17 +33,20 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
-    _TAB_LABELS,
+    _TAB_LABEL_TEXT,
     DetailCard,
     DetailModal,
     render_file_tree,
     resolve_detail,
+    tab_label,
 )
 from eawf.surfaces.tui.snapshot import capture_screen_text
 from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
+from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
+from eawf.surfaces.tui.widgets.sigils import Sigil
 from eawf.workflow.agent_report.rollup import AgentReportRow
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -212,14 +215,19 @@ def test_resolve_detail_wave_includes_success_criteria_rows() -> None:
     if wave is None:
         return
     card = resolve_detail(state, wave.id)
-    criterion_rows = [value for label, value in card.rows if label == "criterion"]
+    # Criteria live in their own ``criteria`` group (the criteria tab), not
+    # the overview ``rows`` group, and carry the legacy ``.text`` only.
+    criterion_rows = [value for label, value in card.criteria if label == "criterion"]
     assert criterion_rows == list(wave.success_criteria)
+    assert "criterion" not in {label for label, _ in card.rows}
 
 
 def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:
     state, wave_id = _state_with_attempted_wave()
     card = resolve_detail(state, wave_id)
-    rows = dict(card.rows)
+    # The attempt rollup folds into the evidence tab group (the wave d-tab
+    # is the NarrativeBundle markdown, not aligned rollup rows).
+    rows = dict(card.evidence)
 
     assert rows["attempts"] == "2 attempts, 1 retry, 0 blocked, 49 tokens"
     assert rows["error kinds"] == "none"
@@ -252,7 +260,7 @@ def test_resolve_detail_wave_attempt_rollup_uses_reports_and_errors() -> None:
         ),
         error_kind_by_attempt={2: ("timeout", "network_error", "timeout")},
     )
-    rows = dict(card.rows)
+    rows = dict(card.evidence)
 
     assert rows["attempts"] == "2 attempts, 1 retry, 1 blocked, 49 tokens"
     assert rows["error kinds"] == "network_error=1, timeout=2"
@@ -301,7 +309,39 @@ def test_wave_card_files_row_renders_as_tree() -> None:
 
 def test_dispatch_tab_label_is_removed() -> None:
     """The modal no longer carries a dedicated dispatch-prompt tab."""
-    assert "dp" not in _TAB_LABELS
+    assert "dp" not in _TAB_LABEL_TEXT
+
+
+def test_tab_label_text_is_the_five_chassis_ids() -> None:
+    """The chassis carries exactly the five cosmic-terminal tab ids."""
+    assert list(_TAB_LABEL_TEXT) == [
+        "overview",
+        "criteria",
+        "gates",
+        "evidence",
+        "runtime",
+    ]
+
+
+def test_tab_label_carries_chrome_glyph_prefix() -> None:
+    """Each pane label is the chrome / sigil glyph then the word, per mode."""
+    # Unicode column: overview triple-bar, gate lozenge, runtime dollar,
+    # evidence closed-circle, criteria right-pointing marker.
+    overview_u = sigils.chrome("overview", mode="unicode")
+    gate_u = sigils.chrome("gate", mode="unicode")
+    runtime_u = sigils.chrome("runtime", mode="unicode")
+    evidence_u = sigils.glyph(Sigil.CLOSED, mode="unicode")
+    assert tab_label("overview", mode="unicode") == f"{overview_u} overview"
+    assert tab_label("gates", mode="unicode") == f"{gate_u} gates"
+    assert tab_label("runtime", mode="unicode") == f"{runtime_u} runtime"
+    assert tab_label("evidence", mode="unicode") == f"{evidence_u} evidence"
+    assert tab_label("criteria", mode="unicode").endswith(" criteria")
+    # ASCII column flips to the deconflicted fallbacks.
+    assert tab_label("overview", mode="ascii") == "= overview"
+    assert tab_label("gates", mode="ascii") == "[] gates"
+    assert tab_label("evidence", mode="ascii") == "@ evidence"
+    assert tab_label("criteria", mode="ascii") == "> criteria"
+    assert tab_label("runtime", mode="ascii") == "$ runtime"
 
 
 # --------------------------------------------------------------------------
@@ -327,47 +367,50 @@ def test_resolve_detail_phase_card() -> None:
     assert {"id", "scope", "title", "status", "iters", "waves"} <= row_labels
 
 
-def test_resolve_detail_iter_metrics_has_completion_bar() -> None:
+def test_resolve_detail_iter_runtime_has_completion_bar() -> None:
     state = _load(_PHASE_ITER_WAVE)
     iter_id = next(iter(state.iters))
     card = resolve_detail(state, iter_id)
-    metric_labels = {label for label, _ in card.metrics}
-    assert "completion" in metric_labels
+    runtime_labels = {label for label, _ in card.runtime}
+    assert "completion" in runtime_labels
 
 
-def test_resolve_detail_phase_metrics_has_completion_bar() -> None:
+def test_resolve_detail_phase_runtime_has_completion_bar() -> None:
     state = _load(_PHASE_ITER_WAVE)
     phase_id = next(iter(state.phases))
     card = resolve_detail(state, phase_id)
-    metric_labels = {label for label, _ in card.metrics}
-    assert "completion" in metric_labels
+    runtime_labels = {label for label, _ in card.runtime}
+    assert "completion" in runtime_labels
 
 
-def test_resolve_detail_wave_metrics_has_size_bar() -> None:
+def test_resolve_detail_wave_runtime_has_size_bar() -> None:
     state, wave_id = _state_with_bucketed_wave(EffortBucket.L)
     card = resolve_detail(state, wave_id)
-    size_values = [value for label, value in card.metrics if label == "size"]
+    size_values = [value for label, value in card.runtime if label == "size"]
     assert size_values
     assert "L" in size_values[0]
     assert EMPTY_STATE not in size_values[0]
 
 
-def test_resolve_detail_wave_metrics_eu_tokens_empty_state() -> None:
+def test_resolve_detail_wave_runtime_eu_tokens_empty_state() -> None:
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
-    metrics = dict(card.metrics)
-    assert metrics["eu"] == EMPTY_STATE
-    assert metrics["tokens"] == EMPTY_STATE
+    runtime = dict(card.runtime)
+    # Honest-empty: a no-runtime wave shows the sentinel, never 0.00/0.00.
+    assert runtime["eu"] == EMPTY_STATE
+    assert runtime["tokens"] == EMPTY_STATE
+    assert "0.00" not in runtime["eu"]
+    assert "0.00" not in runtime["tokens"]
 
 
-def test_resolve_detail_iter_metrics_eu_tokens_empty_state() -> None:
+def test_resolve_detail_iter_runtime_eu_tokens_empty_state() -> None:
     state = _load(_PHASE_ITER_WAVE)
     iter_id = next(iter(state.iters))
     card = resolve_detail(state, iter_id)
-    metrics = dict(card.metrics)
-    assert metrics["eu"] == EMPTY_STATE
-    assert metrics["tokens"] == EMPTY_STATE
+    runtime = dict(card.runtime)
+    assert runtime["eu"] == EMPTY_STATE
+    assert runtime["tokens"] == EMPTY_STATE
 
 
 def test_resolve_detail_wave_has_narrative_preview() -> None:
@@ -386,11 +429,11 @@ def test_resolve_detail_iter_has_no_narrative_preview() -> None:
     assert card.detail_markdown is None
 
 
-def test_resolve_detail_backlog_has_no_metrics_or_narrative() -> None:
+def test_resolve_detail_backlog_has_no_runtime_or_narrative() -> None:
     state = _load(_BACKLOG)
     item_id = next(iter(state.backlog))
     card = resolve_detail(state, item_id)
-    assert card.metrics == ()
+    assert card.runtime == ()
     assert card.detail_markdown is None
 
 
@@ -399,40 +442,53 @@ def test_resolve_detail_backlog_has_no_metrics_or_narrative() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_present_tabs_detail_always_present() -> None:
+def test_present_tabs_overview_always_present() -> None:
     card = DetailCard(title="t", rows=(("id", "x"),))
-    assert DetailModal._present_tabs(card) == ("d",)
+    assert DetailModal._present_tabs(card) == ("overview",)
 
 
-def test_present_tabs_wave_includes_metrics_not_dispatch() -> None:
+def test_present_tabs_wave_includes_runtime_and_criteria() -> None:
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
     tabs = DetailModal._present_tabs(card)
-    assert "d" in tabs
-    assert "m" in tabs
-    assert "dp" not in tabs
+    assert "overview" in tabs
+    assert "runtime" in tabs
+    assert "evidence" in tabs
 
 
-def test_present_tabs_skips_empty_events() -> None:
-    # A wave with no dispatch history yields no ``e`` tab.
+def test_present_tabs_skips_empty_gates() -> None:
+    # No wave carries gate rows yet (I06 fills them), so no gates tab.
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
-    if not card.events:
-        assert "e" not in DetailModal._present_tabs(card)
+    assert card.gates == ()
+    assert "gates" not in DetailModal._present_tabs(card)
 
 
-def test_present_tabs_order_follows_brief_sequence() -> None:
+def test_present_tabs_skips_empty_criteria() -> None:
+    # A wave with no success criteria yields no criteria tab.
+    card = DetailCard(title="t", rows=(("id", "x"),))
+    assert "criteria" not in DetailModal._present_tabs(card)
+
+
+def test_present_tabs_order_follows_chassis_sequence() -> None:
     card = DetailCard(
         title="t",
         rows=(("id", "x"),),
-        metrics=(("size", "###--  M"),),
-        history=(("status", "open"),),
-        events=(("attempt 1", "fresh"),),
+        criteria=(("criterion", "ship it"),),
+        gates=(("gate", "pytest"),),
+        evidence=(("attempt 1", "fresh"),),
+        runtime=(("size", "M"),),
         detail_markdown="body",
     )
-    assert DetailModal._present_tabs(card) == ("h", "d", "m", "e")
+    assert DetailModal._present_tabs(card) == (
+        "overview",
+        "criteria",
+        "gates",
+        "evidence",
+        "runtime",
+    )
 
 
 # --------------------------------------------------------------------------
@@ -518,7 +574,7 @@ def test_detail_modal_iter_shows_completion_bar() -> None:
             modal = app.screen
             assert isinstance(modal, DetailModal)
             tabs = modal.query_one(TabbedContent)
-            tabs.active = "detail-tab-m"
+            tabs.active = "detail-tab-runtime"
             await pilot.pause()
             rendered = capture_screen_text(app)
             # The closed/total count suffix of the completion bar is visible.
@@ -539,7 +595,7 @@ def test_detail_modal_wave_shows_size_bar() -> None:
             modal = app.screen
             assert isinstance(modal, DetailModal)
             tabs = modal.query_one(TabbedContent)
-            tabs.active = "detail-tab-m"
+            tabs.active = "detail-tab-runtime"
             await pilot.pause()
             rendered = capture_screen_text(app)
             # The size-bar row carries the bucket label.
@@ -558,7 +614,7 @@ def test_detail_modal_metrics_show_empty_state_for_eu_tokens() -> None:
             app.push_screen(DetailModal(card))
             await pilot.pause()
             tabs = app.screen.query_one(TabbedContent)
-            tabs.active = "detail-tab-m"
+            tabs.active = "detail-tab-runtime"
             await pilot.pause()
             rendered = capture_screen_text(app)
             assert EMPTY_STATE in rendered
@@ -578,15 +634,15 @@ def test_detail_modal_tab_cycles_forward_and_back() -> None:
             modal = app.screen
             assert isinstance(modal, DetailModal)
             tabs = modal.query_one(TabbedContent)
-            # Lands on the detail tab by default.
-            assert tabs.active == "detail-tab-d"
+            # Lands on the overview tab by default.
+            assert tabs.active == "detail-tab-overview"
             await pilot.press("tab")
             await pilot.pause()
             after_tab = tabs.active
-            assert after_tab != "detail-tab-d"
+            assert after_tab != "detail-tab-overview"
             await pilot.press("shift+tab")
             await pilot.pause()
-            assert tabs.active == "detail-tab-d"
+            assert tabs.active == "detail-tab-overview"
 
     asyncio.run(body())
 
@@ -633,19 +689,20 @@ def test_detail_modal_iter_opens_with_tabs() -> None:
 
 
 def _full_card() -> DetailCard:
-    """A card carrying every section so all four tabs (h/d/m/e) are built."""
+    """A card carrying every section so all five chassis tabs are built."""
     return DetailCard(
         title="wave P00-I01-W01",
-        rows=(("id", "P00-I01-W01"), ("title", "demo")),
-        metrics=(("size", "M"),),
-        history=(("status", "open"),),
-        events=(("attempt 1", "fresh (claude)"),),
+        rows=(("id", "P00-I01-W01"), ("title", "demo"), ("status", "closed")),
+        criteria=(("criterion", "ship the chassis"),),
+        gates=(("gate", "pytest"),),
+        evidence=(("attempt 1", "fresh (claude)"),),
+        runtime=(("size", "M"),),
         detail_markdown="# heading\n\n**bold** body",
     )
 
 
 def test_detail_modal_hotkey_activates_matching_tab() -> None:
-    """``h``/``m``/``e`` jump straight to their pane when present."""
+    """``o``/``c``/``g``/``v``/``r`` jump straight to their pane when present."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -655,10 +712,11 @@ def test_detail_modal_hotkey_activates_matching_tab() -> None:
             await pilot.pause()
             tabs = app.screen.query_one(TabbedContent)
             for key, expected in (
-                ("m", "detail-tab-m"),
-                ("h", "detail-tab-h"),
-                ("e", "detail-tab-e"),
-                ("d", "detail-tab-d"),
+                ("c", "detail-tab-criteria"),
+                ("g", "detail-tab-gates"),
+                ("v", "detail-tab-evidence"),
+                ("r", "detail-tab-runtime"),
+                ("o", "detail-tab-overview"),
             ):
                 await pilot.press(key)
                 await pilot.pause()
@@ -670,35 +728,36 @@ def test_detail_modal_hotkey_activates_matching_tab() -> None:
 def test_detail_modal_hotkey_absent_tab_is_noop() -> None:
     """A hotkey for a tab the card lacks leaves the active tab unchanged.
 
-    Boundary: a card carrying only the ``d`` tab (field rows, no metrics /
-    history / events). Pressing ``m`` (and ``h``/``e``)
-    must be a no-op rather than raising or switching to a missing pane.
+    Boundary: a card carrying only the ``overview`` tab (field rows, no
+    criteria / gates / evidence / runtime). Pressing ``g`` (and the other
+    absent-tab keys) must be a no-op rather than raising or switching to a
+    missing pane.
     """
 
     async def body() -> None:
         card = DetailCard(title="t", rows=(("id", "x"),))
-        assert DetailModal._present_tabs(card) == ("d",)
+        assert DetailModal._present_tabs(card) == ("overview",)
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             app.push_screen(DetailModal(card))
             await pilot.pause()
             tabs = app.screen.query_one(TabbedContent)
-            assert tabs.active == "detail-tab-d"
-            for key in ("m", "h", "e"):
+            assert tabs.active == "detail-tab-overview"
+            for key in ("c", "g", "v", "r"):
                 await pilot.press(key)
                 await pilot.pause()
-                assert tabs.active == "detail-tab-d"
+                assert tabs.active == "detail-tab-overview"
 
     asyncio.run(body())
 
 
 def test_detail_modal_footer_omits_tab_hotkey_list() -> None:
-    """The footer hint drops the ``h/d/m/e`` list — the tabs already show them.
+    """The footer hint drops the per-letter list — the tab labels carry them.
 
-    Each tab pane label carries its own mnemonic (``h history`` / …), so
-    repeating the per-letter list in the footer hint is
-    redundant. The footer keeps only the cycle + close affordances.
+    Each tab pane label carries its own chrome-glyph mnemonic, so repeating
+    a per-letter list in the footer hint is redundant. The footer keeps only
+    the cycle + close affordances.
     """
 
     async def body() -> None:
@@ -708,15 +767,15 @@ def test_detail_modal_footer_omits_tab_hotkey_list() -> None:
             app.push_screen(DetailModal(_full_card()))
             await pilot.pause()
             hint = str(app.screen.query_one(".detail-hint", Static).render())
-            assert "h/d/m/e" not in hint
+            assert "o/c/g/v/r" not in hint
             assert "Tab/Shift+Tab cycle" in hint
             assert "Esc close" in hint
 
     asyncio.run(body())
 
 
-def test_detail_modal_wave_detail_pane_mounts_narrative_markdown() -> None:
-    """The wave ``d`` tab body is Markdown, not aligned field rows."""
+def test_detail_modal_wave_overview_pane_mounts_narrative_markdown() -> None:
+    """The wave ``overview`` tab body is Markdown, not aligned field rows."""
 
     async def body() -> None:
         state, wave_id = _state_with_bucketed_wave(EffortBucket.L)
@@ -728,7 +787,7 @@ def test_detail_modal_wave_detail_pane_mounts_narrative_markdown() -> None:
             modal = DetailModal(card)
             app.push_screen(modal)
             await pilot.pause()
-            pane = modal.query_one("#detail-tab-d")
+            pane = modal.query_one("#detail-tab-overview")
             assert pane.query(Markdown)
             # The narrative preview is not emitted as aligned detail rows.
             assert not pane.query("Static.detail-row")
@@ -737,10 +796,10 @@ def test_detail_modal_wave_detail_pane_mounts_narrative_markdown() -> None:
 
 
 def test_detail_modal_wave_size_row_is_bucket_text() -> None:
-    """The wave ``size`` metric row is the plain bucket string (no bar glyphs)."""
+    """The wave ``size`` runtime row is the plain bucket string (no bar glyphs)."""
     state, wave_id = _state_with_bucketed_wave(EffortBucket.M)
     card = resolve_detail(state, wave_id)
-    size_values = [value for label, value in card.metrics if label == "size"]
+    size_values = [value for label, value in card.runtime if label == "size"]
     assert size_values == ["M"]
     assert "#" not in size_values[0]
     assert "-" not in size_values[0]
@@ -969,3 +1028,163 @@ def _assert_golden(golden_path: Path, actual: str) -> None:
         return
     expected = golden_path.read_text(encoding="utf-8")
     assert actual == expected, f"golden drift at {golden_path}"
+
+
+# --------------------------------------------------------------------------
+# Five-tab chassis acceptance (P30-I02-W24)
+# --------------------------------------------------------------------------
+
+
+def _five_tab_card() -> DetailCard:
+    """A wave card carrying overview / criteria / evidence / runtime (no gates).
+
+    Mirrors a real grandfathered wave: an identity overview, a legacy
+    success-criterion ``.text`` row, a dispatch attempt for evidence, and
+    the honest-empty runtime rows. ``gates`` is left empty so the chassis
+    renders no gates tab (the W24 acceptance boundary).
+    """
+    return DetailCard(
+        title="wave P30-I02-W24",
+        rows=(
+            ("id", "P30-I02-W24"),
+            ("title", "five-tab chassis"),
+            ("status", "in_progress"),
+        ),
+        criteria=(("criterion", "the five tabs render with chrome glyphs"),),
+        evidence=(("attempt 1", "fresh (claude)"),),
+        runtime=(("size", "M"), ("eu", EMPTY_STATE), ("tokens", EMPTY_STATE)),
+        detail_markdown=None,
+    )
+
+
+def test_chassis_five_tab_ids_present_with_chrome_labels() -> None:
+    """The modal builds the four populated chassis tabs with chrome labels."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = DetailModal(_five_tab_card())
+            app.push_screen(modal)
+            await pilot.pause()
+            tabs = modal.query_one(TabbedContent)
+            mode = app.render_mode
+            # overview + criteria + evidence + runtime are present (no gates).
+            present_ids = {pane.id for pane in tabs.query(TabPane)}
+            assert present_ids == {
+                "detail-tab-overview",
+                "detail-tab-criteria",
+                "detail-tab-evidence",
+                "detail-tab-runtime",
+            }
+            # Each present tab's chrome-glyph word is painted in the tab bar.
+            rendered = capture_screen_text(app)
+            for tab_id in ("overview", "criteria", "evidence", "runtime"):
+                word = tab_label(tab_id, mode=mode).split(" ", 1)[1]
+                assert word in rendered
+
+    asyncio.run(body())
+
+
+def test_chassis_no_gates_wave_renders_no_gates_tab() -> None:
+    """A wave with no gate rows renders no gates tab and ``g`` is a no-op."""
+
+    async def body() -> None:
+        card = _five_tab_card()
+        assert card.gates == ()
+        assert "gates" not in DetailModal._present_tabs(card)
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            tabs = modal.query_one(TabbedContent)
+            assert "detail-tab-gates" not in {pane.id for pane in tabs.query(TabPane)}
+            before = tabs.active
+            await pilot.press("g")
+            await pilot.pause()
+            # ``g`` jumps nowhere: the gates tab does not exist.
+            assert tabs.active == before
+
+    asyncio.run(body())
+
+
+def test_chassis_hotkeys_jump_to_each_present_tab() -> None:
+    """``o``/``c``/``v``/``r`` jump to each present tab; ``Tab`` cycles."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = DetailModal(_five_tab_card())
+            app.push_screen(modal)
+            await pilot.pause()
+            tabs = modal.query_one(TabbedContent)
+            # Opens on overview.
+            assert tabs.active == "detail-tab-overview"
+            for key, expected in (
+                ("c", "detail-tab-criteria"),
+                ("v", "detail-tab-evidence"),
+                ("r", "detail-tab-runtime"),
+                ("o", "detail-tab-overview"),
+            ):
+                await pilot.press(key)
+                await pilot.pause()
+                assert tabs.active == expected
+            # Tab cycles forward off the overview tab; Shift+Tab returns.
+            await pilot.press("tab")
+            await pilot.pause()
+            assert tabs.active != "detail-tab-overview"
+            await pilot.press("shift+tab")
+            await pilot.pause()
+            assert tabs.active == "detail-tab-overview"
+
+    asyncio.run(body())
+
+
+def test_chassis_runtime_tab_shows_empty_sentinel_not_fabricated_zero() -> None:
+    """The no-runtime wave's runtime tab paints the sentinel, not 0.00/0.00."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = DetailModal(_five_tab_card())
+            app.push_screen(modal)
+            await pilot.pause()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-runtime"
+            await pilot.pause()
+            rendered = capture_screen_text(app)
+            assert EMPTY_STATE in rendered
+            assert "0.00/0.00" not in rendered
+            assert "0.00" not in rendered
+
+    asyncio.run(body())
+
+
+def test_chassis_overview_status_row_is_sigil_prefixed() -> None:
+    """The overview ``status:`` row prepends the lifecycle sigil glyph."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            # A non-wave (iter) card renders its rows directly (no markdown),
+            # so the sigil-prefixed status row is paint-visible.
+            iter_id = next(iter(app.state.iters))  # type: ignore[union-attr]
+            card = resolve_detail(app.state, iter_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            rendered = capture_screen_text(app)
+            status_value = dict(card.rows)["status"]
+            expected_glyph = sigils.glyph(
+                Sigil.PENDING if status_value in {"planned", "pending", "open"} else Sigil.RUNNING,
+                mode=app.render_mode,
+            )
+            # The bare status word is sigil-prefixed in the painted overview.
+            assert f"{expected_glyph} {status_value}" in rendered
+
+    asyncio.run(body())

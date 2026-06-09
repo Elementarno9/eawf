@@ -9,14 +9,23 @@ carrying a wave id), the shared
 :class:`~eawf.surfaces.tui.scopes.ScopeScreen` routes the message here, and this
 modal renders the resolved entity's detail in a tabbed, scrollable card.
 
-The card body is split across up to four tabs — ``h`` history, ``d``
-detail, ``m`` metrics, ``e`` events — mirroring the per-overlay tab set
-the C06 brief reserved. ``Tab`` / ``Shift+Tab`` cycle the tabs, the
-single-letter keys ``h`` / ``d`` / ``m`` / ``e`` jump straight to a tab, and
-the arrow keys keep their native scroll behaviour inside the focused pane
-(they are *not* rebound to tab-switching). Only tabs that have data for
-the resolved entity are built, so an entity with no dispatch history shows
-no ``e`` tab rather than an empty one; a hotkey for an absent tab no-ops.
+The card body is split across up to five cosmic-terminal tabs —
+``overview`` / ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` —
+each carrying a chrome-glyph mnemonic from the reskin sigil vocabulary
+(``glyph`` / ``chrome`` in
+:mod:`~eawf.surfaces.tui.widgets.sigils`). ``Tab`` / ``Shift+Tab`` cycle
+the tabs, the single-letter keys ``o`` / ``c`` / ``g`` / ``v`` / ``r``
+jump straight to a tab, and the arrow keys keep their native scroll
+behaviour inside the focused pane (they are *not* rebound to
+tab-switching). The ``overview`` tab is ALWAYS present (it carries the
+entity identity); the rest are built only when their section has data for
+the resolved entity, so a wave with no gates shows no ``gates`` tab rather
+than an empty one and a hotkey for an absent tab no-ops. The ``runtime``
+tab is honest-empty: a wave with no runtime telemetry shows the shared
+:data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel rather than
+a fabricated ``0.00/0.00`` bar. This wave (P30-I02-W24) lands the chassis;
+later iters (I06 data, I04 runtime) fill the criteria / gates / evidence /
+runtime panes with their typed projections.
 
 Entity resolution is a pure function (:func:`resolve_detail`) that takes
 the reactive :class:`~eawf.kernel.state.models.State` and the selection id and
@@ -54,10 +63,14 @@ from eawf.surfaces.render.narrative import (
     render_narrative_bundle,
 )
 from eawf.surfaces.tui.screens.overlays.reference import tooltip_for_text
+from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.eu_bar import (
+    DEFAULT_RENDER_MODE,
+    EMPTY_STATE,
+    RenderMode,
     render_completion_bar,
-    render_eu_bar_plain,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil
 from eawf.workflow.agent_report.rollup import (
     AgentReportRow,
     PerWaveAttemptRollup,
@@ -71,47 +84,175 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Tab id → human label, in cycle order. The modal builds a
-#: :class:`~textual.widgets.TabPane` per non-empty section keyed by these
-#: ids; the labels carry the single-letter mnemonic from the C06 brief.
-_TAB_LABELS: dict[str, str] = {
-    "h": "h history",
-    "d": "d detail",
-    "m": "m metrics",
-    "e": "e events",
+#: Tab id → ``(label_text, glyph_resolver)`` in cosmic-terminal cycle
+#: order. ``label_text`` is the human word; ``glyph_resolver`` returns the
+#: chrome / sigil mark for the active render mode, prepended to the word
+#: so the pane label reads e.g. the overview triple-bar mark then
+#: ``overview`` (unicode) / ``= overview`` (ascii). The overview tab is
+#: always built; the rest follow the ``criteria`` / ``gates`` /
+#: ``evidence`` / ``runtime`` chassis order and appear only when their
+#: section is non-empty.
+#:
+#: The marks are sourced from the single-home sigil vocabulary
+#: (:mod:`~eawf.surfaces.tui.widgets.sigils`): ``overview`` and ``gates``
+#: and ``runtime`` are :func:`~eawf.surfaces.tui.widgets.sigils.chrome`
+#: roles; ``evidence`` reuses the closed lifecycle
+#: :func:`~eawf.surfaces.tui.widgets.sigils.glyph`; ``criteria`` uses a
+#: plain right-pointing marker (no chrome role exists for it).
+_TAB_LABEL_TEXT: dict[str, str] = {
+    "overview": "overview",
+    "criteria": "criteria",
+    "gates": "gates",
+    "evidence": "evidence",
+    "runtime": "runtime",
 }
+
+#: The unicode / ascii right-pointing marker prefixed to the ``criteria``
+#: tab label (no chrome role exists for it, so it is spelled out here).
+#: The unicode column is written with a ``\uXXXX`` escape so the source
+#: stays ASCII-clean (matching the sigils-module convention); the rendered
+#: mark is a black right-pointing small triangle.
+_CRITERIA_MARKER: tuple[str, str] = ("\u25b8", ">")
+
+
+def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
+    """Return the chrome / sigil mark prefixed to *tab_id*'s pane label.
+
+    Routes each tab to the single-home sigil vocabulary so the chassis
+    never invents a glyph: ``overview`` / ``gates`` / ``runtime`` are
+    :func:`~eawf.surfaces.tui.widgets.sigils.chrome` roles, ``evidence``
+    reuses the closed lifecycle
+    :func:`~eawf.surfaces.tui.widgets.sigils.glyph`, and ``criteria`` uses
+    the local :data:`_CRITERIA_MARKER` (no chrome role exists for it).
+
+    Args:
+        tab_id: One of the five chassis tab ids.
+        mode: The App's resolved render mode (``"unicode"`` / ``"ascii"``).
+
+    Returns:
+        The single-cell glyph string for *tab_id* in the resolved column.
+
+    Raises:
+        KeyError: If *tab_id* is not one of the five chassis tab ids.
+    """
+    if tab_id == "evidence":
+        return sigils.glyph(Sigil.CLOSED, mode=mode)
+    if tab_id == "criteria":
+        unicode_marker, ascii_marker = _CRITERIA_MARKER
+        return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
+    chrome_role = {"overview": "overview", "gates": "gate", "runtime": "runtime"}[tab_id]
+    return sigils.chrome(chrome_role, mode=mode)
+
+
+def tab_label(tab_id: str, *, mode: RenderMode) -> str:
+    """Return the full pane label (glyph + word) for *tab_id* in *mode*.
+
+    Args:
+        tab_id: One of the five chassis tab ids.
+        mode: The App's resolved render mode (``"unicode"`` / ``"ascii"``).
+
+    Returns:
+        The ``"<glyph> <word>"`` pane label, e.g. the overview mark
+        followed by ``"overview"``.
+
+    Raises:
+        KeyError: If *tab_id* is not one of the five chassis tab ids.
+    """
+    return f"{_tab_glyph(tab_id, mode=mode)} {_TAB_LABEL_TEXT[tab_id]}"
+
+
+#: Lifecycle-status string -> the :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: whose glyph prefixes the overview ``status`` row. The five entity kinds
+#: (wave / iter / phase / backlog) span more status words than the closed
+#: five-member :class:`Sigil` enum, so the planning / active / open /
+#: archived / deferred / abandoned strings fold onto the nearest lifecycle
+#: shape rather than crashing on an unmapped key.
+_STATUS_SIGIL: dict[str, Sigil] = {
+    "pending": Sigil.PENDING,
+    "planned": Sigil.PENDING,
+    "open": Sigil.PENDING,
+    "claimed": Sigil.CLAIMED,
+    "in_progress": Sigil.RUNNING,
+    "active": Sigil.RUNNING,
+    "running": Sigil.RUNNING,
+    "closed": Sigil.CLOSED,
+    "failed": Sigil.FAILED,
+    "abandoned": Sigil.FAILED,
+    "archived": Sigil.FAILED,
+    "deferred": Sigil.FAILED,
+}
+
+
+def _status_with_sigil(status_value: str, *, mode: RenderMode) -> str:
+    """Return the overview ``status`` value prefixed with its sigil glyph.
+
+    Maps *status_value* onto a lifecycle :class:`Sigil` (via
+    :data:`_STATUS_SIGIL`) and prepends that sigil's glyph for the active
+    render *mode*, so the overview reads e.g. the closed filled-circle then
+    ``closed`` rather than a bare ``closed`` word. An unmapped status word
+    (a status enum that drifted past the table) degrades to the bare word
+    so the drill-in seam stays total.
+
+    Args:
+        status_value: The lifecycle-status string off the resolved entity.
+        mode: The active render mode (``"unicode"`` / ``"ascii"``).
+
+    Returns:
+        The ``"<glyph> <status>"`` string, or the bare status word when the
+        status has no mapped sigil.
+    """
+    sigil = _STATUS_SIGIL.get(status_value)
+    if sigil is None:
+        return status_value
+    return f"{sigils.glyph(sigil, mode=mode)} {status_value}"
 
 
 @dataclass(frozen=True)
 class DetailCard:
-    """A resolved detail card: a title plus per-tab section rows.
+    """A resolved detail card: a title plus the five chassis section groups.
 
-    The card carries one row group per overlay tab. ``rows`` is the
-    canonical ``d`` (detail) field group — always populated; the remaining
-    groups are populated only when the entity has data for them, and the
-    modal builds a tab only for a non-empty group. ``detail_markdown`` is
-    the optional Markdown body for the ``d`` tab; wave cards use it for
-    the phase NarrativeBundle preview, while non-wave cards render the
-    regular ``rows`` group.
+    The card carries one row group per cosmic-terminal tab. ``rows`` is the
+    canonical ``overview`` field group — always populated (every card
+    carries an identity); the remaining groups are populated only when the
+    entity has data for them, and the modal builds a tab only for a
+    non-empty group. ``detail_markdown`` is the optional Markdown body for
+    the ``overview`` tab; wave cards use it for the NarrativeBundle
+    preview, while non-wave cards render the regular ``rows`` group.
+
+    The ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` groups are
+    the chassis seams that later iters fill with their typed projections
+    (I06 criteria / gates / evidence, I04 runtime). For now ``criteria``
+    carries the legacy success-criterion ``.text`` rows, ``evidence``
+    carries the wave's attempt rollup + dispatch history, ``runtime``
+    carries the size + honest-empty EU / token rows, and ``gates`` stays
+    empty (so a wave with no gates shows no gates tab).
 
     Attributes:
         title: The card heading (e.g. ``wave P26-I01-W19`` /
             ``iter P26-I01`` / ``phase P26`` / ``backlog B042``).
-        rows: The ``d`` detail group — ordered ``(label, value)`` pairs.
-        metrics: The ``m`` group — bar rows (completion / size / EU /
-            token), ``(label, value)`` pairs.
-        history: The ``h`` group — lifecycle rows (status, timestamps).
-        events: The ``e`` group — recent activity rows (e.g. a wave's
-            dispatch history), ``(label, value)`` pairs.
-        detail_markdown: Optional Markdown body for the ``d`` tab. When
-            ``None``, the ``d`` tab renders ``rows`` as aligned field rows.
+        rows: The ``overview`` group — ordered ``(label, value)`` pairs.
+        criteria: The ``criteria`` group — one row per success criterion
+            (now the legacy ``.text``; I06 fills typed tier badges).
+        gates: The ``gates`` group — gate-pack rows (I06 fills; empty now
+            so a wave with no gates renders no gates tab).
+        evidence: The ``evidence`` group — the wave's attempt rollup +
+            dispatch-history rows (I06 folds in the report rollup).
+        runtime: The ``runtime`` group — size + honest-empty EU / token
+            rows (I04 fills real runtime telemetry). A no-runtime wave's
+            EU / token rows are the shared
+            :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel,
+            never a fabricated ``0.00/0.00`` bar.
+        detail_markdown: Optional Markdown body for the ``overview`` tab.
+            When ``None``, the ``overview`` tab renders ``rows`` as aligned
+            field rows.
     """
 
     title: str
     rows: tuple[tuple[str, str], ...]
-    metrics: tuple[tuple[str, str], ...] = ()
-    history: tuple[tuple[str, str], ...] = ()
-    events: tuple[tuple[str, str], ...] = ()
+    criteria: tuple[tuple[str, str], ...] = ()
+    gates: tuple[tuple[str, str], ...] = ()
+    evidence: tuple[tuple[str, str], ...] = ()
+    runtime: tuple[tuple[str, str], ...] = ()
     detail_markdown: str | None = None
 
 
@@ -211,43 +352,47 @@ def _emit_tree(node: dict[str, Any], *, depth: int, lines: list[str]) -> None:
             _emit_tree(child, depth=depth + 1, lines=lines)
 
 
-def _wave_metrics(wave: Wave) -> tuple[tuple[str, str], ...]:
-    """Build the ``m`` (metrics) rows for a wave.
+def _wave_runtime(wave: Wave) -> tuple[tuple[str, str], ...]:
+    """Build the ``runtime`` tab rows for a wave (honest-empty until I04).
 
     A wave's only populated progress signal is its effort bucket (shown as
-    the plain bucket label, e.g. ``M``); EU and token rows surface the
-    shared empty-state sentinel because estimates / actuals / token
-    telemetry are unpopulated scaffolding.
+    the plain bucket label, e.g. ``M``). The EU and token rows are the
+    shared :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel
+    rather than a fabricated ``0.00/0.00`` bar, because estimates /
+    actuals / token telemetry are unpopulated scaffolding I04 fills. The
+    runtime tab therefore stays honest: a no-runtime wave reads "no data",
+    never a manufactured zero.
 
     Args:
         wave: The resolved wave.
 
     Returns:
-        Ordered metric ``(label, value)`` rows.
+        Ordered runtime ``(label, value)`` rows.
     """
     rows: list[tuple[str, str]] = []
     if wave.effort_bucket is not None:
         rows.append(("size", wave.effort_bucket.value))
-    rows.append(("eu", render_eu_bar_plain(0.0, 0.0)))
-    rows.append(("tokens", render_eu_bar_plain(float(wave.tokens_consumed), 0.0)))
+    rows.append(("eu", EMPTY_STATE))
+    rows.append(("tokens", EMPTY_STATE))
     return tuple(rows)
 
 
-def _completion_metrics(closed: int, total: int) -> tuple[tuple[str, str], ...]:
-    """Build the ``m`` rows for an iter / phase from child-wave counts.
+def _completion_runtime(closed: int, total: int) -> tuple[tuple[str, str], ...]:
+    """Build the iter / phase ``runtime`` rows from child-wave counts.
 
     Args:
         closed: Count of closed child waves.
         total: Total child-wave count.
 
     Returns:
-        Ordered metric ``(label, value)`` rows: a real completion bar plus
-        empty-state EU / token rows (no estimation data is populated).
+        Ordered runtime ``(label, value)`` rows: a real completion bar plus
+        honest-empty EU / token sentinel rows (no estimation data is
+        populated, so the rows read "no data" rather than ``0.00/0.00``).
     """
     return (
         ("completion", render_completion_bar(closed, total)),
-        ("eu", render_eu_bar_plain(0.0, 0.0)),
-        ("tokens", render_eu_bar_plain(0.0, 0.0)),
+        ("eu", EMPTY_STATE),
+        ("tokens", EMPTY_STATE),
     )
 
 
@@ -290,34 +435,32 @@ def _wave_card(
         tree = render_file_tree(wave.file_scopes)
         indented = "\n".join(f"  {line}" for line in tree.split("\n"))
         rows.append(("files", f"\n{indented}"))
-    for criterion in wave.success_criteria:
-        rows.append(("criterion", criterion.text))
+
+    # The criteria tab carries the legacy ``.text`` rows only (I06 fills
+    # the typed tier badge). A grandfathered wave with no structured tier
+    # therefore shows the plain criterion text, never a fabricated badge.
+    criteria: list[tuple[str, str]] = [
+        ("criterion", criterion.text) for criterion in wave.success_criteria
+    ]
+
+    # The evidence tab folds in the attempt rollup plus the dispatch
+    # history (I06 layers the typed report rollup on top of this seam).
     attempt_rollup = per_wave_attempt_rollup(
         wave,
         reports=reports,
         error_kind_by_attempt=error_kind_by_attempt,
     )
-    rows.extend(_attempt_rollup_rows(attempt_rollup))
-
-    history: list[tuple[str, str]] = [
-        ("status", wave.status.value),
-        ("opened", _fmt_dt(wave.opened_at)),
-        ("closed", _fmt_dt(wave.closed_at)),
-    ]
-    if wave.commit is not None:
-        history.append(("commit", wave.commit))
-
-    events: list[tuple[str, str]] = []
+    evidence: list[tuple[str, str]] = list(_attempt_rollup_rows(attempt_rollup))
     for ann in wave.dispatch_history:
         runtime = ann.runtime_to or ann.runtime_from or "—"
-        events.append((f"attempt {ann.attempt}", f"{ann.note.value} ({runtime})"))
+        evidence.append((f"attempt {ann.attempt}", f"{ann.note.value} ({runtime})"))
 
     return DetailCard(
         title=f"wave {wave.id}",
         rows=tuple(rows),
-        metrics=_wave_metrics(wave),
-        history=tuple(history),
-        events=tuple(events),
+        criteria=tuple(criteria),
+        evidence=tuple(evidence),
+        runtime=_wave_runtime(wave),
         detail_markdown=_wave_narrative_preview(state, wave, reports=reports),
     )
 
@@ -448,16 +591,14 @@ def _iter_card(state: State, iter_id: str) -> DetailCard | None:
         ("waves", f"{closed}/{total} closed"),
     ]
     rows.extend(_intent_rows(it.intent))
-    history: list[tuple[str, str]] = [
-        ("status", it.status.value),
-        ("opened", _fmt_dt(it.opened_at)),
-        ("closed", _fmt_dt(it.closed_at)),
-    ]
+    # No standalone history tab in the five-tab chassis; the lifecycle
+    # timestamps fold into the overview group beside the status row.
+    rows.append(("opened", _fmt_dt(it.opened_at)))
+    rows.append(("closed", _fmt_dt(it.closed_at)))
     return DetailCard(
         title=f"iter {it.id}",
         rows=tuple(rows),
-        metrics=_completion_metrics(closed, total),
-        history=tuple(history),
+        runtime=_completion_runtime(closed, total),
     )
 
 
@@ -492,16 +633,14 @@ def _phase_card(state: State, phase_id: str) -> DetailCard | None:
         ("waves", f"{closed}/{total} closed"),
     ]
     rows.extend(_intent_rows(phase.intent))
-    history: list[tuple[str, str]] = [
-        ("status", phase.status.value),
-        ("opened", _fmt_dt(phase.opened_at)),
-        ("closed", _fmt_dt(phase.closed_at)),
-    ]
+    # No standalone history tab in the five-tab chassis; the lifecycle
+    # timestamps fold into the overview group beside the status row.
+    rows.append(("opened", _fmt_dt(phase.opened_at)))
+    rows.append(("closed", _fmt_dt(phase.closed_at)))
     return DetailCard(
         title=f"phase {phase.id}",
         rows=tuple(rows),
-        metrics=_completion_metrics(closed, total),
-        history=tuple(history),
+        runtime=_completion_runtime(closed, total),
     )
 
 
@@ -659,9 +798,10 @@ class DetailModal(ModalScreen[None]):
     resolves the card from ``app.state`` via :func:`resolve_detail` when
     it routes the selection message. The modal owns only the presentation,
     the ``Tab`` / ``Shift+Tab`` tab cycle, the single-letter tab hotkeys
-    (``h`` / ``d`` / ``m`` / ``e``), and the ``Esc`` close
-    binding. The arrow keys keep their native per-pane scroll behaviour —
-    they are deliberately not bound here.
+    (``o`` / ``c`` / ``g`` / ``v`` / ``r`` for overview / criteria / gates
+    / evidence / runtime), and the ``Esc`` close binding. The arrow keys
+    keep their native per-pane scroll behaviour — they are deliberately not
+    bound here.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -696,17 +836,18 @@ class DetailModal(ModalScreen[None]):
     """
 
     #: ``Esc`` closes; ``Tab`` / ``Shift+Tab`` cycle the body tabs; the
-    #: single-letter keys jump straight to a tab.
+    #: single-letter keys jump straight to one of the five chassis tabs.
     #: The arrow keys are intentionally absent so they keep scrolling the
     #: focused pane rather than switching tabs.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "close", "close", show=False),
         Binding("tab", "next_tab", "next tab", show=False),
         Binding("shift+tab", "prev_tab", "prev tab", show=False),
-        Binding("h", "show_tab('h')", "history", show=False),
-        Binding("d", "show_tab('d')", "detail", show=False),
-        Binding("m", "show_tab('m')", "metrics", show=False),
-        Binding("e", "show_tab('e')", "events", show=False),
+        Binding("o", "show_tab('overview')", "overview", show=False),
+        Binding("c", "show_tab('criteria')", "criteria", show=False),
+        Binding("g", "show_tab('gates')", "gates", show=False),
+        Binding("v", "show_tab('evidence')", "evidence", show=False),
+        Binding("r", "show_tab('runtime')", "runtime", show=False),
     ]
 
     def __init__(
@@ -777,43 +918,60 @@ class DetailModal(ModalScreen[None]):
     def _present_tabs(card: DetailCard) -> tuple[str, ...]:
         """Return the ordered tab ids that have data for *card*.
 
-        The ``d`` detail tab is always present (every card carries field
-        rows); the rest appear only when their section is non-empty. Order
-        follows the ``h / d / m / e`` brief sequence.
+        The ``overview`` tab is ALWAYS present (every card carries an
+        identity); the ``criteria`` / ``gates`` / ``evidence`` / ``runtime``
+        tabs appear only when their section is non-empty, so a wave with no
+        gates renders no gates tab. Order follows the chassis sequence.
 
         Args:
             card: The resolved card.
 
         Returns:
-            The ordered, deduplicated tab ids to build panes for.
+            The ordered tab ids to build panes for.
         """
-        present: list[str] = []
-        if card.history:
-            present.append("h")
-        present.append("d")
-        if card.metrics:
-            present.append("m")
-        if card.events:
-            present.append("e")
+        present: list[str] = ["overview"]
+        if card.criteria:
+            present.append("criteria")
+        if card.gates:
+            present.append("gates")
+        if card.evidence:
+            present.append("evidence")
+        if card.runtime:
+            present.append("runtime")
         return tuple(present)
 
     def _section_rows(self, tab_id: str) -> tuple[tuple[str, str], ...]:
         """Return the ``(label, value)`` rows for the *tab_id* section.
 
         Args:
-            tab_id: One of the row-group tab ids (``h`` / ``d`` / ``m`` /
-                ``e``).
+            tab_id: One of the chassis tab ids (``overview`` / ``criteria``
+                / ``gates`` / ``evidence`` / ``runtime``).
 
         Returns:
             The matching section's rows.
         """
-        if tab_id == "h":
-            return self._card.history
-        if tab_id == "m":
-            return self._card.metrics
-        if tab_id == "e":
-            return self._card.events
+        if tab_id == "criteria":
+            return self._card.criteria
+        if tab_id == "gates":
+            return self._card.gates
+        if tab_id == "evidence":
+            return self._card.evidence
+        if tab_id == "runtime":
+            return self._card.runtime
         return self._card.rows
+
+    def _render_mode(self) -> RenderMode:
+        """Return the App's resolved render mode, defaulting when unbound.
+
+        Reads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` so the pane
+        labels pick the right chrome-glyph column. A bare harness whose host
+        App carries no ``render_mode`` (a direct construction outside the
+        full app) falls back to the shared default.
+
+        Returns:
+            The active render mode (``"unicode"`` / ``"ascii"``).
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def compose(self) -> ComposeResult:
         """Yield the scrollable, tabbed card: title, tab panes, close hint.
@@ -821,42 +979,48 @@ class DetailModal(ModalScreen[None]):
         Within each row-group pane the labels are space-padded to that
         group's widest label so the ``label: value`` colons line up in one
         column (the same mechanism
-        :class:`~eawf.surfaces.tui.widgets.status_pane.StatusPane` uses for its
-        counter block). Wave ``d`` panes render the NarrativeBundle
-        preview as Markdown.
+        :class:`~eawf.surfaces.tui.widgets.status_pane.StatusPane` uses for
+        its counter block). Each pane label carries its chrome-glyph
+        mnemonic for the active render mode. The wave ``overview`` pane
+        renders the NarrativeBundle preview as Markdown.
         """
         self._enrich_from_app()
+        mode = self._render_mode()
         with VerticalScroll(id="detail-card"):
             yield Static(self._card.title, classes="detail-title")
-            with TabbedContent(initial="detail-tab-d"):
+            with TabbedContent(initial="detail-tab-overview"):
                 for tab_id in self._tab_ids:
-                    with TabPane(_TAB_LABELS[tab_id], id=f"detail-tab-{tab_id}"):
-                        yield from self._compose_pane(tab_id)
+                    label = tab_label(tab_id, mode=mode)
+                    with TabPane(label, id=f"detail-tab-{tab_id}"):
+                        yield from self._compose_pane(tab_id, mode=mode)
             yield Static(
                 "[ Tab/Shift+Tab cycle · Esc close ]",
                 classes="detail-hint",
             )
 
-    def _compose_pane(self, tab_id: str) -> ComposeResult:
+    def _compose_pane(self, tab_id: str, *, mode: RenderMode) -> ComposeResult:
         """Yield the body widgets for one tab pane.
 
         Args:
             tab_id: The tab whose body to render.
+            mode: The active render mode, threaded through so the overview
+                ``status`` row prepends the matching lifecycle sigil glyph.
 
         Yields:
             The pane's child widgets — aligned ``label: value`` rows for a
-            row-group tab, or a rendered Markdown block for the ``d`` tab
-            when the card supplies one.
+            row-group tab, or a rendered Markdown block for the ``overview``
+            tab when the card supplies one.
         """
-        if tab_id == "d" and self._card.detail_markdown is not None:
+        if tab_id == "overview" and self._card.detail_markdown is not None:
             yield Markdown(self._card.detail_markdown)
             return
         rows = self._section_rows(tab_id)
         label_width = max((len(label) for label, _ in rows), default=0)
         for label, value in rows:
             padded = f"{label}:".ljust(label_width + 1)
+            display = _status_with_sigil(value, mode=mode) if label == "status" else value
             row = Static(
-                f"[$accent]{escape(padded)}[/] {linkify_text(value)}",
+                f"[$accent]{escape(padded)}[/] {linkify_text(display)}",
                 classes="detail-row",
             )
             row.tooltip = tooltip_for_text(self._state, value)
@@ -882,10 +1046,11 @@ class DetailModal(ModalScreen[None]):
     def action_show_tab(self, tab_id: str) -> None:
         """Jump straight to the *tab_id* pane, or no-op when it is absent.
 
-        Bound to the single-letter tab hotkeys (``h`` / ``d`` / ``m`` /
-        ``e``). A key for a tab the card does not carry
-        (e.g. ``e`` on an event-less card) is silently ignored so the
-        binding stays harmless on every card shape.
+        Bound to the single-letter tab hotkeys (``o`` / ``c`` / ``g`` /
+        ``v`` / ``r`` for overview / criteria / gates / evidence /
+        runtime). A key for a tab the card does not carry (e.g. ``g`` on a
+        gate-less wave) is silently ignored so the binding stays harmless on
+        every card shape.
 
         Args:
             tab_id: The target tab id (one of :attr:`_tab_ids`).
@@ -912,4 +1077,5 @@ __all__ = [
     "DetailModal",
     "render_file_tree",
     "resolve_detail",
+    "tab_label",
 ]
