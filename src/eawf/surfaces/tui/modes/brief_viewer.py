@@ -26,8 +26,9 @@ from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
+from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import MarkdownViewer
+from textual.widgets import MarkdownViewer, Static
 from textual.widgets.markdown import MarkdownBlock
 
 from eawf.platform.artifacts.references import Citation
@@ -35,6 +36,7 @@ from eawf.surfaces.render.artifact_chassis import (
     link_inline_citations,
     render_references,
 )
+from eawf.surfaces.render.brand import render_wordmark_markup
 from eawf.surfaces.render.link_wrap import iter_refs
 from eawf.surfaces.tui.modes.research_board import (
     EMPTY_NOTICE,
@@ -53,6 +55,25 @@ logger = logging.getLogger(__name__)
 #: Id of the :class:`MarkdownViewer` the brief d-tab mounts (addressable so a
 #: Pilot test can target the viewer + its table-of-contents).
 BRIEF_VIEWER_ID: str = "research-brief-viewer"
+
+#: Id of the brand-header :class:`~textual.widgets.Static` the brief modal docks
+#: above the viewer (addressable so a Pilot test can target the two-tone Eae
+#: wordmark band). The band leads the reskinned chassis so the brief reads in the
+#: Eae cosmic-terminal render language end to end, not just on the single
+#: ClaimStatus bullet a prior wave touched.
+BRIEF_HEADER_ID: str = "research-brief-header"
+
+#: Id of the vertical shell that stacks the header band over the viewer as one
+#: centred block (a screen ``align: center middle`` aligns sibling children
+#: independently, so the band + viewer share one wrapper to read as a single
+#: framed modal rather than two overlapping boxes).
+_BRIEF_SHELL_ID: str = "research-brief-shell"
+
+#: Label trailing the two-tone Eae wordmark in the brief modal's header band --
+#: a fixed brief-surface title (the modal carries no per-brief heading of its
+#: own; the brief body's H1 names the topic). It rides the green ``$accent`` span
+#: so it tracks the active palette rather than a frozen hex.
+BRIEF_HEADER_TITLE: str = "Research brief"
 
 #: Href prefix of an in-document reference jump (``#ref-N``) -- the target a
 #: rendered inline ``[N]`` marker and a reference-row self-link both point at
@@ -89,6 +110,25 @@ BRIEF_EMPTY_MARKDOWN: str = "\n".join(
 )
 
 
+def render_brief_header_markup() -> str:
+    """Render the brief modal's header band as Textual content markup.
+
+    The band leads with the two-tone Eae wordmark
+    (:func:`~eawf.surfaces.render.brand.render_wordmark_markup` -- the ``E``
+    plain, the ``ae`` carrying the accent) wrapped in a ``[b]...[/b]`` bold span,
+    exactly as the shared chassis :class:`~eawf.surfaces.tui.widgets.header.Header`
+    composes it, then trails the :data:`BRIEF_HEADER_TITLE` inside the same green
+    ``[$accent]...[/]`` span. The accent is threaded as the theme ``$accent`` var
+    (never a frozen hex) so the band tracks the active palette.
+
+    Returns:
+        A Textual content-markup string: the bold two-tone wordmark, a gap, then
+        the brief title in the green accent span.
+    """
+    wordmark = render_wordmark_markup("$accent")
+    return f"[b]{wordmark}[/b]  [$accent]{BRIEF_HEADER_TITLE}[/]"
+
+
 def build_brief_preview_markdown(
     campaigns: tuple[CampaignRow, ...],
     claims: tuple[Claim, ...],
@@ -98,9 +138,13 @@ def build_brief_preview_markdown(
 
     Projects the staged campaign, the claim ledger, and the open questions into
     a chassis-shaped brief preview: an H1, a ``## Summary`` of the campaign +
-    counts, a ``## Claims`` list, and a numbered ``## References`` block
+    counts, a ``## Claims`` list, a ``## Open questions`` list, and a numbered
+    ``## References`` block
     (via :func:`eawf.surfaces.render.artifact_chassis.render_references`) whose
-    rows cite the real on-disk sources the preview was projected from. The
+    rows cite the real on-disk sources the preview was projected from. Each claim
+    AND open-question row leads with its resolved status sigil
+    (:func:`~eawf.surfaces.tui.widgets.sigils.status_sigil`) so the body speaks
+    the Eae sigil language throughout, not just on the single claim bullet. The
     inline ``[N]`` summary markers are linkified to their ``#ref-N`` anchors
     (:func:`link_inline_citations`) so the brief, mounted in a
     :class:`BriefMarkdownViewer`, fast-travels from a marker to its row. An empty
@@ -140,6 +184,15 @@ def build_brief_preview_markdown(
             f"- {status_sigil(claim.status).render(mode=DEFAULT_RENDER_MODE)} "
             f"{claim.status.value}: {claim.title}"
             for claim in claims
+        )
+    else:
+        lines.append(f"_{NONE_YET}_")
+    lines.extend(["", "## Open questions", ""])
+    if questions:
+        lines.extend(
+            f"- {status_sigil(question.status).render(mode=DEFAULT_RENDER_MODE)} "
+            f"{question.status.value}: {question.title}"
+            for question in questions
         )
     else:
         lines.append(f"_{NONE_YET}_")
@@ -298,8 +351,11 @@ class BriefMarkdownViewer(MarkdownViewer):
 class BriefViewerScreen(ModalScreen[None]):
     """Modal that renders a research brief through a scrollable MarkdownViewer.
 
-    Mounts a :class:`BriefMarkdownViewer` (``show_table_of_contents=True``)
-    over a pre-built brief markdown body, so the brief reads with a heading
+    Docks an Eae brand-header band (:data:`BRIEF_HEADER_ID`, the two-tone
+    wordmark + brief title in the green ``$accent``) above a
+    :class:`BriefMarkdownViewer` (``show_table_of_contents=True``) over a
+    pre-built brief markdown body, so the modal opens in the reskinned
+    cosmic-terminal render language and the brief reads with a heading
     table-of-contents and the numbered ``## References`` list renders as an
     ordered list. ``Esc`` closes. The host research board builds the brief body
     from the active scope's signal (:func:`build_brief_preview_markdown`) and
@@ -320,10 +376,22 @@ class BriefViewerScreen(ModalScreen[None]):
     BriefViewerScreen {
         align: center middle;
     }
-    BriefViewerScreen > #research-brief-viewer {
+    BriefViewerScreen > #research-brief-shell {
         width: 90%;
         max-width: 120;
         height: 85%;
+        layout: vertical;
+    }
+    BriefViewerScreen #research-brief-header {
+        width: 100%;
+        height: 1;
+        background: $panel;
+        color: $accent;
+        padding: 0 1;
+    }
+    BriefViewerScreen #research-brief-viewer {
+        width: 100%;
+        height: 1fr;
         border: solid $accent;
         background: $surface;
     }
@@ -346,12 +414,21 @@ class BriefViewerScreen(ModalScreen[None]):
         self._brief_markdown = brief_markdown
 
     def compose(self) -> ComposeResult:
-        """Yield the routing MarkdownViewer over the brief body (with a TOC)."""
-        yield BriefMarkdownViewer(
-            self._brief_markdown,
-            show_table_of_contents=True,
-            id=BRIEF_VIEWER_ID,
-        )
+        """Yield the Eae brand-header band over the routing MarkdownViewer.
+
+        The header band (:data:`BRIEF_HEADER_ID`) leads with the two-tone Eae
+        wordmark + brief title (:func:`render_brief_header_markup`) so the modal
+        opens in the reskinned cosmic-terminal render language; the viewer below
+        renders the brief body (whose claim + open-question rows already carry
+        their resolved status sigils) with a heading table-of-contents.
+        """
+        with Vertical(id=_BRIEF_SHELL_ID):
+            yield Static(render_brief_header_markup(), id=BRIEF_HEADER_ID)
+            yield BriefMarkdownViewer(
+                self._brief_markdown,
+                show_table_of_contents=True,
+                id=BRIEF_VIEWER_ID,
+            )
 
     def action_close(self) -> None:
         """Dismiss the brief viewer."""
@@ -360,8 +437,11 @@ class BriefViewerScreen(ModalScreen[None]):
 
 __all__ = [
     "BRIEF_EMPTY_MARKDOWN",
+    "BRIEF_HEADER_ID",
+    "BRIEF_HEADER_TITLE",
     "BRIEF_VIEWER_ID",
     "BriefMarkdownViewer",
     "BriefViewerScreen",
     "build_brief_preview_markdown",
+    "render_brief_header_markup",
 ]
