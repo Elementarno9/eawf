@@ -70,8 +70,10 @@ def _assert_text_golden(captured: str, golden_path: Path) -> None:
 
     Mirrors the :func:`eawf.surfaces.tui.snapshot.assert_screen_snapshot`
     contract for plain-text frames: byte equality against a committed golden,
-    with an env-gated regeneration escape hatch. The trailing-newline shape is
-    preserved so the golden round-trips byte-for-byte.
+    with an env-gated regeneration escape hatch. Both sides are normalized to
+    exactly one trailing newline because the committed golden always ends with
+    one (the pre-commit end-of-file fixer guarantees it) while a rendered
+    frame may not.
 
     Args:
         captured: The rendered frame text under test.
@@ -81,6 +83,7 @@ def _assert_text_golden(captured: str, golden_path: Path) -> None:
         AssertionError: When *captured* differs from the golden and
             regeneration is not requested.
     """
+    captured = captured.rstrip("\n") + "\n"
     if os.environ.get(_REGEN_ENV) == "1":
         golden_path.parent.mkdir(parents=True, exist_ok=True)
         golden_path.write_text(captured, encoding="utf-8")
