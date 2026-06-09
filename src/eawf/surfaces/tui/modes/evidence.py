@@ -30,17 +30,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
+from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.ids import natural_key
 from eawf.platform.scrub import scan_text
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
+from eawf.workflow.estimation.buckets import wave_estimate_eu
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -55,6 +60,27 @@ logger = logging.getLogger(__name__)
 #: on disk). Phrased honestly so the empty surface is unmistakable.
 EMPTY_NOTICE: str = "no agent reports yet"
 
+
+def frame_empty_notice(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Return the no-reports sentinel framed calmly with a muted ring.
+
+    Leads the honest :data:`EMPTY_NOTICE` with the muted PENDING sigil (the
+    hollow ring) so the empty surface reads in the reskin's lifecycle
+    vocabulary as a not-yet-populated pane rather than a missing one -- a
+    calm frame that fabricates no rows. The notice text itself is unchanged;
+    the surrounding ``#evidence-empty`` Static keeps its muted-italic CSS.
+
+    Args:
+        mode: The App's resolved render-mode label threaded into the sigil
+            helper; defaults to the ASCII column for a bare standalone render.
+
+    Returns:
+        The framed sentinel string (``<ring> no agent reports yet``).
+    """
+    ring = glyph(Sigil.PENDING, mode=mode)
+    return f"{ring} {EMPTY_NOTICE}"
+
+
 #: The criterion statuses that count as "ready" toward the close-readiness
 #: header tally. A criterion is ready when its gate evidence passed or an
 #: operator waiver cleared it; ``fail`` / ``blocked`` / ``pending`` are not
@@ -67,10 +93,60 @@ _READY_STATUSES: frozenset[str] = frozenset({"pass", "waived"})
 #: declare only legacy string criteria, or none at all).
 NO_CRITERIA_NOTICE: str = "criteria: none"
 
-#: Column ids for the evidence table, in display order. ``followups`` is the
-#: trailing count column; the per-follow-up titles render in the detail
-#: block below the table.
-_COLUMNS: tuple[str, ...] = ("role", "verdict", "wave", "attempt", "followups")
+#: Column ids for the evidence table, in display order. The table is keyed
+#: by the WAVE the report advanced: ``report`` carries the wave label joined
+#: to the producing role, ``verdict`` carries the tinted lifecycle-shaped
+#: verdict sigil, and ``eu`` carries the wave's effort-unit estimate. The
+#: per-report attempt + the follow-up titles render in the detail block
+#: below the table.
+_COLUMNS: tuple[str, ...] = ("report", "verdict", "eu")
+
+#: Map each typed agent-report verdict to the lifecycle :class:`Sigil` shape
+#: whose mark + Wong tint reads its meaning at a glance, so the verdict
+#: column never prints a raw enum word. A clean ``pass`` (and the
+#: ``pass-with-followups`` pass-with-a-tail) wears the CLOSED filled circle
+#: (closed green); a ``fail`` wears the FAILED multiplication cross (failed
+#: red); a ``blocked`` verdict -- a withheld, not-terminal call -- wears the
+#: muted PENDING ring so it reads as held back rather than as a clean pass
+#: or a hard fail. Shape comes from the single sigils home; no pane invents
+#: a glyph of its own.
+_VERDICT_SIGIL: dict[AgentReportVerdict, Sigil] = {
+    AgentReportVerdict.PASS: Sigil.CLOSED,
+    AgentReportVerdict.PASS_WITH_FOLLOWUPS: Sigil.CLOSED,
+    AgentReportVerdict.FAIL: Sigil.FAILED,
+    AgentReportVerdict.BLOCKED: Sigil.PENDING,
+}
+
+
+def verdict_sigil(verdict: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> Text:
+    """Return the tinted lifecycle-shaped sigil for an agent-report *verdict*.
+
+    Resolves the verdict string to its lifecycle :class:`Sigil` shape via
+    :data:`_VERDICT_SIGIL` and renders the shape's glyph (in render *mode*)
+    tinted with the shape's own Wong hex (:func:`~eawf.surfaces.tui.widgets.sigils.tint`)
+    into a :class:`~rich.text.Text` -- the cell form a
+    :class:`~textual.widgets.DataTable` styles without a content-markup parse.
+    A verdict string outside the closed :class:`~eawf.kernel.state.enums.AgentReportVerdict`
+    set falls back to the muted PENDING ring rather than raising, so a row
+    never crashes the pane on an unrecognised verdict.
+
+    Args:
+        verdict: The report verdict string (an
+            :class:`~eawf.kernel.state.enums.AgentReportVerdict` value).
+        mode: The App's resolved render-mode label threaded into the sigil
+            helper; defaults to the ASCII column for a bare standalone render.
+
+    Returns:
+        A tinted single-cell :class:`~rich.text.Text` for the verdict sigil.
+    """
+    try:
+        sigil = _VERDICT_SIGIL[AgentReportVerdict(verdict)]
+    except ValueError:
+        sigil = Sigil.PENDING
+    mark = glyph(sigil, mode=mode)
+    hex_tint = tint(sigil)
+    return Text(mark, style=hex_tint or "")
+
 
 #: Footer hints for the Evidence mode (arrows primary). The mode digits are
 #: surfaced by the always-visible mode row, not duplicated in the hint strip.
@@ -103,6 +179,9 @@ class EvidenceRow:
         attempt: The report attempt number (``>= 1``).
         summary: The report's one-line header summary.
         followups: The follow-up titles the report emitted, in order.
+        eu: The effort-unit estimate of the wave the report advanced, derived
+            from the wave's effort bucket; ``0.0`` when the ``base_id`` joins
+            no wave in state (a phase-scoped report) or the wave has no bucket.
     """
 
     report_id: str
@@ -113,6 +192,7 @@ class EvidenceRow:
     attempt: int
     summary: str
     followups: tuple[str, ...]
+    eu: float = 0.0
 
     @property
     def followup_count(self) -> int:
@@ -126,44 +206,73 @@ class EvidenceRow:
             return self.wave_id
         return f"{self.wave_id} {self.wave_title}"
 
+    @property
+    def report_label(self) -> str:
+        """Return the report's identity -- the wave it advanced plus the role.
 
-def _wave_titles(state: State | None) -> dict[str, str]:
-    """Return a ``{wave_id: title}`` map from *state*, empty when unbound.
+        The table is keyed by wave, so the report column leads with the wave
+        label (id + title) and trails the producing role, reading as
+        ``<wave-id> <title> :: <role>`` so a multi-role wave's rows are
+        distinguishable under the shared wave key.
+        """
+        return f"{self.wave_label} :: {self.role}"
+
+    @property
+    def eu_label(self) -> str:
+        """Return the wave EU formatted to two decimals, or a calm dash.
+
+        A report joining no wave (or a wave with no effort bucket) carries
+        ``0.0`` EU; that renders as a ``-`` so an honest no-estimate cell is
+        unmistakable rather than a misleading ``0.00``.
+        """
+        if self.eu <= 0.0:
+            return "-"
+        return f"{self.eu:.2f}"
+
+
+def _wave_joins(state: State | None) -> dict[str, tuple[str, float]]:
+    """Return a ``{wave_id: (title, eu)}`` join map from *state*.
 
     Args:
         state: The loaded state, or ``None`` (fresh / user scope) -- the
             latter yields an empty map so every row renders with no title
-            join rather than raising.
+            join and a dashed EU rather than raising.
 
     Returns:
-        A wave-id to title map.
+        A wave-id to ``(title, eu)`` map, where ``eu`` is the bucket-derived
+        effort-unit estimate for the wave (``0.0`` when the wave has no
+        effort bucket).
     """
     if state is None:
         return {}
-    return {wave_id: wave.title for wave_id, wave in state.waves.items()}
+    return {wave_id: (wave.title, wave_estimate_eu(wave)) for wave_id, wave in state.waves.items()}
 
 
-def _row_from_report(report: AgentReportRow, wave_titles: dict[str, str]) -> EvidenceRow:
-    """Join one report row to its wave title and project the surfaced fields.
+def _row_from_report(
+    report: AgentReportRow, wave_joins: dict[str, tuple[str, float]]
+) -> EvidenceRow:
+    """Join one report row to its wave and project the surfaced fields.
 
     Args:
         report: The loaded report row.
-        wave_titles: The ``{wave_id: title}`` join map.
+        wave_joins: The ``{wave_id: (title, eu)}`` join map.
 
     Returns:
         The projected :class:`EvidenceRow`.
     """
     header = report.payload.header
     body = report.payload.body
+    title, eu = wave_joins.get(header.base_id, (None, 0.0))
     return EvidenceRow(
         report_id=header.report_id,
         role=header.role.value,
         verdict=body.verdict.value,
         wave_id=header.base_id,
-        wave_title=wave_titles.get(header.base_id),
+        wave_title=title,
         attempt=header.attempt,
         summary=header.summary,
         followups=tuple(followup.title for followup in body.followups),
+        eu=eu,
     )
 
 
@@ -192,9 +301,9 @@ def build_evidence_rows(state_path: Path | None, state: State | None) -> tuple[E
     if state_path is None:
         return ()
     reports = iter_agent_reports(state_path)
-    wave_titles = _wave_titles(state)
-    rows = tuple(_row_from_report(report, wave_titles) for report in reports)
-    logger.info(f"build_evidence_rows reports={len(rows)} waves={len(wave_titles)}")
+    wave_joins = _wave_joins(state)
+    rows = tuple(_row_from_report(report, wave_joins) for report in reports)
+    logger.info(f"build_evidence_rows reports={len(rows)} waves={len(wave_joins)}")
     return rows
 
 
@@ -662,10 +771,11 @@ class EvidenceModeScreen(ScopeScreen):
     """Evidence-mode base screen rendering the agent-report rollup.
 
     Composes the shared chassis around a bordered pane carrying the rollup
-    summary line, a :class:`~textual.widgets.DataTable` of per-report rows
-    (role / verdict / wave / attempt / follow-up count), and a follow-up
-    detail block. Renders honest-empty (the muted :data:`EMPTY_NOTICE`)
-    whenever no report exists for the active scope -- the common path.
+    summary line, a wave-keyed :class:`~textual.widgets.DataTable` of
+    per-report rows (report identity / tinted verdict sigil / wave EU), and a
+    follow-up detail block. Renders honest-empty (the calmly-framed muted
+    :data:`EMPTY_NOTICE`) whenever no report exists for the active scope --
+    the common path.
 
     The screen self-binds to the host :class:`~eawf.surfaces.tui.app.EaApp`
     reactive ``state``: it seeds from ``app.state`` + ``app._state_path`` on
@@ -773,11 +883,22 @@ class EvidenceModeScreen(ScopeScreen):
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._rebuild()
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this screen's reactive."""
         self.state = new_state
+
+    def _on_render_mode(self, _mode: RenderMode) -> None:
+        """Repaint the verdict-sigil column when the render mode swaps."""
+        if self.is_mounted:
+            self._rebuild()
+
+    def _render_mode(self) -> RenderMode:
+        """Return the host app's resolved render-mode label, else the default."""
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def watch_state(self) -> None:
         """Rebuild the rollup rows when the bound state changes."""
@@ -793,27 +914,29 @@ class EvidenceModeScreen(ScopeScreen):
         """Repopulate the summary, table, and follow-up block from state.
 
         Reads the role-report stores under the app's ``state.json`` path and
-        joins each report to its wave title via the bound state. Honest-empty
-        is the common path: no report store on disk yields no rows, so the
-        muted :data:`EMPTY_NOTICE` shows and the table hides.
+        joins each report to the wave it advanced (title + EU) via the bound
+        state, painting the wave-keyed table (report identity / tinted verdict
+        sigil / wave EU). Honest-empty is the common path: no report store on
+        disk yields no rows, so the calmly-framed muted :data:`EMPTY_NOTICE`
+        shows and the table hides.
         """
         table = self.query_one("#evidence-table", DataTable)
         if not table.columns:
             return
         rows = sort_evidence_rows(build_evidence_rows(self._state_path(), self.state))
+        mode = self._render_mode()
         summary = self.query_one("#evidence-summary", Static)
         empty = self.query_one("#evidence-empty", Static)
         followups = self.query_one("#evidence-followups", Static)
         summary.update(evidence_summary_line(rows))
         followups.update(render_followups_block(rows))
+        empty.update(frame_empty_notice(mode=mode))
         table.clear()
         for row in rows:
             table.add_row(
-                row.role,
-                row.verdict,
-                row.wave_label,
-                str(row.attempt),
-                str(row.followup_count),
+                row.report_label,
+                verdict_sigil(row.verdict, mode=mode),
+                row.eu_label,
                 key=row.report_id,
             )
         has_rows = bool(rows)
@@ -959,8 +1082,10 @@ __all__ = [
     "criterion_ready_count",
     "evidence_summary_line",
     "export_evidence_manifest",
+    "frame_empty_notice",
     "gate_status_label",
     "join_evidence_to_criteria",
     "render_followups_block",
     "sort_evidence_rows",
+    "verdict_sigil",
 ]

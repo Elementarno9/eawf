@@ -65,6 +65,7 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 
 NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
@@ -465,8 +466,10 @@ def test_evidence_pane_renders_reports_with_role_verdict_wave(tmp_path: Path) ->
             frame = normalize_snapshot(capture_screen_text(app))
             assert "executor" in frame
             assert "reviewer" in frame
-            assert "pass" in frame
-            # The wave join (id + title) renders in the wave column.
+            # The verdict column renders the tinted lifecycle sigil, not the
+            # raw enum word: a clean pass wears the CLOSED filled circle.
+            assert glyph(Sigil.CLOSED, mode=app.render_mode) in frame
+            # The wave join (id + title) renders in the report column.
             assert "P29-I02-W22" in frame
             assert "Add Evidence pane" in frame
             assert EMPTY_NOTICE not in frame

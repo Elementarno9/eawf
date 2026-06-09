@@ -1,0 +1,40 @@
+ Eä  repo ❯ QR ❯ P30 ❯ P30-I02 ❯ Evidence    ≈ idle    HH:MM UTC
+ criteria: none
+ no close-readiness criteria
+ 2 reports - 0 followup(s)
+  report                                   verdict  eu
+  P30-I02-W15 Reskin Evidence :: executor  ●        1.00
+  P30-I02-W15 Reskin Evidence :: reviewer  ◌        1.00
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Followups
+ no followups
+ ↑↓ select  ·  p peek  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  qweekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
