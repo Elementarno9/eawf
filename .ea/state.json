@@ -3948,6 +3948,18 @@
       "status": "done",
       "updated_at": "2026-06-09T13:40:54.871368Z"
     },
+    "P30-I01-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W06",
+      "scope_id": "P30-I01-W06",
+      "status": "done",
+      "updated_at": "2026-06-09T14:40:45.101522Z"
+    },
     "P30-I01-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -3959,6 +3971,30 @@
       "scope_id": "P30-I01-W07",
       "status": "done",
       "updated_at": "2026-06-09T14:15:07.535806Z"
+    },
+    "P30-I01-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W08",
+      "scope_id": "P30-I01-W08",
+      "status": "done",
+      "updated_at": "2026-06-09T14:40:45.788560Z"
+    },
+    "P30-I01-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I01-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I01-W09",
+      "scope_id": "P30-I01-W09",
+      "status": "done",
+      "updated_at": "2026-06-09T14:41:54.498464Z"
     },
     "P30-I01-W10": {
       "actual_cost_usd": 0.0,
@@ -13724,6 +13760,19 @@
       "scope_id": "P30-I01-W05",
       "updated_at": "2026-06-09T13:11:28.230914Z"
     },
+    "P30-I01-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W06-bucket-20260609T141622Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I01-W06",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I01-W06",
+      "updated_at": "2026-06-09T14:16:22.594616Z"
+    },
     "P30-I01-W07": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I01-W07-bucket-20260609T140613Z",
@@ -13736,6 +13785,32 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I01-W07",
       "updated_at": "2026-06-09T14:06:13.332814Z"
+    },
+    "P30-I01-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W08-bucket-20260609T141623Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I01-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I01-W08",
+      "updated_at": "2026-06-09T14:16:23.081739Z"
+    },
+    "P30-I01-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I01-W09-bucket-20260609T144153Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I01-W09",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I01-W09",
+      "updated_at": "2026-06-09T14:41:53.919549Z"
     },
     "P30-I01-W10": {
       "confidence": "low",
@@ -16608,7 +16683,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T14:15:07.536203Z",
+  "updated_at": "2026-06-09T14:41:54.498849Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -64021,10 +64096,10 @@
     "P30-I01-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T14:16:22.594608Z",
+      "closed_at": "2026-06-09T14:40:45.101522Z",
+      "commit": "263f6a519260503948738adbe4f4aa0636985c80",
       "deps": [
         "P30-I01-W02",
         "P30-I01-W04",
@@ -64042,10 +64117,10 @@
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.769300Z",
-      "outcome": null,
+      "outcome": "drift_budget_pulse fires one typed DriftPulseReport at the K-wave/D-EU budget boundary over just-closed waves; WavePlanRow.is_thin (delivered<planned criteria) is the thinness predicate; barrier-mode thin wave refuses next dispatch (LifecycleError), optimistic clean pulse never stalls. The machinery checkpoint.mode (W05) switches. Binding-proof + negative-path tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -64204,10 +64279,10 @@
     "P30-I01-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T14:16:23.081733Z",
+      "closed_at": "2026-06-09T14:40:45.788560Z",
+      "commit": "892baed5f689e914971360f076bbacda8d706422",
       "deps": [
         "P30-I01-W07"
       ],
@@ -64224,10 +64299,10 @@
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.769750Z",
-      "outcome": null,
+      "outcome": "Reconciled tier0 to the 5 irreversible no-tooling-backstop rules (996 tokens) under the enforced 1200 cap; demoted 2 tooling-backed rules to reference; check_budget names tier0 ids + main() exits non-zero over-cap; agents-md-budget gate blocks an over-cap synthesized set; 3 goldens regenerated for the tier-zone shift. Binding-proof + negative-path tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -64266,10 +64341,10 @@
     "P30-I01-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i01-orchestrator",
+      "claimed_at": "2026-06-09T14:16:23.563854Z",
+      "closed_at": "2026-06-09T14:41:54.498464Z",
+      "commit": "7e71c7c80ed747bdf4b3efec5c9c1c2f122d78a6",
       "deps": [
         "P30-I01-W02"
       ],
@@ -64282,41 +64357,102 @@
         "src/eawf/kernel/spec/intent.py",
         "src/eawf/surfaces/cli/commands/roadmap.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint/test_eawf021_022.py",
+              "tests/unit/propose/test_generator_coverage.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/platform/lint/test_eawf021_022.py",
+              "tests/unit/propose/test_generator_coverage.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I01-W09",
       "intent": null,
       "iter_id": "P30-I01",
       "opened_at": "2026-06-09T12:29:17.770170Z",
-      "outcome": null,
+      "outcome": "check_source_brief_coverage extracts units from source-brief docs + flags any unit not mapped to a criterion/planned_step/backlog-id/deferral (CoverageFinding); required-intent empty-planned_steps no longer short-circuits; apply refused on uncovered source unit. Also fixed a W01 idle-gate false-positive (lint-module detector now requires a genuine file addition). Criteria bound to command_exit_zero gates over the lint+propose unit suites (deterministic, no jury).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I01-W09-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_source_brief_coverage_flags_dropped_unit yields one finding; accepts_explicit_deferral yields zero findings",
-          "oracle_tier": null,
+          "measurable_signal": "test_check_source_brief_coverage_flags_uncovered_unit yields one CoverageFinding for the dropped unit while test_check_source_brief_coverage_deferred_unit_is_not_a_finding and the all-units-covered case yield zero, under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the source-brief coverage unit suite asserting an uncovered deliverable yields one finding and a deferred unit yields none",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "check_source_brief_coverage extracts units from each referenced source-brief document and flags any unit not mapped to a wave criterion / planned_step / backlog id / explicit deferral: a brief enumerating an uncovered deliverable yields one CoverageFinding naming the dropped unit; the same unit marked deferred yields zero findings.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I01-W09-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "behavioral",
-          "measurable_signal": "test_propose_apply_blocks_on_uncovered_source_unit refuses apply; empty_planned_steps_with_required_intent_is_finding yields one finding",
-          "oracle_tier": null,
+          "measurable_signal": "the propose-coverage unit suite asserts a required-intent wave with empty planned_steps still surfaces the source-brief gap rather than short-circuiting, under pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the propose-coverage and source-brief unit suites asserting a required-intent empty-planned-steps wave still surfaces the uncovered source unit",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "The spec.py:1025 empty-planned_steps no-op no longer hides drift for required-intent waves and apply is refused on an uncovered source unit: a required-intent wave with empty planned_steps is a finding, and an uncovered unit at apply refuses the apply.",
           "waiver_reason": null
         }
