@@ -1208,6 +1208,39 @@ def eawf018_structure_smell(
     )
 
 
+@hook_app.command(name="sigil-totality")
+def sigil_totality(ctx: typer.Context) -> None:
+    """Assert every TUI-render status value resolves to a real ratified glyph.
+
+    Sweeps every status enum the reskin renders (plus the lifecycle FSM
+    terminals) and proves each member resolves through the single resolver
+    :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` to a non-empty glyph
+    that is neither the ``?`` fallthrough nor the bare ``.value`` word. The
+    check is pure -- it sweeps a fixed enum surface, builds no widget, and
+    mutates no state, so it takes no file arguments. It BLOCKS: a value that
+    does not resolve to a real glyph emits the offending members and exits
+    non-zero, so a dropped resolver row is caught at commit time rather than
+    shipping a word where a glyph belongs.
+    """
+    from eawf.platform.lint.sigil_totality import check_sigil_totality
+
+    flags: GlobalFlags = ctx.obj
+    result = check_sigil_totality()
+    payload: dict[str, object] = {
+        "hook": "sigil-totality",
+        "checked": result.checked,
+        "clean": result.passed,
+        "violations": len(result.misses),
+        "blocking": True,
+    }
+    if result.passed:
+        emit_json_or_text(payload, result.message, flags=flags)
+        return
+    body = "\n".join([result.message, *(f"  {miss}" for miss in result.misses)])
+    emit_json_or_text(payload, body, flags=flags)
+    raise typer.Exit(exit_codes.USER_ERROR)
+
+
 def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
     """Return ``(1-based new lineno, text)`` for lines the staged diff added.
 

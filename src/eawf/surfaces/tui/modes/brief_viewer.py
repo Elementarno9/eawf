@@ -42,6 +42,8 @@ from eawf.surfaces.tui.modes.research_board import (
     CampaignRow,
     has_research_signal,
 )
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.sigils import status_sigil
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import Claim, OpenQuestion
@@ -134,7 +136,11 @@ def build_brief_preview_markdown(
         "",
     ]
     if claims:
-        lines.extend(f"- {claim.status.value}: {claim.title}" for claim in claims)
+        lines.extend(
+            f"- {status_sigil(claim.status).render(mode=DEFAULT_RENDER_MODE)} "
+            f"{claim.status.value}: {claim.title}"
+            for claim in claims
+        )
     else:
         lines.append(f"_{NONE_YET}_")
     lines.append("")

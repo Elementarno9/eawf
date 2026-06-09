@@ -284,6 +284,20 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: sigil-totality
+        name: sigil-totality
+        entry: uv run eawf hook sigil-totality
+        language: system
+        # Proves the reskin's two-axis visual vocabulary is TOTAL: every status
+        # enum value the TUI renders (plus the lifecycle FSM terminals) resolves
+        # through the single resolver (status_sigil) to a real ratified glyph --
+        # never a bare .value word, never a '?' fallthrough. Sweeps a fixed enum
+        # surface in-process, builds no widget, and mutates nothing -- so
+        # always-run with no file filter. BLOCKS: a dropped resolver row fails
+        # the commit.
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift

@@ -17,15 +17,30 @@ from __future__ import annotations
 
 import pytest
 
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionStatus,
+    AuditVerdict,
+    BacklogStatus,
+    ClaimStatus,
+    IterStatus,
+    OpenQuestionStatus,
+    OutcomeStatus,
+    PhaseStatus,
+    WaveStatus,
+)
 from eawf.surfaces.tui.app import resolve_render_mode
 from eawf.surfaces.tui.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.eu_bar import GLYPH_EMPTY, GLYPH_FULL
 from eawf.surfaces.tui.widgets.sigils import (
+    FOLLOWUP_BADGE,
     Sigil,
     chrome,
     glyph,
+    status_sigil,
     tint,
 )
+from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 
 # The expected rendered glyphs, written as the actual code points so the
 # test pins the real marks (the source uses \uXXXX escapes to stay ASCII).
@@ -35,6 +50,7 @@ _LIFECYCLE_UNICODE: dict[Sigil, str] = {
     Sigil.RUNNING: "\u25c6",  # filled diamond
     Sigil.CLOSED: "\u25cf",  # filled circle
     Sigil.FAILED: "\u2715",  # multiplication x
+    Sigil.ABANDONED: "\u2298",  # circled division slash (withheld)
 }
 _LIFECYCLE_ASCII: dict[Sigil, str] = {
     Sigil.PENDING: "o",
@@ -42,6 +58,7 @@ _LIFECYCLE_ASCII: dict[Sigil, str] = {
     Sigil.RUNNING: "*",
     Sigil.CLOSED: "@",
     Sigil.FAILED: "x",
+    Sigil.ABANDONED: "%",
 }
 
 _CHROME_UNICODE: dict[str, str] = {
@@ -220,3 +237,180 @@ def test_lifecycle_ascii_chars_exclude_bar_full_and_empty() -> None:
     lifecycle_ascii = {glyph(sigil, mode="ascii") for sigil in Sigil}
     assert GLYPH_FULL not in lifecycle_ascii
     assert GLYPH_EMPTY not in lifecycle_ascii
+
+
+# --------------------------------------------------------------------------
+# Criterion 6 -- the 6th ABANDONED sigil + its deconflicted ascii char
+# --------------------------------------------------------------------------
+
+
+def test_abandoned_is_sixth_lifecycle_sigil() -> None:
+    # The extended alphabet adds exactly one lifecycle member: ABANDONED.
+    assert Sigil.ABANDONED in Sigil
+    assert len(list(Sigil)) == 6
+
+
+def test_abandoned_unicode_is_circled_division_slash() -> None:
+    assert glyph(Sigil.ABANDONED, mode="unicode") == "⊘"
+
+
+def test_abandoned_ascii_is_percent() -> None:
+    # '%' is chosen because it collides with NEITHER the other lifecycle
+    # sigils ('o ( * @ x') NOR the bar glyphs ('# -') NOR the chrome ascii.
+    assert glyph(Sigil.ABANDONED, mode="ascii") == "%"
+
+
+def test_abandoned_ascii_deconflicts_from_every_other_alphabet() -> None:
+    # The new ascii char must not collide with any other lifecycle sigil, the
+    # bar glyphs, or the chrome ascii -- a withheld row beside a bar or a
+    # chrome mark must read unambiguously.
+    abandoned = glyph(Sigil.ABANDONED, mode="ascii")
+    other_lifecycle = {glyph(s, mode="ascii") for s in Sigil if s is not Sigil.ABANDONED}
+    chrome_ascii = {chrome(role, mode="ascii") for role in _CHROME_ASCII}
+    bar_chars = {GLYPH_FULL, GLYPH_EMPTY}
+    assert abandoned not in other_lifecycle
+    assert abandoned not in chrome_ascii
+    assert abandoned not in bar_chars
+
+
+def test_abandoned_tint_is_muted_grey() -> None:
+    # ABANDONED wears the muted 'abandoned' grey (it recedes, not alarms).
+    assert tint(Sigil.ABANDONED) == WONG_VARIABLES["status-pending"]
+
+
+def test_tint_still_never_none_for_any_sigil() -> None:
+    # The extended alphabet must keep tint() total over every member.
+    for sigil in Sigil:
+        assert tint(sigil) is not None
+
+
+# --------------------------------------------------------------------------
+# Criterion 7 -- the extended-status resolver: every status -> ratified glyph
+# --------------------------------------------------------------------------
+
+#: The ratified base glyph (unicode) every extended status must resolve to.
+#: Verbatim from the W28 contract -- the column the totality gate also pins.
+#: A LIST of pairs (not a dict) because the cross-class StrEnum value collisions
+#: (AgentReportVerdict.BLOCKED and OpenQuestionStatus.BLOCKED both == "blocked")
+#: would silently merge into one dict key -- exactly the hazard the class-keyed
+#: resolver fixes, so the test must not re-introduce it.
+_EXTENDED_EXPECTED: list[tuple[object, str]] = [
+    (WaveStatus.PENDING, "◌"),
+    (WaveStatus.CLAIMED, "◐"),
+    (WaveStatus.IN_PROGRESS, "◆"),
+    (WaveStatus.CLOSED, "●"),
+    (WaveStatus.FAILED, "✕"),
+    (WaveStatus.ABANDONED, "⊘"),
+    (IterStatus.PLANNED, "◌"),
+    (IterStatus.ACTIVE, "◆"),
+    (IterStatus.CLOSED, "●"),
+    (IterStatus.ABANDONED, "⊘"),
+    (PhaseStatus.PLANNED, "◌"),
+    (PhaseStatus.ACTIVE, "◆"),
+    (PhaseStatus.CLOSED, "●"),
+    (PhaseStatus.ARCHIVED, "⊘"),
+    (AgentReportVerdict.PASS, "●"),
+    (AgentReportVerdict.PASS_WITH_FOLLOWUPS, "●"),
+    (AgentReportVerdict.FAIL, "✕"),
+    (AgentReportVerdict.BLOCKED, "⊘"),
+    (AgentSessionStatus.ACTIVE, "◆"),
+    (AgentSessionStatus.CHECKPOINTED, "◐"),
+    (AgentSessionStatus.CLOSED, "●"),
+    (AgentSessionStatus.STALE, "△"),
+    (AgentSessionStatus.FAILED, "✕"),
+    (AuditVerdict.PASS, "●"),
+    (AuditVerdict.MINOR, "△"),
+    (AuditVerdict.MAJOR, "✕"),
+    (OutcomeStatus.PENDING, "◌"),
+    (OutcomeStatus.MET, "●"),
+    (OutcomeStatus.MISSED, "✕"),
+    (OutcomeStatus.WAIVED, "⊘"),
+    (BacklogStatus.OPEN, "◌"),
+    (BacklogStatus.IN_PROGRESS, "◆"),
+    (BacklogStatus.DEFERRED, "⊘"),
+    (BacklogStatus.CLOSED, "●"),
+    (ClaimStatus.OPEN, "◌"),
+    (ClaimStatus.SUPPORTED, "●"),
+    (ClaimStatus.REFUTED, "✕"),
+    (ClaimStatus.SUPERSEDED, "⊘"),
+    (OpenQuestionStatus.OPEN, "◌"),
+    (OpenQuestionStatus.ANSWERED, "●"),
+    (OpenQuestionStatus.BLOCKED, "△"),
+    (OpenQuestionStatus.DROPPED, "⊘"),
+]
+
+
+@pytest.mark.parametrize(("status", "expected"), _EXTENDED_EXPECTED)
+def test_status_sigil_resolves_to_ratified_glyph(status: object, expected: str) -> None:
+    # Every extended status resolves to its ratified unicode glyph -- never the
+    # bare .value word, never a '?' fallthrough.
+    resolved = status_sigil(status)
+    assert resolved.glyph_unicode == expected
+    assert resolved.glyph_unicode != status.value  # type: ignore[attr-defined]
+    assert resolved.glyph_unicode != "?"
+
+
+def test_blocked_verdict_and_blocked_question_do_not_collide() -> None:
+    # AgentReportVerdict.BLOCKED and OpenQuestionStatus.BLOCKED both == "blocked"
+    # as StrEnum values; the class-keyed resolver must give them distinct glyphs
+    # (withheld circled-slash vs warn triangle), not merge them.
+    verdict = status_sigil(AgentReportVerdict.BLOCKED)
+    question = status_sigil(OpenQuestionStatus.BLOCKED)
+    assert verdict.glyph_unicode == "⊘"
+    assert question.glyph_unicode == "△"
+    assert verdict.glyph_unicode != question.glyph_unicode
+
+
+def test_pass_with_followups_trails_a_followup_badge() -> None:
+    # A pass-with-a-tail is the CLOSED filled circle plus the follow-up badge,
+    # so it is distinguishable from a clean pass without a second shape.
+    clean = status_sigil(AgentReportVerdict.PASS)
+    tailed = status_sigil(AgentReportVerdict.PASS_WITH_FOLLOWUPS)
+    assert clean.badge is None
+    assert tailed.badge == FOLLOWUP_BADGE
+    assert tailed.render(mode="unicode") == "●" + FOLLOWUP_BADGE[0]
+    assert tailed.render(mode="ascii") == "@" + FOLLOWUP_BADGE[1]
+    # The follow-up badge must not collide with the bar glyphs.
+    assert FOLLOWUP_BADGE[1] not in {GLYPH_FULL, GLYPH_EMPTY}
+
+
+@pytest.mark.parametrize(
+    "warn_status",
+    [AuditVerdict.MINOR, AgentSessionStatus.STALE, OpenQuestionStatus.BLOCKED],
+)
+def test_warn_status_is_the_triangle_never_the_pending_ring(warn_status: object) -> None:
+    # The correctness rule: a degraded state maps to the warn TRIANGLE, never
+    # the PENDING ring -- a degraded state must not be shape-identical to a
+    # not-yet-run one.
+    resolved = status_sigil(warn_status)
+    assert resolved.glyph_unicode == "△"
+    assert resolved.glyph_unicode != status_sigil(WaveStatus.PENDING).glyph_unicode
+    assert resolved.tint_hex == BAND_HEX["warn"]
+
+
+def test_minor_is_warn_triangle_major_is_failed_cross() -> None:
+    # Pin the audit-verdict split the contract calls out explicitly.
+    assert status_sigil(AuditVerdict.MINOR).glyph_unicode == "△"
+    assert status_sigil(AuditVerdict.MAJOR).glyph_unicode == "✕"
+
+
+def test_abandoned_and_archived_map_to_the_sixth_sigil() -> None:
+    # ABANDONED (wave/iter) + ARCHIVED (phase) all map to the withheld glyph.
+    assert status_sigil(WaveStatus.ABANDONED).glyph_unicode == "⊘"
+    assert status_sigil(IterStatus.ABANDONED).glyph_unicode == "⊘"
+    assert status_sigil(PhaseStatus.ARCHIVED).glyph_unicode == "⊘"
+
+
+def test_resolved_sigil_render_picks_the_active_column() -> None:
+    # render() is binary on mode, mirroring glyph()/chrome().
+    resolved = status_sigil(WaveStatus.ABANDONED)
+    assert resolved.render(mode="unicode") == "⊘"
+    assert resolved.render(mode="ascii") == "%"
+    assert resolved.render(mode="braille") == "⊘"  # any non-ascii label -> unicode
+
+
+def test_status_sigil_unmapped_member_raises_key_error() -> None:
+    # A status enum the resolver does not cover surfaces a KeyError rather than
+    # silently rendering a fallthrough (no idle contract).
+    with pytest.raises(KeyError):
+        status_sigil(WaveStatus)  # the class itself is not a mapped member

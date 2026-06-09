@@ -106,6 +106,7 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.sigils import status_sigil
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import OpenPause, record_pause
 
@@ -541,6 +542,20 @@ def test_build_brief_preview_markdown_linkifies_inline_markers() -> None:
     md = build_brief_preview_markdown((_campaign_row(),), (_claim(),), ())
     assert r"[\[1\]](#ref-1)" in md
     assert r"[\[2\]](#ref-2)" in md
+
+
+def test_build_brief_preview_markdown_claim_bullet_leads_with_a_sigil() -> None:
+    """The claim bullet renders a leading status sigil via the helper, not a bare word.
+
+    The orphan ClaimStatus bullet must lead with the resolved status glyph
+    (W28), so a reader sees the shape -- not just the raw ``.value`` word.
+    """
+    md = build_brief_preview_markdown((), (_claim(status=ClaimStatus.SUPPORTED),), ())
+    sigil = status_sigil(ClaimStatus.SUPPORTED).render(mode=DEFAULT_RENDER_MODE)
+    # The bullet leads with the sigil, then the status word + title.
+    assert f"- {sigil} supported:" in md
+    # It is NOT the pre-W28 bare-value bullet form.
+    assert "- supported:" not in md
 
 
 # --------------------------------------------------------------------------
