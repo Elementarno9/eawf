@@ -19,14 +19,20 @@ import pytest
 
 from eawf.surfaces.render import brand
 from eawf.surfaces.render.brand import (
+    ACCENT_HEX,
     ASCII_GLYPHS,
     BRAND_LITERAL,
     NERD_FONT_GLYPHS,
+    ascii_wordmark,
     bold,
     is_tty,
     render_breadcrumb_head,
+    render_wordmark_markup,
     select_glyphs,
 )
+
+#: The cosmic-terminal reskin accent green the wordmark's ``ae`` carries.
+_GREEN = "#16b384"
 
 
 def test_brand_literal_is_e_plus_a_umlaut() -> None:
@@ -139,3 +145,57 @@ def test_module_re_export_path() -> None:
     assert brand.BRAND_LITERAL == "Eä"
     assert brand.select_glyphs is select_glyphs
     assert brand.is_tty is is_tty
+
+
+# --------------------------------------------------------------------------
+# P30-I02-W01: green-accent rotation + two-tone wordmark
+# --------------------------------------------------------------------------
+
+
+def test_accent_hex_rotated_to_reskin_green() -> None:
+    """``ACCENT_HEX`` rotates from the Wong orange to the reskin green."""
+    assert ACCENT_HEX == _GREEN
+
+
+def test_wordmark_markup_carries_green_on_umlaut_not_on_e() -> None:
+    """The two-tone wordmark colours the ``ae`` green and leaves ``E`` plain."""
+    markup = render_wordmark_markup()
+    # The accent span wraps ONLY the umlaut, never the E.
+    assert markup == "E[#16b384]ä[/]"
+    assert _GREEN in markup
+    # The E precedes the colour span open-tag, so it carries no accent.
+    e_index = markup.index("E")
+    span_index = markup.index(f"[{_GREEN}]")
+    umlaut_index = markup.index("ä")
+    assert e_index < span_index < umlaut_index
+    # No colour span surrounds the E (nothing between the start and E).
+    assert markup[:span_index] == "E"
+
+
+def test_wordmark_markup_accepts_theme_resolved_accent() -> None:
+    """A caller may pass a theme-resolved accent to track the active palette."""
+    markup = render_wordmark_markup("#1a9988")
+    assert markup == "E[#1a9988]ä[/]"
+    assert "#16b384" not in markup
+
+
+def test_ascii_wordmark_is_plain_ea_no_markup_no_umlaut() -> None:
+    """The ASCII channel renders plain ``Ea`` -- never coloured, never umlaut."""
+    text = ascii_wordmark()
+    assert text == "Ea"
+    assert "ä" not in text
+    assert "[" not in text and "]" not in text
+    assert _GREEN not in text
+    assert "\x1b" not in text  # no ANSI escape either
+
+
+def test_brand_literal_unchanged_by_rotation() -> None:
+    """The brand literals stay intact across the accent rotation."""
+    assert brand.BRAND_LITERAL == "Eä"
+    assert brand.ASCII_BRAND_LITERAL == "[Ea]"
+
+
+def test_wordmark_markup_re_exported() -> None:
+    """The new wordmark helpers are re-exported from the module surface."""
+    assert brand.render_wordmark_markup is render_wordmark_markup
+    assert brand.ascii_wordmark is ascii_wordmark

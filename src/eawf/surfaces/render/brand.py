@@ -48,12 +48,14 @@ ASCII_BRAND_LITERAL: str = "[Ea]"
 # Nerd Font separator (which would force the head into the NF branch).
 _BRAND_GAP: str = "  "
 
-# Default Wong 2011 deuteranopia-safe accent (orange). Matches §5.6
-# ``palette.semantic_map.accent``. Callers that style the brand with
-# ANSI 24-bit colour can pass this through their colour helper; the
-# constant lives here so the canonical hex is grep-able from one
-# place.
-ACCENT_HEX: str = "#E69F00"
+# The cosmic-terminal reskin accent green. The brand wordmark carries
+# this hex on its ``ae`` (U+00E4) glyph via :func:`render_wordmark_markup`;
+# it mirrors the green-rotated ``$accent`` / ``$primary`` palette var the
+# TUI themes resolve (see :data:`eawf.surfaces.tui.theme.WONG_VARIABLES`).
+# Callers that style the brand with ANSI 24-bit colour can pass this
+# through their colour helper; the constant lives here so the canonical
+# hex is grep-able from one place.
+ACCENT_HEX: str = "#16b384"
 
 # ANSI SGR open/close pair for bold. Emitted by :func:`bold` so callers
 # don't have to remember the escape codes.
@@ -178,6 +180,45 @@ def bold(text: str) -> str:
     return f"{_BOLD_ON}{text}{_BOLD_OFF}"
 
 
+def render_wordmark_markup(accent_hex: str = ACCENT_HEX) -> str:
+    """Render the two-tone Eä wordmark as Rich / Textual console markup.
+
+    The ``E`` (U+0045) stays in the surrounding base/foreground colour and
+    only the ``ä`` (U+00E4) carries the accent so the umlaut reads as the
+    branded cosmic-terminal flourish. The returned string is console markup
+    a Rich renderable or a Textual ``Static`` can mount — it is **not** an
+    ANSI-escape string and is **not** the ASCII channel (commits / JSON /
+    logs / PR titles), which MUST stay the plain ``Ea`` produced by
+    :func:`ascii_wordmark`.
+
+    Args:
+        accent_hex: The ``#rrggbb`` accent the ``ä`` carries. Defaults to
+            :data:`ACCENT_HEX` (the reskin green); a caller may pass a
+            theme-resolved accent to keep the wordmark in lockstep with the
+            active palette.
+
+    Returns:
+        ``"E[<accent_hex>]ä[/]"`` — the ``E`` plain, the ``ä`` wrapped in a
+        single colour span closed by ``[/]``.
+    """
+    return f"E[{accent_hex}]ä[/]"
+
+
+def ascii_wordmark() -> str:
+    """Return the plain ASCII channel wordmark ``"Ea"`` — never coloured.
+
+    The ASCII channel (commit subjects, JSON payloads, log lines, PR
+    titles) must never carry the umlaut or any markup / ANSI colour: it is
+    pure ``Ea`` so a scrub-safe, copy-paste-safe consumer sees stable
+    seven-bit text. This is the deliberate counterpart to
+    :func:`render_wordmark_markup` (the coloured markup channel).
+
+    Returns:
+        The literal two-character ``"Ea"``.
+    """
+    return "Ea"
+
+
 __all__ = [
     "ACCENT_HEX",
     "ASCII_BRAND_LITERAL",
@@ -185,8 +226,10 @@ __all__ = [
     "BRAND_LITERAL",
     "NERD_FONT_GLYPHS",
     "GlyphSet",
+    "ascii_wordmark",
     "bold",
     "is_tty",
     "render_breadcrumb_head",
+    "render_wordmark_markup",
     "select_glyphs",
 ]

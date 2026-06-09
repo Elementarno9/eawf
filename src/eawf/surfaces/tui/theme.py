@@ -16,10 +16,10 @@ otherwise the structural CSS in ``theme.tcss`` references an undefined
 var on that theme. The four operator-facing logical names map onto
 registered Textual theme names through :data:`LOGICAL_THEMES`:
 
-* ``dark`` → :data:`EA_DARK` — the Wong 2011 deuteranopia-safe palette,
-  carrying the exact hex values that shipped at global scope in
-  ``theme.tcss`` (so selecting ``dark`` is a no-op visual baseline; the
-  migration introduces no regression).
+* ``dark`` → :data:`EA_DARK` — the Wong 2011 deuteranopia-safe palette.
+  Its lifecycle ``status-*`` tints carry the exact hex values that shipped
+  at global scope in ``theme.tcss``; only ``accent`` / ``primary`` rotate
+  teal -> green for the cosmic-terminal reskin.
 * ``cb`` → :data:`EA_CB` — the IBM colour-blind-safe palette, visually
   distinct from Wong so a second swap is observable.
 * ``light`` → :data:`EA_LIGHT` — a light-background variant that carries
@@ -63,16 +63,19 @@ _OSC11_TIMEOUT_S: Final[float] = 0.2
 #: midpoint of the 0..255 range.
 _LIGHT_LUMINANCE_THRESHOLD: Final[float] = 127.5
 
-#: Wong 2011 deuteranopia-safe semantic vars — the exact hex values that
-#: shipped at global scope in ``theme.tcss`` before the per-theme
-#: migration. Hosted here so selecting ``dark`` reproduces the original
-#: look byte-for-byte (no visual regression). Public because the shared
+#: Wong 2011 deuteranopia-safe semantic vars. The lifecycle ``status-*``
+#: tints and the ``ok`` / ``warn`` / ``err`` band hexes keep the exact
+#: values that shipped at global scope in ``theme.tcss`` before the
+#: per-theme migration; only ``accent`` / ``primary`` rotate teal -> green
+#: for the cosmic-terminal reskin. ``status-claimed`` deliberately keeps
+#: the cool teal so it reads distinct from the green accent and the green
+#: ``status-closed``. Public because the shared
 #: :mod:`eawf.surfaces.tui.widgets.status_tint` helper derives the Rich-context
 #: fallback tints (tree-label / DataTable-cell hexes) from this single
 #: palette rather than re-typing the hexes.
 WONG_VARIABLES: Final[dict[str, str]] = {
-    "accent": "#56b6c2",
-    "primary": "#56b6c2",
+    "accent": "#16b384",
+    "primary": "#16b384",
     "ok": "#009e73",
     "warn": "#e69f00",
     "err": "#d55e00",
@@ -88,8 +91,8 @@ WONG_VARIABLES: Final[dict[str, str]] = {
 #: Wong (bluer accent, magenta error, gold in-progress) so a swap away
 #: from ``dark`` is observable while staying colour-blind-safe.
 _IBM_VARIABLES: Final[dict[str, str]] = {
-    "accent": "#648fff",
-    "primary": "#648fff",
+    "accent": "#1a9988",
+    "primary": "#1a9988",
     "ok": "#1a9988",
     "warn": "#ffb000",
     "err": "#dc267f",
@@ -104,8 +107,8 @@ _IBM_VARIABLES: Final[dict[str, str]] = {
 #: Light-surface semantic vars — the same var *names* the structural CSS
 #: references, retuned so the tints stay legible on a light background.
 _LIGHT_VARIABLES: Final[dict[str, str]] = {
-    "accent": "#007a87",
-    "primary": "#007a87",
+    "accent": "#007a52",
+    "primary": "#007a52",
     "ok": "#007a52",
     "warn": "#a35b00",
     "err": "#a8331a",
@@ -119,11 +122,12 @@ _LIGHT_VARIABLES: Final[dict[str, str]] = {
 
 
 #: The Wong deuteranopia-safe dark theme — the default + the ``dark``
-#: logical name. Its ``variables`` carry the exact pre-migration hex.
+#: logical name. Its ``variables`` carry the pre-migration lifecycle hex
+#: with the green-rotated accent/primary mirrored onto the Textual ctor.
 EA_DARK: Final[Theme] = Theme(
     name="ea-dark",
-    primary="#56b6c2",
-    accent="#56b6c2",
+    primary="#16b384",
+    accent="#16b384",
     success="#009e73",
     warning="#e69f00",
     error="#d55e00",
@@ -134,8 +138,8 @@ EA_DARK: Final[Theme] = Theme(
 #: The IBM colour-blind-safe dark theme — the ``cb`` logical name.
 EA_CB: Final[Theme] = Theme(
     name="ea-cb",
-    primary="#648fff",
-    accent="#648fff",
+    primary="#1a9988",
+    accent="#1a9988",
     success="#1a9988",
     warning="#ffb000",
     error="#dc267f",
@@ -148,8 +152,8 @@ EA_CB: Final[Theme] = Theme(
 #: keeps resolving every ``$var`` it references.
 EA_LIGHT: Final[Theme] = Theme(
     name="ea-light",
-    primary="#007a87",
-    accent="#007a87",
+    primary="#007a52",
+    accent="#007a52",
     success="#007a52",
     warning="#a35b00",
     error="#a8331a",

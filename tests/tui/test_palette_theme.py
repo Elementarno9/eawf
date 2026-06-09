@@ -76,11 +76,18 @@ def test_resolve_theme_name_unknown_returns_none() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_dark_theme_ports_the_wong_palette_unchanged() -> None:
-    """The dark theme reproduces the exact pre-migration global-scope hex."""
+def test_dark_theme_ports_the_wong_palette_with_green_accent() -> None:
+    """The dark theme keeps the Wong lifecycle tints; only accent/primary rotate.
+
+    The cosmic-terminal reskin (P30-I02-W01) rotates ``accent`` / ``primary``
+    teal -> green; every lifecycle ``status-*`` tint and the ok/warn/err
+    bands stay at their exact pre-migration hex. ``status-claimed`` keeps the
+    cool teal ``#56b6c2`` so it reads distinct from the green accent and the
+    green ``status-closed``.
+    """
     variables = EA_DARK.variables
-    assert variables["accent"] == "#56b6c2"
-    assert variables["primary"] == "#56b6c2"
+    assert variables["accent"] == "#16b384"
+    assert variables["primary"] == "#16b384"
     assert variables["ok"] == "#009e73"
     assert variables["warn"] == "#e69f00"
     assert variables["err"] == "#d55e00"
