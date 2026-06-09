@@ -461,6 +461,55 @@ def _validate_body(skill_name: SkillName, body: EnvelopeBody) -> None:
     model.model_validate(body)
 
 
+#: Footer-warning code attached to an advisory prose-clarity finding at emit.
+PROSE_CLARITY_CODE = "prose_clarity"
+
+
+def _prose_warnings(skill_name: SkillName, body: EnvelopeBody) -> list[EnvelopeWarning]:
+    """Run the advisory Layer-2 prose chokepoint over the emit body.
+
+    De-idles ``validate_prose`` at the skill emit path. The body is first
+    normalized to a markdown surface (a ``str`` body passes through; a typed
+    ``dict`` body is rendered through
+    :func:`~eawf.surfaces.render.envelope.body_to_markdown`, the same sorted-key
+    YAML the envelope ships), then the fail-open (``strict=False``) chokepoint
+    inspects it. The check is ADVISORY: a finding folds into a single
+    :class:`~eawf.surfaces.render.envelope.EnvelopeWarning` with
+    ``code="prose_clarity"`` and the envelope status is untouched -- it never
+    flips to blocked. The pass fails open end-to-end: a prose-lint crash is
+    caught and logged so emit always proceeds.
+
+    Args:
+        skill_name: The canonical skill name (logged for attribution only).
+        body: The action result's body, already serialized to ``str`` or
+            ``dict``.
+
+    Returns:
+        A list holding one :class:`EnvelopeWarning` when the chokepoint
+        reports at least one finding, else an empty list. Always empty on a
+        prose-lint exception (fail-open).
+    """
+    from eawf.platform.lint.validate_prose import validate_prose
+    from eawf.surfaces.render.envelope import body_to_markdown
+
+    try:
+        surface = body_to_markdown(body)
+        report = validate_prose(surface, strict=False)
+    except Exception:
+        # A prose-lint crash must not break emit; fail open, log, continue.
+        logger.exception(f"_prose_warnings prose-check-raised skill={skill_name}")
+        return []
+    if not report.has_findings:
+        return []
+    codes = ",".join(sorted(report.codes()))
+    logger.warning(
+        f"_prose_warnings skill={skill_name} findings={len(report.findings)} "
+        f"codes={codes!r} advisory=true"
+    )
+    detail = f"prose-clarity advisory: {len(report.findings)} finding(s) ({codes})"
+    return [EnvelopeWarning(code=PROSE_CLARITY_CODE, detail=detail)]
+
+
 def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     """Execute *skill* against *ctx* and return a fully-populated envelope.
 
@@ -475,10 +524,13 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
        ``footer.repair_commands`` set to ``ctx.failure_repair_commands``
        (or a default if unset).
     4. Otherwise → validate a registered dict body against its body model
-       (see :func:`_validate_body`) and return an envelope built from the
-       action result. A drifted dict body raises before the envelope is
-       built; the probe-fail and action-raised paths above are ungated
-       because their bodies are engine-authored strings.
+       (see :func:`_validate_body`), run the advisory prose chokepoint over
+       the body (see :func:`_prose_warnings`; a clarity finding folds into a
+       ``prose_clarity`` footer warning but never flips the status), and
+       return an envelope built from the action result. A drifted dict body
+       raises before the envelope is built; the probe-fail and action-raised
+       paths above are ungated because their bodies are engine-authored
+       strings.
 
     Args:
         skill: The :class:`Skill` to execute.
@@ -577,6 +629,11 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     # from its model raises here, before the envelope is emitted. String
     # bodies and unregistered skills are ungated (see _validate_body).
     _validate_body(skill_name, result.body)
+    # Bind the advisory Layer-2 prose chokepoint over the emit body. A
+    # clarity finding folds into a prose_clarity footer warning; the status is
+    # never flipped to blocked and a prose-lint crash never breaks emit
+    # (fail-open, see _prose_warnings).
+    combined_warnings.extend(_prose_warnings(skill_name, result.body))
     return _build_envelope(
         skill_name=skill_name,
         ctx=ctx,
@@ -596,6 +653,7 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
 
 
 __all__ = [
+    "PROSE_CLARITY_CODE",
     "ActionRun",
     "ProbeOutcome",
     "Skill",

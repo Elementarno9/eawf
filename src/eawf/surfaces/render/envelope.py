@@ -255,6 +255,28 @@ def _footer_to_dict(footer: EnvelopeFooter) -> dict[str, Any]:
     return footer.model_dump(mode="json", exclude_none=True)
 
 
+def body_to_markdown(body: EnvelopeBody) -> str:
+    """Normalize an envelope body to a markdown surface for prose inspection.
+
+    The body wire-form has two shapes (:data:`EnvelopeBody`): a raw markdown
+    ``str`` (passed through unchanged) and a typed ``dict`` body. A dict body
+    is rendered through the same deterministic, sorted-key YAML dump
+    (:func:`_dump_yaml`) that :func:`to_markdown` emits in its body block, so
+    the markdown surface a downstream prose check sees matches the wire-form
+    the envelope ships.
+
+    Args:
+        body: The envelope body, already serialized to ``str`` or ``dict``.
+
+    Returns:
+        The body as markdown text: the string itself for a ``str`` body, or
+        the sorted-key YAML render for a ``dict`` body.
+    """
+    if isinstance(body, str):
+        return body
+    return _dump_yaml(body)
+
+
 def to_markdown(env: OutputEnvelope) -> str:
     """Serialise *env* into the markdown wire-form.
 
@@ -379,6 +401,7 @@ __all__ = [
     "InstrumentStatus",
     "OutputEnvelope",
     "SkillName",
+    "body_to_markdown",
     "from_markdown",
     "to_markdown",
 ]
