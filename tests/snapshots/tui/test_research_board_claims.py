@@ -55,6 +55,7 @@ from eawf.surfaces.tui.modes.research_board import (
     CONFLICTS_BODY_ID,
     NONE_YET,
     OPTIONS_BODY_ID,
+    claim_sigil_markup,
     group_claims_by_evidence,
     render_conflicts,
     render_options,
@@ -63,7 +64,9 @@ from eawf.surfaces.tui.snapshot import (
     assert_screen_snapshot,
     settle_screen,
 )
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _SIZE = (120, 40)
 _GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -244,10 +247,13 @@ def test_render_options_lists_supported_with_ref_counts() -> None:
 
 
 def test_render_conflicts_lists_refuted_with_ref_counts() -> None:
-    """Conflicts renders one row per refuted claim with its evidence-ref count."""
+    """Conflicts renders one row per refuted claim with its lifecycle sigil + ref count."""
     rendered = render_conflicts(_mixed_claims())
     assert len(rendered.splitlines()) == 1
-    assert "refuted" in rendered
+    # The refuted status renders as its lifecycle sigil, never the raw word.
+    assert "refuted" not in rendered
+    assert claim_sigil_markup(ClaimStatus.REFUTED, mode=DEFAULT_RENDER_MODE) in rendered
+    assert "1 ref(s)" in rendered
     assert "Term-structure arbitrage is exploitable intraday" in rendered
 
 
@@ -288,7 +294,10 @@ def test_research_board_claims_snapshot(tmp_path: Path) -> None:
             # Options groups the two supported claims; Conflicts the one refuted.
             assert len(options.splitlines()) == 2
             assert len(conflicts.splitlines()) == 1
-            assert "refuted" in conflicts
+            # The refuted claim leads with its lifecycle sigil, never the raw word.
+            assert "refuted" not in conflicts
+            refuted_glyph = glyph(Sigil.FAILED, mode=app.render_mode)
+            assert refuted_glyph in conflicts
             assert "Term-structure arbitrage is exploitable intraday" in conflicts
             assert_screen_snapshot(app, _GOLDEN / "research_board_claims.txt")
 

@@ -91,6 +91,7 @@ from eawf.surfaces.tui.modes.research_board import (
     NodeKind,
     ResearchBoardModeScreen,
     build_tree_nodes,
+    claim_sigil_markup,
     has_research_signal,
     read_campaign_rows,
     render_center_tabs,
@@ -104,6 +105,7 @@ from eawf.surfaces.tui.snapshot import (
     normalize_snapshot,
     settle_screen,
 )
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import OpenPause, record_pause
 
@@ -460,10 +462,12 @@ def test_render_claims_empty_renders_none_yet() -> None:
     assert NONE_YET in render_claims(())
 
 
-def test_render_claims_populated_surfaces_status_and_title() -> None:
-    """A claim row surfaces its lifecycle status and its title."""
+def test_render_claims_populated_surfaces_sigil_and_title() -> None:
+    """A claim row leads with its lifecycle sigil (not the word) and its title."""
     body = render_claims((_claim(status=ClaimStatus.SUPPORTED),))
-    assert "supported" in body
+    # The status renders as a sigil, never the raw status word.
+    assert "supported" not in body
+    assert claim_sigil_markup(ClaimStatus.SUPPORTED, mode=DEFAULT_RENDER_MODE) in body
     assert "Implied vol surface is downward sloping in strike" in body
 
 

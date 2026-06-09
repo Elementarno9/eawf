@@ -62,27 +62,44 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from eawf.kernel.state.enums import CampaignStatus, StoreKind
+from eawf.kernel.state.enums import (
+    CampaignStatus,
+    ClaimStatus,
+    OpenQuestionStatus,
+    StoreKind,
+)
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import Sigil
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import Claim, OpenQuestion, State
+    from eawf.surfaces.tui.widgets.eu_bar import RenderMode
     from eawf.workflow.skills.needs_user import OpenPause
 
 logger = logging.getLogger(__name__)
 
-#: Notice rendered when the scope has no research signal at all -- no staged
-#: campaign, no claim, and no open question. The common path on a scope that
-#: has run no campaign (no campaign store on disk, empty claim / question
-#: maps). Phrased honestly so the empty surface is unmistakable rather than
-#: reading as a measured "nothing to research".
-EMPTY_NOTICE: str = "no active research campaign"
+#: Empty-state headline rendered when the scope has no research signal at all
+#: -- no staged campaign, no claim, and no open question. The common path on a
+#: scope that has run no campaign (no campaign store on disk, empty claim /
+#: question maps). The literal copy is pinned from the cosmic-terminal reskin
+#: mock (``new-surfaces-mock-handoff.md``) so the empty surface reads in the
+#: reskin's voice rather than a measured "nothing to research".
+EMPTY_NOTICE: str = "no word spoken yet"
+
+#: Empty-state sub-line under :data:`EMPTY_NOTICE`. Pins the mock's literal
+#: press-``n`` compose hint copy: a campaign begins with a question, and ``n``
+#: opens the compose modal. The ``n`` compose modal itself is deferred to a
+#: later iter (the research-surface data work) -- this renders the hint, not
+#: the behaviour. The middle dot is a one-cell separator escaped in source.
+EMPTY_SUBLINE: str = "a research campaign begins with a question · press n"
 
 #: Per-section sentinel rendered when one pane is empty while the board as a
 #: whole still carries signal elsewhere (e.g. a campaign is staged but no
@@ -236,6 +253,127 @@ _RESEARCH_HINTS: tuple[str, ...] = (
 #: surface 5 s tick so the pane can switch to daemon-push later without
 #: changing the visible contract).
 RESEARCH_REFRESH_S: float = 5.0
+
+#: :class:`~eawf.kernel.state.enums.ClaimStatus` -> the lifecycle
+#: :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` whose SHAPE the claim row
+#: renders, or ``None`` for a status with no live lifecycle shape (it renders
+#: a muted dot instead). A claim's status is its evidence verdict, so the
+#: shape reads as the closest lifecycle phase: ``OPEN`` is still pending
+#: (hollow circle), ``SUPPORTED`` reads as closed-resolved (filled circle),
+#: ``REFUTED`` reads as failed (the multiplication x), and ``SUPERSEDED`` is
+#: inert (no shape -- a muted dot). The COLOUR comes from
+#: :func:`~eawf.surfaces.tui.widgets.sigils.tint` so shape + hue stay
+#: single-homed in the sigils helper, never a raw status word.
+_CLAIM_SIGIL: dict[ClaimStatus, Sigil | None] = {
+    ClaimStatus.OPEN: Sigil.PENDING,
+    ClaimStatus.SUPPORTED: Sigil.CLOSED,
+    ClaimStatus.REFUTED: Sigil.FAILED,
+    ClaimStatus.SUPERSEDED: None,
+}
+
+#: :class:`~eawf.kernel.state.enums.OpenQuestionStatus` -> the lifecycle
+#: :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` whose SHAPE an open-question
+#: marker renders, or ``None`` for a status with no live lifecycle shape (a
+#: muted dot). ``OPEN`` is pending (hollow circle), ``ANSWERED`` reads as
+#: closed-resolved (filled circle), and ``DROPPED`` is inert (no shape).
+#: ``BLOCKED`` is absent on purpose: a blocking question short-circuits to the
+#: literal ``blocking`` ``$warn`` marker (the autonomy-interrupt signal) before
+#: this map is consulted, so it never reaches the shape path.
+_QUESTION_SIGIL: dict[OpenQuestionStatus, Sigil | None] = {
+    OpenQuestionStatus.OPEN: Sigil.PENDING,
+    OpenQuestionStatus.ANSWERED: Sigil.CLOSED,
+    OpenQuestionStatus.DROPPED: None,
+}
+
+
+def _muted_sigil_markup(*, mode: RenderMode) -> str:
+    """Return the muted inert-status sigil markup in the active render *mode*.
+
+    A claim / question whose status maps onto no live lifecycle shape
+    (``SUPERSEDED`` / ``DROPPED``) renders the pending hollow-circle glyph
+    -- the most inert lifecycle shape the sigils helper carries -- tinted
+    ``$muted`` so it reads as set aside rather than as a live pending row.
+
+    Args:
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the muted pending glyph.
+    """
+    glyph = escape_markup(sigils.glyph(Sigil.PENDING, mode=mode))
+    return f"[$muted]{glyph}[/]"
+
+
+def _sigil_markup(sigil: Sigil | None, *, mode: RenderMode) -> str:
+    """Return *sigil*'s shape tinted by its lifecycle status, or the muted dot.
+
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and the
+    COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) from the sigils
+    helper so a status renders as a tinted lifecycle mark, never a raw status
+    word. A ``None`` *sigil* (a status with no live lifecycle shape) falls back
+    to the muted inert dot.
+
+    Args:
+        sigil: The lifecycle sigil the status maps onto, or ``None`` for an
+            inert status (rendered as the muted dot).
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the tinted lifecycle glyph, or the muted dot.
+    """
+    if sigil is None:
+        return _muted_sigil_markup(mode=mode)
+    glyph = escape_markup(sigils.glyph(sigil, mode=mode))
+    hue = sigils.tint(sigil)
+    if hue is None:
+        return f"[$muted]{glyph}[/]"
+    return f"[{hue}]{glyph}[/]"
+
+
+def claim_sigil_markup(status: ClaimStatus, *, mode: RenderMode) -> str:
+    """Return the lifecycle sigil markup for a claim *status*.
+
+    Maps the claim status onto its lifecycle sigil (:data:`_CLAIM_SIGIL`) and
+    renders the tinted shape via :func:`_sigil_markup` -- the SHAPE + COLOUR
+    both come from the sigils helper, so the claim row leads with a sigil
+    rather than a raw status word and never falls through to a ``?``.
+
+    Args:
+        status: The claim's :class:`~eawf.kernel.state.enums.ClaimStatus`.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the claim status's tinted lifecycle sigil.
+    """
+    return _sigil_markup(_CLAIM_SIGIL[status], mode=mode)
+
+
+def question_sigil_markup(status: OpenQuestionStatus, *, mode: RenderMode) -> str:
+    """Return the lifecycle sigil markup for an open-question *status*.
+
+    Maps the question status onto its lifecycle sigil (:data:`_QUESTION_SIGIL`)
+    and renders the tinted shape via :func:`_sigil_markup`. ``BLOCKED`` is not
+    in the map -- a blocking question short-circuits to the literal
+    ``blocking`` marker before this path -- so the lookup covers only the
+    shape-bearing statuses (``OPEN`` / ``ANSWERED`` / ``DROPPED``).
+
+    Args:
+        status: The question's
+            :class:`~eawf.kernel.state.enums.OpenQuestionStatus`.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the question status's tinted lifecycle sigil.
+
+    Raises:
+        KeyError: If *status* is ``BLOCKED`` (handled upstream) or any value
+            outside the shape-bearing subset.
+    """
+    return _sigil_markup(_QUESTION_SIGIL[status], mode=mode)
 
 
 @dataclass(frozen=True)
@@ -460,33 +598,71 @@ def build_tree_nodes(
     return tuple(nodes)
 
 
-def render_tree(nodes: tuple[TreeNode, ...], selected: int) -> str:
+#: :class:`NodeKind` -> the sigils-helper role / lifecycle mark its level glyph
+#: renders. The structural nodes draw a chrome role (the campaign root is the
+#: ``overview`` triple-bar, the round node the ``dispatch`` arrow); the
+#: shape-bearing leaves draw a lifecycle sigil (a staged topic is ``PENDING``;
+#: an unresolved question is ``PENDING`` too -- the tree's questions are the
+#: open / unresolved leaves). No NodeKind maps to a raw glyph or a ``?``
+#: fallthrough -- every level resolves through the sigils helper.
+_TREE_CHROME: dict[NodeKind, str] = {
+    NodeKind.CAMPAIGN: "overview",
+    NodeKind.ROUND: "dispatch",
+}
+_TREE_SIGIL: dict[NodeKind, Sigil] = {
+    NodeKind.TOPIC: Sigil.PENDING,
+    NodeKind.QUESTION: Sigil.PENDING,
+}
+
+
+def _tree_node_glyph(kind: NodeKind, *, mode: RenderMode) -> str:
+    """Return the sigils-helper glyph for a tree node *kind*.
+
+    Resolves the node's level mark through the sigils helper -- a chrome role
+    for the structural campaign / round nodes, a lifecycle sigil for the
+    topic / question leaves -- so the tree carries no hardcoded glyph and no
+    ``?`` fallthrough.
+
+    Args:
+        kind: The :class:`NodeKind` of the row.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        The single-cell glyph string for *kind* in the resolved column.
+    """
+    role = _TREE_CHROME.get(kind)
+    if role is not None:
+        return sigils.chrome(role, mode=mode)
+    return sigils.glyph(_TREE_SIGIL[kind], mode=mode)
+
+
+def render_tree(
+    nodes: tuple[TreeNode, ...], selected: int, *, mode: RenderMode = DEFAULT_RENDER_MODE
+) -> str:
     """Render the topic-tree pane (one indented row per node).
 
-    Each row carries a level glyph (``v`` campaign, branch for round / topic,
-    ``?`` for an unresolved question) and the node label, indented by depth.
-    The *selected* row is marked so the peek target is visible. An empty node
-    list renders the per-pane :data:`NONE_YET` sentinel.
+    Each row carries a sigils-helper level glyph -- the ``overview`` mark for a
+    campaign root, the ``dispatch`` arrow for a round, the pending lifecycle
+    sigil for a staged topic or an unresolved question -- and the node label,
+    indented by depth. The *selected* row is marked so the peek target is
+    visible. An empty node list renders the per-pane :data:`NONE_YET` sentinel.
 
     Args:
         nodes: The flattened tree nodes in render order.
         selected: Index of the selected node (the peek target), or ``-1``.
+        mode: The App's resolved render-mode label -- selects each glyph's
+            ASCII / unicode column.
 
     Returns:
         A content-markup string of one tree row per node.
     """
     if not nodes:
         return f"[$muted]{NONE_YET}[/]"
-    glyphs = {
-        NodeKind.CAMPAIGN: "v",
-        NodeKind.ROUND: ">",
-        NodeKind.TOPIC: "#",
-        NodeKind.QUESTION: "?",
-    }
     lines: list[str] = []
     for index, node in enumerate(nodes):
         indent = "  " * node.depth
-        glyph = glyphs.get(node.kind, "-")
+        glyph = escape_markup(_tree_node_glyph(node.kind, mode=mode))
         marker = "[$accent]>[/] " if index == selected else "  "
         tint = "$warn" if node.kind is NodeKind.QUESTION else "$muted"
         lines.append(f"{marker}{indent}[{tint}]{glyph}[/] {escape_markup(node.label)}")
@@ -517,15 +693,19 @@ def render_center_tabs(active: str) -> str:
     return " ".join(cells)
 
 
-def render_claims(claims: tuple[Claim, ...]) -> str:
+def render_claims(claims: tuple[Claim, ...], *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
     """Render the claim-ledger (center pane Claims tab) -- one row per claim.
 
-    Each row names the claim status (tinted by lifecycle position) and its
-    title. The rows are capped at :data:`_MAX_ROWS` with a ``+N more`` overflow
-    line. An empty claim ledger renders :data:`NONE_YET`.
+    Each row LEADS with the claim status's lifecycle sigil (shape + tint both
+    from the sigils helper via :func:`claim_sigil_markup`) followed by the
+    title -- a sigil per claim, never a raw status word. The rows are capped at
+    :data:`_MAX_ROWS` with a ``+N more`` overflow line. An empty claim ledger
+    renders :data:`NONE_YET`.
 
     Args:
         claims: The state-resident claim rows for the scope.
+        mode: The App's resolved render-mode label -- selects each sigil's
+            ASCII / unicode column.
 
     Returns:
         A content-markup string of one claim line per row.
@@ -534,7 +714,8 @@ def render_claims(claims: tuple[Claim, ...]) -> str:
         return f"[$muted]{NONE_YET}[/]"
     lines: list[str] = []
     for claim in claims[:_MAX_ROWS]:
-        lines.append(f"{_claim_status_markup(claim.status.value)} {escape_markup(claim.title)}")
+        sigil = claim_sigil_markup(claim.status, mode=mode)
+        lines.append(f"{sigil} {escape_markup(claim.title)}")
     overflow = len(claims) - _MAX_ROWS
     if overflow > 0:
         lines.append(f"[$muted]+{overflow} more[/]")
@@ -560,23 +741,24 @@ def group_claims_by_evidence(
         A ``(supporting, contradicting)`` pair: the ``SUPPORTED`` claims and
         the ``REFUTED`` claims, each in input order.
     """
-    from eawf.kernel.state.enums import ClaimStatus
-
     supporting = tuple(c for c in claims if c.status is ClaimStatus.SUPPORTED)
     contradicting = tuple(c for c in claims if c.status is ClaimStatus.REFUTED)
     return supporting, contradicting
 
 
-def _render_claim_group(claims: tuple[Claim, ...]) -> str:
-    """Render one claim group -- one row per claim (status + evidence count + title).
+def _render_claim_group(claims: tuple[Claim, ...], *, mode: RenderMode) -> str:
+    """Render one claim group -- one row per claim (sigil + evidence count + title).
 
-    Each row names the claim status, its evidence-ref count (``N ref(s)``), and
+    Each row LEADS with the claim status's lifecycle sigil (via
+    :func:`claim_sigil_markup`), then its evidence-ref count (``N ref(s)``) and
     the title, so the operator reads how strongly each grouped claim is backed.
     Rows cap at :data:`_MAX_ROWS` with a ``+N more`` overflow line; an empty
     group renders :data:`NONE_YET`.
 
     Args:
         claims: The claims in one evidence group (supporting or contradicting).
+        mode: The App's resolved render-mode label -- selects each sigil's
+            ASCII / unicode column.
 
     Returns:
         A content-markup string of one claim line per row.
@@ -586,50 +768,52 @@ def _render_claim_group(claims: tuple[Claim, ...]) -> str:
     lines: list[str] = []
     for claim in claims[:_MAX_ROWS]:
         refs = len(claim.evidence_refs)
-        lines.append(
-            f"{_claim_status_markup(claim.status.value)} [$muted]{refs} ref(s)[/] "
-            f"{escape_markup(claim.title)}"
-        )
+        sigil = claim_sigil_markup(claim.status, mode=mode)
+        lines.append(f"{sigil} [$muted]{refs} ref(s)[/] {escape_markup(claim.title)}")
     overflow = len(claims) - _MAX_ROWS
     if overflow > 0:
         lines.append(f"[$muted]+{overflow} more[/]")
     return "\n".join(lines)
 
 
-def render_options(claims: tuple[Claim, ...]) -> str:
+def render_options(claims: tuple[Claim, ...], *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
     """Render the Options tab -- claims grouped by supporting evidence.
 
     Projects the supporting-evidence group from
     :func:`group_claims_by_evidence` (the ``SUPPORTED`` claims -- the live
-    candidate answers backed by evidence), one row per claim with its evidence-
-    ref count. An empty group renders :data:`NONE_YET`.
+    candidate answers backed by evidence), one row per claim with its lifecycle
+    sigil + evidence-ref count. An empty group renders :data:`NONE_YET`.
 
     Args:
         claims: The state-resident claim rows for the scope.
+        mode: The App's resolved render-mode label -- selects each sigil's
+            ASCII / unicode column.
 
     Returns:
         A content-markup string of one supporting-claim row per line.
     """
     supporting, _ = group_claims_by_evidence(claims)
-    return _render_claim_group(supporting)
+    return _render_claim_group(supporting, mode=mode)
 
 
-def render_conflicts(claims: tuple[Claim, ...]) -> str:
+def render_conflicts(claims: tuple[Claim, ...], *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
     """Render the Conflicts tab -- claims grouped by contradicting evidence.
 
     Projects the contradicting-evidence group from
     :func:`group_claims_by_evidence` (the ``REFUTED`` claims -- the conflicts
-    the campaign surfaced), one row per claim with its evidence-ref count. An
-    empty group renders :data:`NONE_YET`.
+    the campaign surfaced), one row per claim with its lifecycle sigil +
+    evidence-ref count. An empty group renders :data:`NONE_YET`.
 
     Args:
         claims: The state-resident claim rows for the scope.
+        mode: The App's resolved render-mode label -- selects each sigil's
+            ASCII / unicode column.
 
     Returns:
         A content-markup string of one contradicting-claim row per line.
     """
     _, contradicting = group_claims_by_evidence(claims)
-    return _render_claim_group(contradicting)
+    return _render_claim_group(contradicting, mode=mode)
 
 
 def render_unresolved(
@@ -739,25 +923,6 @@ def render_checkpoint(pause: OpenPause | None) -> str:
         f"[$warn]checkpoint[/] {escape_markup(pause.question.question)}\n"
         f"[$muted]options:[/] {options}"
     )
-
-
-def _claim_status_markup(status: str) -> str:
-    """Return *status* wrapped in its palette-var colour span.
-
-    Args:
-        status: One of the :class:`~eawf.kernel.state.enums.ClaimStatus`
-            values.
-
-    Returns:
-        The status wrapped in the matching ``theme.tcss`` palette var.
-    """
-    palette = {
-        "open": "$accent",
-        "supported": "$ok",
-        "refuted": "$warn",
-        "superseded": "$muted",
-    }
-    return f"[{palette.get(status, '$muted')}]{status}[/]"
 
 
 def _sorted_claims(state: State | None) -> tuple[Claim, ...]:
@@ -927,25 +1092,28 @@ class ResearchBoardModeScreen(ScopeScreen):
                 yield Static(self._empty_body(), id=EMPTY_ID)
                 return
             pause = self._current_checkpoint()
+            mode = self._render_mode()
             with Horizontal(id="research-panes"):
                 with VerticalScroll(id=TREE_PANE_ID, classes="research-pane") as tree:
                     tree.border_title = "TOPIC TREE"
-                    yield Static(render_tree(self._tree, self.selected), id="research-tree-body")
+                    yield Static(
+                        render_tree(self._tree, self.selected, mode=mode), id="research-tree-body"
+                    )
                     yield Static(self._peek_idle(), id=PEEK_RESULT_ID)
                 with VerticalScroll(id=CENTER_PANE_ID, classes="research-pane") as center:
                     center.border_title = "CLAIMS / EVIDENCE"
                     yield Static(render_center_tabs("Claims"), id="research-center-tabs")
-                    yield Static(render_claims(claims), id="research-center-body")
+                    yield Static(render_claims(claims, mode=mode), id="research-center-body")
                     yield Static(
                         "[$accent]Options[/] [$muted](supporting evidence)[/]",
                         classes="research-center-section",
                     )
-                    yield Static(render_options(claims), id=OPTIONS_BODY_ID)
+                    yield Static(render_options(claims, mode=mode), id=OPTIONS_BODY_ID)
                     yield Static(
                         "[$accent]Conflicts[/] [$muted](contradicting evidence)[/]",
                         classes="research-center-section",
                     )
-                    yield Static(render_conflicts(claims), id=CONFLICTS_BODY_ID)
+                    yield Static(render_conflicts(claims, mode=mode), id=CONFLICTS_BODY_ID)
                     yield Static(
                         "[$accent]Unresolved[/]",
                         id=UNRESOLVED_HEADER_ID,
@@ -973,12 +1141,19 @@ class ResearchBoardModeScreen(ScopeScreen):
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self.set_interval(RESEARCH_REFRESH_S, self._rebuild)
         self._clamp_selection()
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this screen's reactive."""
         self.state = new_state
+
+    def _on_render_mode(self, _mode: RenderMode) -> None:
+        """Repaint the reskinned sigils when the App's render mode swaps."""
+        if self.is_mounted:
+            self._rebuild()
 
     def watch_state(self) -> None:
         """Rebuild the panes when the bound state changes."""
@@ -1311,10 +1486,11 @@ class ResearchBoardModeScreen(ScopeScreen):
             logger.info("research_rebuild empty=True")
             return
         pause = self._current_checkpoint()
-        self._update_one("research-tree-body", render_tree(self._tree, self.selected))
-        self._update_one("research-center-body", render_claims(claims))
-        self._update_one(OPTIONS_BODY_ID, render_options(claims))
-        self._update_one(CONFLICTS_BODY_ID, render_conflicts(claims))
+        mode = self._render_mode()
+        self._update_one("research-tree-body", render_tree(self._tree, self.selected, mode=mode))
+        self._update_one("research-center-body", render_claims(claims, mode=mode))
+        self._update_one(OPTIONS_BODY_ID, render_options(claims, mode=mode))
+        self._update_one(CONFLICTS_BODY_ID, render_conflicts(claims, mode=mode))
         self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions))
         self._update_one(
             "research-progress-body",
@@ -1349,7 +1525,9 @@ class ResearchBoardModeScreen(ScopeScreen):
 
     def _repaint_tree(self) -> None:
         """Repaint the tree body so the selection highlight tracks the cursor."""
-        self._update_one("research-tree-body", render_tree(self._tree, self.selected))
+        self._update_one(
+            "research-tree-body", render_tree(self._tree, self.selected, mode=self._render_mode())
+        )
 
     def _clamp_selection(self) -> None:
         """Clamp the tree cursor into the current node list.
@@ -1407,10 +1585,14 @@ class ResearchBoardModeScreen(ScopeScreen):
         return "[$muted]enter to peek the selected node[/]"
 
     def _empty_body(self) -> str:
-        """Return the honest-empty notice body (banner + sub-line)."""
-        return (
-            f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]no staged campaign, claim, or open question yet[/]"
-        )
+        """Return the honest-empty notice body (headline + press-n sub-line).
+
+        Pins the cosmic-terminal reskin mock's literal empty-state copy: the
+        :data:`EMPTY_NOTICE` headline over the :data:`EMPTY_SUBLINE` press-``n``
+        compose hint. The ``n`` compose modal itself is deferred -- this renders
+        the hint, not the behaviour.
+        """
+        return f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]{escape_markup(EMPTY_SUBLINE)}[/]"
 
     def _current_rows(
         self,
@@ -1480,6 +1662,15 @@ class ResearchBoardModeScreen(ScopeScreen):
             return None
         return state_path if isinstance(state_path, Path) else None
 
+    def _render_mode(self) -> RenderMode:
+        """Return the App's active render mode, defaulting when unavailable.
+
+        A bare harness without the reactive degrades to
+        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` so the
+        reskin's sigil resolution never raises.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
     def _daemon_available(self) -> bool:
         """Return whether the App reports a reachable daemon socket.
 
@@ -1509,6 +1700,7 @@ __all__ = [
     "CONFLICTS_BODY_ID",
     "DRAWER_ID",
     "EMPTY_NOTICE",
+    "EMPTY_SUBLINE",
     "NONE_YET",
     "OPTIONS_BODY_ID",
     "PARK_NO_CHECKPOINT",
@@ -1522,8 +1714,10 @@ __all__ = [
     "ResearchBoardModeScreen",
     "TreeNode",
     "build_tree_nodes",
+    "claim_sigil_markup",
     "group_claims_by_evidence",
     "has_research_signal",
+    "question_sigil_markup",
     "read_campaign_rows",
     "render_center_tabs",
     "render_checkpoint",
