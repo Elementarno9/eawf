@@ -4,7 +4,7 @@ description: "Dispatch a claimed wave to a runtime per the V8 session-reuse ladd
 
 # /agent-dispatch
 
-## v0.4 cross-links
+## Cross-links
 
 Dispatch resolves the wave's `RoleSpec` (`role`, `model`, `tools`,
 `isolation`) and renders the subagent's prompt from the wave's

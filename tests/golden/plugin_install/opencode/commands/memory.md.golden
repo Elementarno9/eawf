@@ -4,7 +4,7 @@ description: "Save, list, or forget curated durable memory entries."
 
 # /memory
 
-## v0.4 cross-links
+## Cross-links
 
 Each memory mutation carries a typed `MutationKind` —
 `create | update | refresh | demote | archive` — so the audit trail

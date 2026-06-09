@@ -51,11 +51,13 @@ _RESEARCH_BODY = """# /research
 5. If `--final`: persist a research brief with `references` and render
    it through `eawf research show --md`.
 
-## v0.4 output contract: `IntentBrief` + dispatch-plan
+## Output contract: `IntentBrief` + dispatch-plan
 
-The brief body conforms to `kernel/spec/research.IntentBrief` — typed
+The brief body conforms to `kernel/spec/intent.IntentBrief` — typed
 claims with `evidence_refs` (a brief is promotable iff every claim
-has at least one resolving + entailing reference). The session also
+has at least one resolving + entailing reference; the EviBound
+rung-1 gate in `platform/artifacts/validation.validate_markdown_artifact`
+enforces this at promotion time, not at ingestion). The session also
 emits an optional dispatch-plan when the verdict names a follow-up
 wave the brief informs, so `/prep` and `/roadmap propose` can wire
 the brief into the next wave's References block automatically.
@@ -195,7 +197,7 @@ _AUDIT_BODY = """# /audit
 4. Parse the verdict; convert refutations into TODOs or new waves.
 5. Render audit evidence through `eawf audit show --md`.
 
-## v0.4 cross-links
+## Cross-links
 
 The auditor emits one `EvidenceRecord` per criterion (`evidence_kind`
 = `gate` | `claim` | `decision`). The aggregate verdict folds into the
@@ -204,6 +206,27 @@ same projection so audit and ship share one source of truth on
 "is this iter actually closable?". Roles are pinned via `RoleSpec`
 (`role="auditor"`); fresh-context isolation stays a `RoleSpec`
 invariant, not an ad-hoc dispatch flag.
+
+## Verify surface
+
+Each success criterion is a typed `CriterionSpec`
+(`kernel/spec/common.CriterionSpec`) whose optional `response` clause
+is mapped to an `oracle_tier` by `assign_oracle_tier`
+(`kernel/spec/common.assign_oracle_tier`) — the tier is derived, never
+authored on input. `run_oracle` (`workflow/verify/oracle.run_oracle`)
+scores a criterion by escalating its gates in ascending oracle-tier
+order, so the cheapest deterministic falsifier is always consulted
+before any jury spawn. The top tier consults the cross-vendor jury
+(`observability/eval/cross_vendor_jury.convene_cross_vendor_jury`)
+only when the wave's verdict requirement is `"always"`.
+
+Enforcement is advisory by default: the band-scoped `verify.enforce`
+bit defaults to `False` (the close gate stays advisory) and
+`cross_vendor_jury` defaults to `False` on the agent-driven profile,
+so a jury veto (`FAIL`) is held advisory by `jury_block_authority`
+unless a band opts in. A criterion may also name a `QualityDimension`
+(`kernel/spec/common.QualityDimension`) so the verdict is attributable
+to one ISO-25010 quality axis.
 
 ## Pre-flight checklist
 
@@ -229,7 +252,7 @@ status (`pass | pass-with-followups | fail`).
 
 _SHIP_BODY = """# /ship
 
-## v0.4 cross-links
+## Cross-links
 
 `/ship` reads the phase `CloseReadiness` projection (gate-pack
 aggregate + `EvidenceRecord` summary + outstanding follow-ups) to
@@ -238,6 +261,16 @@ lands once `CloseReadiness.status == "ready"`. The phase-PR body is
 synthesized from the same projection so reviewer and tool see the
 same shape. `MEMORY` mutations driven by ship (e.g. release-notes
 entries) carry an explicit `MutationKind` for downstream audit.
+
+The per-criterion close gate runs `run_oracle`
+(`workflow/verify/oracle.run_oracle`) over each wave's
+`CriterionSpec`. Enforcement is advisory by default — the band-scoped
+`verify.enforce` bit defaults to `False`, so a failing oracle or a
+cross-vendor jury veto is surfaced advisory rather than blocking the
+close unless a quality band opts in. The trust scorecard
+(`workflow/estimation/trust_scorecard.TrustScorecard`) reads the
+closed-wave store projection live, so ship's EU-calibration tier is
+read off real history rather than recomputed.
 
 ## Canonical algorithm
 
@@ -352,14 +385,17 @@ items list for changes needing user OK.
 
 _INIT_BODY = """# /init
 
-## v0.4 cross-links
+## Cross-links
 
 Init persists a typed `Project` row (id, profile composition, default
 `RoleSpec` set, vcs cadence) — downstream skills resolve role and
 release-cadence config off the `Project` rather than re-reading the
 profile yaml. The init wizard emits a `MEMORY` seed entry
-(`MutationKind=create`) recording the project bootstrap so the
-calibrated-trust scorecard has a base date.
+(`MutationKind=create`) recording the project bootstrap so the live
+trust scorecard (`workflow/estimation/trust_scorecard.TrustScorecard`)
+has a base date. That scorecard is no longer write-idle — it reads the
+closed-wave store projection to score EU-calibration trust per output
+scope.
 
 ## Canonical algorithm
 
@@ -392,10 +428,18 @@ _ROADMAP_BODY = """# /roadmap
    the queue without any waves yet. Emits a `needs_user` envelope
    with the rendered plan text — the active runtime (Claude
    plan-mode, Codex text-prompt) surfaces it for operator approval.
+   When the proposal draws on a source brief, the EAWF022
+   propose-coverage lint
+   (`platform/lint/eawf022_propose_coverage`) surfaces any brief span
+   covered by neither a criterion nor an explicit deferral, so brief
+   detail is not silently dropped at render time.
 2. **`revise`** edits the PLANNED scope via structured flags:
    `--add-wave`, `--remove-wave`, `--set-deps`, `--retitle`.
    Wave-level mutations route through the PENDING-only transitions
-   on the lifecycle state machine.
+   on the lifecycle state machine. New / edited success criteria are
+   typed `CriterionSpec` rows, so the EAWF021 measurability lint
+   (`platform/lint/eawf021_measurable_criterion`) rejects an
+   unmeasurable criterion before it lands.
 3. **`apply`** is the post-propose confirmation step. It validates
    that the phase is PLANNED with at least one wave and emits an
    `ok` envelope; the actual planning is already persisted (propose
@@ -839,7 +883,7 @@ runtime, and the resolved trailer (or a reason on the needs_user path).
 
 _MEMORY_BODY = """# /memory
 
-## v0.4 cross-links
+## Cross-links
 
 Each memory mutation carries a typed `MutationKind` —
 `create | update | refresh | demote | archive` — so the audit trail
@@ -880,7 +924,7 @@ and tier (or a reason on the needs_user path).
 
 _AGENT_DISPATCH_BODY = """# /agent-dispatch
 
-## v0.4 cross-links
+## Cross-links
 
 Dispatch resolves the wave's `RoleSpec` (`role`, `model`, `tools`,
 `isolation`) and renders the subagent's prompt from the wave's

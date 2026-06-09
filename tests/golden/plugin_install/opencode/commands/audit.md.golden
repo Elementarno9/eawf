@@ -13,7 +13,7 @@ description: "Fresh-context verification of a phase deliverable or wave outcome.
 4. Parse the verdict; convert refutations into TODOs or new waves.
 5. Render audit evidence through `eawf audit show --md`.
 
-## v0.4 cross-links
+## Cross-links
 
 The auditor emits one `EvidenceRecord` per criterion (`evidence_kind`
 = `gate` | `claim` | `decision`). The aggregate verdict folds into the
@@ -22,6 +22,27 @@ same projection so audit and ship share one source of truth on
 "is this iter actually closable?". Roles are pinned via `RoleSpec`
 (`role="auditor"`); fresh-context isolation stays a `RoleSpec`
 invariant, not an ad-hoc dispatch flag.
+
+## Verify surface
+
+Each success criterion is a typed `CriterionSpec`
+(`kernel/spec/common.CriterionSpec`) whose optional `response` clause
+is mapped to an `oracle_tier` by `assign_oracle_tier`
+(`kernel/spec/common.assign_oracle_tier`) — the tier is derived, never
+authored on input. `run_oracle` (`workflow/verify/oracle.run_oracle`)
+scores a criterion by escalating its gates in ascending oracle-tier
+order, so the cheapest deterministic falsifier is always consulted
+before any jury spawn. The top tier consults the cross-vendor jury
+(`observability/eval/cross_vendor_jury.convene_cross_vendor_jury`)
+only when the wave's verdict requirement is `"always"`.
+
+Enforcement is advisory by default: the band-scoped `verify.enforce`
+bit defaults to `False` (the close gate stays advisory) and
+`cross_vendor_jury` defaults to `False` on the agent-driven profile,
+so a jury veto (`FAIL`) is held advisory by `jury_block_authority`
+unless a band opts in. A criterion may also name a `QualityDimension`
+(`kernel/spec/common.QualityDimension`) so the verdict is attributable
+to one ISO-25010 quality axis.
 
 ## Pre-flight checklist
 

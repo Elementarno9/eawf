@@ -16,9 +16,9 @@ disable-model-invocation: false
 4. Verdict: recommend one path, or recommend "stay open" with the next discriminating experiment.
 5. If `--final`: persist a research brief with `references` and render it through `eawf research show --md`.
 
-## v0.4 output contract: `IntentBrief` + dispatch-plan
+## Output contract: `IntentBrief` + dispatch-plan
 
-The brief body conforms to `kernel/spec/research.IntentBrief` — typed claims with `evidence_refs` (a brief is promotable iff every claim has at least one resolving + entailing reference). The session also emits an optional dispatch-plan when the verdict names a follow-up wave the brief informs, so `/prep` and `/roadmap propose` can wire the brief into the next wave's References block automatically.
+The brief body conforms to `kernel/spec/intent.IntentBrief` — typed claims with `evidence_refs` (a brief is promotable iff every claim has at least one resolving + entailing reference; the EviBound rung-1 gate in `platform/artifacts/validation.validate_markdown_artifact` enforces this at promotion time, not at ingestion). The session also emits an optional dispatch-plan when the verdict names a follow-up wave the brief informs, so `/prep` and `/roadmap propose` can wire the brief into the next wave's References block automatically.
 
 ## `--depth` flag
 

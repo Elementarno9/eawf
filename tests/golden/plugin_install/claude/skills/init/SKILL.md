@@ -8,9 +8,9 @@ disable-model-invocation: true
 
 # /init
 
-## v0.4 cross-links
+## Cross-links
 
-Init persists a typed `Project` row (id, profile composition, default `RoleSpec` set, vcs cadence) — downstream skills resolve role and release-cadence config off the `Project` rather than re-reading the profile yaml. The init wizard emits a `MEMORY` seed entry (`MutationKind=create`) recording the project bootstrap so the calibrated-trust scorecard has a base date.
+Init persists a typed `Project` row (id, profile composition, default `RoleSpec` set, vcs cadence) — downstream skills resolve role and release-cadence config off the `Project` rather than re-reading the profile yaml. The init wizard emits a `MEMORY` seed entry (`MutationKind=create`) recording the project bootstrap so the live trust scorecard (`workflow/estimation/trust_scorecard.TrustScorecard`) has a base date. That scorecard is no longer write-idle — it reads the closed-wave store projection to score EU-calibration trust per output scope.
 
 ## Canonical algorithm
 

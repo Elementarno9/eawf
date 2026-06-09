@@ -10,8 +10,8 @@ disable-model-invocation: true
 
 ## Canonical algorithm
 
-1. **`propose`** stages a new PLANNED phase + its `P##-I01` iter on the queue without any waves yet. Emits a `needs_user` envelope with the rendered plan text — the active runtime (Claude plan-mode, Codex text-prompt) surfaces it for operator approval.
-2. **`revise`** edits the PLANNED scope via structured flags: `--add-wave`, `--remove-wave`, `--set-deps`, `--retitle`. Wave-level mutations route through the PENDING-only transitions on the lifecycle state machine.
+1. **`propose`** stages a new PLANNED phase + its `P##-I01` iter on the queue without any waves yet. Emits a `needs_user` envelope with the rendered plan text — the active runtime (Claude plan-mode, Codex text-prompt) surfaces it for operator approval. When the proposal draws on a source brief, the EAWF022 propose-coverage lint (`platform/lint/eawf022_propose_coverage`) surfaces any brief span covered by neither a criterion nor an explicit deferral, so brief detail is not silently dropped at render time.
+2. **`revise`** edits the PLANNED scope via structured flags: `--add-wave`, `--remove-wave`, `--set-deps`, `--retitle`. Wave-level mutations route through the PENDING-only transitions on the lifecycle state machine. New / edited success criteria are typed `CriterionSpec` rows, so the EAWF021 measurability lint (`platform/lint/eawf021_measurable_criterion`) rejects an unmeasurable criterion before it lands.
 3. **`apply`** is the post-propose confirmation step. It validates that the phase is PLANNED with at least one wave and emits an `ok` envelope; the actual planning is already persisted (propose does the state mutation). Use it as the handoff into `/prep`.
 4. **`drop`** archives a PLANNED phase (PLANNED → ARCHIVED) when the operator rejects the proposed plan.
 5. **`show`** renders the queue: text table (default), markdown (`--md`), or JSON envelope (`--json`).
