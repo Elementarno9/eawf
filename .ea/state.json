@@ -4031,6 +4031,30 @@
       "scope_id": "P30-I02-W01",
       "status": "done",
       "updated_at": "2026-06-09T16:05:39.980649Z"
+    },
+    "P30-I02-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W02",
+      "scope_id": "P30-I02-W02",
+      "status": "done",
+      "updated_at": "2026-06-09T16:14:02.586392Z"
+    },
+    "P30-I02-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W29",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W29",
+      "scope_id": "P30-I02-W29",
+      "status": "done",
+      "updated_at": "2026-06-09T16:14:11.458682Z"
     }
   },
   "agent_sessions": {
@@ -13886,6 +13910,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I02-W01",
       "updated_at": "2026-06-09T16:04:58.099905Z"
+    },
+    "P30-I02-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W02-bucket-20260609T161359Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I02-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I02-W02",
+      "updated_at": "2026-06-09T16:13:59.508277Z"
+    },
+    "P30-I02-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W29-bucket-20260609T161409Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I02-W29",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I02-W29",
+      "updated_at": "2026-06-09T16:14:09.906115Z"
     }
   },
   "goals": {
@@ -16743,7 +16793,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T16:05:39.981118Z",
+  "updated_at": "2026-06-09T16:14:11.459021Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -16752,7 +16802,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-10T22:29:29.132215Z",
-      "commit": null,
+      "commit": "08b9d840cdf3702aafe1f11f35db472361a5c229",
       "deps": [
         "P08-I01-W02"
       ],
@@ -16788,7 +16838,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-10T22:13:08.058437Z",
-      "commit": null,
+      "commit": "467364e787fbc5b12673d2d857e887896b69af90",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16823,7 +16873,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-10T22:29:29.549660Z",
-      "commit": null,
+      "commit": "9fca766ab8845cdf3a4250ad3f1172f3d3869a39",
       "deps": [
         "P08-I01-W02"
       ],
@@ -16856,7 +16906,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-10T22:13:08.501855Z",
-      "commit": null,
+      "commit": "3db0a1c777127cc367be0c013663d3e6829b19e5",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16887,7 +16937,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-10T22:46:30.776412Z",
-      "commit": null,
+      "commit": "3037dbf52ffac110b546881348426e5b8f542b7b",
       "deps": [
         "P08-I01-W03"
       ],
@@ -16920,7 +16970,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-10T22:46:31.147208Z",
-      "commit": null,
+      "commit": "fb2f4b540305a27217f86738fb7214e240fc01e2",
       "deps": [
         "P08-I01-W03"
       ],
@@ -16955,7 +17005,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T08:18:14.020785Z",
-      "commit": null,
+      "commit": "29e355c5bf708774783d1e666fd5523dfa8eac5a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -16986,7 +17036,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T08:20:17.430900Z",
-      "commit": null,
+      "commit": "150978e3f5bb17fc319d568b6361296026b36a49",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17016,7 +17066,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T08:21:40.313753Z",
-      "commit": null,
+      "commit": "5252c6af26eec7c6a77c16b85cdde8f8c595e8a3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17046,7 +17096,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T08:23:58.605660Z",
-      "commit": null,
+      "commit": "066a0049df1e0ed180cd970d793e94def5e6a4b3",
       "deps": [
         "P09-I01-W01"
       ],
@@ -17080,7 +17130,7 @@
       "claim_session_id": "p10-flow-w01",
       "claimed_at": null,
       "closed_at": "2026-05-11T10:43:00.505929Z",
-      "commit": null,
+      "commit": "77bc2577a0f52506a51f8cc8a448ac8a84d2db90",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17114,7 +17164,7 @@
       "claim_session_id": "p10-flow-w02",
       "claimed_at": null,
       "closed_at": "2026-05-11T10:43:01.565652Z",
-      "commit": null,
+      "commit": "c632ce2bf9fe97f189d04c380a0cef26280301b5",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17151,7 +17201,7 @@
       "claim_session_id": "p10-flow-w03",
       "claimed_at": null,
       "closed_at": "2026-05-11T10:43:02.296715Z",
-      "commit": null,
+      "commit": "b8f4cbe64fb685efdd02727d50b84ed68235a001",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17184,7 +17234,7 @@
       "claim_session_id": "p10-flow-w04",
       "claimed_at": null,
       "closed_at": "2026-05-11T10:50:04.485389Z",
-      "commit": null,
+      "commit": "1f0621a4144c4621d2c03ebec1adc543acd72cd6",
       "deps": [
         "P10-I01-W01",
         "P10-I01-W02",
@@ -17220,7 +17270,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T11:49:56.625542Z",
-      "commit": null,
+      "commit": "f91985d99c3d81495540944af0ca56007830f6b7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17252,7 +17302,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T11:49:57.680282Z",
-      "commit": null,
+      "commit": "57c0887ecc8b67f3569d78bf3b0a4c53316a2083",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17281,7 +17331,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T11:49:58.312420Z",
-      "commit": null,
+      "commit": "1e68364bb696f8c61ba34872aad9d6d2fd385393",
       "deps": [
         "P11-I01-W01",
         "P11-I01-W02"
@@ -17314,7 +17364,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T13:05:27.792212Z",
-      "commit": null,
+      "commit": "7fa0d4397228673af48e90789642370e7792874b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17345,7 +17395,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T13:09:07.015750Z",
-      "commit": null,
+      "commit": "d73d1380f8b784087fc89064aa5a5c6d2ee0e36a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17379,7 +17429,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T13:13:40.278328Z",
-      "commit": null,
+      "commit": "685d76427b2224aab0b72e3d11d30dd2bcda93b4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17410,7 +17460,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T13:16:03.556288Z",
-      "commit": null,
+      "commit": "ad9f625818e99ed80b77461d23d4ac8d2b5def21",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17444,7 +17494,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T13:19:04.760498Z",
-      "commit": null,
+      "commit": "01e95910c3cb7ccd8268c8febd0732aa40b21a7d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17474,7 +17524,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T13:22:43.169235Z",
-      "commit": null,
+      "commit": "28ae78f04aa091563f569b18dc3326a504b2493a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17509,7 +17559,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T13:24:44.025187Z",
-      "commit": null,
+      "commit": "b6639a09ec4d126a8184ebb2352982400aeba00f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17545,7 +17595,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T14:14:04.500555Z",
-      "commit": null,
+      "commit": "74501dae598ecd30209cf945678a7e41155761db",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17578,7 +17628,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T14:38:19.212561Z",
-      "commit": null,
+      "commit": "6c674e556b5a1f9b30f4bcad2610f79cff627a42",
       "deps": [
         "P13-I01-W01"
       ],
@@ -17612,7 +17662,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T14:50:23.253179Z",
-      "commit": null,
+      "commit": "7d1acd43bb94c7f7f6ae2c73fbeec3d82b850588",
       "deps": [
         "P13-I01-W02"
       ],
@@ -17648,7 +17698,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T14:38:19.569156Z",
-      "commit": null,
+      "commit": "9391b8b73605100345f718cc4ef2f49c2d9e51a1",
       "deps": [
         "P13-I01-W01"
       ],
@@ -17686,7 +17736,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T14:38:19.919111Z",
-      "commit": null,
+      "commit": "deec9366288b42202f8ab1232a8c0c290d5b0796",
       "deps": [
         "P13-I01-W01"
       ],
@@ -17722,7 +17772,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T14:53:04.881059Z",
-      "commit": null,
+      "commit": "2cb4118914260a4f6891d7de8feb25c17f1a2ce6",
       "deps": [
         "P13-I01-W02",
         "P13-I01-W03",
@@ -17765,7 +17815,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T14:38:20.272524Z",
-      "commit": null,
+      "commit": "1ee51b28907f90027454f7bd3bf3e12187c6f148",
       "deps": [
         "P13-I01-W01"
       ],
@@ -17801,7 +17851,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T21:27:58.133113Z",
-      "commit": null,
+      "commit": "7741491a767c9c5db7064f63533101087c62b671",
       "deps": [],
       "description": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
       "dispatch_history": [],
@@ -17833,7 +17883,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T21:31:58.495166Z",
-      "commit": null,
+      "commit": "2e3ed20dffcd5a612b4466dee65c83e6997104cf",
       "deps": [
         "P14-I01-W01"
       ],
@@ -17871,7 +17921,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T21:39:06.329869Z",
-      "commit": null,
+      "commit": "7aee72008f9b647e27240aebb99285a54505d4d3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -17907,7 +17957,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T21:43:39.087994Z",
-      "commit": null,
+      "commit": "d7c4dd792e57a8e28640fcf23208e545c1aa6f5e",
       "deps": [
         "P14-I01-W03"
       ],
@@ -17940,7 +17990,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T21:49:43.686353Z",
-      "commit": null,
+      "commit": "2e28e5d7edd34a89cd6b4731f37d1d33538971ad",
       "deps": [
         "P14-I01-W04"
       ],
@@ -17977,7 +18027,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T21:57:34.853049Z",
-      "commit": null,
+      "commit": "52c1748181d972f77f9944693c6706b2eb0725f0",
       "deps": [
         "P14-I01-W03"
       ],
@@ -18016,7 +18066,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T22:14:44.738712Z",
-      "commit": null,
+      "commit": "5f3ce3cdb085a4cd559df0826abdcb51dc803154",
       "deps": [
         "P14-I01-W03"
       ],
@@ -18052,7 +18102,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T22:24:14.309138Z",
-      "commit": null,
+      "commit": "bdd6980e0941ce71adab24fb9451e969f0355669",
       "deps": [
         "P14-I01-W06",
         "P14-I01-W07"
@@ -18086,7 +18136,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T22:31:24.973405Z",
-      "commit": null,
+      "commit": "4e83f8a63c76479ee55affb4661cbd741cb7109e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18118,7 +18168,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T22:46:46.811276Z",
-      "commit": null,
+      "commit": "ae626ea2171fc4a0cde5e112bcced1855f36bfba",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18150,7 +18200,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T23:01:22.700165Z",
-      "commit": null,
+      "commit": "5412d9b94361dffc40aab7ef8217a52186b368bb",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18185,7 +18235,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-12T18:28:41.232196Z",
-      "commit": null,
+      "commit": "c23608cc96d60d7c10e713131abfde0127a973b2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18221,7 +18271,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-12T18:58:48.589880Z",
-      "commit": null,
+      "commit": "136c3bf0aeecbe64b9243f652e18f84741a77474",
       "deps": [],
       "description": "codex doctor folder display + marketplace path + opencode agents/skills emission",
       "dispatch_history": [],
@@ -18258,7 +18308,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-12T20:09:22.023040Z",
-      "commit": null,
+      "commit": "ef2061b9d22c185cb0f0672c13fabee1b0f06efc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18288,7 +18338,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-12T20:09:23.291579Z",
-      "commit": null,
+      "commit": "f163133ef129e9060034cb6e1db7e844e0c161dc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18319,7 +18369,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-12T20:09:24.561088Z",
-      "commit": null,
+      "commit": "7ad7f1eff9ecabf6035a383b1444774b805a58da",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18349,7 +18399,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-12T20:09:25.802062Z",
-      "commit": null,
+      "commit": "655abb1c0b31b7f8f5cf93f353d476c1012f524b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18381,7 +18431,7 @@
       "claim_session_id": "SES-20260513T123700Z-codex",
       "claimed_at": null,
       "closed_at": "2026-05-13T12:42:40.715867Z",
-      "commit": null,
+      "commit": "30dec6921f19858feb6f0cfb81fb90de0451b6d7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18415,7 +18465,7 @@
       "claim_session_id": "SES-20260513T123700Z-codex",
       "claimed_at": null,
       "closed_at": "2026-05-13T12:47:21.161183Z",
-      "commit": null,
+      "commit": "e1f641e9d90d22a2d02c98a4878201ec54090280",
       "deps": [
         "P15-I01-W01"
       ],
@@ -18454,7 +18504,7 @@
       "claim_session_id": "SES-20260513T123700Z-codex",
       "claimed_at": null,
       "closed_at": "2026-05-13T12:44:45.255714Z",
-      "commit": null,
+      "commit": "f3b6245c1e50461cbabdc26025b0bfc297f79a65",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18486,7 +18536,7 @@
       "claim_session_id": "SES-20260513T123700Z-codex",
       "claimed_at": null,
       "closed_at": "2026-05-13T12:50:54.609631Z",
-      "commit": null,
+      "commit": "94564fc143625610493bbcb064c947344ab275ec",
       "deps": [
         "P15-I01-W01",
         "P15-I01-W02",
@@ -18527,7 +18577,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:46.780266Z",
-      "commit": null,
+      "commit": "ed3f0f06ceb6760c5f67bb56d493f9f46b38b214",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18576,7 +18626,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:47.592710Z",
-      "commit": null,
+      "commit": "887b499456460436b15dfd00a80e0b54453414fa",
       "deps": [
         "P17-I01-W01"
       ],
@@ -18628,7 +18678,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:48.397007Z",
-      "commit": null,
+      "commit": "a488e58974b1e8601a018c1367dad0a796893e25",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -18677,7 +18727,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:49.184298Z",
-      "commit": null,
+      "commit": "c94be41c7d40cdced2af74fa74e1cc9965f7141b",
       "deps": [
         "P17-I01-W03"
       ],
@@ -18727,7 +18777,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:49.971046Z",
-      "commit": null,
+      "commit": "d39c6c95aebc15e3915124ad5bb82c2294a72a58",
       "deps": [
         "P17-I01-W04"
       ],
@@ -18779,7 +18829,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:50.763454Z",
-      "commit": null,
+      "commit": "3f070dd939a62a4fb724682f0d19ff6b0a33e686",
       "deps": [
         "P17-I01-W05"
       ],
@@ -18830,7 +18880,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:51.561764Z",
-      "commit": null,
+      "commit": "0f3cda56e23533d9f7cbf987ab12da05abdf2b64",
       "deps": [
         "P17-I01-W04"
       ],
@@ -18879,7 +18929,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:52.364708Z",
-      "commit": null,
+      "commit": "e26001e5dd83398573885ef5bf4e6fb1c7bfb055",
       "deps": [
         "P17-I01-W02",
         "P17-I01-W05"
@@ -18929,7 +18979,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T15:43:53.949296Z",
-      "commit": null,
+      "commit": "2b0fca28d73541aa2e4bfc67764f511b11232aca",
       "deps": [
         "P17-I01-W06",
         "P17-I01-W08"
@@ -18980,7 +19030,7 @@
       "claim_session_id": "SES-codex-p18-w01",
       "claimed_at": null,
       "closed_at": "2026-05-14T17:27:53.626739Z",
-      "commit": null,
+      "commit": "b879dbdd94d2c0ca717e7ee1a3298d88f9b05165",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -19056,7 +19106,7 @@
       "claim_session_id": "SES-codex-p18-w02",
       "claimed_at": null,
       "closed_at": "2026-05-14T17:31:22.164705Z",
-      "commit": null,
+      "commit": "6142c44f18d5d2512bfae2e6dfd71f5a199214c5",
       "deps": [
         "P18-I01-W01"
       ],
@@ -19133,7 +19183,7 @@
       "claim_session_id": "SES-codex-p18-w03",
       "claimed_at": null,
       "closed_at": "2026-05-14T17:37:23.464056Z",
-      "commit": null,
+      "commit": "c193918bc8af2298b694c7a6cd8276112da4ece9",
       "deps": [
         "P18-I01-W02"
       ],
@@ -19216,7 +19266,7 @@
       "claim_session_id": "SES-codex-p18-w04",
       "claimed_at": null,
       "closed_at": "2026-05-14T17:43:03.644964Z",
-      "commit": null,
+      "commit": "dd3a56ec39a2056cdf07ee35d340f0d83e28c236",
       "deps": [
         "P18-I01-W03"
       ],
@@ -19307,7 +19357,7 @@
       "claim_session_id": "SES-codex-p18-w05",
       "claimed_at": null,
       "closed_at": "2026-05-14T18:23:03.412827Z",
-      "commit": null,
+      "commit": "d5c2089120eb758f9ce4d930a93e0288ecc678fb",
       "deps": [
         "P18-I01-W04"
       ],
@@ -19391,7 +19441,7 @@
       "claim_session_id": "SES-codex-p18-w06",
       "claimed_at": null,
       "closed_at": "2026-05-14T17:46:49.420907Z",
-      "commit": null,
+      "commit": "9c1b5538a637d69bc71b438b0a696a19edacbe68",
       "deps": [
         "P18-I01-W04"
       ],
@@ -19471,7 +19521,7 @@
       "claim_session_id": "SES-codex-p18-w07",
       "claimed_at": null,
       "closed_at": "2026-05-14T17:52:31.293757Z",
-      "commit": null,
+      "commit": "2c30fd317820187659f53df4bdc163f080a78cb7",
       "deps": [
         "P18-I01-W06"
       ],
@@ -19550,7 +19600,7 @@
       "claim_session_id": "SES-codex-p18-w08",
       "claimed_at": null,
       "closed_at": "2026-05-14T18:02:25.477535Z",
-      "commit": null,
+      "commit": "dd32b22e8b0f60f6d834cd9bbdd2d8bd7b4e4123",
       "deps": [
         "P18-I01-W06"
       ],
@@ -19683,7 +19733,7 @@
       "claim_session_id": "SES-codex-p18-w09",
       "claimed_at": null,
       "closed_at": "2026-05-14T18:15:19.189371Z",
-      "commit": null,
+      "commit": "82668bc88df865d25d0444ea35f142d9cd93d166",
       "deps": [
         "P18-I01-W07",
         "P18-I01-W08"
@@ -19762,7 +19812,7 @@
       "claim_session_id": "SES-codex-p18-w10",
       "claimed_at": null,
       "closed_at": "2026-05-14T17:56:34.498700Z",
-      "commit": null,
+      "commit": "18a4cecfc4281bf2a98a753e4e7ee44df3b7e1a3",
       "deps": [
         "P18-I01-W04"
       ],
@@ -19827,7 +19877,7 @@
       "claim_session_id": "SES-codex-p18-w11",
       "claimed_at": null,
       "closed_at": "2026-05-14T18:05:23.687970Z",
-      "commit": null,
+      "commit": "4190f715221cf12968160d005480e25bc64f1c14",
       "deps": [
         "P18-I01-W08",
         "P18-I01-W10"
@@ -19906,7 +19956,7 @@
       "claim_session_id": "SES-codex-p18-w12",
       "claimed_at": null,
       "closed_at": "2026-05-14T18:08:58.311172Z",
-      "commit": null,
+      "commit": "d0b744a85d3b1af41226c86127d7132a6255dae5",
       "deps": [
         "P18-I01-W11"
       ],
@@ -19997,7 +20047,7 @@
       "claim_session_id": "SES-codex-p18-w13",
       "claimed_at": null,
       "closed_at": "2026-05-14T18:34:44.039998Z",
-      "commit": null,
+      "commit": "b6391ef83452766ee5e1f1520cf9731ae13c98ba",
       "deps": [
         "P18-I01-W09",
         "P18-I01-W12"
@@ -20081,7 +20131,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:44:43.535335Z",
-      "commit": null,
+      "commit": "fa091e53074f6c96469c030e4b2f332232604e5b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20130,7 +20180,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:45:31.829194Z",
-      "commit": null,
+      "commit": "c6f0190e4b71ea5dc9d4ecaa0a410967644a1194",
       "deps": [
         "P19-I01-W01"
       ],
@@ -20180,7 +20230,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:45:32.709985Z",
-      "commit": null,
+      "commit": "7e6a0f0b113f6dadea5d88c1cad63011977ff2af",
       "deps": [
         "P19-I01-W01"
       ],
@@ -20230,7 +20280,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:45:33.590476Z",
-      "commit": null,
+      "commit": "1b7e2a423f36d12016335e2729f979aa3ebf22ff",
       "deps": [
         "P19-I01-W01"
       ],
@@ -20283,7 +20333,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:45:34.465923Z",
-      "commit": null,
+      "commit": "0ae4eb713f0977e31fa1e97d1b6d18c6c70e7626",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20331,7 +20381,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:45:35.369313Z",
-      "commit": null,
+      "commit": "8e541fe6b7542ec8bf1da082bfce44e24dc9c71b",
       "deps": [
         "P19-I01-W01"
       ],
@@ -20382,7 +20432,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:45:36.301549Z",
-      "commit": null,
+      "commit": "11a5da8f9b0f9e06e7ec2e9c2ae4e100ead5094b",
       "deps": [
         "P19-I01-W01",
         "P19-I01-W06"
@@ -20432,7 +20482,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-14T20:45:37.183270Z",
-      "commit": null,
+      "commit": "620ce384f68d1a4efd8ff9cd897456dd7aa3a154",
       "deps": [
         "P19-I01-W01",
         "P19-I01-W02",
@@ -20543,7 +20593,7 @@
       "claim_session_id": "SES-P19-W09",
       "claimed_at": null,
       "closed_at": "2026-05-14T22:09:57.204744Z",
-      "commit": null,
+      "commit": "71fd23260ae82789c86a1fbc2fab9e2a5b2b5814",
       "deps": [
         "P19-I01-W04",
         "P19-I01-W08"
@@ -20590,7 +20640,7 @@
       "claim_session_id": "SES-P19-W10",
       "claimed_at": null,
       "closed_at": "2026-05-14T22:22:44.054988Z",
-      "commit": null,
+      "commit": "1099c3eb54bce57c92a21f17d445bf4b9f858550",
       "deps": [
         "P19-I01-W09"
       ],
@@ -20639,7 +20689,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:18:57.190971Z",
-      "commit": null,
+      "commit": "d20c3c76afaa9c5468d3115b783b995069ef66e6",
       "deps": [],
       "description": "fix: activate-gate completeness (wave count + branch currency + clean worktree)",
       "dispatch_history": [],
@@ -20714,7 +20764,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:17:41.945993Z",
-      "commit": null,
+      "commit": "04696b4948aa5c557ee7df81cf918abe4eb3038c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -20789,7 +20839,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:33:06.789209Z",
-      "commit": null,
+      "commit": "c6354ca23b3609365d65bbfc7724dcadd23b2198",
       "deps": [
         "P19-I02-W11"
       ],
@@ -20866,7 +20916,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:17:41.002945Z",
-      "commit": null,
+      "commit": "714eb3f4fe70039aeea3752fb832ba519fd729da",
       "deps": [],
       "description": "chore: coauthor verification (CC settings change test commit + docs note)",
       "dispatch_history": [],
@@ -20941,7 +20991,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:33:07.228258Z",
-      "commit": null,
+      "commit": "b92f854c4be19c5bf77027cb80dacafd60730af6",
       "deps": [
         "P19-I02-W14"
       ],
@@ -21032,7 +21082,7 @@
       "claim_session_id": "executor-p19-w16",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:17:41.485183Z",
-      "commit": null,
+      "commit": "f4352b4f3f18c0fe745368d1ae6e5d45a35f560b",
       "deps": [],
       "description": "chore: backlog audit + bulk close stale (B019/B020/B047/B054/B055/B059/B061 delivered; B024/B043 superseded by B061; tag B001/B002/B004/B005/B010/B016/B017/B048 defer-publication)",
       "dispatch_history": [],
@@ -21107,7 +21157,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:33:06.335759Z",
-      "commit": null,
+      "commit": "5f085c2eff35b4349f3030a98bc0f1bd09b81edf",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -21168,7 +21218,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:17:42.418104Z",
-      "commit": null,
+      "commit": "b4b187ccc87deb283b3e2580cef272164dcb2c64",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -21229,7 +21279,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:18:01.828920Z",
-      "commit": null,
+      "commit": "005b93f90ccd0502f0fa58e10570c7015fae1c6d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -21304,7 +21354,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:20:27.151013Z",
-      "commit": null,
+      "commit": "32c31bae350a27631bed0cd168309aa675968252",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -21377,7 +21427,7 @@
       "claim_session_id": "SES-flow-p19-i02-ad2a74ba",
       "claimed_at": null,
       "closed_at": "2026-05-15T15:38:23.417868Z",
-      "commit": null,
+      "commit": "f8acbf6ec19fa002a01fbec1c3b82a0e55571b1b",
       "deps": [
         "P19-I02-W11",
         "P19-I02-W12",
@@ -21464,7 +21514,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T16:59:40.385437Z",
-      "commit": "7a8e0b1dba25a6db592940fa57501f0c1b50438e",
+      "commit": "078fef4c1858ca00d0dcf7074b17202307f300d4",
       "deps": [],
       "description": "feat: eawf roadmap show rich-table renderer (phases/iters/waves/stale items)",
       "dispatch_history": [],
@@ -21527,7 +21577,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T17:15:52.187786Z",
-      "commit": "3dbf201b9ce8f0954b39a94b1105a8aa71503488",
+      "commit": "75fe10de222f23ef17183b50f7803c9a417a2e27",
       "deps": [
         "P20-I01-W01"
       ],
@@ -21618,7 +21668,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T18:11:57.928287Z",
-      "commit": "39bc45e50ff091899c2cadf30701e51d10be3e28",
+      "commit": "c6336a4ce77cc38760f0426b8ef02f75f087b501",
       "deps": [
         "P20-I01-W02"
       ],
@@ -21692,7 +21742,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T18:29:46.664544Z",
-      "commit": "67fd0332fc52cb01760a6944d88ab02b4244bb49",
+      "commit": "93f4cb1a38d1a94d40d5e2ca3cb6486055ba9c77",
       "deps": [
         "P20-I01-W02"
       ],
@@ -21768,7 +21818,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T18:37:45.457413Z",
-      "commit": "30abfa0e30cf34927b38dc088bda6e7842e306fc",
+      "commit": "1e4f9c3cb945b770d7f6a9b2ec04be1d5c79517c",
       "deps": [
         "P20-I01-W02"
       ],
@@ -21843,7 +21893,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T19:07:19.617822Z",
-      "commit": "3820a048e233bb21aafd6970a3a5aade854b0210",
+      "commit": "67968113678e9158a303fb27823efd8e7625e07e",
       "deps": [
         "P20-I01-W05"
       ],
@@ -21906,7 +21956,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T18:52:19.308774Z",
-      "commit": "18d2162bdb8ac846fced4a2a3068f9bfd24516eb",
+      "commit": "590f4af64940ab58eee20d2247a2cab5a5d82c08",
       "deps": [
         "P20-I01-W03"
       ],
@@ -21982,7 +22032,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T17:15:52.681457Z",
-      "commit": "fc693de084948326c6c634338e14683ee5b9d0ed",
+      "commit": "2727c171b2d566540272ddfefa66482c8a01aa2f",
       "deps": [],
       "description": "feat: eawf metrics (EU variance, audit pass rate, wave elapsed, planned vs reactive split)",
       "dispatch_history": [],
@@ -22055,7 +22105,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T18:56:29.632686Z",
-      "commit": "318553d1bcbee130951f349598a0c75328069970",
+      "commit": "b1a1dd395669bbb7683946c421533a6cb6d968b7",
       "deps": [
         "P20-I01-W08"
       ],
@@ -22133,7 +22183,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T16:59:41.139622Z",
-      "commit": "541da25cd0744a82b4c19cbfec41f9b15cd7ce34",
+      "commit": "cc862f7d1c4e05af21c36b061c6259574ce09fb3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -22208,7 +22258,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T18:37:20.047402Z",
-      "commit": "321847bc8bb8eb42610d8ca3abcc4f10f78a30b9",
+      "commit": "ca01f3e497da2d4865dab163e2a69fe60b688bb8",
       "deps": [
         "P20-I01-W02",
         "P20-I01-W10"
@@ -22285,7 +22335,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T17:45:57.407802Z",
-      "commit": "03ae041372dcfdc88fddc86527e4983f5dd537ad",
+      "commit": "d92d995ef9c7b6f769e726ecd0fe77bc7c637542",
       "deps": [
         "P20-I01-W10"
       ],
@@ -22361,7 +22411,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T19:24:16.140805Z",
-      "commit": "83a30d4dacf9e29aff88645abfdfbf9fd33c3ee1",
+      "commit": "4a6511233e674085b26f7f2f4b91551fd11c8154",
       "deps": [
         "P20-I01-W07",
         "P20-I01-W11",
@@ -22438,7 +22488,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T19:45:46.363260Z",
-      "commit": "8a6b454a44e307ee2f5345219929fde0152a03b4",
+      "commit": "ec5896cbb1ce2990449a93d198833297ba448e11",
       "deps": [
         "P20-I01-W13"
       ],
@@ -22513,7 +22563,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T17:29:39.964276Z",
-      "commit": "1a9a20823218cddcd216914cf3752d264ffb1510",
+      "commit": "07252d8c4578e85107899a30ef07d6af209de804",
       "deps": [
         "P20-I01-W01"
       ],
@@ -22588,7 +22638,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T20:10:04.578780Z",
-      "commit": "f4eda19eedaae697f41df7e9eb88676898a2e94c",
+      "commit": "078fef4c1858ca00d0dcf7074b17202307f300d4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -22662,7 +22712,7 @@
       "claim_session_id": "prep-p20-flow-20260515-1844",
       "claimed_at": null,
       "closed_at": "2026-05-15T21:05:53.553442Z",
-      "commit": "193a2debc4622bed0883f0417b5f6b8aab843066",
+      "commit": "078fef4c1858ca00d0dcf7074b17202307f300d4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -23935,7 +23985,7 @@
       "claim_session_id": "p22-w01-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:01:58.119217Z",
-      "commit": "cf16d84d6a75a93f430bc939f7d4b0366493a728",
+      "commit": "384a1abbab92ecb00d7d1a7d865b92532a4ddc4f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -24051,7 +24101,7 @@
       "claim_session_id": "p22-w02-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:04:17.649123Z",
-      "commit": "7133c0fccf553116746f022b909a84600911cd58",
+      "commit": "843fde0fc76d096e614ef5c697e280a1c7590905",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -24112,7 +24162,7 @@
       "claim_session_id": "p22-w03-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:08:41.219577Z",
-      "commit": "99f1dfa043dcfbdfab895bce83a470dc18cc30b2",
+      "commit": "3515d20a6613fe80b1b8b6a4a70be5825b2be771",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -24188,7 +24238,7 @@
       "claim_session_id": "p22-w04-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:11:00.735800Z",
-      "commit": "c13e56bb73f79a56fc675d1ff8d161afffe8163e",
+      "commit": "f3875ed746ec281b026d6aa404976ed07d6e64f7",
       "deps": [
         "P22-I01-W03"
       ],
@@ -24353,7 +24403,7 @@
       "claim_session_id": "p22-w06-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:22:35.508658Z",
-      "commit": "ac84c6d7babd711372124fe25581b4079dda68a4",
+      "commit": "05037b7b8fd51b8552bb17abc17e36c391a81631",
       "deps": [
         "P22-I01-W01",
         "P22-I01-W02",
@@ -24446,7 +24496,7 @@
       "claim_session_id": "p22-w07-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:34:40.697192Z",
-      "commit": "ff60dc6b1f1889847837b866b01c813c19b1c1b2",
+      "commit": "ba1d58aaa601ebb3d7d6a9717747c34dfe63acb4",
       "deps": [
         "P22-I01-W06"
       ],
@@ -24538,7 +24588,7 @@
       "claim_session_id": "eawf-flow-p23-w01-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T21:01:02.531487Z",
-      "commit": null,
+      "commit": "4222bd597b355baff48e447714397c7840b743a7",
       "deps": [],
       "description": "feat: URN_KINDS expansion to 26 + golden fixture + backward-compat aliases",
       "dispatch_history": [],
@@ -24667,7 +24717,7 @@
       "claim_session_id": "eawf-flow-p23-w02-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T21:08:06.966026Z",
-      "commit": null,
+      "commit": "3fadf8fea6d50ce7968f9a0846e2e8298434aa26",
       "deps": [
         "P23-I01-W01"
       ],
@@ -24784,7 +24834,7 @@
       "claim_session_id": "eawf-flow-p23-w03-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T21:14:49.754850Z",
-      "commit": null,
+      "commit": "facbc626074d4b4b035cbf09c4d8cef940832643",
       "deps": [
         "P23-I01-W01"
       ],
@@ -24902,7 +24952,7 @@
       "claim_session_id": "eawf-flow-p23-i02-w01-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T21:38:27.201933Z",
-      "commit": null,
+      "commit": "2030fc11fa0e6224dfe1ce408ab175b7594ff573",
       "deps": [],
       "description": "feat: criterion drift detector — wave success_criteria path-glob resolver + close-time warning",
       "dispatch_history": [],
@@ -25039,7 +25089,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T14:00:57.771352Z",
-      "commit": null,
+      "commit": "853bcf295ace0663b1ecf872cbb37139e3e97d5e",
       "deps": [],
       "description": "feat: daemon process scaffolding + asyncio JSON-RPC framing + daemon.ping/status/shutdown methods",
       "dispatch_history": [],
@@ -25072,7 +25122,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T14:23:48.216186Z",
-      "commit": null,
+      "commit": "d2d39d0662d9249a98883caf8abc6248eba4d33a",
       "deps": [
         "P24-I01-W01"
       ],
@@ -25108,7 +25158,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T14:23:48.960125Z",
-      "commit": null,
+      "commit": "7a70e7f03a16c9bc1f51bad299447a55465bc28f",
       "deps": [
         "P24-I01-W01"
       ],
@@ -25143,7 +25193,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T14:53:07.577249Z",
-      "commit": null,
+      "commit": "ba081b64dd82a58e57f7cbcd83926c1ad52aa623",
       "deps": [
         "P24-I01-W01",
         "P24-I01-W02"
@@ -25178,7 +25228,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T14:53:08.156019Z",
-      "commit": null,
+      "commit": "286c1ade4029b63a5dc821fe8acbd75776de82bd",
       "deps": [
         "P24-I01-W01",
         "P24-I01-W02"
@@ -25213,7 +25263,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T14:53:08.710098Z",
-      "commit": null,
+      "commit": "2666288b63533d8e90bdbd2dc923a2fef4ddc633",
       "deps": [
         "P24-I01-W01",
         "P24-I01-W03"
@@ -25249,7 +25299,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T15:21:56.694737Z",
-      "commit": null,
+      "commit": "75b5eb2c63f963459d0ce9cd480c4f064d5eaa1c",
       "deps": [
         "P24-I01-W03",
         "P24-I01-W06"
@@ -25285,7 +25335,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T15:21:57.203896Z",
-      "commit": null,
+      "commit": "580c23342037621ac6f7eeb827fff81802e9d8c8",
       "deps": [
         "P24-I01-W01",
         "P24-I01-W04"
@@ -25321,7 +25371,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T15:55:52.376324Z",
-      "commit": null,
+      "commit": "c51ed3785f005c114e54ce05903f6d417ad89012",
       "deps": [
         "P24-I01-W03",
         "P24-I01-W07",
@@ -25356,7 +25406,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T16:43:13.692409Z",
-      "commit": null,
+      "commit": "8f00405f2e09936ff9f4a00fa38418a2da6aaf46",
       "deps": [
         "P24-I01-W09"
       ],
@@ -25390,7 +25440,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-19T17:18:38.011077Z",
-      "commit": null,
+      "commit": "7fa2b970030c0d478b6a4afe24a2c1f51ec95dab",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -25425,7 +25475,7 @@
       "claim_session_id": "p25-w01-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:38:36.980436Z",
-      "commit": null,
+      "commit": "fa250328fc59b4180eb712e90800dfcb93608fe5",
       "deps": [],
       "description": "feat: C03 PhaseSpec + IterSpec + WaveSpec Pydantic schemas + common types",
       "dispatch_history": [],
@@ -25516,7 +25566,7 @@
       "claim_session_id": "p25-w02-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:03:51.978845Z",
-      "commit": null,
+      "commit": "b545b48dd347ed5e264667ceb863ca31f2de93fd",
       "deps": [
         "P25-I01-W01"
       ],
@@ -25608,7 +25658,7 @@
       "claim_session_id": "p25-w03-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:03:54.147809Z",
-      "commit": null,
+      "commit": "566e69a7cdd573e6c207f843a994e19137e48257",
       "deps": [
         "P25-I01-W01"
       ],
@@ -25743,7 +25793,7 @@
       "claim_session_id": "p25-w04-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:49:03.515628Z",
-      "commit": "6a8c43b9a82c8ab390458fec011836e2eab03fe8",
+      "commit": "5eb49e4373bef4956be65d36d7dbc6427ae91b19",
       "deps": [
         "P25-I01-W01"
       ],
@@ -25835,7 +25885,7 @@
       "claim_session_id": "p25-w05-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:06:15.034727Z",
-      "commit": "e3e13eab2d0bade11aad5c3b012f1f844a557822",
+      "commit": "8802b450775807cf0fe7df5c382ab992a73bfd8c",
       "deps": [
         "P25-I01-W01"
       ],
@@ -25915,7 +25965,7 @@
       "claim_session_id": "p25-w06-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:38:43.514078Z",
-      "commit": null,
+      "commit": "45cfcacce4954d51b9eecb401de19ff20e739eb9",
       "deps": [],
       "description": "feat: C07b canonical Event model + event store + 10 per-kind JSONL layout",
       "dispatch_history": [],
@@ -26007,7 +26057,7 @@
       "claim_session_id": "p25-w07-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:38:50.123265Z",
-      "commit": null,
+      "commit": "b2470558512165a0b195dc42ce2b8dfd6edce6f8",
       "deps": [],
       "description": "feat: C07b commit-prefix lint hardening + worktree at .ea/worktrees/ + KISS-007",
       "dispatch_history": [],
@@ -26084,7 +26134,7 @@
       "claim_session_id": "p25-w08-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:38:56.527213Z",
-      "commit": null,
+      "commit": "3effa83dbe80ac74c710abcabd1781fa536fed29",
       "deps": [],
       "description": "feat: C07b multi-repo registry + scope dispatch ladder (cwd to workspace/repo/user)",
       "dispatch_history": [],
@@ -26175,7 +26225,7 @@
       "claim_session_id": "p25-w09-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:39:04.765920Z",
-      "commit": null,
+      "commit": "b5717d37f4c7513ad2f01aace3f3070841a70042",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -26269,7 +26319,7 @@
       "claim_session_id": "p25-w10-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:06:33.976871Z",
-      "commit": null,
+      "commit": "2188c5a161ba5d2fff14dcffddf3a9732849652a",
       "deps": [
         "P25-I01-W06"
       ],
@@ -26364,7 +26414,7 @@
       "claim_session_id": "p25-w11-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:28:28.943257Z",
-      "commit": null,
+      "commit": "47204e5dd1b3d96df6668c11271f17ba1d40b652",
       "deps": [
         "P25-I01-W10"
       ],
@@ -26457,7 +26507,7 @@
       "claim_session_id": "p25-w12-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:48:44.762481Z",
-      "commit": null,
+      "commit": "8ed1fcdf7d2e12b4fc19f8bc53e18eef0622b9f2",
       "deps": [
         "P25-I01-W11"
       ],
@@ -26535,7 +26585,7 @@
       "claim_session_id": "p25-w13-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:28:31.789095Z",
-      "commit": null,
+      "commit": "a00b4cd0f174fefddc5799b9ee5d65097d77f06a",
       "deps": [
         "P25-I01-W10"
       ],
@@ -26615,7 +26665,7 @@
       "claim_session_id": "p25-w14-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:39:15.669200Z",
-      "commit": null,
+      "commit": "493365702be466d209f40e4a5a69091de47195d8",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -26721,7 +26771,7 @@
       "claim_session_id": "p25-w15-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:06:42.595217Z",
-      "commit": null,
+      "commit": "809458742aa2e4076fca8f3fef59ca6d7ba2fdb3",
       "deps": [
         "P25-I01-W14"
       ],
@@ -26827,7 +26877,7 @@
       "claim_session_id": "p25-w16-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T21:06:53.092151Z",
-      "commit": null,
+      "commit": "e78f7cdc712ffa03de24e548222d889af62d7db0",
       "deps": [
         "P25-I01-W14"
       ],
@@ -26949,7 +26999,7 @@
       "claim_session_id": "p25-w17-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:03:59.138813Z",
-      "commit": null,
+      "commit": "08cfa08c28c5151a994cb9fb27ff475501d5bd78",
       "deps": [],
       "description": "chore: AGENTS.md + skill workflow rules — /prep plan mode (Case A + B) + close-timing + /flow re-order",
       "dispatch_history": [],
@@ -27059,7 +27109,7 @@
       "claim_session_id": "p25-w18-exec",
       "claimed_at": null,
       "closed_at": "2026-05-19T20:39:21.992815Z",
-      "commit": null,
+      "commit": "081e5a8bcdf6de122a16a366bb6acd7f14e28b12",
       "deps": [],
       "description": "test: C07a SDK pre-release probe snapshot (pre-2026-06-15 baseline for v0.4 diff)",
       "dispatch_history": [],
@@ -27147,7 +27197,7 @@
       "claim_session_id": "p25-w19-polish",
       "claimed_at": null,
       "closed_at": "2026-05-19T22:00:08.337822Z",
-      "commit": "c43766e297ee7b68bcbd1f9b481c3f1fcff10c02",
+      "commit": "efbcba59fc79bb1c1031dcf2a629037e614f5d18",
       "deps": [],
       "description": "fix: P25-I01 polish — flip stale .claude/worktrees test + scrub W04-backfill stub citations",
       "dispatch_history": [],
@@ -27286,7 +27336,7 @@
       "claim_session_id": "p26-w02-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T00:19:54.558852Z",
-      "commit": null,
+      "commit": "6106559f1189e1c15f38d036df4344f3566aab0d",
       "deps": [],
       "description": "fix: C08 config migration — drop legacy lifecycle/plugins + rewrite runtime.kind",
       "dispatch_history": [],
@@ -27336,7 +27386,7 @@
       "claim_session_id": "p26-w03-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T00:33:56.431756Z",
-      "commit": null,
+      "commit": "1ebca261537f4ead064fbb48493166344118686d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -27388,7 +27438,7 @@
       "claim_session_id": "p26-w04-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T12:47:50.462080Z",
-      "commit": null,
+      "commit": "5fdd0ef5ab4c6294c5820742d05f34902ef1aa2c",
       "deps": [
         "P26-I01-W02",
         "P26-I01-W03"
@@ -27442,7 +27492,7 @@
       "claim_session_id": "p26-w05-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:01:59.197220Z",
-      "commit": null,
+      "commit": "6bb90366b7c7433f4e74a98e7a14516b1fcae7a4",
       "deps": [
         "P26-I01-W04"
       ],
@@ -27521,7 +27571,7 @@
       "claim_session_id": "p26-w06-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:03:18.225111Z",
-      "commit": null,
+      "commit": "611b4c0d5536f1beadfb46f52f63983ec24f0e78",
       "deps": [
         "P26-I01-W04"
       ],
@@ -27573,7 +27623,7 @@
       "claim_session_id": "p26-w07-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:15:08.725671Z",
-      "commit": null,
+      "commit": "dbdca3a5154c68422d9b20de617f639e225792cb",
       "deps": [
         "P26-I01-W05"
       ],
@@ -27623,7 +27673,7 @@
       "claim_session_id": "p26-w08-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:11:21.926362Z",
-      "commit": null,
+      "commit": "48cd9d60bc2dd87aeb832a1b218ac4ae8e65eb4a",
       "deps": [
         "P26-I01-W04"
       ],
@@ -27673,7 +27723,7 @@
       "claim_session_id": "p26-w09-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:23:47.492022Z",
-      "commit": null,
+      "commit": "7828ac811d4969f8e87334122e9b54a8a90a6faf",
       "deps": [
         "P26-I01-W08"
       ],
@@ -27752,7 +27802,7 @@
       "claim_session_id": "p26-w10-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T12:59:08.337572Z",
-      "commit": null,
+      "commit": "47dd92f07fa301772dbaa03fa0d3ad59718354b2",
       "deps": [
         "P26-I01-W04"
       ],
@@ -27832,7 +27882,7 @@
       "claim_session_id": "p26-w11-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:14:35.597198Z",
-      "commit": null,
+      "commit": "299cd98166e317bcf38539437539c92c150ce9de",
       "deps": [
         "P26-I01-W10"
       ],
@@ -27886,7 +27936,7 @@
       "claim_session_id": "p26-w12-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:10:41.480376Z",
-      "commit": null,
+      "commit": "4408ba14be0f2dc3c32c721409688e0545ecea1b",
       "deps": [
         "P26-I01-W10"
       ],
@@ -27977,7 +28027,7 @@
       "claim_session_id": "p26-w13-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:25:00.688110Z",
-      "commit": null,
+      "commit": "e547cb09c8fb07eb98651a85edf85b4c98cc35b5",
       "deps": [
         "P26-I01-W10",
         "P26-I01-W12"
@@ -28057,7 +28107,7 @@
       "claim_session_id": "p26-w14-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T13:34:31.635115Z",
-      "commit": null,
+      "commit": "ac2e2dec8d6e15491b08fa5542577c462a9ecbf5",
       "deps": [
         "P26-I01-W13"
       ],
@@ -28139,7 +28189,7 @@
       "claim_session_id": "p26-w15-audit",
       "claimed_at": null,
       "closed_at": "2026-05-20T14:05:14.650535Z",
-      "commit": null,
+      "commit": "103c00d4e18bf6f11743d97d9f8ac588067df502",
       "deps": [
         "P26-I01-W06",
         "P26-I01-W07",
@@ -28193,7 +28243,7 @@
       "claim_session_id": "p26-w16-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T14:21:50.574723Z",
-      "commit": null,
+      "commit": "8fb37ba922c40d37bdbc032cdfc45e81964f6120",
       "deps": [
         "P26-I01-W15"
       ],
@@ -28249,7 +28299,7 @@
       "claim_session_id": "p26-w17-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T14:39:45.525400Z",
-      "commit": null,
+      "commit": "92a54228f0c797900ac369bd7a2b6e8d2acf652e",
       "deps": [
         "P26-I01-W16"
       ],
@@ -28301,7 +28351,7 @@
       "claim_session_id": "p26-w18-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T14:57:38.645421Z",
-      "commit": null,
+      "commit": "78c5db5ed056c2920a6f4d58bb84fa04c94bee79",
       "deps": [
         "P26-I01-W17"
       ],
@@ -28365,7 +28415,7 @@
       "claim_session_id": "p26-w19-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T15:18:34.123079Z",
-      "commit": null,
+      "commit": "f54cc860490ca0db520e027ea86d72a3cf3e7659",
       "deps": [
         "P26-I01-W18"
       ],
@@ -28428,7 +28478,7 @@
       "claim_session_id": "p26-w20-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T15:40:04.079162Z",
-      "commit": null,
+      "commit": "0ebdfcbce0976310d82fcf0bdd948aa43cd6d70e",
       "deps": [
         "P26-I01-W19"
       ],
@@ -28541,7 +28591,7 @@
       "claim_session_id": "p26-w22-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T16:34:38.720312Z",
-      "commit": null,
+      "commit": "67867be056e4f26194a610b2d919c23db483b728",
       "deps": [
         "P26-I01-W20",
         "P26-I01-W21"
@@ -28597,7 +28647,7 @@
       "claim_session_id": "p26-w23-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T00:24:52.616374Z",
-      "commit": null,
+      "commit": "4636e8359c8be8e0987b3015f33d19b1ebf78c4d",
       "deps": [],
       "description": "chore: drop -CORE mandate from commit-prefix lint + rebind whitelist to type=state",
       "dispatch_history": [],
@@ -28701,7 +28751,7 @@
       "claim_session_id": "p26-w24-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T12:57:19.412387Z",
-      "commit": null,
+      "commit": "dd514c97b83db6030c8487d83a25a07f6308b080",
       "deps": [],
       "description": "fix: thread now= through tui/layout weekly-burn builders (test_tui_weekly_eu date bug)",
       "dispatch_history": [],
@@ -28746,7 +28796,7 @@
       "claim_session_id": "p26-w25-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T14:25:38.899765Z",
-      "commit": null,
+      "commit": "92b440755ba0837291c2aeb90432f07db5f8bc01",
       "deps": [
         "P26-I01-W05",
         "P26-I01-W15"
@@ -28837,7 +28887,7 @@
       "claim_session_id": "p26-w26-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T14:39:21.535246Z",
-      "commit": null,
+      "commit": "512f471356d9907ef0c75dce213d780e1e604fca",
       "deps": [
         "P26-I01-W11",
         "P26-I01-W15"
@@ -28930,7 +28980,7 @@
       "claim_session_id": "p26-w27-polish",
       "claimed_at": null,
       "closed_at": "2026-05-20T17:29:07.378405Z",
-      "commit": null,
+      "commit": "6bdcfa8fa432c6e12175690624868007a232f286",
       "deps": [],
       "description": "chore: P26 polish — strip rule-25 design-ID tokens from source comments/docstrings + ship.py log-format fix",
       "dispatch_history": [],
@@ -29049,7 +29099,7 @@
       "claim_session_id": "p26-w28-exec",
       "claimed_at": null,
       "closed_at": "2026-05-20T18:42:29.071244Z",
-      "commit": null,
+      "commit": "3d1a20e23d8c49edec5a008564149a65b901c797",
       "deps": [],
       "description": "fix: bump typer to restore shell-completion runtime (typer 0.25.1/click 8.3.3 COMP_WORDS crash)",
       "dispatch_history": [],
@@ -29138,7 +29188,7 @@
       "claim_session_id": "p26-w29-fix",
       "claimed_at": null,
       "closed_at": "2026-05-20T19:18:08.967365Z",
-      "commit": null,
+      "commit": "49df0a27f2a2f4a138cabe006ed8ae0884d9beae",
       "deps": [],
       "description": "fix: zsh completion uses click-native function (typer eval-wrapper incompatible with click >=8.2 output)",
       "dispatch_history": [],
@@ -29239,7 +29289,7 @@
       "claim_session_id": "op-p26-w30",
       "claimed_at": null,
       "closed_at": "2026-05-20T22:37:51.788581Z",
-      "commit": null,
+      "commit": "40ff1ec9372cd9383835ddb750eb045be6f60dc1",
       "deps": [],
       "description": "perf: lazy-import heavy deps in CLI command handlers (completion startup ~2-3x)",
       "dispatch_history": [],
@@ -29440,7 +29490,7 @@
       "claim_session_id": "op-p26-w31",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:09:30.075224Z",
-      "commit": null,
+      "commit": "c2eef2b1107afda3879a80f86fbfe06ac08e57dd",
       "deps": [],
       "description": "fix: TUI pane display (scroll/ellipsis, msgbox align, roadmap pre-scroll, events ts, glyph color)",
       "dispatch_history": [],
@@ -29561,7 +29611,7 @@
       "claim_session_id": "op-p26-w32",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:07:22.638835Z",
-      "commit": null,
+      "commit": "1f8080ee806fd337574ed15b14292c26c9c43e7e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -29638,7 +29688,7 @@
       "claim_session_id": "op-p26-w33",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:06:02.887629Z",
-      "commit": null,
+      "commit": "ce6273e4751ba8ac459b20971ef4bc50dbbf8e06",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -29715,7 +29765,7 @@
       "claim_session_id": "op-p26-w34",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:51:35.421765Z",
-      "commit": null,
+      "commit": "914bd5a7875edd8938a636dadc28576e06785d07",
       "deps": [],
       "description": "feat: tui_v2 ConfigModal + EditFieldModal (registry-driven config window on c / /config)",
       "dispatch_history": [],
@@ -29833,7 +29883,7 @@
       "claim_session_id": "op-p26-w35",
       "claimed_at": null,
       "closed_at": "2026-05-21T02:15:04.988428Z",
-      "commit": null,
+      "commit": "a74dbf5820b2655b467e5aec6ae2f868ce711864",
       "deps": [
         "P26-I01-W31",
         "P26-I01-W32",
@@ -29943,7 +29993,7 @@
       "claim_session_id": "op-p26-w36",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:32:29.357233Z",
-      "commit": null,
+      "commit": "8a8d847bf6165d3cd3cf009f825453811bfb3a3a",
       "deps": [],
       "description": "fix: scope status-pane wave counters to active phase + abandon-cascade archived-phase waves",
       "dispatch_history": [],
@@ -30033,7 +30083,7 @@
       "claim_session_id": "op-p26-w37",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:44:36.964647Z",
-      "commit": null,
+      "commit": "ebdf9adbd1b4cd652859f2df4d45d5dd7098e922",
       "deps": [],
       "description": "fix: roadmap tree plain left/right collapse-expand (W31 left arrows inert)",
       "dispatch_history": [],
@@ -30107,7 +30157,7 @@
       "claim_session_id": "op-p26-w38",
       "claimed_at": null,
       "closed_at": "2026-05-21T02:19:57.990072Z",
-      "commit": null,
+      "commit": "ab16b015b12fdf60ef4ac4ed91478cedb5e84b70",
       "deps": [],
       "description": "fix: ConfigModal UX — visible key helper, Space cycles choices, single-row tab selectable, tab-switch keys",
       "dispatch_history": [],
@@ -30209,7 +30259,7 @@
       "claim_session_id": "op-p26-w39",
       "claimed_at": null,
       "closed_at": "2026-05-21T02:51:17.628447Z",
-      "commit": null,
+      "commit": "85a4bf4e1c683e9285a0b0e7cf6deac69a4662d0",
       "deps": [],
       "description": "chore: polish — delete orphaned tests/golden/tui fixtures + P26 tui_v2 consistency sweep",
       "dispatch_history": [],
@@ -30283,7 +30333,7 @@
       "claim_session_id": "op-p26-w40",
       "claimed_at": null,
       "closed_at": "2026-05-21T10:17:33.874028Z",
-      "commit": null,
+      "commit": "ca56d554f9a7b991f6c5119a8364bcd9fba00e58",
       "deps": [],
       "description": "fix: auto-activate iter on first wave claim (no waves under a PLANNED iter)",
       "dispatch_history": [],
@@ -30415,7 +30465,7 @@
       "claim_session_id": "op-p26-w42",
       "claimed_at": null,
       "closed_at": "2026-05-21T11:26:48.862399Z",
-      "commit": null,
+      "commit": "a6e1ab52c811ea98bc9a65463d17d844c50eb31f",
       "deps": [],
       "description": "fix: hermetic git-pane in snapshots (CI xdist drift) + active-phase pointer should-fixes",
       "dispatch_history": [],
@@ -30505,7 +30555,7 @@
       "claim_session_id": "op-p26-w43",
       "claimed_at": null,
       "closed_at": "2026-05-21T11:43:19.859391Z",
-      "commit": null,
+      "commit": "e2726f81875eb2840d609c8dba114e91699277f9",
       "deps": [],
       "description": "ci: run TUI snapshot+perf tests serially (kill -n auto contention flake) + harness diff-dump",
       "dispatch_history": [],
@@ -30579,7 +30629,7 @@
       "claim_session_id": "op-p26-w44",
       "claimed_at": null,
       "closed_at": "2026-05-21T11:53:43.668788Z",
-      "commit": null,
+      "commit": "c8f43a2025bd53f8088e6840a89830696108c399",
       "deps": [],
       "description": "feat: wire gh pr list shell-out for the TUI /pr overlay (lazy fetch + cache + open-web)",
       "dispatch_history": [],
@@ -30681,7 +30731,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:35:46.061437Z",
-      "commit": null,
+      "commit": "c03857641d02de5f950e83c1807deb3a2a5c3732",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -30787,7 +30837,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:08:12.904285Z",
-      "commit": null,
+      "commit": "1270a4f8a2aae728fc291bfe4088519fd13e3569",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -30907,7 +30957,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:35:47.806304Z",
-      "commit": null,
+      "commit": "a3267c7b06b427f9aa56abce66aa4094162a1447",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -30995,7 +31045,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:15:42.277679Z",
-      "commit": null,
+      "commit": "ad9de257293bb1838d6b4c4b7dbc8d059d2e78a3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -31071,7 +31121,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:16:00.036401Z",
-      "commit": null,
+      "commit": "f643c5e88cb7e1248ce782f3ddb450acc0bfc627",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -31188,7 +31238,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:35:49.406800Z",
-      "commit": null,
+      "commit": "677ce5d2c633990a8df494f9a0d74dc3bae00a7b",
       "deps": [
         "P26-I02-W05"
       ],
@@ -31265,7 +31315,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:35:51.110094Z",
-      "commit": null,
+      "commit": "d2202a6fcf201b291aa0e545582c7e6f4c89af47",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -31354,7 +31404,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T01:40:23.782521Z",
-      "commit": null,
+      "commit": "8eb29bb931733e90cf0a795fb44dcceed8b8ebbc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -31398,7 +31448,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T02:13:19.228396Z",
-      "commit": null,
+      "commit": "72011b890fe116051354ab901f03a64b24018ad7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -31485,7 +31535,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T02:31:32.025636Z",
-      "commit": null,
+      "commit": "df636e035b02d096e09f67ac2c6617f12f3a9557",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -31557,7 +31607,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-22T02:36:50.126351Z",
-      "commit": null,
+      "commit": "de0b156d297eb3a80109a2db471b2ddf00404a37",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -31645,7 +31695,7 @@
       "claim_session_id": "w12-exec",
       "claimed_at": null,
       "closed_at": "2026-05-22T03:30:40.848689Z",
-      "commit": null,
+      "commit": "e60a57fd1308c59a23219dc9f91c062bbbcf5124",
       "deps": [],
       "description": "fix: RoadmapTree row overflow (reserve completion-bar width in title budget)",
       "dispatch_history": [],
@@ -31719,7 +31769,7 @@
       "claim_session_id": "w13-exec",
       "claimed_at": null,
       "closed_at": "2026-05-22T03:30:47.655047Z",
-      "commit": null,
+      "commit": "e3ffd9032ba46182f4a25edca148c51c3f0c0807",
       "deps": [],
       "description": "fix: DetailModal polish — tab hotkeys + markdown dp + label style + bucket text + hint gap",
       "dispatch_history": [],
@@ -31850,7 +31900,7 @@
       "claim_session_id": "w14-exec",
       "claimed_at": null,
       "closed_at": "2026-05-22T03:57:36.424584Z",
-      "commit": null,
+      "commit": "9167e7d68a2e2fbb839ccacebc099a8ac2a2e6ee",
       "deps": [
         "P26-I02-W15"
       ],
@@ -31960,7 +32010,7 @@
       "claim_session_id": "w15-exec",
       "claimed_at": null,
       "closed_at": "2026-05-22T03:45:48.212315Z",
-      "commit": null,
+      "commit": "e434f975d7a297876315ac08d69558c2d0c658cb",
       "deps": [
         "P26-I02-W12"
       ],
@@ -32056,7 +32106,7 @@
       "claim_session_id": "w16-exec",
       "claimed_at": null,
       "closed_at": "2026-05-22T03:30:49.226842Z",
-      "commit": null,
+      "commit": "249f1d97c40597b622303dea1b21c23acbcb92b2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -32144,7 +32194,7 @@
       "claim_session_id": "operator-i02-review",
       "claimed_at": null,
       "closed_at": "2026-05-22T11:23:13.030005Z",
-      "commit": null,
+      "commit": "fdfd738f276a4614a97d77f693c2953170e7cda2",
       "deps": [],
       "description": "fix: DetailModal review — p-dispatch label + file-tree files + footer hotkey dedup",
       "dispatch_history": [],
@@ -32192,7 +32242,7 @@
       "claim_session_id": "operator-i02-review",
       "claimed_at": null,
       "closed_at": "2026-05-22T11:23:13.489260Z",
-      "commit": null,
+      "commit": "d86db42ea95785a9ebaabf2df72a3dfd0ed89cc7",
       "deps": [],
       "description": "fix: config inline-edit column alignment + drop dirty mark on unchanged value",
       "dispatch_history": [],
@@ -32238,7 +32288,7 @@
       "claim_session_id": "operator-i02-review",
       "claimed_at": null,
       "closed_at": "2026-05-22T11:23:13.958614Z",
-      "commit": null,
+      "commit": "4e625aab8b8349f127cbfc690d2477b7d6101077",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -32652,7 +32702,7 @@
       "claim_session_id": "p27-w01",
       "claimed_at": null,
       "closed_at": "2026-05-22T15:46:59.848927Z",
-      "commit": null,
+      "commit": "31942c4f3e8429fb8c6e088d66559c610d57aa3b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -32699,7 +32749,7 @@
       "claim_session_id": "p27-w02",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:43:33.203747Z",
-      "commit": null,
+      "commit": "b198d15158d791e796e5cfd28681750eb450c9cb",
       "deps": [
         "P27-I01-W01"
       ],
@@ -32750,7 +32800,7 @@
       "claim_session_id": "p27-w03",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:02:34.466015Z",
-      "commit": null,
+      "commit": "cd076cdbe2cd9dc43786ef9636669923a13b2a06",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -32797,7 +32847,7 @@
       "claim_session_id": "p27-w04",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:30:00.407639Z",
-      "commit": null,
+      "commit": "450a85345aa69d5f294e2c819cc4164b24fb46f0",
       "deps": [
         "P27-I01-W03"
       ],
@@ -32849,7 +32899,7 @@
       "claim_session_id": "p27-w05",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:30:03.404946Z",
-      "commit": null,
+      "commit": "b89885cf9ac5abad8eb99d29507df44998ecf2ab",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -32897,7 +32947,7 @@
       "claim_session_id": "p27-w06",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:26:31.524538Z",
-      "commit": null,
+      "commit": "bd65d798c29f5e6fe4ca445c0a3f7a1969d4ee1f",
       "deps": [
         "P27-I01-W05"
       ],
@@ -32947,7 +32997,7 @@
       "claim_session_id": "p27-w07",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:43:36.480944Z",
-      "commit": null,
+      "commit": "04f5461c7ce60135f431d388cb4f2c689e3187c3",
       "deps": [
         "P27-I01-W05"
       ],
@@ -33001,7 +33051,7 @@
       "claim_session_id": "p27-w08",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:02:36.452977Z",
-      "commit": null,
+      "commit": "ee2708fc626f145bba8df301595daf8ff0f4fdf8",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -33052,7 +33102,7 @@
       "claim_session_id": "p27-w09",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:02:38.506997Z",
-      "commit": null,
+      "commit": "9b5eee0516f133e5d8f748e97b1932b397e4db4a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -33102,7 +33152,7 @@
       "claim_session_id": "p27-w10",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:30:06.546117Z",
-      "commit": null,
+      "commit": "ce6ed86a02db9e90f53ef37ddef1c62a23ae8365",
       "deps": [
         "P27-I01-W09"
       ],
@@ -33155,7 +33205,7 @@
       "claim_session_id": "p27-w11",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:30:08.877254Z",
-      "commit": null,
+      "commit": "8de75cad702813524d94874c9f255a33ee0bf9e6",
       "deps": [
         "P27-I01-W08",
         "P27-I01-W09"
@@ -33208,7 +33258,7 @@
       "claim_session_id": "p27-w12",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:02:58.179497Z",
-      "commit": null,
+      "commit": "7fd9c5d617b20aa137203f8eb5e22fe2e4612a3a",
       "deps": [
         "P27-I01-W11"
       ],
@@ -33259,7 +33309,7 @@
       "claim_session_id": "p27-w13",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:03:00.670463Z",
-      "commit": null,
+      "commit": "7072730ddffc8bc81dde82c5af1eaf9e7203a5b1",
       "deps": [
         "P27-I01-W11"
       ],
@@ -33310,7 +33360,7 @@
       "claim_session_id": "p27-w14",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:26:35.120503Z",
-      "commit": null,
+      "commit": "f4f83a5c25f80b50e96fd7e1f89ae68087c7e1ac",
       "deps": [
         "P27-I01-W11"
       ],
@@ -33361,7 +33411,7 @@
       "claim_session_id": "p27-w15",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:43:39.402229Z",
-      "commit": null,
+      "commit": "95a8e6248dca9a984b90ac0c4fe09c7ee80eb5d4",
       "deps": [
         "P27-I01-W10",
         "P27-I01-W12",
@@ -33415,7 +33465,7 @@
       "claim_session_id": "p27-w16",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:58:45.948266Z",
-      "commit": null,
+      "commit": "7f3d0bf599346904d3ba1eaefc49ac1a89a86c9c",
       "deps": [
         "P27-I01-W15"
       ],
@@ -33465,7 +33515,7 @@
       "claim_session_id": "p27-w17",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:02:41.170527Z",
-      "commit": null,
+      "commit": "59d79098f8321db4c67cec5b15dd04a6e0fb3a44",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -33512,7 +33562,7 @@
       "claim_session_id": "p27-w18",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:02:45.045107Z",
-      "commit": null,
+      "commit": "7b04cbb042de3e7b621f0c0c6477df798828862d",
       "deps": [],
       "description": "feat: bench fixture seed + eawf bench list/run/compare + per-OS baselines",
       "dispatch_history": [],
@@ -33606,7 +33656,7 @@
       "claim_session_id": "p27-w20",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:02:47.395258Z",
-      "commit": null,
+      "commit": "2588f023c989bb430f230c6d2beae4e5e1336fa8",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -33656,7 +33706,7 @@
       "claim_session_id": "p27-w21",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:37:07.673751Z",
-      "commit": null,
+      "commit": "f59607001df12604ecd35465d0b466bb15f179b1",
       "deps": [
         "P27-I01-W08"
       ],
@@ -33708,7 +33758,7 @@
       "claim_session_id": "p27-w22",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:03:02.625092Z",
-      "commit": null,
+      "commit": "f7153738fab6f645bd55d7fac6aad1870df75549",
       "deps": [
         "P27-I01-W08",
         "P27-I01-W09",
@@ -33760,7 +33810,7 @@
       "claim_session_id": "p27-w23",
       "claimed_at": null,
       "closed_at": "2026-05-22T17:43:41.741909Z",
-      "commit": null,
+      "commit": "3c59e7a49ef1f140ffc0227c02af7b740060d6b7",
       "deps": [
         "P27-I01-W22"
       ],
@@ -33809,7 +33859,7 @@
       "claim_session_id": "p27-w24",
       "claimed_at": null,
       "closed_at": "2026-05-22T16:02:49.641832Z",
-      "commit": null,
+      "commit": "f25fdee2f6b4bbde1a0ef93b9eb0a7c1f6dec5cc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -33856,7 +33906,7 @@
       "claim_session_id": "p27-w25",
       "claimed_at": null,
       "closed_at": "2026-05-22T18:11:29.985100Z",
-      "commit": null,
+      "commit": "d2bd9a660e0dd3455c166201fe9b655c2540964e",
       "deps": [
         "P27-I01-W15"
       ],
@@ -33907,7 +33957,7 @@
       "claim_session_id": "p27-w26",
       "claimed_at": null,
       "closed_at": "2026-05-22T18:12:05.379718Z",
-      "commit": "686c844846bbac7177e2a0b6a9176b9a40f879b3",
+      "commit": "bd5c035cd017534f23f7d5a12e8afcc0f44b5cdb",
       "deps": [
         "P27-I01-W16",
         "P27-I01-W21"
@@ -33958,7 +34008,7 @@
       "claim_session_id": "p27-w27",
       "claimed_at": null,
       "closed_at": "2026-05-22T18:21:39.772442Z",
-      "commit": null,
+      "commit": "877bf87585faae266cdde2bca7d27bb728359aa2",
       "deps": [
         "P27-I01-W22",
         "P27-I01-W26"
@@ -34009,7 +34059,7 @@
       "claim_session_id": "p27-w28",
       "claimed_at": null,
       "closed_at": "2026-05-22T19:03:56.301273Z",
-      "commit": null,
+      "commit": "3ce7b2f732ec486e932f884b4de37cf0c7c239c6",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34057,7 +34107,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:00:56.914003Z",
-      "commit": null,
+      "commit": "56177534fedf1b646f966d437f6864b0deb82949",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34103,7 +34153,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:13:57.452013Z",
-      "commit": null,
+      "commit": "9cab7839c229d4a2349dea81c5d730c295337efe",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34148,7 +34198,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:13:59.308292Z",
-      "commit": null,
+      "commit": "97082940188c71b8b69501005d11dbf391ddac8c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34192,7 +34242,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:14:01.267045Z",
-      "commit": null,
+      "commit": "dd48c09c1b929fad9262eb5b907d759a5c69cb47",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34238,7 +34288,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:27:09.138554Z",
-      "commit": null,
+      "commit": "5a3a25009c9ef13c335e739a1d9575027b50d739",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34286,7 +34336,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:14:03.425059Z",
-      "commit": null,
+      "commit": "42f4fd25eb7a3a4372532a11ace23ef555064e95",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34332,7 +34382,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:14:05.546685Z",
-      "commit": null,
+      "commit": "b9295330b1dd2b1a07ca0f61995591351ffaf881",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34379,7 +34429,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:14:07.689514Z",
-      "commit": null,
+      "commit": "ce31404d3c43a87eaab8e76f6820a11442057f05",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34425,7 +34475,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:27:10.927617Z",
-      "commit": null,
+      "commit": "49fee63ffbcbe6c626b563c3b42c59d5956a364f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34469,7 +34519,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:01:04.957342Z",
-      "commit": null,
+      "commit": "e18a9b9c976955fe0d513b49d67b6377c7890574",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34514,7 +34564,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:41:27.667596Z",
-      "commit": null,
+      "commit": "6142d088dbddea521e4cabfbffd688708dbbdf66",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34558,7 +34608,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:14:09.599954Z",
-      "commit": null,
+      "commit": "9139e3cfc2313b1b85b03b64d2e222e09b563cb3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34610,7 +34660,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:14:11.429154Z",
-      "commit": null,
+      "commit": "66a934ac06af620a9576b72aafcaccc9203485cd",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34654,7 +34704,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:27:12.959103Z",
-      "commit": null,
+      "commit": "9fb39117d963852a6c4b4584aef7a1f2af193eb4",
       "deps": [
         "P27-I02-W13"
       ],
@@ -34702,7 +34752,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:27:14.945264Z",
-      "commit": null,
+      "commit": "25b93e75898277b7ea5f45346886a230167857b0",
       "deps": [
         "P27-I02-W13"
       ],
@@ -34750,7 +34800,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:27:17.094632Z",
-      "commit": null,
+      "commit": "5cdd0e3b437b37951474f92f977991888e25e1fe",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34798,7 +34848,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:41:29.499672Z",
-      "commit": null,
+      "commit": "a99a32f019cf35227a3a00a04799cb1767a689f1",
       "deps": [
         "P27-I02-W16"
       ],
@@ -34848,7 +34898,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T23:09:52.330059Z",
-      "commit": null,
+      "commit": "9f7cfcfefcaeed299a1a41dd1bceabb8d422d10a",
       "deps": [
         "P27-I02-W17",
         "P27-I02-W06"
@@ -34900,7 +34950,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:27:19.007871Z",
-      "commit": null,
+      "commit": "9590ed3249ad4dc340db0ba07a58ada9c11a881a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -34947,7 +34997,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:41:31.313524Z",
-      "commit": null,
+      "commit": "1a109b5b3208224ea5c6b360c6fa2071720b747e",
       "deps": [
         "P27-I02-W19"
       ],
@@ -34994,7 +35044,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:43:09.507190Z",
-      "commit": null,
+      "commit": "00bad172a278a4e40c0ed51ff53a00097e6b6f95",
       "deps": [
         "P27-I02-W20"
       ],
@@ -35043,7 +35093,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T22:41:33.179603Z",
-      "commit": null,
+      "commit": "bf124609bef54ca3c0ade2acfd4a90bca8abe7dd",
       "deps": [
         "P27-I02-W08"
       ],
@@ -35093,7 +35143,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T23:48:31.417219Z",
-      "commit": null,
+      "commit": "0b712109ad0e59412075df3385821d40e8ab4db6",
       "deps": [
         "P27-I02-W22",
         "P27-I02-W08"
@@ -35148,7 +35198,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T23:54:11.295441Z",
-      "commit": null,
+      "commit": "2f533f089c2dae65b3ad3ed09d115f2e097ae176",
       "deps": [
         "P27-I02-W22"
       ],
@@ -35196,7 +35246,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T23:09:54.353956Z",
-      "commit": null,
+      "commit": "fb66d0282e4f62780c373ce04219d88879b406d7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -35242,7 +35292,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-22T23:15:37.898787Z",
-      "commit": null,
+      "commit": "4e6006d39cf153ee0a3fd117c2efe05b1f1efc86",
       "deps": [
         "P27-I02-W25"
       ],
@@ -35291,7 +35341,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-23T00:33:19.394809Z",
-      "commit": null,
+      "commit": "e3bdc5f402b24bd70525330143b87b60b41cc30a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -35338,7 +35388,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-23T00:33:22.623487Z",
-      "commit": null,
+      "commit": "31fef36680e744351dd7488852200ae82bf71071",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -35385,7 +35435,7 @@
       "claim_session_id": "flow-p27i02",
       "claimed_at": null,
       "closed_at": "2026-05-23T00:39:49.379426Z",
-      "commit": null,
+      "commit": "0b243d44ab3e1cf5a140e6f6e1cc0da36c3d522d",
       "deps": [
         "P27-I02-W27",
         "P27-I02-W28"
@@ -35973,7 +36023,7 @@
       "claim_session_id": "exec-P27-I03-W01",
       "claimed_at": null,
       "closed_at": "2026-05-23T16:26:26.445850Z",
-      "commit": null,
+      "commit": "cffe9e806f483bf529d0f70c4b14e5c8c23c11c7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36021,7 +36071,7 @@
       "claim_session_id": "exec-P27-I03-W02",
       "claimed_at": null,
       "closed_at": "2026-05-23T18:14:14.073007Z",
-      "commit": null,
+      "commit": "ebad9489a41ae92b7ff6ebc7c72db650d66d05f5",
       "deps": [
         "P27-I03-W01"
       ],
@@ -36067,7 +36117,7 @@
       "claim_session_id": "exec-P27-I03-W03",
       "claimed_at": null,
       "closed_at": "2026-05-23T18:41:23.608492Z",
-      "commit": null,
+      "commit": "b82efd91560043f7adea5fe1031c26c2d242302d",
       "deps": [
         "P27-I03-W01",
         "P27-I03-W02"
@@ -36116,7 +36166,7 @@
       "claim_session_id": "exec-P27-I03-W04",
       "claimed_at": null,
       "closed_at": "2026-05-23T16:26:28.490588Z",
-      "commit": null,
+      "commit": "3a3472c20b350997f8d0a90fadf091a93bcfbb89",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36162,7 +36212,7 @@
       "claim_session_id": "exec-P27-I03-W05",
       "claimed_at": null,
       "closed_at": "2026-05-23T19:30:12.859658Z",
-      "commit": null,
+      "commit": "9d0a4201477d5bc75524d0875acf74ca657fdf38",
       "deps": [
         "P27-I03-W01"
       ],
@@ -36209,7 +36259,7 @@
       "claim_session_id": "exec-P27-I03-W06",
       "claimed_at": null,
       "closed_at": "2026-05-23T18:41:27.742707Z",
-      "commit": null,
+      "commit": "bf3a9bc9f0981deb4d2659817b1f0ec942ffdf2c",
       "deps": [
         "P27-I03-W01"
       ],
@@ -36261,7 +36311,7 @@
       "claim_session_id": "exec-P27-I03-W07",
       "claimed_at": null,
       "closed_at": "2026-05-23T19:08:05.156677Z",
-      "commit": null,
+      "commit": "55325006e94bf3a3cdf088d67723d3d0f70be317",
       "deps": [
         "P27-I02-W23"
       ],
@@ -36310,7 +36360,7 @@
       "claim_session_id": "exec-P27-I03-W08",
       "claimed_at": null,
       "closed_at": "2026-05-23T19:42:46.092927Z",
-      "commit": null,
+      "commit": "ca753c1c2cea9e8b992a8c76a5d922d84581fa3e",
       "deps": [
         "P27-I02-W23",
         "P27-I03-W01"
@@ -36361,7 +36411,7 @@
       "claim_session_id": "exec-P27-I03-W09",
       "claimed_at": null,
       "closed_at": "2026-05-23T16:26:31.641324Z",
-      "commit": null,
+      "commit": "010fa6cd37d9973912a92366d15101c17388803c",
       "deps": [
         "P27-I02-W06",
         "P27-I02-W13"
@@ -36409,7 +36459,7 @@
       "claim_session_id": "exec-P27-I03-W10",
       "claimed_at": null,
       "closed_at": "2026-05-23T17:22:42.555308Z",
-      "commit": null,
+      "commit": "cfa59a5418cd248a0d42628caf70d274abbec665",
       "deps": [
         "P27-I03-W09",
         "P27-I02-W06"
@@ -36456,7 +36506,7 @@
       "claim_session_id": "exec-P27-I03-W11",
       "claimed_at": null,
       "closed_at": "2026-05-23T17:56:29.124755Z",
-      "commit": null,
+      "commit": "992c059bbb5dbe51514e95cf04239f6389860207",
       "deps": [
         "P27-I03-W09"
       ],
@@ -36505,7 +36555,7 @@
       "claim_session_id": "exec-P27-I03-W12",
       "claimed_at": null,
       "closed_at": "2026-05-23T16:48:22.553291Z",
-      "commit": null,
+      "commit": "097c174159d3cb4fb7c153581699c1523ed033c0",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36550,7 +36600,7 @@
       "claim_session_id": "exec-P27-I03-W13",
       "claimed_at": null,
       "closed_at": "2026-05-23T17:22:44.750100Z",
-      "commit": null,
+      "commit": "a84c8acad24793f355360420416158996efd4955",
       "deps": [
         "P27-I02-W15"
       ],
@@ -36601,7 +36651,7 @@
       "claim_session_id": "exec-P27-I03-W14",
       "claimed_at": null,
       "closed_at": "2026-05-23T17:41:26.840590Z",
-      "commit": null,
+      "commit": "4a83c969a70b686fe23dc9892fe69e92a7d8698d",
       "deps": [
         "P27-I03-W12"
       ],
@@ -36648,7 +36698,7 @@
       "claim_session_id": "exec-P27-I03-W15",
       "claimed_at": null,
       "closed_at": "2026-05-23T17:56:31.273014Z",
-      "commit": null,
+      "commit": "4572ec2d39abd9def9dd8150a53919db15ae5fad",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36693,7 +36743,7 @@
       "claim_session_id": "exec-P27-I03-W16",
       "claimed_at": null,
       "closed_at": "2026-05-23T18:41:25.702710Z",
-      "commit": null,
+      "commit": "31ae87984c10ba86affdf9ace2ac5a095b32e1c7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36738,7 +36788,7 @@
       "claim_session_id": "exec-P27-I03-W17",
       "claimed_at": null,
       "closed_at": "2026-05-23T21:15:38.024490Z",
-      "commit": null,
+      "commit": "5a25fdab1d2acb4bd577531815a9a9cb54a3e790",
       "deps": [
         "P27-I03-W04"
       ],
@@ -36784,7 +36834,7 @@
       "claim_session_id": "exec-P27-I03-W18",
       "claimed_at": null,
       "closed_at": "2026-05-23T20:48:06.846679Z",
-      "commit": null,
+      "commit": "34d6b447c4b7d5a88bd52b2c2b75858748d8b02b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -36829,7 +36879,7 @@
       "claim_session_id": "exec-P27-I03-W19",
       "claimed_at": null,
       "closed_at": "2026-05-23T19:08:07.116842Z",
-      "commit": null,
+      "commit": "0e269bb6fe71c8cc144dd4db9d9dc83ec5bf04f1",
       "deps": [
         "P27-I02-W18"
       ],
@@ -36876,7 +36926,7 @@
       "claim_session_id": "exec-P27-I03-W20",
       "claimed_at": null,
       "closed_at": "2026-05-23T20:04:58.408314Z",
-      "commit": null,
+      "commit": "5303e539df17fdf1516d4f3fe982ffb6ae8a3171",
       "deps": [
         "P27-I03-W07"
       ],
@@ -36934,7 +36984,7 @@
       "claim_session_id": "exec-P27-I03-W21",
       "claimed_at": null,
       "closed_at": "2026-05-23T19:30:14.871412Z",
-      "commit": null,
+      "commit": "a435ee1e595086b396e26fa065e0908b511b4728",
       "deps": [
         "P27-I03-W14"
       ],
@@ -36981,7 +37031,7 @@
       "claim_session_id": "exec-P27-I03-W22",
       "claimed_at": null,
       "closed_at": "2026-05-23T19:30:16.959731Z",
-      "commit": null,
+      "commit": "48f054d00ae5061d97837b9f6b5fa1a3ed624099",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37025,7 +37075,7 @@
       "claim_session_id": "exec-P27-I03-W23",
       "claimed_at": null,
       "closed_at": "2026-05-23T18:14:16.127092Z",
-      "commit": null,
+      "commit": "da809109e600f527182fa27c34dc97ba237598d1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37069,7 +37119,7 @@
       "claim_session_id": "exec-P27-I03-W24",
       "claimed_at": null,
       "closed_at": "2026-05-23T17:41:24.847263Z",
-      "commit": null,
+      "commit": "94dcd86dfafdc47a20d06deac3483fc9d6537ad4",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37113,7 +37163,7 @@
       "claim_session_id": "exec-P27-I03-W25",
       "claimed_at": null,
       "closed_at": "2026-05-23T19:08:03.046791Z",
-      "commit": null,
+      "commit": "9009216c7f44641cb1b4556ceaab1e128f964c64",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37389,7 +37439,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-24T01:24:43.511891Z",
-      "commit": "07eadd6c7b41b767d475784de636915292b9d445",
+      "commit": "6e75c319af139fe1685056a78289d560b084b45e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -37485,7 +37535,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-24T01:43:08.622214Z",
-      "commit": "bf50462cfb2e48cf8c6c9a42f2ef81d76fc8c577",
+      "commit": "41542b8266d076a814746e9f43f9ddca0eba70ae",
       "deps": [
         "P27-I04-W02"
       ],
@@ -38141,7 +38191,7 @@
       "claim_session_id": "p27i04-w17",
       "claimed_at": null,
       "closed_at": "2026-05-24T15:20:26.971228Z",
-      "commit": null,
+      "commit": "fef002c89ac7bb54bf86ef1324cc93ba1ea8036e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -38215,7 +38265,7 @@
       "claim_session_id": "p27i04-w18",
       "claimed_at": null,
       "closed_at": "2026-05-24T15:20:27.437332Z",
-      "commit": null,
+      "commit": "e04e979a806c8d8769ce57c78f26d5928364d3dc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -38306,7 +38356,7 @@
       "claim_session_id": "p27i04-w19",
       "claimed_at": null,
       "closed_at": "2026-05-24T15:20:27.896293Z",
-      "commit": null,
+      "commit": "920a0ef02882b41c49218941af8816874d711a5d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -38379,7 +38429,7 @@
       "claim_session_id": "p27i04-w20",
       "claimed_at": null,
       "closed_at": "2026-05-24T15:20:28.359676Z",
-      "commit": null,
+      "commit": "5125dbb2c1f2d708807e13c362d809f335ae0b7d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -38466,7 +38516,7 @@
       "claim_session_id": "p27i04-w21",
       "claimed_at": null,
       "closed_at": "2026-05-24T15:20:28.818434Z",
-      "commit": null,
+      "commit": "3c6a2808eaacc37ea9c6d79ad833de87067c5af5",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -38557,7 +38607,7 @@
       "claim_session_id": "p27i04-w22",
       "claimed_at": null,
       "closed_at": "2026-05-24T15:20:29.284015Z",
-      "commit": null,
+      "commit": "e6ed06ad43652f456d81a864586fb8287facbae7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -38734,7 +38784,7 @@
       "claim_session_id": "p27i04-w24",
       "claimed_at": null,
       "closed_at": "2026-05-24T16:32:14.325948Z",
-      "commit": "4992a63752f766162469cf06a0a1358ceb452569",
+      "commit": "28542f80278bc25f0610092ef9f4702805de1d53",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -39403,7 +39453,7 @@
       "claim_session_id": "op-p27-i05",
       "claimed_at": null,
       "closed_at": "2026-05-24T19:02:57.529645Z",
-      "commit": "89b595a8deca1d867d22e534babd3b43be7326cd",
+      "commit": "f8d45bbd9512567cf9942d81c95969c5231786bf",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -40432,7 +40482,7 @@
       "claim_session_id": "flow-p27-i05-w25",
       "claimed_at": null,
       "closed_at": "2026-05-25T02:04:49.394050Z",
-      "commit": "c6b53173590940dd35557ed7a8a75903f9460155",
+      "commit": "67b916eeb12d367f2121216ac0019e79e82755fd",
       "deps": [
         "P27-I05-W21"
       ],
@@ -41197,7 +41247,7 @@
       "claim_session_id": "op-post-v0.3-cleanup",
       "claimed_at": null,
       "closed_at": "2026-05-25T22:42:01.352821Z",
-      "commit": "a7f69209611b8bce57bcb5dc15fa4e8da069d69b",
+      "commit": "5ce5fb273f47a93186ef72de9619a96f73d3370a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -41247,7 +41297,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T19:25:55.054077Z",
-      "commit": null,
+      "commit": "8c1ee4b748c74a084f77e238af18646bde547e3e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -41310,7 +41360,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T19:23:12.339149Z",
-      "commit": null,
+      "commit": "8ae0db58f2d63560f970db83c7707cfec668a3a7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -41373,7 +41423,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T19:58:37.014506Z",
-      "commit": null,
+      "commit": "fdb912ff2eba8914b62dc9b09993f5887f07272b",
       "deps": [
         "P28-I01-W01"
       ],
@@ -41455,7 +41505,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T19:58:39.213460Z",
-      "commit": null,
+      "commit": "a74e4f2954d6f171257acf001eb6b114aeb0f858",
       "deps": [
         "P28-I01-W01"
       ],
@@ -41553,7 +41603,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T19:25:34.760599Z",
-      "commit": "3af86d09d501dfbdc8bd1f0b159e30a66f4ccedc",
+      "commit": "b1f0571bbaf61020612c66d9bbfd8586cbadcd54",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -41647,7 +41697,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T21:40:51.603015Z",
-      "commit": null,
+      "commit": "401fca4aac02d7dbcf222f18520eb5ff3a365f0b",
       "deps": [
         "P28-I01-W03",
         "P28-I01-W04"
@@ -41725,7 +41775,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T21:40:52.940736Z",
-      "commit": null,
+      "commit": "14cdabc182dec576cdc5abcf26e46eecb1606ed5",
       "deps": [
         "P28-I01-W05"
       ],
@@ -41804,7 +41854,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T22:50:59.507500Z",
-      "commit": null,
+      "commit": "aca7d918f22ea05f911e02b87d5004584fee26da",
       "deps": [
         "P28-I01-W03",
         "P28-I01-W06",
@@ -41882,7 +41932,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T21:40:53.995130Z",
-      "commit": null,
+      "commit": "ecb2a070ef5dbf8508ba03b8c6aa15c2beb2ea17",
       "deps": [
         "P28-I01-W04",
         "P28-I01-W05"
@@ -41934,7 +41984,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T23:24:22.673440Z",
-      "commit": null,
+      "commit": "75c02a5a71b9f3314873653c1dfa5f6d2c945629",
       "deps": [
         "P28-I01-W08"
       ],
@@ -41997,7 +42047,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T22:20:41.525821Z",
-      "commit": null,
+      "commit": "8de77c7c5031a9ac24dfc2f3d3812474375d9bf4",
       "deps": [
         "P28-I01-W01",
         "P28-I01-W04",
@@ -42081,7 +42131,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T19:23:03.808318Z",
-      "commit": null,
+      "commit": "64a004263913c7e41419206938510c18b95c7350",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -42142,7 +42192,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T21:40:55.749238Z",
-      "commit": null,
+      "commit": "b984921362e4629e88720690c7906a37098241c5",
       "deps": [
         "P28-I01-W12"
       ],
@@ -42204,7 +42254,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T19:58:41.324849Z",
-      "commit": null,
+      "commit": "59111c14e5b042a0ed913574109b9816d65e2389",
       "deps": [
         "P28-I01-W01"
       ],
@@ -42297,7 +42347,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-26T22:20:43.369232Z",
-      "commit": null,
+      "commit": "12e686ad1960daba9e343689a404549e5b57a1cb",
       "deps": [
         "P28-I01-W05"
       ],
@@ -42405,7 +42455,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T07:59:52.585141Z",
-      "commit": null,
+      "commit": "e2b4ef81bbb5882adf182658da52e7be8cc207f2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -42499,7 +42549,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:34:18.571569Z",
-      "commit": null,
+      "commit": "8ae0db58f2d63560f970db83c7707cfec668a3a7",
       "deps": [
         "P28-I02-W01"
       ],
@@ -42568,7 +42618,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:40:21.406408Z",
-      "commit": null,
+      "commit": "fdb912ff2eba8914b62dc9b09993f5887f07272b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -42646,7 +42696,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T02:23:14.076641Z",
-      "commit": null,
+      "commit": "d5d7008b2905255dc34441678504a4aea00ab7b5",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -42707,7 +42757,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:37:05.305987Z",
-      "commit": null,
+      "commit": "b1f0571bbaf61020612c66d9bbfd8586cbadcd54",
       "deps": [
         "P28-I02-W04",
         "P28-I01-W12"
@@ -42787,7 +42837,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:36:32.685061Z",
-      "commit": null,
+      "commit": "401fca4aac02d7dbcf222f18520eb5ff3a365f0b",
       "deps": [
         "P28-I01-W06",
         "P28-I01-W08",
@@ -42853,7 +42903,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:48:36.464621Z",
-      "commit": null,
+      "commit": "14cdabc182dec576cdc5abcf26e46eecb1606ed5",
       "deps": [
         "P28-I01-W01"
       ],
@@ -42922,7 +42972,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T01:39:36.333693Z",
-      "commit": null,
+      "commit": "aa59c2f7c475813720a32f582bcb7af134a6e01c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -43002,7 +43052,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:38:16.263964Z",
-      "commit": null,
+      "commit": "ecb2a070ef5dbf8508ba03b8c6aa15c2beb2ea17",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -43096,7 +43146,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T01:39:30.074991Z",
-      "commit": null,
+      "commit": "2e22b437bd38b8f9492c0fbb4f260fc6ef7aabb9",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -43188,7 +43238,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T02:23:19.364429Z",
-      "commit": null,
+      "commit": "d190defbae9cb229397612cb95fadce11485c5eb",
       "deps": [
         "P28-I01-W02"
       ],
@@ -43284,7 +43334,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:32:55.277508Z",
-      "commit": null,
+      "commit": "03c05fd31af7dd9cc4d78a974d3315b221fb2d98",
       "deps": [
         "P28-I02-W11"
       ],
@@ -43400,7 +43450,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T15:55:43.571646Z",
-      "commit": null,
+      "commit": "b984921362e4629e88720690c7906a37098241c5",
       "deps": [
         "P28-I02-W03",
         "P28-I02-W10"
@@ -43479,7 +43529,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T16:47:21.948303Z",
-      "commit": null,
+      "commit": "59111c14e5b042a0ed913574109b9816d65e2389",
       "deps": [
         "P28-I02-W03",
         "P28-I02-W13"
@@ -43558,7 +43608,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T16:13:04.476986Z",
-      "commit": null,
+      "commit": "12e686ad1960daba9e343689a404549e5b57a1cb",
       "deps": [
         "P28-I02-W03"
       ],
@@ -43655,7 +43705,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T00:55:23.843807Z",
-      "commit": null,
+      "commit": "b583b75f12ed6282f5befce1928a3294367a2687",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -43730,7 +43780,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T16:56:36.572753Z",
-      "commit": null,
+      "commit": "b1c6ae64fb4308c75da86038ab58cd1774afc9dd",
       "deps": [
         "P28-I02-W14"
       ],
@@ -43899,7 +43949,7 @@
       "claim_session_id": "SES-20260527T170000Z-operator-codex",
       "claimed_at": null,
       "closed_at": "2026-05-27T17:11:21.457699Z",
-      "commit": null,
+      "commit": "9240d05cfd1540a5ffe78aeca4eaafb75dec3226",
       "deps": [
         "P28-I02-W11",
         "P28-I02-W17"
@@ -44083,7 +44133,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T02:23:08.900439Z",
-      "commit": null,
+      "commit": "a0c87d5a8ffd8eed1ff50ff6fd28bd278a9e3b70",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -44160,7 +44210,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T01:39:25.089099Z",
-      "commit": null,
+      "commit": "f0d219ec3b4abf95e1904fa29199d0b05cfd0b88",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -44310,7 +44360,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-27T16:32:03.194509Z",
-      "commit": null,
+      "commit": "6c99706a9ad8813f3c221f71f5e446c6efd2d22c",
       "deps": [
         "P28-I02-W21"
       ],
@@ -44734,7 +44784,7 @@
       "claim_session_id": "SES-20260527T204500Z-operator-codex",
       "claimed_at": "2026-05-27T17:38:17.210658Z",
       "closed_at": "2026-05-27T18:13:21.687973Z",
-      "commit": "2ae4e09d404abffc23987541cd107a30be35591e",
+      "commit": "7d7d1ca7ad91b210ffd50420fca034046ffd086e",
       "deps": [],
       "description": "Repair audit finding that bootstrap seeds Project but omits the IntentBrief and bucket-EU defaults expected by W12.",
       "dispatch_history": [],
@@ -49217,7 +49267,7 @@
       "claim_session_id": "inline-polisher",
       "claimed_at": "2026-05-28T17:23:04.159153Z",
       "closed_at": "2026-05-28T17:29:32.689559Z",
-      "commit": null,
+      "commit": "0185decd6e0544836b2bf8a02eacad17fddb520a",
       "deps": [],
       "description": "Post-A42 polish sweep covering deep-audit follow-ups. Excludes W30 ActualSummary EU conflation (requires WaveSessionRollup model change; tracked as separate wave). Excludes B074 runner argv revalidate nit (tracked separately).",
       "dispatch_history": [],
@@ -49274,7 +49324,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T18:09:52.441548Z",
       "closed_at": "2026-05-28T18:09:53.046596Z",
-      "commit": null,
+      "commit": "088d23ad87423ad9efce8798adea51c81b5aa21c",
       "deps": [],
       "description": "P28 status-pane fix per operator review 2026-05-28. D-path (empty-state render) chosen over backfill or full telemetry wiring.",
       "dispatch_history": [],
@@ -49321,7 +49371,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T19:49:43.116393Z",
       "closed_at": "2026-05-28T19:49:43.695281Z",
-      "commit": null,
+      "commit": "4632141c099a39613b40a2cc76dc3b1022ddc508",
       "deps": [
         "P28-I03-W61"
       ],
@@ -49371,7 +49421,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T20:00:40.568786Z",
       "closed_at": "2026-05-28T20:00:41.110598Z",
-      "commit": null,
+      "commit": "c850df0394810934e5147208e79779900876cf78",
       "deps": [
         "P28-I03-W61"
       ],
@@ -49476,7 +49526,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T18:25:57.094212Z",
       "closed_at": "2026-05-28T18:25:57.687274Z",
-      "commit": null,
+      "commit": "9615cce351be7623d31a3b6c1351626bd564a80a",
       "deps": [],
       "description": "Operator picked full Codex UX overhaul over partial. Token-cost structural fix still deferred to spawn seam (v0.4.1).",
       "dispatch_history": [],
@@ -49525,7 +49575,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T18:04:45.749441Z",
       "closed_at": "2026-05-28T18:04:46.342160Z",
-      "commit": null,
+      "commit": "b9e01782d3a246fcf1bacb374afbc3463f2c7616",
       "deps": [],
       "description": "Codex plugin install emits hooks dir but writes literal './hooks/' string in plugin.json; Codex reads as config file.",
       "dispatch_history": [],
@@ -49587,7 +49637,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T18:09:46.562584Z",
       "closed_at": "2026-05-28T18:09:47.153003Z",
-      "commit": null,
+      "commit": "d2193b0dc0491b0a8b4a585667fda2f63eebd0d7",
       "deps": [],
       "description": "First wave of W52 split: add W24-audited fields as Optional alongside the shipped 5 fields. No consumer changes. Sets the schema base for W60/W61.",
       "dispatch_history": [],
@@ -49690,7 +49740,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T18:35:12.183924Z",
       "closed_at": "2026-05-28T18:35:12.762787Z",
-      "commit": null,
+      "commit": "ded0123b0b2146e9a50ffe3d1dd9a497d4e95d1a",
       "deps": [
         "P28-I03-W59"
       ],
@@ -49749,7 +49799,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T19:12:32.501045Z",
       "closed_at": "2026-05-28T19:12:33.081685Z",
-      "commit": null,
+      "commit": "75188e045d30e0b6d3d7f1de2d4858aed50a5769",
       "deps": [
         "P28-I03-W60"
       ],
@@ -49863,7 +49913,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T18:41:03.841880Z",
       "closed_at": "2026-05-28T18:41:04.426447Z",
-      "commit": null,
+      "commit": "46bd6705294ed62d009eade983fb8ff27e5a4891",
       "deps": [],
       "description": "Reactive wave from W60 followups: W59 schema additions never regenerated schemas/state.schema.json + docs/reference/autogen, and W60 CLI flag additions pushed wheel past the ceiling. Run eawf schema dump + docs autogen + raise wheel_max_bytes. Parallel-safe with W61 (zero file overlap).",
       "dispatch_history": [],
@@ -49912,7 +49962,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T21:21:41.526990Z",
       "closed_at": "2026-05-28T21:22:06.102339Z",
-      "commit": null,
+      "commit": "954eebf03231fdb69d09f2ca1c7a24739ad38968",
       "deps": [],
       "description": "Reactive polish wave after the PR #26 CI matrix tripped the cold-import timing gate at 408ms (8ms over 400ms ceiling). Structural leak gate was clean (zero FORBIDDEN_MODULES imported); the failure is CI jitter at a too-tight ceiling. Local reference is 238-308ms; CI runs ~1.3x slower. Raising to 500ms keeps the gate as a regression guard (a heavy import would add hundreds of ms) while absorbing natural growth.",
       "dispatch_history": [],
@@ -49956,7 +50006,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T23:02:53.289217Z",
       "closed_at": "2026-05-28T23:02:53.855366Z",
-      "commit": null,
+      "commit": "f6d5e41d0c1bf0ea8d7038d942c33e6cc1a9f8d0",
       "deps": [],
       "description": "Reactive wave from W63 follow-up: CI per-package coverage gates fail on state branch (91.67<95) + telemetry branch (84.74<86). Operator picked test additions over gate bump. Local uncovered state branches: ids.py 54+153->152; io.py 364-366; mutations.py 330,334,338,342,343->345,499,501; urn.py 112. Telemetry branches: probe via coverage report -m in worktree (CI runs broader suite). Target floors: state branch >=95, telemetry branch >=86.",
       "dispatch_history": [],
@@ -50005,7 +50055,7 @@
       "claim_session_id": "main-replay",
       "claimed_at": "2026-05-28T23:16:20.264390Z",
       "closed_at": "2026-05-28T23:16:51.203062Z",
-      "commit": null,
+      "commit": "7ed2c27901766fcfbd9faf550c9d6094e9677918",
       "deps": [],
       "description": "Second-round reactive perf ceiling bump: PR #26 retry tripped cold-import at 576ms (was 408ms; W63 had bumped 400 to 500); macos-15 tripped TUI first-paint p99 at 693ms (gate 600ms). Shared CI runners are ~2x local on contended jobs. Structural gates remain the real regression guards.",
       "dispatch_history": [],
@@ -50053,7 +50103,7 @@
       "claim_session_id": "flow-p29-i01",
       "claimed_at": "2026-06-01T01:22:49.293728Z",
       "closed_at": "2026-06-01T02:53:29.209391Z",
-      "commit": "55b8e58b5eb6bb63b64da995585f8d705ed3ce5c",
+      "commit": "b844262044b61c143d60ac64701084cf4057a86e",
       "deps": [],
       "description": "[MET-1 | scope T2/dec4 | SF] reactive-metric correction; owns the Iter.trigger field reused by TRUST-1. Prior 54% was a definitional artifact, annotate in release notes.",
       "dispatch_history": [],
@@ -51865,7 +51915,7 @@
       "claim_session_id": "op-p29i02",
       "claimed_at": "2026-06-01T15:09:22.866154Z",
       "closed_at": "2026-06-01T15:19:04.522782Z",
-      "commit": "add07b51b05941a19812af56aacbf5bc5983e766",
+      "commit": "65d85bab50c04e8cc832390369cb282637da0349",
       "deps": [],
       "description": "[CLI-3 | scope 7-topic#6 | SF] operator-preference knobs feeding planner + AUQ defaults.",
       "dispatch_history": [],
@@ -52247,7 +52297,7 @@
       "claim_session_id": "op-p29i02",
       "claimed_at": "2026-06-01T16:59:40.958783Z",
       "closed_at": "2026-06-01T17:11:58.875597Z",
-      "commit": "458ae78b0f28f29e32f77fab249388ee95579d61",
+      "commit": "43093fc2bb32901559702e88c6a2891aee1abcf9",
       "deps": [],
       "description": "[CLI-11 | scope I01 | SF] ship-process doc + housekeeping.",
       "dispatch_history": [],
@@ -52385,7 +52435,7 @@
       "claim_session_id": "op-p29i02",
       "claimed_at": "2026-06-01T17:48:09.568104Z",
       "closed_at": "2026-06-01T17:53:05.529182Z",
-      "commit": null,
+      "commit": "1860231df2de0566f07eb657b2accbea0d02d77f",
       "deps": [],
       "description": "[TUI-19 | tui-chassis | spike] pre-claim probe for the chassis approach; gates TUI-1.",
       "dispatch_history": [],
@@ -52984,7 +53034,7 @@
       "claim_session_id": "op-p29i02",
       "claimed_at": "2026-06-01T19:52:48.754211Z",
       "closed_at": "2026-06-01T20:22:44.584529Z",
-      "commit": "f10271cac33a5ce6f096be4dbc5b5ba3ff7ac2db",
+      "commit": "fefdf9a780fd7874a14de4d90a922db0a672f31e",
       "deps": [
         "P29-I02-W16"
       ],
@@ -53090,7 +53140,7 @@
       "claim_session_id": "op-p29i02",
       "claimed_at": "2026-06-01T19:33:49.096369Z",
       "closed_at": "2026-06-01T19:42:50.715919Z",
-      "commit": "60e8d2abe181f6189b2cf4bb476b52fb912eea9f",
+      "commit": "6e4683057e5eeaebd492203dea77ce3ab8a0820b",
       "deps": [
         "P29-I02-W16"
       ],
@@ -53138,7 +53188,7 @@
       "claim_session_id": "op-p29i02",
       "claimed_at": "2026-06-01T19:54:17.948880Z",
       "closed_at": "2026-06-01T20:19:44.987716Z",
-      "commit": "82adf126b489b5f7708b9b3a496ebe801179007f",
+      "commit": "a55ca667ee14b815477169d2c88f2051cdb5a175",
       "deps": [
         "P29-I02-W23"
       ],
@@ -53595,7 +53645,7 @@
       "claim_session_id": "flow-p29-i03",
       "claimed_at": "2026-06-01T22:26:40.466368Z",
       "closed_at": "2026-06-01T22:37:03.635247Z",
-      "commit": null,
+      "commit": "8d119f8f144c0a842f1ce1440c5de00bad3a7685",
       "deps": [],
       "description": "[S-JAIL-0 | safety-floor | spike] gates FLOOR-4 jail backend choice.",
       "dispatch_history": [],
@@ -54033,7 +54083,7 @@
       "claim_session_id": "flow-p29i04",
       "claimed_at": "2026-06-02T01:30:21.424941Z",
       "closed_at": "2026-06-02T01:50:59.958104Z",
-      "commit": "74ff64a1e605afa0037efe24d19dd24623a0b19e",
+      "commit": "3d4912c6b7ef31e7f8dd04c76f61e48bc96a12e4",
       "deps": [
         "P29-I03-W04",
         "P29-I01-W23"
@@ -54824,7 +54874,7 @@
       "claim_session_id": "op-flow-p29i05",
       "claimed_at": "2026-06-02T17:31:11.713623Z",
       "closed_at": "2026-06-02T18:08:31.029569Z",
-      "commit": "f5710abfc83c9debf1753e27fae2f41c09481e60",
+      "commit": "59e36c680cae5303de7aaf7778c4ea89a79f858a",
       "deps": [],
       "description": "Restores the 2026-05-30 tui-chassis brief digit map dropped at the P29 propose (see incident 2026-06-02-tui-brief-criteria-drift). Pure registry reorder + golden regen; autopilot/research modes already exist (I04-W12/W13).",
       "dispatch_history": [],
@@ -55079,7 +55129,7 @@
       "claim_session_id": "op-flow-p29i05",
       "claimed_at": "2026-06-02T19:36:18.861122Z",
       "closed_at": "2026-06-02T19:36:20.351779Z",
-      "commit": "8566952c34ded2ddb13d5374c2b299297c1436b2",
+      "commit": "ff444416a70ddf5453534cb1d09c384f621c9298",
       "deps": [
         "P29-I05-W06"
       ],
@@ -55170,7 +55220,7 @@
       "claim_session_id": "op-flow-p29i05",
       "claimed_at": "2026-06-02T20:15:16.159059Z",
       "closed_at": "2026-06-02T20:15:17.457898Z",
-      "commit": "61d9cf3bd2eb2aadc8edc05e73b6c4e2511cae63",
+      "commit": "15af30b740553dd6e5ba95f070cc569fd1562975",
       "deps": [
         "P29-I05-W06",
         "P29-I05-W09"
@@ -55295,7 +55345,7 @@
       "claim_session_id": "op-flow-p29i05",
       "claimed_at": "2026-06-02T21:10:08.522767Z",
       "closed_at": "2026-06-02T21:10:10.023648Z",
-      "commit": "90bd9b6f0c0c882646102b0566ffe3e948ca0bb8",
+      "commit": "bbc8b23336323b471901bd74b5c2d59cfb69d84a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -55463,7 +55513,7 @@
       "claim_session_id": "op-flow-p29-i06",
       "claimed_at": "2026-06-02T23:40:03.034075Z",
       "closed_at": "2026-06-03T00:19:48.798504Z",
-      "commit": "e5bf98257bb6fa47d02b9bf5cb00f825b4272b4d",
+      "commit": "2f6f73566f12ccb56c50f93c8b763089c81d2ab8",
       "deps": [
         "P29-I02-W13"
       ],
@@ -55510,7 +55560,7 @@
       "claim_session_id": "op-flow-p29-i06",
       "claimed_at": "2026-06-03T00:20:54.826957Z",
       "closed_at": "2026-06-03T00:32:35.163385Z",
-      "commit": "b314ed9694a75377deb69755b92f2991808f000f",
+      "commit": "9768d611f7d33988e37a3cad51036c993143f8ff",
       "deps": [
         "P29-I06-W01"
       ],
@@ -55859,7 +55909,7 @@
       "claim_session_id": "op-flow-p29-i06",
       "claimed_at": "2026-06-02T23:40:04.992493Z",
       "closed_at": "2026-06-03T00:19:50.052382Z",
-      "commit": "97e274fbf255f72a913befeb0604a22557711c6e",
+      "commit": "0bce17d09d9045c7746988511dba82abf6276b59",
       "deps": [],
       "description": "[REF-2 | iter-candidate-tags | SF] parked candidate-tag proposal.",
       "dispatch_history": [],
@@ -55963,7 +56013,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T01:49:06.554981Z",
       "closed_at": "2026-06-03T02:15:58.171661Z",
-      "commit": "b5e892d0e53ebd07ebd531bee190f29280ef1361",
+      "commit": "8bc79aca3deb5b8ac7ea91f309086469741f5ecd",
       "deps": [],
       "description": "[DOC-0 | doc-clarity L0 | SF] the root of the doc-clarity cluster.",
       "dispatch_history": [],
@@ -56011,7 +56061,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T02:43:05.835022Z",
       "closed_at": "2026-06-03T04:11:29.315413Z",
-      "commit": "43ca2b86612968853097627d76cbab3ea7c8e102",
+      "commit": "0b9aff70a06f8d148dcedbc4985618fe37780eec",
       "deps": [
         "P29-I07-W01"
       ],
@@ -56063,7 +56113,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T02:43:06.365913Z",
       "closed_at": "2026-06-03T04:30:58.096112Z",
-      "commit": "f4d78ae5cd03947c61edb3e0e69f93bb18659316",
+      "commit": "907778fc7cd0746a41fa31aec5361713387c27c8",
       "deps": [
         "P29-I07-W01"
       ],
@@ -56111,7 +56161,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T04:45:22.231863Z",
       "closed_at": "2026-06-03T05:09:54.343300Z",
-      "commit": "9ea6ed9837ad21c82839608dc49718b51a0ad179",
+      "commit": "76d60dd6961b285add61499fde527ef5670feaa2",
       "deps": [
         "P29-I07-W03"
       ],
@@ -56161,7 +56211,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T04:45:22.719458Z",
       "closed_at": "2026-06-03T05:00:12.990887Z",
-      "commit": "37da72cc95c56ce726aca8645cb4402703b77692",
+      "commit": "2553a1b8672ff42a0d7ad6b59013cba6cb13d22b",
       "deps": [
         "P29-I07-W03"
       ],
@@ -56222,7 +56272,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T02:18:00.791886Z",
       "closed_at": "2026-06-03T02:41:48.436487Z",
-      "commit": "58ff866447e84f288c0d68a5b5e1ea97234de417",
+      "commit": "94f6dece78b02306251fc0042df1f42651889ef3",
       "deps": [
         "P29-I07-W01"
       ],
@@ -56384,7 +56434,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T02:18:01.291249Z",
       "closed_at": "2026-06-03T02:41:47.742833Z",
-      "commit": "0879d9c7614770728eacd1edb57f2406765bb876",
+      "commit": "a04da69141a74edb1cee000fe9b1f9b02c8ae1bc",
       "deps": [
         "P29-I01-W08",
         "P29-I07-W01"
@@ -56436,7 +56486,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T02:43:06.888344Z",
       "closed_at": "2026-06-03T04:44:50.670888Z",
-      "commit": "c0773d9ad44258d5bc6d7e6a01468d7c3720ca92",
+      "commit": "be54498e1544168220590cddb3d671b97c958fd0",
       "deps": [
         "P29-I07-W09"
       ],
@@ -56483,7 +56533,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T04:45:23.233411Z",
       "closed_at": "2026-06-03T05:00:13.667312Z",
-      "commit": "51b115398b9c7e1d969948f765fa4b820e32e801",
+      "commit": "d90a12da9644d143f9ecf6481a946aa4e7a18e92",
       "deps": [
         "P29-I07-W09",
         "P29-I07-W10",
@@ -56532,7 +56582,7 @@
       "claim_session_id": "op-flow-p29-i07",
       "claimed_at": "2026-06-03T05:27:14.357902Z",
       "closed_at": "2026-06-03T05:27:58.971488Z",
-      "commit": "ee0f7bca2e9f4f9b8648df0ffb756bd4a1e95256",
+      "commit": "50440a762b8baa56fca710abd2ea702a676daad8",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -56578,7 +56628,7 @@
       "claim_session_id": "op-flow-p29-i08",
       "claimed_at": "2026-06-03T13:29:35.685936Z",
       "closed_at": "2026-06-03T13:48:28.470073Z",
-      "commit": "8f09404fd4aa8c7d875b87a321975d462f86735e",
+      "commit": "16f01e06d2fb9ed6165ca7e04fb5488359ee2c2f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -58728,7 +58778,7 @@
       "claim_session_id": "op-p29-i10",
       "claimed_at": "2026-06-06T15:32:37.745007Z",
       "closed_at": "2026-06-06T15:57:37.604957Z",
-      "commit": "fe0606238b8a8f4823b3f912fb3f9a4899dc1d7b",
+      "commit": "b2b2ec2a049294a67c2af318a1c6087460b112e4",
       "deps": [],
       "description": "FS01 of fidelity-spine-impl-spec. extra=forbid preserved; OPERABILITY retained for back-compat; oracle_tier defaults None (FS02 computes it).",
       "dispatch_history": [],
@@ -58818,7 +58868,7 @@
       "claim_session_id": "op-p29-i10",
       "claimed_at": "2026-06-06T15:32:38.268278Z",
       "closed_at": "2026-06-06T15:57:38.283732Z",
-      "commit": "6e44335d7bbccad674c63c9fa4cdfb79506b45eb",
+      "commit": "67b4be3877c3c75a53cccbf6bc3c8a74ac6a3c36",
       "deps": [],
       "description": "FS04. single CheckKind; uses existing CriterionSpec/GateSpec so it is an L0 root independent of FS01.",
       "dispatch_history": [],
@@ -59785,7 +59835,7 @@
       "claim_session_id": "op-p29-i11",
       "claimed_at": "2026-06-06T18:40:13.550002Z",
       "closed_at": "2026-06-06T18:40:15.044109Z",
-      "commit": "866d9ac5f8d1ce7bed21ddb3577bd5666d169a86",
+      "commit": "c7ccad412a4db1fe66d50d8cb6bf6499346f04db",
       "deps": [
         "P29-I11-W01",
         "P29-I10-W07"
@@ -59866,7 +59916,7 @@
       "claim_session_id": "op-p29-i11",
       "claimed_at": "2026-06-06T19:13:36.508419Z",
       "closed_at": "2026-06-06T19:41:04.336976Z",
-      "commit": "e41569a889eb47d4a096bba8af43ea2a1cabec94",
+      "commit": "e752e4e19621d7e4b2134db39ac29a62168a9cd0",
       "deps": [
         "P29-I11-W03"
       ],
@@ -59942,7 +59992,7 @@
       "claim_session_id": "op-p29-i11",
       "claimed_at": "2026-06-06T19:42:38.211449Z",
       "closed_at": "2026-06-06T20:00:41.107530Z",
-      "commit": "6258efcb2990f05b6e45000c2ad61a9b4457a48d",
+      "commit": "89ff69ab38bd2f08a3e6d2e51a31b43ef1c15fcd",
       "deps": [
         "P29-I11-W05",
         "P29-I10-W09"
@@ -60710,7 +60760,7 @@
       "claim_session_id": "op-p29-i13",
       "claimed_at": "2026-06-07T04:18:21.963839Z",
       "closed_at": "2026-06-07T04:18:36.014865Z",
-      "commit": "0eb9f51b4972de054d39bb6853c9dbb1a9e4faa3",
+      "commit": "a44bef961603565d45cbbc52d677a3264c571b1e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -61231,7 +61281,7 @@
       "claim_session_id": "op-p29-i13",
       "claimed_at": "2026-06-07T04:18:52.628390Z",
       "closed_at": "2026-06-07T04:19:06.921341Z",
-      "commit": "b046278f490e9fba53aefc55814547c1d186c6b7",
+      "commit": "792287ff489218edc35c42c42ad316cbb583cd21",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -62891,7 +62941,7 @@
       "claim_session_id": "op-p29-i13",
       "claimed_at": "2026-06-07T08:39:35.497832Z",
       "closed_at": "2026-06-07T08:39:38.947839Z",
-      "commit": "05031b9c09a7825a630b5d789be115dff4635437",
+      "commit": "25b9683dc0d16c60df3a03987044132f079146bc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -63642,7 +63692,7 @@
       "claim_session_id": "op-p29-i13",
       "claimed_at": "2026-06-07T11:34:18.388851Z",
       "closed_at": "2026-06-07T11:34:19.062297Z",
-      "commit": "89f5c0218d4bbf81a354de9d25386432db31217b",
+      "commit": "66d933c13c7ca1cfae8e7b42bde4283f1755f5f1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -64831,10 +64881,10 @@
         "P30-I10-W09",
         "P30-I02-W27"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:13:59.508268Z",
+      "closed_at": "2026-06-09T16:14:02.586392Z",
+      "commit": "99b57ea016032f1f6ba25043128dd7c1e4852600",
       "deps": [
         "P30-I02-W01"
       ],
@@ -64846,27 +64896,57 @@
         "src/eawf/surfaces/tui/widgets/status_tint.py",
         "src/eawf/surfaces/tui/app.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_widgets_sigils.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W02",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.770593Z",
-      "outcome": null,
+      "outcome": "New pure widgets/sigils.py keystone: Sigil enum (5 lifecycle) + glyph/chrome/tint over unicode/ascii tables; tint delegates to status_colour (RUNNING->in_progress key) so colour stays single-homed; binary ascii-vs-else mode selection decouples from the pending RenderMode rename; deconfliction invariant proven (ascii sigils share no char with eu_bar # / -). 45 unit tests, gate G-01 over test_widgets_sigils.py.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W02-C1",
-          "kind": "structural",
-          "measurable_signal": "Pure-helper pytest exits zero asserting all five state + chrome glyph/tint resolutions in both modes and the ascii-vs-bar-glyph deconfliction regression.",
-          "oracle_tier": null,
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_widgets_sigils asserts glyph over 5 lifecycle states + 8 chrome roles in both columns, tint(CLOSED)==#009e73 via status_colour, a non-TTY harness resolves ascii, and the ascii sigil alphabet shares no char with the eu_bar glyphs (deconfliction); pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the sigils helper unit suite (glyph/chrome/tint + deconfliction invariant)",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A unit test asserts glyph(CLOSED, mode=unicode) is the closed sigil and the ascii column for mode=ascii across all five states + the chrome roles, that tint(CLOSED) returns the Wong closed green via status_colour, that a non-TTY harness resolves the ascii column, and a regression test proves the ascii alphabet shares no character with the bar glyphs (deconfliction invariant).",
           "waiver_reason": null
         }
@@ -66157,10 +66237,10 @@
     "P30-I02-W29": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "op-p30-i02",
+      "claimed_at": "2026-06-09T16:14:09.906109Z",
+      "closed_at": "2026-06-09T16:14:11.458682Z",
+      "commit": "6afbc9d01cfad838e424b2c8c75252960e428209",
       "deps": [],
       "description": "Goal #3 ships only the two-tone wordmark today; the canonical Ea Seal mark (the evenodd-knockout disc the brand book makes canonical) has no owning wave. Commit the Seal SVG verbatim from the brand handoff as a single zero-risk asset that render/brand.py resolves; placements (favicon/README/--version) stay a deferred docs follow-on per the I00 contract.",
       "dispatch_history": [],
@@ -66169,27 +66249,57 @@
         "src/eawf/surfaces/render/assets/ea-seal.svg",
         "src/eawf/surfaces/render/brand.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_ea_seal_asset.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I02-W29",
       "intent": null,
       "iter_id": "P30-I02",
       "opened_at": "2026-06-09T12:29:17.758212Z",
-      "outcome": null,
+      "outcome": "Committed assets/ea-seal.svg (canonical Seal mark: evenodd-knockout disc + radiant star, single-colour currentColor) + SEAL_ASSET_PATH in brand.py so consumers resolve the asset without a hardcoded literal. Gate G-01 over test_ea_seal_asset.py (valid SVG + evenodd path + path-constant resolves).",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I02-W29-C1",
-          "kind": "structural",
-          "measurable_signal": "test_ea_seal_svg_valid parses the SVG and asserts a fill-rule=evenodd path; test_brand_exposes_seal_path resolves the asset via render/brand.py SEAL_ASSET_PATH",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_ea_seal_asset asserts SEAL_ASSET_PATH resolves to a real ea-seal.svg, the file parses as valid SVG via ElementTree with root tag svg, and a path element carries fill-rule=evenodd (the knockout disc); green under pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the Ea Seal asset unit test",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "assets/ea-seal.svg exists, parses as valid SVG, and carries the evenodd-knockout disc path (the Seal mark); render/brand.py exposes a SEAL_ASSET_PATH so a consumer resolves the asset without a hardcoded literal.",
           "waiver_reason": null
         }
