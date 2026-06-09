@@ -2,23 +2,31 @@
 
 A :class:`~textual.widgets.Tree` that renders the full
 phase → iter → wave hierarchy from the reactive
-:class:`~eawf.kernel.state.models.State`, prefixing each row with the **V12
-glyph schema** (``- > ~ # x !``) keyed off the row's lifecycle status,
-and surfacing a right-pinned bar on every row: iter and phase rows carry
-a completion bar (closed ÷ total child waves); wave rows carry a hybrid
-size/burn bar — the ``effort_bucket`` size bar (``XS``..``XL``) by
-default, auto-upgrading to the live token-burn bar
+:class:`~eawf.kernel.state.models.State`, prefixing each row with a
+lifecycle **sigil** drawn from the shared cosmic-terminal vocabulary
+(:func:`eawf.surfaces.tui.widgets.sigils.glyph`) keyed off the row's
+lifecycle status, and surfacing a right-pinned bar on every row: iter and
+phase rows carry a completion bar (closed ÷ total child waves) rendered by
+the unified :func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar`
+(a block ``█`` fill over a ``▒`` remainder track plus the ``n/m`` ratio);
+wave rows carry a hybrid size/burn bar — the ``effort_bucket`` size bar
+(``XS``..``XL``) by default, auto-upgrading to the live token-burn bar
 (``tokens_consumed ÷ token_budget``) once a wave carries a budget, and
 falling back to the empty-state sentinel only when it has neither. Every
-bar pins flush at
-the pane right edge with a blank gap — the title ellipsizes if it would
-collide with the bar, never the bar.
+bar pins flush at the pane right edge with a blank gap — the title
+ellipsizes if it would collide with the bar, never the bar.
+
+Leaf wave rows draw the FULL lifecycle sigil set (pending / claimed /
+running / closed / failed). Iter and phase rows draw the FOUR-state subset
+(pending / running / closed / failed): a phase or iter is never CLAIMED —
+that state belongs to a single voice claiming one wave — so the claimed
+sigil never appears on a branch row.
 
 This replaces the P20 regression where the "roadmap pane" shipped as a
-flat 5-line numeric counter strip instead of V12's collapsible tree (see
-the brief §1 postmortem). Navigation follows the operator keymap: arrow
-keys are primary (``↑↓`` move the cursor, ``←→`` collapse / expand),
-vim ``hjkl`` ride as hidden aliases declared app-wide on
+flat 5-line numeric counter strip instead of a collapsible tree (see the
+brief §1 postmortem). Navigation follows the operator keymap: arrow keys
+are primary (``↑↓`` move the cursor, ``←→`` collapse / expand), vim
+``hjkl`` ride as hidden aliases declared app-wide on
 :class:`~eawf.surfaces.tui.app.EaApp`. Pressing ``Enter`` on a **wave** row
 posts a :class:`RoadmapTree.WaveSelected` message so a host screen can
 route to the wave board scoped to that wave (the board screen lands in a
@@ -30,14 +38,14 @@ The tree is driven entirely by the reactive ``state`` attribute the host
 mtime-poll) state revision rebuilds the tree in place. For standalone
 unit tests, assign :attr:`state` directly and the same rebuild fires.
 
-The status signal is the **glyph** (``- > ~ # x !``) per the V12 schema —
-the glyph stays the primary, colour-independent signal so the tree is
-legible without relying on hue. Colour is *additive* on top of the glyph
-(colour-blind safe): the leading glyph is tinted by its lifecycle status
-from the Wong deuteranopia-safe palette. Tree node labels are parsed by
-Rich (not Textual content markup) and cannot resolve the ``$`` palette
-vars, so the glyph tint is applied as a concrete-colour Rich span sourced
-from the shared :data:`eawf.surfaces.tui.widgets.status_tint.STATUS_COLOURS` map
+The status signal is the **sigil** — the glyph stays the primary,
+colour-independent signal so the tree is legible without relying on hue.
+Colour is *additive* on top of the glyph (colour-blind safe): the leading
+glyph is tinted by its lifecycle status from the Wong deuteranopia-safe
+palette. Tree node labels are parsed by Rich (not Textual content markup)
+and cannot resolve the ``$`` palette vars, so the glyph tint is applied as
+a concrete-colour Rich span sourced from the shared
+:data:`eawf.surfaces.tui.widgets.status_tint.STATUS_COLOURS` map
 (re-exported here) — the same hex set ``theme.tcss`` carries as
 ``$status-*`` vars (Rich-label colours mirror the CSS vars, as the inline
 completion bar's plain renderer already does).
@@ -69,6 +77,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_size_bar,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.status_tint import STATUS_COLOURS, status_colour
 
 if TYPE_CHECKING:
@@ -80,10 +89,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Cell count for the inline completion bar on iter / phase rows. Kept at
-#: 5 (one cell per 20 %) so it matches the inline EU bar's width and the
-#: ``<glyph> <id>  <title>  <bar>`` row still fits the narrow roadmap pane.
-COMPLETION_BAR_CELLS: int = 5
+#: Cell count for the inline completion bar on iter / phase rows. Ten cells
+#: (one cell per 10 %) so a fully-closed iter / phase paints ten full block
+#: cells and the ``done/total`` ratio reads at single-percent resolution.
+#: Matches :func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar`'s
+#: default width so the block-fill maths stay one home.
+COMPLETION_BAR_CELLS: int = 10
 
 #: Active-wave elapsed burn bands. The row marker uses ``~`` at/above the
 #: warning threshold and ``!`` at/above the error threshold so the status is
@@ -138,40 +149,43 @@ _MIN_BODY_CHARS: int = 4
 #: :meth:`RoadmapTree.on_resize`.
 _UNSIZED_BUDGET: int = 1024
 
-#: V12 glyph schema (``- > ~ # x !``) mapped onto wave lifecycle status.
-#: ``-`` pending · ``>`` claimed · ``~`` in-progress · ``#`` closed ·
-#: ``x`` (reserved done/abandoned) · ``!`` failed. ASCII-stable so the
-#: ``--plain`` fallback needs no swap.
-WAVE_GLYPHS: dict[WaveStatus, str] = {
-    WaveStatus.PENDING: "-",
-    WaveStatus.CLAIMED: ">",
-    WaveStatus.IN_PROGRESS: "~",
-    WaveStatus.CLOSED: "#",
-    WaveStatus.ABANDONED: "x",
-    WaveStatus.FAILED: "!",
+#: Wave lifecycle status -> the FULL :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: set a leaf row draws. ``ABANDONED`` has no sigil of its own (the cosmic
+#: vocabulary carries no abandoned mark); it reads as :attr:`Sigil.FAILED`
+#: because an abandoned wave is a terminal non-success the same as a failed
+#: one, and the tinted glyph still distinguishes it (abandoned greys, failed
+#: reds) on the colour axis.
+WAVE_SIGILS: dict[WaveStatus, Sigil] = {
+    WaveStatus.PENDING: Sigil.PENDING,
+    WaveStatus.CLAIMED: Sigil.CLAIMED,
+    WaveStatus.IN_PROGRESS: Sigil.RUNNING,
+    WaveStatus.CLOSED: Sigil.CLOSED,
+    WaveStatus.ABANDONED: Sigil.FAILED,
+    WaveStatus.FAILED: Sigil.FAILED,
 }
 
-#: Phase-status glyphs reuse the same vocabulary: planned ``-``, active
-#: ``~``, closed ``#``, archived ``x``.
-PHASE_GLYPHS: dict[PhaseStatus, str] = {
-    PhaseStatus.PLANNED: "-",
-    PhaseStatus.ACTIVE: "~",
-    PhaseStatus.CLOSED: "#",
-    PhaseStatus.ARCHIVED: "x",
+#: Phase status -> the FOUR-state sigil subset a branch row draws (no
+#: ``CLAIMED`` — a phase is never claimed by one voice). ``PLANNED`` reads as
+#: :attr:`Sigil.PENDING`, ``ACTIVE`` as :attr:`Sigil.RUNNING`, ``CLOSED`` as
+#: :attr:`Sigil.CLOSED`, and ``ARCHIVED`` as :attr:`Sigil.CLOSED` (a clean
+#: terminal state; the muted archived tint carries the distinction).
+PHASE_SIGILS: dict[PhaseStatus, Sigil] = {
+    PhaseStatus.PLANNED: Sigil.PENDING,
+    PhaseStatus.ACTIVE: Sigil.RUNNING,
+    PhaseStatus.CLOSED: Sigil.CLOSED,
+    PhaseStatus.ARCHIVED: Sigil.CLOSED,
 }
 
-#: Iter-status glyphs: planned ``-``, active ``~``, closed ``#``,
-#: abandoned ``x``.
-ITER_GLYPHS: dict[IterStatus, str] = {
-    IterStatus.PLANNED: "-",
-    IterStatus.ACTIVE: "~",
-    IterStatus.CLOSED: "#",
-    IterStatus.ABANDONED: "x",
+#: Iter status -> the FOUR-state sigil subset a branch row draws (no
+#: ``CLAIMED``). ``PLANNED`` reads as :attr:`Sigil.PENDING`, ``ACTIVE`` as
+#: :attr:`Sigil.RUNNING`, ``CLOSED`` as :attr:`Sigil.CLOSED`, and
+#: ``ABANDONED`` as :attr:`Sigil.FAILED` (a terminal non-success).
+ITER_SIGILS: dict[IterStatus, Sigil] = {
+    IterStatus.PLANNED: Sigil.PENDING,
+    IterStatus.ACTIVE: Sigil.RUNNING,
+    IterStatus.CLOSED: Sigil.CLOSED,
+    IterStatus.ABANDONED: Sigil.FAILED,
 }
-
-#: Sentinel glyph for any status that drifts out of the maps above so the
-#: tree stays total even if the enums grow.
-UNKNOWN_GLYPH: str = "?"
 
 #: Internal alias kept so the tree's own call sites read locally; the
 #: status-tint map + lookup live in the shared
@@ -181,18 +195,22 @@ UNKNOWN_GLYPH: str = "?"
 _status_colour = status_colour
 
 
-def _glyph_for(status: object, table: dict[Any, str]) -> str:
-    """Return the glyph for *status* from *table*, or the sentinel.
+def _sigil_glyph(sigil: Sigil, *, mode: RenderMode) -> str:
+    """Return *sigil*'s glyph in the active render *mode*.
+
+    Threads the tree's resolved render mode into the shared SHAPE-layer
+    helper so a single ``"unicode"`` / ``"ascii"`` flip repaints every row's
+    leading sigil in the matching glyph column.
 
     Args:
-        status: A lifecycle status enum member.
-        table: One of :data:`WAVE_GLYPHS` / :data:`PHASE_GLYPHS` /
-            :data:`ITER_GLYPHS`.
+        sigil: The lifecycle-state mark to render.
+        mode: The App's resolved render-mode label (``"ascii"`` selects the
+            ASCII column; any other value selects the unicode column).
 
     Returns:
-        The mapped glyph, or :data:`UNKNOWN_GLYPH` when unmapped.
+        The single-cell sigil glyph string for the resolved column.
     """
-    return table.get(status, UNKNOWN_GLYPH)
+    return glyph(sigil, mode=mode)
 
 
 def _row_label(glyph: str, body: str, glyph_colour: str | None = None) -> Text:
@@ -730,16 +748,17 @@ class RoadmapTree(Tree[str]):
             state: The bound state.
             phase: The phase to add.
         """
-        glyph = _glyph_for(phase.status, PHASE_GLYPHS)
+        mode = self._render_mode()
+        sigil = _sigil_glyph(PHASE_SIGILS[phase.status], mode=mode)
         closed, total = _wave_completion(state, _phase_wave_ids(state, phase))
         bar = render_completion_bar(
             closed,
             total,
             width=COMPLETION_BAR_CELLS,
-            mode=self._render_mode(),
+            mode=mode,
         )
         label = _pin_bar_right(
-            glyph,
+            sigil,
             f"{phase.id.ljust(self._phase_id_width)}  {phase.title}",
             bar,
             budget=self._body_budget(depth=0),
@@ -763,16 +782,17 @@ class RoadmapTree(Tree[str]):
             parent: The phase node to attach under.
             iter_obj: The iter to add.
         """
-        glyph = _glyph_for(iter_obj.status, ITER_GLYPHS)
+        mode = self._render_mode()
+        sigil = _sigil_glyph(ITER_SIGILS[iter_obj.status], mode=mode)
         closed, total = _wave_completion(state, list(iter_obj.wave_ids))
         bar = render_completion_bar(
             closed,
             total,
             width=COMPLETION_BAR_CELLS,
-            mode=self._render_mode(),
+            mode=mode,
         )
         label = _pin_bar_right(
-            glyph,
+            sigil,
             f"{iter_obj.id.ljust(self._iter_id_width)}  {iter_obj.title}",
             bar,
             budget=self._body_budget(depth=1),
@@ -806,10 +826,10 @@ class RoadmapTree(Tree[str]):
             parent: The iter node to attach under.
             wave: The wave to add.
         """
-        glyph = _glyph_for(wave.status, WAVE_GLYPHS)
+        sigil = _sigil_glyph(WAVE_SIGILS[wave.status], mode=self._render_mode())
         bar = self._wave_burn_bar(state, wave)
         label = _pin_bar_right(
-            glyph,
+            sigil,
             f"{wave.id.ljust(self._wave_id_width)}  {wave.title}",
             bar,
             budget=self._body_budget(depth=2),
@@ -937,10 +957,9 @@ class RoadmapTree(Tree[str]):
 __all__ = [
     "COMPLETION_BAR_CELLS",
     "ELLIPSIS",
-    "ITER_GLYPHS",
-    "PHASE_GLYPHS",
+    "ITER_SIGILS",
+    "PHASE_SIGILS",
     "STATUS_COLOURS",
-    "UNKNOWN_GLYPH",
-    "WAVE_GLYPHS",
+    "WAVE_SIGILS",
     "RoadmapTree",
 ]

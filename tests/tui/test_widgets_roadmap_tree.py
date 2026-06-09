@@ -22,6 +22,8 @@ from eawf.surfaces.render.bars import BLOCK_EIGHTHS
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
 from eawf.surfaces.tui.widgets.eu_bar import (
+    COMPLETION_FULL,
+    COMPLETION_REMAINDER,
     EMPTY_STATE,
     render_bar_plain,
     render_size_bar,
@@ -35,15 +37,16 @@ from eawf.surfaces.tui.widgets.roadmap_tree import (
     _UNSIZED_BUDGET,
     COMPLETION_BAR_CELLS,
     ELLIPSIS,
-    ITER_GLYPHS,
-    PHASE_GLYPHS,
-    WAVE_GLYPHS,
+    ITER_SIGILS,
+    PHASE_SIGILS,
+    WAVE_SIGILS,
     RoadmapTree,
     _burn_marker,
     _pin_bar_right,
     _truncate_body,
     _wave_completion,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 from ._palette_harness import PaletteHarnessApp
 
@@ -283,27 +286,55 @@ def _find_data(tree: RoadmapTree, data: str) -> object | None:
 
 
 # --------------------------------------------------------------------------
-# Glyph maps — V12 schema completeness (pure)
+# Sigil maps — lifecycle-status -> Sigil totality (pure)
 # --------------------------------------------------------------------------
 
 
-def test_wave_glyphs_cover_every_status() -> None:
-    assert set(WAVE_GLYPHS) == set(WaveStatus)
+def test_wave_sigils_cover_every_status() -> None:
+    assert set(WAVE_SIGILS) == set(WaveStatus)
 
 
-def test_phase_glyphs_cover_every_status() -> None:
-    assert set(PHASE_GLYPHS) == set(PhaseStatus)
+def test_phase_sigils_cover_every_status() -> None:
+    assert set(PHASE_SIGILS) == set(PhaseStatus)
 
 
-def test_iter_glyphs_cover_every_status() -> None:
-    assert set(ITER_GLYPHS) == set(IterStatus)
+def test_iter_sigils_cover_every_status() -> None:
+    assert set(ITER_SIGILS) == set(IterStatus)
 
 
-def test_wave_glyph_values_match_v12_schema() -> None:
-    assert WAVE_GLYPHS[WaveStatus.PENDING] == "-"
-    assert WAVE_GLYPHS[WaveStatus.IN_PROGRESS] == "~"
-    assert WAVE_GLYPHS[WaveStatus.CLOSED] == "#"
-    assert WAVE_GLYPHS[WaveStatus.FAILED] == "!"
+def test_wave_sigil_values_map_full_lifecycle() -> None:
+    """Leaf wave rows draw the FULL lifecycle sigil set."""
+    assert WAVE_SIGILS[WaveStatus.PENDING] is Sigil.PENDING
+    assert WAVE_SIGILS[WaveStatus.CLAIMED] is Sigil.CLAIMED
+    assert WAVE_SIGILS[WaveStatus.IN_PROGRESS] is Sigil.RUNNING
+    assert WAVE_SIGILS[WaveStatus.CLOSED] is Sigil.CLOSED
+    assert WAVE_SIGILS[WaveStatus.FAILED] is Sigil.FAILED
+    # ABANDONED has no sigil of its own; it reads as the terminal FAILED mark.
+    assert WAVE_SIGILS[WaveStatus.ABANDONED] is Sigil.FAILED
+
+
+def test_branch_sigils_draw_four_state_subset_never_claimed() -> None:
+    """Iter / phase rows draw the four-state subset — never the CLAIMED sigil."""
+    assert Sigil.CLAIMED not in set(PHASE_SIGILS.values())
+    assert Sigil.CLAIMED not in set(ITER_SIGILS.values())
+    # The subset they DO draw: pending / running / closed / failed.
+    four_state = {Sigil.PENDING, Sigil.RUNNING, Sigil.CLOSED, Sigil.FAILED}
+    assert set(PHASE_SIGILS.values()) <= four_state
+    assert set(ITER_SIGILS.values()) <= four_state
+
+
+def test_phase_sigil_values_map_branch_subset() -> None:
+    assert PHASE_SIGILS[PhaseStatus.PLANNED] is Sigil.PENDING
+    assert PHASE_SIGILS[PhaseStatus.ACTIVE] is Sigil.RUNNING
+    assert PHASE_SIGILS[PhaseStatus.CLOSED] is Sigil.CLOSED
+    assert PHASE_SIGILS[PhaseStatus.ARCHIVED] is Sigil.CLOSED
+
+
+def test_iter_sigil_values_map_branch_subset() -> None:
+    assert ITER_SIGILS[IterStatus.PLANNED] is Sigil.PENDING
+    assert ITER_SIGILS[IterStatus.ACTIVE] is Sigil.RUNNING
+    assert ITER_SIGILS[IterStatus.CLOSED] is Sigil.CLOSED
+    assert ITER_SIGILS[IterStatus.ABANDONED] is Sigil.FAILED
 
 
 # --------------------------------------------------------------------------
@@ -329,14 +360,16 @@ def test_tree_builds_phase_iter_wave_hierarchy() -> None:
 
 def test_tree_wave_row_carries_in_progress_glyph() -> None:
     async def body() -> None:
-        app = _Harness()
+        app = _Harness()  # bare harness -> ascii render mode
         async with app.run_test(size=(80, 20)) as pilot:
             await pilot.pause()
             tree = app.query_one("#rt", RoadmapTree)
             tree.state = _load(_PHASE_ITER_WAVE)
             await pilot.pause()
             wave_label = next(lbl for lbl in _labels(tree) if "W01" in lbl)
-            assert wave_label.startswith("~ ")  # in_progress glyph
+            # in_progress -> Sigil.RUNNING -> ascii '*' (cosmic reskin sigil).
+            assert wave_label.startswith(f"{glyph(Sigil.RUNNING, mode='ascii')} ")
+            assert wave_label.startswith("* ")
 
     asyncio.run(body())
 
@@ -1583,5 +1616,184 @@ def test_refresh_from_empty_uses_active_phase_fallback() -> None:
             await pilot.pause()
             assert tree.cursor_node is not None
             assert tree.cursor_node.data == "P02"  # fallback to the active phase
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Cosmic-reskin lifecycle sigils + completion-bar close-gate (P30-I02-W06)
+# --------------------------------------------------------------------------
+
+
+def _state_all_lifecycle_waves() -> State:
+    """Return one iter holding a wave in each lifecycle state.
+
+    Five child waves span the full lifecycle alphabet — pending, claimed,
+    in_progress, closed, failed — so every leaf row's leading sigil can be
+    asserted against the cosmic-reskin SHAPE layer in a single mount.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["iters"]["P01-I01"]["wave_ids"] = [
+        "P01-I01-W01",
+        "P01-I01-W02",
+        "P01-I01-W03",
+        "P01-I01-W04",
+        "P01-I01-W05",
+    ]
+    payload["waves"] = {
+        "P01-I01-W01": _make_wave("P01-I01-W01", "P01-I01", "pending"),
+        "P01-I01-W02": _make_wave("P01-I01-W02", "P01-I01", "claimed"),
+        "P01-I01-W03": _make_wave("P01-I01-W03", "P01-I01", "in_progress"),
+        "P01-I01-W04": _make_wave("P01-I01-W04", "P01-I01", "closed"),
+        "P01-I01-W05": _make_wave("P01-I01-W05", "P01-I01", "failed"),
+    }
+    return State.model_validate(payload)
+
+
+def test_each_wave_row_renders_its_lifecycle_sigil() -> None:
+    """Every leaf wave row starts with the cosmic sigil for its status.
+
+    Mounts a fixture roadmap spanning pending / claimed / running / closed /
+    failed and asserts each row's leading glyph is the matching ascii sigil
+    ('o' / '(' / '*' / '@' / 'x') — the full lifecycle set on a leaf row.
+    """
+
+    async def body() -> None:
+        app = _Harness()  # bare harness -> ascii render mode
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_all_lifecycle_waves()
+            await pilot.pause()
+            expected = {
+                "P01-I01-W01": Sigil.PENDING,
+                "P01-I01-W02": Sigil.CLAIMED,
+                "P01-I01-W03": Sigil.RUNNING,
+                "P01-I01-W04": Sigil.CLOSED,
+                "P01-I01-W05": Sigil.FAILED,
+            }
+            for wave_id, sigil in expected.items():
+                label = next(lbl for lbl in _labels(tree) if wave_id in lbl)
+                assert label.startswith(f"{glyph(sigil, mode='ascii')} ")
+
+    asyncio.run(body())
+
+
+def test_each_wave_row_renders_unicode_lifecycle_sigil_via_app(tmp_path: Path) -> None:
+    """Under the real EaApp (unicode mode) every wave row carries its sigil.
+
+    The unicode column is the operator-default render mode; this pins the
+    full lifecycle sigil set on the live app so a font-driven flip does not
+    silently swap a leaf row back to the retired V12 glyphs.
+    """
+    state_path = _write_state(_state_all_lifecycle_waves(), tmp_path)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.render_mode = "unicode"
+            await settle_screen(pilot)
+            tree = app.screen.query_one(RoadmapTree)
+            expected = {
+                "P01-I01-W01": Sigil.PENDING,
+                "P01-I01-W02": Sigil.CLAIMED,
+                "P01-I01-W03": Sigil.RUNNING,
+                "P01-I01-W04": Sigil.CLOSED,
+                "P01-I01-W05": Sigil.FAILED,
+            }
+            for wave_id, sigil in expected.items():
+                label = str(_node_by_data(tree, wave_id).label)  # type: ignore[attr-defined]
+                assert label.startswith(f"{glyph(sigil, mode='unicode')} ")
+
+    asyncio.run(body())
+
+
+def _state_closed_iter_full() -> State:
+    """Return a CLOSED iter holding 55 closed waves (a full 55/55 ratio).
+
+    The iter and phase completion bars both tally 55 of 55 child waves
+    closed — a 100 % ratio whose block fill must paint every cell. Drives
+    the closed-iter-full-bar regression.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    wave_ids = [f"P01-I01-W{n:02d}" for n in range(1, 56)]  # 55 waves
+    payload["phases"]["P01"]["status"] = "closed"
+    payload["iters"]["P01-I01"]["status"] = "closed"
+    payload["iters"]["P01-I01"]["wave_ids"] = wave_ids
+    payload["waves"] = {
+        wid: _make_wave(wid, "P01-I01", "closed", title=f"wave {wid}") for wid in wave_ids
+    }
+    return State.model_validate(payload)
+
+
+def test_closed_iter_renders_full_block_bar_with_ratio(tmp_path: Path) -> None:
+    """A 55/55 closed iter paints ten full block cells plus the n/m ratio.
+
+    Regression for the close-gate bar: under the operator-default unicode
+    render mode the completion bar's block fill must light every one of its
+    ten cells (no remainder shade) and the row must carry the ``55/55``
+    ratio flush-right — never a fabricated short bar.
+    """
+    state_path = _write_state(_state_closed_iter_full(), tmp_path)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.render_mode = "unicode"
+            await settle_screen(pilot)
+            tree = app.screen.query_one(RoadmapTree)
+            iter_label = str(_node_by_data(tree, "P01-I01").label)  # type: ignore[attr-defined]
+            assert iter_label.rstrip().endswith("55/55")  # full ratio flush-right
+            # Ten full block cells, no remainder shade (a full ratio paints
+            # COMPLETION_BAR_CELLS == 10 full cells).
+            assert COMPLETION_FULL * COMPLETION_BAR_CELLS in iter_label
+            assert COMPLETION_BAR_CELLS == 10  # the close-gate "ten full cells"
+            assert COMPLETION_REMAINDER not in iter_label  # no unfilled tail
+            # The phase tallies the same 55/55 across its single iter.
+            phase_label = str(_node_by_data(tree, "P01").label)  # type: ignore[attr-defined]
+            assert phase_label.rstrip().endswith("55/55")
+            assert COMPLETION_FULL * COMPLETION_BAR_CELLS in phase_label
+
+    asyncio.run(body())
+
+
+def _state_empty_iter() -> State:
+    """Return a phase + iter that hold no child waves at all.
+
+    The iter's ``wave_ids`` is empty and the wave table is empty, so the
+    completion tally is ``(0, 0)`` — the fully-empty case whose bar must
+    surface :data:`EMPTY_STATE` rather than a fabricated 0 % bar.
+    """
+    payload = orjson.loads(_PHASE_ITER_WAVE.read_bytes())
+    payload["iters"]["P01-I01"]["wave_ids"] = []
+    payload["waves"] = {}
+    payload["current"]["active_wave_ids"] = []
+    return State.model_validate(payload)
+
+
+def test_empty_roadmap_renders_empty_state_not_fabricated_bar() -> None:
+    """An iter / phase with no child waves shows EMPTY_STATE, not a fake bar.
+
+    Regression for the close-gate empty-state guard: a fully-empty roadmap
+    (no child waves) must pin :data:`EMPTY_STATE` flush-right on its iter and
+    phase rows rather than a fabricated 0 % completion bar.
+    """
+
+    async def body() -> None:
+        app = _Harness()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            tree = app.query_one("#rt", RoadmapTree)
+            tree.state = _state_empty_iter()
+            await pilot.pause()
+            iter_label = str(_node_by_data(tree, "P01-I01").label)  # type: ignore[attr-defined]
+            phase_label = str(_node_by_data(tree, "P01").label)  # type: ignore[attr-defined]
+            assert iter_label.rstrip().endswith(EMPTY_STATE)
+            assert phase_label.rstrip().endswith(EMPTY_STATE)
+            # No fabricated bar: neither the ascii fill nor a completion ratio.
+            assert "/" not in iter_label
+            assert "#" not in iter_label
 
     asyncio.run(body())
