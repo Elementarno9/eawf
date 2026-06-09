@@ -52,11 +52,13 @@ from eawf.surfaces.tui.modes.registry import MODE_REGISTRY, mode_for_name
 from eawf.surfaces.tui.scopes import RepoScreen
 from eawf.surfaces.tui.screens.overlays.events import EventRow
 from eawf.surfaces.tui.snapshot import (
+    assert_screen_snapshot,
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 from eawf.workflow.lifecycle.wave_sha import Drift
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -326,8 +328,13 @@ def test_render_health_lines_titles_the_rollup_word() -> None:
     assert "unhealthy" in render_health_lines(unhealthy)[0]
 
 
-def test_render_health_lines_shows_each_status_glyph() -> None:
-    """Each row renders its status glyph (OK / WARN / FAIL) and its name."""
+def test_render_health_lines_shows_each_status_sigil() -> None:
+    """Each row renders its status sigil (closed / attention / failed) + name.
+
+    The SHAPE comes from the shared sigils home: ``ok`` wears the CLOSED
+    filled circle, ``warn`` wears the ``attention`` triangle, and ``fail``
+    wears the FAILED multiplication cross. The check names ride alongside.
+    """
     health = DoctorHealth(
         rows=[
             HealthRow("tools_available", "ok", "3 probes ok"),
@@ -336,10 +343,126 @@ def test_render_health_lines_shows_each_status_glyph() -> None:
         ],
         overall="fail",
     )
-    body = "\n".join(render_health_lines(health))
-    assert "OK" in body and "WARN" in body and "FAIL" in body
+    body = "\n".join(render_health_lines(health, mode="unicode"))
+    assert glyph(Sigil.CLOSED, mode="unicode") in body
+    assert chrome("attention", mode="unicode") in body
+    assert glyph(Sigil.FAILED, mode="unicode") in body
     assert "tools_available" in body
     assert "manifest_in_sync" in body
+
+
+def test_render_health_lines_warn_sigil_distinct_from_pending() -> None:
+    """A warn row wears the attention triangle, NEVER the pending ring.
+
+    The I00 correctness rule: a degraded check must not be shape-identical
+    to a not-yet-run one. The warn mark is the ``attention`` chrome triangle
+    (distinct shape); the PENDING lifecycle ring must be absent from the
+    rendered body so the two never collide.
+    """
+    health = DoctorHealth(
+        rows=[HealthRow("state_present", "warn", "no state.json")],
+        overall="warn",
+    )
+    body = "\n".join(render_health_lines(health, mode="unicode"))
+    attention = chrome("attention", mode="unicode")
+    pending = glyph(Sigil.PENDING, mode="unicode")
+    assert attention != pending  # guards the I00 shape-distinction premise
+    assert attention in body
+    assert pending not in body
+
+
+def test_render_health_lines_groups_install_state_drift_sections() -> None:
+    """The body groups rows under Install / State / Drift section headers.
+
+    Each doctor signal renders under exactly one section in install ->
+    state -> drift order: the toolchain / config / render probes under
+    Install, the state-presence / scale / events signals under State, and
+    the manifest / MCP / git-state reconciler signals under Drift.
+    """
+    health = DoctorHealth(
+        rows=[
+            HealthRow("tools_available", "ok", "3 probes ok"),
+            HealthRow("config_resolves", "ok", "2 profile(s)"),
+            HealthRow("render_output_roundtrip", "ok", "ok"),
+            HealthRow("state_present", "ok", "found"),
+            HealthRow("state_scale_ceiling", "ok", "under ceiling"),
+            HealthRow("manifest_in_sync", "ok", "synced"),
+            HealthRow("mcp_drift", "ok", "no drift"),
+            HealthRow("git_state_drift", "ok", "reconciles"),
+            HealthRow("recent_events", "ok", "no recent events"),
+        ],
+        overall="ok",
+    )
+    body = "\n".join(render_health_lines(health, mode="unicode"))
+    # The three section headers all appear, in order.
+    assert "Install" in body
+    assert "State" in body
+    assert "Drift" in body
+    install_at = body.index("Install")
+    state_at = body.index("State")
+    drift_at = body.index("Drift")
+    assert install_at < state_at < drift_at
+    # An install-section row sits before the State header; a drift-section
+    # row sits after the Drift header (the grouping is honoured, not flat).
+    assert body.index("tools_available") < state_at
+    assert body.index("git_state_drift") > drift_at
+    assert body.index("state_present") > state_at
+    assert body.index("state_present") < drift_at
+
+
+def test_render_health_lines_header_reads_n_checks_m_warn() -> None:
+    """The rollup title carries an ``N checks, M warn`` summary.
+
+    The count is every rendered signal row; the warn count is the rows whose
+    status is ``warn`` (the attention-triangle rows), so the operator reads
+    the degraded-check tally at a glance from the header.
+    """
+    health = DoctorHealth(
+        rows=[
+            HealthRow("tools_available", "ok", "ok"),
+            HealthRow("state_present", "warn", "no state.json"),
+            HealthRow("manifest_in_sync", "warn", "hand-edited"),
+            HealthRow("git_state_drift", "ok", "reconciles"),
+        ],
+        overall="warn",
+    )
+    header = render_health_lines(health, mode="unicode")[0]
+    assert "4 checks, 2 warn" in header
+
+
+def test_render_health_lines_header_zero_warn_clean_case() -> None:
+    """An all-ok health reads ``N checks, 0 warn`` in the header."""
+    health = DoctorHealth(
+        rows=[HealthRow("tools_available", "ok", "ok"), HealthRow("state_present", "ok", "found")],
+        overall="ok",
+    )
+    header = render_health_lines(health, mode="unicode")[0]
+    assert "2 checks, 0 warn" in header
+
+
+def test_render_health_lines_ascii_mode_uses_ascii_sigil_column() -> None:
+    """In ASCII mode each row wears the ASCII sigil column, not unicode.
+
+    The mode threads into the sigil helpers, so an ``ascii`` render draws
+    the ASCII fallback glyphs (closed=``@``, warn=``!``, fail=``x``) and the
+    unicode marks are absent -- the byte-stable column for a font-poor
+    terminal.
+    """
+    health = DoctorHealth(
+        rows=[
+            HealthRow("tools_available", "ok", "ok"),
+            HealthRow("state_present", "warn", "no state.json"),
+            HealthRow("manifest_in_sync", "fail", "bad"),
+        ],
+        overall="fail",
+    )
+    body = "\n".join(render_health_lines(health, mode="ascii"))
+    assert glyph(Sigil.CLOSED, mode="ascii") in body
+    assert chrome("attention", mode="ascii") in body
+    assert glyph(Sigil.FAILED, mode="ascii") in body
+    # The unicode marks must not bleed into the ASCII column.
+    assert glyph(Sigil.CLOSED, mode="unicode") not in body
+    assert glyph(Sigil.FAILED, mode="unicode") not in body
 
 
 def test_render_health_lines_surfaces_drift_block() -> None:
@@ -656,5 +779,74 @@ def test_doctor_mode_force_refresh_re_kicks_the_gather_worker(
             second = normalize_snapshot(capture_screen_text(app))
             assert "SENTINEL-GATHER-2" in second
             assert "SENTINEL-GATHER-1" not in second
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Isolated grouped-render golden -- the W14 reskin close-gate bar
+# --------------------------------------------------------------------------
+
+#: The W14 isolated golden, distinct from the shared full-app
+#: ``doctor_mode.txt`` so this wave owns + regenerates it without touching
+#: the coupled screen-snapshot suite. Lives beside the other TUI goldens.
+_GROUPED_GOLDEN = (
+    Path(__file__).resolve().parents[1] / "snapshots" / "tui" / "golden" / "doctor_mode_grouped.txt"
+)
+
+
+def test_doctor_mode_grouped_snapshot() -> None:
+    """The reskinned Doctor pane: install/state/drift groups + status sigils.
+
+    The W14 close-gate golden. The mode's live mount gathers env-dependent
+    doctor checks, so -- mirroring the shared snapshot's fixed-input stance
+    -- the screen is repainted with a deterministic :class:`DoctorHealth`
+    after mount. The fixture pins the install / state / drift section
+    grouping, the per-status sigil (ok=closed circle, warn=attention
+    triangle distinct from the pending ring, fail=failed cross), and the
+    ``N checks, M warn`` header summary, so a layout / glyph regression on
+    any of those is caught against a golden this wave owns in isolation.
+    """
+    health = DoctorHealth(
+        rows=[
+            HealthRow("tools_available", "ok", "3 probes ok"),
+            HealthRow("config_resolves", "ok", "2 profile(s) enabled"),
+            HealthRow("render_output_roundtrip", "ok", "round-trips clean"),
+            HealthRow("state_present", "ok", "state.json found"),
+            HealthRow("state_scale_ceiling", "warn", "approaching 5k-wave ceiling"),
+            HealthRow("manifest_in_sync", "warn", "drift: AGENTS.md::core=hand-edited"),
+            HealthRow("mcp_drift", "fail", "1 eawf-owned server missing"),
+            HealthRow(
+                "git_state_drift", "warn", "2 drift(s); kinds: closed_no_pin, pinned_mismatch"
+            ),
+            HealthRow("recent_events", "ok", "12 recent event(s); 1 error(s) in window"),
+        ],
+        overall="fail",
+        drift_count=2,
+        drift_kinds=["closed_no_pin", "pinned_mismatch"],
+        event_error_count=1,
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("5")  # -> doctor
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, DoctorModeScreen)
+            # Repaint with the fixed health so the golden is deterministic.
+            screen._paint_health(health)  # type: ignore[attr-defined]
+            await settle_screen(pilot)
+            assert_screen_snapshot(app, _GROUPED_GOLDEN)
+            # Belt-and-braces text assertions over the same painted frame so
+            # the close-gate criteria are pinned independently of the golden.
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert "Install" in frame and "State" in frame and "Drift" in frame
+            assert glyph(Sigil.CLOSED, mode="unicode") in frame  # ok sigil
+            assert chrome("attention", mode="unicode") in frame  # warn sigil
+            assert glyph(Sigil.FAILED, mode="unicode") in frame  # fail sigil
+            assert glyph(Sigil.PENDING, mode="unicode") not in frame  # warn != pending
+            assert "9 checks, 3 warn" in frame
 
     asyncio.run(body())

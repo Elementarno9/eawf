@@ -54,6 +54,7 @@ from textual.widgets import Static
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup, style_labeled_line
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 
 if TYPE_CHECKING:
     from eawf.observability.doctor.checks import CheckResult
@@ -68,10 +69,43 @@ logger = logging.getLogger(__name__)
 #: rollup and the CLI exit-code logic share one vocabulary.
 HealthStatus = Literal["ok", "warn", "fail"]
 
-#: Per-status glyph for a check / drift / events row. Plain ASCII tokens so
-#: the pane renders identically under any terminal font (no Braille
-#: dependence) and the golden stays byte-stable.
-_STATUS_GLYPH: dict[HealthStatus, str] = {"ok": "OK", "warn": "WARN", "fail": "FAIL"}
+#: The render-mode label threaded into the sigil helpers when the host App
+#: exposes no ``render_mode`` (a bare standalone render of the pure lines).
+#: The unicode column is the default surface; ``"ascii"`` only when the App
+#: resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
+
+
+def _status_mark(status: HealthStatus, *, mode: str) -> str:
+    """Return the tinted status-sigil content-markup span for *status*.
+
+    The shape resolves through the single
+    :mod:`~eawf.surfaces.tui.widgets.sigils` home so the pane invents no
+    glyph: ``ok`` wears the CLOSED lifecycle sigil (filled circle),
+    ``fail`` wears the FAILED sigil (multiplication cross), and ``warn``
+    wears the ``attention`` chrome triangle -- shape-distinct from the
+    PENDING ring so a degraded check never reads as a not-yet-run one. The
+    ok/fail tints come from the sigil's own Wong hex; warn wears the band's
+    ``$warning`` palette var.
+
+    Args:
+        status: The row's status (drives both the glyph and its colour).
+        mode: The App's resolved render-mode label (``"ascii"`` or unicode).
+
+    Returns:
+        The single-cell tinted glyph content-markup span for *status*.
+    """
+    if status == "ok":
+        mark = glyph(Sigil.CLOSED, mode=mode)
+        hex_tint = tint(Sigil.CLOSED)
+        return f"[{hex_tint}]{mark}[/]" if hex_tint else mark
+    if status == "fail":
+        mark = glyph(Sigil.FAILED, mode=mode)
+        hex_tint = tint(Sigil.FAILED)
+        return f"[{hex_tint}]{mark}[/]" if hex_tint else mark
+    mark = chrome("attention", mode=mode)
+    return f"[$warning]{mark}[/]"
+
 
 #: The human rollup word for each overall status, shown in the pane title.
 _ROLLUP_WORD: dict[HealthStatus, str] = {
@@ -79,6 +113,35 @@ _ROLLUP_WORD: dict[HealthStatus, str] = {
     "warn": "degraded",
     "fail": "unhealthy",
 }
+
+#: Per-row section assignment for the install / state / drift grouping.
+#: Every signal the pane renders maps to exactly one section so the body
+#: reads top-to-bottom as install health, then state health, then drift.
+#: The drift section carries the manifest / MCP / git-state-drift rows (the
+#: three reconciler signals); the events tail rides under state.
+_SECTION_OF: dict[str, str] = {
+    # install -- the toolchain + config + render round-trip probes
+    "tools_available": "install",
+    "config_resolves": "install",
+    "render_output_roundtrip": "install",
+    # state -- the state.json presence + scale + recent-events signals
+    "state_present": "state",
+    "state_scale_ceiling": "state",
+    "recent_events": "state",
+    # drift -- the manifest / MCP / git-state reconciler signals
+    "manifest_in_sync": "drift",
+    "mcp_drift": "drift",
+    "git_state_drift": "drift",
+}
+
+#: The section render order and the header each section block carries. A
+#: row whose name is unknown to :data:`_SECTION_OF` falls into ``install``
+#: so a future doctor check still renders rather than vanishing.
+_SECTION_ORDER: tuple[tuple[str, str], ...] = (
+    ("install", "Install"),
+    ("state", "State"),
+    ("drift", "Drift"),
+)
 
 #: Cap on the per-wave drift rows surfaced in the pane body; the full list
 #: is recoverable via ``eawf --json doctor``. Keeps the body bounded when a
@@ -393,39 +456,67 @@ def _gather_drifts(state_path: Path | None) -> list[Drift]:
     return detect_git_state_drift(state, repo_root=repo_root)
 
 
-def _status_glyph_line(name: str, status: HealthStatus, detail: str) -> str:
-    """Render one health row as a ``<GLYPH>  name  detail`` line.
+def _status_glyph_line(name: str, status: HealthStatus, detail: str, *, mode: str) -> str:
+    """Render one health row as a ``<sigil>  name  detail`` line.
 
-    The glyph is tinted by status via a content-markup span; the name + the
+    The leading mark is the status sigil from the shared sigils home
+    (ok=closed circle, warn=attention triangle, fail=failed cross),
+    tinted by status via a content-markup span; the name + the
     (markup-escaped) detail render plain so an event summary or a wave id in
     the detail never parses as a style tag.
 
     Args:
         name: The row's machine identifier.
-        status: The row's status (drives the glyph + its colour).
+        status: The row's status (drives the sigil + its colour).
         detail: The row's human detail (markup-escaped).
+        mode: The App's resolved render-mode label (``"ascii"`` or unicode).
 
     Returns:
         A content-markup line for a single :class:`~textual.widgets.Static`.
     """
-    glyph = _STATUS_GLYPH[status]
-    colour = {"ok": "$success", "warn": "$warning", "fail": "$error"}[status]
+    mark = _status_mark(status, mode=mode)
     body = f"{name:<26}  {escape_markup(detail)}" if detail else f"{name}"
-    return f"[{colour}]{glyph:<4}[/] {body}"
+    return f"  {mark} {body}"
 
 
-def render_health_lines(health: DoctorHealth) -> list[str]:
+def _group_rows(rows: list[HealthRow]) -> dict[str, list[HealthRow]]:
+    """Partition health rows into the install / state / drift sections.
+
+    Every row maps to exactly one section via :data:`_SECTION_OF`; an
+    unknown row name falls into ``install`` so a future doctor check still
+    renders rather than vanishing. Within each section the rows keep their
+    incoming render order.
+
+    Args:
+        rows: The folded health rows, in render order.
+
+    Returns:
+        A section-keyed mapping of the rows belonging to each section.
+    """
+    grouped: dict[str, list[HealthRow]] = {section: [] for section, _ in _SECTION_ORDER}
+    for row in rows:
+        section = _SECTION_OF.get(row.name, "install")
+        grouped[section].append(row)
+    return grouped
+
+
+def render_health_lines(health: DoctorHealth, *, mode: str = _DEFAULT_RENDER_MODE) -> list[str]:
     """Render a :class:`DoctorHealth` into the pane's content-markup lines.
 
     Pure helper so the rendered text is unit-testable without mounting the
-    screen. The body opens with a rollup title (``Health: <word>``), then
-    one glyph line per signal row, then -- when the reconciler surfaced any
-    drift -- a DRIFT block naming the count + the distinct kinds (capped at
-    :data:`_DRIFT_ROW_CAP`). An all-ok / honest-empty health renders the
-    rollup + the rows with no DRIFT block.
+    screen. The body opens with a rollup title (``Health: <word>``) carrying
+    a ``N checks, M warn`` summary, then the signal rows grouped under the
+    install / state / drift section headers (each section drawing only its
+    own rows). When the reconciler surfaced any drift, a DRIFT block names
+    the count + the distinct kinds (capped at :data:`_DRIFT_ROW_CAP`). An
+    all-ok / honest-empty health renders the rollup + the sections with no
+    DRIFT block. Each row's leading mark is the status sigil from the shared
+    :mod:`~eawf.surfaces.tui.widgets.sigils` home, resolved in *mode*.
 
     Args:
         health: The folded health view.
+        mode: The App's resolved render-mode label (``"ascii"`` or unicode)
+            threaded into the sigil helpers; defaults to the unicode column.
 
     Returns:
         The ordered content-markup lines (one per
@@ -433,8 +524,26 @@ def render_health_lines(health: DoctorHealth) -> list[str]:
     """
     word = _ROLLUP_WORD[health.overall]
     colour = {"ok": "$success", "warn": "$warning", "fail": "$error"}[health.overall]
-    lines: list[str] = [f"[$accent]Health:[/] [{colour}]{word}[/]", ""]
-    lines.extend(_status_glyph_line(row.name, row.status, row.detail) for row in health.rows)
+    check_count = len(health.rows)
+    warn_count = sum(1 for row in health.rows if row.status == "warn")
+    summary = f"[$text-muted]{check_count} checks, {warn_count} warn[/]"
+    lines: list[str] = [f"[$accent]Health:[/] [{colour}]{word}[/]  {summary}", ""]
+
+    grouped = _group_rows(health.rows)
+    for section, title in _SECTION_ORDER:
+        section_rows = grouped[section]
+        if not section_rows:
+            continue
+        lines.append(f"[$accent]{title}[/]")
+        lines.extend(
+            _status_glyph_line(row.name, row.status, row.detail, mode=mode) for row in section_rows
+        )
+        lines.append("")
+    # Drop the trailing separator the last section appended so the optional
+    # DRIFT block (or the body end) abuts the rows cleanly.
+    if lines and lines[-1] == "":
+        lines.pop()
+
     if health.drift_count:
         lines.append("")
         lines.append(style_labeled_line(f"drift:  {health.drift_count} wave(s)"))
@@ -535,10 +644,14 @@ class DoctorModeScreen(ScopeScreen):
         """Update the pane text from a folded :class:`DoctorHealth`.
 
         Named to avoid shadowing Textual's internal ``Screen._render`` (a
-        zero-arg compositor hook); this is the pane's own repaint entry.
+        zero-arg compositor hook); this is the pane's own repaint entry. The
+        active render mode is threaded into the sigil helpers so a
+        unicode <-> ASCII flip paints the right glyph column; a bare test
+        harness whose App carries no ``render_mode`` falls back to unicode.
         """
+        mode = getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
         text = self.query_one("#doctor-health-text", Static)
-        text.update("\n".join(render_health_lines(health)))
+        text.update("\n".join(render_health_lines(health, mode=mode)))
 
     def action_force_refresh(self) -> None:
         """Re-gather the health on ``F5`` (overrides the chassis heartbeat ack)."""

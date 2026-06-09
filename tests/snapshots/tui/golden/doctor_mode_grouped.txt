@@ -1,0 +1,40 @@
+ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Doctor    runtime: 1 running    HH:MM UTC
+
+  Health: unhealthy  9 checks, 3 warn
+
+  Install
+    ● tools_available             3 probes ok
+    ● config_resolves             2 profile(s) enabled
+    ● render_output_roundtrip     round-trips clean
+
+  State
+    ● state_present               state.json found
+    △ state_scale_ceiling         approaching 5k-wave ceiling
+    ● recent_events               12 recent event(s); 1 error(s) in window
+
+  Drift
+    △ manifest_in_sync            drift: AGENTS.md::core=hand-edited
+    ✕ mcp_drift                   1 eawf-owned server missing
+    △ git_state_drift             2 drift(s); kinds: closed_no_pin, pinned_mismatch
+
+  drift:  2 wave(s)
+  kinds:  closed_no_pin, pinned_mismatch
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit                    weekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
