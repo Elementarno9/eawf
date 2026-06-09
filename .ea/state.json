@@ -6998,7 +6998,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I02",
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -15460,7 +15460,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753278Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "TUI reskin into the Eae cosmic-terminal render language",
       "trigger": "none",
       "wave_ids": [
@@ -16718,7 +16718,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T15:29:41.286643Z",
+  "updated_at": "2026-06-09T15:36:34.972302Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
