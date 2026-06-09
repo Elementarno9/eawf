@@ -100,56 +100,23 @@ _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
 # Body schema lookup. The "fingerprint" column in ``skill list`` is the
 # fully-qualified class name of this model — stable enough to spot a
 # drift between the canonical body schema and an installed skill at a
-# glance. Built lazily (deferred import of ``eawf.workflow.skills.bodies``, which
-# pulls the pydantic body models) so importing this module to register the
-# command tree stays light.
-_SKILL_BODY_MODELS_CACHE: dict[SkillName, type[Any]] | None = None
+# glance. The canonical map lives in the library at
+# :data:`eawf.workflow.skills.bodies.SKILL_BODY_MODELS`; this thin
+# re-export defers that import so registering the command tree stays
+# light (the pydantic body models are only pulled when ``skill list``
+# actually runs).
 
 
 def _skill_body_models() -> dict[SkillName, type[Any]]:
-    """Return the canonical skill-name → body-model map (cached)."""
-    global _SKILL_BODY_MODELS_CACHE
-    if _SKILL_BODY_MODELS_CACHE is None:
-        from eawf.workflow.skills.bodies import (
-            AgentDispatchBody,
-            AuditBody,
-            BlitzBody,
-            CoauthorBody,
-            CompressBody,
-            DifferentiateBody,
-            FlowBody,
-            InitBody,
-            MemoryBody,
-            PolishBody,
-            PrepBody,
-            ResearchBody,
-            ReviewBody,
-            RoadmapBody,
-            SecurityReviewBody,
-            ShipBody,
-            WaveSpecBody,
-        )
+    """Re-export the canonical skill-name -> body-model map.
 
-        _SKILL_BODY_MODELS_CACHE = {
-            "/research": ResearchBody,
-            "/prep": PrepBody,
-            "/audit": AuditBody,
-            "/ship": ShipBody,
-            "/review": ReviewBody,
-            "/polish": PolishBody,
-            "/init": InitBody,
-            "/roadmap": RoadmapBody,
-            "/differentiate": DifferentiateBody,
-            "/flow": FlowBody,
-            "/blitz": BlitzBody,
-            "/coauthor": CoauthorBody,
-            "/memory": MemoryBody,
-            "/agent-dispatch": AgentDispatchBody,
-            "/compress": CompressBody,
-            "/wave-spec": WaveSpecBody,
-            "/security-review": SecurityReviewBody,
-        }
-    return _SKILL_BODY_MODELS_CACHE
+    The single source of truth is
+    :data:`eawf.workflow.skills.bodies.SKILL_BODY_MODELS`; the engine and
+    this CLI both bind against it without importing each other.
+    """
+    from eawf.workflow.skills.bodies import SKILL_BODY_MODELS
+
+    return SKILL_BODY_MODELS
 
 
 def _all_skill_names() -> list[SkillName]:

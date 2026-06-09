@@ -41,6 +41,8 @@ validation requires it on ``header.status == "needs_user"``.
 
 from __future__ import annotations
 
+from pydantic import BaseModel
+
 from eawf.workflow.skills.bodies.agent_dispatch import AgentDispatchBody
 from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.bodies.blitz import BlitzBody
@@ -61,7 +63,55 @@ from eawf.workflow.skills.bodies.ship import ShipBody
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.bodies.wave_spec import WaveSpecBody
 
+# Canonical skill-name -> body-model map. This is the single source of
+# truth the engine and the CLI both bind against, so neither layer has to
+# import the other (the CLI ``skill`` subapp re-exports this rather than
+# re-declaring the mapping). Key order matches
+# :data:`eawf.surfaces.render.envelope.CANONICAL_SKILL_NAMES` so the
+# ``skill list`` fingerprint column renders in the frozen builtin order.
+SKILL_BODY_MODELS: dict[str, type[BaseModel]] = {
+    "/research": ResearchBody,
+    "/prep": PrepBody,
+    "/audit": AuditBody,
+    "/ship": ShipBody,
+    "/review": ReviewBody,
+    "/polish": PolishBody,
+    "/init": InitBody,
+    "/roadmap": RoadmapBody,
+    "/differentiate": DifferentiateBody,
+    "/flow": FlowBody,
+    "/blitz": BlitzBody,
+    "/coauthor": CoauthorBody,
+    "/memory": MemoryBody,
+    "/agent-dispatch": AgentDispatchBody,
+    "/compress": CompressBody,
+    "/wave-spec": WaveSpecBody,
+    "/security-review": SecurityReviewBody,
+}
+
+
+def body_model_for(name: str) -> type[BaseModel]:
+    """Return the body-model class registered for canonical skill *name*.
+
+    Args:
+        name: A canonical slash-prefixed skill name (e.g. ``"/research"``).
+
+    Returns:
+        The :class:`pydantic.BaseModel` subclass that types the skill's
+        body payload.
+
+    Raises:
+        KeyError: *name* is not a canonical skill name in
+            :data:`SKILL_BODY_MODELS`.
+    """
+    try:
+        return SKILL_BODY_MODELS[name]
+    except KeyError as exc:
+        raise KeyError(f"unknown skill: {name!r}") from exc
+
+
 __all__ = [
+    "SKILL_BODY_MODELS",
     "AgentDispatchBody",
     "AuditBody",
     "BlitzBody",
@@ -83,4 +133,5 @@ __all__ = [
     "UserQuestion",
     "UserQuestionOption",
     "WaveSpecBody",
+    "body_model_for",
 ]
