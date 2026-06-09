@@ -2,9 +2,12 @@
 
 The read-only audit-progress surface: auto-opened when the TUI receives
 an ``audit_started`` event for a scope visible in the current screen, it
-shows one row per audit
-check with a status glyph (``✓`` pass / ``✗`` fail / ``·`` still running)
-and a running ``done/total`` tally. The overlay pops on the
+shows one row per audit check with a lifecycle-sigil status glyph (the
+closed sigil = pass / the failed sigil = fail / the running sigil = still
+running, drawn from the shared
+:mod:`~eawf.surfaces.tui.widgets.sigils` vocabulary), a block-progress bar
+over the reported-check share, and a running ``done/total`` tally. The
+overlay pops on the
 ``audit_completed`` event (the host swaps in
 :class:`~eawf.surfaces.tui.screens.overlays.audit_failed.AuditFailedModal` when
 the verdict is ``fail``) or on ``Esc`` (minimise to the footer chip
@@ -38,6 +41,14 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.eu_bar import (
+    DEFAULT_RENDER_MODE,
+    RenderMode,
+    render_completion_bar,
+)
+from eawf.surfaces.tui.widgets.sigils import Sigil
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,9 +56,10 @@ class CheckState(StrEnum):
     """Per-check progress state in a running audit.
 
     Attributes:
-        RUNNING: The check has not yet reported (``·`` spinner glyph).
-        PASS: The check passed (``✓`` glyph).
-        FAIL: The check failed (``✗`` glyph).
+        RUNNING: The check has not yet reported (the running lifecycle
+            sigil).
+        PASS: The check passed (the closed lifecycle sigil).
+        FAIL: The check failed (the failed lifecycle sigil).
     """
 
     RUNNING = "running"
@@ -55,14 +67,34 @@ class CheckState(StrEnum):
     FAIL = "fail"
 
 
-#: Glyph rendered for each :class:`CheckState`. ``·`` doubles as the
-#: still-running spinner (a static dot — the live spinner animation rides
-#: the wave that wires the per-check event tick).
-_GLYPH: dict[CheckState, str] = {
-    CheckState.RUNNING: "·",
-    CheckState.PASS: "✓",
-    CheckState.FAIL: "✗",
+#: :class:`CheckState` -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: whose glyph renders the per-check row. A running check ticks the running
+#: sigil, a pass folds onto the closed sigil, a fail onto the failed sigil --
+#: so the audit overlay shares the SHAPE vocabulary every reskin pane reads
+#: rather than inventing its own dot / check / cross marks.
+_CHECK_SIGIL: dict[CheckState, Sigil] = {
+    CheckState.RUNNING: Sigil.RUNNING,
+    CheckState.PASS: Sigil.CLOSED,
+    CheckState.FAIL: Sigil.FAILED,
 }
+
+
+def _check_glyph(state: CheckState, *, mode: RenderMode) -> str:
+    """Return the per-check glyph for *state* in the active render *mode*.
+
+    Routes through the single-home sigil vocabulary
+    (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) so the audit overlay
+    never hardcodes a glyph: a running check renders the running sigil, a
+    pass the closed sigil, a fail the failed sigil.
+
+    Args:
+        state: The check's current :class:`CheckState`.
+        mode: The App's resolved render mode (``"unicode"`` / ``"ascii"``).
+
+    Returns:
+        The single-cell glyph string for *state* in the resolved column.
+    """
+    return sigils.glyph(_CHECK_SIGIL[state], mode=mode)
 
 
 @dataclass(frozen=True)
@@ -158,6 +190,11 @@ class AuditRunningModal(ModalScreen[None]):
         color: $accent;
         height: 1;
     }
+    AuditRunningModal .audit-running-bar {
+        color: $accent;
+        height: 1;
+        margin-top: 1;
+    }
     AuditRunningModal #audit-running-rows {
         height: auto;
         max-height: 70%;
@@ -202,20 +239,44 @@ class AuditRunningModal(ModalScreen[None]):
         self.progress = progress
 
     def compose(self) -> ComposeResult:
-        """Yield the title (with tally), the per-check rows, and the hint.
+        """Yield the title, the block-progress bar, per-check rows, hint.
 
         The initial text is composed directly from the seeded snapshot so
         the first paint is correct without waiting on a reactive watcher;
-        :meth:`update_progress` drives live re-renders thereafter.
+        :meth:`update_progress` drives live re-renders thereafter. The
+        block-progress bar (the shared
+        :func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar` over
+        the reported-check share) sits under the title so the operator reads
+        the audit's done-fraction at a glance beside the per-check sigils.
         """
         snapshot = self.progress
+        mode = self._render_mode()
         with Vertical(id="audit-running-box"):
             yield Static(
                 _title_text(snapshot), classes="audit-running-title", id="audit-running-title"
             )
+            yield Static(
+                _bar_text(snapshot, mode=mode),
+                classes="audit-running-bar",
+                id="audit-running-bar",
+            )
             with VerticalScroll(id="audit-running-rows"):
-                yield Static(_rows_text(snapshot), id="audit-running-rows-inner")
+                yield Static(_rows_text(snapshot, mode=mode), id="audit-running-rows-inner")
             yield Static("[ Esc to minimise ]", classes="audit-running-hint")
+
+    def _render_mode(self) -> RenderMode:
+        """Return the App's resolved render mode, defaulting when unbound.
+
+        Reads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` so the
+        per-check sigils + the block-progress bar pick the right glyph
+        column. A bare harness whose host App carries no ``render_mode`` (a
+        direct construction outside the full app) falls back to the shared
+        default.
+
+        Returns:
+            The active render mode (``"unicode"`` / ``"ascii"``).
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def update_progress(self, progress: AuditProgress) -> None:
         """Swap in a fresh progress snapshot (daemon-push entry point).
@@ -226,15 +287,17 @@ class AuditRunningModal(ModalScreen[None]):
         self.progress = progress
 
     def watch_progress(self) -> None:
-        """Repaint the title tally + per-check rows on a new snapshot."""
+        """Repaint the title tally, bar, and per-check rows on a new snapshot."""
         if self.is_mounted:
             self._repaint()
 
     def _repaint(self) -> None:
-        """Rebuild the title + the per-check row block from the snapshot."""
+        """Rebuild the title, bar, and per-check row block from the snapshot."""
         snapshot = self.progress
+        mode = self._render_mode()
         self.query_one("#audit-running-title", Static).update(_title_text(snapshot))
-        self.query_one("#audit-running-rows-inner", Static).update(_rows_text(snapshot))
+        self.query_one("#audit-running-bar", Static).update(_bar_text(snapshot, mode=mode))
+        self.query_one("#audit-running-rows-inner", Static).update(_rows_text(snapshot, mode=mode))
 
     def action_close(self) -> None:
         """Dismiss the overlay (``Esc`` = minimise)."""
@@ -257,18 +320,48 @@ def _title_text(progress: AuditProgress | None) -> str:
     )
 
 
-def _rows_text(progress: AuditProgress | None) -> str:
-    """Format the per-check row block (one ``<glyph>  <name>`` per line).
+def _bar_text(progress: AuditProgress | None, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Format the block-progress bar over the reported-check share.
+
+    Renders the shared
+    :func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar` over the
+    ``done/total`` reported-check ratio so the audit's progress reads as a
+    block-filled bar (unicode) / ``#``/``-`` fill (ascii) with a trailing
+    ``done/total`` counter. A snapshot with no checks (or none yet seeded)
+    surfaces the shared empty-state sentinel rather than a fabricated bar.
 
     Args:
         progress: The current snapshot, or ``None`` before one is seeded.
+        mode: The active render mode (``"unicode"`` / ``"ascii"``).
+
+    Returns:
+        The rendered completion-bar string, or the empty-state sentinel when
+        there are no checks.
+    """
+    if progress is None:
+        return render_completion_bar(0, 0, mode=mode)
+    return render_completion_bar(progress.done(), progress.total(), mode=mode)
+
+
+def _rows_text(progress: AuditProgress | None, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Format the per-check row block (one ``<sigil>  <name>`` per line).
+
+    Each check renders its lifecycle sigil glyph (running / closed / failed
+    via :func:`_check_glyph`) so the row marks share the reskin SHAPE
+    vocabulary rather than a hardcoded dot / check / cross.
+
+    Args:
+        progress: The current snapshot, or ``None`` before one is seeded.
+        mode: The active render mode (``"unicode"`` / ``"ascii"``).
 
     Returns:
         The newline-joined check rows, or ``(no checks)`` when empty.
     """
     if progress is None or not progress.checks:
         return "(no checks)"
-    return "\n".join(f"{_GLYPH[check.state]}  {check.name}" for check in progress.checks)
+    return "\n".join(
+        f"{_check_glyph(check.state, mode=mode)}  {check.name}" for check in progress.checks
+    )
 
 
 def open_audit_running(app: object, progress: AuditProgress) -> None:

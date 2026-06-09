@@ -17,9 +17,17 @@ This is the only operator surface for mutating wave actions: the
 ``/wave`` palette verbs are read-only, so ``retry`` / ``abandon`` /
 ``split`` reach the operator **only** through this structured menu.
 
-This wave lands the **overlay**: the five-row menu rendered for a failing
-wave, the ``↑`` / ``↓`` highlight, the status-line render seam
-(:meth:`AuditFailedModal.mark_dispatching` /
+Above the menu the modal surfaces the **failing check** that tripped the
+verdict — its name marked with the failed lifecycle sigil + the gate
+chrome glyph — and a single ``evidence`` line carrying the structured
+evidence summary (a gate's exit code, a claim's ``file:line`` citation),
+NOT a raw stack trace. The operator therefore reads *which* check failed
+and *why* in two lines before choosing a repair action, rather than
+scrolling a dumped traceback.
+
+This wave lands the **overlay**: the failing-check header + evidence line,
+the five-row menu rendered for a failing wave, the ``↑`` / ``↓`` highlight,
+the status-line render seam (:meth:`AuditFailedModal.mark_dispatching` /
 :meth:`AuditFailedModal.mark_closed`), and the chosen-action result
 returned through the dismiss value. Wiring the pick to the
 ``eawf agent dispatch`` CLI verb + driving the status line off the
@@ -35,6 +43,7 @@ mounting Textual; the modal is a thin view over the menu + the line.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import ClassVar
 
 from textual.app import ComposeResult
@@ -44,7 +53,35 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
+from eawf.surfaces.tui.widgets.sigils import Sigil
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class FailingCheck:
+    """The audit check that tripped the fail verdict, plus its evidence.
+
+    Carries the structured failure summary the modal surfaces above the
+    repair menu so the operator reads *which* check failed and *why* before
+    choosing an action. The evidence is a one-line summary (a gate's exit
+    code, a claim's ``file:line`` citation), NOT a raw stack trace — the
+    overlay deliberately renders a clean evidence line rather than a dumped
+    traceback.
+
+    Attributes:
+        name: The failing check name (e.g. ``pytest_pass`` /
+            ``coverage_min``).
+        evidence: A one-line structured evidence summary (e.g.
+            ``exit=1`` / ``src/eawf/foo.py:42 missing citation``). Empty
+            when the daemon reported no evidence for the check.
+    """
+
+    name: str
+    evidence: str = ""
+
 
 #: The five mutating repair actions, in menu order. ``retry`` (index
 #: ``0``) is the default highlight — the most common repair response.
@@ -113,6 +150,15 @@ class AuditFailedModal(ModalScreen[str]):
         color: $error;
         height: auto;
     }
+    AuditFailedModal .audit-failed-check {
+        color: $error;
+        height: 1;
+        margin-top: 1;
+    }
+    AuditFailedModal .audit-failed-evidence {
+        color: $text-muted;
+        height: auto;
+    }
     AuditFailedModal #audit-failed-menu {
         height: auto;
         margin-top: 1;
@@ -153,7 +199,13 @@ class AuditFailedModal(ModalScreen[str]):
     #: retry).
     selected: reactive[int] = reactive(0)
 
-    def __init__(self, wave_id: str, runtime: str = "claude-code") -> None:
+    def __init__(
+        self,
+        wave_id: str,
+        runtime: str = "claude-code",
+        *,
+        failing_check: FailingCheck | None = None,
+    ) -> None:
         """Construct the overlay for a failing wave.
 
         Args:
@@ -161,15 +213,54 @@ class AuditFailedModal(ModalScreen[str]):
             runtime: The runtime the repair subagent will dispatch onto;
                 rendered in the status line. Defaults to the canonical
                 ``claude-code`` adapter id.
+            failing_check: The check that tripped the fail verdict plus its
+                one-line structured evidence summary. Surfaced above the
+                repair menu so the operator reads which check failed and why
+                before choosing an action. ``None`` (the
+                event-stream-not-yet-wired path) renders no check header.
         """
         super().__init__()
         self._wave_id = wave_id
         self._runtime = runtime
+        self._failing_check = failing_check
+
+    def _render_mode(self) -> RenderMode:
+        """Return the App's resolved render mode, defaulting when unbound.
+
+        Reads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` so the
+        failing-check sigil + gate-chrome glyphs pick the right column. A
+        bare harness whose host App carries no ``render_mode`` (a direct
+        construction outside the full app) falls back to the shared default.
+
+        Returns:
+            The active render mode (``"unicode"`` / ``"ascii"``).
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
     def compose(self) -> ComposeResult:
-        """Yield the title, the five-action menu, the status line, hint."""
+        """Yield the title, failing-check header, menu, status line, hint.
+
+        When a :class:`FailingCheck` is supplied the modal renders a
+        ``<failed-sigil> <gate-glyph> <name>`` header line + a clean
+        ``evidence: <summary>`` line above the menu (the structured failure,
+        never a raw trace) so the operator reads which check failed and why
+        before choosing a repair action.
+        """
+        mode = self._render_mode()
         with Vertical(id="audit-failed-box"):
             yield Static(f"audit failed: {self._wave_id}", classes="audit-failed-title")
+            if self._failing_check is not None:
+                fail_glyph = sigils.glyph(Sigil.FAILED, mode=mode)
+                gate_glyph = sigils.chrome("gate", mode=mode)
+                yield Static(
+                    f"{fail_glyph} {gate_glyph} {self._failing_check.name}",
+                    classes="audit-failed-check",
+                )
+                evidence = self._failing_check.evidence or "no evidence reported"
+                yield Static(
+                    f"evidence: {evidence}",
+                    classes="audit-failed-evidence",
+                )
             with Vertical(id="audit-failed-menu"):
                 for index, action in enumerate(_ACTIONS):
                     hint = _ACTION_HINTS[action]
@@ -241,7 +332,13 @@ class AuditFailedModal(ModalScreen[str]):
         self.dismiss("close")
 
 
-def open_audit_failed(app: object, wave_id: str, runtime: str = "claude-code") -> None:
+def open_audit_failed(
+    app: object,
+    wave_id: str,
+    runtime: str = "claude-code",
+    *,
+    failing_check: FailingCheck | None = None,
+) -> None:
     """Push the audit-failed overlay onto *app*'s screen stack (cap-checked).
 
     Routes through the App's modal-cap-aware ``push_modal`` helper when
@@ -257,18 +354,21 @@ def open_audit_failed(app: object, wave_id: str, runtime: str = "claude-code") -
             :mod:`eawf.surfaces.tui.app`).
         wave_id: The wave whose audit failed (the dispatch target).
         runtime: The runtime the repair subagent will dispatch onto.
+        failing_check: The check that tripped the fail verdict plus its
+            one-line evidence summary, surfaced above the repair menu.
     """
     push_modal = getattr(app, "push_modal", None)
     if callable(push_modal):
-        push_modal(AuditFailedModal(wave_id, runtime=runtime))
+        push_modal(AuditFailedModal(wave_id, runtime=runtime, failing_check=failing_check))
         return
     push_screen = getattr(app, "push_screen", None)
     if callable(push_screen):
-        push_screen(AuditFailedModal(wave_id, runtime=runtime))
+        push_screen(AuditFailedModal(wave_id, runtime=runtime, failing_check=failing_check))
 
 
 __all__ = [
     "AuditFailedModal",
+    "FailingCheck",
     "format_dispatch_line",
     "open_audit_failed",
 ]

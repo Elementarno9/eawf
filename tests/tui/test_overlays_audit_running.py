@@ -22,6 +22,8 @@ from eawf.surfaces.tui.screens.overlays.audit_running import (
     CheckState,
     open_audit_running,
 )
+from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.sigils import Sigil
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -109,9 +111,31 @@ def test_audit_running_rows_render_glyphs() -> None:
             await pilot.pause()
             rows = modal.query_one("#audit-running-rows-inner", Static)
             text = str(rows.render())
-            assert "✓" in text  # the passed check
-            assert "·" in text  # a still-running check
+            # The per-check marks now draw the shared lifecycle sigils: a pass
+            # folds onto the closed sigil, a running check onto the running
+            # sigil (migrated off the old dot / check / cross).
+            assert sigils.glyph(Sigil.CLOSED, mode="unicode") in text  # the passed check
+            assert sigils.glyph(Sigil.RUNNING, mode="unicode") in text  # a still-running check
             assert "file_exists" in text
+
+    asyncio.run(body())
+
+
+def test_audit_running_renders_block_progress_bar() -> None:
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            modal = AuditRunningModal(_PROGRESS)
+            app.push_screen(modal)
+            await pilot.pause()
+            bar = modal.query_one("#audit-running-bar", Static)
+            text = str(bar.render())
+            # One of three checks reported, so the block-progress bar shows a
+            # partial fill + a 1/3 counter in the unicode render mode.
+            assert "█" in text
+            assert "▒" in text
+            assert "1/3" in text
 
     asyncio.run(body())
 

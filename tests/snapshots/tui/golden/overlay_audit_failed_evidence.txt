@@ -1,0 +1,29 @@
+
+
+
+
+
+
+
+
+
+
+
+                  ┌──────────────────────────────────────────────────────────────────────────────────┐
+                  │                                                                                  │
+                  │  audit failed: P30-I02-W21                                                       │
+                  │                                                                                  │
+                  │  ✕ ⎔ pytest_pass                                                                 │
+                  │  evidence: exit=1 (3 failed, 0 passed)                                           │
+                  │                                                                                  │
+                  │   retry — re-dispatch the wave                                                   │
+                  │   split — split into smaller waves                                               │
+                  │   land-partial — land what passed, defer the rest                                │
+                  │   abandon — abandon the wave                                                     │
+                  │   scope-change — revise the wave success criteria                                │
+                  │                                                                                  │
+                  │                                                                                  │
+                  │                                                                                  │
+                  │  [ ↑/↓ select · Enter dispatch · Esc close ]                                     │
+                  │                                                                                  │
+                  └──────────────────────────────────────────────────────────────────────────────────┘

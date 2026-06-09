@@ -39,6 +39,9 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static, Tree
 
+from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
+
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
@@ -268,17 +271,35 @@ class PlanPreviewModal(ModalScreen[str]):
         if self.is_mounted:
             self._repaint_actions()
 
+    def _render_mode(self) -> RenderMode:
+        """Return the App's resolved render mode, defaulting when unbound.
+
+        Reads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` so the
+        frontier marker picks the right chrome-glyph column. A bare harness
+        whose host App carries no ``render_mode`` (a direct construction
+        outside the full app) falls back to the shared default.
+
+        Returns:
+            The active render mode (``"unicode"`` / ``"ascii"``).
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
     def _repaint_actions(self) -> None:
         """Rebuild the action row, marking selected + disabled cells.
 
-        ``approve`` carries the ``-disabled`` style when the plan has no
-        waves; the highlight skips it in :meth:`action_move`.
+        The selected action is marked with the shared dispatch chrome glyph
+        (the cosmic-terminal frontier pointer), drawn from the single-home
+        sigil vocabulary so the marker honours the active render mode rather
+        than hardcoding a unicode triangle. ``approve`` carries the
+        ``(disabled)`` suffix when the plan has no waves; the highlight
+        skips it in :meth:`action_move`.
         """
         row = self.query_one("#plan-action-row", Static)
+        frontier = sigils.chrome("dispatch", mode=self._render_mode())
         cells: list[str] = []
         for index, action in enumerate(_ACTIONS):
             disabled = action == "approve" and not self._has_waves
-            marker = "▸ " if index == self.selected else "  "
+            marker = f"{frontier} " if index == self.selected else "  "
             suffix = " (disabled)" if disabled else ""
             cells.append(f"{marker}{action}{suffix}")
         row.update("    ".join(cells))

@@ -1,4 +1,14 @@
-"""Clickable-reference modal and preview helpers for the TUI."""
+"""Clickable-reference modal and preview helpers for the TUI.
+
+The :class:`ReferenceModal` reuses the cosmic-terminal detail-chassis look
+its sibling :class:`~eawf.surfaces.tui.screens.overlays.detail.DetailModal`
+established: the card title carries the overview chrome-glyph mnemonic from
+the shared :mod:`~eawf.surfaces.tui.widgets.sigils` vocabulary, and the
+field rows are aligned ``[$accent]<label>:[/] <value>`` pairs so the
+colons line up in one column. A reference card therefore reads as a
+single-tab slice of the detail card rather than a differently-styled
+overlay.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +25,8 @@ from textual.widgets import Static
 
 from eawf.kernel.state.urn import parse as parse_urn
 from eawf.surfaces.render.link_wrap import ReferenceKind, iter_refs, linkify_text
+from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 
 logger = logging.getLogger(__name__)
 
@@ -383,10 +395,30 @@ class ReferenceModal(ModalScreen[None]):
         self._card = card
         self._state = state
 
+    def _render_mode(self) -> RenderMode:
+        """Return the App's resolved render mode, defaulting when unbound.
+
+        Reads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` so the title
+        chrome glyph picks the right column. A bare harness whose host App
+        carries no ``render_mode`` (a direct construction outside the full
+        app) falls back to the shared default.
+
+        Returns:
+            The active render mode (``"unicode"`` / ``"ascii"``).
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
     def compose(self) -> ComposeResult:
-        """Yield the reference card rows."""
+        """Yield the reference card rows in the shared detail-chassis look.
+
+        The title carries the overview chrome-glyph mnemonic (the same mark
+        the detail card's ``overview`` tab uses) and the field rows are
+        aligned ``label: value`` pairs, so a reference card reads as a
+        single-tab slice of the detail chassis.
+        """
+        overview_glyph = sigils.chrome("overview", mode=self._render_mode())
         with VerticalScroll(id="reference-card"):
-            yield Static(self._card.title, classes="reference-title")
+            yield Static(f"{overview_glyph} {self._card.title}", classes="reference-title")
             label_width = max((len(label) for label, _ in self._card.rows), default=0)
             for label, value in self._card.rows:
                 padded = f"{label}:".ljust(label_width + 1)
