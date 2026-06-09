@@ -338,8 +338,11 @@ def test_autopilot_pane_lists_ready_frontier_in_claim_order(tmp_path: Path) -> N
     """The mounted pane lists the ready waves in claim order, matching the compute.
 
     Seeds a wave graph whose ready frontier is ``(W02, W05)`` and asserts the
-    pane mounts exactly those rows, in claim order, surfacing each ready wave id
-    while the held / blocked waves (W03 / W04) stay off the list.
+    pane mounts exactly those ready rows (CSS class :data:`FRONTIER_ROW_CLASS`),
+    in claim order. The held / blocked waves (W03 / W04) are NOT ready rows --
+    the reskin surfaces them in the separate blocked band (see
+    :func:`test_autopilot_pane_renders_ready_blocked_split`), so they never
+    appear as a dispatch-target row.
     """
     state = _frontier_state()
     state_path = _write_state(tmp_path, state)
@@ -356,12 +359,15 @@ def test_autopilot_pane_lists_ready_frontier_in_claim_order(tmp_path: Path) -> N
             rows = pane.query(f".{FRONTIER_ROW_CLASS}")
             assert len(rows) == len(expected) == 2
             frame = normalize_snapshot(capture_screen_text(app))
-            # The two ready waves are listed; the held + blocked ones are not.
+            # The two ready waves are listed in the ready band.
             assert "P01-I01-W02" in frame
             assert "P01-I02-W05" in frame
-            assert "P01-I01-W04" not in frame  # dep still open
             assert EMPTY_NOTICE not in frame
-            # The listed order matches compute_ready_frontier's claim order.
+            # W04 is held (dep open), so it is NOT a ready (dispatch-target) row;
+            # the reskin shows it in the blocked band instead.
+            row_text = " ".join(str(row.render()) for row in rows)  # type: ignore[attr-defined]
+            assert "P01-I01-W04" not in row_text
+            # The listed ready order matches compute_ready_frontier's claim order.
             row_order = [str(row.render()) for row in rows]  # type: ignore[attr-defined]
             assert "P01-I01-W02" in row_order[0]
             assert "P01-I02-W05" in row_order[1]

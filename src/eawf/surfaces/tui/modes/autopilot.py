@@ -71,11 +71,27 @@ out of band:
   honest ``arm: deferred`` line. The key stays bound + footer-advertised for
   discoverability; its result truthfully says the capability is deferred.
 
+Ready vs blocked split (the cosmetic-terminal reskin)
+-----------------------------------------------------
+The list renders the frontier as two bands. The **ready** band lists the
+claim-ready waves, each leading with the multi-select checkbox affordance
+(:func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``check_on`` / ``check_off``)
+and the dispatch chrome arrow (``chrome("dispatch")``) -- the affordance LOOK
+only; the actual multi-select wiring is deferred to a later wave. The
+**blocked** band lists the PENDING waves held off the frontier, each naming the
+dep blocking it (e.g. ``<- P29-I04-W06``), so the operator reads what must close
+or dispatch before a held wave becomes claimable. The dispatch result line
+pairs its literal instruction with the cockpit's "speak it into being" flavour
+hover text -- flavour on the affordance, not a relabel of the dispatch verb.
+Both glyph columns (unicode / ASCII) honour the App's resolved
+:attr:`~eawf.surfaces.tui.app.EaApp.render_mode`.
+
 Honest-empty is the COMMON path: a scope whose wave graph has no claim-ready
 wave (every wave CLOSED, or the next waves still blocked on open deps) renders
 the muted :data:`EMPTY_NOTICE` banner instead of an empty table that reads as a
 quiet "ready to go", exactly like the evidence / trust / research modes'
-honest-empty surfaces.
+honest-empty surfaces; any blocked waves still render below it so the held
+frontier stays visible.
 """
 
 from __future__ import annotations
@@ -95,7 +111,11 @@ from eawf.kernel.spec.auq_bridge import (
     WaveFrontierItem,
     compute_ready_frontier,
 )
+from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.ids import natural_key
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
@@ -104,6 +124,7 @@ if TYPE_CHECKING:
 
     from eawf.kernel.state.models import State, Wave
     from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+    from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +133,14 @@ FRONTIER_HEADER_ID: str = "autopilot-header"
 
 #: Id of the scrollable ready-wave list container.
 FRONTIER_LIST_ID: str = "autopilot-list"
+
+#: Id of the ready-section sub-header (the "ready" band caption above the
+#: claim-ready rows in the ready/blocked split).
+READY_SECTION_ID: str = "autopilot-ready-section"
+
+#: Id of the blocked-section sub-header (the "blocked" band caption above the
+#: blocked rows, each of which names the dep holding it off the frontier).
+BLOCKED_SECTION_ID: str = "autopilot-blocked-section"
 
 #: Id of the honest-empty notice shown when no wave is claim-ready.
 FRONTIER_EMPTY_ID: str = "autopilot-empty"
@@ -123,12 +152,35 @@ DISPATCH_RESULT_ID: str = "autopilot-result"
 #: CSS class on each rendered ready-wave row.
 FRONTIER_ROW_CLASS: str = "autopilot-row"
 
+#: CSS class on each rendered blocked-wave row (the not-yet-claimable band).
+#: A blocked row is read-only: it names the dep holding the wave off the
+#: frontier and is never a dispatch target, so it carries no selection look.
+BLOCKED_ROW_CLASS: str = "autopilot-blocked-row"
+
 #: CSS class flagging the selected ready-wave row (the dispatch target).
 SELECTED_ROW_CLASS: str = "-selected"
 
 #: Notice when the wave graph has no claim-ready wave. Phrased so the empty
 #: surface is unmistakable rather than reading as a quiet "ready to go".
 EMPTY_NOTICE: str = "no ready waves"
+
+#: Caption above the ready band of the ready/blocked split -- the claim-ready
+#: rows that the dispatch affordance can act on.
+READY_CAPTION: str = "ready"
+
+#: Caption above the blocked band of the ready/blocked split -- the PENDING
+#: rows held off the frontier, each naming the dep blocking it.
+BLOCKED_CAPTION: str = "blocked"
+
+#: Marker prefixing a blocked row's blocking dep so the operator reads which
+#: wave holds it off the frontier at a glance (e.g. ``<- EUCAP-6``). The arrow
+#: is ASCII so it renders identically in both glyph columns.
+BLOCKED_BY_MARKER: str = "<-"
+
+#: Hover / flavour text on the dispatch affordance -- the cockpit's "speak it
+#: into being" framing for asking the daemon to spawn the selected wave. This
+#: is flavour on the affordance, NOT a literal relabel of the dispatch verb.
+DISPATCH_FLAVOUR: str = "speak it into being"
 
 #: Result line before any dispatch has been issued (the idle dispatch surface).
 DISPATCH_IDLE: str = "press d to dispatch the selected ready wave"
@@ -228,6 +280,34 @@ class ReadyWaveRow:
     title: str
 
 
+@dataclass(frozen=True)
+class BlockedWaveRow:
+    """One PENDING wave held off the ready frontier, with its blocking dep.
+
+    A display projection of a PENDING
+    :class:`~eawf.kernel.spec.auq_bridge.WaveFrontierItem` that did NOT make
+    the ready frontier, enriched with the wave's title and the id of the dep
+    that holds it off the frontier so the blocked band reads as "this wave is
+    waiting on that one" without a second lookup. The blocking dep is the
+    wave's first not-yet-CLOSED dependency in claim order; when every dep is
+    CLOSED but a lower-numbered ready sibling holds the wave, the blocker is
+    that sibling instead (the monotonic claim-order gate).
+
+    Attributes:
+        wave_id: The blocked wave id (e.g. ``P29-I04-W12``).
+        iter_id: The wave's parent iter id.
+        title: The wave's bounded title, or the empty string when none.
+        blocked_by: The id of the wave holding this one off the frontier --
+            an open dep, or the lower-numbered ready sibling. Never empty for
+            a genuinely blocked row.
+    """
+
+    wave_id: str
+    iter_id: str
+    title: str
+    blocked_by: str
+
+
 def build_frontier_items(state: State | None) -> tuple[WaveFrontierItem, ...]:
     """Project the bound state's waves into the frontier-compute view.
 
@@ -293,46 +373,216 @@ def ready_rows(frontier: DrainableFrontier, state: State | None) -> tuple[ReadyW
     return rows
 
 
+def blocked_rows(frontier: DrainableFrontier, state: State | None) -> tuple[BlockedWaveRow, ...]:
+    """Project the PENDING waves held off the ready frontier into blocked rows.
+
+    Walks :attr:`DrainableFrontier.by_id` for every PENDING wave that is NOT
+    on :attr:`DrainableFrontier.ready` and names the wave holding it off the
+    frontier (:func:`_blocker_of`) -- an open (not-yet-CLOSED) dep, or, when
+    every dep is CLOSED, the lower-numbered ready sibling the monotonic
+    claim-order gate prefers. Rows are returned in claim order (natural id
+    order) so the blocked band reads top-to-bottom like the ready band. A
+    PENDING wave with no resolvable blocker (it cannot be, since a PENDING
+    wave off the ready frontier always has one) is skipped rather than shown
+    with an empty marker.
+
+    Args:
+        frontier: The computed ready frontier from
+            :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier`.
+        state: The bound read-only state the titles are read from.
+
+    Returns:
+        The blocked-wave display rows in claim order; empty when no PENDING
+        wave is blocked.
+    """
+    waves = state.waves if state is not None else {}
+    ready_ids = set(frontier.ready_ids)
+    blocked: list[BlockedWaveRow] = []
+    for item in frontier.by_id.values():
+        if item.status is not WaveStatus.PENDING or item.wave_id in ready_ids:
+            continue
+        blocker = _blocker_of(item, frontier, ready_ids)
+        if blocker is None:
+            continue
+        blocked.append(
+            BlockedWaveRow(
+                wave_id=item.wave_id,
+                iter_id=item.iter_id,
+                title=_wave_title(waves.get(item.wave_id)),
+                blocked_by=blocker,
+            )
+        )
+    blocked.sort(key=lambda row: natural_key(row.wave_id))
+    return tuple(blocked)
+
+
+def _blocker_of(
+    item: WaveFrontierItem,
+    frontier: DrainableFrontier,
+    ready_ids: set[str],
+) -> str | None:
+    """Return the id of the wave holding *item* off the ready frontier.
+
+    The blocker is the wave's first not-yet-CLOSED dependency in declared
+    order (the dep gate); when every dep is CLOSED the wave is held by the
+    monotonic claim-order gate, so the blocker is the nearest lower-numbered
+    sibling under the same iter (preferring a ready sibling, since that is the
+    one the operator dispatches to unblock this row). Returns ``None`` only
+    when no blocker resolves -- a PENDING wave off the frontier always has
+    one, so the ``None`` path is defensive.
+
+    Args:
+        item: The blocked PENDING wave.
+        frontier: The computed frontier carrying the full indexed view.
+        ready_ids: The set of ready wave ids (claim-ready right now).
+
+    Returns:
+        The blocking wave id, or ``None`` when none resolves.
+    """
+    for dep_id in item.deps:
+        dep = frontier.by_id.get(dep_id)
+        if dep is None or dep.status is not WaveStatus.CLOSED:
+            return dep_id
+    my_key = natural_key(item.wave_id)
+    siblings = sorted(
+        (
+            other
+            for other in frontier.by_id.values()
+            if other.iter_id == item.iter_id
+            and other.wave_id != item.wave_id
+            and natural_key(other.wave_id) < my_key
+        ),
+        key=lambda other: natural_key(other.wave_id),
+        reverse=True,
+    )
+    ready_sibling = next((s.wave_id for s in siblings if s.wave_id in ready_ids), None)
+    if ready_sibling is not None:
+        return ready_sibling
+    return siblings[0].wave_id if siblings else None
+
+
 def _wave_title(wave: Wave | None) -> str:
     """Return the wave's title, or the empty string when the wave is absent."""
     return wave.title if wave is not None else ""
 
 
-def render_frontier_header(rows: tuple[ReadyWaveRow, ...]) -> str:
-    """Render the frontier header line above the ready-wave list.
+def render_frontier_header(
+    rows: tuple[ReadyWaveRow, ...],
+    blocked: tuple[BlockedWaveRow, ...] = (),
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+) -> str:
+    """Render the frontier header line above the ready/blocked split.
 
-    When the frontier has ready waves the header reports the ready count so
-    the operator reads the frontier size at a glance; when it is empty it leads
-    with the honest-empty banner rather than implying a primed dispatch queue.
+    Leads with the dispatch chrome arrow (:func:`sigils.chrome` ``"dispatch"``)
+    so the cockpit's dispatch identity reads at a glance. When the frontier has
+    ready waves the header reports the ready count (and the blocked count, when
+    any wave is held) so the operator reads both bands' sizes at a glance; when
+    nothing is ready it leads with the honest-empty banner rather than implying
+    a primed dispatch queue.
 
     Args:
         rows: The ready-wave display rows (empty when nothing is ready).
+        blocked: The blocked-wave display rows (empty when nothing is held).
+        mode: The App's resolved render-mode label -- selects the dispatch
+            chrome glyph's ASCII / unicode column.
 
     Returns:
         A content-markup header string.
     """
+    arrow = escape_markup(sigils.chrome("dispatch", mode=mode))
     if not rows:
-        return f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]no claim-ready wave on the frontier[/]"
+        held = f" [$warn]{len(blocked)} blocked[/]" if blocked else ""
+        return f"[$warn]{EMPTY_NOTICE}[/]{held}\n[$muted]no claim-ready wave on the frontier[/]"
+    blocked_suffix = f" [$muted]+[/] [$warn]{len(blocked)} blocked[/]" if blocked else ""
     return (
-        f"[$accent]ready frontier[/] [$ok]{len(rows)}[/] "
-        f"[$muted]wave{'' if len(rows) == 1 else 's'} claimable[/]"
+        f"[$accent]{arrow} ready frontier[/] [$ok]{len(rows)}[/] "
+        f"[$muted]wave{'' if len(rows) == 1 else 's'} claimable[/]{blocked_suffix}"
     )
 
 
-def render_ready_row(row: ReadyWaveRow) -> str:
-    """Render one ready-wave list row (the wave id + iter + title).
+def render_section_caption(caption: str, count: int) -> str:
+    """Render a ready/blocked band caption naming the band and its row count.
+
+    Args:
+        caption: The band caption (:data:`READY_CAPTION` / :data:`BLOCKED_CAPTION`).
+        count: The number of rows in the band.
+
+    Returns:
+        A content-markup caption string.
+    """
+    return f"[$muted]{escape_markup(caption)} ({count})[/]"
+
+
+def render_ready_row(
+    row: ReadyWaveRow,
+    *,
+    selected: bool = False,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+) -> str:
+    """Render one ready-wave list row with its multi-select affordance look.
+
+    Each ready row leads with a multi-select checkbox affordance
+    (:func:`sigils.chrome` ``"check_on"`` when selected, ``"check_off"``
+    otherwise) so the band reads as a selectable set even though the actual
+    multi-select wiring is deferred -- this renders the look, not the
+    behaviour. The dispatch chrome arrow marks the row as a dispatch target.
 
     Args:
         row: The ready-wave display row.
+        selected: Whether this row is the current dispatch target (drives the
+            checkbox affordance's filled / hollow look).
+        mode: The App's resolved render-mode label -- selects the affordance
+            glyphs' ASCII / unicode column.
 
     Returns:
         A content-markup row string naming the wave id, its iter, and title.
     """
+    box = escape_markup(sigils.chrome("check_on" if selected else "check_off", mode=mode))
+    arrow = escape_markup(sigils.chrome("dispatch", mode=mode))
     title_suffix = f" [$muted]{escape_markup(row.title)}[/]" if row.title else ""
+    marker = f"[$accent]{box} {arrow}[/]" if selected else f"[$muted]{box} {arrow}[/]"
     return (
-        f"[$accent]{escape_markup(row.wave_id)}[/] "
+        f"{marker} [$accent]{escape_markup(row.wave_id)}[/] "
         f"[$muted]{escape_markup(row.iter_id)}[/]{title_suffix}"
     )
+
+
+def render_blocked_row(row: BlockedWaveRow) -> str:
+    """Render one blocked-wave list row naming the dep holding it off the frontier.
+
+    A blocked row carries no selection affordance (it is never a dispatch
+    target) and instead trails with the ``<- <dep>`` marker
+    (:data:`BLOCKED_BY_MARKER`) so the operator reads which wave must close /
+    dispatch before this one becomes claim-ready.
+
+    Args:
+        row: The blocked-wave display row.
+
+    Returns:
+        A content-markup row string naming the wave id, its iter, the title,
+        and the blocking dep.
+    """
+    title_suffix = f" [$muted]{escape_markup(row.title)}[/]" if row.title else ""
+    blocker = f" [$warn]{BLOCKED_BY_MARKER} {escape_markup(row.blocked_by)}[/]"
+    return (
+        f"[$muted]{escape_markup(row.wave_id)}[/] "
+        f"[$muted]{escape_markup(row.iter_id)}[/]{title_suffix}{blocker}"
+    )
+
+
+def _dispatch_idle_line() -> str:
+    """Render the idle dispatch surface with the cockpit's flavour hover text.
+
+    The result line before any dispatch has been issued; it pairs the literal
+    dispatch instruction with the "speak it into being" flavour
+    (:data:`DISPATCH_FLAVOUR`) as muted hover text on the affordance -- flavour,
+    not a relabel of the dispatch verb.
+
+    Returns:
+        A content-markup idle result line.
+    """
+    return f"[$muted]{DISPATCH_IDLE}[/] [$muted]({DISPATCH_FLAVOUR})[/]"
 
 
 class AutopilotModeScreen(ScopeScreen):
@@ -387,6 +637,16 @@ class AutopilotModeScreen(ScopeScreen):
     AutopilotModeScreen .autopilot-row.-selected {
         background: $accent 20%;
     }
+    AutopilotModeScreen .autopilot-blocked-row {
+        height: auto;
+        padding: 0 1;
+        color: $muted;
+    }
+    AutopilotModeScreen .autopilot-section {
+        height: auto;
+        padding: 0 1;
+        margin-top: 1;
+    }
     AutopilotModeScreen #autopilot-result {
         height: auto;
         margin-top: 1;
@@ -425,38 +685,52 @@ class AutopilotModeScreen(ScopeScreen):
     selected: reactive[int] = reactive(0, init=False)
 
     def __init__(self) -> None:
-        """Initialise the pane with an empty ready list until first compute."""
+        """Initialise the pane with empty ready / blocked lists until first compute."""
         super().__init__()
         self._rows: tuple[ReadyWaveRow, ...] = ()
+        self._blocked: tuple[BlockedWaveRow, ...] = ()
 
     def compose_body(self) -> ComposeResult:
-        """Yield the frontier header, the (empty) ready-wave list, and the result.
+        """Yield the frontier header, the (empty) ready/blocked list, and the result.
 
-        The header reports the ready count (or the honest-empty banner); the
-        list container starts empty and :meth:`on_mount` populates it (with the
-        ready rows, or the honest-empty notice) so the row mount path is
-        single-sourced through :meth:`_render_rows`; the result line carries the
-        dispatch surface (idle until ``d`` is pressed).
+        The header leads with the dispatch chrome arrow and reports the ready
+        count (or the honest-empty banner); the list container starts empty and
+        :meth:`on_mount` populates it (the ready/blocked split, or the
+        honest-empty notice) so the row mount path is single-sourced through
+        :meth:`_render_rows`; the result line carries the dispatch surface (idle
+        until ``d`` is pressed) with the cockpit's "speak it into being" flavour.
         """
         self._rows = self._current_rows()
+        self._blocked = self._current_blocked()
+        mode = self._render_mode()
         with Vertical(id="autopilot-body"):
-            yield Static(render_frontier_header(self._rows), id=FRONTIER_HEADER_ID)
+            yield Static(
+                render_frontier_header(self._rows, self._blocked, mode=mode),
+                id=FRONTIER_HEADER_ID,
+            )
             yield VerticalScroll(id=FRONTIER_LIST_ID)
-            yield Static(DISPATCH_IDLE, id=DISPATCH_RESULT_ID)
+            yield Static(_dispatch_idle_line(), id=DISPATCH_RESULT_ID)
 
     def on_mount(self) -> None:
-        """Seed from app state, arm the rebuild seam, and render the frontier."""
+        """Seed from app state, arm the rebuild seams, and render the frontier."""
         super().on_mount()
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._rebuild()
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this screen's reactive."""
         self.state = new_state
+
+    def _on_render_mode(self, _mode: RenderMode) -> None:
+        """Repaint the reskinned glyphs when the App's render mode swaps."""
+        if self.is_mounted:
+            self._rebuild()
 
     def watch_state(self) -> None:
         """Recompute the frontier when the bound state changes."""
@@ -819,48 +1093,90 @@ class AutopilotModeScreen(ScopeScreen):
         return max(wave.sessions)
 
     def _rebuild(self) -> None:
-        """Recompute the ready frontier from state and repaint the list.
+        """Recompute the ready/blocked split from state and repaint the list.
 
-        Recomputes the rows via :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier`
-        over the projected view, clamps the selection into the new list, and
-        remounts the rows under the list container. A frontier that became
-        empty (every ready wave dispatched / closed) repaints the honest-empty
-        notice.
+        Recomputes the ready rows via
+        :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier` over the
+        projected view plus the blocked rows (the PENDING waves held off the
+        frontier, each naming its blocking dep), clamps the selection into the
+        new ready list, and remounts the split under the list container. A
+        frontier that became empty (every ready wave dispatched / closed)
+        repaints the honest-empty notice; blocked rows still render below it so
+        the operator reads what is waiting.
         """
         self._rows = self._current_rows()
+        self._blocked = self._current_blocked()
         self._clamp_selection()
         self._render_rows()
         header = self.query(f"#{FRONTIER_HEADER_ID}")
         if header:
-            header.first(Static).update(render_frontier_header(self._rows))
-        logger.info(f"autopilot_rebuild ready={len(self._rows)} selected={self.selected}")
+            header.first(Static).update(
+                render_frontier_header(self._rows, self._blocked, mode=self._render_mode())
+            )
+        logger.info(
+            f"autopilot_rebuild ready={len(self._rows)} blocked={len(self._blocked)} "
+            f"selected={self.selected}"
+        )
 
     def _render_rows(self) -> None:
-        """Mount one Static per ready wave (or the honest-empty notice).
+        """Mount the ready/blocked split (or the honest-empty notice).
 
-        Clears the list container, then mounts either the honest-empty notice
-        (no ready wave) or one row per ready wave in claim order. Shared by the
-        on-mount seed and every rebuild so the render path is single-sourced.
+        Clears the list container, then mounts the ready band (its caption plus
+        one selectable row per claim-ready wave, or the honest-empty notice when
+        none is ready) followed by the blocked band (its caption plus one row
+        per held wave naming the dep blocking it). Shared by the on-mount seed
+        and every rebuild so the render path is single-sourced.
         """
         listing = self.query(f"#{FRONTIER_LIST_ID}")
         if not listing:
             return
         container = listing.first(VerticalScroll)
         container.remove_children()
+        mode = self._render_mode()
         if not self._rows:
             container.mount(Static(EMPTY_NOTICE, id=FRONTIER_EMPTY_ID, classes="autopilot-empty"))
-            return
-        for index, row in enumerate(self._rows):
-            classes = FRONTIER_ROW_CLASS
-            if index == self.selected:
-                classes = f"{FRONTIER_ROW_CLASS} {SELECTED_ROW_CLASS}"
-            container.mount(Static(render_ready_row(row), classes=classes))
+        else:
+            container.mount(
+                Static(
+                    render_section_caption(READY_CAPTION, len(self._rows)),
+                    id=READY_SECTION_ID,
+                    classes="autopilot-section",
+                )
+            )
+            for index, row in enumerate(self._rows):
+                selected = index == self.selected
+                classes = (
+                    f"{FRONTIER_ROW_CLASS} {SELECTED_ROW_CLASS}" if selected else FRONTIER_ROW_CLASS
+                )
+                container.mount(
+                    Static(render_ready_row(row, selected=selected, mode=mode), classes=classes)
+                )
+        if self._blocked:
+            container.mount(
+                Static(
+                    render_section_caption(BLOCKED_CAPTION, len(self._blocked)),
+                    id=BLOCKED_SECTION_ID,
+                    classes="autopilot-section",
+                )
+            )
+            for blocked_row in self._blocked:
+                container.mount(Static(render_blocked_row(blocked_row), classes=BLOCKED_ROW_CLASS))
 
     def _repaint_selection(self) -> None:
-        """Toggle the ``-selected`` class onto the selected row only."""
-        rows = self.query(f".{FRONTIER_ROW_CLASS}")
-        for index, widget in enumerate(rows):
-            widget.set_class(index == self.selected, SELECTED_ROW_CLASS)
+        """Repaint the ready rows so the selection tint + checkbox look move.
+
+        The multi-select affordance (the filled / hollow checkbox glyph) lives
+        in the row markup, so a selection change must re-render the ready rows
+        (not merely retint the background); it walks the ready rows in claim
+        order and rewrites each with its current selected flag, then toggles the
+        ``-selected`` tint class to match.
+        """
+        mode = self._render_mode()
+        for index, widget in enumerate(self.query(f".{FRONTIER_ROW_CLASS}").results(Static)):
+            selected = index == self.selected
+            if index < len(self._rows):
+                widget.update(render_ready_row(self._rows[index], selected=selected, mode=mode))
+            widget.set_class(selected, SELECTED_ROW_CLASS)
 
     def _clamp_selection(self) -> None:
         """Clamp the selection into the current ready list.
@@ -901,6 +1217,31 @@ class AutopilotModeScreen(ScopeScreen):
         frontier = compute_ready_frontier(build_frontier_items(state))
         return ready_rows(frontier, state)
 
+    def _current_blocked(self) -> tuple[BlockedWaveRow, ...]:
+        """Compute the blocked-wave display rows for the active scope.
+
+        Projects the bound state into the frontier view, computes the ready
+        frontier, and derives the PENDING waves held off it -- each naming the
+        dep blocking it (:func:`blocked_rows`). Single-sourced off the same
+        frontier compute the ready rows use, so the split is consistent.
+
+        Returns:
+            The blocked-wave display rows in claim order; empty when no PENDING
+            wave is held off the frontier.
+        """
+        state = self._current_state()
+        frontier = compute_ready_frontier(build_frontier_items(state))
+        return blocked_rows(frontier, state)
+
+    def _render_mode(self) -> RenderMode:
+        """Return the App's active render mode, defaulting when unavailable.
+
+        A bare harness without the reactive degrades to
+        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` so the
+        reskin's glyph resolution never raises.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
     def _current_state(self) -> State | None:
         """Return the bound read-only state, if loaded."""
         from eawf.kernel.state.models import State
@@ -931,6 +1272,11 @@ class AutopilotModeScreen(ScopeScreen):
 
 __all__ = [
     "ARM_DEFERRED",
+    "BLOCKED_BY_MARKER",
+    "BLOCKED_CAPTION",
+    "BLOCKED_ROW_CLASS",
+    "BLOCKED_SECTION_ID",
+    "DISPATCH_FLAVOUR",
     "DISPATCH_IDLE",
     "DISPATCH_NO_DAEMON",
     "DISPATCH_NO_TARGET",
@@ -945,13 +1291,19 @@ __all__ = [
     "KILL_NO_DAEMON",
     "KILL_NO_TARGET",
     "PAUSE_NO_DAEMON",
+    "READY_CAPTION",
+    "READY_SECTION_ID",
     "SELECTED_ROW_CLASS",
     "SKIP_NO_NEXT",
     "SKIP_NO_TARGET",
     "AutopilotModeScreen",
+    "BlockedWaveRow",
     "ReadyWaveRow",
+    "blocked_rows",
     "build_frontier_items",
     "ready_rows",
+    "render_blocked_row",
     "render_frontier_header",
     "render_ready_row",
+    "render_section_caption",
 ]

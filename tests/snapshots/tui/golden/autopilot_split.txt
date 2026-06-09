@@ -1,0 +1,40 @@
+ Eä  repo ❯ QR ❯ Autopilot    runtime: idle    HH:MM UTC
+
+  ❯ ready frontier 1 wave claimable + 2 blocked
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │                                                                                                                  │
+  │ ready (1)                                                                                                        │
+  │ ▣ ❯ P01-I01-W02 P01-I01 Add ready frontier                                                                       │
+  │                                                                                                                  │
+  │ blocked (2)                                                                                                      │
+  │ P01-I01-W03 P01-I01 Held by sibling <- P01-I01-W02                                                               │
+  │ P01-I01-W04 P01-I01 Waiting on open dep <- P01-I01-W02                                                           │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  press d to dispatch the selected ready wave (speak it into being)
+
+ ↑↓ select  ·  a arm  ·  d dispatch  ·  H halt  ·  K kill  ·  S skip  ·  space pause  ·  w/r/u  weekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
