@@ -5,7 +5,7 @@
   CR-02      fail  agent        fail
   CR-03      -     -            pending
  no agent reports yet
- no agent reports yet
+ ◌ no agent reports yet
 
 
 
