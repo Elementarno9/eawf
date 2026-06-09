@@ -44,9 +44,17 @@ from eawf.surfaces.tui.modes.feed import (
     FEED_EMPTY_LIVE,
     FEED_ROW_CLASS,
     FeedModeScreen,
+    event_sigil,
+    format_event_markup,
     format_event_row,
 )
-from eawf.surfaces.tui.snapshot import capture_screen_text, normalize_snapshot, settle_screen
+from eawf.surfaces.tui.snapshot import (
+    assert_screen_snapshot,
+    capture_screen_text,
+    normalize_snapshot,
+    settle_screen,
+)
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -54,6 +62,14 @@ _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
 
 #: The digit key that switches to the Feed mode.
 _FEED_DIGIT = "7"
+
+#: The W16 isolated reskin golden, distinct from the shared full-app
+#: ``feed_mode_populated.txt`` / ``feed_mode_empty.txt`` snapshots so this
+#: wave owns + regenerates it without touching the coupled screen-snapshot
+#: suite. Lives beside the other TUI goldens.
+_SIGILS_GOLDEN = (
+    Path(__file__).resolve().parents[1] / "snapshots" / "tui" / "golden" / "feed_mode_sigils.txt"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -66,8 +82,26 @@ def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
 
-def _event(event_id: str, *, summary: str = "live event", kind: str = "event") -> Envelope:
-    """Build a minimal event-kind envelope for the feed."""
+def _event(
+    event_id: str,
+    *,
+    summary: str = "live event",
+    kind: str = "event",
+    status: str = "ok",
+    event_kind: str | None = None,
+) -> Envelope:
+    """Build a minimal event-kind envelope for the feed.
+
+    Args:
+        event_id: The envelope id.
+        summary: The row summary text.
+        kind: The store kind (the kind column).
+        status: The payload ``status`` word the lifecycle sigil reads first.
+        event_kind: An optional ``event_kind`` tag the sigil falls back to.
+    """
+    payload: dict[str, object] = {"event_type": "test", "status": status, "message": "live"}
+    if event_kind is not None:
+        payload["event_kind"] = event_kind
     return Envelope(
         id=event_id,
         kind=kind,  # type: ignore[arg-type]
@@ -75,7 +109,7 @@ def _event(event_id: str, *, summary: str = "live event", kind: str = "event") -
         created_at=datetime(2026, 5, 27, 9, 30, 15, tzinfo=UTC),
         updated_at=None,
         summary=summary,
-        payload={"event_type": "test", "status": "ok", "message": "live"},
+        payload=payload,
     )
 
 
@@ -84,18 +118,28 @@ def _event(event_id: str, *, summary: str = "live event", kind: str = "event") -
 # --------------------------------------------------------------------------
 
 
-def test_format_event_row_renders_time_kind_summary() -> None:
-    """A row is ``<HH:MM:SS>  <kind padded>  <summary>``."""
+def test_format_event_row_renders_sigil_time_kind_summary() -> None:
+    """A row is ``<sigil> <HH:MM:SS>  <kind padded>  <summary>``.
+
+    The reskin leads each line with a two-cell lifecycle-sigil column (the
+    sigil glyph plus one space), then the fixed-width wall-clock, the padded
+    kind, and the summary.
+    """
     line = format_event_row(_event("EV-1", summary="wave closed", kind="event"))
-    assert line.startswith("09:30:15")
+    # Two-cell sigil column: the CLOSED unicode glyph + one trailing space,
+    # then the fixed-width timestamp starts at column 2.
+    assert line[0] == glyph(Sigil.CLOSED, mode="unicode")
+    assert line[1] == " "
+    assert line[2:].startswith("09:30:15")
     assert "event" in line
     assert line.endswith("wave closed")
 
 
 def test_format_event_row_empty_summary_drops_trailing() -> None:
-    """An empty summary yields just the time + kind head (no trailing pad)."""
+    """An empty summary yields just the sigil + time + kind head (no pad)."""
     line = format_event_row(_event("EV-1", summary="", kind="decision"))
-    assert line.startswith("09:30:15")
+    assert line[0] == glyph(Sigil.CLOSED, mode="unicode")
+    assert line[2:].startswith("09:30:15")
     assert "decision" in line
     assert line == line.rstrip()
 
@@ -104,6 +148,77 @@ def test_format_event_row_widest_kind_keeps_summary_separated() -> None:
     """The widest store kind still leaves a gap before the summary."""
     line = format_event_row(_event("EV-1", summary="done", kind="domain_specialist_report"))
     assert "domain_specialist_report  done" in line
+
+
+def test_format_event_row_timestamp_column_is_fixed_width() -> None:
+    """The time column is laid out to a fixed eight-cell width after the sigil.
+
+    The sigil column is two cells (glyph + space); the ``HH:MM:SS`` time is
+    exactly eight cells; the two-space gutter then separates it from the
+    kind, so the kind starts at the same column on every row regardless of
+    which lifecycle sigil the event wears.
+    """
+    closed = format_event_row(_event("EV-1", summary="s", kind="event"))
+    pending = format_event_row(_event("EV-2", summary="s", kind="event", status="pending"))
+    # Both rows: sigil(1) + space(1) + HH:MM:SS(8) + two-space gutter = the
+    # kind starts at the same fixed offset.
+    assert closed.index("event") == pending.index("event")
+    assert closed[2:10] == "09:30:15"
+    assert pending[2:10] == "09:30:15"
+
+
+def test_event_sigil_maps_status_to_lifecycle() -> None:
+    """The payload ``status`` word drives the lifecycle sigil first."""
+    assert event_sigil(_event("E", status="ok")) is Sigil.CLOSED
+    assert event_sigil(_event("E", status="closed")) is Sigil.CLOSED
+    assert event_sigil(_event("E", status="claimed")) is Sigil.CLAIMED
+    assert event_sigil(_event("E", status="running")) is Sigil.RUNNING
+    assert event_sigil(_event("E", status="in_progress")) is Sigil.RUNNING
+    assert event_sigil(_event("E", status="pending")) is Sigil.PENDING
+    assert event_sigil(_event("E", status="failed")) is Sigil.FAILED
+    assert event_sigil(_event("E", status="error")) is Sigil.FAILED
+
+
+def test_event_sigil_falls_back_to_event_kind_substring() -> None:
+    """An unrecognised status defers to an ``event_kind`` substring scan."""
+    assert event_sigil(_event("E", status="?", event_kind="wave_claimed")) is Sigil.CLAIMED
+    assert event_sigil(_event("E", status="?", event_kind="wave_closed")) is Sigil.CLOSED
+    assert event_sigil(_event("E", status="?", event_kind="runtime_unavailable")) is Sigil.FAILED
+    assert (
+        event_sigil(_event("E", status="?", event_kind="git_state_drift_detected")) is Sigil.FAILED
+    )
+
+
+def test_event_sigil_defaults_to_running_for_generic_event() -> None:
+    """An event with no recognisable token reads as in-flight (RUNNING)."""
+    assert event_sigil(_event("E", status="?", event_kind="phase_activated")) is Sigil.RUNNING
+
+
+def test_format_event_markup_tints_the_sigil_and_escapes_brackets() -> None:
+    """The markup form tints the leading sigil and renders brackets literally.
+
+    The sigil cell is wrapped in its Wong tint hex; an arbitrary summary
+    carrying a literal ``[`` is backslash-escaped so Textual does not swallow
+    it as a style tag.
+    """
+    markup = format_event_markup(
+        _event("E", summary="[P01-W01] closed", kind="event"), mode="unicode"
+    )
+    closed_tint = tint(Sigil.CLOSED)
+    assert closed_tint is not None
+    assert markup.startswith(f"[{closed_tint}]{glyph(Sigil.CLOSED, mode='unicode')}[/]")
+    # The literal bracket in the summary is escaped, not parsed as a tag.
+    assert "\\[P01-W01]" in markup
+
+
+def test_format_event_markup_swaps_sigil_column_in_ascii_mode() -> None:
+    """An ``ascii`` render mode selects the ASCII sigil column."""
+    unicode_markup = format_event_markup(_event("E", summary="x"), mode="unicode")
+    ascii_markup = format_event_markup(_event("E", summary="x"), mode="ascii")
+    assert glyph(Sigil.CLOSED, mode="unicode") in unicode_markup
+    # The ASCII CLOSED sigil is ``@``; it is escaped-safe and present.
+    assert "@" in ascii_markup
+    assert glyph(Sigil.CLOSED, mode="unicode") not in ascii_markup
 
 
 # --------------------------------------------------------------------------
@@ -307,6 +422,102 @@ def test_feed_pane_degraded_recovers_to_live_notice() -> None:
             frame = normalize_snapshot(capture_screen_text(app))
             assert FEED_EMPTY_LIVE in frame
             assert FEED_EMPTY_DEGRADED not in frame
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Isolated reskin golden -- the W16 sigil + fixed-width column close-gate bar
+# --------------------------------------------------------------------------
+
+
+def test_feed_mode_sigils_snapshot() -> None:
+    """The reskinned feed renders a sigil + fixed-width time + sigil column.
+
+    The W16 close-gate golden, owned + regenerated by this wave in isolation
+    (distinct from the coupled full-app ``feed_mode_populated.txt``). Seeds
+    three deterministic events with distinct lifecycle statuses (closed /
+    claimed / failed) into the App buffer, switches into Feed, and pins:
+
+    * each row leads with its lifecycle sigil (closed circle / claimed ring /
+      failed cross), tinted by its Wong status hue;
+    * the fixed-width ``HH:MM:SS`` timestamp column lines the kind up across
+      rows; and
+    * the no-events sentinel path renders the waiting-for-events notice when
+      no event has arrived.
+
+    So a layout / glyph regression on any of those is caught against a golden
+    this wave owns.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            # Seed deterministic events newest-last; the Feed pane seeds from
+            # the buffer on mount (newest-first), so the failed row lands top.
+            await app._on_event(_event("EV-1", summary="wave P01-I01-W01 closed", status="closed"))
+            await app._on_event(
+                _event("EV-2", summary="wave P01-I01-W02 claimed", status="claimed")
+            )
+            await app._on_event(_event("EV-3", summary="wave P01-I01-W03 failed", status="failed"))
+            await settle_screen(pilot)
+            await pilot.press(_FEED_DIGIT)
+            await settle_screen(pilot)
+            assert isinstance(app.screen, FeedModeScreen)
+            assert_screen_snapshot(app, _SIGILS_GOLDEN)
+            # Belt-and-braces text assertions over the same frame so the
+            # close-gate criteria are pinned independently of the golden.
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert glyph(Sigil.CLOSED, mode="unicode") in frame
+            assert glyph(Sigil.CLAIMED, mode="unicode") in frame
+            assert glyph(Sigil.FAILED, mode="unicode") in frame
+
+    asyncio.run(body())
+
+
+def test_feed_mode_empty_sentinel_snapshot() -> None:
+    """The no-events path renders the waiting-for-events sentinel literal.
+
+    Mounts the feed in isolation with no buffered events and asserts the
+    honest-empty live sentinel (:data:`FEED_EMPTY_LIVE`) renders, so the
+    no-events branch of the close-gate criterion is pinned.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_FEED_DIGIT)
+            await settle_screen(pilot)
+            assert isinstance(app.screen, FeedModeScreen)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert FEED_EMPTY_LIVE in frame
+            # No event rows mounted -- the sentinel is the only feed content.
+            assert not app.screen.query(f".{FEED_ROW_CLASS}")
+
+    asyncio.run(body())
+
+
+def test_feed_pane_repaints_sigils_on_render_mode_flip() -> None:
+    """A unicode <-> ASCII render-mode flip repaints each row's sigil column."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_FEED_DIGIT)
+            await settle_screen(pilot)
+            await app._on_event(_event("EV-1", summary="wave closed", status="closed"))
+            await settle_screen(pilot)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert glyph(Sigil.CLOSED, mode="unicode") in frame
+            # Flip to ASCII; the row repaints to the ASCII sigil column.
+            app.render_mode = "ascii"
+            await settle_screen(pilot)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert glyph(Sigil.CLOSED, mode="unicode") not in frame
+            assert glyph(Sigil.CLOSED, mode="ascii") in frame
 
     asyncio.run(body())
 

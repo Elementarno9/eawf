@@ -30,9 +30,23 @@ daemon is unreachable (the binding is in its mtime-poll fallback,
 flowing. The first arriving envelope replaces the notice with the row
 list.
 
-The row formatter (:func:`format_event_row`) is pure so the timestamp /
-kind / summary layout is unit-testable without mounting Textual; the
-screen is a thin scrollable view over it.
+Cosmic-terminal reskin
+----------------------
+Each event row leads with a two-cell lifecycle-sigil column -- the
+shared SHAPE glyph (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) tinted
+by its Wong status hue (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) --
+so the operator reads the lifecycle of each event (claimed / running /
+closed / failed) at a glance without parsing the summary prose. The
+sigil is followed by a fixed-width wall-clock column and the
+kind-padded summary, so the columns line up across rows. The sigil
+column repaints on a unicode <-> ASCII render-mode flip, like every
+other reskinned pane.
+
+The row formatter (:func:`format_event_row`) is pure (markup-free,
+layout only) so the sigil / timestamp / kind / summary column layout is
+unit-testable without mounting Textual; the tinted content markup is
+composed at mount time by :func:`format_event_markup`. The screen is a
+thin scrollable view over both.
 """
 
 from __future__ import annotations
@@ -46,6 +60,8 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.footer import render_hint_label
+from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 if TYPE_CHECKING:
     from eawf.kernel.store.envelope import Envelope
@@ -109,6 +125,59 @@ FEED_EMPTY_DEGRADED: str = (
 #: (24); pad to that so even the widest kind keeps one trailing space.
 _KIND_WIDTH: int = 24
 
+#: Width the wall-clock timestamp column is laid out to. ``HH:MM:SS`` is
+#: eight cells; pinning the width keeps the kind column left-aligned across
+#: rows even if a future timestamp form changes length.
+_STAMP_WIDTH: int = 8
+
+#: The render-mode label threaded into the sigil helpers when the host App
+#: exposes no ``render_mode`` (a bare standalone test harness). The unicode
+#: column is the default content surface; ``"ascii"`` only when the App
+#: resolves it. Mirrors the attention-feed band's default.
+_DEFAULT_RENDER_MODE: str = "unicode"
+
+#: Lifecycle sigil keyed off a lowercased event-status / event-kind token.
+#: The lifecycle of an event is read first off the payload ``status`` word
+#: and then off the ``event_kind`` / ``event_type`` tag (see
+#: :func:`event_sigil`): a claim transition wears the half-filled CLAIMED
+#: ring, a completed transition (closed / activated-then-done / ok) the
+#: filled CLOSED circle, a failure / drift / alarm the FAILED cross, and an
+#: in-flight transition the RUNNING diamond. The SHAPE comes from the shared
+#: :mod:`~eawf.surfaces.tui.widgets.sigils` home; no glyph is invented here.
+_STATUS_SIGIL: dict[str, Sigil] = {
+    "pending": Sigil.PENDING,
+    "claimed": Sigil.CLAIMED,
+    "running": Sigil.RUNNING,
+    "in_progress": Sigil.RUNNING,
+    "closed": Sigil.CLOSED,
+    "ok": Sigil.CLOSED,
+    "failed": Sigil.FAILED,
+    "error": Sigil.FAILED,
+}
+
+#: Substrings scanned (in order) against a lowercased ``event_kind`` /
+#: ``event_type`` tag when the payload ``status`` word maps onto no sigil.
+#: A ``claimed`` tag reads as the CLAIMED ring, a ``fail`` / ``error`` /
+#: ``drift`` / ``alarm`` / ``unavailable`` / ``oom`` tag as the FAILED
+#: cross, a ``closed`` tag as the CLOSED circle; anything else falls through
+#: to the in-flight RUNNING default (see :func:`event_sigil`).
+_KIND_SIGIL_SUBSTRINGS: tuple[tuple[str, Sigil], ...] = (
+    ("claimed", Sigil.CLAIMED),
+    ("fail", Sigil.FAILED),
+    ("error", Sigil.FAILED),
+    ("drift", Sigil.FAILED),
+    ("alarm", Sigil.FAILED),
+    ("unavailable", Sigil.FAILED),
+    ("oom", Sigil.FAILED),
+    ("dropped", Sigil.FAILED),
+    ("closed", Sigil.CLOSED),
+)
+
+#: The lifecycle sigil an event with no recognisable status / kind token
+#: wears: a generic event represents in-flight activity, so it reads as the
+#: RUNNING diamond rather than a terminal mark.
+_DEFAULT_SIGIL: Sigil = Sigil.RUNNING
+
 #: Footer hints for the Feed pane (arrows primary per the keymap convention).
 #: The scroll affordances plus the always-live chassis keys (palette, help,
 #: quit). The mode digits are surfaced by the always-visible mode row, not
@@ -124,14 +193,47 @@ _FEED_HINTS: tuple[str, ...] = (
 )
 
 
-def format_event_row(envelope: Envelope) -> str:
-    """Render one event *envelope* as a single feed line.
+def event_sigil(envelope: Envelope) -> Sigil:
+    """Return the lifecycle :class:`Sigil` naming *envelope*'s event state.
 
-    Layout is ``<HH:MM:SS> <kind> <summary>`` -- the wall-clock time of the
-    event (UTC, second precision), the store kind padded to
-    :data:`_KIND_WIDTH`, then the envelope summary. The summary is already
-    bounded at 500 chars by the :class:`~eawf.kernel.store.envelope.Envelope`
-    model, so no extra truncation is needed; Textual soft-wraps a long row.
+    The lifecycle is read first off the payload ``status`` word (via
+    :data:`_STATUS_SIGIL`) and then, when that maps onto nothing, off the
+    ``event_kind`` / ``event_type`` tag by substring scan (via
+    :data:`_KIND_SIGIL_SUBSTRINGS`): a claim transition wears the CLAIMED
+    ring, a completed / ok transition the CLOSED circle, a failure / drift /
+    alarm the FAILED cross. An event with no recognisable token defaults to
+    the in-flight :data:`_DEFAULT_SIGIL` (RUNNING) -- a generic event reads
+    as live activity, not a terminal mark.
+
+    Args:
+        envelope: The event envelope whose lifecycle sigil to resolve.
+
+    Returns:
+        The lifecycle :class:`Sigil` the row's leading mark renders.
+    """
+    payload = envelope.payload
+    status = str(payload.get("status", "")).strip().lower()
+    if status in _STATUS_SIGIL:
+        return _STATUS_SIGIL[status]
+    tag = str(payload.get("event_kind") or payload.get("event_type") or "").lower()
+    for substring, sigil in _KIND_SIGIL_SUBSTRINGS:
+        if substring in tag:
+            return sigil
+    return _DEFAULT_SIGIL
+
+
+def format_event_row(envelope: Envelope) -> str:
+    """Render one event *envelope* as a single feed line (markup-free).
+
+    Layout is ``<sigil> <HH:MM:SS> <kind> <summary>``: a two-cell leading
+    lifecycle-sigil column (the sigil glyph plus one trailing space), the
+    wall-clock time of the event (UTC, second precision) laid out to a
+    fixed :data:`_STAMP_WIDTH`, the store kind padded to :data:`_KIND_WIDTH`,
+    then the envelope summary. The sigil is resolved in the unicode column
+    (the markup form swaps to ASCII when the App's render mode is ``ascii``);
+    the summary is already bounded at 500 chars by the
+    :class:`~eawf.kernel.store.envelope.Envelope` model, so no extra
+    truncation is needed and Textual soft-wraps a long row.
 
     Args:
         envelope: The event envelope to render.
@@ -140,14 +242,50 @@ def format_event_row(envelope: Envelope) -> str:
         A plain (markup-free) single-line string for one
         :class:`~textual.widgets.Static`.
     """
+    sigil = glyph(event_sigil(envelope), mode=_DEFAULT_RENDER_MODE)
     stamp = envelope.created_at.strftime("%H:%M:%S")
     kind = envelope.kind.value
     summary = envelope.summary
     if not summary:
         # No summary to align to -- drop the kind-column pad so the row
-        # carries no trailing whitespace.
-        return f"{stamp}  {kind}"
-    return f"{stamp}  {kind:<{_KIND_WIDTH}}  {summary}"
+        # carries no trailing whitespace after the sigil + time + kind head.
+        return f"{sigil} {stamp:<{_STAMP_WIDTH}}  {kind}"
+    return f"{sigil} {stamp:<{_STAMP_WIDTH}}  {kind:<{_KIND_WIDTH}}  {summary}"
+
+
+def format_event_markup(envelope: Envelope, *, mode: str) -> str:
+    """Return the tinted content markup for one feed row in render *mode*.
+
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and
+    the COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) of the event's
+    lifecycle sigil so the leading two-cell column reads as a tinted
+    lifecycle mark, then escapes the timestamp / kind / summary tail so an
+    arbitrary summary (which may carry literal ``[`` brackets) renders
+    verbatim through Textual's content-markup parser rather than being
+    swallowed as a style tag. The column layout mirrors
+    :func:`format_event_row` (sigil + fixed-width time + padded kind +
+    summary).
+
+    Args:
+        envelope: The event envelope to render.
+        mode: The App's resolved render-mode label -- ``"ascii"`` selects the
+            ASCII sigil column, any other value the unicode column.
+
+    Returns:
+        A content-markup string for one :class:`~textual.widgets.Static`.
+    """
+    sigil = event_sigil(envelope)
+    mark = escape_markup(glyph(sigil, mode=mode))
+    hex_tint = tint(sigil)
+    mark_cell = f"[{hex_tint}]{mark}[/]" if hex_tint else mark
+    stamp = envelope.created_at.strftime("%H:%M:%S")
+    kind = envelope.kind.value
+    summary = envelope.summary
+    if not summary:
+        tail = f"{stamp:<{_STAMP_WIDTH}}  {kind}"
+    else:
+        tail = f"{stamp:<{_STAMP_WIDTH}}  {kind:<{_KIND_WIDTH}}  {summary}"
+    return f"{mark_cell} {escape_markup(tail)}"
 
 
 class FeedModeScreen(ScopeScreen):
@@ -193,6 +331,8 @@ class FeedModeScreen(ScopeScreen):
         register = getattr(self.app, "register_feed_listener", None)
         if callable(register):
             register(self)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         buffer = getattr(self.app, "live_event_buffer", ())
         for envelope in buffer:
             self._render_event(envelope)
@@ -233,9 +373,43 @@ class FeedModeScreen(ScopeScreen):
         empty = listing.query(f"#{FEED_EMPTY_ID}")
         if empty:
             empty.first().remove()
-        row = Static(format_event_row(envelope), classes=FEED_ROW_CLASS)
+        mode = self._render_mode()
+        row = Static(format_event_markup(envelope, mode=mode), classes=FEED_ROW_CLASS)
+        # Stash the source envelope on the row so a render-mode flip can
+        # repaint the tinted sigil column in place without re-fetching the
+        # App buffer (the buffer may have rolled past this row by then).
+        row._feed_envelope = envelope  # type: ignore[attr-defined]
         listing.mount(row, before=0)
         logger.debug(f"_render_event id={envelope.id!r} kind={envelope.kind.value!r}")
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helpers so an ``ascii`` flip swaps every row's sigil to its
+        ASCII column; falls back to :data:`_DEFAULT_RENDER_MODE` (the unicode
+        column) under a bare test harness whose host App carries no
+        ``render_mode`` attribute.
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        return getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint every mounted event row when the App's render mode flips.
+
+        Re-renders each row's tinted content markup from its stashed source
+        envelope so a unicode <-> ASCII flip swaps the sigil column in place.
+        A no-op before mount (the watcher is wired in :meth:`on_mount`).
+        """
+        if not self.is_mounted:
+            return
+        mode = self._render_mode()
+        for row in self.query(f".{FEED_ROW_CLASS}").results(Static):
+            envelope = getattr(row, "_feed_envelope", None)
+            if envelope is not None:
+                row.update(format_event_markup(envelope, mode=mode))
 
     def refresh_empty_notice(self) -> None:
         """Update the honest-empty notice text to track the degraded flag.
@@ -269,5 +443,7 @@ __all__ = [
     "FEED_ROW_CLASS",
     "FeedListener",
     "FeedModeScreen",
+    "event_sigil",
+    "format_event_markup",
     "format_event_row",
 ]
