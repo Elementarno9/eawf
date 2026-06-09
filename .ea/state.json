@@ -6532,6 +6532,19 @@
       "status": "open",
       "title": "Recalibrate EU buckets vs actual elapsed_eu (actual ~8x bucket)"
     },
+    "B070": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-09T15:21:17.518295Z",
+      "description": "P30-I01 audit followup: roadmap propose sets coverage_advisory=True but the branch cannot surface a gap; RoadmapPlanWave lacks planned_steps and bare --phase propose has zero waves so _collect_coverage_gaps always returns empty. Add planned_steps to the plan model plus a propose-path gap test. Gap-collection itself is proven via apply.",
+      "id": "B070",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Make propose-path EAWF022 coverage advisory reach a real gap"
+    },
     "B074": {
       "closed_at": "2026-05-28T20:00:18.235842Z",
       "commit": "3af86d0",
@@ -16683,7 +16696,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T14:41:54.498849Z",
+  "updated_at": "2026-06-09T15:21:17.518295Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
