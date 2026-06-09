@@ -223,15 +223,21 @@ def test_run_skill_combines_probe_and_action_warnings() -> None:
 
 
 def test_run_skill_needs_user_status_passes_through_user_question_body() -> None:
-    """``status=needs_user`` with a user_question body survives the engine."""
+    """``status=needs_user`` with a user_question body survives the engine.
+
+    The body must conform to ``ResearchBody`` (``brief_id`` is required)
+    because the engine now binds per-skill body validation on the emit
+    path; the ``user_question`` fragment rides alongside the brief id.
+    """
     user_question_body: dict[str, object] = {
+        "brief_id": "BR-needs-user",
         "user_question": {
             "question": "Pick an option",
             "options": [
                 {"label": "A"},
                 {"label": "B"},
             ],
-        }
+        },
     }
     skill = _StubResearchSkill(
         probe_outcome=ProbeOutcome(ok=True),

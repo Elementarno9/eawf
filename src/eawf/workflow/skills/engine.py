@@ -429,6 +429,38 @@ def _failed_traceback_body(exc: BaseException) -> str:
     return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
 
 
+def _validate_body(skill_name: SkillName, body: EnvelopeBody) -> None:
+    """Validate a serialized dict body against its registered body model.
+
+    The gate fires only when the already-serialized ``body`` is a ``dict``
+    AND ``skill_name`` resolves to a registered model in
+    :data:`eawf.workflow.skills.bodies.SKILL_BODY_MODELS`. A ``str`` body
+    (raw markdown) bypasses validation entirely, and a skill with no
+    registered model is ungated. The body models carry ``extra="forbid"``,
+    so a drifted dict (an unmodeled key) raises before the envelope is built.
+
+    This runs on the already-serialized body only -- it never constrains the
+    action's reasoning, only the wire shape the engine is about to emit.
+
+    Args:
+        skill_name: The canonical skill name driving the model lookup.
+        body: The action result's body, already serialized to ``str`` or
+            ``dict``.
+
+    Raises:
+        pydantic.ValidationError: *body* is a dict registered to a body
+            model but does not conform to it (e.g. an extra-forbid key).
+    """
+    if not isinstance(body, dict):
+        return
+    from eawf.workflow.skills.bodies import SKILL_BODY_MODELS
+
+    model = SKILL_BODY_MODELS.get(skill_name)
+    if model is None:
+        return
+    model.model_validate(body)
+
+
 def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     """Execute *skill* against *ctx* and return a fully-populated envelope.
 
@@ -442,7 +474,11 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
        envelope with the traceback in the body and
        ``footer.repair_commands`` set to ``ctx.failure_repair_commands``
        (or a default if unset).
-    4. Otherwise → return an envelope built from the action result.
+    4. Otherwise → validate a registered dict body against its body model
+       (see :func:`_validate_body`) and return an envelope built from the
+       action result. A drifted dict body raises before the envelope is
+       built; the probe-fail and action-raised paths above are ungated
+       because their bodies are engine-authored strings.
 
     Args:
         skill: The :class:`Skill` to execute.
@@ -452,6 +488,11 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
         A populated :class:`OutputEnvelope`. The envelope's header
         guarantees ``status``, ``started_at <= finished_at``, and the
         instrument-probe map.
+
+    Raises:
+        pydantic.ValidationError: the action returned a dict body that is
+            registered to a body model but does not conform to it. String
+            bodies and unregistered skill names bypass this gate.
     """
     started_at = datetime.now(UTC)
     skill_name: SkillName = skill.name
@@ -532,6 +573,10 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     if result.status in {"blocked", "failed"} and not repair:
         repair = ctx.failure_repair_commands or ["see body for details"]
     combined_warnings = list(probe_outcome.warnings) + list(result.warnings)
+    # Bind per-skill body validation: a registered dict body that drifted
+    # from its model raises here, before the envelope is emitted. String
+    # bodies and unregistered skills are ungated (see _validate_body).
+    _validate_body(skill_name, result.body)
     return _build_envelope(
         skill_name=skill_name,
         ctx=ctx,

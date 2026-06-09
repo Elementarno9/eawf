@@ -122,9 +122,22 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
             return ProbeOutcome(ok=True)
 
         def action(self, ctx: SkillContext) -> SkillResult:
+            # Conform to ``PrepBody`` so the engine's bound body-validation
+            # gate passes; the ``needs_user`` path carries a user_question.
             return SkillResult(
                 status="needs_user",
-                body={"questions": []},
+                body={
+                    "iter_id": "P00-I01",
+                    "objective": "stub prep awaiting approval",
+                    "approval_required": True,
+                    "user_question": {
+                        "question": "Approve the prep plan?",
+                        "options": [
+                            {"label": "approve"},
+                            {"label": "cancel"},
+                        ],
+                    },
+                },
             )
 
     previous = registry.lookup("/prep")
