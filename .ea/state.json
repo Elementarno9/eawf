@@ -4415,6 +4415,18 @@
       "scope_id": "P30-I02-W33",
       "status": "done",
       "updated_at": "2026-06-09T18:38:45.479396Z"
+    },
+    "P30-I02-W34": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I02-W34",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I02-W34",
+      "scope_id": "P30-I02-W34",
+      "status": "done",
+      "updated_at": "2026-06-09T22:46:59.959008Z"
     }
   },
   "agent_sessions": {
@@ -4893,6 +4905,16 @@
       "size_bytes": null,
       "uri": "repo:.ea/artifacts/audits/2026-06-07-A55-P29-i12-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P29-I12/ART-A55-P29-i12"
+    },
+    "ART-A59-P30-i02": {
+      "created_at": "2026-06-09T22:48:42.671612Z",
+      "id": "ART-A59-P30-i02",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-10-A59-P30-i02-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I02/ART-A59-P30-i02"
     },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
@@ -5837,6 +5859,17 @@
       "scope_id": "P30-I01",
       "status": "pending",
       "verdict": null
+    },
+    "A59-P30-i02": {
+      "check_results": [],
+      "created_at": "2026-06-09T22:48:43.333004Z",
+      "id": "A59-P30-i02",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A59-P30-i02",
+      "scope_id": "P30-I02",
+      "status": "complete",
+      "verdict": "minor"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -7394,7 +7427,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I02",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -14686,6 +14719,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I02-W33",
       "updated_at": "2026-06-09T18:36:51.787304Z"
+    },
+    "P30-I02-W34": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I02-W34-bucket-20260609T224635Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I02-W34",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I02-W34",
+      "updated_at": "2026-06-09T22:46:35.917819Z"
     }
   },
   "goals": {
@@ -16276,16 +16322,16 @@
       ]
     },
     "P30-I02": {
-      "audit_id": null,
+      "audit_id": "A59-P30-i02",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-09T22:49:02.247639Z",
       "description": "Render + theme only reskin of the live Textual TUI into the Eae cosmic-terminal language: rotate the accent to green, add a lifecycle sigil layer, unify the bar renderer and retire the dead Braille path, two-tone the Eae wordmark, and frame honest-empty panes as calm next-actions. Spawn-free; mutates no state/daemon/gate logic. Lands before the P30 data iters. Every wave binds a contract to a real render path proven by a snapshot golden plus, where a key is touched, affordance_parity.",
       "estimate_id": null,
       "id": "P30-I02",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753278Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "TUI reskin into the Eae cosmic-terminal render language",
       "trigger": "none",
       "wave_ids": [
@@ -16321,7 +16367,8 @@
         "P30-I02-W31",
         "P30-I02-W27",
         "P30-I02-W30",
-        "P30-I02-W32"
+        "P30-I02-W32",
+        "P30-I02-W34"
       ]
     },
     "P30-I03": {
@@ -16841,6 +16888,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I01-close-A58-P30-i01",
       "summary": "iter P30-I01 closed with audit A58-P30-i01; waves closed=11; outcomes P30-I01-W01: Generalized idle_contract_gate.py into a new-contract meta-gate: detect_idle_contracts(diff_r... | P30-I01-W02: EAWF021 wired into plan_wave/edit_wave_plan (raises LifecycleError on unmeasurable; grandfath... | P30-I01-W03: assign_oracle_tier bound into validate_criterion_gate_refs (both spec.sync + wave-close paths...",
+      "tier": "working"
+    },
+    "MEM-P30-I02-close-A59-P30-i02": {
+      "confidence": "high",
+      "id": "MEM-P30-I02-close-A59-P30-i02",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-09T22:49:02.247639Z",
+      "scope_id": "P30-I02",
+      "status": "active",
+      "store_record_id": "MEM-P30-I02-close-A59-P30-i02",
+      "summary": "iter P30-I02 closed with audit A59-P30-i02; waves closed=34; outcomes P30-I02-W01: Rotated accent+primary teal->green across the three theme variable maps + Theme ctors (WONG #... | P30-I02-W02: New pure widgets/sigils.py keystone: Sigil enum (5 lifecycle) + glyph/chrome/tint over unicod... | P30-I02-W03: Reskin wave; gate G-01 scored deterministically in-process.",
       "tier": "working"
     }
   },
@@ -17545,7 +17603,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T21:17:48.348211Z",
+  "updated_at": "2026-06-09T22:49:02.248018Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -68142,6 +68200,85 @@
         }
       ],
       "title": "RS-33 reskin the placeholder coming-soon mode to the honest-empty voice",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I02-W34": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": "operator-flow-close",
+      "claimed_at": "2026-06-09T22:46:35.917810Z",
+      "closed_at": "2026-06-09T22:46:59.959008Z",
+      "commit": "6d6586dd7bb1cfafea10055f6c26090568be96f9",
+      "deps": [],
+      "description": "Audit/polish follow-ups from the P30-I02 close pass: the Evidence-mode verdict column resolved BLOCKED to a pending ring through a pane-local map instead of the ratified extended resolver; the detail overlay carried a stale five-member Sigil comment; the CLI bare-invocation banner assert was relaxed during the gauntlet and should pin the exact two-tone byte run.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/evidence.py",
+        "src/eawf/surfaces/tui/screens/overlays/detail.py",
+        "tests/integration/test_cli_dispatch.py",
+        "tests/snapshots/tui/test_evidence_rollup.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_evidence_rollup.py",
+              "tests/tui/test_modes_evidence.py",
+              "tests/integration/test_cli_dispatch.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I02-W34",
+      "intent": null,
+      "iter_id": "P30-I02",
+      "opened_at": "2026-06-09T22:45:15.964594Z",
+      "outcome": "Verdict sigils route through the extended status_sigil home (blocked = warn withheld + followups badge), six-member Sigil comment fixed, CLI banner assert pins the exact two-tone accent byte run; rollup + evidence + dispatch suites green.",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "test_evidence_rollup.py asserts blocked = status_sigil(BLOCKED) render with warn tint, followups badge trails, unknown falls back to pending ring; test_cli_dispatch.py pins startswith E+accent_sgr+umlaut; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the evidence-rollup + cli-dispatch suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The Evidence-mode verdict column resolves through the extended status_sigil home: a blocked verdict wears the warn-tinted withheld mark (not a pending ring), pass-with-followups trails its badge, and the unknown-verdict fallback stays the muted pending ring; the stale five-member Sigil comment reads six-member; the CLI bare-invocation banner assert pins the exact two-tone E-accent-umlaut byte run.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Route verdict sigils through status_sigil + pin two-tone CLI banner",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
