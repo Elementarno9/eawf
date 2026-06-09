@@ -1,7 +1,8 @@
- Eä  workspace ❯ EAWF ❯ Home    runtime: idle    HH:MM UTC
+ Eä  workspace ❯ EAWF ❯ Home    ≈ idle    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
-│ nothing needs you                                                                                                    │
+│ ● nothing needs you                                                                                                  │
+│   review the roadmap                                                                                                 │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ WORKSPACE                                                                                                            │
@@ -35,6 +36,5 @@
 
 
 
-
  ↑↓ select  ·  Enter open  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  weekly burn: — no data•
-state schema 1.0 trails live daemon schema 1.8; showing a migrated read-only view -- run eawf migrate to update the file
+△ state schema 1.0 trails live daemon schema 1.8; showing a migrated read-only view -- run eawf migrate to update the

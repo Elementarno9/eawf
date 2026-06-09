@@ -4,14 +4,14 @@
       ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
       │                                                                                                          │
       │  Configuration                                                                                           │
-      │  save layer: repo  (L cycles: global local)                                                              │
+      │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
       │  stimation  flow  planning  preferences  prose  research  runtime  ship  statusline  telemetry  ui  vcs  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
       │  >  research.agent_count     [int]          4                                                            │
-      │     research.auto_save       [bool]         false                                                        │
-      │     research.default_depth   [choice]       medium                                                       │
-      │     research.default_sources [choice]       both                                                         │
+      │     research.auto_save       [bool]         <false>                                                      │
+      │     research.default_depth   [choice]       <medium>                                                     │
+      │     research.default_sources [choice]       <both>                                                       │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

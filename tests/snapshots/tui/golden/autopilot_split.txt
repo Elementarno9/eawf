@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ Autopilot    runtime: idle    HH:MM UTC
+ Eä  repo ❯ QR ❯ Autopilot    ≈ idle    HH:MM UTC
 
   ❯ ready frontier 1 wave claimable + 2 blocked
 

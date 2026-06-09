@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ Trust    runtime: idle    HH:MM UTC
+ Eä  repo ❯ QR ❯ Trust    ≈ idle    HH:MM UTC
 
   ┌─ TRUST ────────────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ window all                                                                                                     │

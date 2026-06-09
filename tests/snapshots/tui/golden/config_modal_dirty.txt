@@ -4,11 +4,11 @@
       ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
       │                                                                                                          │
       │  Configuration                                                                                           │
-      │  save layer: repo  (L cycles: global local)  ·  1 unsaved                                                │
+      │  ≡ save layer: repo  (L cycles: global local)  ·  1 unsaved                                              │
       │                                                                                                          │
       │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
       │  ╸━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >* audit.fix_safe           [bool]         true                                                         │
+      │  >◐ audit.fix_safe           [bool]         <true>                                                       │
       │     audit.flaky_retry_count  [int]          1                                                            │
       │                                                                                                          │
       │                                                                                                          │

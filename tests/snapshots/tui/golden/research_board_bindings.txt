@@ -1,11 +1,11 @@
- Eä  repo ❯ QR ❯ Research    runtime: idle    HH:MM UTC
+ Eä  repo ❯ QR ❯ Research    ≈ idle    HH:MM UTC
 
   ┌─ TOPIC TREE ──────────────────────────────────────────────────┐┌─ CLAIMS / EVIDENCE ───────────────────────────────────────────┐┌─ PROGRESS / BUDGET ────────────────────────────────────────────┐
-  │ > v Survey the options-pricing landscape                      ││                                                               ││ RUN staged -- live run not yet wired                           │
-  │     > round 1                                                 ││ open Implied vol surface is downward sloping in strike        ││ ROUND 1/1 (staged)                                             │
-  │       # market-structure                                      ││                                                               ││ ACTIVE 1 claim(s)                                              │
-  │       # pricing-models                                        ││ Options (supporting evidence)                                 ││ WAITING 1 open question(s)                                     │
-  │       ? Which curve model fits the short tenor                ││ none yet                                                      ││ PAUSED 0 checkpoint(s)                                         │
+  │ > ≡ Survey the options-pricing landscape                      ││                                                               ││ RUN staged -- live run not yet wired                           │
+  │     ❯ round 1                                                 ││ ◌ Implied vol surface is downward sloping in strike           ││ ROUND 1/1 (staged)                                             │
+  │       ◌ market-structure                                      ││                                                               ││ ACTIVE 1 claim(s)                                              │
+  │       ◌ pricing-models                                        ││ Options (supporting evidence)                                 ││ WAITING 1 open question(s)                                     │
+  │       ◌ Which curve model fits the short tenor                ││ none yet                                                      ││ PAUSED 0 checkpoint(s)                                         │
   │ enter to peek the selected node                               ││                                                               ││ BUDGET 2 staged topic(s), 0 answered                           │
   │                                                               ││ Conflicts (contradicting evidence)                            ││ RISKS none                                                     │
   │                                                               ││ none yet                                                      ││                                                                │

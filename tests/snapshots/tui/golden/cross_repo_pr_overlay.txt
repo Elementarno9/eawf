@@ -6,14 +6,14 @@
 
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
             │                                                                                              │
-            │  Cross-repo PRs * 3 repos * 3 open                                                           │
+            │  ≡ Cross-repo PRs * 3 repos * 3 open                                                         │
             │                                                                                              │
             │  ABC  ABC repo  2 open                                                                       │
-            │    #11  tidy the docs @alice                                                                 │
-            │    #12  fix the parser @bob                                                                  │
+            │    ❯ #11  tidy the docs @alice  OPEN                                                         │
+            │    ❯ #12  fix the parser @bob  OPEN                                                          │
             │                                                                                              │
             │  DEF  DEF repo  1 open                                                                       │
-            │    #20  add the widget @carol                                                                │
+            │    ❯ #20  add the widget @carol  OPEN                                                        │
             │                                                                                              │
             │  GHI  GHI repo  (unavailable)                                                                │
             │    gh unavailable -- install + authenticate gh in this repo                                  │

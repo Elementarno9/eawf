@@ -4,19 +4,19 @@
       ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
       │                                                                                                          │
       │  Configuration                                                                                           │
-      │  save layer: repo  (L cycles: global local)                                                              │
+      │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
       │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  flow.ask_on_decisions     [bool]         true                                                        │
-      │     flow.auto_accept.audit    [bool]         false                                                       │
-      │     flow.auto_accept.polish   [bool]         false                                                       │
-      │     flow.auto_accept.prep     [bool]         false                                                       │
-      │     flow.auto_accept.research [bool]         false                                                       │
-      │     flow.auto_accept.review   [bool]         false                                                       │
-      │     flow.auto_accept.ship     [bool]         false                                                       │
-      │     flow.budget.enforce       [choice]       soft                                                        │
-      │     flow.budget.multiplier    [float]        1.5                                                         │
+      │  >  flow.ask_on_decisions     [bool]         <true>                                                      │
+      │     flow.auto_accept.audit    [bool]         <false>                                                     │
+      │     flow.auto_accept.polish   [bool]         <false>                                                     │
+      │     flow.auto_accept.prep     [bool]         <false>                                                     │
+      │     flow.auto_accept.research [bool]         <false>                                                     │
+      │     flow.auto_accept.review   [bool]         <false>                                                     │
+      │     flow.auto_accept.ship     [bool]         <false>                                                     │
+      │     flow.budget.enforce       [choice]       <soft>                                                      │
+      │     flow.budget.multiplier    [float]        <1.5>                                                       │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

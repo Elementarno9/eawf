@@ -4,13 +4,13 @@
       ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
       │                                                                                                          │
       │  Configuration                                                                                           │
-      │  save layer: repo  (L cycles: global local)                                                              │
+      │  ≡ save layer: repo  (L cycles: global local)                                                            │
       │                                                                                                          │
       │   audit  daemon  estimation  flow  planning  preferences  prose  research  runtime  ship  statusline  t  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  preferences.auto_choose   [choice]       off                                                         │
-      │     preferences.scope_size    [choice]       M                                                           │
-      │     preferences.solution_bias [choice]       balanced                                                    │
+      │  >  preferences.auto_choose   [choice]       <off>                                                       │
+      │     preferences.scope_size    [choice]       <M>                                                         │
+      │     preferences.solution_bias [choice]       <balanced>                                                  │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

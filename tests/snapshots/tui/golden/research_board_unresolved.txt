@@ -1,16 +1,16 @@
- Eä  repo ❯ QR ❯ Research    runtime: idle    HH:MM UTC
+ Eä  repo ❯ QR ❯ Research    ≈ idle    HH:MM UTC
 
   ┌─ TOPIC TREE ───────────────────────┐┌─ CLAIMS / EVIDENCE ─────────────────┐┌─ PROGRESS / BUDGET ─────────────────┐
-  │ > v Survey the options-pricing     ││                                     ││ RUN staged -- live run not yet      │
+  │ > ≡ Survey the options-pricing     ││                                     ││ RUN staged -- live run not yet      │
   │ landscape                          ││ none yet                            ││ wired                               │
-  │     > round 1                      ││                                     ││ ROUND 1/1 (staged)                  │
-  │       # market-structure           ││ Options (supporting evidence)       ││ ACTIVE 0 claim(s)                   │
-  │       # pricing-models             ││ none yet                            ││ WAITING 2 open question(s)          │
-  │       ? Which curve model fits the ││                                     ││ PAUSED 0 checkpoint(s)              │
+  │     ❯ round 1                      ││                                     ││ ROUND 1/1 (staged)                  │
+  │       ◌ market-structure           ││ Options (supporting evidence)       ││ ACTIVE 0 claim(s)                   │
+  │       ◌ pricing-models             ││ none yet                            ││ WAITING 2 open question(s)          │
+  │       ◌ Which curve model fits the ││                                     ││ PAUSED 0 checkpoint(s)              │
   │ short tenor                        ││ Conflicts (contradicting evidence)  ││ BUDGET 2 staged topic(s), 1         │
-  │       ? Does the smile invert past ││ none yet                            ││ answered                            │
+  │       ◌ Does the smile invert past ││ none yet                            ││ answered                            │
   │ the 90 delta wing                  ││                                     ││ RISKS 1 blocking question(s)        │
-  │       ? Is the term-structure      ││ Unresolved                          ││                                     │
+  │       ◌ Is the term-structure      ││ Unresolved                          ││                                     │
   │ arbitrage real                     ││ open round 1 Which curve model fits ││                                     │
   │ enter to peek the selected node    ││ the short tenor                     ││                                     │
   │                                    ││ answered round 1 Does the smile     ││                                     │

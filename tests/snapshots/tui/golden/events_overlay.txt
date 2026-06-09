@@ -4,10 +4,10 @@
 
       ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
       │                                                                                                          │
-      │  Events · 3/3 · filter all                                                                               │
-      │  2026-05-10T12:49:10Z  wave close               ok  closed W01                                           │
-      │  2026-05-10T12:49:25Z  dispatch cost            fail  boom                                               │
-      │  2026-05-10T12:49:35Z  executor report          ok  report body                                          │
+      │  ≡ Events · 3/3 · filter all                                                                             │
+      │  ● 2026-05-10T12:49:10Z  wave close               ok  closed W01                                         │
+      │  ✕ 2026-05-10T12:49:25Z  dispatch cost            fail  boom                                             │
+      │  ● 2026-05-10T12:49:35Z  executor report          ok  report body                                        │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

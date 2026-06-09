@@ -2,7 +2,7 @@
 
       ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
       │                                                                                                          │
-      │  Eä TUI — Help                                                                                           │
+      │  ≡ Eä TUI — Help                                                                                         │
       │                                                                                                          │
       │  Global keys                                                                                             │
       │    q          quit                                                                                       │
@@ -20,7 +20,7 @@
       │    Shift-Tab  previous pane                                                                              │
       │                                                                                                          │
       │  Modes (digit keys)                                                                                      │
-      │  > 1          switch to Home mode (active)                                                               │
+      │  ❯ 1          switch to Home mode (active)                                                               │
       │    2          switch to Autopilot mode                                                                   │
       │    3          switch to Research mode                                                                    │
       │    4          switch to Trust mode                                                                       │

@@ -1,6 +1,6 @@
  Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Feed    runtime: 1 running    HH:MM UTC
- 09:30:15  event                     wave P01-I01-W01 closed
- 09:30:15  event                     wave P01-I01-W01 claimed
+ ● 09:30:15  event                     wave P01-I01-W01 closed
+ ● 09:30:15  event                     wave P01-I01-W01 claimed
 
 
 

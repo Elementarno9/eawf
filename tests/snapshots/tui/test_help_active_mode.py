@@ -111,8 +111,9 @@ def test_help_active_mode_highlight_snapshot() -> None:
             await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
             # The active Trust row carries the cursor + active tag; the inactive
-            # Home row keeps the plain two-space indent.
-            assert "> 4          switch to Trust mode (active)" in frame
+            # Home row keeps the plain two-space indent. The cursor is the
+            # chrome "dispatch" glyph (unicode column in the default mode).
+            assert "\u276f 4          switch to Trust mode (active)" in frame
             assert "  1          switch to Home mode" in frame
             assert "(active)" in frame
             # Only one row is marked active.
