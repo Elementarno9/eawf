@@ -55,6 +55,16 @@ The check kinds frozen for v0.3:
   in-process to collect coverage; an explicit list (e.g. one missing a
   known edge) drives the deterministic error path. A malformed ``args``
   degrades to ``status="fail"`` rather than raising.
+* ``tui_flow`` — ``args = {flow: str, key_sequence: list[str],
+  terminal_state: dict, scope: str = "repo", state_path: str, size:
+  [int, int]}``. Mounts the operator TUI at the launch scope, drives the
+  named ``key_sequence`` through the real key->Binding path, and asserts the
+  terminal observable state (the seven signals the behaviour probe samples)
+  equals every field the ``terminal_state`` mapping declares (a partial
+  spec is allowed). Fails naming each divergent observable field when the
+  journey lands elsewhere; covers a multi-step operator journey the
+  per-key (``affordance_parity``) and per-surface (snapshot) gates cannot.
+  A malformed ``args`` degrades to ``status="fail"`` rather than raising.
 * ``svg_well_formed`` — ``args = {path: str}`` or ``{svg: str}``. Shells
   ``xmllint --noout`` over an SVG file (or inline SVG string) and turns a
   clean parse into ``pass``, a parser error into ``fail`` (with the
@@ -97,6 +107,7 @@ CheckKind = Literal[
     "schema_validate",
     "affordance_parity",
     "transition_coverage",
+    "tui_flow",
     "svg_well_formed",
     "svg_pixel_diff",
 ]

@@ -418,6 +418,61 @@ async def record_keypress_transcript(
     return BehaviourTranscript(source_commit=source_commit, outcomes=tuple(outcomes))
 
 
+#: The stable field order of the seven observable signals
+#: :func:`_sample_observable_state` samples. Exported so a caller (the
+#: ``tui_flow`` audit kind) can validate a declared terminal-state spec
+#: against the exact field set the probe knows, rather than duplicating the
+#: list and drifting from it.
+OBSERVABLE_FIELDS: tuple[str, ...] = (
+    "current_mode",
+    "nav_scope",
+    "nav_mode",
+    "screen_depth",
+    "top_screen",
+    "modal_depth",
+    "toast_count",
+)
+
+
+async def record_flow_terminal_state(
+    pilot: Pilot[object],
+    keys: Sequence[str],
+) -> dict[str, object]:
+    """Drive *keys* as a flow and return the terminal observable state.
+
+    The journey complement to :func:`record_keypress_transcript`: where the
+    transcript driver records the per-key OUTCOME (the dead-click signal), a
+    flow gate cares only about the TERMINAL observable state the whole key
+    sequence lands in. This driver presses each key through the real
+    key->:class:`~textual.binding.Binding` path
+    (:meth:`~textual.pilot.Pilot.press`), draining the background workers
+    after each press (via :func:`settle_screen`) so a binding that offloads to
+    a worker is observed after it settles -- keeping the terminal state
+    deterministic across runs. A key that resolves to no binding is still
+    pressed (Textual no-ops it) so a flow spec that includes a benign
+    unresolved key does not abort; the terminal-state comparison is what the
+    gate asserts.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from ``app.run_test()``,
+            already settled.
+        keys: Ordered Textual key strings to drive as the flow (e.g.
+            ``["2", "1"]`` for "open autopilot then return home").
+
+    Returns:
+        The terminal observable state as a plain ``dict`` keyed by
+        :data:`OBSERVABLE_FIELDS`, suitable for an equality comparison against
+        a declared ``terminal_state`` spec.
+    """
+    app = cast("EaApp", pilot.app)
+    await settle_screen(pilot)
+    for key in keys:
+        await pilot.press(key)
+        await settle_screen(pilot)
+    state = _sample_observable_state(app)
+    return {field: getattr(state, field) for field in OBSERVABLE_FIELDS}
+
+
 def render_transcript_evidence(transcript: BehaviourTranscript) -> str:
     """Format *transcript* as the auditor ``evidence_block`` text.
 
@@ -630,10 +685,12 @@ async def sweep_unresolved_affordances(
 
 __all__ = [
     "DEFERRED_KEYS",
+    "OBSERVABLE_FIELDS",
     "BehaviourTranscript",
     "ProbeOutcome",
     "ProbeStatus",
     "record_behaviour_transcript",
+    "record_flow_terminal_state",
     "record_keypress_transcript",
     "render_transcript_evidence",
     "sweep_unresolved_affordances",

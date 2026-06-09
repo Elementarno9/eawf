@@ -23,12 +23,15 @@ import pytest
 
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.snapshot.behaviour_probe import (
+    OBSERVABLE_FIELDS,
     BehaviourTranscript,
     ProbeOutcome,
     ProbeStatus,
     record_behaviour_transcript,
+    record_flow_terminal_state,
     render_transcript_evidence,
 )
+from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 
 _REPO_STATE = (
     Path(__file__).resolve().parents[2]
@@ -175,6 +178,52 @@ def test_transcript_is_deterministic_across_runs() -> None:
     second = _record(probes)
     # The provenance differs only if the commit differs; here both stamp the
     # same commit, so the whole typed transcript must compare equal.
+    assert first == second
+
+
+# --------------------------------------------------------------------------
+# record_flow_terminal_state — the tui_flow journey driver
+# --------------------------------------------------------------------------
+
+
+def _terminal_state(keys: list[str]) -> dict[str, object]:
+    """Drive *keys* against a fresh repo-scope app + return the terminal state."""
+
+    async def body() -> dict[str, object]:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            return await record_flow_terminal_state(pilot, keys)
+
+    return asyncio.run(body())
+
+
+def test_flow_terminal_state_keys_match_observable_fields() -> None:
+    # The terminal-state dict is keyed by exactly the seven observable fields
+    # the probe samples -- the contract the tui_flow gate asserts against.
+    state = _terminal_state([])
+    assert set(state) == set(OBSERVABLE_FIELDS)
+
+
+def test_flow_terminal_state_reflects_mode_switch() -> None:
+    # Driving the autopilot digit lands the autopilot mode in the terminal
+    # observable state -- the multi-step journey's end is observable.
+    state = _terminal_state(["2"])
+    assert state["current_mode"] == "autopilot"
+    assert state["top_screen"] == "AutopilotModeScreen"
+
+
+def test_flow_terminal_state_open_close_modal_round_trips() -> None:
+    # A modal open then dismiss returns the modal depth to 0 -- the journey's
+    # before->after round-trip is captured.
+    state = _terminal_state(["c", "escape"])
+    assert state["modal_depth"] == 0
+    assert state["top_screen"] == "RepoScreen"
+
+
+def test_flow_terminal_state_is_deterministic_across_runs() -> None:
+    first = _terminal_state(["2", "1"])
+    second = _terminal_state(["2", "1"])
     assert first == second
 
 
