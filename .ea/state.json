@@ -4488,6 +4488,18 @@
       "status": "done",
       "updated_at": "2026-06-09T23:35:10.030653Z"
     },
+    "P30-I03-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W06",
+      "scope_id": "P30-I03-W06",
+      "status": "done",
+      "updated_at": "2026-06-09T23:44:50.830043Z"
+    },
     "P30-I03-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -14882,6 +14894,19 @@
       "scope_id": "P30-I03-W05",
       "updated_at": "2026-06-09T23:34:41.918315Z"
     },
+    "P30-I03-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W06-bucket-20260609T234447Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I03-W06",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I03-W06",
+      "updated_at": "2026-06-09T23:44:47.687941Z"
+    },
     "P30-I03-W07": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I03-W07-bucket-20260609T230556Z",
@@ -17778,7 +17803,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T23:35:10.030981Z",
+  "updated_at": "2026-06-09T23:44:52.054624Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -68860,10 +68885,10 @@
     "P30-I03-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T23:35:49.041468Z",
+      "closed_at": "2026-06-09T23:44:50.830043Z",
+      "commit": "de0c1968c457e39e15f6b8d9e5e89178e04b2f2f",
       "deps": [
         "P30-I03-W02",
         "P30-I03-W03",
@@ -68876,28 +68901,59 @@
         "tools/idle_contract_gate.py",
         "src/eawf/workflow/skills/engine.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_idle_contract_binding_probe.py",
+              "tests/unit/test_idle_contract_gate.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W06",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.812736Z",
-      "outcome": null,
+      "outcome": "Binding-proof probe row in idle_contract_gate drives a drifted /audit body through run_skill and requires ValidationError; injection seam proves the gate bites when validation is stubbed out; meta-gate self-discharges the new check; 39 tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W06-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "pytest test_idle_contract_gate_passes_when_bound and test_idle_contract_gate_fails_when_unbound pass; gate exit code asserted both directions",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "measurable_signal": "test_idle_contract_binding_probe.py asserts the live-binding exit-0 path and the no-validation-stub non-zero path through the injection seam; the existing idle-contract gate suite stays green; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "With the SKILL-2 binding present the gate's probe raises on a drifted body and the gate exits 0; a monkeypatched run_skill that skips body validation makes the probe stop raising and the gate exits non-zero (the gate that guards the gate bites when the binding is removed).",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the binding-proof probe suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "With the SKILL-2 binding present the idle-contract gate's binding-proof probe drives a drifted dict body through run_skill, the emit path raises pydantic.ValidationError, and the gate exits 0; a run_skill stub that skips body validation makes the probe stop raising and the gate exits non-zero (the gate that guards the gate bites when the binding is removed).",
           "waiver_reason": null
         }
       ],
