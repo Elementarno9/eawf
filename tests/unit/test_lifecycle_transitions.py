@@ -22,11 +22,13 @@ from eawf.kernel.spec.common import (
     ResponseClause,
     grandfather_criterion,
 )
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
     AuditVerdict,
     DecisionStatus,
+    EffortBucket,
     IterStatus,
     PhaseStatus,
     ProjectStatus,
@@ -41,6 +43,7 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
+from eawf.platform.profiles.models import CheckpointBlock
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     activate_iter,
@@ -461,6 +464,134 @@ def test_close_iter_zero_criteria_takes_sentinel_path_no_advisory(
         it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
     assert it.status == IterStatus.CLOSED
     assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def _insert_closed_wave_with_plan(
+    state: State,
+    *,
+    wave_id: str,
+    iter_id: str,
+    planned: int,
+    delivered: int,
+    effort_bucket: EffortBucket = EffortBucket.M,
+) -> None:
+    """Insert a CLOSED wave whose intent plans *planned* criteria and ships *delivered*.
+
+    The plan row count comes from ``intent.planned_steps`` (the planner's
+    intended steps); the delivered count is ``len(success_criteria)``. A wave
+    is *thin* for the drift pulse when ``delivered < planned``.
+    """
+    now = datetime.now(UTC)
+    state.waves[wave_id] = Wave(
+        id=wave_id,
+        iter_id=iter_id,
+        title="w",
+        status=WaveStatus.CLOSED,
+        file_scopes=["src/"],
+        success_criteria=[
+            _odr_criterion(f"CR-{wave_id}-{i:02d}", tier=OracleTier.T1_STATIC)
+            for i in range(delivered)
+        ],
+        effort_bucket=effort_bucket,
+        intent=IntentBrief(
+            problem="ship the wave deliverable per spec",
+            desired_outcome="the deliverable lands with all planned criteria",
+            planned_steps=[f"planned step {i:02d} the planner intended" for i in range(planned)],
+        ),
+        opened_at=now,
+        closed_at=now,
+    )
+
+
+def test_close_iter_k_clean_closes_fires_pulse_no_drift(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # K=3 default budget: three clean (delivered >= planned) waves fire one
+    # pulse with drift_detected=False; the close proceeds.
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    for idx in range(1, 4):
+        _insert_closed_wave_with_plan(
+            state,
+            wave_id=f"P01-I01-W0{idx}",
+            iter_id="P01-I01",
+            planned=2,
+            delivered=2,
+        )
+    with caplog.at_level(logging.INFO):
+        it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    assert it.status == IterStatus.CLOSED
+    messages = [r.getMessage() for r in caplog.records]
+    assert any(
+        "emit_iter_drift_pulse" in m and "iter=P01-I01" in m and "drift_detected=false" in m
+        for m in messages
+    )
+
+
+def test_close_iter_fewer_than_k_closes_fires_no_pulse(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Two clean closes against the K=3 / D=3.5 default budget (2 M-waves = 2.0
+    # EU < 3.5) -> below both arms -> no pulse line at all.
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    for idx in range(1, 3):
+        _insert_closed_wave_with_plan(
+            state,
+            wave_id=f"P01-I01-W0{idx}",
+            iter_id="P01-I01",
+            planned=2,
+            delivered=2,
+        )
+    with caplog.at_level(logging.INFO):
+        it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    assert it.status == IterStatus.CLOSED
+    messages = [r.getMessage() for r in caplog.records]
+    assert not any("emit_iter_drift_pulse" in m for m in messages)
+
+
+def test_close_iter_thin_wave_barrier_mode_refuses_close() -> None:
+    # A thin wave (delivered < planned) under barrier mode refuses the close
+    # so the next dispatch cannot proceed against unreconciled drift.
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    _insert_closed_wave_with_plan(
+        state, wave_id="P01-I01-W01", iter_id="P01-I01", planned=2, delivered=2
+    )
+    _insert_closed_wave_with_plan(
+        state, wave_id="P01-I01-W02", iter_id="P01-I01", planned=4, delivered=1
+    )
+    _insert_closed_wave_with_plan(
+        state, wave_id="P01-I01-W03", iter_id="P01-I01", planned=2, delivered=2
+    )
+    barrier = CheckpointBlock(checkpoint_mode="barrier")
+    with pytest.raises(LifecycleError, match="refuses next dispatch"):
+        close_iter(state, iter_id="P01-I01", audit_id="AUD-1", checkpoint=barrier)
+    # The refusal is raised BEFORE the close mutation lands -> still active.
+    assert state.iters["P01-I01"].status == IterStatus.ACTIVE
+
+
+def test_close_iter_thin_wave_optimistic_mode_does_not_stall() -> None:
+    # The same thin wave under the optimistic default is advisory: the pulse
+    # detects drift but the close proceeds (zero parallelism cost on the
+    # frontier; the next claim is not blocked).
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    _insert_closed_wave_with_plan(
+        state, wave_id="P01-I01-W01", iter_id="P01-I01", planned=2, delivered=2
+    )
+    _insert_closed_wave_with_plan(
+        state, wave_id="P01-I01-W02", iter_id="P01-I01", planned=4, delivered=1
+    )
+    _insert_closed_wave_with_plan(
+        state, wave_id="P01-I01-W03", iter_id="P01-I01", planned=2, delivered=2
+    )
+    it = close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
+    assert it.status == IterStatus.CLOSED
 
 
 def test_edit_iter_plan_planned() -> None:

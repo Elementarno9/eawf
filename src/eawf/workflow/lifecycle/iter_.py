@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Final, Literal
 
 from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.spec.intent import IntentBrief
@@ -30,11 +31,33 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State, Wave
 from eawf.kernel.state.mutations import Mutation, MutationKind, apply_memory_add
-from eawf.observability.metrics.odr import iter_odr_advisory
+from eawf.observability.metrics.odr import (
+    DriftPulseReport,
+    WavePlanRow,
+    drift_budget_pulse,
+    iter_odr_advisory,
+    pulse_refuses_dispatch,
+)
+from eawf.workflow.estimation.buckets import wave_estimate_eu
 from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
 from eawf.workflow.lifecycle.spec import ITER_TRANSITIONS, validate_transition
 
+if TYPE_CHECKING:
+    from eawf.platform.profiles.models import CheckpointBlock
+
 logger = logging.getLogger(__name__)
+
+#: Default drift-budget pulse cadence, mirroring the
+#: :class:`~eawf.platform.profiles.models.CheckpointBlock` field defaults
+#: (``checkpoint_mode="optimistic"``, ``drift_budget_waves=3``,
+#: ``drift_budget_eu=3.5``). Held here so :func:`close_iter` can size a pulse
+#: with no profile in hand -- the same no-profile fallback the ODR advisory
+#: uses with :data:`~eawf.observability.metrics.odr.DEFAULT_ODR_FLOOR` -- and
+#: the lifecycle layer never imports the profiles layer at runtime (which
+#: would re-introduce the audit-DSL import cycle).
+_DEFAULT_DRIFT_BUDGET_WAVES: Final[int] = 3
+_DEFAULT_DRIFT_BUDGET_EU: Final[float] = 3.5
+_DEFAULT_CHECKPOINT_MODE: Final[Literal["optimistic", "barrier"]] = "optimistic"
 
 
 def open_iter(
@@ -94,8 +117,32 @@ def open_iter(
     return it
 
 
-def close_iter(state: State, *, iter_id: str, audit_id: str) -> Iter:
-    """Close an active iter. Rejects when child waves are still open."""
+def close_iter(
+    state: State,
+    *,
+    iter_id: str,
+    audit_id: str,
+    checkpoint: CheckpointBlock | None = None,
+) -> Iter:
+    """Close an active iter. Rejects when child waves are still open.
+
+    Args:
+        state: State to mutate in place.
+        iter_id: Canonical iter id (e.g. ``P03-I02``).
+        audit_id: Audit row id ratifying the close.
+        checkpoint: Optional drift-cadence dial. Defaults to the
+            :class:`~eawf.platform.profiles.models.CheckpointBlock` default
+            (optimistic, K=3 / D=3.5) when ``None`` -- the same
+            no-profile-in-hand fallback the ODR advisory uses. In ``barrier``
+            mode a drift pulse that detects a thin wave refuses the close so
+            the next dispatch cannot proceed against unreconciled drift; in
+            ``optimistic`` mode the pulse is advisory and never stalls.
+
+    Raises:
+        LifecycleError: when the iter is unknown, the close edge is illegal,
+            child waves are still open, or a ``barrier``-mode drift pulse
+            detects criteria-vs-plan drift over the iter's closed waves.
+    """
     it = state.iters.get(iter_id)
     if it is None:
         raise LifecycleError(f"unknown iter {iter_id!r}")
@@ -116,6 +163,26 @@ def close_iter(state: State, *, iter_id: str, audit_id: str) -> Iter:
     if open_waves:
         raise LifecycleError(
             f"iter {iter_id!r} has open waves: {sorted(open_waves, key=natural_key)}"
+        )
+    if checkpoint is not None:
+        budget_waves = checkpoint.drift_budget_waves
+        budget_eu = checkpoint.drift_budget_eu
+        checkpoint_mode = checkpoint.checkpoint_mode
+    else:
+        budget_waves = _DEFAULT_DRIFT_BUDGET_WAVES
+        budget_eu = _DEFAULT_DRIFT_BUDGET_EU
+        checkpoint_mode = _DEFAULT_CHECKPOINT_MODE
+    pulse = _emit_iter_drift_pulse(
+        state,
+        iter_id=iter_id,
+        budget_waves=budget_waves,
+        budget_eu=budget_eu,
+        checkpoint_mode=checkpoint_mode,
+    )
+    if pulse is not None and pulse_refuses_dispatch(pulse):
+        raise LifecycleError(
+            f"iter {iter_id!r} drift pulse refuses next dispatch (barrier mode): "
+            f"thin waves {pulse.thin_wave_ids}"
         )
     closed_at = datetime.now(UTC)
     it.status = IterStatus.CLOSED
@@ -179,6 +246,98 @@ def _emit_iter_odr_advisory(state: State, *, iter_id: str) -> None:
         f"floor={advisory.floor:.4f} required={advisory.required} "
         f"finding=odr_below_floor severity=advisory"
     )
+
+
+def _closed_wave_plan_rows(state: State, *, iter_id: str) -> list[WavePlanRow]:
+    """Build the delivered-vs-planned criteria rows for an iter's closed waves.
+
+    Walks the iter's CLOSED waves in id order and pairs, per wave, the
+    criteria the planner intended (the *plan row*) against the criteria the
+    executor delivered. The plan-row count is the wave's
+    :attr:`eawf.kernel.spec.intent.IntentBrief.planned_steps` count when the
+    wave carries a typed intent; a wave with no intent has no recorded plan,
+    so its plan-row count is taken as the delivered count and the wave can
+    never read as thin (the conservative reading -- a missing plan is not
+    evidence of drift). The delivered count is
+    ``len(wave.success_criteria)``; the per-wave EU comes from
+    :func:`eawf.workflow.estimation.buckets.wave_estimate_eu` so the pulse can
+    size its window in EU as well as wave count.
+
+    Args:
+        state: The state holding the wave rows.
+        iter_id: Canonical iter id whose closed waves are scored.
+
+    Returns:
+        One :class:`WavePlanRow` per CLOSED wave under *iter_id*, in id order.
+    """
+    rows: list[WavePlanRow] = []
+    closed = sorted(
+        [
+            wave
+            for wave in state.waves.values()
+            if wave.iter_id == iter_id and wave.status is WaveStatus.CLOSED
+        ],
+        key=lambda wave: natural_key(wave.id),
+    )
+    for wave in closed:
+        delivered = len(wave.success_criteria)
+        planned = len(wave.intent.planned_steps) if wave.intent is not None else delivered
+        rows.append(
+            WavePlanRow(
+                wave_id=wave.id,
+                planned_criteria=planned,
+                delivered_criteria=delivered,
+                eu=wave_estimate_eu(wave),
+            )
+        )
+    return rows
+
+
+def _emit_iter_drift_pulse(
+    state: State,
+    *,
+    iter_id: str,
+    budget_waves: int,
+    budget_eu: float,
+    checkpoint_mode: Literal["optimistic", "barrier"],
+) -> DriftPulseReport | None:
+    """Fire the drift-budget pulse over the closing iter's closed waves.
+
+    Aggregates the iter's CLOSED-wave plan rows and delegates to
+    :func:`eawf.observability.metrics.odr.drift_budget_pulse`, which fires one
+    typed :class:`DriftPulseReport` once the closed-wave window reaches the
+    budget (``K`` waves or ``D`` EU). Fewer than ``K`` closed waves (and below
+    ``D`` EU) yields no pulse and ``None`` is returned. A clean pulse (no thin
+    wave) is advisory in either cadence shape and never stalls the frontier; a
+    pulse that detects criteria-vs-plan drift logs the finding and -- only in
+    ``barrier`` mode -- is surfaced by :func:`close_iter` as a refused
+    dispatch.
+
+    Args:
+        state: The state holding the wave rows.
+        iter_id: Canonical iter id being closed.
+        budget_waves: The ``K`` wave-count budget for the pulse window.
+        budget_eu: The ``D`` EU budget for the pulse window.
+        checkpoint_mode: The cadence shape (``optimistic`` / ``barrier``).
+
+    Returns:
+        The :class:`DriftPulseReport` when the budget boundary is reached;
+        ``None`` when the budget has not yet fired.
+    """
+    rows = _closed_wave_plan_rows(state, iter_id=iter_id)
+    pulse = drift_budget_pulse(
+        rows,
+        budget_waves=budget_waves,
+        budget_eu=budget_eu,
+        checkpoint_mode=checkpoint_mode,
+    )
+    if pulse is None:
+        return None
+    logger.info(
+        f"emit_iter_drift_pulse iter={iter_id} mode={pulse.checkpoint_mode} "
+        f"drift_detected={str(pulse.drift_detected).lower()} thin={pulse.thin_wave_ids}"
+    )
+    return pulse
 
 
 def _record_iter_close_memory(

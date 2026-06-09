@@ -27,13 +27,17 @@ from eawf.kernel.spec.common import (
 from eawf.observability.metrics.odr import (
     DEFAULT_ODR_FLOOR,
     EMPTY_RATIO,
+    DriftPulseReport,
     EscapeFinding,
     EscapeStage,
     OdrAdvisory,
+    WavePlanRow,
+    drift_budget_pulse,
     escape_rate,
     iter_odr_advisory,
     odr_below_floor,
     oracle_determinism_ratio,
+    pulse_refuses_dispatch,
 )
 
 
@@ -278,4 +282,167 @@ def test_escape_finding_rejects_extra_keys() -> None:
             finding_id="F-01",
             caught_at=EscapeStage.CLOSE,
             severity="advisory",  # type: ignore[call-arg]
+        )
+
+
+# --- drift-budget pulse: WavePlanRow thinness predicate -------------------
+
+
+def _plan_row(
+    wave_id: str,
+    *,
+    planned: int,
+    delivered: int,
+    eu: float = 0.0,
+) -> WavePlanRow:
+    """Build a WavePlanRow pairing planned vs delivered criteria counts."""
+    return WavePlanRow(
+        wave_id=wave_id,
+        planned_criteria=planned,
+        delivered_criteria=delivered,
+        eu=eu,
+    )
+
+
+def test_wave_plan_row_is_thin_when_delivered_below_planned() -> None:
+    assert _plan_row("P01-I01-W01", planned=4, delivered=2).is_thin is True
+
+
+def test_wave_plan_row_is_not_thin_when_delivered_meets_plan() -> None:
+    assert _plan_row("P01-I01-W01", planned=3, delivered=3).is_thin is False
+
+
+def test_wave_plan_row_over_delivery_is_not_thin() -> None:
+    assert _plan_row("P01-I01-W01", planned=2, delivered=5).is_thin is False
+
+
+def test_wave_plan_row_rejects_negative_counts() -> None:
+    with pytest.raises(ValidationError):
+        WavePlanRow(wave_id="P01-I01-W01", planned_criteria=-1, delivered_criteria=0)
+
+
+def test_wave_plan_row_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        WavePlanRow(
+            wave_id="P01-I01-W01",
+            planned_criteria=2,
+            delivered_criteria=2,
+            severity="x",  # type: ignore[call-arg]
+        )
+
+
+# --- drift_budget_pulse: budget boundary ----------------------------------
+
+
+def test_drift_budget_pulse_fewer_than_k_returns_none() -> None:
+    # Two clean closes against a K=3 budget -> below boundary -> no pulse.
+    rows = [
+        _plan_row("P01-I01-W01", planned=2, delivered=2),
+        _plan_row("P01-I01-W02", planned=2, delivered=2),
+    ]
+    assert drift_budget_pulse(rows, budget_waves=3, budget_eu=0.0) is None
+
+
+def test_drift_budget_pulse_k_clean_closes_reports_no_drift() -> None:
+    # Exactly K=3 clean closes -> pulse fires with drift_detected=False.
+    rows = [
+        _plan_row("P01-I01-W01", planned=2, delivered=2),
+        _plan_row("P01-I01-W02", planned=3, delivered=3),
+        _plan_row("P01-I01-W03", planned=1, delivered=4),
+    ]
+    report = drift_budget_pulse(rows, budget_waves=3, budget_eu=0.0)
+    assert report is not None
+    assert isinstance(report, DriftPulseReport)
+    assert report.drift_detected is False
+    assert report.thin_wave_ids == []
+    assert report.findings == []
+    assert report.window_waves == ["P01-I01-W01", "P01-I01-W02", "P01-I01-W03"]
+    assert report.budget_waves == 3
+
+
+def test_drift_budget_pulse_thin_wave_reports_drift() -> None:
+    # One wave delivers fewer criteria than its plan row -> drift_detected.
+    rows = [
+        _plan_row("P01-I01-W01", planned=2, delivered=2),
+        _plan_row("P01-I01-W02", planned=4, delivered=1),
+        _plan_row("P01-I01-W03", planned=2, delivered=2),
+    ]
+    report = drift_budget_pulse(rows, budget_waves=3, budget_eu=0.0)
+    assert report is not None
+    assert report.drift_detected is True
+    assert report.thin_wave_ids == ["P01-I01-W02"]
+    assert report.findings == ["wave=P01-I01-W02 planned=4 delivered=1"]
+
+
+def test_drift_budget_pulse_eu_arm_fires_before_wave_count() -> None:
+    # Two large waves accumulate D=3.5 EU before the K=5 wave count -> pulse.
+    rows = [
+        _plan_row("P01-I01-W01", planned=2, delivered=2, eu=2.0),
+        _plan_row("P01-I01-W02", planned=2, delivered=2, eu=2.0),
+    ]
+    report = drift_budget_pulse(rows, budget_waves=5, budget_eu=3.5)
+    assert report is not None
+    assert report.drift_detected is False
+
+
+def test_drift_budget_pulse_eu_arm_below_budget_returns_none() -> None:
+    rows = [_plan_row("P01-I01-W01", planned=2, delivered=2, eu=1.0)]
+    assert drift_budget_pulse(rows, budget_waves=5, budget_eu=3.5) is None
+
+
+def test_drift_budget_pulse_no_live_budget_arm_raises() -> None:
+    rows = [_plan_row("P01-I01-W01", planned=2, delivered=2)]
+    with pytest.raises(ValueError, match="no live budget arm"):
+        drift_budget_pulse(rows, budget_waves=0, budget_eu=0.0)
+
+
+# --- pulse_refuses_dispatch: barrier vs optimistic ------------------------
+
+
+def test_pulse_refuses_dispatch_barrier_drift_refuses() -> None:
+    rows = [
+        _plan_row("P01-I01-W01", planned=2, delivered=2),
+        _plan_row("P01-I01-W02", planned=4, delivered=1),
+        _plan_row("P01-I01-W03", planned=2, delivered=2),
+    ]
+    report = drift_budget_pulse(rows, budget_waves=3, budget_eu=0.0, checkpoint_mode="barrier")
+    assert report is not None
+    assert report.drift_detected is True
+    assert pulse_refuses_dispatch(report) is True
+
+
+def test_pulse_refuses_dispatch_optimistic_drift_does_not_refuse() -> None:
+    # Optimistic mode is advisory: detected drift never refuses dispatch.
+    rows = [
+        _plan_row("P01-I01-W01", planned=2, delivered=2),
+        _plan_row("P01-I01-W02", planned=4, delivered=1),
+        _plan_row("P01-I01-W03", planned=2, delivered=2),
+    ]
+    report = drift_budget_pulse(rows, budget_waves=3, budget_eu=0.0, checkpoint_mode="optimistic")
+    assert report is not None
+    assert report.drift_detected is True
+    assert pulse_refuses_dispatch(report) is False
+
+
+def test_pulse_refuses_dispatch_barrier_clean_does_not_refuse() -> None:
+    # A clean pulse never refuses, even in barrier mode (zero parallelism cost).
+    rows = [
+        _plan_row("P01-I01-W01", planned=2, delivered=2),
+        _plan_row("P01-I01-W02", planned=2, delivered=2),
+        _plan_row("P01-I01-W03", planned=2, delivered=2),
+    ]
+    report = drift_budget_pulse(rows, budget_waves=3, budget_eu=0.0, checkpoint_mode="barrier")
+    assert report is not None
+    assert report.drift_detected is False
+    assert pulse_refuses_dispatch(report) is False
+
+
+def test_drift_budget_pulse_rejects_extra_keys() -> None:
+    with pytest.raises(ValidationError):
+        DriftPulseReport(
+            drift_detected=False,
+            budget_waves=3,
+            budget_eu=3.5,
+            checkpoint_mode="optimistic",
+            severity="x",  # type: ignore[call-arg]
         )
