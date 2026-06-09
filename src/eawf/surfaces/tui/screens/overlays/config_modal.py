@@ -98,11 +98,26 @@ from eawf.surfaces.tui.screens.overlays.config_modal_logic import (
     writable_layers_for,
 )
 from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 if TYPE_CHECKING:
     from textual.app import App
 
 logger = logging.getLogger(__name__)
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
+
+#: The value-shape types that render their value cell as a typed chip --
+#: the closed/discrete shapes whose value is one of a known set (a flag, a
+#: bounded number, or one of a fixed choice list). A ``str`` / ``int`` field
+#: renders its value plainly because it is open-ended free text and a chip
+#: would only add visual noise; a ``multichoice`` already renders its own
+#: comma-joined list. The chip is the green-palette affordance that reads
+#: the discrete value as a pill rather than a bare token.
+_CHIP_TYPES: frozenset[str] = frozenset({"bool", "choice", "float"})
 
 
 class ConfigModal(ModalScreen[None]):
@@ -279,9 +294,20 @@ class ConfigModal(ModalScreen[None]):
         interaction model (it drives tab switching via
         :meth:`action_switch_tab`). The exception is while an inline edit
         is open: focus then belongs to the mounted :class:`Input`.
+
+        A ``render_mode`` watcher is wired so a unicode <-> ASCII flip
+        repaints the overridden-marker / layer-indicator sigils (and the
+        typed value chips) without a manual re-open.
         """
         self.set_focus(None)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         self._repaint_fields()
+
+    def _on_render_mode(self, _mode: object) -> None:
+        """Repaint the field rows + layer line when the render mode flips."""
+        if self.is_mounted:
+            self._repaint_fields()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         """Repaint rows whenever the active tab changes.
@@ -309,13 +335,78 @@ class ConfigModal(ModalScreen[None]):
 
     # -- rendering ----------------------------------------------------------
 
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the overridden-marker /
+        layer-indicator glyphs to their ASCII column; falls back to the
+        unicode column under a bare test harness whose host App carries no
+        ``render_mode`` attribute (or when the modal is not mounted in an
+        app at all, e.g. a pure-render unit test).
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        try:
+            app = self.app
+        except Exception:  # pragma: no cover - no active app (pure-render test)
+            return _DEFAULT_RENDER_MODE
+        return getattr(app, "render_mode", _DEFAULT_RENDER_MODE)
+
+    def _override_marker(self) -> str:
+        """Return the overridden-key marker glyph in the active render mode.
+
+        An overridden (dirty / staged) field carries the half-filled
+        ``claimed`` lifecycle sigil so the row reads as "this value departs
+        from the persisted baseline" with the same half-claimed shape the
+        roadmap tree uses for a partially-resolved entity, sourced from the
+        single :mod:`~eawf.surfaces.tui.widgets.sigils` home rather than a
+        hardcoded ``*``.
+
+        Returns:
+            The half-filled claimed sigil glyph for the resolved column.
+        """
+        return glyph(Sigil.CLAIMED, mode=self._render_mode())
+
+    def _value_chip(self, entry: ConfigKey, value: Any) -> str:
+        """Render *entry*'s value cell, wrapping a typed value in a chip.
+
+        A discrete-shape field (``bool`` / ``choice`` / ``float`` -- the
+        :data:`_CHIP_TYPES` set) renders its value inside ``<...>`` chip
+        delimiters so the value reads as a pill in the green ``$accent``
+        palette the row carries; an open-ended ``str`` / ``int`` (or a
+        ``multichoice`` list) renders its value plainly. The delimiters are
+        plain ASCII so a plain-text snapshot capture survives unchanged.
+
+        Args:
+            entry: The registry entry (its type decides chip vs plain).
+            value: The field's currently-resolved value.
+
+        Returns:
+            The value-cell string -- a ``<value>`` chip for a typed field,
+            else the plain rendered value.
+        """
+        rendered = format_value(entry, value)
+        if entry.type in _CHIP_TYPES:
+            return f"<{rendered}>"
+        return rendered
+
     def _layer_line(self) -> str:
-        """Render the writable-layer indicator line above the tabs."""
+        """Render the writable-layer indicator line above the tabs.
+
+        The line leads with the ``overview`` chrome sigil (the triple-bar
+        identity mark, or its ASCII ``=`` fallback) so the writable-layer
+        indicator reads as the modal's identity row, resolved through the
+        single :mod:`~eawf.surfaces.tui.widgets.sigils` home rather than a
+        bare ``save layer:`` label.
+        """
+        marker = chrome("overview", mode=self._render_mode())
         others = " ".join(layer for layer in self._layers if layer != self._view.layer)
         suffix = f"  (L cycles: {others})" if others else ""
         dirty_count = len(self._view.dirty)
         dirty_note = f"  ·  {dirty_count} unsaved" if dirty_count else ""
-        return f"save layer: {self._view.layer}{suffix}{dirty_note}"
+        return f"{marker} save layer: {self._view.layer}{suffix}{dirty_note}"
 
     def _key_col_width(self) -> int:
         """Return the key-column width for the active tab.
@@ -344,6 +435,13 @@ class ConfigModal(ModalScreen[None]):
         (``L``) to a permitted layer before it edits. The marker is plain
         ASCII so it survives a plain-text snapshot capture unchanged.
 
+        A field whose value departs from the persisted baseline (it sits
+        in the staged dirty map) carries the half-filled ``claimed`` sigil
+        as its overridden marker, sourced from
+        :func:`~eawf.surfaces.tui.widgets.sigils.glyph` rather than a
+        hardcoded ``*`` (see :meth:`_override_marker`); a clean field pads
+        with a space so the columns stay aligned.
+
         Args:
             entry: The registry entry the row renders.
             selected: ``True`` when this row is the focused field — adds a
@@ -353,13 +451,14 @@ class ConfigModal(ModalScreen[None]):
         """
         value = current_value(entry, self._merged, self._view.dirty)
         caret = ">" if selected else " "
-        dirty_mark = "*" if entry.key in self._view.dirty else " "
+        overridden = entry.key in self._view.dirty
+        dirty_mark = self._override_marker() if overridden else " "
         type_cell = f"[{entry.type}]"
         key_width = self._key_col_width()
         lock_mark = "" if is_editable_on_layer(entry, self._view.layer) else "  (read-only)"
         return (
             f"{caret}{dirty_mark} {entry.key:<{key_width}} "
-            f"{type_cell:<14} {format_value(entry, value)}{lock_mark}"
+            f"{type_cell:<14} {self._value_chip(entry, value)}{lock_mark}"
         )
 
     def _hint_line(self) -> str:

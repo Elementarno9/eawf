@@ -36,11 +36,17 @@ from textual.widgets import Input, Static
 
 from eawf.kernel.config.registry import ConfigKey, coerce_and_validate
 from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App
 
 logger = logging.getLogger(__name__)
+
+#: Render-mode label threaded into the sigil helper when the host App
+#: exposes no ``render_mode`` (a bare standalone harness): the unicode
+#: column is the default surface, ``"ascii"`` only when the App resolves it.
+_DEFAULT_RENDER_MODE: str = "unicode"
 
 
 def seed_input_text(entry: ConfigKey, current: Any) -> str:
@@ -97,15 +103,21 @@ class EditFieldModal(ModalScreen[Any]):
         height: auto;
         margin-bottom: 1;
     }
+    EditFieldModal .edit-field-caret {
+        color: $accent;
+        text-style: bold;
+        height: 1;
+    }
     EditFieldModal #edit-field-input {
         margin-bottom: 1;
+        border: tall $accent;
     }
     EditFieldModal .edit-field-error {
         color: $error;
         height: auto;
     }
     EditFieldModal .edit-field-error.-ok {
-        color: $text-muted;
+        color: $accent;
     }
     EditFieldModal .edit-field-hint {
         color: $text-muted;
@@ -135,16 +147,66 @@ class EditFieldModal(ModalScreen[Any]):
         self._seed = seed_input_text(entry, current)
 
     def compose(self) -> ComposeResult:
-        """Yield the field label, type/range meta, input, and inline error row."""
+        """Yield the label, meta, green caret, input, and validation chip row.
+
+        The :class:`Input` sits beside a leading caret glyph (the
+        ``dispatch`` chrome mark, or its ASCII ``>`` fallback) painted in
+        the rotated green ``$accent`` palette so the active edit point reads
+        as the focused cursor, and the validation row seeds the calm
+        (no-error) chip in the same green palette -- it flips to ``$error``
+        only when a validation failure lands. Both glyphs are sourced from
+        the single :mod:`~eawf.surfaces.tui.widgets.sigils` home.
+        """
+        mode = self._render_mode()
+        caret = chrome("dispatch", mode=mode)
         with Vertical(id="edit-field-box"):
             yield Static(self._entry.label, classes="edit-field-label")
             # markup=False — the ``[int]`` type cell is literal, not a tag.
             yield Static(self._meta_line(), classes="edit-field-meta", markup=False)
+            # The caret marks the active edit point in the green palette.
+            yield Static(caret, classes="edit-field-caret", id="edit-field-caret", markup=False)
             yield Input(value=self._seed, id="edit-field-input")
             # markup=False — validation messages may contain ``[...]`` (e.g.
-            # a choices list) that must render literally, not as a tag.
-            yield Static("", classes="edit-field-error -ok", id="edit-field-error", markup=False)
+            # a choices list) that must render literally, not as a tag. The
+            # row seeds the calm green chip; _report_error flips it to red.
+            yield Static(
+                self._ok_chip(),
+                classes="edit-field-error -ok",
+                id="edit-field-error",
+                markup=False,
+            )
             yield Static("[ Enter accept · Esc cancel ]", classes="edit-field-hint")
+
+    def _render_mode(self) -> str:
+        """Resolve the active render-mode label from the host app.
+
+        Threads :attr:`~eawf.surfaces.tui.app.EaApp.render_mode` into the
+        sigil helper so an ``ascii`` flip swaps the caret glyph to its ASCII
+        column; falls back to the unicode column under a bare test harness
+        whose host App carries no ``render_mode`` attribute (or when the
+        overlay is not mounted in an app at all).
+
+        Returns:
+            The render-mode label (``"ascii"`` or a unicode label).
+        """
+        try:
+            app = self.app
+        except Exception:  # pragma: no cover - no active app (pure-render test)
+            return _DEFAULT_RENDER_MODE
+        return getattr(app, "render_mode", _DEFAULT_RENDER_MODE)
+
+    @staticmethod
+    def _ok_chip() -> str:
+        """Return the calm (no-error) validation chip seeded in the row.
+
+        The chip reads as a green-palette pill confirming the buffer has not
+        yet failed validation; the ``-ok`` CSS class paints it ``$accent``.
+        Plain ASCII so a plain-text snapshot survives unchanged.
+
+        Returns:
+            The calm validation chip text.
+        """
+        return "<valid>"
 
     def _meta_line(self) -> str:
         """Render the dotted key + type + range hint shown above the input."""
@@ -187,14 +249,19 @@ class EditFieldModal(ModalScreen[Any]):
         self.dismiss(None)
 
     def _report_error(self, message: str) -> None:
-        """Render *message* in the inline error row below the input.
+        """Render *message* as the inline validation chip below the input.
+
+        Drops the calm green ``-ok`` class (flipping the chip to the
+        ``$error`` palette) and renders the failure wrapped in ``<...>``
+        chip delimiters so the validation feedback reads as the same pill
+        affordance the calm state seeds, just in the error colour.
 
         Args:
             message: The validation error to surface.
         """
         row = self.query_one("#edit-field-error", Static)
         row.set_class(False, "-ok")
-        row.update(message)
+        row.update(f"<{message}>")
 
 
 def open_edit_field(app: App[None], entry: ConfigKey, current: Any) -> bool:

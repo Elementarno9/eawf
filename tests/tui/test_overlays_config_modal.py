@@ -1794,7 +1794,8 @@ def test_config_multichoice_space_toggle_then_enter_commits() -> None:
 
     Exercises the full operator UX: focus the key, Enter to expand, Space to
     toggle ``state`` ON, Enter to commit. The dirty map then carries the
-    toggled list and the restored row shows the dirty ``*`` marker.
+    toggled list and the restored row shows the overridden-key marker -- the
+    half-filled claimed sigil the reskin migrated the dirty marker onto.
     """
 
     async def body() -> None:
@@ -1817,9 +1818,13 @@ def test_config_multichoice_space_toggle_then_enter_commits() -> None:
             # Editor torn down, the toggled list staged, no popup.
             assert modal._editing_key is None
             assert modal._view.dirty.get("ui.dashboard_panes") == [first_choice]
-            # The restored static row carries the dirty ``*`` marker.
+            # The restored static row carries the overridden-key marker --
+            # the half-filled claimed sigil the reskin migrated off ``*``.
+            from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+
+            overridden_marker = glyph(Sigil.CLAIMED, mode="unicode")
             row = modal.query_one(f"#{modal._field_row_id('ui', index)}", Static)
-            assert "*" in str(row.render())
+            assert overridden_marker in str(row.render())
 
     asyncio.run(body())
 
