@@ -4452,6 +4452,18 @@
       "status": "done",
       "updated_at": "2026-06-09T23:24:25.036391Z"
     },
+    "P30-I03-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W03",
+      "scope_id": "P30-I03-W03",
+      "status": "done",
+      "updated_at": "2026-06-09T23:35:05.960269Z"
+    },
     "P30-I03-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4463,6 +4475,18 @@
       "scope_id": "P30-I03-W04",
       "status": "done",
       "updated_at": "2026-06-09T23:06:33.837099Z"
+    },
+    "P30-I03-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W05",
+      "scope_id": "P30-I03-W05",
+      "status": "done",
+      "updated_at": "2026-06-09T23:35:10.030653Z"
     },
     "P30-I03-W07": {
       "actual_cost_usd": 0.0,
@@ -14819,6 +14843,19 @@
       "scope_id": "P30-I03-W02",
       "updated_at": "2026-06-09T23:24:05.813992Z"
     },
+    "P30-I03-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W03-bucket-20260609T233440Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I03-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I03-W03",
+      "updated_at": "2026-06-09T23:34:40.333236Z"
+    },
     "P30-I03-W04": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I03-W04-bucket-20260609T230554Z",
@@ -14831,6 +14868,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I03-W04",
       "updated_at": "2026-06-09T23:05:54.527206Z"
+    },
+    "P30-I03-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W05-bucket-20260609T233441Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I03-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I03-W05",
+      "updated_at": "2026-06-09T23:34:41.918315Z"
     },
     "P30-I03-W07": {
       "confidence": "low",
@@ -17728,7 +17778,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T23:24:27.034223Z",
+  "updated_at": "2026-06-09T23:35:10.030981Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -68575,10 +68625,10 @@
       "blocks": [
         "P30-I03-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T23:25:16.380922Z",
+      "closed_at": "2026-06-09T23:35:05.960269Z",
+      "commit": "8da19301fa39a2845624b6dc27216d3028cf9bcf",
       "deps": [
         "P30-I03-W02"
       ],
@@ -68589,28 +68639,60 @@
         "src/eawf/workflow/skills/bodies/prep.py",
         "src/eawf/workflow/skills/prep.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/test_prep_body_validators.py",
+              "tests/unit/test_skill_prep.py",
+              "tests/unit/test_skill_bodies.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W03",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.800754Z",
-      "outcome": null,
+      "outcome": "Planning PrepBody model_validator enforces non-empty reconciled dag + no dangling deps (ValidationError names the offending id); no_op + new typed blocked flag exempt the stub paths; 478 tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W03-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "pytest test_prep_body_planning_requires_dag, test_prep_body_planning_empty_dag_raises, test_prep_body_wave_not_in_dag_raises, test_prep_body_dangling_dep_raises, test_prep_body_noop_allows_empty_dag pass",
-          "oracle_tier": null,
+          "measurable_signal": "test_prep_body_validators.py pins the three failure modes (empty dag, unreconciled wave named, dangling dep named) and the three clean paths (reconciled plan, no_op stub, blocked stub); the prep skill + body suites stay green; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "A planning PrepBody requires a non-empty dag with reconciled waves and no dangling deps: an empty dag, a wave not in the dag, or a dangling dep each raise ValidationError, while a no_op=True body validates clean with no dag (the conditional exemption holds).",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the prep body-validator suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A planning PrepBody (no_op False, blocked False) requires a non-empty dag with reconciled waves and no dangling deps: an empty dag, a wave task not in the dag, or a dangling dep each raise ValidationError naming the offending id, while a no_op=True body and a blocked=True closed-phase stub validate clean with no dag (the conditional exemption holds).",
           "waiver_reason": null
         }
       ],
@@ -68699,10 +68781,10 @@
       "blocks": [
         "P30-I03-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-09T23:25:16.992884Z",
+      "closed_at": "2026-06-09T23:35:10.030653Z",
+      "commit": "5469764f48e196e4513eb54666f2508c30acb431",
       "deps": [
         "P30-I03-W02"
       ],
@@ -68714,28 +68796,59 @@
         "src/eawf/surfaces/render/skills/render.py",
         "src/eawf/workflow/skills/engine.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/workflow/test_skill_emit_prose_check.py",
+              "tests/unit/test_skills_engine.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I03-W05",
       "intent": null,
       "iter_id": "P30-I03",
       "opened_at": "2026-06-09T12:29:17.801199Z",
-      "outcome": null,
+      "outcome": "Advisory validate_prose bound at run_skill emit: findings fold into footer.warnings code=prose_clarity, status stays ok, dict bodies normalize via body_to_markdown first, prose-lint crash fails open; 471 tests green.",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I03-W05-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "pytest test_emit_runs_validate_prose_advisory, test_emit_prose_check_is_advisory_not_blocking, test_structured_body_normalized_before_prose_check pass",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "measurable_signal": "test_skill_emit_prose_check.py asserts the clean-body no-warning path, the wrapped-body prose_clarity warning with status ok, the dict-body normalize-then-check path, and the fail-open crash path; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "At emit a clean markdown body yields no prose_clarity warning while a body tripping a deterministic leg (e.g. EAWF014 manual-wrap) adds a footer.warnings entry with code=prose_clarity; the check is advisory (status stays ok, never flips to blocked); and a dict body is normalized to markdown before the prose check.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the emit prose-check suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "At emit a clean markdown body yields no prose_clarity warning while a body tripping a deterministic leg (e.g. the manual-wrap lint) adds a footer.warnings entry with code=prose_clarity; the check is advisory (status stays ok, never flips to blocked); a dict body is normalized to markdown before the prose check; and a prose-lint crash fails open (emit still succeeds).",
           "waiver_reason": null
         }
       ],
