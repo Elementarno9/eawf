@@ -290,6 +290,7 @@ class PrepSkill(SkillAction):
                 iter_id=inputs.iter_id,
                 objective=f"Plan {inputs.iter_id} (blocked: phase {inputs.phase_id} is closed)",
                 non_goals=["reopen closed phase implicitly"],
+                blocked=True,
             ).model_dump(mode="json"),
             next_valid_actions=[f"eawf phase reopen {inputs.phase_id}"],
             repair_commands=[f"eawf phase reopen {inputs.phase_id}"],
@@ -386,6 +387,11 @@ class PrepSkill(SkillAction):
     def _render(self, run: ActionRun, inputs: _PrepInputs, outcome: _PrepPlan) -> SkillResult:
         # Step 10 — approval gate.
         plan_text = _render_plan_mode_markdown(inputs)
+        # An empty DAG means no PENDING waves resolved (no state on disk, or a
+        # phase with nothing left to plan): there is nothing to plan, so this
+        # is the no-op case rather than a real plan. Flag it so the planning
+        # body's DAG-reconciliation invariant is exempted.
+        no_op = not outcome.dag
         body = PrepBody(
             iter_id=inputs.iter_id,
             objective=outcome.objective,
@@ -397,6 +403,7 @@ class PrepSkill(SkillAction):
                 baselines=[],
             ),
             approval_required=inputs.approval == "ask",
+            no_op=no_op,
             plan_text=plan_text,
         )
         if inputs.approval == "ask":

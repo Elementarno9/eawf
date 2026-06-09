@@ -124,11 +124,23 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
         def action(self, ctx: SkillContext) -> SkillResult:
             # Conform to ``PrepBody`` so the engine's bound body-validation
             # gate passes; the ``needs_user`` path carries a user_question.
+            # The planning-DAG invariant (P30-I03-W03) requires a non-empty,
+            # reconciled DAG on a non-no_op body, so the stub carries one task
+            # and a wave that references it.
             return SkillResult(
                 status="needs_user",
                 body={
                     "iter_id": "P00-I01",
                     "objective": "stub prep awaiting approval",
+                    "dag": [{"task_id": "P00-I01-W01", "risk": "low"}],
+                    "waves": [
+                        {
+                            "wave_id": "P00-I01",
+                            "tasks": ["P00-I01-W01"],
+                            "worktree_policy": "auto",
+                            "estimate_eu": 1.0,
+                        }
+                    ],
                     "approval_required": True,
                     "user_question": {
                         "question": "Approve the prep plan?",

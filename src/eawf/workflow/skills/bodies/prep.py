@@ -11,7 +11,9 @@ Per ``docs/architecture/envelope.md``:
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Self
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.workflow.skills.bodies.user_question import UserQuestion
 
@@ -69,6 +71,13 @@ class PrepBody(BaseModel):
     :func:`eawf.surfaces.render.plan_view.render_markdown` so the
     plan-mode body, ``eawf roadmap show --md``, and the TUI roadmap
     tree all draw from the same projection (P28-W18).
+
+    The ``no_op`` and ``blocked`` flags mark the two lifecycle stub paths
+    that exempt the planning-DAG invariant: ``no_op=True`` is the
+    already-active idempotent case (nothing to plan) and ``blocked=True``
+    is the closed-phase stub (the operator must reopen first). On every
+    other path the body is a real plan, and :meth:`_planning_dag_reconciles`
+    requires a non-empty, internally consistent DAG.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -81,8 +90,47 @@ class PrepBody(BaseModel):
     acceptance: PrepAcceptance | None = None
     approval_required: bool = False
     no_op: bool = False
+    blocked: bool = False
     user_question: UserQuestion | None = None
     plan_text: str | None = None
+
+    @model_validator(mode="after")
+    def _planning_dag_reconciles(self) -> Self:
+        """Require a non-empty, internally consistent DAG on the planning path.
+
+        Mechanizes the ``/prep`` DAG-render rule: a body that claims to plan
+        an iter (``no_op`` and ``blocked`` both ``False``) MUST carry a
+        non-empty ``dag``, every wave-referenced task MUST reconcile to a
+        ``dag`` task, and every task dep MUST reference an existing task. The
+        two lifecycle stub paths (``no_op=True`` idempotent already-active,
+        ``blocked=True`` closed-phase) keep ``dag`` optional — the conditional
+        exemption.
+
+        Returns:
+            The validated body (Pydantic ``mode="after"`` contract).
+
+        Raises:
+            ValueError: The planning path has an empty ``dag``, a wave that
+                references a task id absent from the ``dag``, or a task whose
+                dep references a non-existent task id. Pydantic wraps each
+                into a :class:`pydantic.ValidationError`.
+        """
+        if self.no_op or self.blocked:
+            return self
+        if not self.dag:
+            raise ValueError("planning prep body requires a non-empty dag")
+        task_ids = {task.task_id for task in self.dag}
+        for wave in self.waves:
+            for task_id in wave.tasks:
+                if task_id not in task_ids:
+                    raise ValueError(
+                        f"wave {wave.wave_id!r} references task {task_id!r} not in the dag"
+                    )
+        for task in self.dag:
+            for dep in task.deps:
+                if dep not in task_ids:
+                    raise ValueError(f"task {task.task_id!r} has dangling dep {dep!r}")
+        return self
 
 
 __all__ = ["PrepAcceptance", "PrepBody", "PrepDagTask", "PrepWave"]

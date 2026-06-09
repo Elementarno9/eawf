@@ -99,7 +99,9 @@ def test_blitz_body_rejects_extra_field() -> None:
 
 
 def test_prep_body_minimal_construction_and_round_trip() -> None:
-    body = PrepBody(iter_id="P00-I01", objective="ship something")
+    # A minimal body carries no DAG, so it must mark the no_op exemption to
+    # satisfy the planning-DAG invariant (P30-I03-W03).
+    body = PrepBody(iter_id="P00-I01", objective="ship something", no_op=True)
     _round_trip(body)
 
 
