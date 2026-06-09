@@ -7427,7 +7427,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I03",
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -16381,7 +16381,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753341Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Skill-output structure — validate typed bodies at emit + reconcile prose",
       "trigger": "none",
       "wave_ids": [
@@ -17603,7 +17603,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T22:49:02.248018Z",
+  "updated_at": "2026-06-09T22:53:16.797622Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
