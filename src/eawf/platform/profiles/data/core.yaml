@@ -247,7 +247,6 @@ render_blocks:
 
   - id: planned-scope-revisability
     target: AGENTS.md
-    tier: tier0
     version: "1.0"
     body_template: |
       ### Planned-scope revisability
@@ -396,7 +395,6 @@ render_blocks:
 
   - id: agent-report-contract
     target: AGENTS.md
-    tier: tier0
     version: "1.0"
     body_template: |
       ### Agent report contract

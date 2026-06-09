@@ -55,13 +55,27 @@ def _load_cap(repo_root: Path) -> int:
     return int(table.get("max-tier0-tokens", DEFAULT_TIER0_TOKEN_CAP))
 
 
-def check_budget(repo_root: Path) -> Tier0BudgetReport:
-    """Return the tier-0 AGENTS.md budget report for bundled profiles."""
+def check_budget(repo_root: Path, *, workspace: Path | None = None) -> Tier0BudgetReport:
+    """Return the tier-0 AGENTS.md budget report for the visible profiles.
+
+    Args:
+        repo_root: Repository root whose ``pyproject.toml`` supplies the
+            ``[tool.eawf.agents_md_budget] max-tier0-tokens`` cap (falling
+            back to :data:`DEFAULT_TIER0_TOKEN_CAP` when unset).
+        workspace: Optional workspace root forwarded to the profile
+            loader. When given, its ``.ea/profiles/`` overlay participates
+            in discovery, so a synthesized over-cap tier-0 profile can be
+            measured without mutating the bundled set.
+
+    Returns:
+        :class:`Tier0BudgetReport` naming each tier-0 block id and its
+        token weight, the cap, and the summed token count.
+    """
     cap = _load_cap(repo_root)
     tokens = 0
     blocks: list[str] = []
-    for profile_id in sorted(list_profiles()):
-        profile = load_profile(profile_id)
+    for profile_id in sorted(list_profiles(workspace=workspace)):
+        profile = load_profile(profile_id, workspace=workspace)
         for block in profile.render_blocks:
             if block.target != "AGENTS.md" or block.tier != "tier0":
                 continue
@@ -75,8 +89,15 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point for the AGENTS.md budget gate."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        default=None,
+        help="Workspace root whose .ea/profiles overlay participates in discovery.",
+    )
     args = parser.parse_args(argv)
-    report = check_budget(args.repo_root.resolve())
+    workspace = args.workspace.resolve() if args.workspace is not None else None
+    report = check_budget(args.repo_root.resolve(), workspace=workspace)
     if report.clean:
         print(
             f"agents-md-budget: clean tier0_tokens={report.tokens} "

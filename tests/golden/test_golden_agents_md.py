@@ -22,14 +22,23 @@ from eawf.surfaces.render.manifest import Manifest
 
 _FIXTURE_DIR: Path = Path(__file__).parent / "agents_md"
 
-# The always-on tier-0 set tagged in ``core.yaml`` (P29-I07-W06).
+# The always-on tier-0 set tagged in ``core.yaml``. These are the
+# irreversible "no-tooling-backstop" rules: a lapse cannot be caught by
+# any lint or gate, so the agent must internalise them. Rules that DO
+# have a tooling backstop (e.g. ``planned-scope-revisability`` via the
+# PENDING-only guard, ``agent-report-contract`` via the typed report
+# boundary) are ``reference``, not tier-0.
 _EXPECTED_TIER0_BLOCK_IDS = {
     "non-negotiable-rules",
     "state-vs-specs",
     "worktree-discipline",
-    "planned-scope-revisability",
     "prep-plan-mode",
     "iter-phase-close-timing",
+}
+
+# Rules with an automated backstop that were reconciled off tier-0.
+_TOOLING_BACKED_REFERENCE_BLOCK_IDS = {
+    "planned-scope-revisability",
     "agent-report-contract",
 }
 
@@ -162,6 +171,10 @@ def test_core_profile_tags_expected_tier0_blocks() -> None:
     tier0_ids = {b.id for b in core.render_blocks if b.tier == "tier0"}
 
     assert tier0_ids == _EXPECTED_TIER0_BLOCK_IDS
-    # Hook-enforced / duplicated reference blocks stay off tier-0.
+    # Hook-enforced / duplicated reference blocks stay off tier-0, as do
+    # the rules whose discipline has an automated backstop.
     reference_ids = {b.id for b in core.render_blocks if b.tier == "reference"}
     assert reference_ids >= {"commit-prefix", "secrets-hygiene", "markdown-no-manual-wrap"}
+    assert reference_ids >= _TOOLING_BACKED_REFERENCE_BLOCK_IDS
+    # The two reconciled blocks are no longer tier-0.
+    assert tier0_ids.isdisjoint(_TOOLING_BACKED_REFERENCE_BLOCK_IDS)
