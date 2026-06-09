@@ -4,9 +4,11 @@ A single :class:`~textual.widgets.Static` composite reused by every
 per-scope screen (``RepoScreen`` / ``WorkspaceScreen`` / ``UserScreen``)
 with **no per-scope duplication**. It renders, left to right:
 
-* the literal ``Eä`` brand (capital E + a-umlaut), bold-accent styled,
-  positioned **outside-left** of the breadcrumb per the operator
-  branding convention;
+* the two-tone ``Eä`` wordmark (capital E + a-umlaut) from
+  :func:`~eawf.surfaces.render.brand.render_wordmark_markup` -- the ``E``
+  plain and the ``ä`` carrying the palette accent, bold-styled and
+  positioned **outside-left** of the breadcrumb per the operator branding
+  convention;
 * a full-location ``scope > code > phase > iter > mode`` breadcrumb
   derived from the bound :class:`~eawf.kernel.state.models.State`
   (rendered with the angle-ornament separator :data:`CRUMB_SEP`), with an
@@ -15,9 +17,10 @@ with **no per-scope duplication**. It renders, left to right:
   links (to their reference cards); the ``scope``, ``code``, ``mode``, and
   ``entity`` segments render as plain (non-clickable) text — see
   :func:`build_breadcrumb` for the per-segment wiring;
-* a runtime cell — ``runtime: idle`` muted when nothing is dispatched,
-  flipping to ``runtime: <runtime> - <n> running`` (the active runtime id
-  + the running-wave count) when one or more waves are active;
+* a runtime cell — the harmony chrome glyph (``≈`` / ``~``) + ``idle``
+  (muted, no ``runtime:`` label) when nothing is dispatched, flipping to
+  ``runtime: <runtime> - <n> running`` (the active runtime id + the
+  running-wave count) when one or more waves are active;
 * a UTC clock (``HH:MM UTC``).
 
 The header is driven by the host :class:`~eawf.surfaces.tui.app.EaApp`
@@ -44,7 +47,9 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from eawf.kernel.state.enums import AgentSessionStatus
+from eawf.surfaces.render.brand import render_wordmark_markup
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -227,26 +232,31 @@ def active_runtime_id(state: State | None) -> str | None:
     return max(active, key=lambda sess: sess.started_at).runtime
 
 
-def runtime_cell_text(state: State | None) -> str:
+def runtime_cell_text(state: State | None, *, mode: str = "unicode") -> str:
     """Return the runtime-cell label for *state*.
 
-    The runtime cell shows ``runtime: idle`` (muted) when no wave is
-    dispatched. Once one or more waves are active it surfaces the live
-    runtime id + the running-wave count, e.g. ``runtime: claude - 2
-    running``. When waves are active but no ACTIVE agent session resolves a
-    runtime id (the header knows N waves run but not yet which runtime), it
-    falls back to ``runtime: <n> running`` — honest about the count without
-    inventing a runtime name.
+    The idle cell leads with the harmony chrome glyph (``sigils.chrome("harmony",
+    ...)`` -- unicode ``≈`` / ascii ``~``) followed by ``idle`` and DROPS
+    the ``runtime:`` label, so a quiescent runtime reads as a calm harmony
+    mark rather than an empty field name. Once one or more waves are active it
+    surfaces the live runtime id + the running-wave count, e.g. ``runtime:
+    claude - 2 running``. When waves are active but no ACTIVE agent session
+    resolves a runtime id (the header knows N waves run but not yet which
+    runtime), it falls back to ``runtime: <n> running`` -- honest about the
+    count without inventing a runtime name.
 
     Args:
         state: The currently bound state, or ``None``.
+        mode: The App's resolved render-mode label forwarded to
+            :func:`~eawf.surfaces.tui.widgets.sigils.chrome` -- ``"ascii"``
+            selects the ASCII harmony glyph, any other value the unicode one.
 
     Returns:
-        The runtime-cell text, e.g. ``runtime: idle`` or ``runtime: claude
-        - 2 running``.
+        The runtime-cell text, e.g. ``≈ idle`` or ``runtime: claude - 2
+        running``.
     """
     if state is None or not state.current.active_wave_ids:
-        return f"runtime: {RUNTIME_IDLE}"
+        return f"{chrome('harmony', mode=mode)} {RUNTIME_IDLE}"
     running = len(state.current.active_wave_ids)
     runtime = active_runtime_id(state)
     if runtime is None:
@@ -266,14 +276,18 @@ def render_header(
     *,
     mode_name: str | None = None,
     entity: str | None = None,
+    render_mode: str = "unicode",
 ) -> str:
     """Render the full header content-markup line from *state*.
 
-    Pure render source — unit-testable without mounting the widget. The
-    brand is wrapped in a ``[$accent][b]…[/b][/]`` span so it carries the
-    palette accent colour + bold; the breadcrumb segments carry their
-    ``[@click=...]`` nav links (this is the clickable render path), and the
-    runtime cell is muted via ``[$muted]…[/]``.
+    Pure render source -- unit-testable without mounting the widget. The
+    brand leads with the two-tone ``Eä`` wordmark from
+    :func:`~eawf.surfaces.render.brand.render_wordmark_markup` (the ``E``
+    plain, the ``ä`` carrying the palette accent) wrapped in a ``[b]…[/b]``
+    bold span -- the accent is threaded as the theme ``$accent`` var so the
+    umlaut tracks the active palette rather than a frozen hex. The breadcrumb
+    segments carry their ``[@click=...]`` nav links (this is the clickable
+    render path), and the runtime cell is muted via ``[$muted]…[/]``.
 
     Args:
         state: The currently bound state, or ``None``.
@@ -284,24 +298,27 @@ def render_header(
         mode_name: The active mode name the mode segment links to via
             ``switch_mode``, or ``None`` to leave the mode segment plain.
         entity: An optional trailing entity label (an open peek/detail).
+        render_mode: The App's resolved render-mode label forwarded to the
+            runtime cell's harmony glyph -- ``"ascii"`` selects the ASCII
+            glyph, any other value the unicode one.
 
     Returns:
         A Textual content-markup string for the header line.
     """
     crumb = build_breadcrumb(state, scope, mode, mode_name=mode_name, entity=entity, clickable=True)
-    runtime = runtime_cell_text(state)
-    return (
-        f"[$accent][b]{BRAND}[/b][/]  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
-    )
+    runtime = runtime_cell_text(state, mode=render_mode)
+    wordmark = render_wordmark_markup("$accent")
+    return f"[b]{wordmark}[/b]  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
 
 
 class Header(Static):
-    """Shared chassis header: ``Eä`` brand + breadcrumb + runtime + clock.
+    """Shared chassis header: ``Eä`` wordmark + breadcrumb + runtime + clock.
 
     Reused verbatim by every per-scope screen (shared chassis). Reads
     the host app's reactive ``state`` (seeded on mount) and repaints on
-    every revision. Standalone-testable by assigning :attr:`state`
-    directly.
+    every revision; it also watches the host app's ``render_mode`` so a
+    unicode <-> ASCII flip repaints the runtime cell's harmony glyph.
+    Standalone-testable by assigning :attr:`state` directly.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -334,6 +351,8 @@ class Header(Static):
             self.state = app_state
         if hasattr(self.app, "state"):
             self.watch(self.app, "state", self._on_app_state)
+        if hasattr(self.app, "render_mode"):
+            self.watch(self.app, "render_mode", self._on_render_mode)
         mode_signal = getattr(self.app, "mode_change_signal", None)
         if mode_signal is not None:
             mode_signal.subscribe(self, self._on_mode_change)
@@ -341,6 +360,10 @@ class Header(Static):
 
     def _on_mode_change(self, _mode: str) -> None:
         """Repaint the header line when the active mode changes."""
+        self._repaint()
+
+    def _on_render_mode(self, _mode: str) -> None:
+        """Repaint the header line when the render mode flips (glyph swap)."""
         self._repaint()
 
     def _on_app_state(self, new_state: State | None) -> None:
@@ -379,7 +402,10 @@ class Header(Static):
             raw_mode = getattr(self.app, "current_mode", None)
             mode_name = raw_mode if isinstance(raw_mode, str) else None
             mode = mode_title(raw_mode) if isinstance(raw_mode, str) else None
-        self.update(render_header(self.state, scope, mode, mode_name=mode_name))
+        render_mode = getattr(self.app, "render_mode", "unicode")
+        self.update(
+            render_header(self.state, scope, mode, mode_name=mode_name, render_mode=render_mode)
+        )
 
 
 __all__ = [

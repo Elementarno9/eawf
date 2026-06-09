@@ -22,6 +22,7 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
+from eawf.surfaces.render.brand import render_wordmark_markup
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.widgets.header import (
     BRAND,
@@ -383,11 +384,25 @@ def test_active_runtime_id_returns_active_session_runtime() -> None:
 
 
 def test_runtime_cell_text_none_state_is_idle() -> None:
-    assert runtime_cell_text(None) == f"runtime: {RUNTIME_IDLE}"
+    # The idle cell leads with the harmony chrome glyph + idle and DROPS the
+    # runtime: label (W03 reskin). Unicode harmony is U+2248 (almost-equal).
+    assert runtime_cell_text(None) == f"≈ {RUNTIME_IDLE}"
 
 
 def test_runtime_cell_text_no_active_wave_is_idle() -> None:
-    assert runtime_cell_text(_load(_EMPTY_REPO)) == f"runtime: {RUNTIME_IDLE}"
+    assert runtime_cell_text(_load(_EMPTY_REPO)) == f"≈ {RUNTIME_IDLE}"
+
+
+def test_runtime_cell_text_idle_ascii_mode_uses_ascii_harmony() -> None:
+    # In ASCII render mode the harmony glyph is the deconflicted ``~``.
+    assert runtime_cell_text(None, mode="ascii") == f"~ {RUNTIME_IDLE}"
+    assert runtime_cell_text(_load(_EMPTY_REPO), mode="ascii") == f"~ {RUNTIME_IDLE}"
+
+
+def test_runtime_cell_text_idle_drops_runtime_label() -> None:
+    # The idle cell no longer carries the literal ``runtime:`` field name.
+    assert "runtime:" not in runtime_cell_text(None)
+    assert "runtime:" not in runtime_cell_text(_load(_EMPTY_REPO))
 
 
 def test_runtime_cell_text_active_with_runtime_shows_id_and_count() -> None:
@@ -408,14 +423,49 @@ def test_runtime_cell_text_active_without_resolved_runtime_shows_count() -> None
 
 def test_render_header_none_state_has_brand_and_default_code() -> None:
     rendered = render_header(None)
-    assert BRAND in rendered
+    # The two-tone wordmark splits E (plain) from ae (accent span), so the
+    # contiguous BRAND literal no longer appears -- assert the brand helper's
+    # markup is embedded verbatim instead.
+    assert render_wordmark_markup("$accent") in rendered
     assert DEFAULT_PROJECT_CODE in rendered
     assert RUNTIME_IDLE in rendered
 
 
 def test_render_header_populated_has_brand_left_of_breadcrumb() -> None:
     rendered = render_header(_load(_PHASE_ITER_WAVE))
-    assert rendered.index(BRAND) < rendered.index(_CODE)
+    # The wordmark (and so the brand E) leads the breadcrumb code segment.
+    assert rendered.index(render_wordmark_markup("$accent")) < rendered.index(_CODE)
+
+
+def test_render_header_uses_two_tone_wordmark_accent_on_umlaut_only() -> None:
+    # W03: the header leads with brand.render_wordmark_markup -- the E plain
+    # and the umlaut (U+00E4) wrapped in the $accent span -- not the whole
+    # brand in one accent span. Pin both halves of the two-tone split.
+    rendered = render_header(_load(_PHASE_ITER_WAVE))
+    assert "[b]E[$accent]ä[/][/b]" in rendered
+    # The accent span opens immediately before the umlaut, never before the E.
+    assert "[$accent]ä[/]" in rendered
+    assert "[$accent]E" not in rendered
+
+
+def test_render_header_breadcrumb_unchanged_by_wordmark() -> None:
+    # The wordmark swap must not perturb the breadcrumb: the header still
+    # carries the verbatim build_breadcrumb output (clickable render path).
+    state = _load(_PHASE_ITER_WAVE)
+    crumb = build_breadcrumb(state, "repo", "Home", mode_name="home", clickable=True)
+    rendered = render_header(state, "repo", "Home", mode_name="home")
+    assert crumb in rendered
+    # The de-link contract holds: phase + iter ref links present, scope-switch absent.
+    assert f"[@click=app.open_phase_ref('{_PHASE}')]" in rendered
+    assert "@click=app.switch_scope" not in rendered
+
+
+def test_render_header_idle_runtime_cell_uses_harmony_glyph() -> None:
+    # The idle runtime cell renders the harmony chrome glyph + idle (no
+    # runtime: label), forwarded through render_mode.
+    assert "≈ idle" in render_header(None)
+    assert "~ idle" in render_header(None, render_mode="ascii")
+    assert "runtime:" not in render_header(None)
 
 
 def test_render_header_carries_clickable_segments() -> None:
@@ -448,11 +498,16 @@ def test_header_paints_brand_and_breadcrumb() -> None:
         app = _Harness()
         async with app.run_test(size=(80, 6)) as pilot:
             await pilot.pause()
-            app.query_one("#hdr", Header).state = _load(_PHASE_ITER_WAVE)
+            header = app.query_one("#hdr", Header)
+            header.state = _load(_PHASE_ITER_WAVE)
             await pilot.pause()
-            rendered = app.export_screenshot()
-            assert BRAND in rendered
-            assert _CODE in rendered
+            # The two-tone wordmark splits E + umlaut into separate SVG <text>
+            # runs, so the contiguous BRAND literal is not in the screenshot;
+            # read the compositor strip text where both glyphs survive verbatim.
+            strips = header.screen._compositor.render_strips()  # type: ignore[attr-defined]
+            painted = "".join(seg.text for strip in strips for seg in strip._segments)
+            assert BRAND in painted
+            assert _CODE in painted
 
     asyncio.run(body())
 
