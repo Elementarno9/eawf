@@ -259,6 +259,55 @@ def _collect_pending_waves(state: State, phase_id: str) -> list[dict[str, Any]]:
     return rows
 
 
+def _collect_coverage_gaps(state: State, phase_id: str) -> list[dict[str, Any]]:
+    """Project EAWF022 coverage gaps over a phase's PENDING waves.
+
+    For each PENDING wave that carries an
+    :class:`~eawf.kernel.spec.intent.IntentBrief` with ``planned_steps``, runs
+    :func:`eawf.workflow.propose.coverage.coverage_gaps` over the wave's
+    authored success criteria vs those steps. A wave with no intent or no
+    planned steps has nothing to cover, so it contributes no rows. The diff is
+    the same deterministic token-overlap one the daemon ``spec.sync`` path runs,
+    so the propose render surfaces the gap the sync would later reject.
+
+    Args:
+        state: The validated state document holding the ``iters`` / ``waves``
+            maps.
+        phase_id: The target phase id (assumed present in ``state.phases``).
+
+    Returns:
+        One row per gapped wave, each carrying the ``wave_id`` and the list of
+        uncovered planned-step span ids; empty when every staged wave's steps
+        are covered.
+    """
+    from eawf.workflow.propose.coverage import coverage_gaps
+
+    gaps: list[dict[str, Any]] = []
+    phase = state.phases[phase_id]
+    for iter_id in phase.iter_ids:
+        iter_record = state.iters.get(iter_id)
+        if iter_record is None:
+            continue
+        for wave_id in iter_record.wave_ids:
+            wave = state.waves.get(wave_id)
+            if wave is None or wave.status != WaveStatus.PENDING:
+                continue
+            if wave.intent is None or not wave.intent.planned_steps:
+                continue
+            findings = coverage_gaps(
+                list(wave.success_criteria),
+                planned_steps=list(wave.intent.planned_steps),
+            )
+            if findings:
+                gaps.append(
+                    {
+                        "wave_id": wave.id,
+                        "uncovered_spans": [f.snippet for f in findings],
+                    }
+                )
+    return gaps
+
+
 def _render_apply_dag_text(state: State, phase_id: str, waves: list[dict[str, Any]]) -> str:
     """Render the full wave DAG of a phase as markdown plan text.
 
@@ -410,6 +459,7 @@ def roadmap_propose_cmd(
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
         return
     plan_text = ""
+    coverage_gaps_rows: list[dict[str, Any]] = []
     try:
         with state_transaction(state_path) as state:
             try:
@@ -438,6 +488,10 @@ def roadmap_propose_cmd(
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             plan_text = _render_propose_plan_text(state, phase_id)
+            # EAWF022 coverage is ADVISORY at propose: the gaps surface in the
+            # needs_user envelope so the operator sees dropped planned steps
+            # before apply, but the propose itself never blocks on them.
+            coverage_gaps_rows = _collect_coverage_gaps(state, phase_id)
             _append_roadmap_event(
                 state_path,
                 command="roadmap propose",
@@ -468,6 +522,8 @@ def roadmap_propose_cmd(
         "plan_text": plan_text,
         "description": description,
         "iter_description": iter_description,
+        "coverage_gaps": coverage_gaps_rows,
+        "coverage_advisory": True,
         "options": [
             {
                 "label": "approve",
@@ -514,6 +570,7 @@ def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
     plan_text = ""
     iter_ids: list[str] = []
     wave_ids: list[str] = []
+    coverage_gaps_rows: list[dict[str, Any]] = []
     try:
         with state_transaction(state_path) as state:
             try:
@@ -526,6 +583,9 @@ def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
             wave_ids = planned.wave_ids
             state.updated_at = datetime.now(UTC)
             plan_text = _render_propose_plan_text(state, phase_id)
+            # EAWF022 coverage is ADVISORY at propose: the staged waves' dropped
+            # planned steps surface in the envelope without blocking the propose.
+            coverage_gaps_rows = _collect_coverage_gaps(state, phase_id)
             _append_roadmap_event(
                 state_path,
                 command="roadmap propose",
@@ -556,6 +616,8 @@ def _roadmap_propose_from_plan(ctx: typer.Context, *, from_plan: Path) -> None:
         "source_brief_ids": list(plan.phase.source_brief_ids),
         "plan_text": plan_text,
         "description": plan.phase.description,
+        "coverage_gaps": coverage_gaps_rows,
+        "coverage_advisory": True,
         "options": [
             {"label": "approve", "next": f"eawf roadmap apply {phase_id}"},
             {"label": "revise", "next": f"eawf roadmap revise {phase_id} --add-wave WNN ..."},
@@ -1066,6 +1128,7 @@ def roadmap_apply_cmd(
         return
     dag_text = ""
     pending_waves: list[dict[str, Any]] = []
+    coverage_gaps_rows: list[dict[str, Any]] = []
     try:
         # read_only when not approving: rendering the DAG must not trip the
         # mutating-verb gate, and only the approve path appends an EVENT.
@@ -1085,8 +1148,21 @@ def roadmap_apply_cmd(
                     f"phase {phase_id!r} has no pending waves; revise --add-wave before apply",
                     kind="InvalidInput",
                 )
+            coverage_gaps_rows = _collect_coverage_gaps(state, phase_id)
             dag_text = _render_apply_dag_text(state, phase_id, pending_waves)
             if approve:
+                # EAWF022 coverage is BLOCKING at apply: a planned step a wave's
+                # criteria silently dropped refuses the apply so the gap is
+                # closed (or explicitly deferred) before /prep dispatches.
+                if coverage_gaps_rows:
+                    gap_bodies = "; ".join(
+                        f"{row['wave_id']}: {row['uncovered_spans']}" for row in coverage_gaps_rows
+                    )
+                    raise cli_errors.UserError(
+                        f"phase {phase_id!r} has uncovered planned steps (EAWF022): "
+                        f"{gap_bodies}; cover or defer them via revise before apply",
+                        kind="InvalidInput",
+                    )
                 state.updated_at = datetime.now(UTC)
                 _append_roadmap_event(
                     state_path,
@@ -1107,6 +1183,8 @@ def roadmap_apply_cmd(
             "wave_count": len(pending_waves),
             "waves": pending_waves,
             "plan_text": dag_text,
+            "coverage_gaps": coverage_gaps_rows,
+            "coverage_advisory": False,
             "options": [
                 {"label": "approve", "next": f"eawf roadmap apply {phase_id} --approve"},
                 {"label": "revise", "next": f"eawf roadmap revise {phase_id} --add-wave WNN ..."},

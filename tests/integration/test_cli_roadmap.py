@@ -648,6 +648,116 @@ def test_roadmap_apply_approve_emits_event(workspace: Path) -> None:
     assert len(after) == 1
 
 
+# ---- EAWF022 propose/apply coverage binding ---------------------------------
+
+
+def _add_wave_with_uncovered_step(workspace: Path) -> None:
+    """Add a P21-W01 whose criterion covers one planned step but drops another.
+
+    The intent carries two planned steps; the single success criterion shares
+    significant tokens with the first step only, so the second step is an
+    uncovered EAWF022 span. ``--effort-bucket`` and ``--files`` satisfy the
+    add-wave required-flag gate.
+    """
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "Foo handling",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+            "--success",
+            "implement parser tokeniser module returning tokens",
+            "--intent-problem",
+            "parser drift",
+            "--intent-desired-outcome",
+            "parser covered",
+            "--intent-planned-steps",
+            "implement parser tokeniser module,wire telemetry dashboard exporter",
+        ],
+    )
+
+
+def test_roadmap_apply_propose_render_surfaces_coverage_gap_advisory(
+    workspace: Path,
+) -> None:
+    """The bare apply needs_user envelope surfaces the EAWF022 gap as advisory."""
+    _add_wave_with_uncovered_step(workspace)
+    res = runner.invoke(app, ["--json", "roadmap", "apply", "P21"])
+    assert res.exit_code == 0, res.output
+    body = orjson.loads(res.stdout)
+    assert body["status"] == "needs_user"
+    assert body["coverage_advisory"] is False
+    gaps = body["coverage_gaps"]
+    assert len(gaps) == 1
+    assert gaps[0]["wave_id"] == "P21-I01-W01"
+    # The dropped "telemetry dashboard exporter" step is the uncovered span.
+    assert gaps[0]["uncovered_spans"]
+
+
+def test_roadmap_apply_approve_blocks_on_coverage_gap(workspace: Path) -> None:
+    """`--approve` refuses when a planned step is silently dropped (EAWF022)."""
+    _add_wave_with_uncovered_step(workspace)
+    res = runner.invoke(app, ["roadmap", "apply", "P21", "--approve"])
+    assert res.exit_code != 0
+    combined = f"{res.stdout}{res.stderr}"
+    assert "EAWF022" in combined
+    assert "uncovered planned steps" in combined
+    # No apply EVENT lands when the blocking gate refuses.
+    events = [e for e in _read_events(workspace) if e["payload"]["command"] == "roadmap apply"]
+    assert not events
+
+
+def test_roadmap_apply_approve_passes_when_every_step_covered(workspace: Path) -> None:
+    """A wave whose criteria cover every planned step applies cleanly."""
+    runner.invoke(app, ["roadmap", "propose", "--phase", "P21", "--title", "X"])
+    runner.invoke(
+        app,
+        [
+            "roadmap",
+            "revise",
+            "P21",
+            "--add-wave",
+            "W01",
+            "--title",
+            "Foo handling",
+            "--files",
+            "src/",
+            "--effort-bucket",
+            "M",
+            "--success",
+            "implement parser tokeniser module,wire telemetry dashboard exporter",
+            "--intent-problem",
+            "parser drift",
+            "--intent-desired-outcome",
+            "parser covered",
+            "--intent-planned-steps",
+            "implement parser tokeniser module,wire telemetry dashboard exporter",
+        ],
+    )
+    res = runner.invoke(app, ["--json", "roadmap", "apply", "P21", "--approve"])
+    assert res.exit_code == 0, res.output
+    body = orjson.loads(res.stdout)
+    assert body["status"] == "ok"
+
+
+def test_roadmap_apply_advisory_clean_when_wave_has_no_intent(workspace: Path) -> None:
+    """A wave with no planned steps contributes no coverage gap (clean no-op)."""
+    _propose_with_wave(workspace)
+    res = runner.invoke(app, ["--json", "roadmap", "apply", "P21"])
+    assert res.exit_code == 0, res.output
+    body = orjson.loads(res.stdout)
+    assert body["coverage_gaps"] == []
+
+
 def test_roadmap_apply_non_planned_phase_rejected(workspace: Path) -> None:
     """Apply on a non-PLANNED phase is rejected (only PLANNED can apply)."""
     _propose_with_wave(workspace)

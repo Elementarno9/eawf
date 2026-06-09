@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.spec.common import DeferredDeliverable, SourceUnit
+from eawf.kernel.spec.common import (
+    DeferredDeliverable,
+    SourceUnit,
+    grandfather_criterion,
+)
+from eawf.workflow.propose.coverage import coverage_gaps, significant_tokens
 from eawf.workflow.propose.generator import coverage_diff, extract_units
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "tui_drift_brief.md"
@@ -123,3 +128,40 @@ def test_coverage_diff_tui_fixture_flags_collapsed_digit_map() -> None:
     report = coverage_diff(units, covered, [])
     assert _DIGIT_MAP_SPAN in report.uncovered
     assert _DIGIT_MAP_SPAN not in report.covered
+
+
+# ---- coverage_gaps: criteria vs planned-steps shared helper ------------------
+
+
+def test_significant_tokens_drops_short_connectives() -> None:
+    """Tokens under the 4-char floor are dropped; topical runs are kept."""
+    tokens = significant_tokens("wire the parser to a new exporter")
+    assert "parser" in tokens
+    assert "exporter" in tokens
+    assert "the" not in tokens
+    assert "to" not in tokens
+
+
+def test_coverage_gaps_flags_uncovered_planned_step() -> None:
+    """A planned step no criterion topically covers is an EAWF022 finding."""
+    criteria = [grandfather_criterion("implement parser tokeniser module", index=1)]
+    steps = ["implement parser tokeniser module", "wire telemetry dashboard exporter"]
+    findings = coverage_gaps(criteria, planned_steps=steps)
+    assert len(findings) == 1
+    assert findings[0].code == "EAWF022"
+
+
+def test_coverage_gaps_clean_when_every_step_covered() -> None:
+    """Every planned step covered by a criterion yields no finding."""
+    criteria = [
+        grandfather_criterion("implement parser tokeniser module", index=1),
+        grandfather_criterion("wire telemetry dashboard exporter", index=2),
+    ]
+    steps = ["implement parser tokeniser module", "wire telemetry dashboard exporter"]
+    assert coverage_gaps(criteria, planned_steps=steps) == []
+
+
+def test_coverage_gaps_no_planned_steps_is_noop() -> None:
+    """A wave with no planned steps has nothing to cover (clean no-op)."""
+    criteria = [grandfather_criterion("anything at all", index=1)]
+    assert coverage_gaps(criteria, planned_steps=[]) == []

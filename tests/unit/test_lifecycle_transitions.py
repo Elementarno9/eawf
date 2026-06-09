@@ -12,6 +12,14 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.spec.common import (
+    CriterionSpec,
+    ObserveVerb,
+    ProofLocus,
+    QualityDimension,
+    ResponseClause,
+    grandfather_criterion,
+)
 from eawf.kernel.state.enums import (
     AuditKind,
     AuditStatus,
@@ -966,16 +974,17 @@ def test_edit_wave_plan_mutates_pending() -> None:
         file_scopes=["x"],
         effort_bucket="M",
     )
+    criterion = grandfather_criterion("legacy criterion text", index=1)
     w = edit_wave_plan(
         state,
         wave_id="P01-I01-W01",
         title="updated",
         file_scopes=["src/y/"],
-        success_criteria=["criterion"],
+        success_criteria=[criterion],
     )
     assert w.title == "updated"
     assert w.file_scopes == ["src/y/"]
-    assert w.success_criteria == ["criterion"]
+    assert w.success_criteria == [criterion]
 
 
 def test_edit_wave_plan_non_pending_rejected() -> None:
@@ -995,6 +1004,126 @@ def test_edit_wave_plan_non_pending_rejected() -> None:
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     with pytest.raises(LifecycleError, match="not pending"):
         edit_wave_plan(state, wave_id="P01-I01-W01", title="late")
+
+
+# ---- EAWF021 measurability binding at the wave-plan transition --------------
+
+
+def _measurable_criterion() -> CriterionSpec:
+    """Return a well-formed measurable typed criterion (typed response clause)."""
+    return CriterionSpec(
+        id="CR-01",
+        text="returns 200 for a valid request; pytest tests/x.py::test_ok",
+        kind="functional",
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="exit code 0 on a clean corpus; cli_exit",
+        response=ResponseClause(observe=ObserveVerb.RETURNS, object="200", locus=ProofLocus.PYTEST),
+    )
+
+
+def _unmeasurable_criterion() -> CriterionSpec:
+    """Return an authored criterion with a banned-vague token and no contract."""
+    return CriterionSpec(
+        id="CR-01",
+        text="the widget works properly under all conditions",
+        kind="functional",
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal="the widget works properly under all load conditions",
+    )
+
+
+def test_plan_wave_rejects_unmeasurable_criterion() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    with pytest.raises(LifecycleError, match="unmeasurable success criteria"):
+        plan_wave(
+            state,
+            wave_id="P01-I01-W01",
+            iter_id="P01-I01",
+            title="w",
+            file_scopes=["x"],
+            effort_bucket="M",
+            success_criteria=[_unmeasurable_criterion()],
+        )
+    # The wave is rejected before insertion, leaving state untouched.
+    assert "P01-I01-W01" not in state.waves
+
+
+def test_plan_wave_inserts_measurable_criterion() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    w = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+        success_criteria=[_measurable_criterion()],
+    )
+    assert w.success_criteria[0].id == "CR-01"
+
+
+def test_plan_wave_inserts_grandfathered_legacy_criterion() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    legacy = grandfather_criterion("ship the thing", index=1)
+    w = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+        success_criteria=[legacy],
+    )
+    assert w.success_criteria[0].kind == "legacy"
+
+
+def test_edit_wave_plan_rejects_unmeasurable_criterion() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="orig",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
+    with pytest.raises(LifecycleError, match="unmeasurable success criteria"):
+        edit_wave_plan(
+            state,
+            wave_id="P01-I01-W01",
+            success_criteria=[_unmeasurable_criterion()],
+        )
+    # A rejected edit leaves the wave's prior plan untouched (no criteria set).
+    assert state.waves["P01-I01-W01"].success_criteria == []
+
+
+def test_edit_wave_plan_accepts_grandfathered_legacy_criterion() -> None:
+    state = _empty_state()
+    plan_phase(state, phase_id="P01", title="t")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="i")
+    plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="orig",
+        file_scopes=["x"],
+        effort_bucket="M",
+    )
+    legacy = grandfather_criterion("ship the thing", index=1)
+    w = edit_wave_plan(state, wave_id="P01-I01-W01", success_criteria=[legacy])
+    assert w.success_criteria[0].kind == "legacy"
 
 
 def test_remove_wave_plan_deletes_pending() -> None:

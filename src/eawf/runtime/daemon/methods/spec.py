@@ -50,7 +50,6 @@ from eawf.kernel.spec import cache as spec_cache
 from eawf.kernel.spec import writer as spec_writer
 from eawf.kernel.spec.common import (
     CriterionSpec,
-    DeferredDeliverable,
     GateSpec,
     validate_criterion_gate_refs,
 )
@@ -71,7 +70,6 @@ from eawf.platform.lint.eawf021_measurable_criterion import (
 )
 from eawf.platform.lint.eawf022_propose_coverage import (
     CoverageGapViolation,
-    check_coverage,
 )
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
@@ -86,7 +84,7 @@ from eawf.runtime.daemon.methods.state import (
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
-from eawf.workflow.propose.generator import extract_units
+from eawf.workflow.propose.coverage import coverage_gaps
 
 logger = logging.getLogger(__name__)
 
@@ -940,12 +938,14 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 def _run_measurability_lint(criteria: list[CriterionSpec]) -> list[MeasurabilityViolation]:
     """Return every EAWF021 measurability finding across *criteria*.
 
-    Runs :func:`eawf.platform.lint.eawf021_measurable_criterion.check_criterion_spec`
-    over each parsed criterion. A non-empty result means at least one
-    criterion carries a banned-vague token (in its ``text`` or
-    ``measurable_signal``) or lacks an observation contract — the sync
-    rejects rather than materialise an unfalsifiable criterion onto the
-    wave row.
+    Runs the EAWF021 entrypoint
+    :func:`eawf.platform.lint.eawf021_measurable_criterion.check_criterion_spec`
+    over each parsed criterion. A non-empty result means at least one criterion
+    carries a banned-vague token (in its ``text`` or ``measurable_signal``) or
+    lacks an observation contract -- the sync rejects rather than materialise an
+    unfalsifiable criterion onto the wave row. The daemon parses authored typed
+    criteria from the spec body (never legacy rows), so the grandfathered
+    exemption the wave-plan transition applies is not needed here.
 
     Args:
         criteria: The parsed criterion rows from the spec body.
@@ -960,38 +960,6 @@ def _run_measurability_lint(criteria: list[CriterionSpec]) -> list[Measurability
     return findings
 
 
-#: Minimum length for a "significant" token in the coverage overlap check.
-#: Tokens shorter than this (``the``, ``a``, ``to``, ``via``, ``and``, ...)
-#: carry no topical signal, so they are dropped before matching a criterion
-#: against a planned step — otherwise every step would trivially "match"
-#: any criterion through a shared article.
-_COVERAGE_TOKEN_MIN_LEN: Final[int] = 4
-
-#: Word-token pattern for the coverage overlap check (alphanumeric runs).
-_COVERAGE_TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9]+")
-
-
-def _significant_tokens(text: str) -> set[str]:
-    """Return the lowercased significant tokens of *text*.
-
-    A significant token is an alphanumeric run of at least
-    :data:`_COVERAGE_TOKEN_MIN_LEN` characters; short connective words are
-    dropped so the coverage overlap check keys on topical content, not
-    shared articles.
-
-    Args:
-        text: The source string to tokenise.
-
-    Returns:
-        The set of lowercased significant tokens.
-    """
-    return {
-        token.lower()
-        for token in _COVERAGE_TOKEN_RE.findall(text)
-        if len(token) >= _COVERAGE_TOKEN_MIN_LEN
-    }
-
-
 def _run_coverage_lint(
     criteria: list[CriterionSpec],
     *,
@@ -999,19 +967,13 @@ def _run_coverage_lint(
 ) -> list[CoverageGapViolation]:
     """Return every EAWF022 coverage gap of *planned_steps* by *criteria*.
 
-    The wave's :class:`~eawf.kernel.spec.intent.IntentBrief` ``planned_steps``
-    are the per-wave brief spans the authored criteria must account for.
-    Each step is extracted into a :class:`~eawf.kernel.spec.common.SourceUnit`
-    via :func:`eawf.workflow.propose.generator.extract_units`, and a span is
-    COVERED when at least one criterion's ``text`` or ``measurable_signal``
-    shares a significant token (see :func:`_significant_tokens`) with the
-    step. A span no criterion topically addresses is a hard finding so a
-    silently-dropped planned step fails the sync rather than the close gate.
-
-    The cover-set is decided by deterministic token overlap, never by an
-    LLM's self-report: the diff is reproducible over identical input. A
-    wave with no planned steps has nothing to cover, so the lint is a
-    clean no-op.
+    Thin daemon-side delegate to
+    :func:`eawf.workflow.propose.coverage.coverage_gaps` so the sync path and
+    the ``/roadmap propose`` render run one implementation. The wave's
+    :class:`~eawf.kernel.spec.intent.IntentBrief` ``planned_steps`` are the
+    per-wave brief spans the authored criteria must account for; a span no
+    criterion topically addresses is a hard finding so a silently-dropped
+    planned step fails the sync rather than the close gate.
 
     Args:
         criteria: The parsed criterion rows from the spec body.
@@ -1022,21 +984,7 @@ def _run_coverage_lint(
         One finding per uncovered planned-step span; empty when every
         step is covered.
     """
-    if not planned_steps:
-        return []
-    units = extract_units("\n".join(planned_steps))
-    criterion_tokens = [
-        _significant_tokens(f"{criterion.text} {criterion.measurable_signal}")
-        for criterion in criteria
-    ]
-    cover_set = {
-        unit.span_id
-        for unit in units
-        if (step_tokens := _significant_tokens(unit.quote))
-        and any(step_tokens & ctokens for ctokens in criterion_tokens)
-    }
-    deferrals: list[DeferredDeliverable] = []
-    return check_coverage(units, covered_span_ids=cover_set, deferrals=deferrals)
+    return coverage_gaps(criteria, planned_steps=planned_steps)
 
 
 def _render_lint_findings(

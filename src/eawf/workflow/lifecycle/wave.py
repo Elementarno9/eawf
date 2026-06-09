@@ -25,7 +25,11 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import ActualSummary, State, Wave
 from eawf.workflow.estimation.buckets import default_estimate_summary
-from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
+from eawf.workflow.lifecycle._errors import (
+    LifecycleError,
+    check_criteria_measurability,
+    check_title_clarity,
+)
 from eawf.workflow.lifecycle.spec import (
     WAVE_TRANSITIONS,
     GuardContext,
@@ -76,8 +80,9 @@ def plan_wave(
     Raises:
         LifecycleError: if iter is missing/closed, wave id duplicates, any
             declared dep references a missing wave id, the dep set names
-            the wave itself, ``effort_bucket`` is missing, or the
-            resulting graph would contain a cycle.
+            the wave itself, ``effort_bucket`` is missing, the resulting
+            graph would contain a cycle, or any non-legacy success
+            criterion is unmeasurable (EAWF021).
 
     Side-effects on the reverse-index: for every ``dep`` in *deps*, the
     dep wave's ``blocks`` list is mutated in-place to include *wave_id*
@@ -109,6 +114,12 @@ def plan_wave(
     # Title-clarity is the final author-facing gate before persistence, so the
     # structural DAG guards (dup id, self-dep, unknown dep, cycle) report first.
     check_title_clarity(title, entity_kind="wave", entity_id=wave_id)
+    # Measurability runs before the wave is inserted so an unmeasurable typed
+    # criterion is rejected at author time rather than slipping onto the row and
+    # failing only at the close gate. Grandfathered legacy rows are exempt.
+    check_criteria_measurability(
+        list(success_criteria or []), entity_kind="wave", entity_id=wave_id
+    )
     wave = Wave(
         id=wave_id,
         iter_id=iter_id,
@@ -223,7 +234,9 @@ def edit_wave_plan(
             description / title API).
 
     Raises:
-        LifecycleError: when *wave_id* is unknown or not PENDING.
+        LifecycleError: when *wave_id* is unknown, not PENDING, or a
+            replacement non-legacy success criterion is unmeasurable
+            (EAWF021).
         pydantic.ValidationError: when *description* exceeds 500 chars
             or *intent* violates an :class:`IntentBrief` bound.
     """
@@ -234,6 +247,10 @@ def edit_wave_plan(
         raise LifecycleError(
             f"wave {wave_id!r} is not pending (status={wave.status.value!r}); cannot edit plan"
         )
+    if success_criteria is not None:
+        # Gate the new criteria before any field mutates so a rejected edit
+        # leaves the wave untouched. Grandfathered legacy rows are exempt.
+        check_criteria_measurability(list(success_criteria), entity_kind="wave", entity_id=wave_id)
     if title is not None:
         wave.title = title
     if file_scopes is not None:
