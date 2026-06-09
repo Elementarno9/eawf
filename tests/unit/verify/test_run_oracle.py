@@ -338,6 +338,77 @@ def test_run_oracle_jury_needs_user_maps_to_needs_user(
     assert result.status == "needs_user"
 
 
+# --------------------------------------------------------------------------- #
+# W10: a jury veto is held advisory until TRUST-4 -- it is logged at WARNING
+# and the close proceeds rather than blocking on an uncalibrated jury.
+# --------------------------------------------------------------------------- #
+
+
+def test_run_oracle_jury_veto_held_advisory_close_proceeds(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    """An always-band FAIL veto returns status='pass' with a WARNING, no block.
+
+    The live cross-vendor jury is uncalibrated on eawf's own distribution, so
+    its veto is advisory until TRUST-4: the binding point
+    :func:`oracle.jury_block_authority` returns ``"advisory"``, the veto is
+    logged at WARNING, and the oracle returns ``status="pass"`` so the close
+    proceeds. The negative space -- that the veto does NOT map to ``"fail"`` --
+    is the load-bearing safety property: a correct close drawing an
+    uncalibrated veto is never blocked.
+    """
+
+    async def _jury(**_kwargs: Any) -> Any:
+        class _Result:
+            outcome = JuryAggregateOutcome.FAIL
+
+        return _Result()
+
+    monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
+
+    with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
+        result = _run(_criterion(), [], repo_root=tmp_path)
+
+    assert result.tier is OracleTier.T7_JURY
+    assert result.status == "pass"
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage()
+    ]
+    assert len(warnings) == 1
+    assert "authority=advisory" in warnings[0].getMessage()
+    assert "close_proceeds=True" in warnings[0].getMessage()
+
+
+def test_run_oracle_correct_close_with_uncalibrated_veto_not_blocked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A correct close that draws an uncalibrated jury veto is not blocked.
+
+    The oracle returns ``status="pass"`` (never ``"fail"``) so the
+    per-criterion close-gate frontier proceeds past this criterion rather than
+    raising. This is the negative-path mirror of the advisory hold: the absence
+    of a block, not the presence of one, is what is asserted.
+    """
+
+    async def _jury(**_kwargs: Any) -> Any:
+        class _Result:
+            outcome = JuryAggregateOutcome.FAIL
+
+        return _Result()
+
+    monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
+    assert oracle.jury_block_authority(_wave()) == "advisory"
+
+    result = _run(_criterion(), [], repo_root=tmp_path)
+
+    assert result.status != "fail"
+    assert result.status == "pass"
+
+
 def test_run_oracle_non_deterministic_criterion_skips_gates(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

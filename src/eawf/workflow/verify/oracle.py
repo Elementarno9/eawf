@@ -116,7 +116,11 @@ async def run_oracle(
     3. When no deterministic gate passed (or none exist), consult the
        jury tier: the async cross-vendor jury when
        :func:`verdict_requirement` is ``"always"``, else the sync
-       single-auditor :func:`verify_wave_verdict_gate`.
+       single-auditor :func:`verify_wave_verdict_gate`. A cross-vendor
+       jury veto (``FAIL``) is held advisory by :func:`jury_block_authority`
+       -- it is logged at WARNING and the close proceeds as ``"pass"`` --
+       until TRUST-4 supplies the earned-authority computation that lets a
+       calibrated jury block.
 
     Args:
         criterion: The criterion being scored. Read-only.
@@ -183,6 +187,20 @@ async def run_oracle(
             spawn_factory=spawn_factory,
             repo_root=repo_root,
         )
+        if jr.outcome is JuryAggregateOutcome.FAIL and jury_block_authority(wave) == "advisory":
+            logger.warning(
+                f"run_oracle jury_veto_advisory criterion={criterion.id!r} wave={wave.id} "
+                f"outcome={jr.outcome.value} authority=advisory close_proceeds=True"
+            )
+            return OracleResult(
+                tier=OracleTier.T7_JURY,
+                status="pass",
+                criterion_id=criterion.id,
+                detail=(
+                    f"cross-vendor jury outcome={jr.outcome.value} held advisory "
+                    "until TRUST-4 earned-authority calibration"
+                ),
+            )
         status = _jury_outcome_status(jr.outcome)
         logger.info(
             f"run_oracle jury criterion={criterion.id!r} wave={wave.id} "
@@ -212,6 +230,30 @@ async def run_oracle(
     )
 
 
+def jury_block_authority(wave: Wave) -> Literal["advisory", "blocking"]:
+    """Return whether a cross-vendor jury veto may block *wave*'s close.
+
+    This is the single binding point for the jury's blocking authority. It
+    returns ``"advisory"`` unconditionally: the live holistic cross-vendor
+    jury blocks band-scoped closes today without ever having been calibrated
+    on eawf's own distribution, so a veto it casts is logged but never
+    blocking. TRUST-4 replaces this placeholder with the earned-authority
+    computation (a jury earns blocking authority only once its agreement and
+    calibration clear the trust floor) at this same call site, so the swap
+    is local to one function.
+
+    Args:
+        wave: The wave whose close is being scored. Read-only; reserved for
+            the TRUST-4 earned-authority lookup that will key off the wave's
+            band and the jury's measured reliability.
+
+    Returns:
+        ``"advisory"`` until TRUST-4 lands; ``"blocking"`` is never returned
+        by this placeholder.
+    """
+    return "advisory"
+
+
 def _jury_outcome_status(
     outcome: JuryAggregateOutcome,
 ) -> Literal["pass", "fail", "needs_user"]:
@@ -223,4 +265,4 @@ def _jury_outcome_status(
     return "needs_user"
 
 
-__all__ = ["OracleResult", "run_oracle"]
+__all__ = ["OracleResult", "jury_block_authority", "run_oracle"]

@@ -9,8 +9,10 @@ through :func:`eawf.runtime.daemon.methods.state._enforce_wave_close_gate`'s
 per-criterion :func:`eawf.workflow.verify.oracle.run_oracle` loop. For an
 ``always`` (high-risk) band wave each un-gated criterion escalates to the jury
 tier, which convenes the three disjoint-family cross-vendor jurors and reduces
-their ballots: a unanimous PASS closes; a minority-veto FAIL or a sub-quorum
-NEEDS_USER blocks close with the unified ``oracle blocked close`` reason.
+their ballots: a unanimous PASS closes; a minority-veto FAIL is held ADVISORY
+(W10) -- logged, never blocking -- until I07 TRUST-4 calibrates the jury; a
+sub-quorum NEEDS_USER still blocks close with the unified ``oracle blocked
+close`` reason.
 
 The W03 unification REPLACED the separate uiux-band spec-jury branch (the
 pre-W03 ``_enforce_spec_jury_gate`` / ``_spec_jury_ballot_fn`` close path) with
@@ -420,17 +422,23 @@ def test_band_wave_unanimous_pass_writes_reports_and_closes(
 
 
 # --------------------------------------------------------------------------- #
-# (b) band wave + a refuted item -> FAIL -> blocks close.
+# (b) band wave + a refuted item -> FAIL -> held ADVISORY (W10), close proceeds.
 # --------------------------------------------------------------------------- #
 
 
-def test_band_wave_veto_blocks_close(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A single FAIL juror minority-vetoes the banded close.
+def test_band_wave_veto_held_advisory_close_proceeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A single FAIL juror veto is held advisory (W10): the banded close proceeds.
 
-    Re-pinned to the unified oracle (W03): a banded ``always`` wave routes
-    through run_oracle's jury tier. One juror voting FAIL minority-vetoes the
-    reduction to FAIL, so the close is refused with the unified ``oracle
-    blocked close (... status=fail)`` reason and the wave stays CLAIMED.
+    Until I07 TRUST-4 supplies the earned-authority computation, the live
+    cross-vendor jury is uncalibrated on eawf's own distribution, so its veto
+    is advisory: :func:`~eawf.workflow.verify.oracle.jury_block_authority`
+    returns ``"advisory"``, run_oracle's jury tier logs the veto at WARNING and
+    returns ``status="pass"``, and the banded wave CLOSES rather than staying
+    CLAIMED. The per-juror reports (including the dissenting FAIL) are still
+    written, so the veto is recorded for the operator even though it does not
+    block.
     """
     _patch_jury(
         monkeypatch,
@@ -439,14 +447,18 @@ def test_band_wave_veto_blocks_close(tmp_path: Path, monkeypatch: pytest.MonkeyP
     state_path, ctx, mutation = _setup(tmp_path, uiux_bands=[_BAND_TOKEN])
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="oracle blocked close"):
+        with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_BAND_WAVE]["status"] == "claimed"
+        assert payload["waves"][_BAND_WAVE]["status"] == "closed"
 
     _run(body)
-    # Each juror's verdict was written before the close was rejected: the
-    # dissenting juror's report carries the FAIL.
+    # The advisory hold logged the veto at WARNING; the close was not blocked.
+    assert any(
+        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
+    )
+    # Each juror's verdict was still written: the dissenting juror's report
+    # carries the FAIL so the operator sees the (advisory) veto.
     rows = iter_agent_reports(state_path, role=AgentSessionRole.AUDITOR, base_id=_BAND_WAVE)
     assert len(rows) == len(JURY_RUNTIME_FAMILIES)
     assert any(not c.passed for row in rows for c in row.payload.body.criteria)

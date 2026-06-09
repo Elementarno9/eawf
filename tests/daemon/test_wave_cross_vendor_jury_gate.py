@@ -4,10 +4,11 @@ Exercises the opt-in jury upgrade of the enforcing wave-close verdict gate
 wired into :func:`eawf.runtime.daemon.methods.state._enforce_wave_close_gate`:
 when an enabled profile sets ``verify.cross_vendor_jury: true`` AND the host's
 cross-vendor CLI lanes resolve, a high-risk (``always``) wave's close is gated
-on a three-vendor disjoint-family jury reduced through the TRUST-3 reducer; a
-minority-veto FAIL or a split / sub-quorum NEEDS_USER blocks close. The path
-degrades to the single fresh-auditor gate when the flag is OFF or the lanes are
-unavailable.
+on a three-vendor disjoint-family jury reduced through the TRUST-3 reducer. A
+minority-veto FAIL is held ADVISORY (W10) -- logged, never blocking -- until I07
+TRUST-4 supplies the earned-authority computation; a split / sub-quorum
+NEEDS_USER still blocks close. The path degrades to the single fresh-auditor
+gate when the flag is OFF or the lanes are unavailable.
 
 The juror spawn is ALWAYS stubbed: the test monkeypatches
 ``_jury_spawn_factory`` to return per-runtime recording stubs that replay canned
@@ -386,16 +387,20 @@ def test_jury_split_no_veto_blocks_close(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 # --------------------------------------------------------------------------- #
-# (c) flag-on + a juror failing -> per the reducer (veto FAIL / sub-quorum).
+# (c) flag-on + a juror failing -> per the reducer (advisory FAIL / sub-quorum).
 # --------------------------------------------------------------------------- #
 
 
-def test_jury_one_fail_vetoes_and_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A single FAIL ballot minority-vetoes the vote to FAIL and blocks close.
+def test_jury_one_fail_veto_held_advisory_close_proceeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A single FAIL veto is held advisory (W10): the close proceeds, not blocks.
 
-    Re-pinned to the unified oracle: the jury-tier FAIL reduction surfaces
-    as ``oracle blocked close (... status=fail): cross-vendor jury
-    outcome=fail``.
+    The cross-vendor jury is uncalibrated on eawf's own distribution, so a
+    minority-veto FAIL is held advisory by
+    :func:`~eawf.workflow.verify.oracle.jury_block_authority` until I07
+    TRUST-4: run_oracle's jury tier logs the veto at WARNING and returns
+    ``status="pass"``, so the high-risk wave CLOSES rather than staying CLAIMED.
     """
     _patch_jury(
         monkeypatch,
@@ -404,12 +409,15 @@ def test_jury_one_fail_vetoes_and_blocks(tmp_path: Path, monkeypatch: pytest.Mon
     state_path, ctx, mutation = _setup(tmp_path, cross_vendor_jury=True)
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="oracle blocked close"):
+        with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
             await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         payload = orjson.loads(state_path.read_bytes())
-        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "claimed"
+        assert payload["waves"][_HIGH_RISK_WAVE]["status"] == "closed"
 
     _run(body)
+    assert any(
+        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
+    )
 
 
 def test_jury_sub_quorum_abstentions_block(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

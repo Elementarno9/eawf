@@ -330,16 +330,21 @@ def test_close_passing_deterministic_gate_mints_evidence_and_verifies(
 # --------------------------------------------------------------------------- #
 
 
-def test_close_failing_deterministic_gate_blocks_and_mints_no_pass(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_close_failing_deterministic_gate_blocks_via_readiness_jury_veto_advisory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A failing ``file_exists`` gate blocks close and leaves no deterministic row.
+    """A failing ``file_exists`` gate still blocks close (via readiness), jury veto advisory.
 
     The deterministic gate points at a missing file, so the real oracle
     exhausts the deterministic tier without a pass and falls through to the
-    jury tier (stubbed to FAIL so no live spawn runs). The close is refused
-    (``DaemonValidationError``), the wave stays CLAIMED, and no
-    ``deterministic`` / ``pass`` evidence row is minted.
+    jury tier (stubbed to FAIL so no live spawn runs). Per W10 the jury veto
+    no longer blocks -- it is held advisory until I07 TRUST-4 and logged at
+    WARNING. The close is still REFUSED, but by the independent
+    readiness-enforcement gate that scores the deterministic ``CR-01`` gate
+    directly (``readiness enforcement failed ... CR-01:fail``), NOT by the
+    advisory jury veto. The wave stays CLAIMED and no ``deterministic`` /
+    ``pass`` evidence row is minted -- the W10 hold scopes to the jury veto,
+    not to a real deterministic-gate failure.
     """
     _write_enforcing_profile(tmp_path)
     _init_git_repo(tmp_path)
@@ -368,9 +373,14 @@ def test_close_failing_deterministic_gate_blocks_and_mints_no_pass(
     )
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError) as excinfo:
+        with (
+            caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"),
+            pytest.raises(DaemonValidationError) as excinfo,
+        ):
             await mutate(ctx, {"mutation": _close_mutation().model_dump(mode="json")})
-        assert "oracle blocked close" in str(excinfo.value)
+        # The block is the deterministic readiness gate, not the advisory jury.
+        assert "readiness enforcement failed" in str(excinfo.value)
+        assert "CR-01:fail" in str(excinfo.value)
 
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_WAVE]["status"] == "claimed"
@@ -379,3 +389,7 @@ def test_close_failing_deterministic_gate_blocks_and_mints_no_pass(
         assert not [r for r in rows if r.evidence_kind == "deterministic" and r.status == "pass"]
 
     _run(body)
+    # The jury veto was held advisory: logged at WARNING, did not raise.
+    assert any(
+        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
+    )
