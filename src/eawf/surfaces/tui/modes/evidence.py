@@ -37,6 +37,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Static
 
+from eawf.kernel.spec.common import OracleTier, tier_label
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.ids import natural_key
 from eawf.platform.scrub import scan_text
@@ -50,6 +51,7 @@ from eawf.workflow.estimation.buckets import wave_estimate_eu
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
     from eawf.kernel.store.kinds.evidence import EvidenceRecord
+    from eawf.observability.eval.cross_vendor_jury import PerItemJurorBallot
     from eawf.platform.scrub import ScrubFinding
     from eawf.workflow.verify.models import CloseReadiness, CriterionView
 
@@ -621,6 +623,168 @@ def join_evidence_to_criteria(
 
 
 # --------------------------------------------------------------------------
+# Jury-ballot oracle-tier drill (U2) -- the juror x rubric-item grid + ladder
+# --------------------------------------------------------------------------
+
+#: The per-cell ballot vote vocabulary for the juror x rubric-item grid. A
+#: juror that passed the item reads ``pass``, one that vetoed it ``fail``, and
+#: one that cast no vote on the item ``abstain`` (a non-vote is never a silent
+#: pass). Kept ASCII per the source-glyph convention.
+PASS_VOTE: str = "pass"
+FAIL_VOTE: str = "fail"
+ABSTAIN_VOTE: str = "abstain"
+
+#: Row-status word when at least one juror voted ``fail`` on a rubric item:
+#: one credible refutation blocks the row under the refute-first rubric
+#: (minority-veto). A row with no fail (every juror passed or abstained) reads
+#: ``ready``.
+ROW_BLOCKED: str = "blocked"
+ROW_READY: str = "ready"
+
+#: Notice rendered in the ballot sub-pane when no jury ballots are bound -- the
+#: honest-empty path (a wave the close gate never convened a jury for, or whose
+#: ballots were reduced away before they could be drilled into).
+NO_BALLOTS_NOTICE: str = "no jury ballots"
+
+#: Mark prefixing the oracle tier that scored the criterion in the ladder; a
+#: non-scoring tier is prefixed by spaces of equal width so the ladder stays
+#: column-aligned. ASCII per the source-glyph convention.
+_TIER_MARK: str = ">"
+_TIER_NOMARK: str = " "
+
+
+@dataclass(frozen=True)
+class BallotGridRow:
+    """One rubric item's row in the juror x rubric-item ballot grid.
+
+    Attributes:
+        item_id: The rubric behaviour id (a ``B<n>`` label) this row scores.
+        votes: One ``pass`` / ``fail`` / ``abstain`` vote per juror, in juror
+            (column) order. A juror that cast no vote on the item votes
+            ``abstain`` -- a non-vote, never a silent pass.
+        status: The rolled-up row status -- :data:`ROW_BLOCKED` when any juror
+            voted ``fail`` (one credible refutation blocks the row under the
+            refute-first rubric), else :data:`ROW_READY`.
+    """
+
+    item_id: str
+    votes: tuple[str, ...]
+    status: str
+
+
+def build_ballot_grid(
+    ballots: tuple[PerItemJurorBallot, ...],
+    rubric_item_ids: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[BallotGridRow, ...]]:
+    """Build the juror x rubric-item ballot grid over *ballots*.
+
+    Pivots the per-juror ballots into a per-item grid: one :class:`BallotGridRow`
+    per id in *rubric_item_ids* (in render order), one column per juror (in the
+    order the ballots were convened). Each cell is the juror's vote on that item
+    -- :data:`PASS_VOTE` when the juror passed it, :data:`FAIL_VOTE` when the
+    juror vetoed it, :data:`ABSTAIN_VOTE` when that juror cast no vote on the
+    item (a non-vote, never a silent pass). A row with at least one
+    :data:`FAIL_VOTE` rolls up to :data:`ROW_BLOCKED` (one credible refutation
+    blocks the row under the refute-first rubric); a row with none reads
+    :data:`ROW_READY`.
+
+    Boundary: an empty *rubric_item_ids* yields no rows (a rubric with nothing
+    to score); a juror that voted on no in-rubric item still contributes an
+    ``abstain`` column so the grid never silently drops a convened juror.
+
+    Args:
+        ballots: One :class:`~eawf.observability.eval.cross_vendor_jury.PerItemJurorBallot`
+            per convened juror, in convene order.
+        rubric_item_ids: The rubric behaviour ids to render as rows, in order.
+
+    Returns:
+        A ``(juror_ids, rows)`` pair -- the column header juror ids in convene
+        order, and one :class:`BallotGridRow` per rubric item.
+    """
+    jurors = tuple(ballot.juror for ballot in ballots)
+    rows: list[BallotGridRow] = []
+    for item_id in rubric_item_ids:
+        votes = tuple(_juror_vote(ballot, item_id) for ballot in ballots)
+        status = ROW_BLOCKED if FAIL_VOTE in votes else ROW_READY
+        rows.append(BallotGridRow(item_id=item_id, votes=votes, status=status))
+    logger.info(f"build_ballot_grid jurors={len(jurors)} items={len(rows)}")
+    return jurors, tuple(rows)
+
+
+def _juror_vote(ballot: PerItemJurorBallot, item_id: str) -> str:
+    """Return one juror's vote on *item_id*: pass / fail / abstain.
+
+    Reads the juror's :class:`~eawf.observability.eval.cross_vendor_jury.RubricItemVote`
+    for *item_id* from its ballot. A passing vote maps to :data:`PASS_VOTE`; a
+    failing vote (a veto) to :data:`FAIL_VOTE`; the absence of a vote on the
+    item to :data:`ABSTAIN_VOTE`.
+
+    Args:
+        ballot: The juror's per-item ballot.
+        item_id: The rubric item id to read the juror's vote for.
+
+    Returns:
+        The juror's vote word for the item.
+    """
+    for vote in ballot.votes:
+        if vote.item_id == item_id:
+            return PASS_VOTE if vote.passed else FAIL_VOTE
+    return ABSTAIN_VOTE
+
+
+def render_ballot_grid(juror_ids: tuple[str, ...], rows: tuple[BallotGridRow, ...]) -> str:
+    """Render the juror x rubric-item ballot grid as one text block.
+
+    Lays out a header row of juror ids followed by one line per rubric item --
+    the item id, each juror's vote in column order, and the rolled-up row
+    status -- so the operator reads the whole grid top-to-bottom. An empty
+    *rows* yields the honest-empty :data:`NO_BALLOTS_NOTICE`.
+
+    Args:
+        juror_ids: The column-header juror ids, in convene order.
+        rows: The ballot grid rows (:func:`build_ballot_grid`).
+
+    Returns:
+        The newline-joined grid block (no trailing newline), or
+        :data:`NO_BALLOTS_NOTICE` when there are no rows.
+    """
+    if not rows:
+        return NO_BALLOTS_NOTICE
+    header = "item  " + "  ".join(juror_ids) + "  status"
+    lines = [header]
+    for row in rows:
+        cells = "  ".join(row.votes)
+        lines.append(f"{row.item_id}  {cells}  {row.status}")
+    return "\n".join(lines)
+
+
+def render_tier_ladder(scored: OracleTier | None) -> str:
+    """Render the T1_STATIC..T7_JURY oracle-tier ladder, marking *scored*.
+
+    Walks every :class:`~eawf.kernel.spec.common.OracleTier` in ascending order
+    and renders its human :func:`~eawf.kernel.spec.common.tier_label` (e.g.
+    ``T1 static`` ... ``T7 jury``), prefixing the tier that scored the criterion
+    with :data:`_TIER_MARK` so the operator reads which tier settled it. The
+    label is sourced from :func:`tier_label`, never hardcoded, so a tier rename
+    lands in one place. A ``None`` *scored* marks no tier (the honest-empty
+    path: no oracle result bound).
+
+    Args:
+        scored: The :class:`~eawf.workflow.verify.oracle.OracleResult.tier` that
+            scored the criterion, or ``None`` when no result is bound.
+
+    Returns:
+        The newline-joined ladder block, one ``<mark> T<n> <flavor>`` line per
+        tier (no trailing newline).
+    """
+    lines: list[str] = []
+    for tier in OracleTier:
+        mark = _TIER_MARK if tier is scored else _TIER_NOMARK
+        lines.append(f"{mark} {tier_label(tier)}")
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
 # Scrub-gated evidence export -- a clean manifest, refusing host-path leaks
 # --------------------------------------------------------------------------
 
@@ -821,6 +985,21 @@ class EvidenceModeScreen(ScopeScreen):
         max-height: 8;
         color: $text;
     }
+    EvidenceModeScreen .evidence-ballot-title {
+        height: 1;
+        color: $accent;
+        text-style: bold;
+    }
+    EvidenceModeScreen .evidence-ballot-grid {
+        height: auto;
+        max-height: 8;
+        color: $text;
+    }
+    EvidenceModeScreen .evidence-ballot-ladder {
+        height: auto;
+        max-height: 8;
+        color: $text;
+    }
     """
 
     #: Bound state, watched so a fresh revision rebuilds the rollup rows.
@@ -839,6 +1018,17 @@ class EvidenceModeScreen(ScopeScreen):
         #: Evidence rows joined into the ledger's ``produced_by`` column,
         #: supplied alongside the readiness view via :meth:`set_readiness`.
         self._records: tuple[EvidenceRecord, ...] = ()
+        #: The per-juror jury ballots painted into the ballot-grid sub-pane.
+        #: Empty is the honest-empty path -- like the readiness view, the
+        #: render seam never convenes a live jury, so ballots are supplied
+        #: externally (a close envelope, a fixture under test) via
+        #: :meth:`set_ballots`.
+        self._ballots: tuple[PerItemJurorBallot, ...] = ()
+        #: The rubric behaviour ids the ballot grid renders as rows, in order.
+        self._rubric_item_ids: tuple[str, ...] = ()
+        #: The oracle tier that scored the criterion, marked in the ladder.
+        #: ``None`` marks no tier (no oracle result bound).
+        self._scored_tier: OracleTier | None = None
 
     def compose_body(self) -> ComposeResult:
         """Yield the evidence pane body (readiness header + ledger + rollup)."""
@@ -853,6 +1043,15 @@ class EvidenceModeScreen(ScopeScreen):
             yield DataTable(id="evidence-table", cursor_type="row", zebra_stripes=True)
             yield Static("Followups", classes="evidence-followups-title")
             yield Static("no followups", id="evidence-followups", classes="evidence-followups")
+            yield Static("Jury ballots", classes="evidence-ballot-title")
+            yield Static(
+                NO_BALLOTS_NOTICE, id="evidence-ballot-grid", classes="evidence-ballot-grid"
+            )
+            yield Static(
+                render_tier_ladder(None),
+                id="evidence-ballot-ladder",
+                classes="evidence-ballot-ladder",
+            )
 
     def on_mount(self) -> None:
         """Add columns, seed from app state, and watch for revisions."""
@@ -928,6 +1127,7 @@ class EvidenceModeScreen(ScopeScreen):
         table.display = has_rows
         empty.display = not has_rows
         self._paint_readiness()
+        self._paint_ballots()
         logger.info(f"evidence_rebuild rows={len(rows)} has_rows={has_rows}")
 
     def set_readiness(
@@ -991,6 +1191,56 @@ class EvidenceModeScreen(ScopeScreen):
         ledger.display = has_rows
         empty.display = not has_rows
 
+    def set_ballots(
+        self,
+        ballots: Iterable[PerItemJurorBallot] = (),
+        rubric_item_ids: Iterable[str] = (),
+        scored_tier: OracleTier | None = None,
+    ) -> None:
+        """Bind jury ballots + the scoring tier and repaint the ballot sub-pane.
+
+        Like :meth:`set_readiness`, the render seam never convenes a live jury
+        (three cross-vendor spawns) -- the reduced ballots + the
+        :class:`~eawf.workflow.verify.oracle.OracleResult.tier` that scored the
+        criterion are supplied externally and pushed in here. Repaints the
+        juror x rubric-item grid + the oracle-tier ladder immediately when the
+        pane is mounted.
+
+        Args:
+            ballots: One
+                :class:`~eawf.observability.eval.cross_vendor_jury.PerItemJurorBallot`
+                per convened juror, in convene order. Defaults to none -- the
+                grid then renders the honest-empty :data:`NO_BALLOTS_NOTICE`.
+            rubric_item_ids: The rubric behaviour ids the grid renders as rows,
+                in order. Defaults to none.
+            scored_tier: The oracle tier that scored the criterion, marked in
+                the ladder, or ``None`` to mark no tier.
+        """
+        self._ballots = tuple(ballots)
+        self._rubric_item_ids = tuple(rubric_item_ids)
+        self._scored_tier = scored_tier
+        if self.is_mounted:
+            self._paint_ballots()
+
+    def _paint_ballots(self) -> None:
+        """Repaint the jury-ballot grid + oracle-tier ladder from the bound data.
+
+        Renders the juror x rubric-item grid (:func:`build_ballot_grid` ->
+        :func:`render_ballot_grid`) into the grid Static and the
+        T1_STATIC..T7_JURY ladder (:func:`render_tier_ladder`, marking the
+        scoring tier) into the ladder Static. Falls back to
+        :data:`NO_BALLOTS_NOTICE` when no ballots are bound. Guarded on mount:
+        the sub-pane widgets only exist after :meth:`compose_body`.
+        """
+        grids = self.query("#evidence-ballot-grid")
+        if not grids:
+            return
+        grid = grids.first(Static)
+        ladder = self.query_one("#evidence-ballot-ladder", Static)
+        juror_ids, rows = build_ballot_grid(self._ballots, self._rubric_item_ids)
+        grid.update(render_ballot_grid(juror_ids, rows))
+        ladder.update(render_tier_ladder(self._scored_tier))
+
     def action_drill(self) -> None:
         """Open the why-peek drill modal for the selected ledger criterion.
 
@@ -1051,15 +1301,23 @@ class EvidenceModeScreen(ScopeScreen):
 
 
 __all__ = [
+    "ABSTAIN_VOTE",
     "EMPTY_NOTICE",
+    "FAIL_VOTE",
     "LEDGER_EMPTY_NOTICE",
+    "NO_BALLOTS_NOTICE",
     "NO_CRITERIA_NOTICE",
     "ORPHAN_SECTION",
+    "PASS_VOTE",
+    "ROW_BLOCKED",
+    "ROW_READY",
+    "BallotGridRow",
     "EvidenceJoin",
     "EvidenceModeScreen",
     "EvidenceRow",
     "EvidenceScrubError",
     "LedgerRow",
+    "build_ballot_grid",
     "build_evidence_ledger",
     "build_evidence_manifest",
     "build_evidence_rows",
@@ -1070,7 +1328,9 @@ __all__ = [
     "frame_empty_notice",
     "gate_status_label",
     "join_evidence_to_criteria",
+    "render_ballot_grid",
     "render_followups_block",
+    "render_tier_ladder",
     "sort_evidence_rows",
     "verdict_sigil",
 ]

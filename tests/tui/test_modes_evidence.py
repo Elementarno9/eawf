@@ -30,6 +30,7 @@ import orjson
 import pytest
 from textual.widgets import DataTable, Static
 
+from eawf.kernel.spec.common import OracleTier, tier_label
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
@@ -49,14 +50,24 @@ from eawf.kernel.store.kinds.agent_report import (
     store_kind_for_role,
 )
 from eawf.kernel.store.paths import store_path
+from eawf.observability.eval.cross_vendor_jury import PerItemJurorBallot, RubricItemVote
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.evidence import (
+    ABSTAIN_VOTE,
     EMPTY_NOTICE,
+    FAIL_VOTE,
+    NO_BALLOTS_NOTICE,
+    PASS_VOTE,
+    ROW_BLOCKED,
+    ROW_READY,
     EvidenceModeScreen,
     EvidenceRow,
+    build_ballot_grid,
     build_evidence_rows,
     evidence_summary_line,
+    render_ballot_grid,
     render_followups_block,
+    render_tier_ladder,
     sort_evidence_rows,
 )
 from eawf.surfaces.tui.snapshot import (
@@ -422,6 +433,135 @@ def test_sort_evidence_rows_orders_by_natural_wave_then_role() -> None:
 
 
 # --------------------------------------------------------------------------
+# Jury-ballot grid + oracle-tier ladder (U2 drill) -- pure helpers
+# --------------------------------------------------------------------------
+
+
+def _ballots() -> tuple[PerItemJurorBallot, ...]:
+    """Three disjoint-vendor jurors voting on two rubric items.
+
+    B-01 is unanimous pass; B-02 carries one veto (opencode fails it with a
+    refutation) so the row reads blocked. The claude juror casts no vote on
+    B-02 -- an abstention -- so the grid never silently treats a non-vote as a
+    pass.
+    """
+    return (
+        PerItemJurorBallot(
+            juror="claude-code",
+            votes=(RubricItemVote(item_id="B-01", passed=True),),
+        ),
+        PerItemJurorBallot(
+            juror="codex",
+            votes=(
+                RubricItemVote(item_id="B-01", passed=True),
+                RubricItemVote(item_id="B-02", passed=True),
+            ),
+        ),
+        PerItemJurorBallot(
+            juror="opencode",
+            votes=(
+                RubricItemVote(item_id="B-01", passed=True),
+                RubricItemVote(
+                    item_id="B-02", passed=False, refutation="row regressed under pytest"
+                ),
+            ),
+        ),
+    )
+
+
+def test_build_ballot_grid_pivots_jurors_into_columns() -> None:
+    """The grid pivots per-juror ballots into one row per rubric item."""
+    juror_ids, rows = build_ballot_grid(_ballots(), ("B-01", "B-02"))
+
+    assert juror_ids == ("claude-code", "codex", "opencode")
+    assert len(rows) == 2
+    assert rows[0].item_id == "B-01"
+    assert rows[0].votes == (PASS_VOTE, PASS_VOTE, PASS_VOTE)
+    assert rows[1].item_id == "B-02"
+    assert rows[1].votes == (ABSTAIN_VOTE, PASS_VOTE, FAIL_VOTE)
+
+
+def test_build_ballot_grid_one_fail_blocks_the_row() -> None:
+    """A row with one fail vote rolls up to blocked; an all-pass row to ready."""
+    _, rows = build_ballot_grid(_ballots(), ("B-01", "B-02"))
+
+    assert rows[0].status == ROW_READY
+    assert rows[1].status == ROW_BLOCKED
+
+
+def test_build_ballot_grid_abstain_alone_does_not_block() -> None:
+    """A row of pass + abstain (no fail) reads ready, not blocked."""
+    ballots = (
+        PerItemJurorBallot(juror="codex", votes=(RubricItemVote(item_id="B-01", passed=True),)),
+        PerItemJurorBallot(juror="opencode", votes=()),  # abstains on B-01
+    )
+    _, rows = build_ballot_grid(ballots, ("B-01",))
+
+    assert rows[0].votes == (PASS_VOTE, ABSTAIN_VOTE)
+    assert rows[0].status == ROW_READY
+
+
+def test_build_ballot_grid_empty_rubric_yields_no_rows() -> None:
+    """An empty rubric (nothing to score) yields the column header but no rows."""
+    juror_ids, rows = build_ballot_grid(_ballots(), ())
+
+    assert juror_ids == ("claude-code", "codex", "opencode")
+    assert rows == ()
+
+
+def test_render_ballot_grid_shows_votes_and_row_status() -> None:
+    """The rendered grid carries each juror column + the per-row status word."""
+    juror_ids, rows = build_ballot_grid(_ballots(), ("B-01", "B-02"))
+    block = render_ballot_grid(juror_ids, rows)
+
+    assert "claude-code" in block
+    assert "codex" in block
+    assert "opencode" in block
+    # B-02: one fail -> the row reads blocked, and the abstain cell shows.
+    assert FAIL_VOTE in block
+    assert ABSTAIN_VOTE in block
+    assert f"B-02  {ABSTAIN_VOTE}  {PASS_VOTE}  {FAIL_VOTE}  {ROW_BLOCKED}" in block
+
+
+def test_render_ballot_grid_empty_is_honest_notice() -> None:
+    """No grid rows renders the honest-empty ballots notice."""
+    assert render_ballot_grid((), ()) == NO_BALLOTS_NOTICE
+
+
+def test_render_tier_ladder_uses_real_tier_names_via_tier_label() -> None:
+    """The ladder renders every T1_STATIC..T7_JURY label via tier_label."""
+    block = render_tier_ladder(OracleTier.T7_JURY)
+
+    # Every real tier label is present, sourced from tier_label (never hardcoded).
+    for tier in OracleTier:
+        assert tier_label(tier) in block
+    # The full real-name span is covered end to end.
+    assert "T1 static" in block
+    assert "T7 jury" in block
+
+
+def test_render_tier_ladder_marks_the_scoring_tier() -> None:
+    """The scoring tier line is marked; the others are not."""
+    block = render_tier_ladder(OracleTier.T4_CONTRACT)
+    lines = block.splitlines()
+
+    scored = next(line for line in lines if tier_label(OracleTier.T4_CONTRACT) in line)
+    other = next(line for line in lines if tier_label(OracleTier.T1_STATIC) in line)
+    assert scored.startswith(">")
+    assert not other.startswith(">")
+
+
+def test_render_tier_ladder_none_marks_no_tier() -> None:
+    """A None scoring tier marks no line (the honest-empty path)."""
+    block = render_tier_ladder(None)
+
+    assert not any(line.startswith(">") for line in block.splitlines())
+    # The ladder still renders every real tier name.
+    assert "T1 static" in block
+    assert "T7 jury" in block
+
+
+# --------------------------------------------------------------------------
 # Pilot-driven pane -- honest-empty + populated
 # --------------------------------------------------------------------------
 
@@ -504,5 +644,46 @@ def test_evidence_pane_surfaces_followups_in_detail_block(tmp_path: Path) -> Non
             frame = normalize_snapshot(capture_screen_text(app))
             assert "P29-I02-W22 :: executor" in frame
             assert "regen TUI goldens" in frame
+
+    asyncio.run(body())
+
+
+def test_evidence_pane_renders_seeded_ballot_grid_and_tier_ladder(tmp_path: Path) -> None:
+    """Seeded ballots render the juror x rubric grid + the marked tier ladder.
+
+    Drives the live Evidence pane, pushes seeded jury ballots + the scoring
+    oracle tier through the :meth:`set_ballots` render seam (the same external-
+    push pattern :meth:`set_readiness` uses, since the pane never convenes a
+    live jury), and asserts both halves of the U2 drill surface: the
+    pass/fail/abstain grid with the blocked row, and the T1_STATIC..T7_JURY
+    ladder with the scoring tier marked via the real ``tier_label`` names.
+    """
+
+    async def body() -> None:
+        state = _state_with_wave(wave_id="P29-I02-W22")
+        state_path = _write_state(state, tmp_path)
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("6")
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, EvidenceModeScreen)
+            screen.set_ballots(
+                _ballots(),
+                rubric_item_ids=("B-01", "B-02"),
+                scored_tier=OracleTier.T7_JURY,
+            )
+            await settle_screen(pilot)
+            frame = normalize_snapshot(capture_screen_text(app))
+            # The juror x rubric grid: pass / fail / abstain votes + blocked row.
+            assert "claude-code" in frame
+            assert "opencode" in frame
+            assert ABSTAIN_VOTE in frame
+            assert FAIL_VOTE in frame
+            assert ROW_BLOCKED in frame
+            # The oracle-tier ladder uses the real tier_label names and marks T7.
+            assert "T1 static" in frame
+            assert "T7 jury" in frame
 
     asyncio.run(body())
