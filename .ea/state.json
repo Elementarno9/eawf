@@ -5108,6 +5108,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-10-A62-P30-i05-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P30-I05/A62-P30-i05-report"
     },
+    "A63-P30-i06-report": {
+      "created_at": "2026-06-10T20:33:48.732633Z",
+      "id": "A63-P30-i06-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-10-A63-P30-i06-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I06/A63-P30-i06-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -6483,6 +6493,17 @@
       "kind": "evaluation",
       "report_artifact_id": "A62-P30-i05-report",
       "scope_id": "P30-I05",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A63-P30-i06": {
+      "check_results": [],
+      "created_at": "2026-06-10T20:33:49.330498Z",
+      "id": "A63-P30-i06",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A63-P30-i06-report",
+      "scope_id": "P30-I06",
       "status": "complete",
       "verdict": "minor"
     },
@@ -8042,7 +8063,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I06",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -17669,16 +17690,16 @@
       ]
     },
     "P30-I06": {
-      "audit_id": null,
+      "audit_id": "A63-P30-i06",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-10T20:34:14.021262Z",
       "description": "Close the gap between what P29 lit on the spawn floor and what is still idle: bind the spawned executor's real self-report (not a daemon stub), add a headless spawn caller, inject Zone-3 role rules at dispatch, add a grounded repair re-dispatch, and pin binding-proof + negative-path tests so each substrate change provably fires on a real call path and blocks on the negative path.",
       "estimate_id": null,
       "id": "P30-I06",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753513Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Fleet substrate — bind the eawf-spawned dispatch fleet + prove it fires",
       "trigger": "none",
       "wave_ids": [
@@ -18155,6 +18176,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I05-close-A62-P30-i05",
       "summary": "iter P30-I05 closed with audit A62-P30-i05; waves closed=16; outcomes P30-I05-W01: Added strict RuntimeBaseline state model, claim-time baseline hook, v1.8 to v1.9 migration, g... | P30-I05-W02: Parsed Claude Code cost payloads into strict RuntimeCounters with degrade-not-crash behavior ... | P30-I05-W03: Registered SESSION_END runtime capture hook and non-blocking degradation paths; parent commit...",
+      "tier": "working"
+    },
+    "MEM-P30-I06-close-A63-P30-i06": {
+      "confidence": "high",
+      "id": "MEM-P30-I06-close-A63-P30-i06",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-10T20:34:14.021262Z",
+      "scope_id": "P30-I06",
+      "status": "active",
+      "store_record_id": "MEM-P30-I06-close-A63-P30-i06",
+      "summary": "iter P30-I06 closed with audit A63-P30-i06; waves closed=10; outcomes P30-I06-W01: Bound live-spawn output to a validated ExecutorReportBody via assist_with_schema; synthetic b... | P30-I06-W02: Added 'eawf dispatch wave' headless spawn verb (daemon-only, typed errors, pid+runtime report... | P30-I06-W03: Binding-proof tests: dated opus-4-8 + bare opus alias both yield real non-zero priced dispatc...",
       "tier": "working"
     }
   },
@@ -18859,7 +18891,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T20:26:25.576084Z",
+  "updated_at": "2026-06-10T20:34:14.021806Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
