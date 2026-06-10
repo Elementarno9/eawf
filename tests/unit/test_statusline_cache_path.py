@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from eawf.runtime.runtime_counter_sidecar import sidecar_path_for_statusline_cache
 from eawf.runtime.runtimes.claude.statusline import cache_path_for
 
 
@@ -75,3 +76,10 @@ def test_cache_path_null_byte_replaced(_cache_root: Path) -> None:
     path = cache_path_for("ses\x00001")
     assert "\x00" not in path.name
     assert path.parent == _cache_root
+
+
+def test_runtime_counter_sidecar_stays_under_cache_root(_cache_root: Path) -> None:
+    sidecar_path = sidecar_path_for_statusline_cache(cache_path_for("../../escape"))
+
+    assert sidecar_path.parent == _cache_root
+    assert sidecar_path.name.endswith(".runtime-counters.json")

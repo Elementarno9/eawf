@@ -42,6 +42,11 @@ from typing import Any
 
 import orjson
 
+from eawf.runtime.runtime_counter_sidecar import (
+    RuntimeCounterSidecar,
+    sidecar_path_for_statusline_cache,
+)
+from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
 from eawf.runtime.runtimes.claude.statusline_modules import (
     context_tokens,
     git,
@@ -237,6 +242,17 @@ def _write_cached_line(session_id: str, line: str) -> None:
         logger.debug(f"_write_cached_line cache-write-failed session={session_id!r} error={exc}")
 
 
+def _write_runtime_counter_sidecar(session_id: str, claude_payload: dict[str, Any]) -> None:
+    """Persist parsed runtime counters beside the statusline cache, best-effort."""
+    if not session_id:
+        return
+    counters = parse_runtime_counters(claude_payload)
+    if counters is None:
+        return
+    path = sidecar_path_for_statusline_cache(cache_path_for(session_id))
+    RuntimeCounterSidecar(path).write(counters)
+
+
 def run_with_cache(
     *,
     workspace: Path | None,
@@ -256,6 +272,7 @@ def run_with_cache(
     claude_payload = _read_payload_from_stdin()
     session_id = claude_payload.get("session_id")
     if isinstance(session_id, str) and session_id:
+        _write_runtime_counter_sidecar(session_id, claude_payload)
         cached = _read_cached_line(session_id)
         if cached is not None:
             return cached
@@ -279,6 +296,7 @@ def prewarm(
     line = render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
     session_id = claude_payload.get("session_id")
     if isinstance(session_id, str) and session_id:
+        _write_runtime_counter_sidecar(session_id, claude_payload)
         _write_cached_line(session_id, line)
     return line
 
