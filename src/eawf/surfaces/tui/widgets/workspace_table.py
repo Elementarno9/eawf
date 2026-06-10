@@ -30,12 +30,21 @@ AND the totals row LEAD with a lifecycle sigil drawn from the shared I02
 sigils source (:func:`repo_row_sigil` / :func:`totals_row_sigil` +
 :mod:`eawf.surfaces.tui.widgets.sigils`) -- the RUNNING diamond for a repo
 with an active phase, the ABANDONED circled-slash for a stale one, the
-CLOSED circle otherwise -- and the phase-completion bar is tinted the green
-status hue (:func:`_green_hex`) so a calm row reads green. The blocker /
-stale attention chip renders as the warn marker (the
+CLOSED circle otherwise -- and the per-repo phase-completion bar is tinted
+the green status hue (:func:`_green_hex`) so a calm row reads green. The
+blocker / stale attention chip renders as the warn marker (the
 :func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``attention`` triangle,
 tinted the warn band) rather than a bare ``(blocked)`` / ``(stale)`` word,
 so a repo needing the operator reads ATTENTION-shaped at a glance.
+
+The roll-up totals row reads in the BRAND voice rather than the per-repo
+status green: its leading sigil and summed completion bar carry the brand
+accent (:func:`_brand_hex` -- the green-rotated ``$accent`` / ``$primary``
+theme var, fallback :data:`~eawf.surfaces.render.brand.ACCENT_HEX`) instead
+of the legacy band ``ok`` hue, so the summary lifts off the per-repo rows as
+the portfolio's own line rather than reading as one more repo. The totals
+EU bar keeps its consumed-fraction burn band -- that band is a meaningful
+over/under signal on the aggregate too, not the legacy status green.
 
 Every sigil + bar + chip span is baked to a concrete ``#rrggbb`` hex at
 row-build time: a :class:`textual.widgets.DataTable` ``str`` cell is
@@ -62,6 +71,7 @@ from textual.reactive import reactive
 from textual.widgets import DataTable
 
 from eawf.platform.registry.staleness import read_repo_state
+from eawf.surfaces.render.brand import ACCENT_HEX as BRAND_ACCENT_HEX
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_BAND_PALETTE,
     DEFAULT_RENDER_MODE,
@@ -511,6 +521,37 @@ def _green_hex(palette: Mapping[str, str]) -> str:
     return palette.get("ok", BAND_HEX["ok"])
 
 
+def _brand_hex(palette: Mapping[str, str]) -> str:
+    """Return the concrete brand-accent hex for the roll-up totals tint.
+
+    The reskin's brand green -- the green-rotated ``$accent`` / ``$primary``
+    palette var (``#16b384`` on the dark baseline) -- theme-resolved off the
+    palette's ``accent`` key so the brand tint tracks the active theme rather
+    than hard-coding a hex, falling back to
+    :data:`~eawf.surfaces.render.brand.ACCENT_HEX` when the active theme is
+    unavailable. The totals row carries this brand hue rather than the
+    per-repo band ``ok`` green (:func:`_green_hex`) so the roll-up reads in
+    the portfolio's own brand voice. A
+    :class:`textual.widgets.DataTable` ``str`` cell is Rich-parsed, so a
+    concrete hex -- not the ``$accent`` palette var -- is required.
+
+    Args:
+        palette: The status-tint band map (see :func:`_band_palette`); the
+            ``accent`` key carries the brand green when the theme resolves it.
+
+    Returns:
+        The concrete brand-accent ``#rrggbb`` hex.
+    """
+    return palette.get("accent", BRAND_ACCENT_HEX)
+
+
+#: The built-in band palette extended with the brand ``accent`` key, used as
+#: the default for the totals-row brand tint when no theme-resolved palette is
+#: passed (e.g. an unmounted test harness). The live render passes the
+#: theme-resolved :func:`_band_palette` map, which already carries ``accent``.
+_DEFAULT_BRAND_PALETTE: dict[str, str] = {**DEFAULT_BAND_PALETTE, "accent": BRAND_ACCENT_HEX}
+
+
 #: The chip text the warn marker trails when a repo trips the blocker
 #: threshold. Carried after the triangle so a screen reader / plain scrape
 #: still resolves which alarm fired; the substring ``blocked`` keeps the
@@ -804,6 +845,54 @@ def _green_bar_markup(bar: str, *, palette: Mapping[str, str]) -> str:
     return f"[{_green_hex(palette)}]{bar}[/]"
 
 
+def _brand_bar_markup(bar: str, *, palette: Mapping[str, str]) -> str:
+    """Wrap a plain completion-bar string in the brand-accent span.
+
+    The roll-up totals twin of :func:`_green_bar_markup`: the totals row's
+    summed completion bar carries the brand accent (:func:`_brand_hex`)
+    rather than the per-repo band ``ok`` green, so the summary reads in the
+    portfolio's own brand voice. The empty-state sentinel is left untinted --
+    there is no progress to colour, and tinting the "no data" text would
+    imply a fill that is not there. The hue is a concrete ``#rrggbb`` because
+    a :class:`textual.widgets.DataTable` ``str`` cell is Rich-parsed.
+
+    Args:
+        bar: The plain completion-bar string (or the empty-state sentinel).
+        palette: The status-tint band map (see :func:`_band_palette`).
+
+    Returns:
+        The bar wrapped in the brand-accent hex span, or the untinted
+        sentinel.
+    """
+    if bar == EMPTY_STATE:
+        return bar
+    return f"[{_brand_hex(palette)}]{bar}[/]"
+
+
+def _totals_sigil_markup(sigil: Sigil, *, mode: RenderMode, palette: Mapping[str, str]) -> str:
+    """Render the totals row's leading lifecycle sigil in the brand accent.
+
+    The roll-up twin of :func:`_sigil_hex`: the totals sigil carries the
+    brand accent (:func:`_brand_hex`) regardless of which lifecycle shape
+    (RUNNING / CLOSED) :func:`totals_row_sigil` maps it to, so the summary's
+    leading mark reads in the brand voice rather than picking up a per-repo
+    status hue. The hue is baked to a concrete ``#rrggbb`` because the
+    :class:`textual.widgets.DataTable` ``str`` cell is Rich-parsed.
+
+    Args:
+        sigil: The aggregate lifecycle mark (see :func:`totals_row_sigil`).
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+        palette: The status-tint band map (see :func:`_band_palette`); the
+            brand accent is read from its ``accent`` key.
+
+    Returns:
+        A Rich-markup span: the brand-tinted lifecycle glyph.
+    """
+    mark = glyph(sigil, mode=mode)
+    return f"[{_brand_hex(palette)}]{mark}[/]"
+
+
 def _phase_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | None = None) -> str:
     """Render *row*'s active-phase id + green status-tinted completion bar cell.
 
@@ -843,24 +932,28 @@ def _pr_cell(open_prs: int) -> str:
 
 
 def _band_palette(app: App[object]) -> dict[str, str]:
-    """Resolve the EU-burn band colours from the app's active theme.
+    """Resolve the EU-burn band + brand-accent colours from the active theme.
 
     DataTable ``str`` cells are Rich-parsed and cannot resolve the Textual
-    ``$ok`` / ``$warn`` / ``$err`` palette vars, so the tint must be baked to
-    a concrete hex at row-build time. Falls back to
-    :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_BAND_PALETTE` when the active
-    theme is unavailable (e.g. an unmounted test harness).
+    ``$ok`` / ``$warn`` / ``$err`` / ``$accent`` palette vars, so the tint
+    must be baked to a concrete hex at row-build time. The map carries the
+    three EU-burn band keys plus the ``accent`` key the totals row's brand
+    tint reads (:func:`_brand_hex`). Falls back to
+    :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_BAND_PALETTE` (and the
+    brand :data:`~eawf.surfaces.render.brand.ACCENT_HEX` for ``accent``) when
+    the active theme is unavailable (e.g. an unmounted test harness).
 
     Args:
         app: The host app whose active theme carries the palette.
 
     Returns:
-        A ``{"ok"|"warn"|"err": "#rrggbb"}`` map, theme values where present
-        and the default palette otherwise.
+        A ``{"ok"|"warn"|"err"|"accent": "#rrggbb"}`` map, theme values where
+        present and the default palette otherwise.
     """
     theme = getattr(app, "current_theme", None)
     variables = getattr(theme, "variables", None) or {}
-    return {key: variables.get(key, default) for key, default in DEFAULT_BAND_PALETTE.items()}
+    defaults = {**DEFAULT_BAND_PALETTE, "accent": BRAND_ACCENT_HEX}
+    return {key: variables.get(key, default) for key, default in defaults.items()}
 
 
 def _eu_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | None = None) -> str:
@@ -891,25 +984,27 @@ def _eu_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | Non
 def _totals_phase_cell(
     totals: PortfolioTotals, *, mode: RenderMode, palette: Mapping[str, str] | None = None
 ) -> str:
-    """Render the totals row's phase cell: the summed green status-tinted bar.
+    """Render the totals row's phase cell: the summed brand-accent-tinted bar.
 
-    Mirrors :func:`_phase_cell` shape (a leading label + a green status-tinted
-    completion bar) so the summary row lines up under the per-repo phase
-    column. The label is the repo count rather than a phase id, since the
+    Mirrors :func:`_phase_cell` shape (a leading label + a tinted completion
+    bar) so the summary row lines up under the per-repo phase column, but
+    carries the BRAND accent (:func:`_brand_bar_markup`) rather than the
+    per-repo band ``ok`` green so the roll-up reads in the portfolio's own
+    brand voice. The label is the repo count rather than a phase id, since the
     totals span every repo's active phase.
 
     Args:
         totals: The folded :class:`PortfolioTotals`.
         mode: The active bar render mode.
         palette: The status-tint band map (see :func:`_band_palette`);
-            defaults to the built-in palette when omitted.
+            defaults to the built-in palette + brand accent when omitted.
 
     Returns:
-        The totals phase cell (``<repo_count> repos <green-bar> done/total``).
+        The totals phase cell (``<repo_count> repos <brand-bar> done/total``).
     """
     bar = render_completion_bar(totals.wave_done, totals.wave_total, width=6, mode=mode)
-    colours = palette if palette is not None else DEFAULT_BAND_PALETTE
-    return f"{totals.repo_count} repos {_green_bar_markup(bar, palette=colours)}"
+    colours = palette if palette is not None else _DEFAULT_BRAND_PALETTE
+    return f"{totals.repo_count} repos {_brand_bar_markup(bar, palette=colours)}"
 
 
 def _totals_eu_cell(
@@ -1136,13 +1231,15 @@ class WorkspaceTable(DataTable[str]):
         """Append the portfolio-totals summary row under the repo rows.
 
         Folds *rows* via :func:`portfolio_totals` and renders one summary
-        row whose phase + EU cells carry the portfolio-wide green status-tinted
-        completion + EU bars and whose PR cell carries the summed open-PR
-        count. The git + age columns are blank on the summary row (no live
-        probe spans the portfolio); the repo column LEADS with the totals'
-        tinted lifecycle sigil (:func:`totals_row_sigil`) then the
-        :data:`TOTALS_ROW_LABEL` sigma, so the row reads as a roll-up that
-        lines up under the per-repo sigil column rather than as a repo.
+        row whose phase cell carries the portfolio-wide brand-accent-tinted
+        completion bar, whose EU cell carries the summed consumed-fraction
+        burn bar, and whose PR cell carries the summed open-PR count. The git
+        + age columns are blank on the summary row (no live probe spans the
+        portfolio); the repo column LEADS with the totals' brand-tinted
+        lifecycle sigil (:func:`totals_row_sigil` + :func:`_totals_sigil_markup`)
+        then the :data:`TOTALS_ROW_LABEL` sigma, so the row reads as a roll-up
+        in the brand voice that lines up under the per-repo sigil column
+        rather than as one more repo.
 
         An empty repo set adds no totals row -- there is nothing to sum, so
         the table stays at zero rows rather than rendering a ``Σ 0 repos``
@@ -1156,7 +1253,9 @@ class WorkspaceTable(DataTable[str]):
         if not rows:
             return
         totals = portfolio_totals(rows)
-        sigil = _sigil_hex(totals_row_sigil(totals), mode=self.render_mode, palette=palette)
+        sigil = _totals_sigil_markup(
+            totals_row_sigil(totals), mode=self.render_mode, palette=palette
+        )
         self.add_row(
             f"{sigil} {TOTALS_ROW_LABEL}",
             _totals_phase_cell(totals, mode=self.render_mode, palette=palette),

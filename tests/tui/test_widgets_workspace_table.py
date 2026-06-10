@@ -16,15 +16,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from eawf.surfaces.render.brand import ACCENT_HEX as BRAND_ACCENT_HEX
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_BAND_PALETTE, DEFAULT_RENDER_MODE, EMPTY_STATE
 from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 from eawf.surfaces.tui.widgets.workspace_table import (
     PortfolioTotals,
     RepoRow,
+    _brand_hex,
     _phase_cell,
     _repo_cell_markup,
     _totals_phase_cell,
+    _totals_sigil_markup,
     active_phase_completion,
     build_repo_rows,
     completion_pair,
@@ -275,8 +278,13 @@ def _flag_row(
 
 
 def _green() -> str:
-    """Return the concrete green status hex the reskin tints sigils + bars with."""
+    """Return the concrete green status hex the reskin tints per-repo sigils + bars with."""
     return DEFAULT_BAND_PALETTE["ok"]
+
+
+def _brand() -> str:
+    """Return the concrete brand-accent hex the reskin tints the totals row with."""
+    return BRAND_ACCENT_HEX
 
 
 # repo_row_sigil -- lifecycle -> sigil mapping
@@ -369,7 +377,7 @@ def test_warn_chip_markup_is_not_a_bare_word() -> None:
     assert chrome("attention", mode=DEFAULT_RENDER_MODE) in chip
 
 
-# _phase_cell / _totals_phase_cell -- green status-tinted bar
+# _phase_cell -- per-repo green status-tinted bar; _totals_phase_cell -- brand accent
 
 
 def test_phase_cell_bar_is_green_tinted() -> None:
@@ -387,12 +395,61 @@ def test_phase_cell_empty_state_is_not_tinted() -> None:
     assert f"[{_green()}]" not in cell
 
 
-def test_totals_phase_cell_bar_is_green_tinted() -> None:
-    """The totals phase cell wraps its summed completion bar in the green span."""
+def test_brand_hex_falls_back_to_brand_accent() -> None:
+    """An ``accent``-less palette resolves the brand accent fallback."""
+    assert _brand_hex({}) == BRAND_ACCENT_HEX
+
+
+def test_brand_hex_reads_accent_key() -> None:
+    """A palette carrying an ``accent`` key wins over the brand fallback."""
+    assert _brand_hex({"accent": "#123456"}) == "#123456"
+
+
+def test_totals_phase_cell_bar_is_brand_tinted() -> None:
+    """The totals phase cell wraps its summed completion bar in the brand-accent span."""
     cell = _totals_phase_cell(_totals(done=8, total=16), mode="unicode")
     assert cell.startswith("1 repos ")
-    assert f"[{_green()}]" in cell
+    assert f"[{_brand()}]" in cell
     assert "8/16" in cell
+
+
+def test_totals_phase_cell_bar_is_not_the_per_repo_green() -> None:
+    """The totals bar carries the brand accent, not the per-repo band ``ok`` green.
+
+    The brand accent (``#16b384``) and the per-repo status green (``#009e73``)
+    are distinct hexes, so the roll-up reads in the brand voice rather than as
+    one more per-repo status bar.
+    """
+    assert _brand() != _green()
+    cell = _totals_phase_cell(_totals(done=8, total=16), mode="unicode")
+    assert f"[{_green()}]" not in cell
+
+
+def test_totals_phase_cell_empty_state_is_not_tinted() -> None:
+    """A zero-wave totals phase cell leaves the empty-state sentinel untinted."""
+    cell = _totals_phase_cell(_totals(done=0, total=0), mode="unicode")
+    assert EMPTY_STATE in cell
+    assert f"[{_brand()}]" not in cell
+
+
+# _totals_sigil_markup -- the totals row's leading sigil carries the brand accent
+
+
+def test_totals_sigil_markup_carries_brand_accent() -> None:
+    """The totals sigil is tinted the brand accent regardless of lifecycle shape."""
+    running = _totals_sigil_markup(Sigil.RUNNING, mode=DEFAULT_RENDER_MODE, palette={})
+    closed = _totals_sigil_markup(Sigil.CLOSED, mode=DEFAULT_RENDER_MODE, palette={})
+    assert running == f"[{_brand()}]{glyph(Sigil.RUNNING, mode=DEFAULT_RENDER_MODE)}[/]"
+    assert closed == f"[{_brand()}]{glyph(Sigil.CLOSED, mode=DEFAULT_RENDER_MODE)}[/]"
+
+
+def test_totals_sigil_markup_not_the_per_repo_closed_green() -> None:
+    """The totals CLOSED sigil reads brand accent, not the per-repo CLOSED band green."""
+    closed = _totals_sigil_markup(
+        Sigil.CLOSED, mode=DEFAULT_RENDER_MODE, palette=DEFAULT_BAND_PALETTE
+    )
+    assert f"[{_brand()}]" in closed
+    assert f"[{_green()}]" not in closed
 
 
 # _repo_cell_markup -- leading sigil + code + warn chip
