@@ -96,6 +96,115 @@ _AFFORDANCE_PARITY_YAML = textwrap.dedent(
     """
 )
 
+# A UI transition response without transition_coverage. It still carries the
+# existing affordance_parity gate so the failure isolates the new require check.
+_TRANSITION_WITHOUT_COVERAGE_YAML = textwrap.dedent(
+    """\
+    criteria:
+      - id: CR-01
+        text: details pane transitions to edit mode; tui_pilot state assertion
+        kind: behavioral
+        acceptance_style: binary
+        evidence_kind: deterministic
+        quality_dimension: interaction_capability
+        measurable_signal: the tui pilot records the detail pane entering edit mode
+        response:
+          observe: transitions_to
+          object: details pane mode
+          locus: tui_pilot
+          expected: edit
+        gate_ids: [G-01]
+    gates:
+      - id: G-01
+        criterion_id: CR-01
+        kind: affordance_parity
+        args: {mode: home}
+        policy: block
+        cadence: every-wave
+    """
+)
+
+# A transition_coverage gate on a different criterion must not satisfy the
+# transition response criterion: the required gate belongs to the criterion
+# promising the state transition.
+_TRANSITION_COVERAGE_ON_OTHER_CRITERION_YAML = textwrap.dedent(
+    """\
+    criteria:
+      - id: CR-01
+        text: details pane transitions to edit mode; tui_pilot state assertion
+        kind: behavioral
+        acceptance_style: binary
+        evidence_kind: deterministic
+        quality_dimension: interaction_capability
+        measurable_signal: the tui pilot records the detail pane entering edit mode
+        response:
+          observe: transitions_to
+          object: details pane mode
+          locus: tui_pilot
+          expected: edit
+        gate_ids: [G-01]
+      - id: CR-02
+        text: transition coverage validates a separate wave table; tui_pilot assertion
+        kind: structural
+        acceptance_style: binary
+        evidence_kind: deterministic
+        quality_dimension: reliability
+        measurable_signal: transition_coverage validates a separate non-transition criterion
+        response:
+          observe: validates
+          object: unrelated transition table
+          locus: tui_pilot
+          gate_ref: transition_coverage
+        gate_ids: [G-02]
+    gates:
+      - id: G-01
+        criterion_id: CR-01
+        kind: affordance_parity
+        args: {mode: home}
+        policy: block
+        cadence: every-wave
+      - id: G-02
+        criterion_id: CR-02
+        kind: transition_coverage
+        args: {table: wave}
+        policy: block
+        cadence: every-wave
+    """
+)
+
+# Same typed transition response with the required transition_coverage gate.
+_TRANSITION_WITH_COVERAGE_YAML = textwrap.dedent(
+    """\
+    criteria:
+      - id: CR-01
+        text: details pane transitions to edit mode; tui_pilot state assertion
+        kind: behavioral
+        acceptance_style: binary
+        evidence_kind: deterministic
+        quality_dimension: interaction_capability
+        measurable_signal: the tui pilot records the detail pane entering edit mode
+        response:
+          observe: transitions_to
+          object: details pane mode
+          locus: tui_pilot
+          expected: edit
+        gate_ids: [G-01, G-02]
+    gates:
+      - id: G-01
+        criterion_id: CR-01
+        kind: affordance_parity
+        args: {mode: home}
+        policy: block
+        cadence: every-wave
+      - id: G-02
+        criterion_id: CR-01
+        kind: transition_coverage
+        args: {table: wave}
+        policy: block
+        cadence: every-wave
+    """
+)
+
 # A vague-signal body: ``is performant`` is a banned EAWF021 token in the
 # ``measurable_signal`` even though it clears the 20-char floor.
 _VAGUE_YAML = textwrap.dedent(
@@ -720,3 +829,71 @@ def test_sync_passes_non_ui_scope_wave_without_affordance_parity_gate(tmp_path: 
     wave = _load_wave(state_path)
     assert len(wave.gates) == 1
     assert wave.gates[0].kind == "schema_validate"
+
+
+# --------------------------------------------------------------------------- #
+# transition_coverage require-gate — a UI-scope TRANSITIONS_TO response must
+# carry a transition_coverage gate.
+# --------------------------------------------------------------------------- #
+def test_sync_transition_criterion_requires_coverage_gate(tmp_path: Path) -> None:
+    """A UI-scope ``transitions_to`` response requires transition_coverage."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(
+            status="pending",
+            planned_steps=[],
+            file_scopes=["src/eawf/surfaces/tui/screens/detail.py"],
+        ),
+    )
+    _write_spec_file(repo_root, _wrap_body(_TRANSITION_WITHOUT_COVERAGE_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="transition_coverage"):
+            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        _write_spec_file(
+            repo_root,
+            _wrap_body(_TRANSITION_COVERAGE_ON_OTHER_CRITERION_YAML),
+        )
+        with pytest.raises(DaemonValidationError, match="transition_coverage"):
+            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        _write_spec_file(repo_root, _wrap_body(_TRANSITION_WITH_COVERAGE_YAML))
+        result = await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        assert result["criteria_count"] == 1
+        assert result["gates_count"] == 2
+
+    _run(body)
+    wave = _load_wave(state_path)
+    assert len(wave.success_criteria) == 1
+    assert len(wave.gates) == 2
+    assert {gate.kind for gate in wave.gates} == {"affordance_parity", "transition_coverage"}
+
+
+def test_sync_no_transition_criterion_no_coverage_required(tmp_path: Path) -> None:
+    """A UI-scope wave without ``transitions_to`` syncs without coverage."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(
+            status="pending",
+            planned_steps=[],
+            file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
+        ),
+    )
+    _write_spec_file(repo_root, _wrap_body(_AFFORDANCE_PARITY_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        result = await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        assert result["criteria_count"] == 1
+        assert result["gates_count"] == 1
+
+    _run(body)
+    wave = _load_wave(state_path)
+    assert len(wave.gates) == 1
+    assert wave.gates[0].kind == "affordance_parity"

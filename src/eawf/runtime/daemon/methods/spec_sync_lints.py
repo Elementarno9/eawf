@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import CriterionSpec, GateSpec, ObserveVerb
 from eawf.kernel.spec.heuristics import is_ui_scope
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.platform.lint.eawf021_measurable_criterion import (
@@ -21,6 +21,7 @@ from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.workflow.propose.coverage import coverage_gaps, source_brief_coverage_gaps
 
 _AFFORDANCE_PARITY_KIND: Final[str] = "affordance_parity"
+_TRANSITION_COVERAGE_KIND: Final[str] = "transition_coverage"
 
 
 def measure_criteria(criteria: list[CriterionSpec]) -> list[MeasurabilityViolation]:
@@ -73,3 +74,31 @@ def require_affordance_parity_for_ui_scope(
         f"validation_failed: ui-scope wave {wave_id!r} requires an "
         f"{_AFFORDANCE_PARITY_KIND} gate; none found in synced gates"
     )
+
+
+def require_transition_coverage_for_ui_transitions(
+    *,
+    wave_id: str,
+    file_scopes: list[str],
+    criteria: list[CriterionSpec],
+    gates: list[GateSpec],
+) -> None:
+    """Reject a UI-scope transition criterion whose gates omit transition_coverage."""
+    if not is_ui_scope(file_scopes):
+        return
+    gate_by_id = {gate.id: gate for gate in gates}
+    for criterion in criteria:
+        if (
+            criterion.response is None
+            or criterion.response.observe is not ObserveVerb.TRANSITIONS_TO
+        ):
+            continue
+        if any(
+            gate_by_id[gate_id].kind == _TRANSITION_COVERAGE_KIND for gate_id in criterion.gate_ids
+        ):
+            continue
+        raise DaemonValidationError(
+            f"validation_failed: ui-scope wave {wave_id!r} criterion "
+            f"{criterion.id!r} has a transitions_to response and requires a "
+            f"{_TRANSITION_COVERAGE_KIND} gate; none found in criterion gates"
+        )

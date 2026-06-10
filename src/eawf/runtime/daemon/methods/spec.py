@@ -75,6 +75,7 @@ from eawf.runtime.daemon.methods.spec_sync_lints import (
     measure_criteria,
     render_lint_findings,
     require_affordance_parity_for_ui_scope,
+    require_transition_coverage_for_ui_transitions,
 )
 from eawf.runtime.daemon.methods.state import (
     _read_state,
@@ -967,7 +968,9 @@ async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         DaemonValidationError: When the spec body fails to parse, a lint
             finding rejects the criteria, the target wave is not PENDING,
             the criterion / gate cross-references do not resolve, the wave
-            is UI-scope but its gates omit an ``affordance_parity`` gate, or
+            is UI-scope but its gates omit an ``affordance_parity`` gate, a
+            UI-scope ``transitions_to`` response omits a
+            ``transition_coverage`` gate, or
             the post-mutation state fails schema / invariant validation
             (mapped to ``-32002`` so the CLI exit code matches a
             rejected mutation).
@@ -1097,8 +1100,9 @@ def _apply_sync_locked(
         DaemonValidationError: When the wave is not PENDING, a lint finding
             rejects the criteria, the cross-references do not resolve, the
             wave is UI-scope but its gates omit an ``affordance_parity`` gate,
-            or the post-mutation state fails validation (mapped to
-            ``-32002``).
+            a UI-scope ``transitions_to`` response omits a
+            ``transition_coverage`` gate, or the post-mutation state fails
+            validation (mapped to ``-32002``).
         ValueError: When the wave id is unknown (mapped to ``-32602``).
     """
     state, _payload = _read_state(state_path)
@@ -1130,6 +1134,12 @@ def _apply_sync_locked(
     require_affordance_parity_for_ui_scope(
         wave_id=args.wave_id,
         file_scopes=wave.file_scopes,
+        gates=gates,
+    )
+    require_transition_coverage_for_ui_transitions(
+        wave_id=args.wave_id,
+        file_scopes=wave.file_scopes,
+        criteria=criteria,
         gates=gates,
     )
 
