@@ -29,9 +29,11 @@ plain ``os.replace`` calls — atomic on POSIX + Windows.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import secrets
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -46,6 +48,18 @@ logger = logging.getLogger(__name__)
 
 
 _DONE_RETENTION_SECONDS_DEFAULT: int = 3600
+
+#: Default interval (seconds) between background WAL-GC sweeps. Hourly is
+#: granular enough for the 1-hour default retention window -- the sweep is a
+#: janitor for already-durable ``.fsynced.json`` records, not a hot path.
+DEFAULT_WAL_GC_INTERVAL_SECONDS: int = 3600
+
+#: Env var that overrides the WAL-GC sweep interval (seconds).
+_WAL_GC_INTERVAL_ENV: str = "EAWF_DAEMON_WAL_GC_INTERVAL"
+
+#: Env var that overrides the WAL retention window (seconds) before a
+#: fsynced record is eligible for GC.
+_WAL_RETENTION_ENV: str = "EAWF_DAEMON_WAL_RETENTION"
 
 
 class WalStatus(StrEnum):
@@ -280,7 +294,10 @@ def mark_poisoned(wal_dir: Path, record_id: str, reason: str) -> Path:
 
 
 def gc_done_records(
-    wal_dir: Path, max_age_seconds: int = _DONE_RETENTION_SECONDS_DEFAULT
+    wal_dir: Path,
+    max_age_seconds: int = _DONE_RETENTION_SECONDS_DEFAULT,
+    *,
+    now: datetime | None = None,
 ) -> list[Path]:
     """Unlink ``.fsynced.json`` files older than *max_age_seconds*.
 
@@ -295,6 +312,10 @@ def gc_done_records(
         max_age_seconds: Files whose mtime is older than ``now -
             max_age_seconds`` are unlinked. Default matches the
             retention window of 1 hour.
+        now: Reference time the cutoff anchors on. Defaults to
+            ``datetime.now(UTC)`` -- the background sweep loop injects a
+            clock so a fake-clock test can drive the boundary
+            deterministically.
 
     Returns:
         Paths that were unlinked, in lexical order. Useful for tests
@@ -302,8 +323,8 @@ def gc_done_records(
     """
     if not wal_dir.exists():
         return []
-    now = datetime.now(UTC).timestamp()
-    threshold = now - max_age_seconds
+    reference = (now or datetime.now(UTC)).timestamp()
+    threshold = reference - max_age_seconds
     removed: list[Path] = []
     for path in sorted(wal_dir.glob(f"*.{WalStatus.FSYNCED.value}.json")):
         try:
@@ -315,6 +336,127 @@ def gc_done_records(
             removed.append(path)
     logger.info(f"gc_done_records removed={len(removed)} max_age_seconds={max_age_seconds}")
     return removed
+
+
+def resolve_wal_gc_interval_seconds() -> int:
+    """Return the configured WAL-GC sweep interval in seconds.
+
+    The env var ``EAWF_DAEMON_WAL_GC_INTERVAL`` lets the operator override
+    the default for testing + tuning while the layered-config daemon reader
+    is still landing. A non-positive or unparseable override falls back to
+    :data:`DEFAULT_WAL_GC_INTERVAL_SECONDS` and logs a warning -- a
+    zero-or-negative interval must never spin a zero-sleep loop.
+
+    Returns:
+        Positive sweep interval in seconds.
+    """
+    return _resolve_positive_int_env(_WAL_GC_INTERVAL_ENV, DEFAULT_WAL_GC_INTERVAL_SECONDS)
+
+
+def resolve_wal_retention_seconds() -> int:
+    """Return the configured WAL retention window in seconds.
+
+    The env var ``EAWF_DAEMON_WAL_RETENTION`` lets the operator override the
+    default. A non-positive or unparseable override falls back to
+    :data:`_DONE_RETENTION_SECONDS_DEFAULT` and logs a warning -- a
+    zero-or-negative retention must never silently disable GC by widening
+    the window to nothing or treating every record as in-window.
+
+    Returns:
+        Positive retention window in seconds.
+    """
+    return _resolve_positive_int_env(_WAL_RETENTION_ENV, _DONE_RETENTION_SECONDS_DEFAULT)
+
+
+def _resolve_positive_int_env(env_var: str, default: int) -> int:
+    """Resolve *env_var* to a positive int, falling back to *default*.
+
+    Mirrors the daemon-main resolver pattern: read the raw value, parse it
+    as an int, and reject a non-positive or unparseable value back to
+    *default* with a warning so a misconfigured env cannot disable GC or
+    spin a zero-interval loop.
+
+    Args:
+        env_var: Environment variable name to read.
+        default: Fallback when the var is unset, unparseable, or
+            non-positive.
+
+    Returns:
+        The parsed positive int, or *default*.
+    """
+    raw = os.environ.get(env_var)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(f"_resolve_positive_int_env unparseable env={env_var!r} raw={raw!r}")
+        return default
+    if value <= 0:
+        logger.warning(f"_resolve_positive_int_env non-positive env={env_var!r} raw={raw!r}")
+        return default
+    return value
+
+
+async def run_wal_gc_loop(
+    *,
+    wal_dir: Path,
+    retention_seconds: int = _DONE_RETENTION_SECONDS_DEFAULT,
+    interval_seconds: int = DEFAULT_WAL_GC_INTERVAL_SECONDS,
+    stop_event: asyncio.Event | None = None,
+    now: Callable[[], datetime] | None = None,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    """Sweep aged ``.fsynced.json`` WAL records on a loop until stopped.
+
+    Each tick unlinks fsynced records older than *retention_seconds* via
+    :func:`gc_done_records`, then waits *interval_seconds* (or exits early
+    when *stop_event* is set). The WAL would otherwise grow unbounded:
+    nothing GCs the durable-and-eligible records once the daemon is past
+    the active-recovery window for each mutation.
+
+    Args:
+        wal_dir: Directory the WAL lives under.
+        retention_seconds: Records older than this are swept. Defaults to
+            :data:`_DONE_RETENTION_SECONDS_DEFAULT`.
+        interval_seconds: Seconds between sweeps. Defaults to
+            :data:`DEFAULT_WAL_GC_INTERVAL_SECONDS`.
+        stop_event: When set, the loop exits at the next tick. ``None``
+            means the loop runs forever -- used by the daemon main
+            entrypoint, never by tests.
+        now: Clock factory injected for deterministic fake-clock tests;
+            forwarded to :func:`gc_done_records`. Defaults to wall clock.
+        sleep: Sleep coroutine factory used only when *stop_event* is
+            ``None``; the stop-event path waits on the event instead.
+
+    Raises:
+        ValueError: When ``interval_seconds`` or ``retention_seconds`` is
+            non-positive -- the caller must resolve a positive window so
+            the loop cannot spin or disable GC.
+    """
+    if interval_seconds <= 0:
+        raise ValueError(f"interval_seconds must be positive: {interval_seconds!r}")
+    if retention_seconds <= 0:
+        raise ValueError(f"retention_seconds must be positive: {retention_seconds!r}")
+    stop = stop_event
+    while stop is None or not stop.is_set():
+        try:
+            gc_done_records(
+                wal_dir,
+                retention_seconds,
+                now=now() if now is not None else None,
+            )
+        except Exception:
+            logger.exception("run_wal_gc_loop sweep failed; will retry next tick")
+        if stop is None:
+            await sleep(interval_seconds)
+            continue
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
+        except TimeoutError:
+            continue
+        else:
+            return
 
 
 def list_records(wal_dir: Path, status: WalStatus | None = None) -> list[Path]:
@@ -372,6 +514,7 @@ def read_record(path: Path) -> WalRecord:
 
 
 __all__ = [
+    "DEFAULT_WAL_GC_INTERVAL_SECONDS",
     "WalRecord",
     "WalStatus",
     "gc_done_records",
@@ -381,5 +524,8 @@ __all__ = [
     "mark_fsynced",
     "mark_poisoned",
     "read_record",
+    "resolve_wal_gc_interval_seconds",
+    "resolve_wal_retention_seconds",
+    "run_wal_gc_loop",
     "write_pending",
 ]

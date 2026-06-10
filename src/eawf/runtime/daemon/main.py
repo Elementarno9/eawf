@@ -48,6 +48,11 @@ from eawf.runtime.daemon.stale_wave import (
 from eawf.runtime.daemon.stale_wave import (
     run_sweep_loop as run_stale_wave_loop,
 )
+from eawf.runtime.daemon.wal import (
+    resolve_wal_gc_interval_seconds,
+    resolve_wal_retention_seconds,
+    run_wal_gc_loop,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +218,34 @@ def _schedule_stale_wave_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
     )
 
 
+def _schedule_wal_gc_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
+    """Schedule the WAL garbage-collection sweep loop on the running loop.
+
+    The sweep unlinks fsynced WAL records older than the retention window
+    once per interval so the WAL does not grow unbounded. Returns ``None``
+    when the context lacks a WAL directory (unit-test daemonless paths) so
+    the caller can elide the teardown step.
+
+    Args:
+        ctx: Live :class:`MethodContext` with a wired ``shutdown_event``
+            and (optionally) ``wal_dir``.
+
+    Returns:
+        The scheduled task, or ``None`` when no WAL directory is wired.
+    """
+    if ctx.wal_dir is None:
+        return None
+    assert isinstance(ctx.shutdown_event, asyncio.Event)
+    return asyncio.create_task(
+        run_wal_gc_loop(
+            wal_dir=Path(ctx.wal_dir),
+            retention_seconds=resolve_wal_retention_seconds(),
+            interval_seconds=resolve_wal_gc_interval_seconds(),
+            stop_event=ctx.shutdown_event,
+        )
+    )
+
+
 def _write_pid_file(path: Path, pid: int, started_at: str) -> None:
     """Atomically write the daemon PID file.
 
@@ -288,6 +321,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     ttl_task = _schedule_session_ttl_sweep(ctx)
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
+    wal_gc_task = _schedule_wal_gc_sweep(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
@@ -302,6 +336,10 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
             stale_wave_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await stale_wave_task
+        if wal_gc_task is not None:
+            wal_gc_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await wal_gc_task
         server.close()
         await server.wait_closed()
 
@@ -338,6 +376,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     watchdog_task = asyncio.create_task(watchdog.run(ctx.shutdown_event))
     ttl_task = _schedule_session_ttl_sweep(ctx)
     stale_wave_task = _schedule_stale_wave_sweep(ctx)
+    wal_gc_task = _schedule_wal_gc_sweep(ctx)
     try:
         await ctx.shutdown_event.wait()
     finally:
@@ -352,6 +391,10 @@ async def _run_windows_server(ctx: MethodContext) -> None:
             stale_wave_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await stale_wave_task
+        if wal_gc_task is not None:
+            wal_gc_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await wal_gc_task
         pipe_server.stop()
 
 
