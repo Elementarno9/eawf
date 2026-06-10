@@ -37,10 +37,14 @@ from typing import TYPE_CHECKING, Literal, cast
 from eawf.surfaces.render.snapshot_normalize import normalize_snapshot
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from textual.app import App
+    from textual.dom import DOMNode
     from textual.pilot import Pilot
+
+    from eawf.kernel.state.models import State
 
 #: Env var that, when set to ``"1"``, makes :func:`assert_screen_snapshot`
 #: (re)write the golden fixture from the live capture instead of
@@ -61,6 +65,13 @@ _SETTLE_MAX_CYCLES: int = 20
 #: cap only guards against an unbounded log dump if the two frames diverge
 #: wholesale (e.g. an empty capture vs a populated golden).
 _DRIFT_DIFF_MAX_LINES: int = 200
+
+#: Upper bound on the mtime-poll backstop pump cycles. A tight poll cadence
+#: (set via ``EAWF_POLL_INTERVAL_S``) ticks within a couple of message-pump
+#: turns once the on-disk mtime advances; this cap keeps
+#: :func:`tick_poll_backstop` from hanging if the binder's poll loop never
+#: delivers (e.g. the daemon push path is live and the mtime never bumps).
+_POLL_BACKSTOP_MAX_CYCLES: int = 40
 
 
 async def settle_screen(pilot: Pilot[object]) -> str:
@@ -94,6 +105,110 @@ async def settle_screen(pilot: Pilot[object]) -> str:
             return current
         previous = current
     return previous
+
+
+async def push_state_revision(pilot: Pilot[object], new_state: State) -> str:
+    """Push a fresh state revision through the App's daemon-push seam, settle.
+
+    Models the daemon ``state.subscribe`` push leg without a live daemon: a
+    fresh :class:`~eawf.kernel.state.models.State` is delivered through the
+    App's ``_on_state`` hook (the same coroutine the binder marshals every
+    push and poll refresh through), then the frame is pumped to rest. A pane
+    that watches the App reactive ``state`` re-renders off this push WITHOUT
+    an app restart -- the live-behaviour the project's TUI-staleness lesson
+    pins for the push leg.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from ``app.run_test()``.
+        new_state: The fresh read-only state revision to deliver.
+
+    Returns:
+        The settled, normalised screen text after the push lands.
+
+    Raises:
+        AttributeError: When the mounted app exposes no ``_on_state`` push
+            hook (i.e. it is not an :class:`~eawf.surfaces.tui.app.EaApp`),
+            so the probe is not silently a no-op against a bare host.
+    """
+    on_state = getattr(pilot.app, "_on_state", None)
+    if not callable(on_state):
+        raise AttributeError("app exposes no _on_state push hook")
+    await on_state(new_state)
+    return await settle_screen(pilot)
+
+
+async def tick_poll_backstop(
+    pilot: Pilot[object],
+    state_path: Path,
+    new_state: State,
+) -> str:
+    """Advance the on-disk state + let the always-on mtime-poll backstop fire.
+
+    Models the poll backstop the project's TUI-staleness lesson pins BESIDE
+    the push: writes *new_state* to *state_path* (advancing its mtime) and
+    pumps the message loop until the binder's mtime-gated poll loop re-reads
+    the file and delivers the revision through ``_on_state`` -- without any
+    daemon push. Drive this under a tight poll cadence (set
+    ``EAWF_POLL_INTERVAL_S`` to a small value before constructing the App)
+    so the loop ticks within :data:`_POLL_BACKSTOP_MAX_CYCLES` pump cycles
+    rather than the production interval.
+
+    The mtime write is the only state mutation a test performs; it writes a
+    fixture path, never the daemon's live ``state.json`` (AGENTS rule 4), so
+    the read-only binder contract is preserved.
+
+    Args:
+        pilot: The live :class:`~textual.pilot.Pilot` from ``app.run_test()``.
+        state_path: The fixture ``state.json`` the App's binder polls.
+        new_state: The fresh revision to write to disk for the poll to read.
+
+    Returns:
+        The settled, normalised screen text after the poll-driven refresh.
+    """
+    state_path.write_text(new_state.model_dump_json(), encoding="utf-8")
+    poll_interval = float(os.environ.get("EAWF_POLL_INTERVAL_S", "2.0"))
+    settled = normalize_snapshot(capture_screen_text(pilot.app))
+    for _ in range(_POLL_BACKSTOP_MAX_CYCLES):
+        # Sleep past one poll cadence so the binder's mtime-gated loop wakes,
+        # re-reads the advanced file, and delivers via _on_state; pump after
+        # so the watcher-driven recompose lands before the next capture.
+        await asyncio.sleep(poll_interval)
+        current = await settle_screen(pilot)
+        if current != settled:
+            return current
+        settled = current
+    return settled
+
+
+def mutating_action_keys_resolve(
+    *,
+    bindings: Iterable[tuple[str, str]],
+    namespace: DOMNode,
+) -> dict[str, bool]:
+    """Map each declared (key, action) binding to whether its handler is real.
+
+    The project's TUI-action lesson: a bound key whose ``action_<name>``
+    method is missing on its resolving namespace is a SILENT no-op (the key
+    fires nothing). This probe checks each declared binding against the
+    namespace that owns it (the focused screen or the App), returning
+    ``True`` only when a callable ``action_<name>`` handler exists -- so a
+    test can assert every mutating key resolves to a non-no-op handler.
+
+    Args:
+        bindings: Pairs of (key, action_name) declared by the surface, e.g.
+            ``[("k", "cancel_session")]`` for the agent-watch cancel verb.
+        namespace: The DOM node the bound key resolves its action against
+            (typically the mounted screen, falling through to the App).
+
+    Returns:
+        A ``{key: resolved}`` map; ``resolved`` is ``True`` iff a callable
+        ``action_<action_name>`` handler exists on *namespace*.
+    """
+    resolved: dict[str, bool] = {}
+    for key, action_name in bindings:
+        handler = getattr(namespace, f"action_{action_name}", None)
+        resolved[key] = callable(handler)
+    return resolved
 
 
 def capture_screen_text(app: App[object]) -> str:
@@ -307,6 +422,9 @@ __all__ = [
     "capture_mockup_golden_screen_text_sync",
     "capture_screen_text",
     "mockup_golden_diff_detail",
+    "mutating_action_keys_resolve",
     "normalize_snapshot",
+    "push_state_revision",
     "settle_screen",
+    "tick_poll_backstop",
 ]
