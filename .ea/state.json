@@ -4920,6 +4920,30 @@
       "status": "done",
       "updated_at": "2026-06-10T19:51:59.655977Z"
     },
+    "P30-I06-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W06",
+      "scope_id": "P30-I06-W06",
+      "status": "done",
+      "updated_at": "2026-06-10T19:59:53.314491Z"
+    },
+    "P30-I06-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W07",
+      "scope_id": "P30-I06-W07",
+      "status": "done",
+      "updated_at": "2026-06-10T20:10:11.228246Z"
+    },
     "P30-I06-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -15833,6 +15857,32 @@
       "scope_id": "P30-I06-W05",
       "updated_at": "2026-06-10T18:45:21.780806Z"
     },
+    "P30-I06-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W06-bucket-20260610T195307Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I06-W06",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I06-W06",
+      "updated_at": "2026-06-10T19:53:07.360083Z"
+    },
+    "P30-I06-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W07-bucket-20260610T200015Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I06-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I06-W07",
+      "updated_at": "2026-06-10T20:00:15.334689Z"
+    },
     "P30-I06-W09": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I06-W09-bucket-20260610T190437Z",
@@ -18758,7 +18808,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T19:51:59.656166Z",
+  "updated_at": "2026-06-10T20:10:11.228462Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -75161,10 +75211,10 @@
     "P30-I06-W06": {
       "agent_role": "auditor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i06-w06",
+      "claimed_at": "2026-06-10T19:53:07.353681Z",
+      "closed_at": "2026-06-10T19:59:53.314491Z",
+      "commit": "58d1c196574b8fa9be3e1fc50386fd54c2360b18",
       "deps": [
         "P30-I06-W05"
       ],
@@ -75173,19 +75223,21 @@
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/workflow/dispatch/renderer.py",
-        "src/eawf/workflow/agents/specs/models.py"
+        "src/eawf/workflow/agents/specs/models.py",
+        "src/eawf/workflow/dispatch/__init__.py",
+        "tests/unit/test_dispatch_role_tier.py"
       ],
       "gates": [],
       "id": "P30-I06-W06",
       "intent": null,
       "iter_id": "P30-I06",
       "opened_at": "2026-06-09T12:29:17.776857Z",
-      "outcome": null,
+      "outcome": "Role render tier honours a raising token budget (RoleTierBudgetError, no truncation, overridable cap) + per-role injection isolation proven. 41 targeted + 737 broad green, mypy/ruff/import-budget clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -75227,10 +75279,10 @@
         "P30-I12-W01",
         "P30-I12-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i06-w07",
+      "claimed_at": "2026-06-10T20:00:15.334561Z",
+      "closed_at": "2026-06-10T20:10:11.228246Z",
+      "commit": "b070c6d9583e318833d616a5e57a438f48f66ca8",
       "deps": [
         "P30-I06-W01",
         "P30-I06-W02"
@@ -75241,19 +75293,22 @@
       "file_scopes": [
         "src/eawf/workflow/dispatch/retry.py",
         "src/eawf/runtime/daemon/methods/state.py",
-        "src/eawf/workflow/verify/oracle.py"
+        "src/eawf/workflow/verify/oracle.py",
+        "tests/workflow/dispatch/test_repair_dispatch.py",
+        "tests/unit/verify/test_run_oracle.py",
+        "tests/unit/daemon/test_close_gate_oracle.py"
       ],
       "gates": [],
       "id": "P30-I06-W07",
       "intent": null,
       "iter_id": "P30-I06",
       "opened_at": "2026-06-09T12:29:17.802556Z",
-      "outcome": null,
+      "outcome": "Grounded + bounded repair re-dispatch: build_repair_prompt requires criterion text + non-empty failing payload (raises otherwise); repair_until_resolved bounded by cap (raises RetryExhaustedError); close gate raises structured WaveCloseRefusalError carrying the grounded detail. Also fixed the W09 needs_user-advisory unit test. 54 targeted green, mypy/ruff clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
