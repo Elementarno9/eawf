@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import logging.handlers
 import os
 import signal
 import sys
@@ -61,6 +62,16 @@ logger = logging.getLogger(__name__)
 #: with the Anthropic prompt-cache TTL so a CLI that consults the
 #: daemon every five minutes keeps it warm.
 DEFAULT_IDLE_TIMEOUT_SECONDS: float = 300.0
+
+#: Default per-file size cap for the rotating ``eawfd.log`` handler. At
+#: 16 MiB a long-lived daemon rolls a handful of backups instead of
+#: growing the live log unbounded across weeks of uptime.
+DEFAULT_DAEMON_LOG_MAX_BYTES: int = 16 * 1024 * 1024
+
+#: Default number of rolled ``eawfd.log.N`` backups the rotating handler
+#: retains; older backups are unlinked so total log footprint stays
+#: bounded at roughly ``(backup_count + 1) * max_bytes``.
+DEFAULT_DAEMON_LOG_BACKUP_COUNT: int = 5
 
 
 def _resolve_idle_timeout() -> float:
@@ -129,6 +140,57 @@ def _resolve_stale_wave_seconds() -> int:
     if value <= 0:
         logger.warning(f"_resolve_stale_wave_seconds non-positive raw={raw!r}; using default")
         return DEFAULT_ABSOLUTE_BACKSTOP_SECONDS
+    return value
+
+
+def _resolve_log_max_bytes() -> int:
+    """Return the per-file size cap for the rotating ``eawfd.log`` handler.
+
+    The env var ``EAWF_DAEMON_LOG_MAX_BYTES`` lets the operator (and the
+    rotation test) override the default while the layered-config daemon
+    reader is still landing. A non-positive or unparseable override falls
+    back to :data:`DEFAULT_DAEMON_LOG_MAX_BYTES` and logs a warning -- a
+    zero cap would disable rotation and let the live log grow unbounded.
+
+    Returns:
+        Positive per-file byte cap.
+    """
+    raw = os.environ.get("EAWF_DAEMON_LOG_MAX_BYTES")
+    if not raw:
+        return DEFAULT_DAEMON_LOG_MAX_BYTES
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(f"_resolve_log_max_bytes unparseable raw={raw!r}; using default")
+        return DEFAULT_DAEMON_LOG_MAX_BYTES
+    if value <= 0:
+        logger.warning(f"_resolve_log_max_bytes non-positive raw={raw!r}; using default")
+        return DEFAULT_DAEMON_LOG_MAX_BYTES
+    return value
+
+
+def _resolve_log_backup_count() -> int:
+    """Return the number of rolled ``eawfd.log.N`` backups to retain.
+
+    The env var ``EAWF_DAEMON_LOG_BACKUP_COUNT`` overrides the default for
+    tests and operator tuning. A non-positive or unparseable override falls
+    back to :data:`DEFAULT_DAEMON_LOG_BACKUP_COUNT` and logs a warning -- a
+    zero count would leave only the live log and discard rolled history.
+
+    Returns:
+        Positive backup-file count.
+    """
+    raw = os.environ.get("EAWF_DAEMON_LOG_BACKUP_COUNT")
+    if not raw:
+        return DEFAULT_DAEMON_LOG_BACKUP_COUNT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(f"_resolve_log_backup_count unparseable raw={raw!r}; using default")
+        return DEFAULT_DAEMON_LOG_BACKUP_COUNT
+    if value <= 0:
+        logger.warning(f"_resolve_log_backup_count non-positive raw={raw!r}; using default")
+        return DEFAULT_DAEMON_LOG_BACKUP_COUNT
     return value
 
 
@@ -268,6 +330,11 @@ def _configure_logging(foreground: bool) -> None:
     tokens (an unscrubbed ``error_detail`` / ``session_log_path`` would
     otherwise leak the operator's absolute paths into the log).
 
+    The file branch uses a :class:`logging.handlers.RotatingFileHandler`
+    so ``eawfd.log`` rolls at ``EAWF_DAEMON_LOG_MAX_BYTES`` (default
+    16 MiB) and retains ``EAWF_DAEMON_LOG_BACKUP_COUNT`` backups (default
+    5) instead of growing unbounded across a long-lived daemon.
+
     Args:
         foreground: When True, logs go to stderr; otherwise to
             ``<runtime_dir>/eawfd.log``.
@@ -287,7 +354,12 @@ def _configure_logging(foreground: bool) -> None:
     # holds the PID file, socket, log, and WAL — all embed operator paths).
     log_file.parent.mkdir(parents=True, exist_ok=True)
     harden_runtime_dir(log_file.parent)
-    handler = logging.FileHandler(log_file, encoding="utf-8")
+    handler = logging.handlers.RotatingFileHandler(
+        log_file,
+        maxBytes=_resolve_log_max_bytes(),
+        backupCount=_resolve_log_backup_count(),
+        encoding="utf-8",
+    )
     handler.setFormatter(logging.Formatter(fmt))
     handler.addFilter(SensitiveScrubber())
     root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
