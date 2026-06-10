@@ -17,11 +17,11 @@ def test_parse_runtime_counters_real_status_payload() -> None:
     payload = {
         "hook_event_name": "Status",
         "session_id": "abc123",
-        "cwd": "/workspace/project",
+        "cwd": "workspace/project",
         "model": {"id": "claude-opus-4-1", "display_name": "Opus"},
         "workspace": {
-            "current_dir": "/workspace/project",
-            "project_dir": "/workspace/project",
+            "current_dir": "workspace/project",
+            "project_dir": "workspace/project",
         },
         "version": "2.1.153",
         "cost": {
