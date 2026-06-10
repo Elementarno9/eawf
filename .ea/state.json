@@ -4859,6 +4859,18 @@
       "scope_id": "P30-I05-W16",
       "status": "done",
       "updated_at": "2026-06-10T16:04:05.734107Z"
+    },
+    "P30-I06-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W01",
+      "scope_id": "P30-I06-W01",
+      "status": "done",
+      "updated_at": "2026-06-10T18:29:29.458771Z"
     }
   },
   "agent_sessions": {
@@ -7922,7 +7934,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I06",
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -15695,6 +15707,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I05-W16",
       "updated_at": "2026-06-10T15:56:49.392525Z"
+    },
+    "P30-I06-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W01-bucket-20260610T180505Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I06-W01",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I06-W01",
+      "updated_at": "2026-06-10T18:05:05.990130Z"
     }
   },
   "goals": {
@@ -17428,7 +17453,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753513Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Fleet substrate — bind the eawf-spawned dispatch fleet + prove it fires",
       "trigger": "none",
       "wave_ids": [
@@ -18607,7 +18632,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T16:41:26.117594Z",
+  "updated_at": "2026-06-10T18:29:29.458978Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74680,10 +74705,10 @@
         "P30-I06-W08",
         "P30-I06-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i06-w01",
+      "claimed_at": "2026-06-10T18:05:05.990008Z",
+      "closed_at": "2026-06-10T18:29:29.458771Z",
+      "commit": "ec09babb452d9558a652bb1d1ddd391169f51051",
       "deps": [],
       "description": "Drive assist_with_schema over the spawned executor's real text to populate ExecutorReportBody, replacing the synthetic body emit_agent_end_report mints, so the report carries the agent's word on every agent.dispatch(spawn=True).",
       "dispatch_history": [],
@@ -74692,19 +74717,23 @@
         "src/eawf/runtime/daemon/methods/agent.py",
         "src/eawf/workflow/dispatch/llm_assist.py",
         "src/eawf/runtime/daemon/dispatch_runner.py",
-        "src/eawf/kernel/store/kinds/agent_report.py"
+        "src/eawf/kernel/store/kinds/agent_report.py",
+        "tests/daemon/test_spawn_executor_report_binding.py",
+        "tests/daemon/test_live_spawn_dispatch.py",
+        "tests/daemon/test_spawn_deny_list.py",
+        "tests/daemon/test_cross_vendor_spawn_integ.py"
       ],
       "gates": [],
       "id": "P30-I06-W01",
       "intent": null,
       "iter_id": "P30-I06",
       "opened_at": "2026-06-09T12:29:17.760894Z",
-      "outcome": null,
+      "outcome": "Bound live-spawn output to a validated ExecutorReportBody via assist_with_schema; synthetic body bypassed on the spawn path, exhaustion raises LLMAssistError with no synthetic row. agent.py + dispatch_runner.py + 4 test files; 34 focused + 2246 broad green, mypy/ruff clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
