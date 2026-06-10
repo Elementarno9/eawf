@@ -5028,6 +5028,18 @@
       "status": "done",
       "updated_at": "2026-06-10T21:18:41.670382Z"
     },
+    "P30-I07-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W06",
+      "scope_id": "P30-I07-W06",
+      "status": "done",
+      "updated_at": "2026-06-10T21:23:27.720852Z"
+    },
     "P30-I07-W10": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8123,8 +8135,8 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I07-W06",
-      "P30-I07-W11"
+      "P30-I07-W11",
+      "P30-I07-W05"
     ],
     "iter_id": "P30-I07",
     "phase_id": "P30",
@@ -16082,6 +16094,19 @@
       "scope_id": "P30-I07-W04",
       "updated_at": "2026-06-10T21:15:07.406582Z"
     },
+    "P30-I07-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W05-bucket-20260610T211901Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I07-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I07-W05",
+      "updated_at": "2026-06-10T21:19:01.749826Z"
+    },
     "P30-I07-W06": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I07-W06-bucket-20260610T210548Z",
@@ -19045,7 +19070,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T21:18:41.670554Z",
+  "updated_at": "2026-06-10T21:23:27.721079Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -75982,8 +76007,8 @@
         "P30-I07-W13",
         "P30-I07-W12"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w05",
+      "claimed_at": "2026-06-10T21:19:01.749656Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -76006,7 +76031,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76036,8 +76061,8 @@
       ],
       "claim_session_id": "flow-p30-i07-w06",
       "claimed_at": "2026-06-10T21:05:48.020946Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T21:23:27.720852Z",
+      "commit": "c1fa2e6b60005d328e76039d035e7b58e643d070",
       "deps": [],
       "description": "Add a multi-select state to the autopilot frontier reusing the MultichoiceChecklist [X]/[ ] toggle primitive over the compute_ready_frontier ready rows, producing a typed FleetSelection (the set of selected ready WaveFrontierItem ids) the dispatch action consumes. Arrows drive the cursor; Space toggles; Enter commits.",
       "dispatch_history": [],
@@ -76051,12 +76076,12 @@
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.762415Z",
-      "outcome": null,
+      "outcome": "Multi-select wave-claim shell over the ready frontier: m opens a reused MultichoiceChecklist seeded from compute_ready_frontier, Space toggles [X], non-ready waves never selectable, live space->pause preserved. 43+133 tests green, mypy/ruff clean. Cherry-picked from worktree.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
