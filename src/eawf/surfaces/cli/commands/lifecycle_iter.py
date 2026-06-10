@@ -12,6 +12,7 @@ owns the iter-bump-hint heuristic. The phase command bodies live in
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
@@ -547,13 +548,73 @@ def iter_open_cmd(
     )
 
 
+def _archive_iter_specs_after_close(
+    ctx: typer.Context,
+    *,
+    iter_id: str,
+    flags: GlobalFlags,
+) -> None:
+    """Force-archive every wave spec under *iter_id* after a successful close.
+
+    Reads the freshly-closed state read-only, resolves the iter's wave scope
+    ids + the active project code, and routes the batch through the W08
+    force-archive path (:func:`~eawf.workflow.lifecycle.spec_archive.archive_specs_for_scopes`).
+    A wave with no spec cache row (or an already-archived row) is skipped, so
+    the cascade is idempotent. Archive failures surface the canonical error
+    envelope without un-doing the close (the iter is already closed).
+    """
+    from eawf.surfaces.cli.commands.lifecycle import _load_state_readonly
+    from eawf.workflow.lifecycle.spec_archive import archive_specs_for_scopes
+
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, _ = loaded
+    it = state.iters.get(iter_id)
+    if it is None or not it.wave_ids:
+        return
+    repo_code = state.current.project_code
+    if repo_code is None:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "cannot archive specs: state.current.project_code is unset", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+        return
+    repo_root = (flags.workspace or Path.cwd()).resolve()
+    try:
+        archived = archive_specs_for_scopes(
+            list(it.wave_ids),
+            repo_code=repo_code,
+            repo_root=repo_root,
+        )
+    except ValueError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
+        return
+    logger.info(f"archive_iter_specs iter={iter_id} archived={len(archived)}")
+
+
 @iter_app.command("close")
 def iter_close_cmd(
     ctx: typer.Context,
     iter_id: Annotated[str, typer.Argument(help="Iter ID to close.")],
     audit: Annotated[str, typer.Option("--audit", help="Audit ID providing closure evidence.")],
+    archive_specs: Annotated[
+        bool,
+        typer.Option(
+            "--archive-specs",
+            help="After close, git-remove + ARCHIVE every wave spec under the iter.",
+        ),
+    ] = False,
 ) -> None:
-    """Close an active iter. Rejects when child waves are still open."""
+    """Close an active iter. Rejects when child waves are still open.
+
+    With ``--archive-specs`` the close runs a post-close cascade: every wave
+    spec under the iter is git-removed, its cache row flipped to ``ARCHIVED``,
+    and its blob SHA recorded so ``eawf spec show <urn> --from-git`` recovers
+    the body. Without the flag the specs stay untouched.
+    """
     from eawf.workflow.lifecycle.transitions import close_iter
 
     flags: GlobalFlags = ctx.obj
@@ -575,6 +636,8 @@ def iter_close_cmd(
         mutation_kind=MutationKind.ITER_CLOSE,
         params={"iter_id": iter_id, "audit_id": audit},
     )
+    if archive_specs:
+        _archive_iter_specs_after_close(ctx, iter_id=iter_id, flags=flags)
 
 
 @iter_app.command("candidate-tag")
