@@ -5052,6 +5052,18 @@
       "status": "done",
       "updated_at": "2026-06-10T21:23:27.720852Z"
     },
+    "P30-I07-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W08",
+      "scope_id": "P30-I07-W08",
+      "status": "done",
+      "updated_at": "2026-06-10T21:48:24.016081Z"
+    },
     "P30-I07-W10": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5075,6 +5087,18 @@
       "scope_id": "P30-I07-W11",
       "status": "done",
       "updated_at": "2026-06-10T21:26:50.242094Z"
+    },
+    "P30-I14-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W05",
+      "scope_id": "P30-I14-W05",
+      "status": "done",
+      "updated_at": "2026-06-10T21:58:22.979491Z"
     }
   },
   "agent_sessions": {
@@ -8160,9 +8184,15 @@
     ],
     "active_wave_ids": [
       "P30-I07-W07",
-      "P30-I07-W08"
+      "P30-I07-W13",
+      "P30-I07-W15",
+      "P30-I07-W09",
+      "P30-I14-W10",
+      "P30-I08-W01",
+      "P30-I14-W08",
+      "P30-I14-W01"
     ],
-    "iter_id": "P30-I07",
+    "iter_id": "P30-I08",
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -8758,7 +8788,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -16170,6 +16200,19 @@
       "scope_id": "P30-I07-W08",
       "updated_at": "2026-06-10T21:23:36.295626Z"
     },
+    "P30-I07-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W09-bucket-20260610T214847Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I07-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I07-W09",
+      "updated_at": "2026-06-10T21:48:47.289809Z"
+    },
     "P30-I07-W10": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I07-W10-bucket-20260610T210548Z",
@@ -16195,6 +16238,97 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I07-W11",
       "updated_at": "2026-06-10T21:15:07.927658Z"
+    },
+    "P30-I07-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W13-bucket-20260610T212725Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I07-W13",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I07-W13",
+      "updated_at": "2026-06-10T21:27:25.761362Z"
+    },
+    "P30-I07-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W15-bucket-20260610T212726Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I07-W15",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I07-W15",
+      "updated_at": "2026-06-10T21:27:26.263155Z"
+    },
+    "P30-I08-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I08-W01-bucket-20260610T215623Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I08-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I08-W01",
+      "updated_at": "2026-06-10T21:56:23.874429Z"
+    },
+    "P30-I14-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W01-bucket-20260610T215624Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I14-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I14-W01",
+      "updated_at": "2026-06-10T21:56:24.963362Z"
+    },
+    "P30-I14-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W05-bucket-20260610T215344Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I14-W05",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I14-W05",
+      "updated_at": "2026-06-10T21:53:44.849559Z"
+    },
+    "P30-I14-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W08-bucket-20260610T215624Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I14-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I14-W08",
+      "updated_at": "2026-06-10T21:56:24.432272Z"
+    },
+    "P30-I14-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W10-bucket-20260610T215345Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I14-W10",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I14-W10",
+      "updated_at": "2026-06-10T21:53:45.396674Z"
     }
   },
   "goals": {
@@ -17987,7 +18121,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753610Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Multi-scope dashboards — workspace + user scope reskin",
       "trigger": "none",
       "wave_ids": [
@@ -18141,7 +18275,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753875Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Cleanup — cap unbounded growth, normalize artifact paths, spec lifecycle",
       "trigger": "none",
       "wave_ids": [
@@ -19120,7 +19254,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T21:26:50.242288Z",
+  "updated_at": "2026-06-10T21:58:22.979719Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -76212,8 +76346,8 @@
       ],
       "claim_session_id": "flow-p30-i07-w08",
       "claimed_at": "2026-06-10T21:23:36.295084Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T21:48:24.016081Z",
+      "commit": "74fd28276aa1c8e17b2d2137a008bf223a631b23",
       "deps": [
         "P30-I07-W06"
       ],
@@ -76228,12 +76362,12 @@
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.780078Z",
-      "outcome": null,
+      "outcome": "Parallel multi-session watch grid (WatchGrid+WatchTile): two ACTIVE executors route one event each to own tile only; zero sessions -> EMPTY_NOTICE; daemon-unreachable -> WATCH_DEGRADED; single-session zoom preserved. 42 tests green, mypy/ruff clean, 971 LOC. Cherry-picked from worktree.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76261,8 +76395,8 @@
         "P30-I07-W12",
         "P30-I07-W14"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w09",
+      "claimed_at": "2026-06-10T21:48:47.289415Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -76285,7 +76419,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76460,8 +76594,8 @@
     "P30-I07-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w13",
+      "claimed_at": "2026-06-10T21:27:25.761237Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -76484,7 +76618,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76560,8 +76694,8 @@
       "blocks": [
         "P30-I13-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w15",
+      "claimed_at": "2026-06-10T21:27:26.262751Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -76583,7 +76717,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76706,8 +76840,8 @@
       "blocks": [
         "P30-I08-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i08-w01",
+      "claimed_at": "2026-06-10T21:56:23.874171Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -76727,7 +76861,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80257,8 +80391,8 @@
         "P30-I14-W02",
         "P30-I14-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i14-w01",
+      "claimed_at": "2026-06-10T21:56:24.962841Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -80280,7 +80414,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80467,16 +80601,16 @@
         "P30-I14-W06",
         "P30-I14-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i14-w05",
+      "claimed_at": "2026-06-10T21:53:44.849097Z",
+      "closed_at": "2026-06-10T21:58:22.979491Z",
+      "commit": "74fd28276aa1c8e17b2d2137a008bf223a631b23",
       "deps": [],
       "description": "The artifact builder uses a slug-/ heuristic to place promoted artifacts, diverging from the canonical kind subdirs. Add a _KIND_SUBDIR map over the already-validated _PROMOTABLE_KINDS (incl. a releases entry) so placement is a pure lookup, not a heuristic.",
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
-        "src/eawf/platform/artifacts/draft.py",
+        "src/eawf/surfaces/cli/commands/draft.py",
         "tests/platform/test_kind_subdir.py"
       ],
       "gates": [],
@@ -80484,12 +80618,12 @@
       "intent": null,
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T12:29:17.767225Z",
-      "outcome": null,
+      "outcome": "Canonical _KIND_SUBDIR map routes the 6 promotable kinds (research/audits/plans/hypotheses/decisions/incidents) to canonical subdirs, fixing the singular-token bug (audit/->audits/). Scope corrected to the real file surfaces/cli/commands/draft.py. 18+74 tests green, mypy/ruff clean. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80629,8 +80763,8 @@
       "blocks": [
         "P30-I14-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i14-w08",
+      "claimed_at": "2026-06-10T21:56:24.432181Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -80651,7 +80785,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80739,8 +80873,8 @@
     "P30-I14-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i14-w10",
+      "claimed_at": "2026-06-10T21:53:45.396246Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -80769,7 +80903,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
