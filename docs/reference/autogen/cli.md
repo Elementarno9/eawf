@@ -183,12 +183,13 @@ Manage decisions (add / supersede / list / graph).
 
 ### `eawf dispatch`
 
-Pause and resume the dispatch loop (headless toggle of dispatch_paused).
+Pause, resume, and headlessly spawn waves through the dispatch loop.
 
 | Verb | Summary |
 |---|---|
 | `pause` | Pause the dispatch loop by setting ``dispatch_paused`` via ``agent.pause``. |
 | `resume` | Resume the dispatch loop by clearing ``dispatch_paused`` via ``agent.resume``. |
+| `wave` | Spawn + dispatch a wave headlessly via the daemon's ``agent.dispatch``. |
 
 ### `eawf doc`
 
