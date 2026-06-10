@@ -4739,6 +4739,18 @@
       "scope_id": "P30-I05-W06",
       "status": "done",
       "updated_at": "2026-06-10T10:10:33.434377Z"
+    },
+    "P30-I05-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W07",
+      "scope_id": "P30-I05-W07",
+      "status": "done",
+      "updated_at": "2026-06-10T10:29:47.244802Z"
     }
   },
   "agent_sessions": {
@@ -7780,9 +7792,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I05-W07"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15429,7 +15439,7 @@
     },
     "P30-I05-W07": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I05-W07-bucket-20260610T101208Z",
+      "current_store_record_id": "EST-P30-I05-W07-bucket-20260610T102941Z",
       "display": "0.5 EU · exp ~15m · pess ~54m",
       "expected_eu": 0.5,
       "expected_minutes": 15.0,
@@ -15438,7 +15448,7 @@
       "pessimistic_minutes": 54.0,
       "reference_class": "bucket:S",
       "scope_id": "P30-I05-W07",
-      "updated_at": "2026-06-10T10:12:08.805243Z"
+      "updated_at": "2026-06-10T10:29:41.699993Z"
     }
   },
   "goals": {
@@ -18334,7 +18344,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T10:27:42.865775Z",
+  "updated_at": "2026-06-10T10:29:47.245107Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73415,8 +73425,8 @@
       "blocks": [],
       "claim_session_id": "codex-p30-i05-w07",
       "claimed_at": "2026-06-10T10:12:08.805222Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T10:29:47.244802Z",
+      "commit": "85ae2cc59978b4baa14d73e63f25db3ab6618184",
       "deps": [
         "P30-I05-W06"
       ],
@@ -73437,29 +73447,82 @@
         "src/eawf/kernel/config/defaults.py",
         "src/eawf/surfaces/cli/commands/config.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_wave_close_actuals.py::test_eu_basis_api_duration_default",
+              "tests/unit/test_wave_close_actuals.py::test_eu_basis_tokens_uses_token_delta",
+              "tests/unit/test_config_layered.py::test_eu_basis_rejects_unknown",
+              "tests/integration/test_cli_config.py::test_get_eu_basis_returns_api_duration_default",
+              "tests/integration/test_cli_config.py::test_validate_rejects_unknown_eu_basis",
+              "tests/daemon/test_state_methods.py::test_mutate_wave_close_uses_configured_token_basis",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I05-W07",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "Wave close chooses api_duration, tokens, or wall_clock from strict estimation.eu_basis config, defaulting to api_duration.",
+        "evidence_refs": [
+          "src/eawf/kernel/config/schema.py",
+          "src/eawf/workflow/lifecycle/wave.py",
+          "src/eawf/runtime/daemon/methods/state.py"
+        ],
+        "planned_steps": [
+          "Add estimation.eu_basis config enum with api_duration tokens wall_clock choices",
+          "Use api_duration by default and token delta over DEFAULT_TOKENS_PER_EU when tokens basis is selected",
+          "Reject unknown eu_basis during config validation and daemon close"
+        ],
+        "priority_rationale": "Configurable EU basis lets close actuals remain honest while future projects calibrate token or wall-clock fallbacks.",
+        "problem": "Runtime deltas need an operator-visible EU basis instead of hard-wiring api_duration forever.",
+        "risks": [
+          "Invalid config values must reject instead of silently changing close-time actuals"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.814121Z",
-      "outcome": null,
+      "outcome": "Added configurable EU basis for runtime deltas; parent commit 85ae2cc5.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W07-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_eu_basis_api_duration_default and test_eu_basis_tokens_uses_token_delta pass; test_eu_basis_rejects_unknown raises ValidationError",
-          "oracle_tier": null,
+          "measurable_signal": "test_eu_basis_api_duration_default, test_eu_basis_tokens_uses_token_delta, test_eu_basis_rejects_unknown, test_validate_rejects_unknown_eu_basis, and test_mutate_wave_close_uses_configured_token_basis assert the default, token-basis, enum-validation, and daemon close paths",
+          "oracle_tier": 2,
           "quality_dimension": "flexibility",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the EU-basis pytest gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "An unset estimation.eu_basis yields the api_duration delta; the tokens basis divides the token delta by the calibrated rate; an out-of-enum basis fails config validation.",
           "waiver_reason": null
         }
@@ -73467,7 +73530,7 @@
       "title": "EUCAP-7 Wire configurable EU basis (api_duration default)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": "WT-P30-I05-W07-1781086337"
+      "worktree_id": null
     },
     "P30-I05-W08": {
       "agent_role": "executor",
