@@ -243,6 +243,20 @@ def test_i03_contracts_fail_when_mockup_golden_diff_tier_missing(mod) -> None:
     assert "mockup_golden_diff" in result.message
 
 
+def test_runtime_gate_is_not_idle(mod) -> None:
+    current = _GATE_PATH.parent.parent.joinpath(".pre-commit-config.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert mod.check_runtime_gate_is_not_idle(precommit_text=current).passed is True
+
+    disabled = current.replace("always_run: true", "always_run: false")
+    result = mod.check_runtime_gate_is_not_idle(precommit_text=disabled)
+
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.RUNTIME_GATE_IDLE
+    assert "always_run: true" in result.message
+
+
 # --------------------------------------------------------------------------- #
 # CLI wrapper.
 # --------------------------------------------------------------------------- #

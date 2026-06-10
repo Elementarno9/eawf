@@ -263,9 +263,10 @@ repos:
         # producer (produce_spec_jury_verdict) is wired but no shipped profile
         # enables it via a non-empty uiux_bands + enforce (idle-forever), OR
         # when the band profile would enforce fleet-wide for a non-UI wave
-        # instead of band-scoped (global flip). Reads the shipped profile set
-        # + the real resolver, builds two pure probe waves in-process, and
-        # mutates nothing — so always-run with no file filter.
+        # instead of band-scoped (global flip). Also proves the W08 runtime
+        # zero-EU close gate remains bound to this always-run hook. Reads the
+        # shipped profile set + the real resolver, builds two pure probe waves
+        # in-process, and mutates nothing — so always-run with no file filter.
         pass_filenames: false
         always_run: true
         stages: [pre-commit]

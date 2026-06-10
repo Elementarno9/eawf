@@ -760,6 +760,57 @@ def _compute_wave_close_readiness(
     )
 
 
+def _runtime_zero_close_enforces(
+    state: State,
+    *,
+    wave_id: str,
+    state_path: Path,
+    repo_root: Path,
+) -> bool:
+    """Return whether a zero-runtime close should block instead of warn."""
+    from eawf.workflow.verify.readiness import load_active_verify_block, resolve_wave_verify_block
+
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return True
+    verify_block = resolve_wave_verify_block(
+        load_active_verify_block(
+            wave_id,
+            state,
+            repo_root=repo_root,
+            config_root=_config_root_for_state_path(state_path),
+        ),
+        wave,
+    )
+    return True if verify_block is None else verify_block.enforce
+
+
+def _enforce_nonzero_runtime_close(
+    state: State,
+    mutation: Mutation,
+    *,
+    elapsed_eu: float | None,
+    state_path: Path,
+    repo_root: Path,
+) -> None:
+    """Reject silent zero-EU wave closes unless the active profile is advisory."""
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id or (elapsed_eu is not None and elapsed_eu > 0.0):
+        return
+    message = (
+        f"wave {wave_id!r} has no captured runtime; refusing silent 0-EU close "
+        "without a runtime waiver"
+    )
+    if _runtime_zero_close_enforces(
+        state,
+        wave_id=wave_id,
+        state_path=state_path,
+        repo_root=repo_root,
+    ):
+        raise LifecycleError(message)
+    logger.warning(f"wave_close_runtime_zero wave={wave_id!r} mode='warn' message={message!r}")
+
+
 def _validate_wave_close_gate_refs(state: State, mutation: Mutation) -> None:
     """Reject a wave-close mutation whose criterion/gate refs do not resolve.
 
@@ -2544,6 +2595,13 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                             wave_close_rollup,
                             eu_minutes=_close_eu_minutes,
                         )
+                    )
+                    _enforce_nonzero_runtime_close(
+                        state,
+                        mutation,
+                        elapsed_eu=wave_close_elapsed_eu,
+                        state_path=state_path,
+                        repo_root=repo_anchor,
                     )
                     _apply_wave_close(
                         state,

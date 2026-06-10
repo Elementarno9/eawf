@@ -29,6 +29,8 @@ exits non-zero:
   require-gate must reject a UI wave with no ``affordance_parity`` gate, and
   ``mockup_golden_diff`` must be a registered ``CheckKind`` with a mapped
   ``OracleTier``.
+- :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
+  pre-commit gate stays enabled so the runtime close gate cannot ship idle.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
   flags any newly-defined contract (a ``check_*`` / ``*_gate`` / ``*_lint``
   function, a ``CheckKind`` runner registration, an ``OracleTier`` dispatch
@@ -150,6 +152,7 @@ class GateFailure(StrEnum):
     REQUIRED_INTENT_IDLE = "required_intent_idle"
     UI_REQUIRE_GATE_IDLE = "ui_require_gate_idle"
     MOCKUP_GOLDEN_DIFF_IDLE = "mockup_golden_diff_idle"
+    RUNTIME_GATE_IDLE = "runtime_gate_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -639,6 +642,35 @@ def check_i03_contracts(
             "idle-contract gate: ok (I03 required-intent guard, UI "
             "affordance-parity require-gate, and mockup_golden_diff tier mapping fired)"
         ),
+    )
+
+
+def check_runtime_gate_is_not_idle(
+    *,
+    precommit_text: str | None = None,
+    precommit_path: Path | None = None,
+) -> GateResult:
+    """Assert the always-run pre-commit idle-contract gate remains enabled."""
+    path = precommit_path or (_REPO_ROOT / ".pre-commit-config.yaml")
+    text = precommit_text if precommit_text is not None else path.read_text()
+    required = (
+        "id: idle-contract-gate",
+        "entry: uv run python tools/idle_contract_gate.py",
+        "pass_filenames: false",
+        "always_run: true",
+        "stages: [pre-commit]",
+    )
+    missing = [snippet for snippet in required if snippet not in text]
+    if missing:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.RUNTIME_GATE_IDLE,
+            message=f"runtime close gate idle: pre-commit binding missing {missing!r}",
+        )
+    return GateResult(
+        passed=True,
+        failure=None,
+        message="runtime close gate binding: ok (idle-contract-gate always runs at pre-commit)",
     )
 
 
@@ -1167,6 +1199,13 @@ def main(argv: list[str]) -> int:
         print(i03.message)
     else:
         print(i03.message, file=sys.stderr)
+        failed = True
+
+    runtime_gate = check_runtime_gate_is_not_idle()
+    if runtime_gate.passed:
+        print(runtime_gate.message)
+    else:
+        print(runtime_gate.message, file=sys.stderr)
         failed = True
 
     # Pass the module-level default sources explicitly so a test (or a future

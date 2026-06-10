@@ -276,6 +276,22 @@ def _write_eu_basis_config(root: Path, *, eu_basis: str) -> None:
     )
 
 
+def _add_runtime_delta(payload: dict[str, object]) -> None:
+    """Add non-zero runtime baseline/latest counters to the default wave."""
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    assert isinstance(wave, dict)
+    wave["runtime_baseline"] = {
+        "api_duration_ms": 5000,
+        "total_duration_ms": 7000,
+        "captured_at": _now().isoformat(),
+    }
+    wave["runtime_latest"] = {
+        "api_duration_ms": 17000,
+        "total_duration_ms": 23000,
+        "captured_at": (_now() + timedelta(minutes=5)).isoformat(),
+    }
+
+
 def _build_ctx(
     *,
     tmp_path: Path,
@@ -289,6 +305,7 @@ def _build_ctx(
     state_path = tmp_path / "state.json"
     if state_payload is None:
         state_payload = _build_state_payload()
+        _add_runtime_delta(state_payload)
     _write_state(state_path, state_payload)
     event_path = store_path(state_path, StoreKind.EVENT)
     wal_dir = tmp_path / "wal"
@@ -486,6 +503,7 @@ def test_mutate_wave_close_publishes_wave_closed_event_kind(tmp_path: Path) -> N
     """
     # Pre-seed one tally, then override it through mutation params so
     # the close path proves the final tally is accepted at close time.
+    _write_verify_profile(tmp_path, enforce=False)
     payload = _build_state_payload()
     payload["waves"]["P24-I01-W09"]["tokens_consumed"] = 111  # type: ignore[index]
     ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
@@ -812,9 +830,33 @@ def test_mutate_wave_close_uses_configured_token_basis(tmp_path: Path) -> None:
     _run(body)
 
 
-def test_mutate_wave_close_no_telemetry_leaves_elapsed_eu_zero(tmp_path: Path) -> None:
-    """A close with no captured runtime keeps the honest zero-EU actual."""
+def test_close_refuses_zero_runtime(tmp_path: Path) -> None:
+    """Default zero-runtime close is refused and leaves the wave unclosed."""
+    from eawf.runtime.daemon.methods import DaemonValidationError
+
     payload = _build_state_payload()
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="no captured runtime"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["waves"]["P24-I01-W09"]["status"] == "claimed"
+        assert written.get("actuals") in ({}, None)
+
+    _run(body)
+
+
+def test_close_allows_nonzero_runtime(tmp_path: Path) -> None:
+    """A non-zero runtime delta closes cleanly and persists elapsed EU."""
+    payload = _build_state_payload()
+    _add_runtime_delta(payload)
     ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
     mutation = Mutation(
         kind=MutationKind.WAVE_CLOSE,
@@ -826,8 +868,36 @@ def test_mutate_wave_close_no_telemetry_leaves_elapsed_eu_zero(tmp_path: Path) -
     async def body() -> None:
         await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
         written = orjson.loads(state_path.read_bytes())
-        actual = written["actuals"]["P24-I01-W09"]
-        assert actual["elapsed_eu"] == pytest.approx(0.0)
+        assert written["waves"]["P24-I01-W09"]["status"] == "closed"
+        assert written["actuals"]["P24-I01-W09"]["elapsed_eu"] == pytest.approx(
+            12000 / (30 * 60_000)
+        )
+
+    _run(body)
+
+
+def test_close_advisory_phase_warns_not_refuses(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A zero-runtime close warns but lands when active verify profile is advisory."""
+    _write_verify_profile(tmp_path, enforce=False)
+    payload = _build_state_payload()
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with caplog.at_level("WARNING", logger="eawf.runtime.daemon.methods.state"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["waves"]["P24-I01-W09"]["status"] == "closed"
+        assert written["actuals"]["P24-I01-W09"]["elapsed_eu"] == pytest.approx(0.0)
+        assert "wave_close_runtime_zero" in caplog.text
 
     _run(body)
 
