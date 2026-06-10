@@ -28,6 +28,7 @@ from eawf.kernel.spec.common import (
     ProofLocus,
     ResponseClause,
     assign_oracle_tier,
+    tier_label,
 )
 
 
@@ -111,3 +112,38 @@ def test_assign_oracle_tier_gate_ref_known_kind_returns_tier() -> None:
     """A gate_ref naming a recognised gate kind resolves to that kind's tier."""
     clause = _clause(ObserveVerb.RETURNS, gate_ref="file_exists")
     assert assign_oracle_tier(clause) is OracleTier.T1_STATIC
+
+
+# --------------------------------------------------------------------------
+# tier_label — the canonical "T<n> <flavor>" label form
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("tier", "expected"),
+    [
+        (OracleTier.T1_STATIC, "T1 static"),
+        (OracleTier.T2_STRUCTURAL, "T2 structural"),
+        (OracleTier.T3_SNAPSHOT, "T3 snapshot"),
+        (OracleTier.T4_CONTRACT, "T4 contract"),
+        (OracleTier.T5_GOLDEN, "T5 golden"),
+        (OracleTier.T6_APPROVAL, "T6 approval"),
+        (OracleTier.T7_JURY, "T7 jury"),
+    ],
+)
+def test_tier_label_renders_short_code_plus_flavor(tier: OracleTier, expected: str) -> None:
+    """Every tier renders its short ``T<n>`` code plus the lowercased flavor word."""
+    assert tier_label(tier) == expected
+
+
+def test_tier_label_is_total_over_every_tier() -> None:
+    """Total: every OracleTier member produces a ``T<n> <flavor>`` label.
+
+    The code segment is the ``T<n>`` short code matching the int value and
+    the flavor segment is the lowercased enum-name tail.
+    """
+    for tier in OracleTier:
+        label = tier_label(tier)
+        code, _, flavor = label.partition(" ")
+        assert code == f"T{int(tier)}"
+        assert flavor and flavor == flavor.lower()

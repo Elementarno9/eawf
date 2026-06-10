@@ -185,6 +185,25 @@ class OracleTier(IntEnum):
     T7_JURY = 7
 
 
+def tier_label(tier: OracleTier) -> str:
+    """Return the human ``T<n> <flavor>`` label for an :class:`OracleTier`.
+
+    The member name is ``T<n>_<FLAVOR>`` (e.g. ``T1_STATIC``); this splits it
+    into the short ``T<n>`` code and the lowercased flavor word so a renderer
+    reads ``T1 static`` rather than the screaming-snake enum name. The minimal
+    formatter lives here beside the enum so every surface (the TUI criteria
+    tab, future CLI renders) shares one canonical tier-label form.
+
+    Args:
+        tier: The oracle tier to label.
+
+    Returns:
+        The ``"T<n> <flavor>"`` label, e.g. ``"T7 jury"``.
+    """
+    code, flavor = tier.name.split("_", 1)
+    return f"{code} {flavor.lower()}"
+
+
 class ObserveVerb(StrEnum):
     """The EARS ``shall <observe>`` verb a response clause asserts."""
 

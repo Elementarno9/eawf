@@ -15,6 +15,13 @@ from pathlib import Path
 import orjson
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
+from eawf.kernel.spec.common import (
+    CriterionSpec,
+    OracleTier,
+    QualityDimension,
+    grandfather_criterion,
+    tier_label,
+)
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
@@ -216,10 +223,161 @@ def test_resolve_detail_wave_includes_success_criteria_rows() -> None:
         return
     card = resolve_detail(state, wave.id)
     # Criteria live in their own ``criteria`` group (the criteria tab), not
-    # the overview ``rows`` group, and carry the legacy ``.text`` only.
+    # the overview ``rows`` group; the ``criterion`` rows carry the ``.text``.
     criterion_rows = [value for label, value in card.criteria if label == "criterion"]
-    assert criterion_rows == list(wave.success_criteria)
+    assert criterion_rows == [c.text for c in wave.success_criteria]
     assert "criterion" not in {label for label, _ in card.rows}
+
+
+# --------------------------------------------------------------------------
+# Criteria tab — full typed CriterionSpec projection (P30-I07-W01)
+# --------------------------------------------------------------------------
+
+
+def _typed_criterion() -> CriterionSpec:
+    """A populated, authored (non-grandfathered) :class:`CriterionSpec`.
+
+    Carries a real oracle tier, evidence_kind, and measurable_signal so the
+    criteria tab can surface all three typed fields.
+    """
+    return CriterionSpec(
+        id="CR-01",
+        text="The d tab renders the full typed criterion.",
+        kind="render",
+        acceptance_style="binary",
+        evidence_kind="jury",
+        quality_dimension=QualityDimension.INTERACTION_CAPABILITY,
+        measurable_signal="the criteria tab shows tier, evidence_kind, and signal rows",
+        oracle_tier=OracleTier.T7_JURY,
+    )
+
+
+def _state_with_criteria(criteria: list[CriterionSpec]) -> tuple[State, str]:
+    """Return a state whose single wave carries *criteria*, plus its id.
+
+    The committed fixture leaves ``success_criteria`` empty; the frozen
+    model is rebuilt via ``model_copy`` so the resolver renders the typed
+    criteria rows.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    with_criteria = state.waves[wave_id].model_copy(update={"success_criteria": criteria})
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = with_criteria
+    return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def test_resolve_detail_typed_criterion_renders_tier_evidence_signal() -> None:
+    """A typed criterion surfaces its tier label, evidence_kind, and signal."""
+    criterion = _typed_criterion()
+    state, wave_id = _state_with_criteria([criterion])
+    card = resolve_detail(state, wave_id)
+    criteria = dict(card.criteria)
+    assert criteria["criterion"] == criterion.text
+    assert criteria["tier"] == tier_label(OracleTier.T7_JURY)
+    assert criteria["tier"] == "T7 jury"
+    assert criteria["evidence"] == criterion.evidence_kind
+    assert criteria["signal"] == criterion.measurable_signal
+    # No grandfathered marker for an authored criterion.
+    assert "grandfathered" not in {label for label, _ in card.criteria}
+
+
+def test_resolve_detail_typed_criterion_without_tier_omits_tier_row() -> None:
+    """An authored criterion with no computed tier omits the tier row only.
+
+    Boundary: the evidence_kind + signal rows still render; the tier row is
+    suppressed rather than fabricated when ``oracle_tier`` is unset.
+    """
+    criterion = _typed_criterion().model_copy(update={"oracle_tier": None})
+    state, wave_id = _state_with_criteria([criterion])
+    card = resolve_detail(state, wave_id)
+    labels = [label for label, _ in card.criteria]
+    assert "tier" not in labels
+    criteria = dict(card.criteria)
+    assert criteria["evidence"] == criterion.evidence_kind
+    assert criteria["signal"] == criterion.measurable_signal
+
+
+def test_resolve_detail_grandfathered_criterion_has_no_tier_badge() -> None:
+    """A grandfathered legacy criterion shows text + marker and NO tier badge."""
+    criterion = grandfather_criterion("ship the legacy chassis end to end", index=1)
+    state, wave_id = _state_with_criteria([criterion])
+    card = resolve_detail(state, wave_id)
+    labels = [label for label, _ in card.criteria]
+    criteria = dict(card.criteria)
+    assert criteria["criterion"] == criterion.text
+    assert "grandfathered" in labels
+    # No fabricated tier badge: the legacy criterion carries no authored tier.
+    assert "tier" not in labels
+
+
+def test_resolve_detail_mixed_criteria_only_typed_carries_tier() -> None:
+    """A mixed wave: the typed criterion carries a tier, the legacy one does not."""
+    typed = _typed_criterion()
+    legacy = grandfather_criterion("legacy short", index=2)
+    state, wave_id = _state_with_criteria([typed, legacy])
+    card = resolve_detail(state, wave_id)
+    # Exactly one tier row (the typed criterion) and one grandfathered marker.
+    labels = [label for label, _ in card.criteria]
+    assert labels.count("tier") == 1
+    assert labels.count("grandfathered") == 1
+    assert labels.count("criterion") == 2
+
+
+def test_detail_modal_typed_criterion_paints_tier_evidence_signal() -> None:
+    """The d tab paints the tier label, evidence_kind, and signal (Pilot)."""
+
+    async def body() -> None:
+        criterion = _typed_criterion()
+        state, wave_id = _state_with_criteria([criterion])
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-criteria"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            assert "T7 jury" in rendered
+            assert criterion.evidence_kind in rendered
+            assert criterion.measurable_signal in rendered
+
+    asyncio.run(body())
+
+
+def test_detail_modal_grandfathered_criterion_paints_marker_no_tier() -> None:
+    """The d tab paints the legacy text + marker and no tier badge (Pilot)."""
+
+    async def body() -> None:
+        criterion = grandfather_criterion("ship the legacy chassis end to end", index=1)
+        state, wave_id = _state_with_criteria([criterion])
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-criteria"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            assert "grandfathered" in rendered
+            assert criterion.text in rendered
+            # No fabricated tier badge is painted for the legacy criterion.
+            assert "T1 " not in rendered
+            assert "T7 " not in rendered
+
+    asyncio.run(body())
 
 
 def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:

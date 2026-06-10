@@ -54,6 +54,7 @@ from textual.markup import escape
 from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
+from eawf.kernel.spec.common import GRANDFATHERED_KIND, CriterionSpec, tier_label
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import linkify_text
@@ -219,10 +220,12 @@ class DetailCard:
     the ``overview`` tab; wave cards use it for the NarrativeBundle
     preview, while non-wave cards render the regular ``rows`` group.
 
-    The ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` groups are
-    the chassis seams that later iters fill with their typed projections
-    (I06 criteria / gates / evidence, I04 runtime). For now ``criteria``
-    carries the legacy success-criterion ``.text`` rows, ``evidence``
+    The ``criteria`` group carries the full typed criterion projection: a
+    text row per criterion plus, for an authored (non-grandfathered)
+    criterion, its oracle tier label, ``evidence_kind``, and
+    ``measurable_signal``; a grandfathered legacy criterion shows the text
+    plus a grandfathered marker and no tier badge. The ``gates`` /
+    ``evidence`` / ``runtime`` groups are the chassis seams: ``evidence``
     carries the wave's attempt rollup + dispatch history, ``runtime``
     carries the size + honest-empty EU / token rows, and ``gates`` stays
     empty (so a wave with no gates shows no gates tab).
@@ -231,8 +234,10 @@ class DetailCard:
         title: The card heading (e.g. ``wave P26-I01-W19`` /
             ``iter P26-I01`` / ``phase P26`` / ``backlog B042``).
         rows: The ``overview`` group — ordered ``(label, value)`` pairs.
-        criteria: The ``criteria`` group — one row per success criterion
-            (now the legacy ``.text``; I06 fills typed tier badges).
+        criteria: The ``criteria`` group — the typed criterion projection
+            (text row plus tier label / evidence_kind / measurable_signal
+            for an authored criterion; text + grandfathered marker and no
+            tier badge for a legacy criterion).
         gates: The ``gates`` group — gate-pack rows (I06 fills; empty now
             so a wave with no gates renders no gates tab).
         evidence: The ``evidence`` group — the wave's attempt rollup +
@@ -396,6 +401,41 @@ def _completion_runtime(closed: int, total: int) -> tuple[tuple[str, str], ...]:
     )
 
 
+def _criteria_rows(criteria: Iterable[CriterionSpec]) -> tuple[tuple[str, str], ...]:
+    """Project a wave's typed criteria into criteria-tab ``(label, value)`` rows.
+
+    Each criterion contributes its ``.text`` row first, then differs by
+    whether it is an authored typed criterion or a grandfathered legacy
+    string:
+
+    - An authored (non-grandfathered) criterion surfaces the full typed
+      shape: the oracle tier label (:func:`~eawf.kernel.spec.common.tier_label`,
+      omitted only when the tier is still unpopulated), the
+      ``evidence_kind``, and the ``measurable_signal``.
+    - A grandfathered criterion (``kind == GRANDFATHERED_KIND`` -- a legacy
+      string the ``1.6 -> 1.7`` migration wrapped) surfaces the text plus a
+      ``grandfathered`` marker and NO tier badge: it carries no authored
+      tier, so a fabricated badge would be a lie.
+
+    Args:
+        criteria: The wave's typed criterion rows.
+
+    Returns:
+        Ordered ``(label, value)`` rows for the criteria tab.
+    """
+    rows: list[tuple[str, str]] = []
+    for criterion in criteria:
+        rows.append(("criterion", criterion.text))
+        if criterion.kind == GRANDFATHERED_KIND:
+            rows.append(("grandfathered", "legacy criterion (no typed tier)"))
+            continue
+        if criterion.oracle_tier is not None:
+            rows.append(("tier", tier_label(criterion.oracle_tier)))
+        rows.append(("evidence", criterion.evidence_kind))
+        rows.append(("signal", criterion.measurable_signal))
+    return tuple(rows)
+
+
 def _wave_card(
     state: State,
     wave_id: str,
@@ -436,12 +476,13 @@ def _wave_card(
         indented = "\n".join(f"  {line}" for line in tree.split("\n"))
         rows.append(("files", f"\n{indented}"))
 
-    # The criteria tab carries the legacy ``.text`` rows only (I06 fills
-    # the typed tier badge). A grandfathered wave with no structured tier
-    # therefore shows the plain criterion text, never a fabricated badge.
-    criteria: list[tuple[str, str]] = [
-        ("criterion", criterion.text) for criterion in wave.success_criteria
-    ]
+    # The criteria tab renders the full typed criterion: the legacy text
+    # row plus, for an authored (non-grandfathered) criterion, the oracle
+    # tier label, the evidence_kind, and the measurable_signal. A
+    # grandfathered criterion (a legacy string the 1.6->1.7 migration
+    # wrapped) shows the text plus a grandfathered marker and NO fabricated
+    # tier badge -- it has no authored tier to surface.
+    criteria: list[tuple[str, str]] = list(_criteria_rows(wave.success_criteria))
 
     # The evidence tab folds in the attempt rollup plus the dispatch
     # history (I06 layers the typed report rollup on top of this seam).
