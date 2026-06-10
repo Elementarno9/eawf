@@ -4620,6 +4620,18 @@
       "status": "done",
       "updated_at": "2026-06-10T03:25:10.198652Z"
     },
+    "P30-I04-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W08",
+      "scope_id": "P30-I04-W08",
+      "status": "done",
+      "updated_at": "2026-06-10T04:26:40.664933Z"
+    },
     "P30-I04-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -15166,6 +15178,19 @@
       "scope_id": "P30-I04-W07",
       "updated_at": "2026-06-10T03:24:45.451131Z"
     },
+    "P30-I04-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W08-bucket-20260610T042617Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I04-W08",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I04-W08",
+      "updated_at": "2026-06-10T04:26:17.734857Z"
+    },
     "P30-I04-W09": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I04-W09-bucket-20260610T034152Z",
@@ -18061,7 +18086,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T04:01:58.177648Z",
+  "updated_at": "2026-06-10T04:26:40.665260Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -70032,10 +70057,10 @@
       "blocks": [
         "P30-I04-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "codex-p30-i04-w08",
+      "claimed_at": "2026-06-10T04:04:29.583272Z",
+      "closed_at": "2026-06-10T04:26:40.664933Z",
+      "commit": "0164e467bc72a747db1414c8b1c93c7efdf76bd4",
       "deps": [
         "P30-I04-W07",
         "P30-I04-W06"
@@ -70049,42 +70074,137 @@
         "src/eawf/kernel/spec/common.py",
         "src/eawf/surfaces/tui/snapshot/pilot_harness.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/daemon/test_close_gate_mockup_golden_diff.py::test_close_gate_passes_and_mints_t5_mockup_evidence",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/daemon/test_close_gate_mockup_golden_diff.py::test_close_gate_blocks_mockup_golden_divergence_with_region_diff",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I04-W08",
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.819599Z",
-      "outcome": null,
+      "outcome": "Bound mockup_golden_diff close gate to T5 golden evidence",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W08-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_mockup_golden_diff_passes_on_match asserts close succeeds and EvidenceRecord tier==T5 with the diff gate_id",
+          "measurable_signal": "test_close_gate_passes_and_mints_t5_mockup_evidence asserts closed status, EvidenceRecord metrics.oracle_tier == 5, and metrics.gate_id == mockup_golden_diff",
           "oracle_tier": null,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "A wave whose rendered screen matches its captured golden closes, and the minted EvidenceRecord carries tier T5 and the mockup_golden_diff gate_id.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the matching mockup_golden_diff close-gate regression",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/unit/daemon/test_close_gate_mockup_golden_diff.py::test_close_gate_passes_and_mints_t5_mockup_evidence exits zero and proves a matching mockup_golden_diff gate closes with deterministic T5 evidence carrying the gate id.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W08-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "behavioral",
-          "measurable_signal": "test_mockup_golden_diff_blocks_on_drift asserts LifecycleError substring \"oracle blocked close\" with tier=5 and the changed region in details",
+          "measurable_signal": "test_close_gate_blocks_mockup_golden_divergence_with_region_diff asserts oracle blocked close, tier=5, region=@@, and expected/actual diff lines",
           "oracle_tier": null,
           "quality_dimension": "reliability",
           "required": true,
-          "response": null,
-          "text": "Altering the built screen so it diverges from the captured golden blocks close with LifecycleError, and the diff detail names the changed region.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the diverging mockup_golden_diff close-gate regression",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/unit/daemon/test_close_gate_mockup_golden_diff.py::test_close_gate_blocks_mockup_golden_divergence_with_region_diff exits zero and proves a diverging mockup_golden_diff gate blocks close with the changed region in the LifecycleError detail.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "structural",
+          "measurable_signal": "affordance_parity HOME mode probe finds no dead advertised key before close",
+          "oracle_tier": null,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "affordance_parity",
+            "jury_reason": null,
+            "locus": "tui_pilot",
+            "object": "HOME mode advertised key bindings",
+            "observe": "validates",
+            "quantifier": "single"
+          },
+          "text": "affordance_parity validates the HOME mode advertised keys so the UI-scope wave has a structural gate before jury fallback.",
           "waiver_reason": null
         }
       ],
@@ -79691,6 +79811,17 @@
       "path": ".ea/worktrees/p29-w29",
       "status": "merged",
       "wave_id": "P29-I01-W29"
+    },
+    "WT-P30-I04-W08-1781064274": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-w08",
+      "created_at": "2026-06-10T04:04:34.825939Z",
+      "id": "WT-P30-I04-W08-1781064274",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i04-w08",
+      "path": ".claude/worktrees/p30-w08",
+      "status": "active",
+      "wave_id": "P30-I04-W08"
     }
   }
 }
