@@ -7792,7 +7792,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I05-W08"
+    ],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15449,6 +15451,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I05-W07",
       "updated_at": "2026-06-10T10:29:41.699993Z"
+    },
+    "P30-I05-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W08-bucket-20260610T103301Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I05-W08",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I05-W08",
+      "updated_at": "2026-06-10T10:33:01.866704Z"
     }
   },
   "goals": {
@@ -18344,7 +18359,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T10:31:18.996547Z",
+  "updated_at": "2026-06-10T10:33:12.776632Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73537,8 +73552,8 @@
       "blocks": [
         "P30-I05-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w08",
+      "claimed_at": "2026-06-10T10:33:01.866488Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -73564,7 +73579,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -73598,7 +73613,7 @@
       "title": "EUCAP-8 Close-gate WARNS then REFUSES silent 0-EU close",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I05-W08-1781087592"
     },
     "P30-I05-W09": {
       "agent_role": "executor",
@@ -82907,6 +82922,17 @@
       "path": ".ea/worktrees/p30-i05-w07",
       "status": "merged",
       "wave_id": "P30-I05-W07"
+    },
+    "WT-P30-I05-W08-1781087592": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i05-w08",
+      "created_at": "2026-06-10T10:33:12.776632Z",
+      "id": "WT-P30-I05-W08-1781087592",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i05-w08",
+      "path": ".ea/worktrees/p30-i05-w08",
+      "status": "active",
+      "wave_id": "P30-I05-W08"
     }
   }
 }
