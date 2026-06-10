@@ -5136,6 +5136,18 @@
       "status": "done",
       "updated_at": "2026-06-10T22:19:32.758468Z"
     },
+    "P30-I07-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W17",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W17",
+      "scope_id": "P30-I07-W17",
+      "status": "done",
+      "updated_at": "2026-06-10T22:22:39.053698Z"
+    },
     "P30-I08-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8303,8 +8315,11 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I07-W17",
-      "P30-I07-W14"
+      "P30-I07-W14",
+      "P30-I07-W16",
+      "P30-I08-W02",
+      "P30-I14-W07",
+      "P30-I14-W09"
     ],
     "iter_id": "P30-I08",
     "phase_id": "P30",
@@ -16392,6 +16407,19 @@
       "scope_id": "P30-I07-W15",
       "updated_at": "2026-06-10T21:27:26.263155Z"
     },
+    "P30-I07-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W16-bucket-20260610T222031Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I07-W16",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I07-W16",
+      "updated_at": "2026-06-10T22:20:31.495165Z"
+    },
     "P30-I07-W17": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I07-W17-bucket-20260610T221207Z",
@@ -16417,6 +16445,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I08-W01",
       "updated_at": "2026-06-10T21:56:23.874429Z"
+    },
+    "P30-I08-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I08-W02-bucket-20260610T222032Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I08-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I08-W02",
+      "updated_at": "2026-06-10T22:20:32.033697Z"
     },
     "P30-I14-W01": {
       "confidence": "low",
@@ -16470,6 +16511,19 @@
       "scope_id": "P30-I14-W05",
       "updated_at": "2026-06-10T21:53:44.849559Z"
     },
+    "P30-I14-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W07-bucket-20260610T222032Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I14-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I14-W07",
+      "updated_at": "2026-06-10T22:20:32.576169Z"
+    },
     "P30-I14-W08": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I14-W08-bucket-20260610T215624Z",
@@ -16482,6 +16536,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I14-W08",
       "updated_at": "2026-06-10T21:56:24.432272Z"
+    },
+    "P30-I14-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W09-bucket-20260610T222033Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I14-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I14-W09",
+      "updated_at": "2026-06-10T22:20:33.115610Z"
     },
     "P30-I14-W10": {
       "confidence": "low",
@@ -19420,7 +19487,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T22:19:34.338794Z",
+  "updated_at": "2026-06-10T22:22:39.053945Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -76913,8 +76980,8 @@
     "P30-I07-W16": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w16",
+      "claimed_at": "2026-06-10T22:20:31.494662Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -76936,7 +77003,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76963,8 +77030,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i07-w17",
       "claimed_at": "2026-06-10T22:12:07.541499Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:22:39.053698Z",
+      "commit": "78c8e35994d7ac0d89bb15021df4cc77e1a4a83d",
       "deps": [
         "P30-I07-W08"
       ],
@@ -76979,12 +77046,12 @@
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.804387Z",
-      "outcome": null,
+      "outcome": "Fleet parity lens generalizes WatchGrid into a side-by-side multi-session surface fed by the shared event.subscribe push + an always-on poll backstop (watch app.state, recompose-on-fleet-change); zero sessions -> honest-empty. 58 watch tests green, 1252 LOC. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -77060,8 +77127,8 @@
         "P30-I08-W03",
         "P30-I08-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i08-w02",
+      "claimed_at": "2026-06-10T22:20:32.033288Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -77083,7 +77150,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80883,8 +80950,8 @@
     "P30-I14-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i14-w07",
+      "claimed_at": "2026-06-10T22:20:32.575639Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -80907,7 +80974,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80981,8 +81048,8 @@
     "P30-I14-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i14-w09",
+      "claimed_at": "2026-06-10T22:20:33.115231Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -81005,7 +81072,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
