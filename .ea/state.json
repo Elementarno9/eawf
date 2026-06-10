@@ -7804,7 +7804,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I05-W09"
+    ],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15474,6 +15476,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I05-W08",
       "updated_at": "2026-06-10T11:21:21.154760Z"
+    },
+    "P30-I05-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W09-bucket-20260610T113226Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I05-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I05-W09",
+      "updated_at": "2026-06-10T11:32:26.598498Z"
     }
   },
   "goals": {
@@ -18369,7 +18384,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T11:30:33.840207Z",
+  "updated_at": "2026-06-10T11:32:26.598794Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73707,8 +73722,8 @@
     "P30-I05-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w09",
+      "claimed_at": "2026-06-10T11:32:26.598485Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -73734,7 +73749,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
