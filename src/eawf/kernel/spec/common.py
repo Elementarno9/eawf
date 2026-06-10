@@ -10,6 +10,7 @@ authoritative place.
 
 from __future__ import annotations
 
+import re
 from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Literal
 
@@ -504,6 +505,239 @@ def grandfather_criterion(text: str, *, index: int) -> CriterionSpec:
         quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
         measurable_signal=measurable_signal,
     )
+
+
+#: ``kind`` stamped on a criterion the legacy-to-typed converter promotes out of
+#: the grandfathered no-op state. Distinct from :data:`GRANDFATHERED_KIND` so a
+#: renderer / audit / the readiness legacy-count can tell a converted-and-gated
+#: criterion apart from a still-legacy one: the readiness path counts only
+#: ``kind == GRANDFATHERED_KIND`` rows as legacy, so a ``converted`` row drops
+#: out of that tally and routes through the gated spec path instead.
+CONVERTED_KIND = "converted"
+
+#: Default gate kind the converter attaches when the eawf021 parser cannot
+#: resolve a richer falsifier from the criterion prose. ``criterion_in_diff``
+#: greps a derived pattern across the wave's file scopes, so it falsifies any
+#: legacy string without a per-criterion ``argv`` -- the safe hand-authored
+#: fallback when the verb/locus parse is ambiguous.
+_FALLBACK_GATE_KIND = "criterion_in_diff"
+
+#: Verb-value -> the cheapest deterministic gate KIND that falsifies a clause
+#: observing that verb. Drives the gate the converter attaches when the eawf021
+#: parser DOES resolve a verb: a ``validates`` / ``matches_pattern`` /
+#: ``emits`` / ``renders_token`` clause maps to the static ``regex_in_file``
+#: grep, a ``file_matches`` clause to the ``criterion_in_diff`` file grep.
+#: Verbs with no cheap deterministic single-file falsifier (``returns`` /
+#: ``raises`` / ``exits`` / ``judged`` / ...) fall through to
+#: :data:`_FALLBACK_GATE_KIND` so every converted criterion still carries a
+#: runnable gate. The map deliberately emits only the two argv-free file-grep
+#: kinds: an ``argv``-bearing kind (``command_exit_zero``) would route the
+#: derived grep through the L0 argv allowlist, which does not admit ``grep``.
+_VERB_VALUE_TO_GATE_KIND: dict[str, str] = {
+    "validates": "regex_in_file",
+    "matches_pattern": "regex_in_file",
+    "emits": "regex_in_file",
+    "file_matches": "criterion_in_diff",
+    "renders_token": "regex_in_file",
+}
+
+#: Default proof locus the converter pins on a converted criterion's response
+#: clause when the parser resolved no explicit locus. ``SOURCE`` pairs with the
+#: ``criterion_in_diff`` / ``regex_in_file`` file-grep gates the fallback emits.
+_DEFAULT_LOCUS_VALUE = "source"
+
+#: Default observe verb when the parser resolves no verb. ``file_matches`` pairs
+#: with the ``criterion_in_diff`` fallback gate (a file-grep contract).
+_DEFAULT_VERB_VALUE = "file_matches"
+
+
+def legacy_criterion_pattern(text: str) -> str:
+    """Return a regex pattern derived from a legacy criterion string.
+
+    The converter's fallback gate (``criterion_in_diff`` / ``regex_in_file``)
+    needs a concrete ``pattern`` to grep. The longest alphanumeric token in the
+    criterion text is the most distinctive keyword to anchor on; it is regex-
+    escaped so punctuation in the token cannot corrupt the pattern. A string
+    with no alphanumeric run yields a catch-all ``.`` so the gate still
+    compiles (an empty pattern would raise at gate construction).
+
+    Args:
+        text: The legacy success-criterion string.
+
+    Returns:
+        A regex pattern string anchoring on the criterion's most distinctive
+        token, or ``"."`` when the text carries no alphanumeric run.
+    """
+    tokens: list[str] = re.findall(r"[A-Za-z0-9_]+", text)
+    if not tokens:
+        return "."
+    longest = max(tokens, key=len)
+    return re.escape(longest)
+
+
+def convert_legacy_criterion(
+    text: str,
+    *,
+    index: int,
+    file_scopes: list[str],
+) -> tuple[CriterionSpec, GateSpec]:
+    """Convert a grandfathered legacy criterion STRING into a typed, gated pair.
+
+    This is the legacy-to-typed converter: it lifts a free-form
+    success-criterion string out of the grandfathered no-op state
+    (:data:`GRANDFATHERED_KIND`, no gates) into a typed
+    :class:`CriterionSpec` carrying a real :class:`ResponseClause` plus an
+    attached, falsifying :class:`GateSpec`. The eawf021 verb/locus parser
+    (:func:`eawf.platform.lint.eawf021_measurable_criterion.extract_observation`)
+    seeds the response clause; where the parse is ambiguous (no recognised verb
+    or locus) the converter hand-authors a ``criterion_in_diff`` gate whose
+    pattern is the criterion's most distinctive token
+    (:func:`legacy_criterion_pattern`).
+
+    The gate kind is chosen from the parsed verb via
+    :data:`_VERB_VALUE_TO_GATE_KIND`, falling back to
+    :data:`_FALLBACK_GATE_KIND`. The response clause's ``gate_ref`` names that
+    gate kind, so :func:`assign_oracle_tier` derives the criterion's oracle tier
+    from the cheapest deterministic falsifier of the attached gate. The returned
+    criterion carries ``kind == CONVERTED_KIND`` and
+    ``evidence_kind == "deterministic"``, so the readiness path no longer counts
+    it as legacy and the deterministic floor runs its gate live.
+
+    The returned pair is NOT yet tier-resolved: pass it through
+    :func:`validate_criterion_gate_refs` (which computes + persists
+    ``oracle_tier`` in place) before scoring -- mirroring the close path that
+    runs the same validator over state-loaded criteria.
+
+    Args:
+        text: The legacy success-criterion string (1-500 chars).
+        index: 1-based position of the criterion within its wave; drives the
+            ``CR-<index>`` / ``GATE-<index>`` ids.
+        file_scopes: The wave's file scopes the file-grep gates resolve their
+            ``pattern`` against. Must be non-empty so the gate has somewhere to
+            look.
+
+    Returns:
+        A ``(criterion, gate)`` tuple. The criterion's ``gate_ids`` references
+        the gate id, and the gate's ``criterion_id`` references the criterion
+        id, so :func:`validate_criterion_gate_refs` accepts the pair.
+
+    Raises:
+        ValueError: When *file_scopes* is empty (a file-grep gate needs at
+            least one scope to resolve its pattern against).
+    """
+    from eawf.platform.lint.eawf021_measurable_criterion import extract_observation
+
+    if not file_scopes:
+        raise ValueError(f"convert_legacy_criterion requires file_scopes: text={text!r}")
+
+    verb_value, locus_value = extract_observation(text)
+    verb_value = verb_value or _DEFAULT_VERB_VALUE
+    locus_value = locus_value or _DEFAULT_LOCUS_VALUE
+    gate_kind = _VERB_VALUE_TO_GATE_KIND.get(verb_value, _FALLBACK_GATE_KIND)
+
+    criterion_id = f"CR-{index:02d}"
+    gate_id = f"GATE-{index:02d}"
+    pattern = legacy_criterion_pattern(text)
+
+    response = ResponseClause(
+        observe=ObserveVerb(verb_value),
+        object=text[:200],
+        locus=ProofLocus(locus_value),
+        gate_ref=gate_kind,
+    )
+    measurable_signal = text[:300] if len(text) >= 20 else GRANDFATHERED_SIGNAL
+    criterion = CriterionSpec(
+        id=criterion_id,
+        text=text,
+        kind=CONVERTED_KIND,
+        acceptance_style="binary",
+        evidence_kind="deterministic",
+        gate_ids=[gate_id],
+        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
+        measurable_signal=measurable_signal,
+        response=response,
+    )
+    gate = GateSpec(
+        id=gate_id,
+        criterion_id=criterion_id,
+        kind=gate_kind,
+        args=_gate_args_for_kind(gate_kind, pattern=pattern, file_scopes=file_scopes),
+        policy="block",
+        cadence="every-wave",
+    )
+    return criterion, gate
+
+
+def _gate_args_for_kind(
+    gate_kind: str,
+    *,
+    pattern: str,
+    file_scopes: list[str],
+) -> dict[str, Any]:
+    """Return the hand-authored ``args`` body for a converter-emitted gate kind.
+
+    Each deterministic gate kind the converter emits has its own ``args``
+    shape; this keeps the per-kind body in one place so
+    :func:`convert_legacy_criterion` stays a flat assembler:
+
+    * ``criterion_in_diff`` -> ``{criterion, pattern, file_scopes}`` (file grep
+      across the wave's scopes).
+    * ``regex_in_file`` -> ``{path, pattern}`` (single-file grep; the first
+      file scope is the path).
+
+    Args:
+        gate_kind: The gate kind to build args for.
+        pattern: The grep pattern derived from the criterion text.
+        file_scopes: The wave's file scopes (non-empty).
+
+    Returns:
+        The per-kind ``args`` dict ready to attach to a :class:`GateSpec`.
+    """
+    if gate_kind == "regex_in_file":
+        return {"path": file_scopes[0], "pattern": pattern}
+    return {"criterion": pattern, "pattern": pattern, "file_scopes": list(file_scopes)}
+
+
+def backfill_legacy_criteria(
+    legacy_texts: list[str],
+    *,
+    file_scopes: list[str],
+) -> tuple[list[CriterionSpec], list[GateSpec]]:
+    """Convert a wave's full legacy success-criteria list into typed, gated rows.
+
+    The batch entry point the backfill tool drives: maps each grandfathered
+    string through :func:`convert_legacy_criterion`, then runs the resulting
+    rows through :func:`validate_criterion_gate_refs` so every criterion's
+    ``oracle_tier`` is computed + persisted (and the cross-reference integrity
+    is asserted) exactly as the close path does. The returned criteria carry
+    ``kind == CONVERTED_KIND`` -- so the legacy count over the returned set is
+    ZERO -- and a populated, gate-kind-derived ``oracle_tier``.
+
+    Args:
+        legacy_texts: The wave's free-form success-criterion strings.
+        file_scopes: The wave's file scopes the file-grep gates resolve
+            against. Must be non-empty.
+
+    Returns:
+        A ``(criteria, gates)`` tuple. Every criterion is typed + gated +
+        tier-resolved; none carry ``kind == GRANDFATHERED_KIND``.
+
+    Raises:
+        ValueError: When *file_scopes* is empty, or a converted criterion/gate
+            pair fails cross-reference / tier validation.
+    """
+    criteria: list[CriterionSpec] = []
+    gates: list[GateSpec] = []
+    for position, text in enumerate(legacy_texts, start=1):
+        criterion, gate = convert_legacy_criterion(
+            text,
+            index=position,
+            file_scopes=file_scopes,
+        )
+        criteria.append(criterion)
+        gates.append(gate)
+    validate_criterion_gate_refs(criteria, gates)
+    return criteria, gates
 
 
 class SourceUnit(_StrictModel):

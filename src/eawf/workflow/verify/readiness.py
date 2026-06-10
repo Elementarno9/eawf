@@ -799,6 +799,30 @@ def _build_legacy_views(wave: Wave) -> tuple[list[CriterionView], list[str]]:
     return views, warnings
 
 
+def legacy_criterion_count(criteria: list[CriterionSpec]) -> int:
+    """Return how many *criteria* are still grandfathered legacy no-ops.
+
+    The active-criteria legacy count is the population the legacy-to-typed
+    converter (:func:`eawf.kernel.spec.common.convert_legacy_criterion`)
+    exists to drain: a criterion counts as legacy iff its ``kind`` is the
+    :data:`~eawf.kernel.spec.common.GRANDFATHERED_KIND` sentinel -- a row the
+    ``1.6 -> 1.7`` migration wrapped from a free-form string with no falsifying
+    gate. A converted criterion carries
+    :data:`~eawf.kernel.spec.common.CONVERTED_KIND` instead, so it drops out of
+    this tally and routes through the gated spec path. The count over a fully
+    converted criterion set is therefore ZERO -- the binary proof the backfill
+    sample asserts.
+
+    Args:
+        criteria: The typed criterion rows to tally (a wave's
+            ``success_criteria``, or a converter's output sample).
+
+    Returns:
+        The number of rows whose ``kind == GRANDFATHERED_KIND``.
+    """
+    return sum(1 for criterion in criteria if criterion.kind == GRANDFATHERED_KIND)
+
+
 def _not_ready_criteria(criteria: list[CriterionView]) -> list[str]:
     """Return compact ``criterion_id:status`` strings for blocking non-ready criteria.
 
@@ -1004,6 +1028,7 @@ def _is_ready(criteria: list[CriterionView]) -> bool:
 
 __all__ = [
     "compute",
+    "legacy_criterion_count",
     "load_active_verify_block",
     "resolve_wave_verify_block",
 ]

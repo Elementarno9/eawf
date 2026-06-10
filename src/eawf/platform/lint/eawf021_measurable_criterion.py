@@ -161,6 +161,87 @@ class MeasurabilityViolation:
         return f"{self.lineno}:{self.col_offset}: {RULE_CODE} {self.reason}: {self.snippet!r}"
 
 
+#: Surface form (lowercase, the exact alternation members above) -> the
+#: canonical :class:`~eawf.kernel.spec.common.ObserveVerb` value. Both the
+#: underscore enum spelling (``holds_for_all``) and the natural-prose spelling
+#: (``holds for all``) resolve to the same enum value so a criterion authored
+#: either way parses. The values are the bare :class:`ObserveVerb` ``.value``
+#: strings so the converter can build the enum without importing it here.
+_VERB_SURFACE_TO_VALUE: dict[str, str] = {
+    "returns": "returns",
+    "raises": "raises",
+    "holds for all": "holds_for_all",
+    "holds_for_all": "holds_for_all",
+    "exits": "exits",
+    "emits": "emits",
+    "validates": "validates",
+    "matches pattern": "matches_pattern",
+    "matches_pattern": "matches_pattern",
+    "transitions to": "transitions_to",
+    "transitions_to": "transitions_to",
+    "renders token": "renders_token",
+    "renders_token": "renders_token",
+    "triggers action": "triggers_action",
+    "triggers_action": "triggers_action",
+    "file matches": "file_matches",
+    "file_matches": "file_matches",
+    "judged": "judged",
+}
+
+#: Surface form -> canonical :class:`~eawf.kernel.spec.common.ProofLocus`
+#: value, mirroring :data:`_VERB_SURFACE_TO_VALUE`. Both ``cli exit`` and
+#: ``cli_exit`` resolve to ``cli_exit`` etc.
+_LOCUS_SURFACE_TO_VALUE: dict[str, str] = {
+    "pytest": "pytest",
+    "hypothesis": "hypothesis",
+    "cli_exit": "cli_exit",
+    "cli exit": "cli_exit",
+    "log_capture": "log_capture",
+    "log capture": "log_capture",
+    "schema": "schema",
+    "source": "source",
+    "state_json": "state_json",
+    "state json": "state_json",
+    "tui_snapshot": "tui_snapshot",
+    "tui snapshot": "tui_snapshot",
+    "tui_pilot": "tui_pilot",
+    "tui pilot": "tui_pilot",
+    "golden": "golden",
+    "human": "human",
+    "jury": "jury",
+}
+
+
+def extract_observation(text: str) -> tuple[str | None, str | None]:
+    """Return the first ``(observe_verb, proof_locus)`` value pair parsed from *text*.
+
+    The string-level twin of :func:`_has_observation_contract`: it scans the
+    criterion text for the earliest observation verb and the earliest proof
+    locus the EAWF021 vocabularies recognise, returning each as its canonical
+    :class:`~eawf.kernel.spec.common.ObserveVerb` /
+    :class:`~eawf.kernel.spec.common.ProofLocus` ``.value`` string (or ``None``
+    when the text carries no recognised form). The legacy-to-typed converter
+    seeds a :class:`ResponseClause` from this pair, falling back to a
+    hand-authored clause when either leg returns ``None``.
+
+    Args:
+        text: The criterion text to parse.
+
+    Returns:
+        A ``(verb_value, locus_value)`` tuple. Either element is ``None`` when
+        the text carries no recognised surface form for that vocabulary.
+    """
+    verb_match = _VERB_RE.search(text)
+    locus_match = _LOCUS_RE.search(text)
+    verb = (
+        _VERB_SURFACE_TO_VALUE[verb_match.group(0).lower()] if verb_match is not None else None
+    )
+    locus = (
+        _LOCUS_SURFACE_TO_VALUE[locus_match.group(0).lower()] if locus_match is not None else None
+    )
+    return verb, locus
+
+
 def _has_observation_contract(text: str, response: ResponseClause | None) -> bool:
     """Return whether *text* / *response* carry an observation verb + locus.
 
@@ -293,4 +374,5 @@ __all__ = [
     "check_criterion",
     "check_criterion_spec",
     "check_source",
+    "extract_observation",
 ]
