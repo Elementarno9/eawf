@@ -4787,6 +4787,18 @@
       "scope_id": "P30-I05-W10",
       "status": "done",
       "updated_at": "2026-06-10T11:58:16.034920Z"
+    },
+    "P30-I05-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W11",
+      "scope_id": "P30-I05-W11",
+      "status": "done",
+      "updated_at": "2026-06-10T13:34:48.095288Z"
     }
   },
   "agent_sessions": {
@@ -15524,6 +15536,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I05-W10",
       "updated_at": "2026-06-10T11:57:58.217048Z"
+    },
+    "P30-I05-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W11-bucket-20260610T132855Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I05-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I05-W11",
+      "updated_at": "2026-06-10T13:28:55.954368Z"
     }
   },
   "goals": {
@@ -18421,7 +18446,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T13:27:22.700494Z",
+  "updated_at": "2026-06-10T13:34:48.095477Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73999,10 +74024,10 @@
     "P30-I05-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "opus-fasttest-w11",
+      "claimed_at": "2026-06-10T13:28:55.954355Z",
+      "closed_at": "2026-06-10T13:34:48.095288Z",
+      "commit": "8f5900f92918c8e6be5696eecc97cd933dff12d9",
       "deps": [],
       "description": "Add a justfile with parallel test recipes mirroring CI, document just test as the fast-suite command, route agent full-suite runs through it, and drop the false slow-marker exclusion claim.",
       "dispatch_history": [],
@@ -74036,12 +74061,12 @@
       },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-10T13:27:22.072736Z",
-      "outcome": null,
+      "outcome": "justfile with test/test-all/test-tui recipes mirroring CI added; CONTRIBUTING + python.yaml route full runs through just test; AGENTS.md re-rendered; slow-marker description corrected",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
