@@ -50,6 +50,7 @@ composition is unit-testable without mounting Textual.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
@@ -60,8 +61,10 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
-from textual.widgets import Static
+from textual.screen import ModalScreen
+from textual.widgets import Input, Static
 
+from eawf.kernel.spec.research_campaign import ResearchDomainConfig, ResearchProfileBlock
 from eawf.kernel.state.enums import (
     CampaignStatus,
     ClaimStatus,
@@ -190,11 +193,12 @@ _SNAPSHOT_METHOD: str = "research.snapshot"
 #: mutator).
 _CANCEL_METHOD: str = "research.cancel_campaign"
 
-#: Intended daemon method the ``n`` (new-campaign) key routes through. Staging
-#: a campaign from the TUI has no callable seam yet (campaigns stage through the
-#: ``research.create_campaign`` RPC, which needs a full ``research:`` block the
-#: board cannot yet compose), so ``n`` surfaces the honest "not yet wired" line
-#: -- the idle-contract pattern, live for free once a staging seam lands.
+#: Daemon JSON-RPC method the ``n`` (new-campaign) key routes through -- the
+#: real plan-only stager (the daemon is the canonical campaign-store mutator).
+#: The compose modal collects a topic + at least one domain into a
+#: :class:`~eawf.kernel.spec.research_campaign.ResearchProfileBlock`, and the
+#: commit issues the staging RPC off the UI thread; an empty-topic commit is
+#: rejected by the daemon and surfaced honestly rather than faking a node.
 _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 
 #: Drawer line before any checkpoint is open (the idle checkpoint surface).
@@ -217,6 +221,15 @@ CANCEL_NO_CAMPAIGN: str = "cancel: no campaign selected to cancel"
 #: Action-result line when the cancel-campaign request could not reach the
 #: daemon (the canonical campaign-store mutator).
 CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
+
+#: Action-result line while the staging RPC is in flight (the worker dispatched
+#: the call off the UI thread). The result line flips to the honest outcome
+#: once the worker returns.
+NEW_PENDING: str = "new: staging campaign..."
+
+#: Action-result line when a new-campaign commit could not reach the daemon
+#: (the canonical campaign-store mutator) so nothing was staged.
+NEW_NO_DAEMON: str = "new: daemon unavailable -- request not issued"
 
 #: Honest "not yet wired" line for the keys whose engine runner does not exist
 #: yet (follow-up / snapshot). Formatted with the verb so each reads clearly.
@@ -396,6 +409,189 @@ class CampaignRow:
     def domain_count(self) -> int:
         """Return the number of staged domains in this campaign."""
         return len(self.domains)
+
+
+def parse_domains(raw: str) -> tuple[str, ...]:
+    """Split the compose-form domains field into a deduplicated domain tuple.
+
+    The compose modal collects domains as one free-text field: comma- and / or
+    whitespace-separated domain names. This normaliser splits on commas first,
+    then trims each piece, drops empties, and deduplicates while preserving
+    first-seen order so a typo'd double-entry collapses to one staged domain.
+    An empty / whitespace-only field yields the empty tuple -- the boundary case
+    the modal rejects (a campaign stages at least one domain).
+
+    Args:
+        raw: The raw domains-field buffer text.
+
+    Returns:
+        The cleaned, deduplicated domain names in first-seen order; empty when
+        the field carries no usable domain.
+    """
+    seen: dict[str, None] = {}
+    for piece in raw.replace("\n", ",").split(","):
+        domain = piece.strip()
+        if domain and domain not in seen:
+            seen[domain] = None
+    return tuple(seen)
+
+
+def build_research_block(domains: tuple[str, ...]) -> ResearchProfileBlock:
+    """Build a :class:`ResearchProfileBlock` from the composed *domains*.
+
+    Each domain stages with the block-level default depth (the compose modal
+    does not yet collect per-domain depth / focus -- those default through the
+    :class:`~eawf.kernel.spec.research_campaign.ResearchDomainConfig` defaults).
+    The block is the staging input the ``research.stage_campaign`` RPC fans the
+    topic out across.
+
+    Args:
+        domains: The cleaned domain names the campaign stages across.
+
+    Returns:
+        The typed ``research:`` block carrying one default-tuned domain config
+        per name.
+    """
+    return ResearchProfileBlock(domains={domain: ResearchDomainConfig() for domain in domains})
+
+
+@dataclass(frozen=True)
+class CampaignDraft:
+    """A composed-but-not-yet-staged campaign (the compose modal's payload).
+
+    The :class:`ComposeCampaignModal` dismisses with this draft on commit; the
+    board's :meth:`ResearchBoardModeScreen.action_new_campaign` callback fans it
+    out to the ``research.stage_campaign`` RPC off the UI thread. The draft
+    carries the operator's raw topic verbatim (an empty / whitespace topic is
+    NOT pre-rejected here -- the daemon owns that verdict so the rejection
+    surfaces honestly through the real staging path, not a faked client-side
+    check).
+
+    Attributes:
+        topic: The campaign topic to fan out across the block's domains, as the
+            operator typed it (may be empty -- the daemon rejects an empty
+            topic).
+        block: The typed ``research:`` block the campaign stages from, carrying
+            at least one composed domain.
+    """
+
+    topic: str
+    block: ResearchProfileBlock
+
+
+class ComposeCampaignModal(ModalScreen["CampaignDraft | None"]):
+    """Campaign compose-form modal (returns a :class:`CampaignDraft` on commit).
+
+    A two-field form -- a topic line + a domains line (comma- / whitespace-
+    separated) -- the board's ``n`` key opens. ``Enter`` commits: the buffers
+    parse into a topic + a :class:`ResearchProfileBlock` and dismiss as a
+    :class:`CampaignDraft`; ``Esc`` cancels (dismisses ``None``, so the board
+    issues zero RPCs). A commit with no parsed domain stays open with an inline
+    notice (a campaign stages at least one domain), so the only dismiss-with-
+    draft path carries a usable block. The topic is NOT validated here -- an
+    empty topic dismisses a draft so the daemon's rejection surfaces honestly
+    through the real staging path rather than a faked client-side guard.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    ComposeCampaignModal {
+        align: center middle;
+    }
+    ComposeCampaignModal > #compose-box {
+        width: 70%;
+        max-width: 90;
+        height: auto;
+        border: solid $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    ComposeCampaignModal .compose-label {
+        text-style: bold;
+        color: $accent;
+        height: auto;
+    }
+    ComposeCampaignModal .compose-field {
+        margin-bottom: 1;
+        border: tall $accent;
+    }
+    ComposeCampaignModal #compose-error {
+        color: $error;
+        height: auto;
+    }
+    ComposeCampaignModal .compose-hint {
+        color: $text-muted;
+        height: 1;
+        margin-top: 1;
+    }
+    """
+
+    #: ``Esc`` cancels (dismisses ``None``). ``Enter`` commits via the focused
+    #: :class:`Input`'s ``Submitted`` message, not a screen binding -- see
+    #: :meth:`on_input_submitted` -- so the same key commits from either field.
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "cancel", "cancel", show=False),
+    ]
+
+    #: Widget ids (addressable so the commit reads the buffers + the test drives
+    #: the fields without re-deriving the layout).
+    TOPIC_INPUT_ID: ClassVar[str] = "compose-topic"
+    DOMAINS_INPUT_ID: ClassVar[str] = "compose-domains"
+    ERROR_ID: ClassVar[str] = "compose-error"
+
+    #: Inline notice shown when a commit carries no parsed domain (the modal
+    #: stays open so the operator can add one without retyping the topic).
+    NO_DOMAIN_NOTICE: ClassVar[str] = "add at least one domain"
+
+    def compose(self) -> ComposeResult:
+        """Yield the topic + domains inputs above the inline notice + hint row."""
+        with Vertical(id="compose-box"):
+            yield Static("new research campaign", classes="compose-label")
+            yield Static("[$muted]topic[/]", classes="compose-label")
+            yield Input(
+                placeholder="campaign topic",
+                id=self.TOPIC_INPUT_ID,
+                classes="compose-field",
+            )
+            yield Static("[$muted]domains (comma-separated)[/]", classes="compose-label")
+            yield Input(
+                placeholder="market-structure, pricing-models",
+                id=self.DOMAINS_INPUT_ID,
+                classes="compose-field",
+            )
+            # markup=False -- the notice is literal copy, never a tag.
+            yield Static("", id=self.ERROR_ID, markup=False)
+            yield Static("[ Enter commit - Esc cancel ]", classes="compose-hint")
+
+    def on_mount(self) -> None:
+        """Focus the topic input so the operator types the topic first."""
+        self.query_one(f"#{self.TOPIC_INPUT_ID}", Input).focus()
+
+    def on_input_submitted(self, message: Input.Submitted) -> None:
+        """Commit on ``Enter`` (either field's ``Submitted`` message)."""
+        message.stop()
+        self.action_commit()
+
+    def action_commit(self) -> None:
+        """Commit the form: dismiss a draft, or report the missing-domain notice.
+
+        Parses the domains field; with no usable domain the modal stays open and
+        renders the :data:`NO_DOMAIN_NOTICE` inline so the operator adds one. On
+        at least one domain the topic + the composed block dismiss as a
+        :class:`CampaignDraft` -- the topic passes through unvalidated so the
+        daemon owns the empty-topic verdict and its rejection surfaces honestly.
+        """
+        topic = self.query_one(f"#{self.TOPIC_INPUT_ID}", Input).value
+        domains = parse_domains(self.query_one(f"#{self.DOMAINS_INPUT_ID}", Input).value)
+        if not domains:
+            self.query_one(f"#{self.ERROR_ID}", Static).update(self.NO_DOMAIN_NOTICE)
+            return
+        logger.info(f"compose_campaign commit topic={topic!r} domains={len(domains)}")
+        self.dismiss(CampaignDraft(topic=topic, block=build_research_block(domains)))
+
+    def action_cancel(self) -> None:
+        """Dismiss with ``None`` (``Esc`` = cancel; the board issues no RPC)."""
+        logger.info("compose_campaign cancel")
+        self.dismiss(None)
 
 
 class NodeKind(StrEnum):
@@ -1280,16 +1476,88 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._issue_unwired(verb="snapshot", method=_SNAPSHOT_METHOD)
 
     def action_new_campaign(self) -> None:
-        """Stage a new campaign (no TUI staging seam yet -- honest-unavailable).
+        """Open the campaign compose-form modal; commit stages a new campaign.
 
-        Routes through the daemon-client seam to the intended
-        ``research.stage_campaign`` method. The board cannot yet compose the
-        full ``research:`` block staging requires, so no TUI-callable seam
-        exists: the daemon answers method-not-found and the action surfaces the
-        honest "not yet wired" line -- it never implies a campaign was staged. It
-        goes live for free once a staging seam lands (the idle-contract pattern).
+        Pushes a :class:`ComposeCampaignModal` and stages the committed draft
+        through the real ``research.stage_campaign`` RPC. ``Esc`` cancels the
+        modal (the callback receives ``None`` and issues zero RPCs). On commit
+        the draft (topic + composed block) routes to :meth:`_stage_committed`,
+        which dispatches the staging call off the UI thread and re-renders the
+        board to show the new campaign node -- or surfaces the daemon's
+        rejection (e.g. an empty topic) honestly without fabricating a node.
         """
-        self._issue_unwired(verb="new-campaign", method=_NEW_CAMPAIGN_METHOD)
+        self.app.push_screen(ComposeCampaignModal(), self._stage_committed)
+
+    def _stage_committed(self, draft: CampaignDraft | None) -> None:
+        """Stage *draft* off the UI thread, or no-op when the modal cancelled.
+
+        The modal dismiss callback: a ``None`` draft (``Esc`` cancel) issues no
+        RPC at all. A committed draft seeds the in-flight :data:`NEW_PENDING`
+        line and dispatches :meth:`_stage_campaign_worker` as a worker so the
+        daemon round-trip never blocks the UI thread; the worker flips the line
+        to the honest outcome and re-renders the board once the call returns.
+
+        Args:
+            draft: The composed campaign draft, or ``None`` when the operator
+                cancelled the modal.
+        """
+        if draft is None:
+            return
+        self._set_action(f"[$muted]{NEW_PENDING}[/]")
+        self.run_worker(self._stage_campaign_worker(draft), group="research-stage", exclusive=True)
+
+    async def _stage_campaign_worker(self, draft: CampaignDraft) -> None:
+        """Issue ``research.stage_campaign`` for *draft* off the event loop.
+
+        Runs the blocking daemon round-trip in a thread (so the UI thread never
+        stalls), then -- back on the event loop -- flips the action line to the
+        honest outcome and re-renders the board so a staged campaign's node
+        appears. A daemon rejection (an empty topic, an over-bound block) or an
+        unreachable daemon surfaces honestly; neither fabricates a campaign
+        node.
+
+        Args:
+            draft: The composed campaign draft to stage.
+        """
+        result_line = await asyncio.to_thread(self._issue_stage, draft)
+        self._set_action(result_line)
+        self._rebuild()
+        logger.info(f"_stage_campaign_worker topic={draft.topic!r} result={result_line!r}")
+
+    def _issue_stage(self, draft: CampaignDraft) -> str:
+        """Issue ``research.stage_campaign`` for *draft* and return a result line.
+
+        Calls the daemon ``research.stage_campaign`` method through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI mutates through, when a daemon socket is available. A daemon that
+        is unreachable, rejecting (an empty topic surfaces as a typed rejection),
+        or timing out yields the honest unavailable / rejected line rather than a
+        faked staging.
+
+        Args:
+            draft: The composed campaign draft (topic + ``research:`` block).
+
+        Returns:
+            A content-markup result line describing the staging outcome.
+        """
+        if not self._daemon_available():
+            return f"[$warn]{NEW_NO_DAEMON}[/]"
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                result = client.call(
+                    _NEW_CAMPAIGN_METHOD,
+                    {"topic": draft.topic, "config": draft.block.model_dump(mode="json")},
+                )
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_stage daemon_rejected message={exc.message!r}")
+            return f"[$warn]new: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_stage daemon_fallback cause={exc!r}")
+            return f"[$warn]{NEW_NO_DAEMON}[/]"
+        topic = result.get("topic", draft.topic)
+        return f"[$ok]new: staged[/] [$muted]topic={escape_markup(str(topic))}[/]"
 
     def action_cancel_campaign(self) -> None:
         """Cancel the selected campaign via the real ``research.cancel_campaign`` RPC.
@@ -1701,6 +1969,8 @@ __all__ = [
     "DRAWER_ID",
     "EMPTY_NOTICE",
     "EMPTY_SUBLINE",
+    "NEW_NO_DAEMON",
+    "NEW_PENDING",
     "NONE_YET",
     "OPTIONS_BODY_ID",
     "PARK_NO_CHECKPOINT",
@@ -1709,14 +1979,18 @@ __all__ = [
     "STAGED_ROUND",
     "UNRESOLVED_BODY_ID",
     "UNRESOLVED_HEADER_ID",
+    "CampaignDraft",
     "CampaignRow",
+    "ComposeCampaignModal",
     "NodeKind",
     "ResearchBoardModeScreen",
     "TreeNode",
+    "build_research_block",
     "build_tree_nodes",
     "claim_sigil_markup",
     "group_claims_by_evidence",
     "has_research_signal",
+    "parse_domains",
     "question_sigil_markup",
     "read_campaign_rows",
     "render_center_tabs",

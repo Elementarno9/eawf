@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from textual.widgets import MarkdownViewer
+from textual.widgets import Input, MarkdownViewer, Static
 from textual.widgets.markdown import Markdown, MarkdownBlock, MarkdownTableOfContents
 
 from eawf.kernel.spec.research import ResearchDepth
@@ -82,17 +82,22 @@ from eawf.surfaces.tui.modes.research_board import (
     DRAWER_ID,
     EMPTY_ID,
     EMPTY_NOTICE,
+    NEW_NO_DAEMON,
     NONE_YET,
     PARK_NO_CHECKPOINT,
     PEEK_RESULT_ID,
     PROGRESS_PANE_ID,
     TREE_PANE_ID,
+    CampaignDraft,
     CampaignRow,
+    ComposeCampaignModal,
     NodeKind,
     ResearchBoardModeScreen,
+    build_research_block,
     build_tree_nodes,
     claim_sigil_markup,
     has_research_signal,
+    parse_domains,
     read_campaign_rows,
     render_center_tabs,
     render_checkpoint,
@@ -1294,5 +1299,339 @@ def test_research_board_unwired_keys_no_daemon_surface_unavailable(
             assert isinstance(pane, ResearchBoardModeScreen)
             result = pane.query_one(f"#{ACTION_RESULT_ID}")
             assert "daemon unavailable" in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W11: parse_domains / build_research_block -- the compose-form helpers
+# --------------------------------------------------------------------------
+
+
+def test_parse_domains_empty_field_yields_empty() -> None:
+    """An empty / whitespace-only domains field parses to no domain."""
+    assert parse_domains("") == ()
+    assert parse_domains("   ") == ()
+
+
+def test_parse_domains_splits_and_trims_comma_separated() -> None:
+    """Comma-separated domains split + trim into a clean tuple."""
+    assert parse_domains("market-structure, pricing-models") == (
+        "market-structure",
+        "pricing-models",
+    )
+
+
+def test_parse_domains_splits_on_whitespace_and_newlines() -> None:
+    """Whitespace + newlines also separate domains (lenient field parse)."""
+    assert parse_domains("alpha\nbeta") == ("alpha", "beta")
+
+
+def test_parse_domains_dedupes_preserving_first_seen_order() -> None:
+    """A repeated domain collapses to one, keeping first-seen order."""
+    assert parse_domains("beta, alpha, beta") == ("beta", "alpha")
+
+
+def test_build_research_block_stages_one_default_domain_config_per_name() -> None:
+    """Each composed domain becomes one default-tuned config in the block."""
+    block = build_research_block(("market-structure", "pricing-models"))
+    assert set(block.domains) == {"market-structure", "pricing-models"}
+    assert all(cfg.depth is None for cfg in block.domains.values())
+
+
+# --------------------------------------------------------------------------
+# W11: ComposeCampaignModal -- the compose-form modal (commit / cancel)
+# --------------------------------------------------------------------------
+
+
+def test_compose_modal_commit_dismisses_topic_and_block(tmp_path: Path) -> None:
+    """Filling topic + one domain and committing dismisses a typed draft."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    dismissed: list[CampaignDraft | None] = []
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.push_screen(ComposeCampaignModal(), dismissed.append)
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, ComposeCampaignModal)
+            modal.query_one(f"#{ComposeCampaignModal.TOPIC_INPUT_ID}", Input).value = "Survey IV"
+            modal.query_one(
+                f"#{ComposeCampaignModal.DOMAINS_INPUT_ID}", Input
+            ).value = "pricing-models"
+            modal.action_commit()
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert len(dismissed) == 1
+    draft = dismissed[0]
+    assert isinstance(draft, CampaignDraft)
+    assert draft.topic == "Survey IV"
+    assert set(draft.block.domains) == {"pricing-models"}
+
+
+def test_compose_modal_cancel_dismisses_none(tmp_path: Path) -> None:
+    """``Esc`` cancels the modal with a ``None`` draft (no campaign composed)."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    dismissed: list[CampaignDraft | None] = []
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.push_screen(ComposeCampaignModal(), dismissed.append)
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ComposeCampaignModal)
+            await pilot.press("escape")
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert dismissed == [None]
+
+
+def test_compose_modal_commit_without_domain_stays_open(tmp_path: Path) -> None:
+    """A commit with no parsed domain stays open with the missing-domain notice."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    dismissed: list[CampaignDraft | None] = []
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.push_screen(ComposeCampaignModal(), dismissed.append)
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, ComposeCampaignModal)
+            modal.query_one(f"#{ComposeCampaignModal.TOPIC_INPUT_ID}", Input).value = "topic only"
+            modal.action_commit()  # no domain entered
+            await settle_screen(pilot)
+            # The modal stays open and surfaces the missing-domain notice.
+            assert isinstance(app.screen, ComposeCampaignModal)
+            notice = app.screen.query_one(f"#{ComposeCampaignModal.ERROR_ID}", Static)
+            assert ComposeCampaignModal.NO_DOMAIN_NOTICE in str(notice.render())
+
+    asyncio.run(body())
+    assert dismissed == []
+
+
+# --------------------------------------------------------------------------
+# W11: n -> compose -> commit stages a campaign + re-renders the board
+# --------------------------------------------------------------------------
+
+
+def test_research_board_n_commit_stages_campaign_and_renders_node(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pressing ``n``, filling the form, and committing stages a campaign.
+
+    The commit must call ``research.stage_campaign`` once with the composed
+    topic + block (a fake DaemonClient capturing the call), and the board must
+    re-render to show the new campaign node. The fake client persists a real
+    campaign row so the re-read board surfaces the node honestly.
+    """
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    calls: list[tuple[str, dict[str, object]]] = []
+    staged_topic = "Survey the options-pricing landscape"
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            # Persist a real campaign row so the board re-read surfaces the node.
+            _append_campaign(state_path, _campaign_payload("RC-NEW"))
+            return {
+                "id": "RC-NEW",
+                "campaign_id": "RC-NEW",
+                "topic": staged_topic,
+                "domain_count": 2,
+                "appended_at": _T0.isoformat(),
+            }
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            await pilot.press("n")  # open the compose modal
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, ComposeCampaignModal)
+            modal.query_one(f"#{ComposeCampaignModal.TOPIC_INPUT_ID}", Input).value = staged_topic
+            modal.query_one(
+                f"#{ComposeCampaignModal.DOMAINS_INPUT_ID}", Input
+            ).value = "market-structure, pricing-models"
+            modal.action_commit()
+            await settle_screen(pilot)  # drains the staging worker
+            board = app.screen
+            assert isinstance(board, ResearchBoardModeScreen)
+            tree_body = str(board.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            assert staged_topic in tree_body
+            result = board.query_one(f"#{ACTION_RESULT_ID}")
+            assert "staged" in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+    assert len(calls) == 1
+    method, params = calls[0]
+    assert method == "research.stage_campaign"
+    assert params["topic"] == staged_topic
+    config = params["config"]
+    assert isinstance(config, dict)
+    assert set(config["domains"]) == {"market-structure", "pricing-models"}
+
+
+def test_research_board_n_cancel_issues_zero_rpcs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pressing ``n`` then ``Esc`` cancels the modal and issues zero RPCs."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press("n")  # open the compose modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ComposeCampaignModal)
+            await pilot.press("escape")  # cancel
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+
+    asyncio.run(body())
+    assert calls == []
+
+
+def test_research_board_n_commit_empty_topic_surfaces_daemon_rejection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty-topic commit surfaces the daemon's rejection -- no faked node.
+
+    The form requires a domain (so it commits), but the topic is empty: the
+    daemon rejects the staging with a typed error, which the board surfaces
+    honestly. No campaign row is persisted, so no fabricated node appears.
+    """
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _RejectingClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _RejectingClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+            calls.append((method, params))
+            raise DaemonRpcError(code=-32602, message="campaign topic must be non-empty: ''")
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _RejectingClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press("n")
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, ComposeCampaignModal)
+            # Empty topic, but a domain is supplied so the form commits.
+            modal.query_one(f"#{ComposeCampaignModal.DOMAINS_INPUT_ID}", Input).value = "pricing"
+            modal.action_commit()
+            await settle_screen(pilot)  # drains the staging worker
+            board = app.screen
+            assert isinstance(board, ResearchBoardModeScreen)
+            result = board.query_one(f"#{ACTION_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "daemon rejected request" in rendered
+            assert "non-empty" in rendered
+            assert "staged" not in rendered
+            # No campaign node was fabricated -- the board carries no topic node.
+            tree_body = str(board.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            assert "pricing" not in tree_body
+
+    asyncio.run(body())
+    assert len(calls) == 1
+    assert calls[0][0] == "research.stage_campaign"
+    assert calls[0][1]["topic"] == ""
+
+
+def test_research_board_n_commit_no_daemon_surfaces_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A commit with no reachable daemon surfaces the honest unavailable line."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press("n")
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, ComposeCampaignModal)
+            modal.query_one(f"#{ComposeCampaignModal.TOPIC_INPUT_ID}", Input).value = "topic"
+            modal.query_one(f"#{ComposeCampaignModal.DOMAINS_INPUT_ID}", Input).value = "pricing"
+            modal.action_commit()
+            await settle_screen(pilot)
+            board = app.screen
+            assert isinstance(board, ResearchBoardModeScreen)
+            result = board.query_one(f"#{ACTION_RESULT_ID}")
+            assert NEW_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
 
     asyncio.run(body())
