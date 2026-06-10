@@ -290,6 +290,87 @@ def build_verdict_outcomes(
     return outcomes
 
 
+# --- fleet verdict rollup (P30-I07-W09) -----------------------------------
+#
+# The fleet rollup is the DISPLAY-side companion to the outcome loop above: it
+# lists each wave's LATEST auditor verdict across the whole fleet so the
+# agent-watch TUI can paint a per-wave verdict pane tinted by outcome. Where
+# ``build_verdict_outcomes`` joins a verdict to its realized outcome (the
+# scorer's input), this helper surfaces the raw verdict per wave (the
+# operator's at-a-glance fleet view). Both read the same AUDITOR store; this
+# one keeps only the most-recent verdict per wave so a re-audited wave shows
+# its current verdict and not a shadowed earlier one.
+#
+# Honest-empty by construction: the per-wave report store is empty today, so
+# :func:`fleet_verdict_rollup` returns ``[]`` right now -- and the empty list
+# is the deliverable, never a fabricated row. The pane renders its honest-empty
+# line off that empty list rather than implying a fleet rollup exists.
+
+
+class FleetVerdictRow(BaseModel):
+    """One wave's latest auditor verdict in the fleet rollup -- a pure row.
+
+    ``extra="forbid"`` so a drifted field surfaces as a
+    :class:`pydantic.ValidationError` at construction rather than skewing the
+    rendered pane. Carries exactly the fields the agent-watch verdict pane
+    paints: the wave the verdict is about, the recorded
+    :class:`~eawf.kernel.state.enums.AgentReportVerdict` (the pane tints each
+    row by this outcome), and the runtime that produced it.
+
+    Attributes:
+        wave_id: The wave the verdict was about (the report ``base_id``).
+        verdict: The recorded
+            :class:`~eawf.kernel.state.enums.AgentReportVerdict` -- the outcome
+            the pane tints the row by (pass / pass-with-followups / fail /
+            blocked).
+        runtime: Runtime adapter id that produced the verdict report.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    wave_id: str
+    verdict: AgentReportVerdict
+    runtime: str
+
+
+def fleet_verdict_rollup(state_path: Path) -> list[FleetVerdictRow]:
+    """List each wave's latest auditor verdict across the fleet -- a pure read.
+
+    Reads the AUDITOR per-wave verdict rows off disk (via
+    :func:`eawf.workflow.agent_report.rollup.iter_agent_reports`, which returns
+    rows oldest-first), keeps only the LATEST row per wave (``base_id``) so a
+    re-audited wave shows its current verdict and not a shadowed earlier one,
+    and returns one :class:`FleetVerdictRow` per wave ordered by wave id for a
+    stable pane layout. No state join, no mutation, no daemon -- a pure store
+    read.
+
+    Honest-empty: the per-wave report store is empty today, so this returns
+    ``[]`` right now -- the correct result, not a bug. It never fabricates a
+    verdict row; it simply has no auditor rows to roll up yet.
+
+    Args:
+        state_path: Path to ``state.json``; the AUDITOR report store resolves
+            under its sibling ``store/`` directory.
+
+    Returns:
+        One :class:`FleetVerdictRow` per wave with an auditor verdict, carrying
+        that wave's latest verdict + producing runtime, ordered by wave id.
+        Empty when no auditor verdict row exists.
+    """
+    latest_by_wave: dict[str, FleetVerdictRow] = {}
+    for row in iter_agent_reports(state_path, role=_VERDICT_ROLE):
+        # Rows arrive oldest-first, so a later assignment overwrites an earlier
+        # one and the most-recent verdict per wave wins.
+        latest_by_wave[row.payload.header.base_id] = FleetVerdictRow(
+            wave_id=row.payload.header.base_id,
+            verdict=row.payload.body.verdict,
+            runtime=row.payload.header.runtime,
+        )
+    rollup = [latest_by_wave[wave_id] for wave_id in sorted(latest_by_wave)]
+    logger.debug(f"fleet_verdict_rollup waves={len(rollup)}")
+    return rollup
+
+
 # --- reliability scoring layer (P29-I05-W02) ------------------------------
 #
 # The scoring layer turns a stream of observed :class:`VerdictOutcome` rows
@@ -778,6 +859,7 @@ def map_reliability_to_tier(
 
 __all__ = [
     "DEFAULT_TIER_THRESHOLDS",
+    "FleetVerdictRow",
     "ReliabilityStatus",
     "ReputationConfig",
     "ReputationTier",
@@ -786,5 +868,6 @@ __all__ = [
     "build_verdict_outcomes",
     "compute_role_reliability",
     "confidence_to_float",
+    "fleet_verdict_rollup",
     "map_reliability_to_tier",
 ]

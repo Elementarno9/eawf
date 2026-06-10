@@ -58,15 +58,18 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static
 
-from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, AgentSessionStatus
+from eawf.observability.eval.reputation import FleetVerdictRow, fleet_verdict_rollup
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from eawf.kernel.state.models import AgentSession, State
     from eawf.kernel.store.envelope import Envelope
 
@@ -127,6 +130,23 @@ WATCH_TILE_LIST_CLASS: str = "watch-tile-list"
 #: CSS class on each rendered event row inside a tile (shared with the Feed
 #: row class so every live-stream surface styles its rows identically).
 WATCH_TILE_ROW_CLASS: str = FEED_ROW_CLASS
+
+#: Id of the fleet verdict-rollup pane -- the per-wave auditor-verdict summary
+#: the Watch mode mounts above the watched-session stream / grid.
+WATCH_ROLLUP_ID: str = "watch-rollup"
+
+#: Id of the rollup's honest-empty notice (zero verdict rows). The pane shows
+#: this line in place of any verdict rows when the report store has no verdict
+#: to roll up -- never a fabricated pass / rollup.
+WATCH_ROLLUP_EMPTY_ID: str = "watch-rollup-empty"
+
+#: CSS class on each rendered verdict row in the rollup pane.
+WATCH_ROLLUP_ROW_CLASS: str = "watch-rollup-row"
+
+#: Notice when the report store carries zero per-wave verdict rows. Phrased so
+#: the empty rollup is unmistakable rather than reading as a quiet / fabricated
+#: rollup -- the honest-empty surface the success criterion pins.
+ROLLUP_EMPTY_NOTICE: str = "no verdicts recorded"
 
 #: The watched session's lifecycle status -> the lifecycle :class:`Sigil` its
 #: header mark draws from. An ACTIVE session wears the RUNNING diamond (the
@@ -202,6 +222,63 @@ def session_sigil_markup(status: AgentSessionStatus, *, mode: RenderMode) -> str
         A content-markup span: the session status's tinted lifecycle sigil.
     """
     return _sigil_markup(_SESSION_SIGIL[status], mode=mode)
+
+
+def verdict_sigil_markup(verdict: AgentReportVerdict, *, mode: RenderMode) -> str:
+    """Return *verdict*'s outcome-tinted sigil markup for the rollup row.
+
+    Resolves the verdict to its ratified glyph + tint + optional badge via the
+    shared :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolver (the
+    one home for the verdict -> outcome shape / colour mapping), so a ``pass``
+    wears the CLOSED green circle, a ``fail`` the FAILED red cross, a
+    ``pass-with-followups`` the closed circle plus its follow-up badge, and a
+    ``blocked`` the warn-tinted withheld slash -- the pane invents no colour or
+    glyph of its own. A resolved sigil with no tint falls back to the muted
+    span so the mark still renders.
+
+    Args:
+        verdict: The recorded auditor verdict to render as a tinted outcome
+            mark.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the verdict's tinted (or muted) outcome sigil.
+    """
+    resolved = status_sigil(verdict)
+    mark = escape_markup(resolved.render(mode=mode))
+    hue = resolved.tint_hex
+    if hue is None:
+        return f"[$muted]{mark}[/]"
+    return f"[{hue}]{mark}[/]"
+
+
+def render_verdict_rollup_row(row: FleetVerdictRow, *, mode: RenderMode) -> str:
+    """Render one fleet verdict-rollup row: a wave + its outcome-tinted verdict.
+
+    Leads with the wave id, then the verdict's outcome-tinted sigil
+    (:func:`verdict_sigil_markup`) followed by the verdict word in the same
+    tint, then the producing runtime in the muted span, so a row reads as
+    ``<wave> <tinted-mark> <tinted-verdict> <runtime>`` at a glance. The tint
+    comes from the shared resolver, so two rows with different outcomes
+    (a ``pass`` and a ``fail``) carry visibly different hues.
+
+    Args:
+        row: One wave's latest verdict row from the fleet rollup.
+        mode: The App's resolved render-mode label -- selects the sigil's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup row string.
+    """
+    sigil = verdict_sigil_markup(row.verdict, mode=mode)
+    hue = status_sigil(row.verdict).tint_hex
+    word = escape_markup(row.verdict.value)
+    tinted_word = f"[{hue}]{word}[/]" if hue is not None else f"[$muted]{word}[/]"
+    return (
+        f"[$accent]{escape_markup(row.wave_id)}[/] {sigil} {tinted_word} "
+        f"[$muted]{escape_markup(row.runtime)}[/]"
+    )
 
 
 @dataclass(frozen=True)
@@ -583,6 +660,61 @@ class WatchGrid(Widget):
         return None
 
 
+class VerdictRollupPane(Widget):
+    """The fleet verdict-rollup pane: each wave's latest verdict, outcome-tinted.
+
+    Renders one row per wave that has an auditor verdict
+    (:func:`~eawf.observability.eval.reputation.fleet_verdict_rollup`), each
+    leading with the wave id then the verdict's outcome-tinted sigil + word
+    (:func:`render_verdict_rollup_row`), so a fleet's pass / fail mix reads at a
+    glance with two visibly different hues. With zero verdict rows it shows the
+    honest-empty :data:`ROLLUP_EMPTY_NOTICE` line rather than a fabricated
+    pass / rollup -- the honesty contract the success criterion pins.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    VerdictRollupPane {
+        height: auto;
+        max-height: 8;
+        border: solid $accent;
+        margin-bottom: 1;
+        padding: 0 1;
+    }
+    VerdictRollupPane .watch-rollup-row {
+        height: auto;
+    }
+    VerdictRollupPane #watch-rollup-empty {
+        height: auto;
+        color: $muted;
+    }
+    """
+
+    def __init__(self, rows: list[FleetVerdictRow], *, mode: RenderMode) -> None:
+        """Build the rollup over *rows* in render *mode*.
+
+        Args:
+            rows: Each wave's latest verdict from the fleet rollup
+                (:func:`~eawf.observability.eval.reputation.fleet_verdict_rollup`);
+                empty drives the honest-empty notice.
+            mode: The App's resolved render-mode label, threaded into each row's
+                outcome sigil.
+        """
+        super().__init__(id=WATCH_ROLLUP_ID)
+        self._rows = rows
+        self._mode = mode
+
+    def compose(self) -> ComposeResult:
+        """Yield either the per-wave verdict rows or the honest-empty notice."""
+        if not self._rows:
+            yield Static(ROLLUP_EMPTY_NOTICE, id=WATCH_ROLLUP_EMPTY_ID)
+            return
+        for row in self._rows:
+            yield Static(
+                render_verdict_rollup_row(row, mode=self._mode),
+                classes=WATCH_ROLLUP_ROW_CLASS,
+            )
+
+
 class AgentWatchModeScreen(ScopeScreen):
     """Live agent-watch zoom: stream one dispatched session, cancel it.
 
@@ -660,17 +792,21 @@ class AgentWatchModeScreen(ScopeScreen):
     _grid: WatchGrid | None = None
 
     def compose_body(self) -> ComposeResult:
-        """Yield the parallel grid OR the single-session zoom for this scope.
+        """Yield the fleet verdict rollup then the grid OR single-session zoom.
 
-        When two or more ACTIVE executor sessions are dispatched the body is the
-        parallel :class:`WatchGrid` -- one tile per session, each streaming its
-        own session's events. Otherwise it is the single-session zoom: a header
-        leading with the watched target's lifecycle sigil (or the honest-empty
-        banner), a stream column starting with a single live-waiting /
-        honest-empty notice, and the cancel result line.
+        The fleet :class:`VerdictRollupPane` leads the body (each wave's latest
+        auditor verdict, outcome-tinted, or the honest-empty rollup line) above
+        the live surface. When two or more ACTIVE executor sessions are
+        dispatched the live surface is the parallel :class:`WatchGrid` -- one
+        tile per session, each streaming its own session's events. Otherwise it
+        is the single-session zoom: a header leading with the watched target's
+        lifecycle sigil (or the honest-empty banner), a stream column starting
+        with a single live-waiting / honest-empty notice, and the cancel result
+        line.
         """
         sessions = active_executor_sessions(self._current_state())
         mode = self._render_mode()
+        yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
         if len(sessions) >= 2:
             self._grid = WatchGrid(sessions, degraded=self._degraded(), mode=mode)
             yield self._grid
@@ -912,6 +1048,33 @@ class AgentWatchModeScreen(ScopeScreen):
         app_state = getattr(self.app, "state", None)
         return app_state if isinstance(app_state, State) else None
 
+    def _fleet_verdict_rollup(self) -> list[FleetVerdictRow]:
+        """Read each wave's latest auditor verdict for the fleet rollup pane.
+
+        Resolves the host App's read-only ``state.json`` path and rolls up the
+        AUDITOR report store off disk (synchronous at build, like the rest of
+        the watch panes source their data). A bare test harness whose host App
+        carries no ``_state_path`` -- or one whose path is unset -- yields an
+        empty rollup, so the pane shows its honest-empty line rather than
+        reaching off a missing store.
+
+        Returns:
+            One :class:`~eawf.observability.eval.reputation.FleetVerdictRow`
+            per wave with an auditor verdict, ordered by wave id; empty when no
+            verdict row exists or no state path is bound.
+        """
+        state_path = self._state_path()
+        if state_path is None:
+            return []
+        return fleet_verdict_rollup(state_path)
+
+    def _state_path(self) -> Path | None:
+        """Return the host App's read-only ``state.json`` path, if configured."""
+        from pathlib import Path
+
+        path = getattr(self.app, "_state_path", None)
+        return path if isinstance(path, Path) else None
+
     def _degraded(self) -> bool:
         """Return whether the host App reports a daemon-unreachable state.
 
@@ -945,6 +1108,7 @@ __all__ = [
     "CANCEL_NO_DAEMON",
     "CANCEL_NO_TARGET",
     "EMPTY_NOTICE",
+    "ROLLUP_EMPTY_NOTICE",
     "WATCH_DEGRADED",
     "WATCH_EMPTY_ID",
     "WATCH_GRID_EMPTY_ID",
@@ -952,11 +1116,15 @@ __all__ = [
     "WATCH_HEADER_ID",
     "WATCH_LIST_ID",
     "WATCH_RESULT_ID",
+    "WATCH_ROLLUP_EMPTY_ID",
+    "WATCH_ROLLUP_ID",
+    "WATCH_ROLLUP_ROW_CLASS",
     "WATCH_ROW_CLASS",
     "WATCH_TILE_CLASS",
     "WATCH_TILE_LIST_CLASS",
     "WATCH_TILE_ROW_CLASS",
     "AgentWatchModeScreen",
+    "VerdictRollupPane",
     "WatchGrid",
     "WatchTarget",
     "WatchTile",
@@ -964,8 +1132,10 @@ __all__ = [
     "cancel_mark",
     "is_watched_event",
     "pick_watch_target",
+    "render_verdict_rollup_row",
     "render_watch_header",
     "session_routes_event",
     "session_sigil_markup",
     "tile_dom_id",
+    "verdict_sigil_markup",
 ]

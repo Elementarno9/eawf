@@ -36,6 +36,7 @@ from eawf.observability.eval.jury import (
 from eawf.observability.eval.models import EvalScore
 from eawf.observability.eval.reputation import (
     DEFAULT_TIER_THRESHOLDS,
+    FleetVerdictRow,
     ReliabilityStatus,
     ReputationConfig,
     ReputationTier,
@@ -44,6 +45,7 @@ from eawf.observability.eval.reputation import (
     build_verdict_outcomes,
     compute_role_reliability,
     confidence_to_float,
+    fleet_verdict_rollup,
     map_reliability_to_tier,
 )
 from eawf.observability.eval.rule_adherence import (
@@ -78,6 +80,7 @@ __all__ = [
     "RULE_IDS",
     "CrossVendorJuryResult",
     "EvalScore",
+    "FleetVerdictRow",
     "JurorBallot",
     "JurorOutcome",
     "JuryAggregate",
@@ -99,6 +102,7 @@ __all__ = [
     "compute_self_eval",
     "confidence_to_float",
     "convene_cross_vendor_jury",
+    "fleet_verdict_rollup",
     "juror_weight",
     "load_recorded_wave_cases",
     "map_reliability_to_tier",
