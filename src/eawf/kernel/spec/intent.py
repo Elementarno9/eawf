@@ -115,6 +115,40 @@ class IntentBrief(BaseModel):
         return bool(self.source_brief_ids)
 
 
+def has_authoring_body(brief: IntentBrief) -> bool:
+    """Return whether *brief* carries any non-blank intent body field.
+
+    An authored brief is expected to say *why* the wave earned its slot:
+    a non-blank ``priority_rationale``, at least one ``planned_steps``
+    entry, or at least one ``risks`` entry. A brief distilled from a
+    source brief (non-empty ``source_brief_ids``) also counts as bodied
+    -- the source-brief document is itself the authoritative deliverable
+    list, so the rationale lives there by reference rather than inline
+    (this is the ``is_required_intent`` case). A brief carrying only the
+    required ``problem`` + ``desired_outcome`` pair (blank rationale,
+    empty steps, empty risks, no source brief) has an empty body and is
+    rejected at the authoring path by
+    :func:`eawf.workflow.lifecycle.wave.plan_wave`.
+
+    This predicate is intentionally a free function, not a model
+    validator: the model itself stays permissive so legacy on-disk
+    briefs with empty body fields still validate at load / replay. Only
+    the authoring path consults the predicate.
+
+    Args:
+        brief: The brief to inspect.
+
+    Returns:
+        ``True`` when at least one body field is populated, else
+        ``False``.
+    """
+    rationale = brief.priority_rationale
+    has_rationale = rationale is not None and rationale.strip() != ""
+    return (
+        has_rationale or bool(brief.planned_steps) or bool(brief.risks) or brief.is_required_intent
+    )
+
+
 def source_brief_units(intent: IntentBrief, *, repo_root: Path) -> list[SourceUnit]:
     """Extract source units from each referenced source-brief document.
 
@@ -169,5 +203,6 @@ def source_brief_units(intent: IntentBrief, *, repo_root: Path) -> list[SourceUn
 
 __all__ = [
     "IntentBrief",
+    "has_authoring_body",
     "source_brief_units",
 ]

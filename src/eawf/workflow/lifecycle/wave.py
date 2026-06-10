@@ -14,7 +14,7 @@ import logging
 from datetime import UTC, datetime
 
 from eawf.kernel.spec.common import CriterionSpec
-from eawf.kernel.spec.intent import IntentBrief
+from eawf.kernel.spec.intent import IntentBrief, has_authoring_body
 from eawf.kernel.state.enums import (
     ActualStatus,
     AgentSessionRole,
@@ -82,8 +82,11 @@ def plan_wave(
         LifecycleError: if iter is missing/closed, wave id duplicates, any
             declared dep references a missing wave id, the dep set names
             the wave itself, ``effort_bucket`` is missing, ``intent`` is
-            missing, the resulting graph would contain a cycle, or any
-            non-legacy success criterion is unmeasurable (EAWF021).
+            missing, ``intent`` has an empty body (blank
+            ``priority_rationale`` plus empty ``planned_steps``,
+            ``risks``, and ``source_brief_ids``), the resulting graph
+            would contain a cycle, or any non-legacy success criterion is
+            unmeasurable (EAWF021).
 
     Side-effects on the reverse-index: for every ``dep`` in *deps*, the
     dep wave's ``blocks`` list is mutated in-place to include *wave_id*
@@ -106,6 +109,17 @@ def plan_wave(
     if intent is None:
         raise LifecycleError(
             f"wave {wave_id!r} has no intent; attach an IntentBrief before planning"
+        )
+    # Body-completeness is an authoring-only guard: a freshly authored brief
+    # carrying only problem + desired_outcome (blank rationale, no steps, no
+    # risks, no source brief) is rejected here so the planner says why the wave
+    # earned its slot. A source-brief-derived brief answers by reference, so it
+    # passes. The model stays permissive (no validator) so legacy on-disk briefs
+    # with empty body fields still re-validate at load / replay.
+    if not has_authoring_body(intent):
+        raise LifecycleError(
+            f"wave {wave_id!r} intent is empty; give it a priority_rationale, "
+            "planned steps, or risks"
         )
     for dep in deps_list:
         if dep not in state.waves:

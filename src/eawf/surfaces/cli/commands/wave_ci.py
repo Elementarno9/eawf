@@ -294,10 +294,13 @@ def _plan_follow_up(
             # The fix-ci follow-up is an authored wave, so it carries an
             # IntentBrief like any other. The repair context is implicit
             # (a CI failure on the parent), so the brief is synthesised from
-            # the parent id rather than operator-supplied flags.
+            # the parent id rather than operator-supplied flags. A non-blank
+            # priority_rationale satisfies the authoring body-completeness
+            # guard since the follow-up takes no operator-supplied body.
             follow_up_intent = IntentBrief(
                 problem=f"CI failed on parent wave {parent_wave_id}",
                 desired_outcome="the follow-up wave repairs the parent CI failure",
+                priority_rationale=f"repair the CI failure on parent wave {parent_wave_id}",
             )
             try:
                 plan_wave(

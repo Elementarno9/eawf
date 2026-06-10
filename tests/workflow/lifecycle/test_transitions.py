@@ -61,6 +61,7 @@ def test_plan_roadmap_stages_waves_in_dependency_order() -> None:
                             "intent": {
                                 "problem": "second wave needs staging",
                                 "desired_outcome": "second wave is planned",
+                                "priority_rationale": "stage after its dep wave",
                             },
                         },
                         {
@@ -71,6 +72,7 @@ def test_plan_roadmap_stages_waves_in_dependency_order() -> None:
                             "intent": {
                                 "problem": "first wave needs staging",
                                 "desired_outcome": "first wave is planned",
+                                "priority_rationale": "stage the leaf wave first",
                             },
                         },
                     ],

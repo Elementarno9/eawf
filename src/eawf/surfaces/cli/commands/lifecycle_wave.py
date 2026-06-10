@@ -349,10 +349,13 @@ def wave_plan_cmd(
     # An authored wave carries an IntentBrief. This low-level ``wave plan``
     # command takes no ``--intent-*`` flags (the operator authoring surface
     # is ``roadmap revise --add-wave``), so it synthesises a minimal brief
-    # from the wave title so the authoring guard is satisfied.
+    # from the wave title. The synthesised brief carries a non-blank
+    # priority_rationale so the authoring body-completeness guard is
+    # satisfied; the rich body comes from the ``roadmap revise`` surface.
     wave_intent = IntentBrief(
         problem=f"plan wave {wave_id}",
         desired_outcome=title,
+        priority_rationale=f"staged via wave plan {wave_id}",
     )
     _run_mutation(
         ctx,

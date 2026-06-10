@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.workflow.lifecycle.transitions import (
@@ -369,4 +370,91 @@ def test_plan_wave_populated_intent_lands() -> None:
     )
     assert wave.intent is not None
     assert wave.intent.problem == "authored wave problem"
+    assert state.waves["P01-I01-W01"].intent is not None
+
+
+def test_plan_wave_intent_body_empty_raises() -> None:
+    """plan_wave rejects a brief carrying only problem + desired_outcome."""
+    state = _seed_iter()
+    empty_body = IntentBrief(
+        problem="authored wave problem",
+        desired_outcome="the wave lands with an empty intent body",
+    )
+    with pytest.raises(LifecycleError, match="intent is empty"):
+        plan_wave(
+            state,
+            wave_id="P01-I01-W01",
+            iter_id="P01-I01",
+            title="First wave",
+            file_scopes=["src/"],
+            effort_bucket="M",
+            intent=empty_body,
+        )
+    assert "P01-I01-W01" not in state.waves
+
+
+def test_plan_wave_intent_rationale_lands() -> None:
+    """A non-blank priority_rationale alone lands the wave (empty steps/risks)."""
+    state = _seed_iter()
+    rationale_only = IntentBrief(
+        problem="authored wave problem",
+        desired_outcome="the wave lands on rationale alone",
+        priority_rationale="ranked above the polish backlog this iter",
+    )
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="First wave",
+        file_scopes=["src/"],
+        effort_bucket="M",
+        intent=rationale_only,
+    )
+    assert wave.intent is not None
+    assert wave.intent.priority_rationale == "ranked above the polish backlog this iter"
+    assert wave.intent.planned_steps == []
+    assert wave.intent.risks == []
+    assert state.waves["P01-I01-W01"].intent is not None
+
+
+def test_plan_wave_intent_whitespace_rationale_raises() -> None:
+    """A whitespace-only priority_rationale with empty steps/risks is blank."""
+    state = _seed_iter()
+    whitespace_rationale = IntentBrief(
+        problem="authored wave problem",
+        desired_outcome="the wave is rejected on a blank rationale",
+        priority_rationale="   ",
+    )
+    with pytest.raises(LifecycleError, match="intent is empty"):
+        plan_wave(
+            state,
+            wave_id="P01-I01-W01",
+            iter_id="P01-I01",
+            title="First wave",
+            file_scopes=["src/"],
+            effort_bucket="M",
+            intent=whitespace_rationale,
+        )
+    assert "P01-I01-W01" not in state.waves
+
+
+def test_plan_wave_intent_source_brief_lands() -> None:
+    """A source-brief-derived brief lands even with blank rationale/steps/risks."""
+    state = _seed_iter()
+    source_only = IntentBrief(
+        problem="authored wave problem",
+        desired_outcome="the wave lands on a source-brief reference",
+        source_brief_ids=[".ea/local/research/2026-06-09-brief.md"],
+    )
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="First wave",
+        file_scopes=["src/"],
+        effort_bucket="M",
+        intent=source_only,
+    )
+    assert wave.intent is not None
+    assert wave.intent.source_brief_ids == [".ea/local/research/2026-06-09-brief.md"]
     assert state.waves["P01-I01-W01"].intent is not None

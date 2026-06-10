@@ -79,6 +79,28 @@ def test_intent_brief_minimal_required_pair_only() -> None:
     assert brief.source_brief_ids == []
 
 
+def test_intent_brief_empty_body_still_validates() -> None:
+    """A brief with an empty body re-validates so legacy on-disk state loads.
+
+    The authoring-path guard on ``plan_wave`` rejects an empty-body brief,
+    but the model itself stays permissive (no validator) so a brief written
+    before the guard existed -- blank ``priority_rationale``, empty
+    ``planned_steps`` / ``risks`` -- still constructs at load / replay.
+    """
+    brief = IntentBrief.model_validate(
+        {
+            "problem": "legacy brief with an empty body",
+            "desired_outcome": "still loads from on-disk state",
+            "priority_rationale": "",
+            "planned_steps": [],
+            "risks": [],
+        }
+    )
+    assert brief.priority_rationale == ""
+    assert brief.planned_steps == []
+    assert brief.risks == []
+
+
 def test_intent_brief_full() -> None:
     brief = IntentBrief(
         problem="executors lack structured intent",
@@ -393,7 +415,10 @@ def test_plan_wave_accepts_intent() -> None:
     state = _empty_state()
     open_phase(state, phase_id="P01", title="x")
     open_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
-    brief = _minimal_brief(problem="implement the deliverable")
+    brief = _minimal_brief(
+        problem="implement the deliverable",
+        priority_rationale="ranked above the polish backlog this iter",
+    )
     wave = plan_wave(
         state,
         wave_id="P01-I01-W01",
@@ -418,7 +443,10 @@ def test_edit_wave_plan_accepts_intent() -> None:
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
-        intent=_minimal_brief(problem="planned problem"),
+        intent=_minimal_brief(
+            problem="planned problem",
+            priority_rationale="ranked above the polish backlog this iter",
+        ),
     )
     assert state.waves["P01-I01-W01"].intent is not None
     assert state.waves["P01-I01-W01"].intent.problem == "planned problem"
@@ -475,6 +503,7 @@ def test_plan_phase_accepts_intent() -> None:
 _DAEMON_INTENT_PAYLOAD: dict[str, str] = {
     "problem": "daemon-side problem",
     "desired_outcome": "daemon-side desired outcome",
+    "priority_rationale": "daemon-side rationale for the wave slot",
 }
 
 
@@ -710,7 +739,7 @@ def test_detail_overlay_wave_card_surfaces_intent() -> None:
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
-        intent=_minimal_brief(),
+        intent=_minimal_brief(planned_steps=["surface the wave intent in the card"]),
     )
     card = resolve_detail(state, "P01-I01-W01")
     labels = dict(card.rows)
@@ -833,8 +862,12 @@ def test_detail_overlay_wave_card_omits_unset_optional_rows() -> None:
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
-        intent=_minimal_brief(),
+        intent=make_intent(),
     )
+    # The authoring guard requires a non-empty intent body, but a legacy
+    # on-disk wave can carry a brief with empty optional fields; overwrite
+    # the intent post-plan to drive the renderer's unset-optional branch.
+    state.waves["P01-I01-W01"].intent = _minimal_brief()
     card = resolve_detail(state, "P01-I01-W01")
     labels = [label for label, _ in card.rows]
     assert "planned steps" not in labels
