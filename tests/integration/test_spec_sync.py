@@ -73,6 +73,29 @@ _GOOD_YAML = textwrap.dedent(
     """
 )
 
+# A UI body whose single gate is an affordance_parity probe. A UI-scope wave
+# materialising these gates satisfies the require-gate check.
+_AFFORDANCE_PARITY_YAML = textwrap.dedent(
+    """\
+    criteria:
+      - id: CR-01
+        text: each advertised footer key triggers action; tui_pilot home mode
+        kind: behavioral
+        acceptance_style: binary
+        evidence_kind: deterministic
+        quality_dimension: interaction_capability
+        measurable_signal: the affordance-parity probe finds no dead advertised key
+        gate_ids: [G-01]
+    gates:
+      - id: G-01
+        criterion_id: CR-01
+        kind: affordance_parity
+        args: {mode: home}
+        policy: block
+        cadence: every-wave
+    """
+)
+
 # A vague-signal body: ``is performant`` is a banned EAWF021 token in the
 # ``measurable_signal`` even though it clears the 20-char floor.
 _VAGUE_YAML = textwrap.dedent(
@@ -115,6 +138,7 @@ def _state_payload(
     planned_steps: list[str],
     source_brief_ids: list[str] | None = None,
     intent_present: bool = True,
+    file_scopes: list[str] | None = None,
 ) -> dict[str, Any]:
     """A minimal valid State with one wave under P29-I12 in *status*.
 
@@ -125,7 +149,9 @@ def _state_payload(
     source-brief coverage leg reads the referenced document(s) even when
     ``planned_steps`` is empty. Pass ``intent_present=False`` to model a legacy
     on-disk wave whose row carries no intent at all, which the coverage gate
-    now rejects rather than silently passing.
+    now rejects rather than silently passing. Pass ``file_scopes`` to drive
+    the UI-scope heuristic that gates the affordance_parity require check
+    (defaults to an empty list, which is non-UI).
     """
     intent: dict[str, Any] | None
     if intent_present:
@@ -187,6 +213,7 @@ def _state_payload(
                 "iter_id": "P29-I12",
                 "title": "add eawf spec sync",
                 "status": status,
+                "file_scopes": list(file_scopes) if file_scopes is not None else [],
                 "success_criteria": [],
                 "gates": [],
                 "effort_bucket": "M",
@@ -590,3 +617,106 @@ def test_sync_idempotent_replay(tmp_path: Path) -> None:
         assert second["after_version"] == first["after_version"]
 
     _run(body)
+
+
+# --------------------------------------------------------------------------- #
+# Affordance-parity require-gate — a UI-scope wave whose synced gates omit an
+# affordance_parity gate is rejected, naming the missing kind.
+# --------------------------------------------------------------------------- #
+def test_sync_rejects_ui_scope_wave_without_affordance_parity_gate(tmp_path: Path) -> None:
+    """A UI-scope wave whose gates omit affordance_parity trips the require check.
+
+    The wave's ``file_scopes`` hit the ``src/eawf/surfaces/tui/`` UI prefix, so
+    :func:`~eawf.kernel.spec.heuristics.is_ui_scope` is true; the ``_GOOD_YAML``
+    body carries only a ``schema_validate`` gate, so the require check rejects
+    the sync, naming ``affordance_parity``, and no state write lands.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(
+            status="pending",
+            planned_steps=[],
+            file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
+        ),
+    )
+    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="affordance_parity"):
+            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+
+    _run(body)
+    # No state write: the wave row still carries empty criteria + gates.
+    wave = _load_wave(state_path)
+    assert wave.success_criteria == []
+    assert wave.gates == []
+
+
+def test_sync_passes_ui_scope_wave_with_affordance_parity_gate(tmp_path: Path) -> None:
+    """A UI-scope wave that carries an affordance_parity gate syncs cleanly.
+
+    Same UI ``file_scopes`` as the rejection case, but the ``_AFFORDANCE_PARITY_YAML``
+    body materialises an ``affordance_parity`` gate, so the require check is
+    satisfied and the typed rows land on the wave.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(
+            status="pending",
+            planned_steps=[],
+            file_scopes=["src/eawf/surfaces/tui/widgets/footer.py"],
+        ),
+    )
+    _write_spec_file(repo_root, _wrap_body(_AFFORDANCE_PARITY_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        result = await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        assert result["criteria_count"] == 1
+        assert result["gates_count"] == 1
+
+    _run(body)
+    wave = _load_wave(state_path)
+    assert len(wave.gates) == 1
+    assert wave.gates[0].kind == "affordance_parity"
+
+
+def test_sync_passes_non_ui_scope_wave_without_affordance_parity_gate(tmp_path: Path) -> None:
+    """A non-UI wave syncs without an affordance_parity gate (band-conditional).
+
+    The wave's ``file_scopes`` name a non-UI path, so
+    :func:`~eawf.kernel.spec.heuristics.is_ui_scope` is false and the require
+    check is a no-op; the ``_GOOD_YAML`` body (a ``schema_validate`` gate, no
+    affordance_parity) syncs cleanly. Proves the check is band-conditional, not
+    global.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(
+            status="pending",
+            planned_steps=[],
+            file_scopes=["src/eawf/kernel/spec/common.py"],
+        ),
+    )
+    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        result = await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        assert result["criteria_count"] == 1
+        assert result["gates_count"] == 1
+
+    _run(body)
+    wave = _load_wave(state_path)
+    assert len(wave.gates) == 1
+    assert wave.gates[0].kind == "schema_validate"

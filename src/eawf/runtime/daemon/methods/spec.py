@@ -53,7 +53,6 @@ from eawf.kernel.spec.common import (
     GateSpec,
     validate_criterion_gate_refs,
 )
-from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.spec.promotion import (
     SpecPromoteValidationError,
     validate_argv_gates,
@@ -65,20 +64,17 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.validate.strict import validate_state
-from eawf.platform.lint.eawf021_measurable_criterion import (
-    MeasurabilityViolation,
-    check_criterion_spec,
-)
-from eawf.platform.lint.eawf022_propose_coverage import (
-    CoverageGapViolation,
-    missing_intent_finding,
-    missing_planned_steps_finding,
-)
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
     DaemonValidationError,
     MethodContext,
     register,
+)
+from eawf.runtime.daemon.methods.spec_sync_lints import (
+    find_coverage_gaps,
+    measure_criteria,
+    render_lint_findings,
+    require_affordance_parity_for_ui_scope,
 )
 from eawf.runtime.daemon.methods.state import (
     _read_state,
@@ -87,7 +83,6 @@ from eawf.runtime.daemon.methods.state import (
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
-from eawf.workflow.propose.coverage import coverage_gaps, source_brief_coverage_gaps
 
 logger = logging.getLogger(__name__)
 
@@ -935,113 +930,6 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
 
 
-# ---- spec.sync helpers ----------------------------------------------------
-
-
-def _run_measurability_lint(criteria: list[CriterionSpec]) -> list[MeasurabilityViolation]:
-    """Return every EAWF021 measurability finding across *criteria*.
-
-    Runs the EAWF021 entrypoint
-    :func:`eawf.platform.lint.eawf021_measurable_criterion.check_criterion_spec`
-    over each parsed criterion. A non-empty result means at least one criterion
-    carries a banned-vague token (in its ``text`` or ``measurable_signal``) or
-    lacks an observation contract -- the sync rejects rather than materialise an
-    unfalsifiable criterion onto the wave row. The daemon parses authored typed
-    criteria from the spec body (never legacy rows), so the grandfathered
-    exemption the wave-plan transition applies is not needed here.
-
-    Args:
-        criteria: The parsed criterion rows from the spec body.
-
-    Returns:
-        Findings in criterion order; empty when every criterion is
-        measurable.
-    """
-    findings: list[MeasurabilityViolation] = []
-    for criterion in criteria:
-        findings.extend(check_criterion_spec(criterion))
-    return findings
-
-
-def _run_coverage_lint(
-    criteria: list[CriterionSpec],
-    *,
-    wave_id: str,
-    intent: IntentBrief | None,
-    repo_root: Path,
-) -> list[CoverageGapViolation]:
-    """Return every EAWF022 coverage gap of a wave's brief detail by *criteria*.
-
-    Daemon-side delegate to the :mod:`eawf.workflow.propose.coverage` diffs so
-    the sync path and the ``/roadmap propose`` render run one implementation.
-    The coverage diff is a property of a wave's typed intent, so the gate first
-    requires the intent to be present and populated before any diff runs:
-
-    - ``intent`` is ``None`` -- a wave reaching the sync coverage gate with no
-      intent has no enumerated deliverables to diff the criteria against, which
-      is a hard finding (:func:`missing_intent_finding`) rather than a silent
-      pass. New waves always carry an intent (the ``plan_wave`` authoring guard
-      rejects ``None``); a legacy on-disk wave whose row predates that guard is
-      the only path here.
-    - a required-intent wave (``source_brief_ids`` non-empty) with an empty
-      ``planned_steps`` -- the empty step list is a vacuous no-op for the
-      planned-step diff, which let a wave that owes the planner a step list
-      sync with no planned-step coverage. That is a finding
-      (:func:`missing_planned_steps_finding`) rather than a clean no-op pass.
-
-    Once the intent is present and (for a required-intent wave) has steps, two
-    diffs run:
-
-    - :func:`~eawf.workflow.propose.coverage.coverage_gaps` over the wave's
-      ``planned_steps``: a planned step no criterion topically addresses is a
-      finding so a silently-dropped step fails the sync.
-    - :func:`~eawf.workflow.propose.coverage.source_brief_coverage_gaps` over
-      the referenced source-brief document(s): a source-brief deliverable the
-      planner never wrote a step for is a finding too. This leg closes the
-      boundary the ``planned_steps`` diff cannot see.
-
-    Args:
-        criteria: The parsed criterion rows from the spec body.
-        wave_id: The wave whose intent is being scored, surfaced as the snippet
-            of the intent-present findings so a reject names the wave.
-        intent: The wave's :class:`~eawf.kernel.spec.intent.IntentBrief`, or
-            ``None`` when the wave carries no intent.
-        repo_root: The repo working-tree root the brief's ``source_brief_ids``
-            paths resolve under.
-
-    Returns:
-        One finding per uncovered planned-step span and per uncovered
-        source-brief unit, plus the intent-present findings; empty only when an
-        intent is present, populated, and every brief detail is covered.
-    """
-    if intent is None:
-        return [missing_intent_finding(wave_id)]
-    findings: list[CoverageGapViolation] = []
-    if intent.is_required_intent and not intent.planned_steps:
-        findings.append(missing_planned_steps_finding(wave_id))
-    findings += coverage_gaps(criteria, planned_steps=list(intent.planned_steps))
-    findings += source_brief_coverage_gaps(criteria, intent=intent, repo_root=repo_root)
-    return findings
-
-
-def _render_lint_findings(
-    measurability: list[MeasurabilityViolation],
-    coverage: list[CoverageGapViolation],
-) -> str:
-    """Render a combined ``validation_failed`` message for lint findings.
-
-    Args:
-        measurability: EAWF021 findings (may be empty).
-        coverage: EAWF022 findings (may be empty).
-
-    Returns:
-        A single-line ``validation_failed: ...`` message listing each
-        finding's ``code reason: snippet`` body, comma-joined.
-    """
-    bodies = [v.render() for v in measurability] + [v.render() for v in coverage]
-    return "validation_failed: spec sync lint findings: " + "; ".join(bodies)
-
-
 # ---- spec.sync handler ----------------------------------------------------
 
 
@@ -1078,8 +966,9 @@ async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Raises:
         DaemonValidationError: When the spec body fails to parse, a lint
             finding rejects the criteria, the target wave is not PENDING,
-            the criterion / gate cross-references do not resolve, or the
-            post-mutation state fails schema / invariant validation
+            the criterion / gate cross-references do not resolve, the wave
+            is UI-scope but its gates omit an ``affordance_parity`` gate, or
+            the post-mutation state fails schema / invariant validation
             (mapped to ``-32002`` so the CLI exit code matches a
             rejected mutation).
         ValueError: When *wave_id* is not a wave scope, the wave is
@@ -1206,8 +1095,10 @@ def _apply_sync_locked(
 
     Raises:
         DaemonValidationError: When the wave is not PENDING, a lint finding
-            rejects the criteria, the cross-references do not resolve, or the
-            post-mutation state fails validation (mapped to ``-32002``).
+            rejects the criteria, the cross-references do not resolve, the
+            wave is UI-scope but its gates omit an ``affordance_parity`` gate,
+            or the post-mutation state fails validation (mapped to
+            ``-32002``).
         ValueError: When the wave id is unknown (mapped to ``-32602``).
     """
     state, _payload = _read_state(state_path)
@@ -1221,17 +1112,26 @@ def _apply_sync_locked(
             f"(status={wave.status.value!r}); only PENDING waves accept a spec sync"
         )
 
-    measurability = _run_measurability_lint(criteria)
-    coverage = _run_coverage_lint(
+    measurability = measure_criteria(criteria)
+    coverage = find_coverage_gaps(
         criteria, wave_id=args.wave_id, intent=wave.intent, repo_root=repo_root
     )
     if measurability or coverage:
-        raise DaemonValidationError(_render_lint_findings(measurability, coverage))
+        raise DaemonValidationError(render_lint_findings(measurability, coverage))
 
     # Referential integrity (criterion.gate_ids <-> gate.criterion_id,
     # deterministic-gate compile) BEFORE any in-place mutation so a malformed
     # pair leaves the wave row untouched.
     validate_criterion_gate_refs(criteria, gates)
+
+    # A UI-scope wave must carry an affordance-parity gate (band-conditional
+    # on the file_scopes heuristic) so its footer-affordance criteria do not
+    # fall through every cheaper oracle tier to the jury.
+    require_affordance_parity_for_ui_scope(
+        wave_id=args.wave_id,
+        file_scopes=wave.file_scopes,
+        gates=gates,
+    )
 
     try:
         edit_wave_plan(state, wave_id=args.wave_id, success_criteria=criteria)
