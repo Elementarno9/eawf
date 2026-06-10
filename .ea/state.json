@@ -4978,6 +4978,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-07-A56-P29-i13-closeout.md",
       "urn": "urn:eawf:v1:artifact:P29-I13/A56-P29-i13-report"
     },
+    "A62-P30-i05-report": {
+      "created_at": "2026-06-10T16:40:23.860027Z",
+      "id": "A62-P30-i05-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-10-A62-P30-i05-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I05/A62-P30-i05-report"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -6344,6 +6354,17 @@
       "scope_id": "P30-I04",
       "status": "complete",
       "verdict": "pass"
+    },
+    "A62-P30-i05": {
+      "check_results": [],
+      "created_at": "2026-06-10T16:40:35.895603Z",
+      "id": "A62-P30-i05",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A62-P30-i05-report",
+      "scope_id": "P30-I05",
+      "status": "complete",
+      "verdict": "minor"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -7901,7 +7922,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I05",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -17366,16 +17387,16 @@
       ]
     },
     "P30-I05": {
-      "audit_id": null,
+      "audit_id": "A62-P30-i05",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-10T16:41:26.116647Z",
       "description": "Close OBSERVATION 3 of the P30 design (elapsed_eu reads 0.00 everywhere): the operator-driven Claude Code session that runs every wave is used by eawf but never instruments it. Wire a SESSION_END hook + statusline sidecar to capture the CC cost block, bracket each wave by a claim-time RuntimeBaseline and a close-time delta, persist the delta into ActualSummary, and add a gate that WARNS then REFUSES a silent 0-EU close unless --no-runtime is passed. Ships the CC adapter only.",
       "estimate_id": null,
       "id": "P30-I05",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753461Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Harness EU instrumentation (EUCAP — capture, attribute, enforce runtime)",
       "trigger": "none",
       "wave_ids": [
@@ -17871,6 +17892,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I04-close-A61-P30-i04",
       "summary": "iter P30-I04 closed with audit A61-P30-i04; waves closed=11; outcomes P30-I04-W01: plan_wave raises LifecycleError on intent=None and the add_wave daemon op rejects missing/Non... | P30-I04-W02: Implemented non-empty intent body guard and tests | P30-I04-W03: Implemented EAWF022 required-intent sync guards and tests",
+      "tier": "working"
+    },
+    "MEM-P30-I05-close-A62-P30-i05": {
+      "confidence": "high",
+      "id": "MEM-P30-I05-close-A62-P30-i05",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-10T16:41:26.116647Z",
+      "scope_id": "P30-I05",
+      "status": "active",
+      "store_record_id": "MEM-P30-I05-close-A62-P30-i05",
+      "summary": "iter P30-I05 closed with audit A62-P30-i05; waves closed=16; outcomes P30-I05-W01: Added strict RuntimeBaseline state model, claim-time baseline hook, v1.8 to v1.9 migration, g... | P30-I05-W02: Parsed Claude Code cost payloads into strict RuntimeCounters with degrade-not-crash behavior ... | P30-I05-W03: Registered SESSION_END runtime capture hook and non-blocking degradation paths; parent commit...",
       "tier": "working"
     }
   },
@@ -18575,7 +18607,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T16:04:05.734306Z",
+  "updated_at": "2026-06-10T16:41:26.117594Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
