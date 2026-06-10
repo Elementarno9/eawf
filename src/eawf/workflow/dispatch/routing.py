@@ -232,6 +232,54 @@ def resolve_routing(
     return decision
 
 
+def runtime_model_for_decision(decision: RoutingDecision, runtime: str) -> str:
+    """Map an already-resolved :class:`RoutingDecision` onto *runtime*'s vendor model.
+
+    Pure function -- no I/O, no hidden state. Reads the capability tier off the
+    *decision*'s claude model, then maps that tier onto *runtime*'s own vendor
+    model via :data:`_RUNTIME_TIER_MODEL`: a claude spawn gets the same claude id
+    the *decision* already carries, a codex spawn gets a bare OpenAI id, and an
+    opencode spawn gets the ``provider/model`` form its CLI ``-m`` flag expects.
+
+    This is the seam the live dispatch path uses after it calls
+    :func:`resolve_routing` itself: the dispatch resolves the per-role tier
+    decision directly, then maps that decision onto the serving runtime's vendor
+    model here. :func:`model_for_runtime` wraps the two calls for callers that
+    only need the final id.
+
+    Args:
+        decision: A resolved routing decision (the per-role tier pick).
+        runtime: The short ``RuntimeTriple`` spelling (``claude`` / ``codex`` /
+            ``opencode``) the spawn runs on.
+
+    Returns:
+        The per-runtime model id for the decision's tier (a key the cost ledger
+        prices through
+        :func:`eawf.observability.telemetry.pricing.lookup_pricing`).
+
+    Raises:
+        ValueError: When *runtime* is not one of the three short triple
+            spellings.
+    """
+    tier_models = _RUNTIME_TIER_MODEL.get(runtime)
+    if tier_models is None:
+        known = ", ".join(sorted(_RUNTIME_TIER_MODEL))
+        raise ValueError(f"unknown runtime: {runtime!r} (known: {known})")
+    tier = _TIER_INDEX_BY_MODEL.get(decision.model)
+    if tier is None:
+        # The default table only ever yields the three tier ids, so this is
+        # reachable only via a sparse operator override whose model is off the
+        # tier ladder; fall back to the runtime's mid (sonnet-equivalent) tier
+        # so the resolver still returns a priced row rather than raising.
+        tier = _TIER_INDEX_BY_MODEL[_MODEL_SONNET]
+    model = tier_models[tier]
+    logger.debug(
+        f"runtime_model_for_decision tier_model={decision.model!r} "
+        f"runtime={runtime!r} model={model!r}"
+    )
+    return model
+
+
 def model_for_runtime(
     agent_role: AgentSessionRole,
     effort_bucket: EffortBucket,
@@ -243,8 +291,8 @@ def model_for_runtime(
 
     Pure function -- no I/O, no hidden state. Resolves the routing decision
     via :func:`resolve_routing` (so an operator *table* override still wins),
-    reads the capability tier off the decision's claude model, then maps that
-    tier onto *runtime*'s own vendor model via :data:`_RUNTIME_TIER_MODEL`.
+    then maps the decision's capability tier onto *runtime*'s own vendor model
+    via :func:`runtime_model_for_decision`.
 
     This is the per-runtime model the live spawn / cross-vendor juror runs
     against: a codex juror gets a bare OpenAI id, an opencode juror gets the
@@ -270,18 +318,7 @@ def model_for_runtime(
             spellings, or the resolved tier model is not a known tier.
     """
     decision = resolve_routing(agent_role, effort_bucket, table=table)
-    tier_models = _RUNTIME_TIER_MODEL.get(runtime)
-    if tier_models is None:
-        known = ", ".join(sorted(_RUNTIME_TIER_MODEL))
-        raise ValueError(f"unknown runtime: {runtime!r} (known: {known})")
-    tier = _TIER_INDEX_BY_MODEL.get(decision.model)
-    if tier is None:
-        # The default table only ever yields the three tier ids, so this is
-        # reachable only via a sparse operator override whose model is off the
-        # tier ladder; fall back to the runtime's mid (sonnet-equivalent) tier
-        # so the resolver still returns a priced row rather than raising.
-        tier = _TIER_INDEX_BY_MODEL[_MODEL_SONNET]
-    model = tier_models[tier]
+    model = runtime_model_for_decision(decision, runtime)
     logger.debug(
         f"model_for_runtime role={agent_role.value} effort={effort_bucket.value} "
         f"runtime={runtime!r} model={model!r}"
@@ -331,5 +368,6 @@ __all__ = [
     "RoutingDecision",
     "model_for_runtime",
     "resolve_routing",
+    "runtime_model_for_decision",
     "tier_for_model",
 ]

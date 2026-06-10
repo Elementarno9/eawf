@@ -29,6 +29,11 @@ exits non-zero:
   require-gate must reject a UI wave with no ``affordance_parity`` gate, and
   ``mockup_golden_diff`` must be a registered ``CheckKind`` with a mapped
   ``OracleTier``.
+- :func:`check_resolve_routing_wired` -- a source-scan probe asserting the live
+  wave-spawn dispatch (``agent.py``) calls ``resolve_routing`` directly, so the
+  per-role tier table selects the spawn model instead of a hardcoded default.
+  If a later refactor drops the direct call, the source no longer matches and
+  this gate reds -- un-idling the routing contract.
 - :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
   pre-commit gate stays enabled so the runtime close gate cannot ship idle.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
@@ -152,6 +157,7 @@ class GateFailure(StrEnum):
     REQUIRED_INTENT_IDLE = "required_intent_idle"
     UI_REQUIRE_GATE_IDLE = "ui_require_gate_idle"
     MOCKUP_GOLDEN_DIFF_IDLE = "mockup_golden_diff_idle"
+    RESOLVE_ROUTING_IDLE = "resolve_routing_idle"
     RUNTIME_GATE_IDLE = "runtime_gate_idle"
 
 
@@ -641,6 +647,77 @@ def check_i03_contracts(
         message=(
             "idle-contract gate: ok (I03 required-intent guard, UI "
             "affordance-parity require-gate, and mockup_golden_diff tier mapping fired)"
+        ),
+    )
+
+
+# =========================================================================== #
+# resolve_routing wiring: the live dispatch path must call resolve_routing.
+# =========================================================================== #
+
+#: The live dispatch module that must call ``resolve_routing`` directly so the
+#: per-role tier table selects the spawn model instead of a hardcoded default.
+#: The pre-commit gate reads this file off the working tree; a test injects the
+#: text to exercise both the wired and idle outcomes.
+_LIVE_DISPATCH_MODULE = "src/eawf/runtime/daemon/methods/agent.py"
+
+#: A direct ``resolve_routing(...)`` call (not a docstring / import mention).
+#: The trailing ``(`` is what distinguishes a live call from a bare reference,
+#: so a comment or ``:func:`` cross-link in prose does not satisfy the gate.
+_RESOLVE_ROUTING_CALL_RE = re.compile(r"\bresolve_routing\s*\(")
+
+
+def check_resolve_routing_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _LIVE_DISPATCH_MODULE,
+) -> GateResult:
+    """Assert the live dispatch path calls :func:`resolve_routing` directly.
+
+    The ``(agent_role, effort_bucket) -> model`` routing table is built but was
+    only reachable through the per-vendor wrapper; this contract pins that the
+    live wave-spawn dispatch (:func:`eawf.runtime.daemon.methods.agent._resolve_spawn_model`)
+    calls :func:`eawf.workflow.dispatch.routing.resolve_routing` itself, so role
+    + effort selects the model tier rather than a hardcoded default. If a later
+    refactor drops the direct call (reverting to a single hardcoded model), the
+    source no longer matches :data:`_RESOLVE_ROUTING_CALL_RE` and this gate
+    fails :attr:`GateFailure.RESOLVE_ROUTING_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the regressed (idle) outcomes; when it is
+    ``None`` the module is read off the working tree via :data:`_REPO_ROOT`
+    (mirroring :func:`check_runtime_gate_is_not_idle`, so this gate is immune to
+    the meta-gate's injected reader stub).
+
+    Args:
+        module_text: The live dispatch module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the live dispatch module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the live
+        dispatch module carries a direct ``resolve_routing(`` call; otherwise
+        ``failure`` is :attr:`GateFailure.RESOLVE_ROUTING_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    if _RESOLVE_ROUTING_CALL_RE.search(text) is not None:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (live dispatch calls resolve_routing -- "
+                "role/effort selects the model tier, not a hardcoded default)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.RESOLVE_ROUTING_IDLE,
+        message=(
+            "resolve_routing is idle in live dispatch: "
+            f"{module_path} carries no direct resolve_routing(...) call, so the "
+            "per-role tier table never selects the spawn model (the path "
+            "regressed to a hardcoded default)"
         ),
     )
 
@@ -1156,7 +1233,9 @@ def main(argv: list[str]) -> int:
     The original B091 single-contract check (:func:`check_idle_contract`) runs
     first, then the emit-validation binding-proof probe
     (:func:`check_skill_body_binding`), then the I03 contract probes
-    (:func:`check_i03_contracts`), then the meta-gate
+    (:func:`check_i03_contracts`), then the resolve_routing wiring probe
+    (:func:`check_resolve_routing_wired`), then the runtime-gate binding check
+    (:func:`check_runtime_gate_is_not_idle`), then the meta-gate
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
     exit code is non-zero when any fails.
 
@@ -1199,6 +1278,16 @@ def main(argv: list[str]) -> int:
         print(i03.message)
     else:
         print(i03.message, file=sys.stderr)
+        failed = True
+
+    # The live-dispatch module is read off the working tree (not the
+    # monkeypatchable _default_read), so this gate stays immune to the
+    # meta-gate's injected reader stub -- mirroring check_runtime_gate_is_not_idle.
+    routing_wired = check_resolve_routing_wired()
+    if routing_wired.passed:
+        print(routing_wired.message)
+    else:
+        print(routing_wired.message, file=sys.stderr)
         failed = True
 
     runtime_gate = check_runtime_gate_is_not_idle()

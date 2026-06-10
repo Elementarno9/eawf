@@ -82,7 +82,7 @@ from eawf.runtime.session.store import SessionConflict, start_session
 from eawf.workflow.dispatch.llm_assist import assist_with_schema
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope
 from eawf.workflow.dispatch.retry import spawn_with_retry
-from eawf.workflow.dispatch.routing import model_for_runtime
+from eawf.workflow.dispatch.routing import resolve_routing, runtime_model_for_decision
 from eawf.workflow.evidence._io import load_state
 
 logger = logging.getLogger(__name__)
@@ -562,11 +562,14 @@ def _resolve_spawn_model(
 ) -> str:
     """Resolve the model id the live spawn prices + runs against.
 
-    An explicit *override* wins. Otherwise the model is resolved from the
-    wave's ``(agent_role, effort_bucket)`` AND the serving *runtime* via
-    :func:`eawf.workflow.dispatch.routing.model_for_runtime`, falling back to
-    the executor / medium-effort defaults when the wave omits either field so
-    the resolver always returns a priced row. Threading the runtime is the
+    An explicit *override* wins. Otherwise the live dispatch resolves the wave's
+    ``(agent_role, effort_bucket)`` to a :class:`~eawf.workflow.dispatch.routing.RoutingDecision`
+    directly via :func:`eawf.workflow.dispatch.routing.resolve_routing` (so the
+    per-role tier table selects the model tier instead of a hardcoded default),
+    then maps that decision onto the serving *runtime*'s own vendor model via
+    :func:`eawf.workflow.dispatch.routing.runtime_model_for_decision`. The
+    executor / medium-effort defaults stand in when the wave omits either field
+    so the resolver always returns a priced row. Mapping per runtime is the
     cross-vendor fix: a codex / opencode spawn must run its OWN vendor's model
     (a bare OpenAI id / a ``provider/model`` id) rather than a claude id the
     foreign CLI rejects; the claude path stays byte-identical.
@@ -595,10 +598,11 @@ def _resolve_spawn_model(
     role = wave.agent_role if wave.agent_role is not None else _DEFAULT_SPAWN_ROLE
     effort = wave.effort_bucket if wave.effort_bucket is not None else _DEFAULT_SPAWN_EFFORT
     triple = _runtime_triple(runtime)
-    model = model_for_runtime(role, effort, triple)
+    decision = resolve_routing(role, effort)
+    model = runtime_model_for_decision(decision, triple)
     logger.debug(
         f"_resolve_spawn_model wave={wave_id} role={role.value} "
-        f"effort={effort.value} runtime={triple!r} model={model!r}"
+        f"effort={effort.value} runtime={triple!r} tier_model={decision.model!r} model={model!r}"
     )
     return model
 
