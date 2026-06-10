@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import io
+import json
+import sys
 from decimal import Decimal
 from pathlib import Path
+
+import pytest
 
 from eawf.runtime.runtime_counter_sidecar import (
     RuntimeCounterSidecar,
     sidecar_path_for_statusline_cache,
 )
+from eawf.runtime.runtimes.claude import statusline
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 
 
@@ -49,3 +55,34 @@ def test_runtime_counter_sidecar_path_sits_beside_statusline_cache() -> None:
 
     assert sidecar_path.parent == cache_path.parent
     assert sidecar_path.name == "session-1.runtime-counters.json"
+
+
+def test_statusline_render_writes_runtime_counter_sidecar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path))
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            json.dumps(
+                {
+                    "session_id": "session-1",
+                    "cost": {"api_duration_ms": 17000, "cost_usd": 0.42},
+                    "context_window": {"current_usage": {"input_tokens": 100, "output_tokens": 50}},
+                }
+            )
+        ),
+    )
+    monkeypatch.setattr(statusline, "render_pipeline", lambda *_args, **_kwargs: "line")
+
+    assert statusline.run_with_cache(workspace=None, theme_name=None) == "line"
+
+    counters = RuntimeCounterSidecar(tmp_path / "session-1.runtime-counters.json").read()
+    assert counters == RuntimeCounters(
+        api_duration_ms=17000,
+        cost_usd=Decimal("0.42"),
+        input_tokens=100,
+        output_tokens=50,
+    )
