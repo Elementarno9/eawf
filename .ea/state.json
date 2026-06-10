@@ -5166,6 +5166,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-10-A60-P30-i03-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P30-I03/ART-A60-P30-i03"
     },
+    "ART-A61-P30-i04": {
+      "created_at": "2026-06-10T05:13:13.554335Z",
+      "id": "ART-A61-P30-i04",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-10-A61-P30-i04-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I04/ART-A61-P30-i04"
+    },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
       "id": "ART-audit-2026-05-28-p28-i03-deep-audit",
@@ -6129,6 +6139,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-A60-P30-i03",
       "scope_id": "P30-I03",
+      "status": "complete",
+      "verdict": "pass"
+    },
+    "A61-P30-i04": {
+      "check_results": [],
+      "created_at": "2026-06-10T05:13:14.153333Z",
+      "id": "A61-P30-i04",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A61-P30-i04",
+      "scope_id": "P30-I04",
       "status": "complete",
       "verdict": "pass"
     },
@@ -7688,7 +7709,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I04",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -16918,16 +16939,16 @@
       ]
     },
     "P30-I04": {
-      "audit_id": null,
+      "audit_id": "A61-P30-i04",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-10T05:13:14.667795Z",
       "description": "Make wave plans dense by binding three authoring-time contracts P29 shipped idle or optional: require a populated IntentBrief on every authored wave, require the non-circular affordance_parity/transition_coverage invariant gates on UI-scope waves, and capture the operator-picked mockup as an independent ASCII golden diffed at close. Cures OBSERVATION 2a, decision #8 (independence/circularity break), and the discarded-mockup gap. Presence and measurability only; faithfulness is deferred.",
       "estimate_id": null,
       "id": "P30-I04",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753401Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Authoring richness — bind intent + invariant + mockup-golden contracts",
       "trigger": "none",
       "wave_ids": [
@@ -17433,6 +17454,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I03-close-A60-P30-i03",
       "summary": "iter P30-I03 closed with audit A60-P30-i03; waves closed=9; outcomes P30-I03-W01: SKILL_BODY_MODELS + body_model_for live in workflow/skills/bodies; CLI _skill_body_models re-... | P30-I03-W02: run_skill validates registered dict bodies via model_validate pre-envelope: drifted extra-for... | P30-I03-W03: Planning PrepBody model_validator enforces non-empty reconciled dag + no dangling deps (Valid...",
+      "tier": "working"
+    },
+    "MEM-P30-I04-close-A61-P30-i04": {
+      "confidence": "high",
+      "id": "MEM-P30-I04-close-A61-P30-i04",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-10T05:13:14.667795Z",
+      "scope_id": "P30-I04",
+      "status": "active",
+      "store_record_id": "MEM-P30-I04-close-A61-P30-i04",
+      "summary": "iter P30-I04 closed with audit A61-P30-i04; waves closed=11; outcomes P30-I04-W01: plan_wave raises LifecycleError on intent=None and the add_wave daemon op rejects missing/Non... | P30-I04-W02: Implemented non-empty intent body guard and tests | P30-I04-W03: Implemented EAWF022 required-intent sync guards and tests",
       "tier": "working"
     }
   },
@@ -18137,7 +18169,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:00:56.697205Z",
+  "updated_at": "2026-06-10T05:13:14.668322Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
