@@ -5184,6 +5184,18 @@
       "status": "done",
       "updated_at": "2026-06-10T22:19:31.976397Z"
     },
+    "P30-I08-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I08-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I08-W02",
+      "scope_id": "P30-I08-W02",
+      "status": "done",
+      "updated_at": "2026-06-10T22:48:11.501078Z"
+    },
     "P30-I14-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5231,6 +5243,18 @@
       "scope_id": "P30-I14-W05",
       "status": "done",
       "updated_at": "2026-06-10T21:58:22.979491Z"
+    },
+    "P30-I14-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W07",
+      "scope_id": "P30-I14-W07",
+      "status": "done",
+      "updated_at": "2026-06-10T22:48:10.173846Z"
     },
     "P30-I14-W08": {
       "actual_cost_usd": 0.0,
@@ -5413,7 +5437,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A09-P08-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A09-P08-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A09-P08"
     },
     "ART-A10-P09": {
@@ -5423,7 +5447,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A10-P09-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A10-P09-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A10-P09"
     },
     "ART-A11-P10": {
@@ -5433,7 +5457,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A11-P10-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A11-P10-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A11-P10"
     },
     "ART-A12-P11": {
@@ -5443,7 +5467,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A12-P11-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A12-P11-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A12-P11"
     },
     "ART-A13-P12": {
@@ -5453,7 +5477,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A13-P12-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A13-P12-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A13-P12"
     },
     "ART-A14-P13": {
@@ -5463,7 +5487,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A14-P13-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A14-P13-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A14-P13"
     },
     "ART-A15-P14": {
@@ -5473,7 +5497,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A15-P14-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A15-P14-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A15-P14"
     },
     "ART-A16-P14": {
@@ -5483,7 +5507,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A16-P14-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A16-P14-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A16-P14"
     },
     "ART-A17-P14": {
@@ -5493,7 +5517,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A17-P14-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A17-P14-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A17-P14"
     },
     "ART-A18-P14": {
@@ -5503,7 +5527,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A18-P14-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A18-P14-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A18-P14"
     },
     "ART-A19-P14": {
@@ -5513,7 +5537,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A19-P14-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A19-P14-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A19-P14"
     },
     "ART-A20-P15": {
@@ -5523,7 +5547,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A20-P15-p15-skills-audit.md",
+      "uri": "repo:.ea/artifacts/audits/A20-P15-p15-skills-audit.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A20-P15"
     },
     "ART-A21-P16": {
@@ -5533,7 +5557,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A21-P16-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A21-P16-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A21-P16"
     },
     "ART-A22-P17": {
@@ -5543,7 +5567,7 @@
       "metadata": {},
       "sha256": "c13bc996c122d7779cc2ec2622a89458a5645b3bc0a4fecfbb753628a75510f3",
       "size_bytes": 1099,
-      "uri": "repo:.ea/artifacts/A22-P17-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A22-P17-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A22-P17"
     },
     "ART-A23-P18": {
@@ -5553,7 +5577,7 @@
       "metadata": {},
       "sha256": "385803c441934881276abc52f296bcc8a37ec6f553b16df850708fc9456fc513",
       "size_bytes": 1807,
-      "uri": "repo:.ea/artifacts/A23-P18-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A23-P18-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P18/ART-A23-P18"
     },
     "ART-A24-P19": {
@@ -5563,7 +5587,7 @@
       "metadata": {},
       "sha256": "af05d3dc70dc91c2ba69574b91b728c3a53e4e0effc611971e05967813bde76c",
       "size_bytes": 2506,
-      "uri": "repo:.ea/artifacts/A24-P19-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A24-P19-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P19/ART-A24-P19"
     },
     "ART-A25-P19-I02-W16": {
@@ -5573,7 +5597,7 @@
       "metadata": {},
       "sha256": "5c6245786117016962f55313b34256f93da5ebd60e2c28697e4d3a037c1a3e3f",
       "size_bytes": 1822,
-      "uri": "repo:.ea/artifacts/A25-P19-I02-W16-backlog-bulk-close.md",
+      "uri": "repo:.ea/artifacts/audits/A25-P19-I02-W16-backlog-bulk-close.md",
       "urn": "urn:eawf:v1:artifact:P19-I02-W16/ART-A25-P19-I02-W16"
     },
     "ART-A26-P19-I02": {
@@ -5583,7 +5607,7 @@
       "metadata": {},
       "sha256": "ad1c3e078e19d08e3631b1b0d8118ff93cb1aee66cddbf0d0216205df8357bb9",
       "size_bytes": 3892,
-      "uri": "repo:.ea/artifacts/A26-P19-I02-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A26-P19-I02-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P19-I02/ART-A26-P19-I02"
     },
     "ART-A27-P20": {
@@ -5593,7 +5617,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A27-P20-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A27-P20-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P20/ART-A27-P20"
     },
     "ART-A28-P22": {
@@ -5603,7 +5627,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A28-P22-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A28-P22-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P22/ART-A28-P22"
     },
     "ART-A29-P23": {
@@ -5613,7 +5637,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A29-P23-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A29-P23-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:P23/ART-A29-P23"
     },
     "ART-A30-P24": {
@@ -5623,7 +5647,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A30-P24-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A30-P24-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A30-P24"
     },
     "ART-A31-P25": {
@@ -5633,7 +5657,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/A31-P25-ship-gate.md",
+      "uri": "repo:.ea/artifacts/audits/A31-P25-ship-gate.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-A31-P25"
     },
     "ART-A32-P26": {
@@ -5803,7 +5827,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/audit-2026-05-28-p28-i03-deep-audit.md",
+      "uri": "repo:.ea/artifacts/audits/audit-2026-05-28-p28-i03-deep-audit.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-audit-2026-05-28-p28-i03-deep-audit"
     },
     "ART-research-2026-05-24-python-package-structure": {
@@ -5813,7 +5837,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/research-2026-05-24-python-package-structure.md",
+      "uri": "repo:.ea/artifacts/research/research-2026-05-24-python-package-structure.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-research-2026-05-24-python-package-structure"
     },
     "ART-research-2026-05-30-tui-chassis": {
@@ -5823,7 +5847,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/research-2026-05-30-tui-chassis.md",
+      "uri": "repo:.ea/artifacts/research/research-2026-05-30-tui-chassis.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-research-2026-05-30-tui-chassis"
     },
     "ART-research-long-term-2026-05-16-c00-spec-index": {
@@ -6053,7 +6077,7 @@
       "metadata": {},
       "sha256": null,
       "size_bytes": null,
-      "uri": "repo:.ea/artifacts/v0.1-closeout.md",
+      "uri": "repo:.ea/artifacts/audits/v0.1-closeout.md",
       "urn": "urn:eawf:v1:artifact:EAWF/ART-v0.1-closeout"
     }
   },
@@ -7909,6 +7933,19 @@
       "status": "open",
       "title": "Make propose-path EAWF022 coverage advisory reach a real gap"
     },
+    "B071": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-10T22:39:47.002499Z",
+      "description": "I07-W14 added the jury-ballot oracle-tier drill with a set_ballots render seam, but the cross-vendor jury discards the per-item grid post-reduction (only summary metrics persist). I09 should persist the PerItemJuryResult grid so the Evidence U2 pane is fed by production, not just tests.",
+      "id": "B071",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30-I09",
+      "status": "open",
+      "title": "Persist per-item jury ballot grid to the evidence store for the U2 drill"
+    },
     "B074": {
       "closed_at": "2026-05-28T20:00:18.235842Z",
       "commit": "3af86d0",
@@ -8350,10 +8387,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I08-W02",
-      "P30-I14-W07"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I08",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -19520,7 +19554,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T22:39:38.535173Z",
+  "updated_at": "2026-06-10T22:48:11.501250Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -77170,8 +77204,8 @@
       ],
       "claim_session_id": "flow-p30-i08-w02",
       "claimed_at": "2026-06-10T22:20:32.033288Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:48:11.501078Z",
+      "commit": "04119387f9ad08446aa1100622b6cf062ec574ed",
       "deps": [
         "P30-I08-W01"
       ],
@@ -77179,19 +77213,26 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/surfaces/tui/widgets/workspace_table.py"
+        "src/eawf/surfaces/tui/widgets/workspace_table.py",
+        "tests/tui/test_widgets_workspace_table.py",
+        "tests/tui/test_scope_workspace.py",
+        "tests/tui/test_scope_user.py",
+        "tests/snapshots/tui/test_workspace_chips.py",
+        "tests/snapshots/tui/golden/workspace_chips.txt",
+        "tests/snapshots/tui/golden/workspace_pr_count.txt",
+        "tests/snapshots/tui/golden/workspace_screen.txt"
       ],
       "gates": [],
       "id": "P30-I08-W02",
       "intent": null,
       "iter_id": "P30-I08",
       "opened_at": "2026-06-09T12:29:17.781390Z",
-      "outcome": null,
+      "outcome": "Workspace grid reskinned: lifecycle sigil + green status-tinted bar per repo row + totals; blocker/stale chip = warn triangle. 155 green, 1234 LOC, 3 goldens regen. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80993,8 +81034,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i14-w07",
       "claimed_at": "2026-06-10T22:20:32.575639Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:48:10.173846Z",
+      "commit": "784f6f452797ef9129597bb65a499b92edf6c0a4",
       "deps": [
         "P30-I14-W05"
       ],
@@ -81002,20 +81043,22 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        ".ea/artifacts/research/long-term/2026-05-18-authority-map.md",
-        "tests/platform/test_artifact_uri_rewrite.py"
+        "src/eawf/surfaces/cli/commands/hook.py",
+        "src/eawf/workflow/lifecycle/criterion_drift.py",
+        "tests/platform/test_artifact_uri_rewrite.py",
+        "tests/unit/test_lint_hooks.py"
       ],
       "gates": [],
       "id": "P30-I14-W07",
       "intent": null,
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T12:29:17.786579Z",
-      "outcome": null,
+      "outcome": "Relocated 27 loose-root artifacts under canonical kind subdirs (R100 renames, history preserved); rewrote 2 doc/code refs + all 27 state.json URIs (artifact verify ok); fixed diff-scoped lint gates to --find-renames + skip pure relocations (move-with-edit still flagged). 128 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
