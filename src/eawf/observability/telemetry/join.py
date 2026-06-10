@@ -129,17 +129,11 @@ def _duration_ms_to_eu(duration_ms: int | None, *, eu_minutes: float) -> float |
     return duration_ms / (eu_minutes * 60_000.0)
 
 
-def _tokens_to_eu(
-    tokens: int | None,
-    *,
-    tokens_per_eu: float = DEFAULT_TOKENS_PER_EU,
-) -> float | None:
+def _tokens_to_eu(tokens: int | None) -> float | None:
     """Convert runtime token delta to effort units."""
     if tokens is None:
         return None
-    if tokens_per_eu <= 0.0:
-        raise ValueError(f"tokens_per_eu must be positive: {tokens_per_eu!r}")
-    return tokens / tokens_per_eu
+    return tokens / DEFAULT_TOKENS_PER_EU
 
 
 __all__ = [
