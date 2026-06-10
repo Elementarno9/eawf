@@ -36,6 +36,7 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportHeader,
     AgentReportPayload,
+    AuditorReportBody,
     ExecutorReportBody,
     store_kind_for_role,
 )
@@ -524,6 +525,202 @@ def test_detail_modal_no_gates_renders_no_gates_tab() -> None:
             assert tabs.active == before
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Evidence tab — auditor verdict + reason / honest no-verdict (P30-I07-W03)
+# --------------------------------------------------------------------------
+
+
+def _auditor_report(
+    wave_id: str,
+    *,
+    attempt: int,
+    verdict: AgentReportVerdict,
+    reason: str,
+) -> AgentReportRow:
+    """Build an auditor-store report row carrying *verdict* + *reason*.
+
+    Mirrors the executor :func:`_report` helper but lands in the
+    ``auditor_report`` store with an :class:`AuditorReportBody`, so the
+    evidence-tab verdict section reads a real auditor row. The body's
+    ``summary`` carries the verdict reason text the detail card surfaces.
+    """
+    generated_at = datetime(2026, 5, 27, 13, attempt, tzinfo=UTC)
+    body = AuditorReportBody(
+        role="auditor",
+        verdict=verdict,
+        confidence=Confidence.HIGH,
+        summary=reason,
+        target_id=wave_id,
+    )
+    report_id = f"AR-auditor-{wave_id}-{attempt:02d}"
+    header = AgentReportHeader(
+        report_id=report_id,
+        role=AgentSessionRole.AUDITOR,
+        session_id=f"SES-aud-{attempt}",
+        scope_id=wave_id,
+        base_id=wave_id,
+        attempt=attempt,
+        runtime="claude-code",
+        generated_at=generated_at,
+        summary=body.summary,
+    )
+    payload = AgentReportPayload(header=header, body=body)
+    envelope = Envelope(
+        id=report_id,
+        kind=store_kind_for_role(AgentSessionRole.AUDITOR),
+        scope_id=wave_id,
+        created_at=generated_at,
+        updated_at=None,
+        summary=body.summary,
+        payload=payload.model_dump(mode="json"),
+    )
+    return AgentReportRow(
+        envelope=envelope,
+        payload=payload,
+        store_kind=store_kind_for_role(AgentSessionRole.AUDITOR).value,
+    )
+
+
+def test_resolve_detail_wave_renders_auditor_verdict_and_reason() -> None:
+    """A wave with one auditor report row surfaces its verdict + reason."""
+    state, wave_id = _state_with_attempted_wave()
+    card = resolve_detail(
+        state,
+        wave_id,
+        reports=(
+            _auditor_report(
+                wave_id,
+                attempt=1,
+                verdict=AgentReportVerdict.PASS_WITH_FOLLOWUPS,
+                reason="criteria met; two minor followups filed",
+            ),
+        ),
+    )
+    rows = dict(card.evidence)
+    assert rows["verdict"] == "pass-with-followups"
+    assert rows["reason"] == "criteria met; two minor followups filed"
+    # The honest sentinel is NOT painted when a real verdict exists.
+    assert rows["verdict"] != "no verdict recorded"
+
+
+def test_resolve_detail_wave_no_reports_renders_no_verdict_line() -> None:
+    """A wave with no report rows shows the honest no-verdict line, no pass."""
+    state, wave_id = _state_with_attempted_wave()
+    card = resolve_detail(state, wave_id, reports=())
+    rows = dict(card.evidence)
+    assert rows["verdict"] == "no verdict recorded"
+    # No fabricated pass badge: the verdict value is the honest sentinel and
+    # no ``reason`` row is invented for an absent report.
+    assert "reason" not in rows
+    verdict_values = [value for label, value in card.evidence if label == "verdict"]
+    assert "pass" not in verdict_values
+
+
+def test_resolve_detail_wave_latest_auditor_verdict_wins() -> None:
+    """Two auditor rows: the latest verdict + reason is the one surfaced.
+
+    Boundary: an earlier FAIL must not shadow a later PASS, so the newest
+    auditor pass wins the verdict row.
+    """
+    state, wave_id = _state_with_attempted_wave()
+    card = resolve_detail(
+        state,
+        wave_id,
+        reports=(
+            _auditor_report(
+                wave_id,
+                attempt=1,
+                verdict=AgentReportVerdict.FAIL,
+                reason="first pass refuted criterion two",
+            ),
+            _auditor_report(
+                wave_id,
+                attempt=2,
+                verdict=AgentReportVerdict.PASS,
+                reason="re-audit confirms all criteria met",
+            ),
+        ),
+    )
+    rows = dict(card.evidence)
+    assert rows["verdict"] == "pass"
+    assert rows["reason"] == "re-audit confirms all criteria met"
+
+
+def test_resolve_detail_wave_ignores_non_auditor_report_for_verdict() -> None:
+    """An executor-only report yields the honest no-verdict line, not a pass.
+
+    The executor store carries a verdict too, but only the auditor store
+    feeds the verdict section, so a wave audited by no one stays honest.
+    """
+    state, wave_id = _state_with_attempted_wave()
+    card = resolve_detail(
+        state,
+        wave_id,
+        reports=(_report(wave_id, attempt=1, verdict=AgentReportVerdict.PASS),),
+    )
+    rows = dict(card.evidence)
+    assert rows["verdict"] == "no verdict recorded"
+    assert "reason" not in rows
+
+
+def test_detail_modal_paints_auditor_verdict_and_reason() -> None:
+    """The evidence tab paints the auditor verdict + reason (Pilot)."""
+
+    async def body_fn() -> None:
+        state, wave_id = _state_with_attempted_wave()
+        reason = "criteria met; one nit deferred to followups"
+        reports = (
+            _auditor_report(
+                wave_id,
+                attempt=1,
+                verdict=AgentReportVerdict.PASS,
+                reason=reason,
+            ),
+        )
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id, reports=reports)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-evidence"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            assert "pass" in rendered
+            assert reason in rendered
+
+    asyncio.run(body_fn())
+
+
+def test_detail_modal_no_report_paints_no_verdict_line() -> None:
+    """The evidence tab paints the honest no-verdict line, never a pass (Pilot)."""
+
+    async def body_fn() -> None:
+        state, wave_id = _state_with_attempted_wave()
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id, reports=())
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-evidence"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            assert "no verdict recorded" in rendered
+
+    asyncio.run(body_fn())
 
 
 def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:

@@ -61,6 +61,7 @@ from eawf.kernel.spec.common import (
     tier_label,
 )
 from eawf.kernel.spec.intent import IntentBrief
+from eawf.kernel.state.enums import StoreKind
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import linkify_text
 from eawf.surfaces.render.narrative import (
@@ -479,6 +480,70 @@ def _gate_rows(gates: Iterable[GateSpec]) -> tuple[tuple[str, str], ...]:
     return tuple(rows)
 
 
+#: The store-kind string an auditor report row carries, matched against
+#: :attr:`~eawf.workflow.agent_report.rollup.AgentReportRow.store_kind` so
+#: the verdict section reads the auditor store only (not the executor /
+#: reviewer / planner stores threaded through the same ``reports`` list).
+_AUDITOR_STORE_KIND: str = StoreKind.AUDITOR_REPORT.value
+
+
+def _latest_auditor_verdict(
+    reports: Iterable[AgentReportRow],
+) -> AgentReportRow | None:
+    """Return the most-recent auditor-store report row, or ``None``.
+
+    Scans *reports* (already sorted oldest-first by the caller) for rows
+    whose :attr:`~eawf.workflow.agent_report.rollup.AgentReportRow.store_kind`
+    is the auditor store, and returns the last one so the latest auditor
+    pass wins. Returns ``None`` when no auditor row is present, so the
+    caller renders the honest "no verdict recorded" line rather than a
+    fabricated pass.
+
+    Args:
+        reports: The wave's loaded report rows (every role's store), in
+            oldest-first order.
+
+    Returns:
+        The latest auditor-store report row, or ``None`` when the wave has
+        no auditor report.
+    """
+    latest: AgentReportRow | None = None
+    for row in reports:
+        if row.store_kind == _AUDITOR_STORE_KIND:
+            latest = row
+    return latest
+
+
+def _auditor_verdict_rows(
+    reports: Iterable[AgentReportRow],
+) -> tuple[tuple[str, str], ...]:
+    """Build the evidence-tab auditor verdict + reason rows.
+
+    Surfaces the latest auditor report's
+    :attr:`~eawf.kernel.state.enums.AgentReportVerdict` and its reason text
+    (the report body's ``summary``). A wave with no auditor report row
+    renders a single honest "no verdict recorded" line -- never a
+    fabricated pass badge.
+
+    Args:
+        reports: The wave's loaded report rows (every role's store), in
+            oldest-first order.
+
+    Returns:
+        Ordered ``(label, value)`` rows: a ``verdict`` row plus a
+        ``reason`` row when an auditor report exists, otherwise a single
+        ``verdict`` row carrying the honest no-verdict sentinel.
+    """
+    latest = _latest_auditor_verdict(reports)
+    if latest is None:
+        return (("verdict", "no verdict recorded"),)
+    body = latest.payload.body
+    return (
+        ("verdict", body.verdict.value),
+        ("reason", body.summary),
+    )
+
+
 def _wave_card(
     state: State,
     wave_id: str,
@@ -533,14 +598,20 @@ def _wave_card(
     # section header is absent, not an empty section).
     gates: list[tuple[str, str]] = list(_gate_rows(wave.gates))
 
-    # The evidence tab folds in the attempt rollup plus the dispatch
-    # history (I06 layers the typed report rollup on top of this seam).
+    # The evidence tab folds in the auditor verdict, the attempt rollup,
+    # and the dispatch history. The verdict + reason lead so the operator
+    # sees the audit outcome first; a wave with no auditor report row shows
+    # the honest "no verdict recorded" line rather than a fabricated pass.
+    # ``reports`` is materialized first because it is scanned twice (the
+    # verdict lookup plus the rollup) and may arrive as a one-shot iterable.
+    report_rows = tuple(reports)
     attempt_rollup = per_wave_attempt_rollup(
         wave,
-        reports=reports,
+        reports=report_rows,
         error_kind_by_attempt=error_kind_by_attempt,
     )
-    evidence: list[tuple[str, str]] = list(_attempt_rollup_rows(attempt_rollup))
+    evidence: list[tuple[str, str]] = list(_auditor_verdict_rows(report_rows))
+    evidence.extend(_attempt_rollup_rows(attempt_rollup))
     for ann in wave.dispatch_history:
         runtime = ann.runtime_to or ann.runtime_from or "—"
         evidence.append((f"attempt {ann.attempt}", f"{ann.note.value} ({runtime})"))
@@ -552,7 +623,7 @@ def _wave_card(
         gates=tuple(gates),
         evidence=tuple(evidence),
         runtime=_wave_runtime(wave),
-        detail_markdown=_wave_narrative_preview(state, wave, reports=reports),
+        detail_markdown=_wave_narrative_preview(state, wave, reports=report_rows),
     )
 
 
