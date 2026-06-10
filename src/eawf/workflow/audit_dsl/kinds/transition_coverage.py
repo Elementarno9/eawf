@@ -15,8 +15,9 @@ exploration actually exercised. Hypothesis gives random state-space
 exploration, NOT built-in transition coverage, so the machine
 self-instruments: every ``@rule`` that applies a transition appends the
 ``(frm, to, guard)`` edge it took to a covered-set the run accumulates.
-The check passes iff ``covered_edges == table_edges``; otherwise it fails
-naming each uncovered edge so the gap is actionable.
+The check passes iff the built FSM exposes every state in the element's
+declared status vocabulary AND ``covered_edges == table_edges``; otherwise
+it fails naming each missing state or uncovered edge so the gap is actionable.
 
 ``hypothesis`` is a dev-only dependency, so the machine is built lazily
 inside :func:`_make_machine` rather than at module scope -- importing this
@@ -46,6 +47,11 @@ Args (read from ``spec.args``)
   in-process machine to collect coverage; when supplied (e.g. a set
   missing one known edge) it drives the deterministic error path. A
   malformed entry is a ``fail``.
+* ``built_states`` -- optional explicit built-FSM state set, a list of
+  status-value strings. When omitted the kind reads the state keys from the
+  built lifecycle FSM table; when supplied (e.g. a set missing one terminal
+  state) it drives the deterministic error path. Extra states are ignored;
+  missing declared states fail the check.
 
 A malformed ``args`` (non-str ``table``, unknown table, bad
 ``covered_edges`` shape) yields ``status="fail"`` with a ``details`` note
@@ -90,6 +96,30 @@ Edge = tuple[str, str, str]
 #: forward-only chain whose edges carry the :attr:`GuardName.NONE` guard
 #: sentinel in normal form.
 _TABLE_NAMES: frozenset[str] = frozenset({"wave", "phase", "iter", "spec"})
+
+
+def declared_states(name: str) -> frozenset[str]:
+    """Return the full declared status vocabulary for lifecycle table *name*.
+
+    Args:
+        name: One of ``"wave"`` / ``"phase"`` / ``"iter"`` / ``"spec"``.
+
+    Returns:
+        The frozen set of enum ``.value`` strings declared for that lifecycle
+        element.
+
+    Raises:
+        ValueError: when *name* is not a known table name.
+    """
+    if name == "wave":
+        return frozenset(status.value for status in WaveStatus)
+    if name == "phase":
+        return frozenset(status.value for status in PhaseStatus)
+    if name == "iter":
+        return frozenset(status.value for status in IterStatus)
+    if name == "spec":
+        return frozenset(status.value for status in SpecStatus)
+    raise ValueError(f"unknown transition table: {name!r}")
 
 
 def _guarded_table_edges(
@@ -197,6 +227,26 @@ def _resolve_machine_table(
         }
         return spec_table, _SPEC_START, False
     raise ValueError(f"unknown transition table: {name!r}")
+
+
+def built_states(name: str) -> frozenset[str]:
+    """Return the status values exposed by the built lifecycle FSM for *name*.
+
+    The state-completeness leg intentionally looks at the built table's keys,
+    not its edges: a terminal state with no out-edges must still be present in
+    the FSM, and edge coverage alone cannot see a missing key.
+
+    Args:
+        name: One of ``"wave"`` / ``"phase"`` / ``"iter"`` / ``"spec"``.
+
+    Returns:
+        The frozen set of built FSM state-value strings.
+
+    Raises:
+        ValueError: when *name* is not a known table name.
+    """
+    table, _start, _is_guarded = _resolve_machine_table(name)
+    return frozenset(status.value for status in table)
 
 
 def _make_machine(name: str) -> tuple[type[Any], Any]:
@@ -394,9 +444,36 @@ def _parse_covered_arg(raw: Any) -> frozenset[Edge]:
     return frozenset(out)
 
 
+def _parse_states_arg(raw: Any) -> frozenset[str]:
+    """Coerce an explicit ``built_states`` arg into a normalised state set.
+
+    Args:
+        raw: A list of status-value strings.
+
+    Returns:
+        The frozen set of normalised state values.
+
+    Raises:
+        ValueError: when *raw* is not a list of strings.
+    """
+    if not isinstance(raw, list):
+        raise ValueError(f"built_states must be a list: {raw!r}")
+    out: set[str] = set()
+    for entry in raw:
+        if not isinstance(entry, str):
+            raise ValueError(f"built_states entries must be strings: {entry!r}")
+        out.add(entry)
+    return frozenset(out)
+
+
 def _format_edges(edges: frozenset[Edge]) -> str:
     """Render an edge set as a stable comma-joined ``frm->to[guard]`` string."""
     return ", ".join(f"{frm}->{to}[{guard}]" for frm, to, guard in sorted(edges))
+
+
+def _format_states(states: frozenset[str]) -> str:
+    """Render a state set as a stable comma-joined string."""
+    return ", ".join(sorted(states))
 
 
 def check_transition_coverage(spec: CheckSpec, cwd: Path) -> CheckResult:
@@ -408,12 +485,16 @@ def check_transition_coverage(spec: CheckSpec, cwd: Path) -> CheckResult:
         covered_edges: Optional explicit covered-set (a list of
             ``[frm, to, guard]`` triples). When omitted the kind runs the
             in-process machine to collect coverage.
+        built_states: Optional explicit built-FSM state set (a list of state
+            value strings). When omitted the kind reads the built lifecycle
+            table keys directly.
 
     Returns:
-        :class:`CheckResult` with ``status="pass"`` iff ``covered_edges ==
-        table_edges`` (every declared edge was exercised); ``status="fail"``
-        (naming the uncovered edges) when one or more table edges have no
-        covering rule, or when the args are malformed. Never raises -- a bad
+        :class:`CheckResult` with ``status="pass"`` iff every declared state
+        is present in the built FSM and ``covered_edges == table_edges`` (every
+        declared edge was exercised); ``status="fail"`` (naming the missing
+        states or uncovered edges) when one or more table states/edges have no
+        built coverage, or when the args are malformed. Never raises -- a bad
         criterion degrades to a failed check, not an aborted run.
     """
     name = spec.args.get("table")
@@ -427,6 +508,32 @@ def check_transition_coverage(spec: CheckSpec, cwd: Path) -> CheckResult:
         )
 
     declared = table_edges(name)
+    expected_states = declared_states(name)
+
+    raw_built_states = spec.args.get("built_states")
+    try:
+        if raw_built_states is None:
+            actual_states = built_states(name)
+        else:
+            actual_states = _parse_states_arg(raw_built_states)
+    except ValueError as exc:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=str(exc),
+        )
+
+    missing_states = expected_states - actual_states
+    if missing_states:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=f"table={name} missing states in built FSM: {_format_states(missing_states)}",
+        )
 
     raw_covered = spec.args.get("covered_edges")
     try:
@@ -487,13 +594,15 @@ def check_transition_coverage(spec: CheckSpec, cwd: Path) -> CheckResult:
         kind=spec.kind,
         passed=True,
         status="pass",
-        details=f"table={name} all {len(declared)} edges covered",
+        details=f"table={name} all {len(expected_states)} states and {len(declared)} edges covered",
     )
 
 
 __all__ = [
     "Edge",
+    "built_states",
     "check_transition_coverage",
     "collect_covered_edges",
+    "declared_states",
     "table_edges",
 ]

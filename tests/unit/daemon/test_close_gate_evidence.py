@@ -40,7 +40,7 @@ import pytest
 
 from eawf import __version__
 from eawf.kernel.spec.common import CriterionSpec, GateSpec
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import StoreKind, WaveStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
@@ -49,6 +49,7 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.state import mutate
+from eawf.workflow.audit_dsl.kinds.transition_coverage import built_states, table_edges
 from eawf.workflow.estimation.trust_scorecard import compute_trust_scorecard
 
 pytestmark = pytest.mark.integration
@@ -96,8 +97,29 @@ def _file_exists_gate(*, path: str) -> dict[str, Any]:
     return spec.model_dump(mode="json")
 
 
-def _state_payload(*, gate_path: str) -> dict[str, Any]:
+def _transition_coverage_gate(*, missing_state: str) -> dict[str, Any]:
+    """A ``transition_coverage`` gate with one declared wave state omitted."""
+    spec = GateSpec(
+        id=_GATE,
+        criterion_id=_CRITERION,
+        kind="transition_coverage",
+        args={
+            "table": "wave",
+            "built_states": sorted(built_states("wave") - {missing_state}),
+            "covered_edges": [list(edge) for edge in table_edges("wave")],
+        },
+        policy="block",
+        cadence="every-wave",
+        required=True,
+    )
+    return spec.model_dump(mode="json")
+
+
+def _state_payload(
+    *, gate_path: str | None = None, gate: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """A minimal valid State with one CLAIMED L-effort wave + a deterministic gate."""
+    gate_payload = gate if gate is not None else _file_exists_gate(path=gate_path or _TARGET_FILE)
     return {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -150,7 +172,7 @@ def _state_payload(*, gate_path: str) -> dict[str, Any]:
                 "status": "claimed",
                 "claim_session_id": "session-abc",
                 "success_criteria": [_deterministic_criterion()],
-                "gates": [_file_exists_gate(path=gate_path)],
+                "gates": [gate_payload],
                 "effort_bucket": "L",
                 "agent_role": "executor",
                 "opened_at": _now().isoformat(),
@@ -344,6 +366,44 @@ def test_close_failing_deterministic_gate_blocks_via_oracle(tmp_path: Path) -> N
         assert "tier=1" in str(excinfo.value)
         assert "status=fail" in str(excinfo.value)
         assert "path=missing-deliverable.txt exists=False" in str(excinfo.value)
+
+        payload = orjson.loads(state_path.read_bytes())
+        assert payload["waves"][_WAVE]["status"] == "claimed"
+
+        rows = _read_evidence_rows(state_path)
+        assert not [r for r in rows if r.evidence_kind == "deterministic" and r.status == "pass"]
+
+    _run(body)
+
+
+def test_close_transition_coverage_missing_state_blocks_at_oracle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing transition state blocks enforcing daemon close at the oracle."""
+    _write_enforcing_profile(tmp_path)
+    _init_git_repo(tmp_path)
+    state_path = tmp_path / ".ea" / "state.json"
+    missing = WaveStatus.ABANDONED.value
+    _write_state(
+        state_path,
+        _state_payload(gate=_transition_coverage_gate(missing_state=missing)),
+    )
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def _forbidden_jury(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("transition_coverage failure must not reach jury fallback")
+
+    monkeypatch.setattr(
+        "eawf.workflow.verify.oracle.convene_cross_vendor_jury",
+        _forbidden_jury,
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError) as excinfo:
+            await mutate(ctx, {"mutation": _close_mutation().model_dump(mode="json")})
+        message = str(excinfo.value)
+        assert "oracle blocked close" in message
+        assert missing in message
 
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_WAVE]["status"] == "claimed"

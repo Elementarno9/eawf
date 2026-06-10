@@ -32,6 +32,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, 
 from eawf.kernel.state.enums import WaveStatus
 from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckSpec
 from eawf.workflow.audit_dsl.kinds.transition_coverage import (
+    built_states,
     check_transition_coverage,
     collect_covered_edges,
     table_edges,
@@ -142,6 +143,22 @@ def test_collect_covered_edges_wave_equals_table() -> None:
 def test_check_transition_coverage_all_tables_pass(tmp_path: Path) -> None:
     for name in ("wave", "phase", "iter", "spec"):
         spec = CheckSpec(kind="transition_coverage", name=f"tc-{name}", args={"table": name})
+        result = check_transition_coverage(spec, tmp_path)
+        assert result.status == "pass", f"table={name} did not pass: {result.details}"
+
+
+def test_transition_coverage_state_completeness_passes(tmp_path: Path) -> None:
+    """Live lifecycle FSMs expose every declared state in their built table."""
+    for name in ("wave", "phase", "iter", "spec"):
+        spec = CheckSpec(
+            kind="transition_coverage",
+            name=f"tc-states-{name}",
+            args={
+                "table": name,
+                "built_states": sorted(built_states(name)),
+                "covered_edges": [list(edge) for edge in table_edges(name)],
+            },
+        )
         result = check_transition_coverage(spec, tmp_path)
         assert result.status == "pass", f"table={name} did not pass: {result.details}"
 

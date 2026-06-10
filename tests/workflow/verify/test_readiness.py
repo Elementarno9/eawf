@@ -38,11 +38,17 @@ import orjson
 import pytest
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
-from eawf.kernel.state.enums import ProjectStatus, ScopeKind, StoreKind
+from eawf.kernel.state.enums import ProjectStatus, ScopeKind, StoreKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord, mint_evidence_id
 from eawf.kernel.store.paths import store_dir as _store_dir
+from eawf.workflow.audit_dsl import CheckSpec
+from eawf.workflow.audit_dsl.kinds.transition_coverage import (
+    built_states,
+    check_transition_coverage,
+    table_edges,
+)
 from eawf.workflow.lifecycle.transitions import (
     claim_wave,
     open_iter,
@@ -948,6 +954,55 @@ def test_deterministic_floor_compile_none_yields_blocked(
     assert view.status == "blocked"
     assert view.gate_results is not None
     assert view.gate_results[0].status == "blocked"
+
+
+def test_transition_coverage_blocks_on_missing_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing built FSM state fails the gate and blocks close readiness."""
+    state = _empty_state()
+    _seed_wave(state)
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    missing = WaveStatus.ABANDONED.value
+    args = {
+        "table": "wave",
+        "built_states": sorted(built_states("wave") - {missing}),
+        "covered_edges": [list(edge) for edge in table_edges("wave")],
+    }
+    check = CheckSpec(kind="transition_coverage", name="GATE-missing-state", args=args)
+    check_result = check_transition_coverage(check, tmp_path)
+    assert check_result.status == "fail"
+    assert check_result.details is not None
+    assert missing in check_result.details
+
+    criterion = _make_deterministic_criterion(
+        "CRIT-missing-state",
+        gate_ids=["GATE-missing-state"],
+    )
+    gate = GateSpec(
+        id="GATE-missing-state",
+        criterion_id="CRIT-missing-state",
+        kind="transition_coverage",
+        args=args,
+        policy="block",
+        cadence="every-wave",
+        required=True,
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_criterion_specs",
+        lambda scope_id, state_arg: [criterion],
+    )
+    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is False
+    view = next(v for v in result.criteria if v.id == "CRIT-missing-state")
+    assert view.status == "fail"
+    assert view.gate_results is not None
+    assert view.gate_results[0].status == "fail"
 
 
 def test_legacy_path_unchanged_under_w08(tmp_path: Path) -> None:
