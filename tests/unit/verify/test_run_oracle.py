@@ -15,10 +15,11 @@ and error paths the runner must honour:
   order is asserted to be tier-ascending.
 
 Boundary: a zero-gate criterion routes straight to the verdict / jury
-tier; a single passing-T1-gate criterion short-circuits at T1. Error-path:
-a gate that raises is caught and skipped (it never aborts the escalation),
-and when only a raising gate exists the runner falls through to the verdict
-tier rather than propagating.
+tier; a single passing-T1-gate criterion short-circuits at T1; a required
+blocking deterministic gate that returns ``fail`` blocks before jury
+fallthrough. Error-path: a gate that raises is caught and skipped (it never
+aborts the escalation), and when only a raising gate exists the runner falls
+through to the verdict tier rather than propagating.
 
 Every external seam (``compile_gate``, ``run_checks``,
 ``verify_wave_verdict_gate``, ``convene_cross_vendor_jury``,
@@ -172,6 +173,33 @@ def test_run_oracle_passing_t1_gate_returns_t1_without_jury(
     assert result.criterion_id == "CR-01"
 
 
+def test_run_oracle_failing_required_gate_returns_fail_without_jury(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A required/blocking deterministic gate that fails returns FAIL before jury."""
+    monkeypatch.setattr(
+        oracle,
+        "compile_gate",
+        lambda gate, *, criterion: CheckSpec(kind="file_exists", name=gate.id),
+    )
+    monkeypatch.setattr(
+        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="fail")]
+    )
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _forbidden_jury)
+    monkeypatch.setattr(
+        oracle,
+        "verify_wave_verdict_gate",
+        lambda *a, **k: pytest.fail("single-auditor gate must not run after a T1 fail"),
+    )
+
+    result = _run(_criterion(), [_gate("G-1", "file_exists")], repo_root=tmp_path)
+
+    assert result.tier is OracleTier.T1_STATIC
+    assert result.status == "fail"
+    assert result.gate_id == "G-1"
+    assert result.detail == "check fail"
+
+
 # --------------------------------------------------------------------------- #
 # CR-2: no deterministic gate + requirement != "always" -> single-auditor.
 # --------------------------------------------------------------------------- #
@@ -230,11 +258,12 @@ def test_run_oracle_tries_gates_in_ascending_tier_order(
         seen.append(gate.id)
         return CheckSpec(kind="file_exists", name=gate.id)
 
-    # All gates fail so the runner exhausts every gate before falling through.
+    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+        raise RuntimeError("gate unavailable")
+
+    # Raised gates are skipped, so the runner exhausts every gate before falling through.
     monkeypatch.setattr(oracle, "compile_gate", _spy_compile)
-    monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="fail")]
-    )
+    monkeypatch.setattr(oracle, "run_checks", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:
@@ -264,10 +293,11 @@ def test_run_oracle_unknown_kind_gate_sorts_last(
         seen.append(gate.id)
         return CheckSpec(kind="file_exists", name=gate.id)
 
+    def _raising_run(specs: list[CheckSpec], *, cwd: Path | None = None) -> list[CheckResult]:
+        raise RuntimeError("gate unavailable")
+
     monkeypatch.setattr(oracle, "compile_gate", _spy_compile)
-    monkeypatch.setattr(
-        oracle, "run_checks", lambda specs, *, cwd=None: [_check_result(status="fail")]
-    )
+    monkeypatch.setattr(oracle, "run_checks", _raising_run)
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "skip")
 
     class _Gate:

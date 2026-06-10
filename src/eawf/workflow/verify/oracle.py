@@ -44,6 +44,7 @@ from eawf.observability.eval.cross_vendor_jury import (
     convene_cross_vendor_jury,
 )
 from eawf.observability.eval.jury import JuryAggregateOutcome
+from eawf.workflow.audit_dsl.models import CheckResult
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.dispatch.verdict import (
     verdict_requirement,
@@ -71,6 +72,13 @@ class OracleResult(_StrictModel):
     criterion_id: IdStr
     gate_id: IdStr | None = None
     detail: Annotated[str, Field(max_length=2000)] = ""
+
+
+def _check_result_status(result: CheckResult) -> Literal["pass", "fail", "blocked"]:
+    """Return the closed status for one deterministic check result."""
+    if result.status is not None:
+        return result.status
+    return "pass" if result.passed else "fail"
 
 
 def _gate_sort_key(gate: GateSpec) -> int:
@@ -109,11 +117,13 @@ async def run_oracle(
        deterministic gate.
     2. For each gate, when ``criterion.evidence_kind == "deterministic"``,
        compile it (:func:`compile_gate`) and run it
-       (:func:`run_checks`). The FIRST gate that yields ``status == "pass"``
-       short-circuits and returns at that gate's tier. A gate that raises
-       is caught and recorded as a ``blocked`` skip (it never aborts the
-       escalation).
-    3. When no deterministic gate passed (or none exist), consult the
+       (:func:`run_checks`). The FIRST required/blocking deterministic gate
+       that yields ``status in {"fail", "blocked"}`` returns a non-pass
+       result at that gate's tier; the first deterministic ``pass`` returns a
+       pass at that tier. A gate that raises is caught and recorded as a
+       ``blocked`` skip (it never aborts the escalation).
+    3. When no deterministic gate produced a blocking result or pass (or none
+       exist), consult the
        jury tier: the async cross-vendor jury when
        :func:`verdict_requirement` is ``"always"``, else the sync
        single-auditor :func:`verify_wave_verdict_gate`. A cross-vendor
@@ -165,7 +175,8 @@ async def run_oracle(
                     f"detail={exc!s}"
                 )
                 continue
-            if result.status == "pass":
+            gate_status = _check_result_status(result)
+            if gate_status == "pass":
                 logger.info(
                     f"run_oracle pass criterion={criterion.id!r} gate={gate.id!r} tier={tier}"
                 )
@@ -176,6 +187,22 @@ async def run_oracle(
                     gate_id=gate.id,
                     detail=result.details or "",
                 )
+            if gate.required and gate.policy == "block":
+                logger.info(
+                    f"run_oracle deterministic_nonpass criterion={criterion.id!r} "
+                    f"gate={gate.id!r} tier={tier} status={gate_status}"
+                )
+                return OracleResult(
+                    tier=OracleTier(tier),
+                    status=gate_status,
+                    criterion_id=criterion.id,
+                    gate_id=gate.id,
+                    detail=result.details or "",
+                )
+            logger.debug(
+                f"run_oracle deterministic_advisory criterion={criterion.id!r} "
+                f"gate={gate.id!r} tier={tier} status={gate_status}"
+            )
 
     requirement = verdict_requirement(wave)
     if requirement == "always":

@@ -15,14 +15,13 @@ Exercises the W06 wiring of
   ``evidence.jsonl``, AND the trust scorecard labels the wave
   ``verified`` off that row;
 * negative -- an enforcing close whose required deterministic gate FAILS
-  (``file_exists`` over a missing file) is blocked at the jury fallthrough
-  (stubbed to FAIL so no real spawn runs) and mints NO deterministic-pass
-  row, and the wave stays CLAIMED.
+  (``file_exists`` over a missing file) is blocked by the ordered oracle
+  before jury fallthrough and mints NO deterministic-pass row, and the wave
+  stays CLAIMED.
 
 Both tests run the REAL ordered oracle + REAL compile-gate + REAL gate
-runner against the checkout -- only the cross-vendor jury (the last-resort
-tier for the failing deterministic gate) is stubbed, so the
-deterministic-evidence pipeline is proven end-to-end.
+runner against the checkout, so the deterministic-evidence pipeline is proven
+end-to-end.
 """
 
 from __future__ import annotations
@@ -46,8 +45,6 @@ from eawf.kernel.state.models import State
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
-from eawf.observability.eval.cross_vendor_jury import CrossVendorJuryResult
-from eawf.observability.eval.jury import JuryAggregateOutcome
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
@@ -330,22 +327,8 @@ def test_close_passing_deterministic_gate_mints_evidence_and_verifies(
 # --------------------------------------------------------------------------- #
 
 
-def test_close_failing_deterministic_gate_blocks_via_readiness_jury_veto_advisory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """A failing ``file_exists`` gate still blocks close (via readiness), jury veto advisory.
-
-    The deterministic gate points at a missing file, so the real oracle
-    exhausts the deterministic tier without a pass and falls through to the
-    jury tier (stubbed to FAIL so no live spawn runs). Per W10 the jury veto
-    no longer blocks -- it is held advisory until I07 TRUST-4 and logged at
-    WARNING. The close is still REFUSED, but by the independent
-    readiness-enforcement gate that scores the deterministic ``CR-01`` gate
-    directly (``readiness enforcement failed ... CR-01:fail``), NOT by the
-    advisory jury veto. The wave stays CLAIMED and no ``deterministic`` /
-    ``pass`` evidence row is minted -- the W10 hold scopes to the jury veto,
-    not to a real deterministic-gate failure.
-    """
+def test_close_failing_deterministic_gate_blocks_via_oracle(tmp_path: Path) -> None:
+    """A failing ``file_exists`` gate blocks close through the ordered oracle."""
     _write_enforcing_profile(tmp_path)
     _init_git_repo(tmp_path)
     state_path = tmp_path / ".ea" / "state.json"
@@ -353,34 +336,14 @@ def test_close_failing_deterministic_gate_blocks_via_readiness_jury_veto_advisor
     _write_state(state_path, _state_payload(gate_path="missing-deliverable.txt"))
     ctx = _build_ctx(tmp_path, state_path)
 
-    async def _jury_fail(*_a: Any, wave: Any = None, **_k: Any) -> CrossVendorJuryResult:
-        return CrossVendorJuryResult(
-            wave_id=_WAVE,
-            outcome=JuryAggregateOutcome.FAIL,
-            aggregate=None,
-            jurors=(),
-            voted_count=0,
-            abstained_count=0,
-            reasons=("stubbed fail",),
-        )
-
-    # ``run_oracle`` imports the convener by name at module load, so the
-    # patch must target the binding inside the oracle module, not the
-    # original definition site.
-    monkeypatch.setattr(
-        "eawf.workflow.verify.oracle.convene_cross_vendor_jury",
-        _jury_fail,
-    )
-
     async def body() -> None:
-        with (
-            caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"),
-            pytest.raises(DaemonValidationError) as excinfo,
-        ):
+        with pytest.raises(DaemonValidationError) as excinfo:
             await mutate(ctx, {"mutation": _close_mutation().model_dump(mode="json")})
-        # The block is the deterministic readiness gate, not the advisory jury.
-        assert "readiness enforcement failed" in str(excinfo.value)
-        assert "CR-01:fail" in str(excinfo.value)
+        assert "oracle blocked close" in str(excinfo.value)
+        assert "criterion='CR-01'" in str(excinfo.value)
+        assert "tier=1" in str(excinfo.value)
+        assert "status=fail" in str(excinfo.value)
+        assert "path=missing-deliverable.txt exists=False" in str(excinfo.value)
 
         payload = orjson.loads(state_path.read_bytes())
         assert payload["waves"][_WAVE]["status"] == "claimed"
@@ -389,7 +352,3 @@ def test_close_failing_deterministic_gate_blocks_via_readiness_jury_veto_advisor
         assert not [r for r in rows if r.evidence_kind == "deterministic" and r.status == "pass"]
 
     _run(body)
-    # The jury veto was held advisory: logged at WARNING, did not raise.
-    assert any(
-        r.levelname == "WARNING" and "jury_veto_advisory" in r.getMessage() for r in caplog.records
-    )
