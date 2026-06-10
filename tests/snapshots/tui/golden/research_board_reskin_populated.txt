@@ -6,14 +6,14 @@
   │     ❯ round 1                      ││ sloping in strike                   ││ ROUND 1/1 (staged)                  │
   │       ◌ market-structure           ││ ✕ Term-structure arbitrage is       ││ ACTIVE 4 claim(s)                   │
   │       ◌ pricing-models             ││ exploitable intraday                ││ WAITING 2 open question(s)          │
-  │       ◌ Which curve model fits the ││ ◌ Overnight gamma decay drives the  ││ PAUSED 0 checkpoint(s)              │
-  │ short tenor                        ││ skew                                ││ BUDGET 2 staged topic(s), 1         │
-  │       ◌ Does the smile invert past ││ ◌ Earlier vol-cluster claim         ││ answered                            │
-  │ the 90 delta wing                  ││ subsumed by CL-0001                 ││ RISKS 1 blocking question(s)        │
-  │       ◌ Is the term-structure      ││                                     ││                                     │
-  │ arbitrage real                     ││ Options (supporting evidence)       ││                                     │
-  │ enter to peek the selected node    ││ ● 2 ref(s) Implied vol surface is   ││                                     │
-  │                                    ││ downward sloping in strike          ││                                     │
+  │     ❯ round 1 -- questions         ││ ◌ Overnight gamma decay drives the  ││ PAUSED 0 checkpoint(s)              │
+  │       ◌ Which curve model fits the ││ skew                                ││ BUDGET 2 staged topic(s), 1         │
+  │ short tenor                        ││ ◌ Earlier vol-cluster claim         ││ answered                            │
+  │       ● Does the smile invert past ││ subsumed by CL-0001                 ││ RISKS 1 blocking question(s)        │
+  │ the 90 delta wing                  ││                                     ││                                     │
+  │       ◌ Is the term-structure      ││ Options (supporting evidence)       ││                                     │
+  │ arbitrage real                     ││ ● 2 ref(s) Implied vol surface is   ││                                     │
+  │ enter to peek the selected node    ││ downward sloping in strike          ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││ Conflicts (contradicting evidence)  ││                                     │
   │                                    ││ ✕ 1 ref(s) Term-structure arbitrage ││                                     │
@@ -34,7 +34,7 @@
   │ no checkpoint -- nothing awaiting operator review                                                                │
   └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  enter peek  n new  a approve  p park  r follow-up  s snapshot  x cancel
+  enter peek  n new  o ask  t steer  a approve  p park  r follow-up  s snapshot  x cancel
 
- ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  p park  ·  r follow-up  ·  s  weekly burn: — no data•
+ ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  o ask  ·  p park  ·  r        weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch

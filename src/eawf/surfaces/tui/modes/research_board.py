@@ -201,11 +201,25 @@ _CANCEL_METHOD: str = "research.cancel_campaign"
 #: rejected by the daemon and surfaced honestly rather than faking a node.
 _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 
+#: Daemon JSON-RPC methods the operator-channel keys route through -- the
+#: ``o`` (add-question) opener that appends an :class:`OpenQuestion` row to the
+#: scope, and the ``t`` (steer) channel that pushes an operator steer note into
+#: the running campaign. Neither RPC exists yet (full registry checked) -- the
+#: daemon answers method-not-found -- so each key collects its text through a
+#: modal and routes the committed note off the UI thread, surfacing the daemon's
+#: honest rejection / not-yet-wired result rather than fabricating a row or a
+#: steer. They go live for free once the matching RPC lands (the idle-contract
+#: pattern), the same way the ``n`` compose path went live with its stager.
+_ADD_QUESTION_METHOD: str = "research.add_question"
+_STEER_METHOD: str = "research.steer"
+
 #: Drawer line before any checkpoint is open (the idle checkpoint surface).
 CHECKPOINT_IDLE: str = "no checkpoint -- nothing awaiting operator review"
 
 #: Action-result line before any action key is pressed.
-ACTION_IDLE: str = "enter peek  n new  a approve  p park  r follow-up  s snapshot  x cancel"
+ACTION_IDLE: str = (
+    "enter peek  n new  o ask  t steer  a approve  p park  r follow-up  s snapshot  x cancel"
+)
 
 #: Action-result line when an approve / park has no checkpoint to act on.
 APPROVE_NO_CHECKPOINT: str = "approve: no checkpoint to approve"
@@ -231,6 +245,20 @@ NEW_PENDING: str = "new: staging campaign..."
 #: (the canonical campaign-store mutator) so nothing was staged.
 NEW_NO_DAEMON: str = "new: daemon unavailable -- request not issued"
 
+#: Action-result line while an operator-channel RPC (add-question / steer) is in
+#: flight off the UI thread; the line flips to the honest outcome once the
+#: worker returns. Formatted with the verb so each channel reads clearly.
+_CHANNEL_PENDING_TEMPLATE: str = "{verb}: sending..."
+
+#: Action-result line when an operator-channel commit could not reach the daemon
+#: so nothing was sent. Formatted with the verb.
+_CHANNEL_NO_DAEMON_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
+
+#: Action-result line when the operator-channel RPC does not exist yet (the
+#: daemon answers method-not-found) so the channel is honest-unavailable.
+#: Formatted with the verb + the intended method.
+_CHANNEL_NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- no {method} RPC"
+
 #: Honest "not yet wired" line for the keys whose engine runner does not exist
 #: yet (follow-up / snapshot). Formatted with the verb so each reads clearly.
 _NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- no {method} RPC"
@@ -251,6 +279,8 @@ _RESEARCH_HINTS: tuple[str, ...] = (
     render_hint_label("Enter", "open"),
     render_hint_label("d", "brief"),
     render_hint_label("n", "new"),
+    render_hint_label("o", "ask"),
+    render_hint_label("t", "steer"),
     render_hint_label("a", "approve"),
     render_hint_label("p", "park"),
     render_hint_label("r", "follow-up"),
@@ -594,6 +624,129 @@ class ComposeCampaignModal(ModalScreen["CampaignDraft | None"]):
         self.dismiss(None)
 
 
+class OperatorNoteModal(ModalScreen["str | None"]):
+    """One-field operator-channel modal (returns the entered note on commit).
+
+    The board's operator-channel keys -- ``o`` (add-question) and ``t``
+    (steer) -- push a single free-text line into the running campaign, so each
+    opens this one-field modal: a labelled :class:`Input` whose ``Enter``
+    commits the trimmed text (``Esc`` cancels, dismissing ``None`` so the board
+    issues no RPC). A commit with an empty / whitespace-only line stays open
+    with the :data:`EMPTY_NOTICE_TEMPLATE` inline notice so the operator never
+    sends a blank note; the only dismiss-with-text path carries a usable line.
+    The label + placeholder are supplied per channel so one modal serves both
+    the add-question and steer surfaces without a second widget tree.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    OperatorNoteModal {
+        align: center middle;
+    }
+    OperatorNoteModal > #note-box {
+        width: 70%;
+        max-width: 90;
+        height: auto;
+        border: solid $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    OperatorNoteModal .note-label {
+        text-style: bold;
+        color: $accent;
+        height: auto;
+    }
+    OperatorNoteModal .note-field {
+        margin-bottom: 1;
+        border: tall $accent;
+    }
+    OperatorNoteModal #note-error {
+        color: $error;
+        height: auto;
+    }
+    OperatorNoteModal .note-hint {
+        color: $text-muted;
+        height: 1;
+        margin-top: 1;
+    }
+    """
+
+    #: ``Esc`` cancels (dismisses ``None``). ``Enter`` commits via the focused
+    #: :class:`Input`'s ``Submitted`` message (see :meth:`on_input_submitted`).
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "cancel", "cancel", show=False),
+    ]
+
+    #: Widget ids (addressable so the commit reads the buffer + a test drives
+    #: the field without re-deriving the layout).
+    NOTE_INPUT_ID: ClassVar[str] = "note-input"
+    ERROR_ID: ClassVar[str] = "note-error"
+
+    #: Inline notice shown when a commit carries no non-whitespace text (the
+    #: modal stays open). Formatted with the channel noun so each reads clearly.
+    EMPTY_NOTICE_TEMPLATE: ClassVar[str] = "{noun} cannot be empty"
+
+    def __init__(self, *, title: str, label: str, placeholder: str, noun: str) -> None:
+        """Initialise the modal with its per-channel label / placeholder / noun.
+
+        Args:
+            title: The bold heading line at the top of the modal box.
+            label: The muted field label above the input.
+            placeholder: The input placeholder text.
+            noun: The channel noun used in the empty-line notice (e.g.
+                ``"question"`` / ``"steer note"``).
+        """
+        super().__init__()
+        self._title = title
+        self._label = label
+        self._placeholder = placeholder
+        self._noun = noun
+
+    def compose(self) -> ComposeResult:
+        """Yield the labelled note input above the inline notice + hint row."""
+        with Vertical(id="note-box"):
+            yield Static(self._title, classes="note-label")
+            yield Static(f"[$muted]{escape_markup(self._label)}[/]", classes="note-label")
+            yield Input(
+                placeholder=self._placeholder,
+                id=self.NOTE_INPUT_ID,
+                classes="note-field",
+            )
+            # markup=False -- the notice is literal copy, never a tag.
+            yield Static("", id=self.ERROR_ID, markup=False)
+            yield Static("[ Enter send - Esc cancel ]", classes="note-hint")
+
+    def on_mount(self) -> None:
+        """Focus the note input so the operator types straight away."""
+        self.query_one(f"#{self.NOTE_INPUT_ID}", Input).focus()
+
+    def on_input_submitted(self, message: Input.Submitted) -> None:
+        """Commit on ``Enter`` (the input's ``Submitted`` message)."""
+        message.stop()
+        self.action_commit()
+
+    def action_commit(self) -> None:
+        """Commit the note: dismiss the trimmed text, or report the empty notice.
+
+        A non-whitespace line dismisses as the trimmed string the board routes
+        through the channel RPC; an empty / whitespace-only line stays open and
+        renders the :data:`EMPTY_NOTICE_TEMPLATE` inline so the operator never
+        sends a blank note.
+        """
+        note = self.query_one(f"#{self.NOTE_INPUT_ID}", Input).value.strip()
+        if not note:
+            self.query_one(f"#{self.ERROR_ID}", Static).update(
+                self.EMPTY_NOTICE_TEMPLATE.format(noun=self._noun)
+            )
+            return
+        logger.info(f"operator_note commit noun={self._noun!r} chars={len(note)}")
+        self.dismiss(note)
+
+    def action_cancel(self) -> None:
+        """Dismiss with ``None`` (``Esc`` = cancel; the board issues no RPC)."""
+        logger.info(f"operator_note cancel noun={self._noun!r}")
+        self.dismiss(None)
+
+
 class NodeKind(StrEnum):
     """Closed vocabulary for the kind of a topic-tree node.
 
@@ -604,15 +757,22 @@ class NodeKind(StrEnum):
     Members:
         CAMPAIGN: A staged-campaign node (the tree root per campaign).
         ROUND: The synthetic round node under a campaign (round 1 -- the
-            campaign is staged, not yet multi-round-run).
+            campaign is staged, not yet multi-round-run). The open questions
+            group under this round, so the round is also emitted for a
+            question-only scope that has staged no campaign yet.
         TOPIC: A staged-domain topic node under a round.
-        QUESTION: An unresolved-question leaf under the campaign.
+        QUESTION: An :class:`~eawf.kernel.state.models.OpenQuestion` node
+            grouped under the round, carrying its open / answered / dropped
+            status as its per-status lifecycle sigil.
+        CLAIM: A :class:`~eawf.kernel.state.models.Claim` leaf nested under
+            the question it answers (the round > questions > claims spine).
     """
 
     CAMPAIGN = "campaign"
     ROUND = "round"
     TOPIC = "topic"
     QUESTION = "question"
+    CLAIM = "claim"
 
 
 @dataclass(frozen=True)
@@ -637,6 +797,13 @@ class TreeNode:
             :attr:`NodeKind.CAMPAIGN` node so the ``x`` cancel action can
             resolve a selected campaign to its store id; ``None`` on the
             round / topic / question nodes.
+        question_status: The :class:`~eawf.kernel.state.enums.OpenQuestionStatus`
+            of a :attr:`NodeKind.QUESTION` node, so the row renders the per-
+            status open / answered / dropped sigil; ``None`` on every other
+            node kind.
+        claim_status: The :class:`~eawf.kernel.state.enums.ClaimStatus` of a
+            :attr:`NodeKind.CLAIM` node, so the nested claim row renders the
+            claim's lifecycle sigil; ``None`` on every other node kind.
     """
 
     kind: NodeKind
@@ -644,6 +811,8 @@ class TreeNode:
     depth: int
     detail: str
     campaign_id: str | None = None
+    question_status: OpenQuestionStatus | None = None
+    claim_status: ClaimStatus | None = None
 
 
 def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
@@ -732,23 +901,63 @@ def has_research_signal(
     return bool(campaigns or claims or questions)
 
 
+def index_claims_by_question(
+    claims: tuple[Claim, ...],
+) -> dict[str, tuple[Claim, ...]]:
+    """Group *claims* by the open-question id each one answers.
+
+    A claim that back-links an :class:`~eawf.kernel.state.models.OpenQuestion`
+    via :attr:`~eawf.kernel.state.models.Claim.answers_question_id` nests under
+    that question in the round > questions > claims tree; a free-standing claim
+    (``answers_question_id`` is ``None``) is omitted from the mapping entirely,
+    so it never fabricates a parentless tree leaf. Order within each group is
+    preserved from the input (the natural-id sort the caller supplies).
+
+    Args:
+        claims: The state-resident claim rows for the scope.
+
+    Returns:
+        A mapping of question id to the claims that answer it, in input order;
+        empty when no claim back-links a question.
+    """
+    grouped: dict[str, list[Claim]] = {}
+    for claim in claims:
+        question_id = claim.answers_question_id
+        if question_id is not None:
+            grouped.setdefault(question_id, []).append(claim)
+    return {question_id: tuple(rows) for question_id, rows in grouped.items()}
+
+
 def build_tree_nodes(
     campaigns: tuple[CampaignRow, ...],
     questions: tuple[OpenQuestion, ...],
+    *,
+    claims: tuple[Claim, ...] = (),
 ) -> tuple[TreeNode, ...]:
-    """Flatten the campaign + question rows into the topic-tree node list.
+    """Flatten the campaign + question + claim rows into the topic-tree node list.
 
-    Builds the campaign > round > topic > unresolved-question outline as a
-    flat tuple of :class:`TreeNode` rows in render order: per campaign, the
-    campaign node, then a synthetic round-1 node, then one topic node per
-    staged domain (capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`). The unresolved
-    open questions hang as question leaves after the campaign nodes (a question
-    is scope-wide, not pinned to one campaign's topic). Empty when the scope
-    has neither a campaign nor an open question.
+    Builds the campaign > round > topic outline plus the round > questions >
+    claims spine as a flat tuple of :class:`TreeNode` rows in render order:
+
+    * per campaign -- the campaign node, then a synthetic round-1 node, then one
+      topic node per staged domain (capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`);
+    * then, when the scope carries open questions, a single synthetic
+      ``round 1 -- questions`` round node grouping every
+      :class:`~eawf.kernel.state.models.OpenQuestion` as a question node (each
+      carrying its open / answered / dropped status for the per-status sigil),
+      with the claims that answer a question
+      (:func:`index_claims_by_question`) nested as claim leaves beneath it.
+
+    A question is scope-wide (not pinned to one campaign's topic), so the
+    questions round is emitted once for the scope rather than per campaign, and
+    it surfaces even for a question-only scope that has staged no campaign yet.
+    Empty when the scope has neither a campaign nor an open question.
 
     Args:
         campaigns: The staged campaign rows for the scope.
         questions: The state-resident open-question rows for the scope.
+        claims: The state-resident claim rows; the ones that back-link a
+            question nest under it (free-standing claims are not tree leaves).
 
     Returns:
         The flattened tree nodes in render order; empty when nothing to show.
@@ -770,6 +979,7 @@ def build_tree_nodes(
                 label="round 1",
                 depth=1,
                 detail="campaign staged -- live multi-round run not yet wired",
+                campaign_id=campaign.campaign_id,
             )
         )
         for domain in campaign.domains[:_MAX_TOPICS_PER_CAMPAIGN]:
@@ -779,58 +989,92 @@ def build_tree_nodes(
                     label=domain,
                     depth=2,
                     detail=f"staged topic in {campaign.topic}",
+                    campaign_id=campaign.campaign_id,
                 )
             )
-    for question in questions:
-        marker = "blocking" if question.blocking else question.status.value
+    if questions:
         nodes.append(
             TreeNode(
-                kind=NodeKind.QUESTION,
-                label=question.title,
-                depth=2,
-                detail=f"open question -- {marker}",
+                kind=NodeKind.ROUND,
+                label="round 1 -- questions",
+                depth=1,
+                detail=f"{len(questions)} open question(s) tracked this round",
             )
         )
+        claims_by_question = index_claims_by_question(claims)
+        for question in questions:
+            marker = "blocking" if question.blocking else question.status.value
+            nodes.append(
+                TreeNode(
+                    kind=NodeKind.QUESTION,
+                    label=question.title,
+                    depth=2,
+                    detail=f"open question -- {marker}",
+                    question_status=question.status,
+                )
+            )
+            for claim in claims_by_question.get(question.id, ()):
+                nodes.append(
+                    TreeNode(
+                        kind=NodeKind.CLAIM,
+                        label=claim.title,
+                        depth=3,
+                        detail=f"candidate answer -- {claim.status.value}",
+                        claim_status=claim.status,
+                    )
+                )
     return tuple(nodes)
 
 
-#: :class:`NodeKind` -> the sigils-helper role / lifecycle mark its level glyph
-#: renders. The structural nodes draw a chrome role (the campaign root is the
-#: ``overview`` triple-bar, the round node the ``dispatch`` arrow); the
-#: shape-bearing leaves draw a lifecycle sigil (a staged topic is ``PENDING``;
-#: an unresolved question is ``PENDING`` too -- the tree's questions are the
-#: open / unresolved leaves). No NodeKind maps to a raw glyph or a ``?``
-#: fallthrough -- every level resolves through the sigils helper.
+#: :class:`NodeKind` -> the sigils-helper chrome role its structural level glyph
+#: renders: the campaign root is the ``overview`` triple-bar, every round node
+#: the ``dispatch`` arrow. The shape-bearing leaves are NOT in this map -- a
+#: staged topic draws the ``PENDING`` lifecycle sigil (:data:`_TREE_SIGIL`),
+#: and a question / claim leaf draws its OWN per-status lifecycle sigil (via
+#: :func:`question_sigil_markup` / :func:`claim_sigil_markup`) so the open /
+#: answered / dropped status reads off the row, never a flat pending dot.
 _TREE_CHROME: dict[NodeKind, str] = {
     NodeKind.CAMPAIGN: "overview",
     NodeKind.ROUND: "dispatch",
 }
+
+#: :class:`NodeKind` -> the fixed lifecycle :class:`Sigil` its level glyph
+#: renders when the node carries no per-status sigil. Only the staged-topic
+#: leaf is fixed (always ``PENDING`` -- a staged topic is not yet run);
+#: question / claim leaves resolve their sigil from the node's own status.
 _TREE_SIGIL: dict[NodeKind, Sigil] = {
     NodeKind.TOPIC: Sigil.PENDING,
-    NodeKind.QUESTION: Sigil.PENDING,
 }
 
 
-def _tree_node_glyph(kind: NodeKind, *, mode: RenderMode) -> str:
-    """Return the sigils-helper glyph for a tree node *kind*.
+def _tree_node_markup(node: TreeNode, *, mode: RenderMode) -> str:
+    """Return the tinted level-sigil markup for a tree *node*.
 
-    Resolves the node's level mark through the sigils helper -- a chrome role
-    for the structural campaign / round nodes, a lifecycle sigil for the
-    topic / question leaves -- so the tree carries no hardcoded glyph and no
-    ``?`` fallthrough.
+    Resolves the node's level mark through the sigils helper -- a muted chrome
+    role for the structural campaign / round nodes, the fixed pending sigil for
+    a staged topic, and the per-status lifecycle sigil (open / answered /
+    dropped for a question; the claim's own status for a candidate-answer
+    claim) for the shape-bearing leaves. No node kind falls through to a raw
+    glyph or a ``?`` -- every level resolves through the sigils helper.
 
     Args:
-        kind: The :class:`NodeKind` of the row.
+        node: The tree node whose level sigil to render.
         mode: The App's resolved render-mode label -- selects the glyph's
             ASCII / unicode column.
 
     Returns:
-        The single-cell glyph string for *kind* in the resolved column.
+        A content-markup span: the node's tinted level sigil.
     """
-    role = _TREE_CHROME.get(kind)
+    if node.kind is NodeKind.QUESTION and node.question_status is not None:
+        return question_sigil_markup(node.question_status, mode=mode)
+    if node.kind is NodeKind.CLAIM and node.claim_status is not None:
+        return claim_sigil_markup(node.claim_status, mode=mode)
+    role = _TREE_CHROME.get(node.kind)
     if role is not None:
-        return sigils.chrome(role, mode=mode)
-    return sigils.glyph(_TREE_SIGIL[kind], mode=mode)
+        glyph = escape_markup(sigils.chrome(role, mode=mode))
+    else:
+        glyph = escape_markup(sigils.glyph(_TREE_SIGIL[node.kind], mode=mode))
+    return f"[$muted]{glyph}[/]"
 
 
 def render_tree(
@@ -838,11 +1082,13 @@ def render_tree(
 ) -> str:
     """Render the topic-tree pane (one indented row per node).
 
-    Each row carries a sigils-helper level glyph -- the ``overview`` mark for a
-    campaign root, the ``dispatch`` arrow for a round, the pending lifecycle
-    sigil for a staged topic or an unresolved question -- and the node label,
-    indented by depth. The *selected* row is marked so the peek target is
-    visible. An empty node list renders the per-pane :data:`NONE_YET` sentinel.
+    Each row carries a sigils-helper level sigil -- the ``overview`` mark for a
+    campaign root, the ``dispatch`` arrow for a round, the pending sigil for a
+    staged topic, and the per-status open / answered / dropped lifecycle sigil
+    for a question leaf (its answering claims nested one indent deeper with
+    their own claim sigil) -- and the node label, indented by depth. The
+    *selected* row is marked so the peek target is visible. An empty node list
+    renders the per-pane :data:`NONE_YET` sentinel.
 
     Args:
         nodes: The flattened tree nodes in render order.
@@ -858,10 +1104,9 @@ def render_tree(
     lines: list[str] = []
     for index, node in enumerate(nodes):
         indent = "  " * node.depth
-        glyph = escape_markup(_tree_node_glyph(node.kind, mode=mode))
+        sigil = _tree_node_markup(node, mode=mode)
         marker = "[$accent]>[/] " if index == selected else "  "
-        tint = "$warn" if node.kind is NodeKind.QUESTION else "$muted"
-        lines.append(f"{marker}{indent}[{tint}]{glyph}[/] {escape_markup(node.label)}")
+        lines.append(f"{marker}{indent}{sigil} {escape_markup(node.label)}")
     return "\n".join(lines)
 
 
@@ -1169,7 +1414,12 @@ class ResearchBoardModeScreen(ScopeScreen):
     an open pause, surfacing the honest result; ``r`` (follow-up) / ``s``
     (snapshot) route through the daemon-client seam to their not-yet-existing
     methods and surface the honest "not yet wired" line (the idle-contract
-    pattern). No action ever fakes an outcome that did not happen.
+    pattern). ``o`` (add-question) and ``t`` (steer) are the operator-channel
+    keys: each collects a free-text line through a one-field
+    :class:`OperatorNoteModal` and routes it off the UI thread to its intended
+    ``research.add_question`` / ``research.steer`` RPC, surfacing the daemon's
+    honest not-yet-wired / rejection result. No action ever fakes an outcome
+    that did not happen.
 
     The screen self-binds to the host
     :class:`~eawf.surfaces.tui.app.EaApp` reactive ``state``: it seeds from
@@ -1232,18 +1482,23 @@ class ResearchBoardModeScreen(ScopeScreen):
     #: ``up`` / ``down`` move the tree cursor; ``enter`` peeks the selected
     #: node read-only. ``a`` approve / ``p`` park route checkpoint resolution
     #: through the real needs_user RPCs; ``r`` follow-up / ``s`` snapshot are
-    #: the honest-unavailable idle-contract keys. The lowercase ``a``/``p``/
-    #: ``r``/``s`` are the brief's canonical research action keys (no app-wide
-    #: collision since this pane keeps arrows primary for the tree). The chrome
-    #: bindings (palette / help / quit / scope / mode digits) come from the
-    #: shared chassis + app-wide bindings, so the pane offers no j/k vim
-    #: aliases here.
+    #: the honest-unavailable idle-contract keys. ``o`` (add-question) and ``t``
+    #: (steer) are the operator-channel keys -- both FREE keys (no app-wide or
+    #: in-pane collision; the app binds ``w/r/u i c q h j k l`` + digits and the
+    #: pane keeps arrows primary for the tree), so adding them never displaces
+    #: ``s`` (snapshot) / ``a`` (approve) / ``n`` (new) from their live
+    #: handlers. The lowercase ``a``/``p``/``r``/``s`` are the brief's canonical
+    #: research action keys. The chrome bindings (palette / help / quit / scope
+    #: / mode digits) come from the shared chassis + app-wide bindings, so the
+    #: pane offers no j/k vim aliases here.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "select_prev", "up", show=False),
         Binding("down", "select_next", "down", show=False),
         Binding("enter", "peek_selected", "peek", show=False),
         Binding("d", "open_brief", "brief", show=False),
         Binding("n", "new_campaign", "new", show=False),
+        Binding("o", "add_question", "ask", show=False),
+        Binding("t", "steer", "steer", show=False),
         Binding("a", "approve_checkpoint", "approve", show=False),
         Binding("p", "park_checkpoint", "park", show=False),
         Binding("r", "followup", "follow-up", show=False),
@@ -1282,7 +1537,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         """
         campaigns, claims, questions = self._current_rows()
         self.empty = not has_research_signal(campaigns, claims, questions)
-        self._tree = build_tree_nodes(campaigns, questions)
+        self._tree = build_tree_nodes(campaigns, questions, claims=claims)
         with Vertical(id="research-body"):
             if self.empty:
                 yield Static(self._empty_body(), id=EMPTY_ID)
@@ -1559,6 +1814,166 @@ class ResearchBoardModeScreen(ScopeScreen):
         topic = result.get("topic", draft.topic)
         return f"[$ok]new: staged[/] [$muted]topic={escape_markup(str(topic))}[/]"
 
+    def action_add_question(self) -> None:
+        """Open the add-question modal; commit appends an open question.
+
+        The ``o`` operator-channel key pushes a new
+        :class:`~eawf.kernel.state.models.OpenQuestion` into the running
+        campaign. Pushes a one-field :class:`OperatorNoteModal` collecting the
+        question title; ``Esc`` cancels (the callback receives ``None`` and
+        issues zero RPCs). A committed title routes off the UI thread to the
+        ``research.add_question`` RPC -- which does not exist yet, so the daemon
+        answers method-not-found and the channel surfaces the honest "not yet
+        wired" line rather than fabricating a question row (the idle-contract
+        pattern; it goes live for free once the RPC lands).
+        """
+        modal = OperatorNoteModal(
+            title="add an open question",
+            label="question (imperative noun-phrase)",
+            placeholder="which curve model fits the short tenor",
+            noun="question",
+        )
+        self.app.push_screen(modal, self._add_question_committed)
+
+    def _add_question_committed(self, note: str | None) -> None:
+        """Route a committed add-question *note*, or no-op when cancelled.
+
+        Args:
+            note: The committed question title, or ``None`` when the operator
+                cancelled the modal (the board issues no RPC).
+        """
+        self._dispatch_channel(
+            note=note,
+            verb="ask",
+            method=_ADD_QUESTION_METHOD,
+            params_key="title",
+        )
+
+    def action_steer(self) -> None:
+        """Open the steer modal; commit pushes an operator steer note.
+
+        The ``t`` operator-channel key pushes a steer note into the running
+        campaign (the balanced-autonomy operator-input channel). Pushes a one-
+        field :class:`OperatorNoteModal` collecting the steer text; ``Esc``
+        cancels (the callback receives ``None`` and issues zero RPCs). A
+        committed note routes off the UI thread to the ``research.steer`` RPC --
+        which does not exist yet, so the daemon answers method-not-found and the
+        channel surfaces the honest "not yet wired" line rather than implying a
+        steer landed (the idle-contract pattern; it goes live for free once the
+        RPC lands).
+        """
+        modal = OperatorNoteModal(
+            title="steer the campaign",
+            label="steer note",
+            placeholder="prioritise the venues-and-flow domain next round",
+            noun="steer note",
+        )
+        self.app.push_screen(modal, self._steer_committed)
+
+    def _steer_committed(self, note: str | None) -> None:
+        """Route a committed steer *note*, or no-op when cancelled.
+
+        Args:
+            note: The committed steer text, or ``None`` when the operator
+                cancelled the modal (the board issues no RPC).
+        """
+        self._dispatch_channel(
+            note=note,
+            verb="steer",
+            method=_STEER_METHOD,
+            params_key="text",
+        )
+
+    def _dispatch_channel(
+        self, *, note: str | None, verb: str, method: str, params_key: str
+    ) -> None:
+        """Dispatch an operator-channel *note* off the UI thread, honestly.
+
+        The shared dispatch for the ``o`` (add-question) and ``t`` (steer)
+        channels: a ``None`` *note* (``Esc`` cancel) issues no RPC at all. A
+        committed note seeds the in-flight pending line and dispatches the
+        channel worker so the daemon round-trip never blocks the UI thread; the
+        worker flips the line to the honest outcome once the call returns.
+
+        Args:
+            note: The committed channel note, or ``None`` when cancelled.
+            verb: The channel verb (``"ask"`` / ``"steer"``) for the result
+                line + logs.
+            method: The intended daemon JSON-RPC method name.
+            params_key: The params key the note rides under in the RPC call.
+        """
+        if note is None:
+            return
+        self._set_action(f"[$muted]{_CHANNEL_PENDING_TEMPLATE.format(verb=verb)}[/]")
+        self.run_worker(
+            self._channel_worker(note=note, verb=verb, method=method, params_key=params_key),
+            group="research-channel",
+            exclusive=True,
+        )
+
+    async def _channel_worker(self, *, note: str, verb: str, method: str, params_key: str) -> None:
+        """Issue the operator-channel RPC for *note* off the event loop.
+
+        Runs the blocking daemon round-trip in a thread (so the UI thread never
+        stalls), then -- back on the event loop -- flips the action line to the
+        honest outcome. A method-not-found (the RPC does not exist yet), a typed
+        rejection, or an unreachable daemon each surfaces honestly; none
+        fabricates a sent note.
+
+        Args:
+            note: The committed channel note to send.
+            verb: The channel verb for the result line + logs.
+            method: The intended daemon JSON-RPC method name.
+            params_key: The params key the note rides under in the RPC call.
+        """
+        result_line = await asyncio.to_thread(
+            self._issue_channel, note=note, verb=verb, method=method, params_key=params_key
+        )
+        self._set_action(result_line)
+        logger.info(f"_channel_worker verb={verb} method={method!r} result={result_line!r}")
+
+    def _issue_channel(self, *, note: str, verb: str, method: str, params_key: str) -> str:
+        """Issue the operator-channel RPC for *note* and return a result line.
+
+        Calls *method* through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI mutates through, when a daemon socket is available. The
+        add-question / steer RPCs do not exist yet, so a real daemon answers
+        method-not-found, which surfaces as the honest "not yet wired" line; a
+        typed rejection surfaces the daemon's message, and an unreachable daemon
+        surfaces the honest unavailable line. None fabricates a sent note -- the
+        success line is reachable only once the RPC lands (the idle-contract
+        pattern).
+
+        Args:
+            note: The committed channel note.
+            verb: The channel verb for the result line.
+            method: The intended daemon JSON-RPC method name.
+            params_key: The params key the note rides under in the RPC call.
+
+        Returns:
+            A content-markup result line describing the channel outcome.
+        """
+        if not self._daemon_available():
+            return f"[$warn]{_CHANNEL_NO_DAEMON_TEMPLATE.format(verb=verb)}[/]"
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                client.call(method, {params_key: note})
+        except DaemonRpcError as exc:
+            # The add-question / steer RPCs do not exist yet, so a real daemon
+            # answers method-not-found; surface that (and any other RPC error
+            # for the as-yet-absent method) honestly as "not yet wired".
+            logger.debug(f"_issue_channel method_absent verb={verb} code={exc.code}")
+            return f"[$warn]{_CHANNEL_NOT_WIRED_TEMPLATE.format(verb=verb, method=method)}[/]"
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_channel daemon_fallback verb={verb} cause={exc!r}")
+            return f"[$warn]{_CHANNEL_NO_DAEMON_TEMPLATE.format(verb=verb)}[/]"
+        # Reachable only once the RPC lands; report it sent so the honest path
+        # inverts the moment the daemon implements the channel.
+        return f"[$ok]{verb}: sent[/]"
+
     def action_cancel_campaign(self) -> None:
         """Cancel the selected campaign via the real ``research.cancel_campaign`` RPC.
 
@@ -1744,7 +2159,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         campaigns, claims, questions = self._current_rows()
         was_empty = self.empty
         self.empty = not has_research_signal(campaigns, claims, questions)
-        self._tree = build_tree_nodes(campaigns, questions)
+        self._tree = build_tree_nodes(campaigns, questions, claims=claims)
         self._clamp_selection()
         if self.empty != was_empty:
             self._recompose_body()
@@ -1817,12 +2232,12 @@ class ResearchBoardModeScreen(ScopeScreen):
     def _selected_campaign_id(self) -> str | None:
         """Return the selected node's campaign id, or ``None``.
 
-        A campaign node carries its store id, so a selected campaign resolves
-        directly. A round / topic node under a campaign resolves to its parent
-        campaign by walking up the flat node list to the nearest preceding
-        campaign node. A selected question leaf (scope-wide, not pinned to one
-        campaign) or an empty tree yields ``None`` -- there is no campaign to
-        cancel.
+        Every campaign-owned node -- the campaign root, its round node, and its
+        staged-topic nodes -- carries its own ``campaign_id``, so a selection
+        inside a campaign sub-tree resolves directly. The scope-wide question
+        section (the ``questions`` round node, its question leaves, and their
+        nested claim leaves) carries no ``campaign_id``, so a selection there --
+        or an empty tree -- yields ``None`` (there is no campaign to cancel).
 
         Returns:
             The campaign id of the selected node's campaign, or ``None``.
@@ -1830,15 +2245,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         node = self._selected_node()
         if node is None:
             return None
-        if node.kind is NodeKind.QUESTION:
-            return None
-        if node.campaign_id is not None:
-            return node.campaign_id
-        for index in range(self.selected, -1, -1):
-            candidate = self._tree[index]
-            if candidate.kind is NodeKind.CAMPAIGN and candidate.campaign_id is not None:
-                return candidate.campaign_id
-        return None
+        return node.campaign_id
 
     def _set_peek(self, line: str) -> None:
         """Update the peek-result line under the tree, if mounted."""
@@ -1983,6 +2390,7 @@ __all__ = [
     "CampaignRow",
     "ComposeCampaignModal",
     "NodeKind",
+    "OperatorNoteModal",
     "ResearchBoardModeScreen",
     "TreeNode",
     "build_research_block",
@@ -1990,6 +2398,7 @@ __all__ = [
     "claim_sigil_markup",
     "group_claims_by_evidence",
     "has_research_signal",
+    "index_claims_by_question",
     "parse_domains",
     "question_sigil_markup",
     "read_campaign_rows",

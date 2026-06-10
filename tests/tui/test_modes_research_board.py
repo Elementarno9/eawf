@@ -92,12 +92,15 @@ from eawf.surfaces.tui.modes.research_board import (
     CampaignRow,
     ComposeCampaignModal,
     NodeKind,
+    OperatorNoteModal,
     ResearchBoardModeScreen,
     build_research_block,
     build_tree_nodes,
     claim_sigil_markup,
     has_research_signal,
+    index_claims_by_question,
     parse_domains,
+    question_sigil_markup,
     read_campaign_rows,
     render_center_tabs,
     render_checkpoint,
@@ -133,13 +136,19 @@ def _campaign_row(campaign_id: str = "RC-0001") -> CampaignRow:
     )
 
 
-def _claim(claim_id: str = "CL-0001", *, status: ClaimStatus = ClaimStatus.OPEN) -> Claim:
-    """Build a claim row in *status*."""
+def _claim(
+    claim_id: str = "CL-0001",
+    *,
+    status: ClaimStatus = ClaimStatus.OPEN,
+    answers_question_id: str | None = None,
+) -> Claim:
+    """Build a claim row in *status*, optionally answering a question."""
     return Claim(
         id=claim_id,
         scope_id="QR",
         title="Implied vol surface is downward sloping in strike",
         status=status,
+        answers_question_id=answers_question_id,
         created_at=_T0,
     )
 
@@ -400,12 +409,21 @@ def test_build_tree_nodes_campaign_emits_campaign_round_topic_levels() -> None:
     assert "pricing-models" in topic_labels
 
 
-def test_build_tree_nodes_open_question_is_a_leaf() -> None:
-    """An open question hangs as a question leaf node in the tree."""
+def test_build_tree_nodes_open_question_groups_under_a_questions_round() -> None:
+    """An open question hangs as a question node under the synthetic round.
+
+    The round > questions > claims spine emits the ``questions`` round node
+    even for a question-only scope (no campaign), with the question grouped
+    beneath it carrying its lifecycle status for the per-status sigil.
+    """
     nodes = build_tree_nodes((), (_question(),))
-    assert len(nodes) == 1
-    assert nodes[0].kind is NodeKind.QUESTION
-    assert nodes[0].label == "Which curve model fits the short tenor"
+    assert len(nodes) == 2
+    assert nodes[0].kind is NodeKind.ROUND
+    assert nodes[0].label == "round 1 -- questions"
+    assert nodes[1].kind is NodeKind.QUESTION
+    assert nodes[1].depth == 2
+    assert nodes[1].label == "Which curve model fits the short tenor"
+    assert nodes[1].question_status is OpenQuestionStatus.OPEN
 
 
 def test_persisted_campaign_surfaces_as_board_topic_node(tmp_path: Path) -> None:
@@ -1633,5 +1651,453 @@ def test_research_board_n_commit_no_daemon_surfaces_unavailable(
             assert isinstance(board, ResearchBoardModeScreen)
             result = board.query_one(f"#{ACTION_RESULT_ID}")
             assert NEW_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W15: round > questions > claims tree with per-status open-question sigils
+# --------------------------------------------------------------------------
+
+
+def test_index_claims_by_question_empty_yields_empty_mapping() -> None:
+    """No claim yields an empty question->claims mapping (boundary case)."""
+    assert index_claims_by_question(()) == {}
+
+
+def test_index_claims_by_question_groups_answering_claims() -> None:
+    """A claim that back-links a question groups under that question id."""
+    answering = _claim("CL-0001", answers_question_id="OQ-0001")
+    free = _claim("CL-0002")  # answers no question
+    grouped = index_claims_by_question((answering, free))
+    assert set(grouped) == {"OQ-0001"}
+    assert grouped["OQ-0001"] == (answering,)
+
+
+def test_index_claims_by_question_omits_freestanding_claims() -> None:
+    """A claim answering no question is omitted -- never a parentless leaf."""
+    assert index_claims_by_question((_claim("CL-0002"),)) == {}
+
+
+def test_build_tree_nodes_nests_answering_claims_under_their_question() -> None:
+    """The round > questions > claims spine nests a claim under its question.
+
+    A claim that back-links an open question hangs as a claim leaf one indent
+    deeper than the question, carrying the claim's lifecycle status for its
+    sigil; a question with no answering claim has no claim leaf.
+    """
+    question = _question("OQ-0001", status=OpenQuestionStatus.OPEN)
+    claim = _claim("CL-0001", status=ClaimStatus.SUPPORTED, answers_question_id="OQ-0001")
+    nodes = build_tree_nodes((), (question,), claims=(claim,))
+    kinds = [node.kind for node in nodes]
+    assert kinds == [NodeKind.ROUND, NodeKind.QUESTION, NodeKind.CLAIM]
+    claim_node = nodes[2]
+    assert claim_node.depth == 3  # one indent deeper than the question
+    assert claim_node.claim_status is ClaimStatus.SUPPORTED
+    assert claim_node.label == "Implied vol surface is downward sloping in strike"
+
+
+def test_build_tree_nodes_campaign_and_questions_emit_both_rounds() -> None:
+    """A campaign plus open questions emit the campaign round AND questions round."""
+    nodes = build_tree_nodes((_campaign_row(),), (_question(),))
+    rounds = [node for node in nodes if node.kind is NodeKind.ROUND]
+    assert {node.label for node in rounds} == {"round 1", "round 1 -- questions"}
+    # The campaign-owned round carries the campaign id; the questions round does not.
+    campaign_round = next(node for node in rounds if node.label == "round 1")
+    questions_round = next(node for node in rounds if node.label == "round 1 -- questions")
+    assert campaign_round.campaign_id == "RC-0001"
+    assert questions_round.campaign_id is None
+
+
+def test_render_tree_renders_per_status_question_sigils() -> None:
+    """Each open / answered / dropped question renders its own per-status sigil.
+
+    The tree leads each question row with the lifecycle sigil for its status
+    (not a flat pending dot), so the open / answered / dropped status reads off
+    the row -- the W15 round > questions tree contract.
+    """
+    questions = (
+        _question("OQ-0001", status=OpenQuestionStatus.OPEN),
+        _question("OQ-0002", status=OpenQuestionStatus.ANSWERED),
+        _question("OQ-0003", status=OpenQuestionStatus.DROPPED),
+    )
+    nodes = build_tree_nodes((), questions)
+    body = render_tree(nodes, -1, mode=DEFAULT_RENDER_MODE)
+    for status in (
+        OpenQuestionStatus.OPEN,
+        OpenQuestionStatus.ANSWERED,
+        OpenQuestionStatus.DROPPED,
+    ):
+        assert question_sigil_markup(status, mode=DEFAULT_RENDER_MODE) in body
+    # The raw status words never leak into the rendered tree rows.
+    assert "answered" not in body
+    assert "dropped" not in body
+
+
+def test_render_tree_nests_claim_under_question_with_claim_sigil() -> None:
+    """A nested claim row renders the claim's lifecycle sigil under its question."""
+    question = _question("OQ-0001", status=OpenQuestionStatus.OPEN)
+    claim = _claim("CL-0001", status=ClaimStatus.REFUTED, answers_question_id="OQ-0001")
+    nodes = build_tree_nodes((), (question,), claims=(claim,))
+    body = render_tree(nodes, -1, mode=DEFAULT_RENDER_MODE)
+    assert claim_sigil_markup(ClaimStatus.REFUTED, mode=DEFAULT_RENDER_MODE) in body
+    assert "Implied vol surface is downward sloping in strike" in body
+
+
+def test_research_board_renders_question_tree_with_nested_claims(tmp_path: Path) -> None:
+    """The mounted board renders the round > questions > claims tree.
+
+    A seeded scope with an answered question (and a claim that answers it)
+    surfaces the questions round, the question grouped under it, and the
+    answering claim nested one indent deeper in the live tree pane. The
+    per-status sigil markup is pinned by the pure ``render_tree`` unit tests;
+    this guards the live nesting + grouping the rendered glyphs collapse to.
+    """
+    answered = _question("OQ-0001", status=OpenQuestionStatus.ANSWERED)
+    claim = _claim("CL-0001", status=ClaimStatus.SUPPORTED, answers_question_id="OQ-0001")
+    state = _project_state(
+        claims={"CL-0001": claim},
+        open_questions={"OQ-0001": answered},
+    )
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            tree_body = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
+            lines = tree_body.splitlines()
+            round_label = "round 1 -- questions"
+            question_label = "Which curve model fits the short tenor"
+            claim_label = "Implied vol surface is downward sloping in strike"
+            round_line = next(line for line in lines if round_label in line)
+            question_line = next(line for line in lines if question_label in line)
+            claim_line = next(line for line in lines if claim_label in line)
+            # The claim label is indented deeper than its question label, which is
+            # deeper than the round label -- the round > questions > claims spine.
+            # Compare label column position so the selection marker (a fixed-width
+            # prefix on the cursor row) never skews the measured indent.
+            round_col = round_line.index(round_label)
+            question_col = question_line.index(question_label)
+            claim_col = claim_line.index(claim_label)
+            assert round_col < question_col < claim_col
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W15: the operator channel -- t (steer) + o (add-question), no key collision
+# --------------------------------------------------------------------------
+
+
+def test_research_board_operator_channel_bindings_exist_and_are_distinct() -> None:
+    """``t`` steer + ``o`` add-question are bound and distinct from s / a / n.
+
+    The operator-channel keys must NOT collide with the live snapshot (``s``),
+    approve (``a``), or new (``n``) handlers -- each resolves to its own action.
+    """
+    keys = {
+        binding.key: binding.action
+        for binding in ResearchBoardModeScreen.BINDINGS
+        if hasattr(binding, "key")
+    }
+    assert keys.get("o") == "add_question"
+    assert keys.get("t") == "steer"
+    # The free operator-channel keys never displaced the live s / a / n keys.
+    assert keys.get("s") == "snapshot"
+    assert keys.get("a") == "approve_checkpoint"
+    assert keys.get("n") == "new_campaign"
+    # No two action keys share a key token (no collision across the whole map).
+    bound_keys = [binding.key for binding in ResearchBoardModeScreen.BINDINGS]
+    assert len(bound_keys) == len(set(bound_keys))
+
+
+def test_research_board_operator_channel_keys_in_footer_hints() -> None:
+    """The operator-channel keys are advertised in the footer hints."""
+    hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
+    assert "o ask" in hints
+    assert "t steer" in hints
+
+
+def test_operator_note_modal_commit_dismisses_trimmed_note(tmp_path: Path) -> None:
+    """Filling the note and committing dismisses the trimmed text."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    dismissed: list[str | None] = []
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.push_screen(
+                OperatorNoteModal(
+                    title="add an open question",
+                    label="question",
+                    placeholder="ask",
+                    noun="question",
+                ),
+                dismissed.append,
+            )
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, OperatorNoteModal)
+            modal.query_one(f"#{OperatorNoteModal.NOTE_INPUT_ID}", Input).value = "  which model  "
+            modal.action_commit()
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert dismissed == ["which model"]
+
+
+def test_operator_note_modal_empty_commit_stays_open(tmp_path: Path) -> None:
+    """A whitespace-only commit stays open with the empty-note notice."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    dismissed: list[str | None] = []
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.push_screen(
+                OperatorNoteModal(
+                    title="steer the campaign",
+                    label="steer note",
+                    placeholder="steer",
+                    noun="steer note",
+                ),
+                dismissed.append,
+            )
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, OperatorNoteModal)
+            modal.query_one(f"#{OperatorNoteModal.NOTE_INPUT_ID}", Input).value = "   "
+            modal.action_commit()
+            await settle_screen(pilot)
+            assert isinstance(app.screen, OperatorNoteModal)
+            notice = app.screen.query_one(f"#{OperatorNoteModal.ERROR_ID}", Static)
+            assert "steer note cannot be empty" in str(notice.render())
+
+    asyncio.run(body())
+    assert dismissed == []
+
+
+def test_operator_note_modal_cancel_dismisses_none(tmp_path: Path) -> None:
+    """``Esc`` cancels the note modal with a ``None`` note (no RPC)."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    dismissed: list[str | None] = []
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            app.push_screen(
+                OperatorNoteModal(
+                    title="add an open question",
+                    label="question",
+                    placeholder="ask",
+                    noun="question",
+                ),
+                dismissed.append,
+            )
+            await settle_screen(pilot)
+            assert isinstance(app.screen, OperatorNoteModal)
+            await pilot.press("escape")
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert dismissed == [None]
+
+
+def test_research_board_o_commit_routes_add_question_rpc_honestly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pressing ``o``, filling the question, and committing routes the RPC.
+
+    The add-question RPC does not exist yet, so a daemon that answers
+    method-not-found surfaces the honest "not yet wired" line -- never a faked
+    question. The call must reach ``research.add_question`` with the question
+    title under the ``title`` params key.
+    """
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _MethodNotFoundClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _MethodNotFoundClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+            calls.append((method, params))
+            raise DaemonRpcError(code=-32601, message="method not found")
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _MethodNotFoundClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press("o")  # open the add-question modal
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, OperatorNoteModal)
+            modal.query_one(f"#{OperatorNoteModal.NOTE_INPUT_ID}", Input).value = "which model fits"
+            modal.action_commit()
+            await settle_screen(pilot)  # drains the channel worker
+            board = app.screen
+            assert isinstance(board, ResearchBoardModeScreen)
+            result = board.query_one(f"#{ACTION_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "not yet wired" in rendered
+            assert "research.add_question" in rendered
+
+    asyncio.run(body())
+    assert len(calls) == 1
+    method, params = calls[0]
+    assert method == "research.add_question"
+    assert params == {"title": "which model fits"}
+
+
+def test_research_board_t_commit_routes_steer_rpc_honestly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pressing ``t``, filling the steer note, and committing routes the RPC.
+
+    The steer RPC does not exist yet, so the method-not-found daemon answer
+    surfaces the honest "not yet wired" line. The call must reach
+    ``research.steer`` with the note under the ``text`` params key.
+    """
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _MethodNotFoundClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _MethodNotFoundClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+            calls.append((method, params))
+            raise DaemonRpcError(code=-32601, message="method not found")
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _MethodNotFoundClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press("t")  # open the steer modal
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, OperatorNoteModal)
+            modal.query_one(f"#{OperatorNoteModal.NOTE_INPUT_ID}", Input).value = "prioritise flow"
+            modal.action_commit()
+            await settle_screen(pilot)  # drains the channel worker
+            board = app.screen
+            assert isinstance(board, ResearchBoardModeScreen)
+            result = board.query_one(f"#{ACTION_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "not yet wired" in rendered
+            assert "research.steer" in rendered
+
+    asyncio.run(body())
+    assert len(calls) == 1
+    method, params = calls[0]
+    assert method == "research.steer"
+    assert params == {"text": "prioritise flow"}
+
+
+def test_research_board_operator_channel_cancel_issues_zero_rpcs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pressing ``o`` then ``Esc`` cancels the modal and issues zero RPCs."""
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press("o")  # open the add-question modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, OperatorNoteModal)
+            await pilot.press("escape")  # cancel
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+
+    asyncio.run(body())
+    assert calls == []
+
+
+def test_research_board_empty_board_renders_no_word_spoken_hero(tmp_path: Path) -> None:
+    """An empty board renders the exact "no word spoken yet" hero.
+
+    The common path on a scope with no campaign / claim / question: the muted
+    hero literal (not a fabricated tree) -- the W15 empty-board contract.
+    """
+    state_path = _write_state(tmp_path, _project_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            assert pane.empty is True
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert "no word spoken yet" in frame
+            # The questions tree pane is NOT mounted on the empty board.
+            assert not pane.query(f"#{TREE_PANE_ID}")
 
     asyncio.run(body())

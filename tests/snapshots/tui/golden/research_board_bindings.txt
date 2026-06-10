@@ -5,9 +5,9 @@
   │     ❯ round 1                                                 ││ ◌ Implied vol surface is downward sloping in strike           ││ ROUND 1/1 (staged)                                             │
   │       ◌ market-structure                                      ││                                                               ││ ACTIVE 1 claim(s)                                              │
   │       ◌ pricing-models                                        ││ Options (supporting evidence)                                 ││ WAITING 1 open question(s)                                     │
-  │       ◌ Which curve model fits the short tenor                ││ none yet                                                      ││ PAUSED 0 checkpoint(s)                                         │
-  │ enter to peek the selected node                               ││                                                               ││ BUDGET 2 staged topic(s), 0 answered                           │
-  │                                                               ││ Conflicts (contradicting evidence)                            ││ RISKS none                                                     │
+  │     ❯ round 1 -- questions                                    ││ none yet                                                      ││ PAUSED 0 checkpoint(s)                                         │
+  │       ◌ Which curve model fits the short tenor                ││                                                               ││ BUDGET 2 staged topic(s), 0 answered                           │
+  │ enter to peek the selected node                               ││ Conflicts (contradicting evidence)                            ││ RISKS none                                                     │
   │                                                               ││ none yet                                                      ││                                                                │
   │                                                               ││                                                               ││                                                                │
   │                                                               ││ Unresolved                                                    ││                                                                │
@@ -34,7 +34,7 @@
   │ no checkpoint -- nothing awaiting operator review                                                                                                                                                │
   └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  enter peek  n new  a approve  p park  r follow-up  s snapshot  x cancel
+  enter peek  n new  o ask  t steer  a approve  p park  r follow-up  s snapshot  x cancel
 
- ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  p park  ·  r follow-up  ·  s snapshot  ·  x cancel  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  weekly burn: — no data•
+ ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  o ask  ·  p park  ·  r follow-up  ·  s snapshot  ·  t steer  ·  x cancel  ·  w/r/u scope  ·  c config  ·  F5  weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch

@@ -6,14 +6,14 @@
   │     ❯ round 1                      ││                                     ││ ROUND 1/1 (staged)                  │
   │       ◌ market-structure           ││ Options (supporting evidence)       ││ ACTIVE 0 claim(s)                   │
   │       ◌ pricing-models             ││ none yet                            ││ WAITING 2 open question(s)          │
-  │       ◌ Which curve model fits the ││                                     ││ PAUSED 0 checkpoint(s)              │
-  │ short tenor                        ││ Conflicts (contradicting evidence)  ││ BUDGET 2 staged topic(s), 1         │
-  │       ◌ Does the smile invert past ││ none yet                            ││ answered                            │
-  │ the 90 delta wing                  ││                                     ││ RISKS 1 blocking question(s)        │
-  │       ◌ Is the term-structure      ││ Unresolved                          ││                                     │
-  │ arbitrage real                     ││ open round 1 Which curve model fits ││                                     │
-  │ enter to peek the selected node    ││ the short tenor                     ││                                     │
-  │                                    ││ answered round 1 Does the smile     ││                                     │
+  │     ❯ round 1 -- questions         ││                                     ││ PAUSED 0 checkpoint(s)              │
+  │       ◌ Which curve model fits the ││ Conflicts (contradicting evidence)  ││ BUDGET 2 staged topic(s), 1         │
+  │ short tenor                        ││ none yet                            ││ answered                            │
+  │       ● Does the smile invert past ││                                     ││ RISKS 1 blocking question(s)        │
+  │ the 90 delta wing                  ││ Unresolved                          ││                                     │
+  │       ◌ Is the term-structure      ││ open round 1 Which curve model fits ││                                     │
+  │ arbitrage real                     ││ the short tenor                     ││                                     │
+  │ enter to peek the selected node    ││ answered round 1 Does the smile     ││                                     │
   │                                    ││ invert past the 90 delta wing       ││                                     │
   │                                    ││ blocking round 1 Is the             ││                                     │
   │                                    ││ term-structure arbitrage real       ││                                     │
@@ -34,7 +34,7 @@
   │ no checkpoint -- nothing awaiting operator review                                                                │
   └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  enter peek  n new  a approve  p park  r follow-up  s snapshot  x cancel
+  enter peek  n new  o ask  t steer  a approve  p park  r follow-up  s snapshot  x cancel
 
- ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  p park  ·  r follow-up  ·  s  weekly burn: — no data•
+ ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  o ask  ·  p park  ·  r        weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
