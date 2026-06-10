@@ -72,10 +72,13 @@ from eawf.kernel.state.models import (
     WorktreeRecord,
 )
 from eawf.kernel.store.paths import store_path
+from eawf.platform.lint.tools.agents_md_budget import count_tokens
 from eawf.platform.memory.render_context import DEFAULT_BUDGET, render_context
+from eawf.platform.render_block import DEFAULT_ROLE_TIER_TOKEN_CAP
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.workflow.agents.specs.models import (
     RoleContract,
+    RoleTierBudgetError,
     SpecAudit,
     SpecDecision,
     SpecDependency,
@@ -176,6 +179,7 @@ def render_dispatch_envelope(
     *,
     repo_root: Path | None = None,
     role_blocks: Mapping[str, str] | None = None,
+    role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
 ) -> DispatchEnvelope:
     """Return a typed :class:`DispatchEnvelope` for *wave_id* and *runtime*.
 
@@ -202,6 +206,12 @@ def render_dispatch_envelope(
             ``RoleSpec.system_prompt`` renders byte-for-byte. Callers
             populate this from
             :meth:`~eawf.platform.profiles.models.ComposedProfile.role_tier_blocks`.
+        role_tier_token_cap: Maximum token weight one injected role-tier
+            block may carry (FLEET-6). An over-cap block is rejected by
+            raising :class:`~eawf.workflow.agents.specs.models.RoleTierBudgetError`,
+            never truncated, mirroring the AGENTS.md tier-0 budget gate.
+            Defaults to
+            :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
 
     Returns:
         :class:`DispatchEnvelope` with ``runtime``, ``wave_id``,
@@ -213,6 +223,8 @@ def render_dispatch_envelope(
         KeyError: ``wave_id`` is missing or the wave → iter → phase →
             scope chain has a broken link (propagated from
             :func:`render_wave_prompt`).
+        RoleTierBudgetError: The dispatched wave's role-tier block exceeds
+            ``role_tier_token_cap`` tokens.
     """
     if runtime not in DISPATCH_RUNTIMES:
         raise ValueError(f"unknown runtime {runtime!r}; expected one of {list(DISPATCH_RUNTIMES)}")
@@ -222,7 +234,13 @@ def render_dispatch_envelope(
     # render-then-re-walk pattern where the renderer projected the role
     # registry inside `render_wave_prompt` and the envelope would have to
     # re-project it. The shared spec keeps the two surfaces aligned.
-    spec = build_subagent_spec(state, wave_id, repo_root=repo_root, role_blocks=role_blocks)
+    spec = build_subagent_spec(
+        state,
+        wave_id,
+        repo_root=repo_root,
+        role_blocks=role_blocks,
+        role_tier_token_cap=role_tier_token_cap,
+    )
     prompt = _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
     if runtime in {_CLI_RUNTIME_CLAUDE_CODE, _CLI_RUNTIME_CODEX, _CLI_RUNTIME_OPENCODE}:
         # codex + opencode share the claude-code envelope shape: ``prompt``
@@ -302,31 +320,75 @@ def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
     return sorted(allowed)
 
 
-def _inject_role_block(system_prompt: str, role_block_body: str | None) -> str:
+def _enforce_role_tier_budget(role_value: str, body: str, *, cap: int) -> None:
+    """Raise when *body*'s token weight exceeds the role-tier *cap*.
+
+    The role zone honours a token budget the same way the AGENTS.md tier-0
+    zone does (FLEET-6): an over-cap block fails fast at render time rather
+    than shipping a clipped system prompt. The body is rejected by RAISING,
+    never silently truncated. Reuses the canonical
+    :func:`~eawf.platform.lint.tools.agents_md_budget.count_tokens` so the
+    role tier and the AGENTS.md gate measure tokens identically.
+
+    Args:
+        role_value: The role identifier the block is keyed to (named in the
+            error so an operator can locate the offending block).
+        body: The already-stripped role-tier block body.
+        cap: The maximum token weight one role-tier block may carry.
+
+    Raises:
+        RoleTierBudgetError: when ``count_tokens(body) > cap``.
+    """
+    tokens = count_tokens(body)
+    if tokens > cap:
+        raise RoleTierBudgetError(
+            f"role-tier block for {role_value!r} is {tokens} tokens, over the cap of {cap}"
+        )
+
+
+def _inject_role_block(
+    system_prompt: str,
+    role_block_body: str | None,
+    *,
+    role_value: str,
+    cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
+) -> str:
     """Return *system_prompt* with the role-tier *role_block_body* appended.
 
     The injection is additive and byte-stable for the absent case: when
     *role_block_body* is ``None`` or blank the static *system_prompt* is
     returned unchanged (no separator, no trailing-newline drift), so a role
     with no configured block renders byte-for-byte as before. When a body is
-    present it is appended after a single blank-line separator with its own
-    trailing whitespace stripped, so the merged prompt has one canonical
-    shape regardless of how the block body was authored.
+    present it is first measured against the role-tier token *cap* — an
+    over-cap body RAISES :class:`RoleTierBudgetError` (never truncates,
+    mirroring the AGENTS.md tier-0 gate) — then appended after a single
+    blank-line separator with its own trailing whitespace stripped, so the
+    merged prompt has one canonical shape regardless of how the block body
+    was authored.
 
     Args:
         system_prompt: The static :attr:`RoleSpec.system_prompt`.
         role_block_body: The matching role-tier block body, or ``None`` when
             the role has no configured block.
+        role_value: The role identifier the block is keyed to (named in the
+            budget-overflow error).
+        cap: The role-tier token cap; defaults to
+            :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
 
     Returns:
         The static prompt unchanged when no block applies, else the prompt
         with the block body spliced on.
+
+    Raises:
+        RoleTierBudgetError: when a non-blank ``role_block_body`` exceeds
+            *cap* tokens.
     """
     if role_block_body is None:
         return system_prompt
     body = role_block_body.strip()
     if not body:
         return system_prompt
+    _enforce_role_tier_budget(role_value, body, cap=cap)
     return f"{system_prompt.rstrip()}\n\n{body}"
 
 
@@ -336,6 +398,7 @@ def build_role_contract(
     state: State | None = None,
     wave_id: str | None = None,
     role_block_body: str | None = None,
+    role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
 ) -> RoleContract:
     """Project a :class:`RoleSpec` into a typed :class:`RoleContract`.
 
@@ -360,6 +423,12 @@ def build_role_contract(
     a true no-op — the static ``RoleSpec.system_prompt`` is copied
     byte-for-byte, so a role with no configured block renders unchanged.
 
+    Role-tier budget (FLEET-6): an injected block whose token weight exceeds
+    ``role_tier_token_cap`` is REJECTED by raising
+    :class:`~eawf.workflow.agents.specs.models.RoleTierBudgetError` rather than
+    truncated — the role zone honours a budget the same way the AGENTS.md
+    tier-0 zone does.
+
     Args:
         role: The source :class:`RoleSpec` (typically resolved from
             :data:`~eawf.workflow.agents.specs.roles.ROLE_REGISTRY` via
@@ -371,11 +440,18 @@ def build_role_contract(
         role_block_body: Optional per-role dispatch block body to inject
             into ``system_prompt``. ``None`` (the default) leaves the
             static prompt unchanged.
+        role_tier_token_cap: Maximum token weight one injected role-tier
+            block may carry; defaults to
+            :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
 
     Returns:
         A :class:`RoleContract` carrying the projected role-level
         invariants. The ``allowed_tools`` / ``denied_tools`` lists are
         sorted for deterministic output.
+
+    Raises:
+        RoleTierBudgetError: when a non-blank ``role_block_body`` exceeds
+            ``role_tier_token_cap`` tokens.
     """
     allowed = set(role.allowed_tools)
     denied = set(role.denied_tools)
@@ -393,7 +469,12 @@ def build_role_contract(
     return RoleContract(
         role=role.role.value,
         summary=role.summary,
-        system_prompt=_inject_role_block(role.system_prompt, role_block_body),
+        system_prompt=_inject_role_block(
+            role.system_prompt,
+            role_block_body,
+            role_value=role.role.value,
+            cap=role_tier_token_cap,
+        ),
         allowed_tools=sorted(allowed),
         denied_tools=sorted(denied),
         model=role.model,
@@ -409,6 +490,7 @@ def build_subagent_spec(
     *,
     repo_root: Path | None = None,
     role_blocks: Mapping[str, str] | None = None,
+    role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
 ) -> SubagentSpec:
     """Project *state* + *wave_id* into a typed :class:`SubagentSpec`.
 
@@ -430,6 +512,9 @@ def build_subagent_spec(
             entry, that body is injected into the projected
             :class:`RoleContract.system_prompt`; an absent role is a true
             no-op (the static prompt is copied byte-for-byte).
+        role_tier_token_cap: Maximum token weight one injected role-tier
+            block may carry; defaults to
+            :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
 
     Returns:
         A fully-populated :class:`SubagentSpec`.
@@ -437,6 +522,8 @@ def build_subagent_spec(
     Raises:
         KeyError: When the wave id is missing or the
             wave → iter → phase → scope chain has a broken link.
+        RoleTierBudgetError: When the wave's role-tier block exceeds
+            ``role_tier_token_cap`` tokens.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
@@ -461,7 +548,9 @@ def build_subagent_spec(
         references=_find_spike_briefs(wave, repo_root=repo_root) if repo_root is not None else [],
         worktree=_build_worktree(state, wave),
         estimate=_build_estimate(state, wave),
-        role_contract=_build_role_contract_for_wave(state, wave, role_blocks=role_blocks),
+        role_contract=_build_role_contract_for_wave(
+            state, wave, role_blocks=role_blocks, role_tier_token_cap=role_tier_token_cap
+        ),
     )
     logger.debug(
         f"build_subagent_spec wave={wave.id!r} scope={scope_id!r} "
@@ -501,6 +590,7 @@ def _build_role_contract_for_wave(
     wave: Wave,
     *,
     role_blocks: Mapping[str, str] | None = None,
+    role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
 ) -> RoleContract | None:
     """Return the wave's :class:`RoleContract`, or ``None`` when no role set.
 
@@ -513,7 +603,13 @@ def _build_role_contract_for_wave(
 
     When *role_blocks* carries an entry for the wave's ``agent_role``, the
     matching body is injected into the contract's ``system_prompt`` (the
-    role-tier dispatch block, FLEET-5); an absent role is a no-op.
+    role-tier dispatch block, FLEET-5); an absent role is a no-op. An injected
+    block over *role_tier_token_cap* tokens raises
+    :class:`~eawf.workflow.agents.specs.models.RoleTierBudgetError` (FLEET-6).
+
+    Raises:
+        RoleTierBudgetError: when the wave's role-tier block exceeds
+            ``role_tier_token_cap`` tokens.
     """
     if wave.agent_role is None:
         return None
@@ -524,7 +620,11 @@ def _build_role_contract_for_wave(
         return None
     role_block_body = role_blocks.get(role_value) if role_blocks is not None else None
     return build_role_contract(
-        role_spec, state=state, wave_id=wave.id, role_block_body=role_block_body
+        role_spec,
+        state=state,
+        wave_id=wave.id,
+        role_block_body=role_block_body,
+        role_tier_token_cap=role_tier_token_cap,
     )
 
 

@@ -22,6 +22,23 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class RoleTierBudgetError(ValueError):
+    """A role-tier dispatch block exceeds its token budget.
+
+    Raised at the role-block injection point (FLEET-6 / P30-I06-W06) when a
+    per-role "Zone 3" block body's
+    :func:`~eawf.platform.lint.tools.agents_md_budget.count_tokens` weight
+    exceeds the configured role-tier cap. The role zone honours a budget the
+    same way the AGENTS.md tier-0 zone does — the block is rejected by RAISING,
+    never silently truncated, so an over-cap block fails fast at render time
+    rather than shipping a clipped system prompt.
+
+    Subclasses :class:`ValueError` so callers that already catch the
+    renderer's :class:`ValueError` surface (e.g. an unknown runtime) treat a
+    budget breach the same way.
+    """
+
+
 class _SpecModel(BaseModel):
     """Base spec model — forbids unknown keys (project rule 2)."""
 
@@ -626,6 +643,7 @@ def _starts_markdown_block(line: str) -> bool:
 
 __all__ = [
     "RoleContract",
+    "RoleTierBudgetError",
     "SpecAudit",
     "SpecDecision",
     "SpecDependency",

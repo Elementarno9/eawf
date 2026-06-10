@@ -36,6 +36,7 @@ beyond the module-level ``logger``. The CLI handlers in
 
 from __future__ import annotations
 
+from eawf.workflow.agents.specs.models import RoleTierBudgetError
 from eawf.workflow.dispatch.clarity_judge import (
     CLARITY_DESCRIPTION_SURFACE,
     DEFAULT_CLARITY_JUROR_COUNT,
@@ -118,6 +119,7 @@ __all__ = [
     "LLMAssistError",
     "LLMAssistResult",
     "RetryExhaustedError",
+    "RoleTierBudgetError",
     "RoutingDecision",
     "SchemaAttemptFailure",
     "SpawnAttemptFailure",

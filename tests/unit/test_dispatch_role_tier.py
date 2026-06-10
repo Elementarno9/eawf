@@ -38,10 +38,14 @@ from eawf.kernel.state.enums import (
     ScopeKind,
 )
 from eawf.kernel.state.models import CurrentPointers, Project, State
+from eawf.platform.lint.tools.agents_md_budget import count_tokens
 from eawf.platform.profiles.models import ComposedProfile, RenderBlock
-from eawf.platform.render_block import DISPATCH_SYSTEM_PROMPT_TARGET
+from eawf.platform.render_block import (
+    DEFAULT_ROLE_TIER_TOKEN_CAP,
+    DISPATCH_SYSTEM_PROMPT_TARGET,
+)
 from eawf.workflow.agents.specs.roles import get_role_spec
-from eawf.workflow.dispatch import render_dispatch_envelope
+from eawf.workflow.dispatch import RoleTierBudgetError, render_dispatch_envelope
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests.conftest import make_intent
 
@@ -349,3 +353,122 @@ def test_blank_role_block_body_is_no_op() -> None:
     )
     assert envelope.role_contract is not None
     assert envelope.role_contract.system_prompt == static_prompt
+
+
+# ---- FLEET-6 criterion 1: per-role injection isolation ---------------------
+
+_AUDITOR_BLOCK_BODY = "## House auditor rules\n\nBe skeptical of every green test."
+
+#: Two distinct roles each carrying a distinct role-tier block. The
+#: parametrization asserts each block lands only in its own role's prompt and
+#: never in a sibling role's prompt.
+_ISOLATION_BLOCKS: dict[str, str] = {
+    "executor": _EXECUTOR_BLOCK_BODY,
+    "auditor": _AUDITOR_BLOCK_BODY,
+}
+_ISOLATION_CASES = [
+    pytest.param(AgentSessionRole.EXECUTOR, "executor", "auditor", id="executor-not-auditor"),
+    pytest.param(AgentSessionRole.AUDITOR, "auditor", "executor", id="auditor-not-executor"),
+]
+
+
+@pytest.mark.parametrize(("role", "own_key", "sibling_key"), _ISOLATION_CASES)
+def test_role_tier_block_lands_only_in_its_own_role_prompt(
+    role: AgentSessionRole, own_key: str, sibling_key: str
+) -> None:
+    """A configured role block lands in its role's prompt, absent from a sibling.
+
+    FLEET-6 criterion 1: parametrized over each role that has a configured
+    role-tier block, that block lands in THAT role's dispatched
+    ``system_prompt`` and NOT in a sibling role's prompt. The same two-block
+    config is fed to both a wave of *role* and (in the sibling assertion) the
+    sibling role, proving the injection is keyed strictly by ``agent_role``.
+    """
+    own_body = _ISOLATION_BLOCKS[own_key]
+    sibling_body = _ISOLATION_BLOCKS[sibling_key]
+
+    state = _empty_state()
+    wave_id = _seed_wave_with_role(state, role=role)
+    envelope = render_dispatch_envelope(
+        state, wave_id, "claude-code", role_blocks=_ISOLATION_BLOCKS
+    )
+
+    assert envelope.role_contract is not None
+    # The role's OWN block is injected into its contract + rendered prompt.
+    assert own_body in envelope.role_contract.system_prompt
+    assert own_body in envelope.prompt
+    # The SIBLING role's block never leaks into this role's prompt.
+    assert sibling_body not in envelope.role_contract.system_prompt
+    assert sibling_body not in envelope.prompt
+    # The static role body still leads — the block is additive, not a replacement.
+    assert get_role_spec(role).system_prompt.splitlines()[0] in envelope.prompt
+
+
+# ---- FLEET-6 criterion 2: over-cap block RAISES (never truncates) ----------
+
+
+def _over_cap_body(*, cap: int) -> str:
+    """Return a role-tier block body whose token weight exceeds *cap*."""
+    return "## Oversized rules\n\n" + " ".join(f"word{n}" for n in range(cap + 50))
+
+
+@pytest.mark.parametrize("role", [AgentSessionRole.EXECUTOR, AgentSessionRole.AUDITOR])
+def test_over_cap_role_block_raises_and_emits_no_truncated_prompt(
+    role: AgentSessionRole,
+) -> None:
+    """An over-cap role-tier block fails the render-budget gate by RAISING.
+
+    FLEET-6 criterion 2: a role-tier block whose body exceeds the configured
+    role-tier token cap (:data:`DEFAULT_ROLE_TIER_TOKEN_CAP`) FAILS the
+    render-budget gate by RAISING rather than truncating — proving the role
+    zone honours a budget like the AGENTS.md tier-0 zone. The error names the
+    offending role and the cap, and NO truncated prompt is produced.
+    """
+    state = _empty_state()
+    wave_id = _seed_wave_with_role(state, role=role)
+    body = _over_cap_body(cap=DEFAULT_ROLE_TIER_TOKEN_CAP)
+    # Sanity: the body really is over the default cap.
+    assert count_tokens(body) > DEFAULT_ROLE_TIER_TOKEN_CAP
+
+    with pytest.raises(RoleTierBudgetError) as excinfo:
+        render_dispatch_envelope(state, wave_id, "claude-code", role_blocks={role.value: body})
+
+    message = str(excinfo.value)
+    # The error names the offending role and the cap that was breached.
+    assert repr(role.value) in message
+    assert str(DEFAULT_ROLE_TIER_TOKEN_CAP) in message
+    # No truncated prompt: the body never leaks as a clipped fragment.
+    assert "Oversized rules" not in message
+
+
+def test_under_cap_block_passes_but_over_lower_override_raises() -> None:
+    """The cap is overridable: a body fitting the default fails a tighter cap.
+
+    Proves the budget cap is a live, overridable seam (not a hardcoded
+    constant): the same small executor block injects cleanly under the default
+    cap, yet RAISES under a deliberately tight override below its token weight.
+    """
+    state = _empty_state()
+    wave_id = _seed_wave_with_role(state, role=AgentSessionRole.EXECUTOR)
+    block_tokens = count_tokens(_EXECUTOR_BLOCK_BODY)
+    assert block_tokens < DEFAULT_ROLE_TIER_TOKEN_CAP
+
+    # Default cap: the small block injects without error.
+    clean = render_dispatch_envelope(
+        state, wave_id, "claude-code", role_blocks={"executor": _EXECUTOR_BLOCK_BODY}
+    )
+    assert clean.role_contract is not None
+    assert _EXECUTOR_BLOCK_BODY in clean.role_contract.system_prompt
+
+    # Override below the block's token weight: the same block now RAISES.
+    with pytest.raises(RoleTierBudgetError) as excinfo:
+        render_dispatch_envelope(
+            state,
+            wave_id,
+            "claude-code",
+            role_blocks={"executor": _EXECUTOR_BLOCK_BODY},
+            role_tier_token_cap=block_tokens - 1,
+        )
+    message = str(excinfo.value)
+    assert repr("executor") in message
+    assert str(block_tokens - 1) in message
