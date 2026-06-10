@@ -25,6 +25,8 @@ write, with the ``portalocker`` direct-write fallback under the V1 carve-out.
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -97,6 +99,64 @@ def _resolve_kind_filter(kinds: list[str] | None) -> tuple[str, ...] | None:
         )
     requested = set(kinds)
     return tuple(kind for kind in _KIND_NAMES if kind in requested)
+
+
+def _wave_intent_payload(report: Any) -> dict[str, Any]:
+    """Return JSON-friendly report payload for ``backfill wave-intents``."""
+    return {
+        "apply": report.apply,
+        "changed": list(report.changed_wave_ids),
+        "pending": list(report.pending_wave_ids),
+        "skipped": list(report.skipped_wave_ids),
+        "rows": [
+            {
+                "wave_id": row.wave_id,
+                "changed": row.changed,
+                "would_change": row.would_change,
+                "reason": row.reason,
+            }
+            for row in report.rows
+        ],
+    }
+
+
+def _wave_intent_text(payload: dict[str, Any], *, mode: str) -> str:
+    """Render concise operator text for ``backfill wave-intents``."""
+    lines = [
+        (
+            f"backfill wave-intents {mode}: "
+            f"{len(payload['changed'])} changed, "
+            f"{len(payload['pending'])} pending, "
+            f"{len(payload['skipped'])} skipped"
+        )
+    ]
+    for row in payload["rows"]:
+        marker = "changed" if row["changed"] else "would-change" if row["would_change"] else "skip"
+        lines.append(f"  {row['wave_id']}: {marker} ({row['reason']})")
+    return "\n".join(lines)
+
+
+def _append_wave_intent_event(
+    state_path: Path,
+    *,
+    changed_wave_ids: list[str],
+) -> None:
+    """Append an audit event for a wave-intent backfill apply pass."""
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.workflow.evidence._io import append_jsonl, event_envelope, store_paths
+
+    now = datetime.now(UTC)
+    event = event_envelope(
+        event_id=f"EV-{uuid.uuid4().hex[:12]}",
+        scope_id=",".join(changed_wave_ids),
+        event_type="backfill.wave_intents",
+        actor="cli",
+        command="backfill wave-intents",
+        args={"changed_wave_ids": changed_wave_ids, "timestamp": now.isoformat()},
+        summary=f"backfill wave-intents changed={len(changed_wave_ids)}",
+        message=f"backfilled wave intents: {', '.join(changed_wave_ids)}",
+    )
+    append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
 
 
 @backfill_app.command("titles")
@@ -197,6 +257,87 @@ def backfill_titles(
     )
     body = "\n".join([headline, *changed_lines, *violation_lines])
     emit_json_or_text(payload, body, flags=flags)
+
+
+@backfill_app.command("wave-intents")
+def backfill_wave_intents(
+    ctx: typer.Context,
+    wave: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--wave",
+            help=(
+                "Explicit closed synced wave id to inspect or repair. Repeat for "
+                "multiple waves; no implicit all-state scan is performed."
+            ),
+        ),
+    ] = None,
+    apply: Annotated[
+        bool,
+        typer.Option(
+            "--apply/--dry-run",
+            help="Persist missing IntentBriefs. Default --dry-run only reports.",
+        ),
+    ] = False,
+    check: Annotated[
+        bool,
+        typer.Option(
+            "--check",
+            help="Exit non-zero when any target would need repair or is not repairable.",
+        ),
+    ] = False,
+) -> None:
+    """Backfill missing ``Wave.intent`` on explicit closed synced waves.
+
+    This is a recovery surface for stale-daemon drift: a closed wave that
+    already has typed criteria + gates from ``spec.sync`` but still has
+    ``intent=None`` can be repaired without reopening the wave. It deliberately
+    requires one or more ``--wave`` values so old historical rows are never
+    swept by accident.
+    """
+    from eawf.kernel.state.migration import backfill_missing_wave_intents
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.evidence._io import load_state
+
+    flags = _flags(ctx)
+    wave_ids = list(wave or [])
+    if not wave_ids:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "--wave is required for wave-intents backfill", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+        return
+    try:
+        state_path = _state_path(flags)
+        if apply:
+            with state_transaction(state_path) as state:
+                report = backfill_missing_wave_intents(state, wave_ids=wave_ids, apply=True)
+                if report.changed:
+                    state.updated_at = datetime.now(UTC)
+                    _append_wave_intent_event(
+                        state_path,
+                        changed_wave_ids=list(report.changed_wave_ids),
+                    )
+        else:
+            state = load_state(state_path)
+            report = backfill_missing_wave_intents(state, wave_ids=wave_ids, apply=False)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    payload = _wave_intent_payload(report)
+    mode = "apply" if apply else "check" if check else "dry-run"
+    emit_json_or_text(payload, _wave_intent_text(payload, mode=mode), flags=flags)
+    if check:
+        bad_rows = [
+            row
+            for row in report.rows
+            if row.would_change or row.reason not in {"already_has_intent"}
+        ]
+        if bad_rows:
+            raise typer.Exit(code=1)
 
 
 __all__ = ["backfill_app"]

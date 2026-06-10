@@ -21,14 +21,19 @@ Current transforms:
   terminal status (``archived`` / ``closed``). This catches the
   zombie-PENDING rows a pre-cascade ``archive_phase`` left behind (e.g.
   the 16 ``P21-I01-W01..W16`` waves under the archived ``P21`` phase).
+- :func:`backfill_missing_wave_intents` — attaches a synthetic
+  :class:`~eawf.kernel.spec.intent.IntentBrief` to explicit closed waves that
+  already carry synced criteria + gates but still have ``intent=None``.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.kernel.state.models import State
 
@@ -69,6 +74,63 @@ class AbandonOrphansReport:
     def changed(self) -> bool:
         """``True`` when at least one wave or iter was transitioned."""
         return bool(self.abandoned_wave_ids or self.abandoned_iter_ids)
+
+
+@dataclass(frozen=True)
+class WaveIntentBackfillRow:
+    """One inspected wave from :func:`backfill_missing_wave_intents`.
+
+    Attributes:
+        wave_id: Target wave id.
+        changed: ``True`` when the row was mutated on this apply pass.
+        would_change: ``True`` when the row is eligible for repair. In dry-run
+            mode this means the command would mutate it; in apply mode it means
+            it was mutated.
+        reason: Stable machine-readable outcome reason.
+    """
+
+    wave_id: str
+    changed: bool
+    would_change: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class WaveIntentBackfillReport:
+    """Outcome of one :func:`backfill_missing_wave_intents` pass.
+
+    Attributes:
+        rows: Per-wave inspection rows in caller-supplied order.
+        apply: Whether the pass mutated eligible rows.
+    """
+
+    rows: tuple[WaveIntentBackfillRow, ...]
+    apply: bool
+
+    @property
+    def changed_wave_ids(self) -> tuple[str, ...]:
+        """Wave ids mutated during this pass."""
+        return tuple(row.wave_id for row in self.rows if row.changed)
+
+    @property
+    def pending_wave_ids(self) -> tuple[str, ...]:
+        """Wave ids that still need repair after a dry-run/check pass."""
+        return tuple(row.wave_id for row in self.rows if row.would_change and not row.changed)
+
+    @property
+    def skipped_wave_ids(self) -> tuple[str, ...]:
+        """Wave ids that were not eligible for repair."""
+        return tuple(row.wave_id for row in self.rows if not row.would_change and not row.changed)
+
+    @property
+    def clean(self) -> bool:
+        """``True`` when every inspected wave already has intent."""
+        return all(row.reason == "already_has_intent" for row in self.rows)
+
+    @property
+    def changed(self) -> bool:
+        """``True`` when at least one row was mutated."""
+        return bool(self.changed_wave_ids)
 
 
 def abandon_orphaned_waves(state: State) -> AbandonOrphansReport:
@@ -127,7 +189,148 @@ def abandon_orphaned_waves(state: State) -> AbandonOrphansReport:
     return report
 
 
+def _bounded(value: str, *, limit: int) -> str:
+    """Return a single-line string capped to *limit* characters."""
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip()
+
+
+def _intent_for_synced_wave(state: State, wave_id: str) -> IntentBrief:
+    """Synthesize metadata-only intent from an already-synced wave row."""
+    wave = state.waves[wave_id]
+    planned_steps = [
+        _bounded(criterion.text, limit=500)
+        for criterion in wave.success_criteria[:10]
+        if criterion.text.strip()
+    ]
+    if not planned_steps:
+        planned_steps = [f"preserve synced criteria for {wave_id}"]
+    return IntentBrief(
+        problem=_bounded(f"wave {wave_id} was synced without typed intent", limit=200),
+        desired_outcome=_bounded(
+            f"{wave.title} keeps auditable criteria with IntentBrief metadata",
+            limit=200,
+        ),
+        priority_rationale=(
+            "metadata repair for a closed wave whose spec.sync accepted intent=None"
+        ),
+        planned_steps=planned_steps,
+        risks=["metadata-only repair must not change the closed wave outcome"],
+    )
+
+
+def backfill_missing_wave_intents(
+    state: State,
+    *,
+    wave_ids: Iterable[str],
+    apply: bool,
+) -> WaveIntentBackfillReport:
+    """Backfill missing intent on explicit closed waves with synced gates.
+
+    This recovery transform is intentionally narrow: it never scans all state
+    by default, never edits a non-closed wave, and only touches rows that
+    already carry both typed criteria and gates. The synthesized intent is
+    metadata-only and derives its planned steps from the already-synced
+    criterion text so future coverage checks can explain the repair.
+
+    Args:
+        state: The typed state to inspect or mutate.
+        wave_ids: Explicit target wave ids, in caller-supplied order.
+        apply: When ``True``, persist eligible intents into the typed state.
+            When ``False``, report what would change without mutation.
+
+    Returns:
+        A :class:`WaveIntentBackfillReport` listing every inspected target.
+    """
+    rows: list[WaveIntentBackfillRow] = []
+    seen: set[str] = set()
+    for wave_id in wave_ids:
+        if wave_id in seen:
+            continue
+        seen.add(wave_id)
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            rows.append(
+                WaveIntentBackfillRow(
+                    wave_id=wave_id,
+                    changed=False,
+                    would_change=False,
+                    reason="unknown_wave",
+                )
+            )
+            continue
+        if wave.intent is not None:
+            rows.append(
+                WaveIntentBackfillRow(
+                    wave_id=wave_id,
+                    changed=False,
+                    would_change=False,
+                    reason="already_has_intent",
+                )
+            )
+            continue
+        if wave.status != WaveStatus.CLOSED:
+            rows.append(
+                WaveIntentBackfillRow(
+                    wave_id=wave_id,
+                    changed=False,
+                    would_change=False,
+                    reason=f"not_closed:{wave.status.value}",
+                )
+            )
+            continue
+        if not wave.success_criteria:
+            rows.append(
+                WaveIntentBackfillRow(
+                    wave_id=wave_id,
+                    changed=False,
+                    would_change=False,
+                    reason="missing_success_criteria",
+                )
+            )
+            continue
+        if not wave.gates:
+            rows.append(
+                WaveIntentBackfillRow(
+                    wave_id=wave_id,
+                    changed=False,
+                    would_change=False,
+                    reason="missing_gates",
+                )
+            )
+            continue
+        if apply:
+            intent = _intent_for_synced_wave(state, wave_id)
+            wave.__pydantic_validator__.validate_assignment(wave, "intent", intent)
+            rows.append(
+                WaveIntentBackfillRow(
+                    wave_id=wave_id,
+                    changed=True,
+                    would_change=True,
+                    reason="backfilled",
+                )
+            )
+        else:
+            rows.append(
+                WaveIntentBackfillRow(
+                    wave_id=wave_id,
+                    changed=False,
+                    would_change=True,
+                    reason="missing_intent",
+                )
+            )
+    report = WaveIntentBackfillReport(rows=tuple(rows), apply=apply)
+    if report.changed:
+        logger.info(f"backfill_missing_wave_intents waves={len(report.changed_wave_ids)}")
+    return report
+
+
 __all__ = [
     "AbandonOrphansReport",
+    "WaveIntentBackfillReport",
+    "WaveIntentBackfillRow",
     "abandon_orphaned_waves",
+    "backfill_missing_wave_intents",
 ]
