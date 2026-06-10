@@ -491,3 +491,70 @@ def test_close_oracle_fail_blocks_with_structured_detail(
         assert payload["waves"][_WAVE]["status"] == "claimed"
 
     _run(body)
+
+
+# --------------------------------------------------------------------------- #
+# A refusal feeds the GROUNDED failing payload to a repair re-dispatch.
+# --------------------------------------------------------------------------- #
+
+
+def test_close_refusal_grounds_a_repair_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The structured refusal carries criterion + detail, grounding a repair prompt.
+
+    A wave close refused on a criterion raises a ``WaveCloseRefusalError`` (a
+    ``LifecycleError`` subclass) carrying the refused criterion AND the
+    concrete failing-check output as attributes -- so a repair re-dispatch
+    is fed the grounding payload directly off the exception rather than
+    re-parsing the message. The carried payload builds a grounded repair
+    prompt that contains the criterion's text PLUS the failing detail.
+    """
+    from eawf.runtime.daemon.methods.state import WaveCloseRefusalError
+    from eawf.workflow.dispatch.retry import build_repair_prompt
+
+    _write_enforcing_profile(tmp_path)
+    _init_git_repo(tmp_path)
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path, _state_payload(criteria=[_criterion(cid="CR-01")]))
+
+    async def _fail(criterion: CriterionSpec, *_a: Any, **_k: Any) -> OracleResult:
+        return OracleResult(
+            tier=OracleTier.T1_STATIC,
+            status="fail",
+            criterion_id=criterion.id,
+            gate_id="GATE-1",
+            detail="command_exit_zero gate exit=1: the cold-path budget regressed",
+        )
+
+    monkeypatch.setattr("eawf.workflow.verify.oracle.run_oracle", _fail)
+
+    async def body() -> None:
+        from eawf.runtime.daemon.methods.state import _enforce_wave_close_gate
+
+        state = State.model_validate(orjson.loads(state_path.read_bytes()))
+        with pytest.raises(WaveCloseRefusalError) as excinfo:
+            await _enforce_wave_close_gate(
+                state,
+                _close_mutation(),
+                state_path=state_path,
+                repo_root=tmp_path,
+            )
+        refusal = excinfo.value
+        # The structured refusal exposes the grounding payload to a repair caller.
+        assert refusal.criterion.id == "CR-01"
+        assert refusal.failing_detail == (
+            "command_exit_zero gate exit=1: the cold-path budget regressed"
+        )
+        # A grounded repair prompt built off the refusal carries the criterion
+        # text PLUS the concrete failing detail.
+        prompt = build_repair_prompt(
+            refusal.criterion,
+            refusal.failing_detail,
+            base_prompt="ORIGINAL DISPATCH PROMPT",
+            attempt=1,
+        )
+        assert refusal.criterion.text in prompt
+        assert "command_exit_zero gate exit=1: the cold-path budget regressed" in prompt
+
+    _run(body)

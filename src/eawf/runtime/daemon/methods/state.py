@@ -64,7 +64,11 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.config.schema import EuBasis
-from eawf.kernel.spec.common import grandfather_criterion, validate_criterion_gate_refs
+from eawf.kernel.spec.common import (
+    CriterionSpec,
+    grandfather_criterion,
+    validate_criterion_gate_refs,
+)
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentSessionRole,
@@ -1205,6 +1209,50 @@ async def _produce_high_risk_verdict(
     logger.info(f"_produce_high_risk_verdict wave={wave.id} status=produced")
 
 
+class WaveCloseRefusalError(LifecycleError):
+    """Raised when the ordered oracle refuses a wave close on one criterion.
+
+    A :class:`~eawf.workflow.lifecycle.transitions.LifecycleError` subclass so
+    the existing CLI / daemon catch sites remap it to the same exit code, but
+    structured so a repair caller is FED the grounding payload directly off the
+    exception rather than re-parsing the message string. The refused criterion
+    and the concrete failing-check output (the oracle
+    :meth:`~eawf.workflow.verify.oracle.OracleResult.failing_detail`) are carried
+    as attributes so a grounded repair re-dispatch
+    (:func:`eawf.workflow.dispatch.retry.build_repair_prompt`) can be built
+    without the failing payload going missing -- a content-free "drifted, redo"
+    repair is impossible by construction because there is no path from a refusal
+    to a repair that drops the criterion text or the failing detail.
+
+    Attributes:
+        wave_id: The wave whose close was refused.
+        criterion: The refused success criterion (its text grounds the repair).
+        failing_detail: The concrete failing-check output the oracle refused on
+            -- non-empty, the grounding payload of the repair re-dispatch.
+        tier: The integer oracle tier that produced the refusal.
+        status: The closed non-pass status word the oracle scored.
+    """
+
+    def __init__(
+        self,
+        *,
+        wave_id: str,
+        criterion: CriterionSpec,
+        failing_detail: str,
+        tier: int,
+        status: str,
+    ) -> None:
+        self.wave_id = wave_id
+        self.criterion = criterion
+        self.failing_detail = failing_detail
+        self.tier = tier
+        self.status = status
+        super().__init__(
+            f"wave {wave_id!r} oracle blocked close "
+            f"(criterion={criterion.id!r} tier={tier} status={status}): {failing_detail}"
+        )
+
+
 async def _enforce_wave_close_gate(
     state: State,
     mutation: Mutation,
@@ -1261,8 +1309,11 @@ async def _enforce_wave_close_gate(
         criteria were all scored by the jury / single-auditor tier.
 
     Raises:
-        LifecycleError: When the ordered oracle (or the high-risk
-            single-auditor gate) refuses close.
+        WaveCloseRefusalError: When the ordered oracle refuses a wave close on a
+            required criterion -- a :class:`LifecycleError` subclass carrying
+            the refused criterion + the grounded failing-check output so a
+            repair re-dispatch is fed the concrete falsifier.
+        LifecycleError: When the high-risk single-auditor gate refuses close.
     """
     from eawf.kernel.store.kinds.evidence import deterministic_pass_record
     from eawf.workflow.dispatch.verdict import verdict_requirement
@@ -1348,10 +1399,17 @@ async def _enforce_wave_close_gate(
                 f"_enforce_wave_close_gate wave={wave_id} criterion={criterion.id!r} "
                 f"tier={int(result.tier)} status={result.status} blocked"
             )
-            raise LifecycleError(
-                f"wave {wave_id!r} oracle blocked close "
-                f"(criterion={criterion.id!r} tier={int(result.tier)} "
-                f"status={result.status}): {result.detail}"
+            # Carry the criterion + the GROUNDED failing-check output onto the
+            # structured refusal so a repair re-dispatch is fed the concrete
+            # falsifier (never re-parsed from the message string). failing_detail
+            # is non-empty by construction, so a content-free repair cannot be
+            # built downstream.
+            raise WaveCloseRefusalError(
+                wave_id=wave_id,
+                criterion=criterion,
+                failing_detail=result.failing_detail(),
+                tier=int(result.tier),
+                status=result.status,
             )
         # Only a deterministic gate carries a gate_id; the jury /
         # single-auditor fallthrough scores the whole wave (gate_id=None)

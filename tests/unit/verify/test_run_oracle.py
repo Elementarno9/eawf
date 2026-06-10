@@ -349,10 +349,16 @@ def test_run_oracle_always_requirement_consults_jury(
     assert result.status == "pass"
 
 
-def test_run_oracle_jury_needs_user_maps_to_needs_user(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_run_oracle_jury_needs_user_held_advisory_close_proceeds(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
 ) -> None:
-    """A NEEDS_USER jury outcome maps to status='needs_user'."""
+    """A NEEDS_USER jury outcome is held advisory (W09): maps to status='pass'.
+
+    An uncalibrated jury holds only advisory authority, so ANY non-pass
+    outcome -- a FAIL veto or a NEEDS_USER split / sub-quorum -- is logged at
+    WARNING and the close proceeds as ``"pass"`` rather than blocking. TRUST-4
+    restores blocking on a calibrated jury.
+    """
 
     async def _jury(**_kwargs: Any) -> Any:
         class _Result:
@@ -363,9 +369,11 @@ def test_run_oracle_jury_needs_user_maps_to_needs_user(
     monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
     monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
 
-    result = _run(_criterion(), [], repo_root=tmp_path)
+    with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
+        result = _run(_criterion(), [], repo_root=tmp_path)
 
-    assert result.status == "needs_user"
+    assert result.status == "pass"
+    assert any("jury_veto_advisory" in r.getMessage() for r in caplog.records)
 
 
 # --------------------------------------------------------------------------- #
@@ -519,3 +527,50 @@ def test_run_oracle_compile_returns_none_skips_gate(
     assert result.tier is OracleTier.T2_STRUCTURAL
     assert result.gate_id == "G-T2"
     assert result.status == "pass"
+
+
+# --------------------------------------------------------------------------- #
+# OracleResult.failing_detail -- the grounding payload a repair re-dispatch is fed.
+# --------------------------------------------------------------------------- #
+
+
+def test_failing_detail_returns_recorded_detail() -> None:
+    """A refused result surfaces its recorded detail as the repair grounding payload."""
+    result = OracleResult(
+        tier=OracleTier.T1_STATIC,
+        status="fail",
+        criterion_id="CR-01",
+        gate_id="G-T1",
+        detail="command_exit_zero gate exit=1: import budget exceeded",
+    )
+
+    assert result.failing_detail() == "command_exit_zero gate exit=1: import budget exceeded"
+
+
+def test_failing_detail_falls_back_when_detail_empty() -> None:
+    """A refused result with no detail still yields a non-empty grounding payload."""
+    result = OracleResult(
+        tier=OracleTier.T7_JURY,
+        status="fail",
+        criterion_id="CR-01",
+    )
+
+    detail = result.failing_detail()
+    # Non-empty so the repair builder's guard always has something to ground on.
+    assert detail
+    assert "CR-01" in detail
+    assert "fail" in detail
+
+
+def test_failing_detail_raises_on_passing_result() -> None:
+    """A passing result has no failing check, so failing_detail raises."""
+    result = OracleResult(
+        tier=OracleTier.T2_STRUCTURAL,
+        status="pass",
+        criterion_id="CR-01",
+        gate_id="G-T2",
+        detail="all checks green",
+    )
+
+    with pytest.raises(ValueError, match="passed: no failing detail"):
+        result.failing_detail()

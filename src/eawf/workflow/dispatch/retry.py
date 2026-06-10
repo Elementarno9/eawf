@@ -61,9 +61,16 @@ from eawf.runtime.runtimes.fallback import (
 )
 
 if TYPE_CHECKING:
+    from eawf.kernel.spec.common import CriterionSpec
     from eawf.runtime.runtimes.adapter import ErrorClass, SpawnResult
 
 logger = logging.getLogger(__name__)
+
+#: Default attempt ceiling for :func:`repair_until_resolved`. One initial repair
+#: re-dispatch plus up to ``DEFAULT_MAX_REPAIR_ATTEMPTS - 1`` further grounded
+#: re-dispatches. Bounded so a criterion that keeps failing terminates in a typed
+#: exhaustion rather than re-dispatching forever.
+DEFAULT_MAX_REPAIR_ATTEMPTS: int = 3
 
 #: Default attempt ceiling for :func:`spawn_with_retry`. One initial spawn plus
 #: up to ``DEFAULT_MAX_ATTEMPTS - 1`` retries / switches. Bounded so a runtime
@@ -86,6 +93,23 @@ type SpawnFn = Callable[[str], Awaitable["SpawnResult"]]
 #: binds a stub keyed off the canned stderr. The runtime id is passed so a
 #: classifier can pick the per-runtime adapter when the loop has switched.
 type ErrorClassifier = Callable[[RuntimeSpawnError, str], "ErrorClass"]
+
+#: A callable that performs one repair re-dispatch given a grounded prompt and
+#: returns the transient :class:`~eawf.runtime.runtimes.adapter.SpawnResult`.
+#: Injected into :func:`repair_until_resolved` so the loop drives a live adapter
+#: in production and a recording stub under test. The repair prompt the loop
+#: hands in is built by :func:`build_repair_prompt`, so it always carries the
+#: refused criterion's text + the concrete failing-check output.
+type RepairSpawnFn = Callable[[str], Awaitable["SpawnResult"]]
+
+#: A callable that re-verifies a repair attempt's result against the refused
+#: criterion and returns the still-failing-check output, or ``None`` when the
+#: repair resolved the refusal. Injected into :func:`repair_until_resolved` so
+#: the loop re-grounds each subsequent re-dispatch on the freshest falsifier
+#: output. The production caller binds the close-gate oracle re-run; a test binds
+#: a scripted stub. A returned payload feeds the next :func:`build_repair_prompt`
+#: so a repair is NEVER re-dispatched without a concrete failing payload.
+type RepairVerifier = Callable[["SpawnResult"], str | None]
 
 
 class FailureTier(StrEnum):
@@ -233,6 +257,74 @@ class RetryExhaustedError(RuntimeError):
             f"spawn retry exhausted after {len(failures)} attempt(s) "
             f"(tier={notice.tier.value}); last failure: {notice.message}"
         )
+
+
+class RepairWithoutFailureError(ValueError):
+    """Raised when a repair prompt is requested without a failing-check payload.
+
+    A repair re-dispatch MUST be grounded: it carries the refused criterion's
+    text PLUS the concrete failing check's output. A content-free "drifted,
+    redo" repair -- one with no resolved failing payload -- can never be built,
+    because :func:`build_repair_prompt` raises this before assembling a prompt
+    when ``failing_detail`` is ``None`` or empty / whitespace-only. This is the
+    structural guarantee behind success criterion 2: a content-free repair
+    cannot be dispatched because it cannot even be constructed.
+    """
+
+
+def build_repair_prompt(
+    criterion: CriterionSpec,
+    failing_detail: str | None,
+    *,
+    base_prompt: str,
+    attempt: int,
+) -> str:
+    """Build a GROUNDED repair re-dispatch prompt for a refused *criterion*.
+
+    The prompt carries the refused criterion's text PLUS the concrete failing
+    check's output so the repair re-dispatch knows exactly which criterion was
+    refused and why. A content-free repair is structurally impossible: the
+    function REQUIRES a non-empty *failing_detail* and raises
+    :class:`RepairWithoutFailureError` when it is ``None`` or empty /
+    whitespace-only, so a "drifted, redo" repair with no resolved payload can
+    never be assembled.
+
+    Args:
+        criterion: The refused success criterion. Its
+            :attr:`~eawf.kernel.spec.common.CriterionSpec.text` is rendered
+            verbatim into the repair prompt so the re-dispatch is grounded in
+            the exact criterion that was refused.
+        failing_detail: The concrete failing-check output the close gate refused
+            on (the oracle's deterministic check output or jury detail). MUST be
+            non-empty -- the grounding payload of the repair.
+        base_prompt: The original rendered dispatch prompt; preserved verbatim so
+            the dispatched contract is unchanged while the repair notice steers
+            the re-dispatch.
+        attempt: 1-based repair attempt number, surfaced to the re-dispatched
+            agent so it knows how many repairs have already been tried.
+
+    Returns:
+        The original prompt plus a ``## Repair required`` notice quoting the
+        refused criterion's text and the concrete failing-check output.
+
+    Raises:
+        RepairWithoutFailureError: when *failing_detail* is ``None`` or empty /
+            whitespace-only -- a content-free repair cannot be built.
+    """
+    if failing_detail is None or not failing_detail.strip():
+        raise RepairWithoutFailureError(
+            f"cannot build a repair prompt for criterion {criterion.id!r} "
+            f"without a resolved failing-check payload: {failing_detail!r}"
+        )
+    return (
+        f"{base_prompt}\n\n"
+        "## Repair required\n\n"
+        f"The close was refused on criterion {criterion.id!r} (repair attempt {attempt}).\n\n"
+        f"Criterion text:\n{criterion.text}\n\n"
+        f"Failing check output:\n{failing_detail}\n\n"
+        "Resolve the failing check above. Your repair must make the named "
+        "criterion pass; address the concrete failure, not a paraphrase of it."
+    )
 
 
 def _failure_notice(*, failures: list[SpawnAttemptFailure], attempts_used: int) -> FailureNotice:
@@ -389,14 +481,118 @@ async def spawn_with_retry(
     raise RetryExhaustedError(attempts=max_attempts, failures=failures, notice=notice)
 
 
+async def repair_until_resolved(
+    criterion: CriterionSpec,
+    failing_detail: str,
+    *,
+    base_prompt: str,
+    spawn: RepairSpawnFn,
+    verify: RepairVerifier,
+    max_attempts: int = DEFAULT_MAX_REPAIR_ATTEMPTS,
+) -> SpawnResult:
+    """Drive a GROUNDED repair re-dispatch through the bounded repair loop.
+
+    Builds a grounded repair prompt for *criterion* (carrying the criterion's
+    text PLUS the concrete failing-check output via :func:`build_repair_prompt`),
+    re-dispatches via *spawn*, then re-verifies the result via *verify*. When the
+    verifier returns ``None`` the refusal is resolved and the
+    :class:`~eawf.runtime.runtimes.adapter.SpawnResult` is returned. When it
+    returns a still-failing payload, the loop re-grounds the NEXT re-dispatch on
+    that freshest falsifier output and tries again -- up to *max_attempts* total
+    re-dispatches.
+
+    The loop is **bounded** (never more than *max_attempts* re-dispatches) and
+    **fail-loud** (a cap reached without resolution raises a typed
+    :class:`RetryExhaustedError` carrying every repair attempt; it never loops
+    forever and never returns an unresolved result). The repair is always
+    grounded: the first prompt carries *failing_detail* and each retry carries
+    the verifier's freshest payload through :func:`build_repair_prompt`, so a
+    content-free repair is never dispatched (a :class:`RepairWithoutFailureError`
+    would raise before any re-dispatch if a payload were empty).
+
+    Args:
+        criterion: The refused success criterion the repair targets. Read-only;
+            its text grounds every re-dispatch.
+        failing_detail: The concrete failing-check output the close gate refused
+            on -- the grounding payload of the FIRST repair re-dispatch. MUST be
+            non-empty (the guard in :func:`build_repair_prompt` enforces it).
+        base_prompt: The original rendered dispatch prompt, preserved verbatim
+            under each repair notice.
+        spawn: Injected async callable performing one repair re-dispatch per
+            grounded prompt. The production caller binds a resolved adapter's
+            ``spawn_session`` (with the model + cwd captured in the closure); a
+            test binds a recording stub (no real subprocess).
+        verify: Injected callable re-verifying a re-dispatch result and returning
+            the still-failing-check output, or ``None`` once the refusal is
+            resolved. The production caller binds the close-gate oracle re-run.
+        max_attempts: Total repair-re-dispatch ceiling. Must be at least 1.
+
+    Returns:
+        The :class:`~eawf.runtime.runtimes.adapter.SpawnResult` of the first
+        re-dispatch the verifier accepted.
+
+    Raises:
+        ValueError: when *max_attempts* is less than 1.
+        RepairWithoutFailureError: when *failing_detail* (or a later verifier
+            payload) is empty -- a content-free repair cannot be built.
+        RetryExhaustedError: when the cap is reached without the verifier
+            accepting any re-dispatch -- the typed exhaustion carrying every
+            repair attempt.
+    """
+    if max_attempts < 1:
+        raise ValueError(f"max_attempts must be >= 1: {max_attempts!r}")
+
+    failures: list[SpawnAttemptFailure] = []
+    current_detail = failing_detail
+    for attempt in range(1, max_attempts + 1):
+        prompt = build_repair_prompt(
+            criterion, current_detail, base_prompt=base_prompt, attempt=attempt
+        )
+        result = await spawn(prompt)
+        still_failing = verify(result)
+        if still_failing is None:
+            logger.info(
+                f"repair_until_resolved attempt={attempt} criterion={criterion.id!r} "
+                f"runtime={result.runtime!r} status=resolved"
+            )
+            return result
+        failures.append(
+            SpawnAttemptFailure(
+                attempt=attempt,
+                runtime=result.runtime,
+                error_class="REPAIR_CRITERION_STILL_FAILING",
+                action=FallbackAction.RETRY_SAME,
+                detail=f"{still_failing}"[:2000] or "criterion still failing after repair",
+            )
+        )
+        logger.info(
+            f"repair_until_resolved attempt={attempt} criterion={criterion.id!r} "
+            f"runtime={result.runtime!r} status=still-failing"
+        )
+        current_detail = still_failing
+
+    notice = _failure_notice(failures=failures, attempts_used=len(failures))
+    logger.warning(
+        f"repair_until_resolved status=exhausted criterion={criterion.id!r} "
+        f"attempts={len(failures)} tier={notice.tier.value}"
+    )
+    raise RetryExhaustedError(attempts=max_attempts, failures=failures, notice=notice)
+
+
 __all__ = [
     "DEFAULT_MAX_ATTEMPTS",
+    "DEFAULT_MAX_REPAIR_ATTEMPTS",
     "ErrorClassifier",
     "FailureNotice",
     "FailureTier",
+    "RepairSpawnFn",
+    "RepairVerifier",
+    "RepairWithoutFailureError",
     "RetryExhaustedError",
     "SpawnAttemptFailure",
     "SpawnFn",
+    "build_repair_prompt",
     "failure_tier_for_action",
+    "repair_until_resolved",
     "spawn_with_retry",
 ]

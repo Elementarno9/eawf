@@ -73,6 +73,34 @@ class OracleResult(_StrictModel):
     gate_id: IdStr | None = None
     detail: Annotated[str, Field(max_length=2000)] = ""
 
+    def failing_detail(self) -> str:
+        """Return the concrete failing-check output for a refused criterion.
+
+        The repair re-dispatch must be GROUNDED in the actual falsifier output,
+        never a content-free "drifted, redo" hint. This accessor surfaces the
+        :attr:`detail` (the deterministic check output or the jury detail) the
+        oracle recorded when it refused, so a repair builder is fed the same
+        concrete payload the close gate refused on. When the oracle scored a
+        non-pass without any detail, a typed fallback string is returned so the
+        payload is never empty -- the repair builder's non-empty guard then
+        always has something to ground on.
+
+        Returns:
+            The recorded :attr:`detail`, or a typed fallback naming the tier +
+            status when the oracle refused without a detail string.
+
+        Raises:
+            ValueError: when called on a passing result (a pass has no failing
+                check to ground a repair on).
+        """
+        if self.status == "pass":
+            raise ValueError(
+                f"oracle result for criterion {self.criterion_id!r} passed: no failing detail"
+            )
+        if self.detail:
+            return self.detail
+        return f"criterion {self.criterion_id!r} scored {self.status} at tier {int(self.tier)}"
+
 
 def _check_result_status(result: CheckResult) -> Literal["pass", "fail", "blocked"]:
     """Return the closed status for one deterministic check result."""
