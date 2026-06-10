@@ -275,9 +275,7 @@ _VERB_TIER: dict[ObserveVerb, OracleTier] = {
 #: oracle tier that can falsify it. The principle: the cheapest deterministic
 #: falsifier wins, so static parse / lint / schema / citation checks sit at
 #: T1, structural / state / FSM checks at T2, contract / command checks at T4,
-#: and golden pixel diffs at T5. The ``svg_*`` kinds are listed by string even
-#: though they are not yet registered ``CheckKind`` values -- they land in a
-#: sibling wave and the map must already route them when they do.
+#: and golden diffs at T5.
 _GATE_KIND_TIER: dict[str, OracleTier] = {
     "file_exists": OracleTier.T1_STATIC,
     "path_glob_nonempty": OracleTier.T1_STATIC,
@@ -292,6 +290,7 @@ _GATE_KIND_TIER: dict[str, OracleTier] = {
     "command_exit_zero": OracleTier.T4_CONTRACT,
     "verify_implements": OracleTier.T4_CONTRACT,
     "svg_pixel_diff": OracleTier.T5_GOLDEN,
+    "mockup_golden_diff": OracleTier.T5_GOLDEN,
 }
 
 

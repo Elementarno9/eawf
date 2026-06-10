@@ -77,6 +77,7 @@ from eawf.workflow.audit_dsl.models import (
     CheckSpec,
     CitationResolvesArgs,
     CommandExitZeroArgs,
+    MockupGoldenDiffArgs,
     Scope,
     TimeoutClass,
 )
@@ -386,6 +387,106 @@ def _check_command_exit_zero(spec: CheckSpec, cwd: Path) -> CheckResult:
     return CheckResult(name=spec.name, kind=spec.kind, passed=passed, details=details)
 
 
+def _resolve_optional_file(
+    value: str | None,
+    *,
+    cwd: Path,
+    arg_name: str,
+) -> tuple[Path | None, str | None]:
+    """Resolve an optional repo-relative file arg into a path or error."""
+    if value is None:
+        return None, None
+    target = (cwd / value).resolve() if not Path(value).is_absolute() else Path(value)
+    if not target.is_file():
+        return None, f"{arg_name}={value} not found"
+    return target, None
+
+
+def _check_mockup_golden_diff(spec: CheckSpec, cwd: Path) -> CheckResult:
+    """Capture a TUI screen via Pilot and compare it to a mockup golden."""
+    try:
+        args = MockupGoldenDiffArgs.model_validate(spec.args)
+    except ValidationError as exc:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=f"invalid args: {exc.errors()[0]['msg']}",
+        )
+
+    golden_path, golden_error = _resolve_optional_file(
+        args.golden_path,
+        cwd=cwd,
+        arg_name="golden_path",
+    )
+    if golden_error is not None or golden_path is None:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=golden_error or "golden_path not found",
+        )
+    state_path, state_error = _resolve_optional_file(
+        args.state_path,
+        cwd=cwd,
+        arg_name="state_path",
+    )
+    if state_error is not None:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=state_error,
+        )
+
+    from eawf.surfaces.tui.snapshot import pilot_harness
+
+    try:
+        expected = golden_path.read_text(encoding="utf-8").rstrip("\n")
+        captured = pilot_harness.capture_mockup_golden_screen_text_sync(
+            scope=args.scope,
+            state_path=state_path,
+            mode=args.mode,
+            key_sequence=list(args.key_sequence),
+            size=(args.size[0], args.size[1]),
+        )
+    except Exception as exc:
+        logger.debug(f"_check_mockup_golden_diff capture-fail name={spec.name!r} reason={exc!r}")
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=f"mockup golden capture failed: {exc}",
+        )
+
+    if captured == expected:
+        byte_count = len(expected.encode("utf-8"))
+        logger.debug(f"_check_mockup_golden_diff ok name={spec.name!r} golden={args.golden_path!r}")
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=True,
+            status="pass",
+            details=f"screen matches mockup golden path={args.golden_path} bytes={byte_count}",
+        )
+
+    details = pilot_harness.mockup_golden_diff_detail(golden_path, expected, captured)
+    logger.debug(
+        f"_check_mockup_golden_diff mismatch name={spec.name!r} golden={args.golden_path!r}"
+    )
+    return CheckResult(
+        name=spec.name,
+        kind=spec.kind,
+        passed=False,
+        status="fail",
+        details=details,
+    )
+
+
 CHECK_REGISTRY: dict[str, CheckFn] = {
     "file_exists": _check_file_exists,
     "path_glob_nonempty": _check_path_glob_nonempty,
@@ -401,6 +502,7 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "tui_flow": check_tui_flow,
     "svg_well_formed": check_svg_well_formed,
     "svg_pixel_diff": check_svg_pixel_diff,
+    "mockup_golden_diff": _check_mockup_golden_diff,
 }
 
 

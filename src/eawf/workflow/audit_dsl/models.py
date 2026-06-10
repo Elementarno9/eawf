@@ -78,6 +78,15 @@ The check kinds frozen for v0.3:
   byte-identical (ratio-0, satisfying ``maxDiffPixelRatio <= 0.001``);
   ``blocked`` when ``resvg`` is absent. The golden-pixel falsifier (T5),
   consulted only after ``svg_well_formed`` passes.
+* ``mockup_golden_diff`` — ``args`` validated by
+  :class:`MockupGoldenDiffArgs`: ``{golden_path: str, scope: "repo" |
+  "workspace" | "user" = "repo", state_path: str | None = None,
+  mode: str | None = None, key_sequence: list[str] = [], size: [int, int]
+  = [120, 40]}``. Mounts the Textual TUI through the Pilot harness,
+  captures the settled screen as normalised ASCII, and byte-compares it
+  against the approved pick-time mockup golden. Fails with a unified diff
+  naming the first changed region. This is the text-golden falsifier (T5)
+  for UI mockup fidelity.
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -110,6 +119,7 @@ CheckKind = Literal[
     "tui_flow",
     "svg_well_formed",
     "svg_pixel_diff",
+    "mockup_golden_diff",
 ]
 
 
@@ -279,6 +289,42 @@ class CitationResolvesArgs(BaseModel):
         return self
 
 
+class MockupGoldenDiffArgs(BaseModel):
+    """Strict args schema for the ``mockup_golden_diff`` check kind."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    golden_path: str
+    scope: Literal["repo", "workspace", "user"] = "repo"
+    state_path: str | None = None
+    mode: str | None = None
+    key_sequence: list[str] = Field(default_factory=list)
+    size: list[int] = Field(default_factory=lambda: [120, 40])
+
+    @model_validator(mode="after")
+    def _valid_capture_args(self) -> MockupGoldenDiffArgs:
+        """Validate golden path, optional screen selectors, and terminal size.
+
+        Raises:
+            ValueError: when the golden path or optional selector is empty,
+                any key sequence item is empty, or ``size`` is not exactly two
+                integer entries.
+        """
+        if not self.golden_path.strip():
+            raise ValueError("golden_path must be a non-empty str")
+        if self.state_path is not None and not self.state_path.strip():
+            raise ValueError("state_path must be a non-empty str when set")
+        if self.mode is not None and not self.mode.strip():
+            raise ValueError("mode must be a non-empty str when set")
+        if any(not key for key in self.key_sequence):
+            raise ValueError("key_sequence entries must be non-empty strings")
+        if len(self.size) != 2 or any(
+            isinstance(v, bool) or not isinstance(v, int) for v in self.size
+        ):
+            raise ValueError(f"size must be a two-element [cols, rows] list: {self.size!r}")
+        return self
+
+
 class CheckFile(BaseModel):
     """Top-level yaml document validated by :func:`load_spec`."""
 
@@ -296,6 +342,7 @@ __all__ = [
     "CheckStatus",
     "CitationResolvesArgs",
     "CommandExitZeroArgs",
+    "MockupGoldenDiffArgs",
     "Scope",
     "TimeoutClass",
 ]

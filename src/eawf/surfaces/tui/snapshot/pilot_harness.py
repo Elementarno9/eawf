@@ -27,10 +27,12 @@ function of the bound (fixture) ``state.json``.
 
 from __future__ import annotations
 
+import asyncio
 import difflib
 import itertools
 import os
-from typing import TYPE_CHECKING
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, Literal, cast
 
 from eawf.surfaces.render.snapshot_normalize import normalize_snapshot
 
@@ -156,6 +158,117 @@ def assert_screen_snapshot(app: App[object], golden_path: Path) -> None:
         raise AssertionError(_drift_message(golden_path, expected, captured))
 
 
+async def capture_mockup_golden_screen_text(
+    *,
+    scope: Literal["repo", "workspace", "user"],
+    state_path: Path | None,
+    mode: str | None,
+    key_sequence: list[str],
+    size: tuple[int, int],
+) -> str:
+    """Mount the TUI through Pilot and capture the target mockup screen.
+
+    The mockup close gate needs the same stable text capture as the snapshot
+    suite, but it reaches the target screen from a typed gate row rather than
+    a hand-written pytest. This helper launches :class:`EaApp`, waits for the
+    bound state to settle, optionally switches to a mode, optionally presses a
+    key sequence to reach an overlay / subview, then returns the normalised
+    active-screen text.
+
+    Args:
+        scope: Launch nav scope (``repo`` / ``workspace`` / ``user``).
+        state_path: Fixture or live ``state.json`` path to bind, or ``None``.
+        mode: Optional TUI mode to switch to before pressing keys.
+        key_sequence: Textual key strings to press after mode switch.
+        size: Pilot terminal size as ``(cols, rows)``.
+
+    Returns:
+        Normalised ASCII screen text with no trailing newline.
+    """
+    from eawf.surfaces.tui.app import EaApp
+
+    app = EaApp(scope=scope, state_path=state_path)
+    async with app.run_test(size=size) as raw_pilot:
+        pilot = cast("Pilot[object]", raw_pilot)
+        await settle_screen(pilot)
+        if mode is not None:
+            await app.switch_mode(mode)
+            await settle_screen(pilot)
+        for key in key_sequence:
+            await pilot.press(key)
+            await settle_screen(pilot)
+        return await settle_screen(pilot)
+
+
+def capture_mockup_golden_screen_text_sync(
+    *,
+    scope: Literal["repo", "workspace", "user"],
+    state_path: Path | None,
+    mode: str | None,
+    key_sequence: list[str],
+    size: tuple[int, int],
+) -> str:
+    """Run :func:`capture_mockup_golden_screen_text` from a sync caller.
+
+    The audit-DSL runner is synchronous, but daemon close-gate calls can happen
+    while an event loop is already running. Mirror the existing TUI gate
+    pattern: run inline when no loop is active, otherwise offload to a worker
+    thread with its own loop.
+    """
+
+    def _run() -> str:
+        return asyncio.run(
+            capture_mockup_golden_screen_text(
+                scope=scope,
+                state_path=state_path,
+                mode=mode,
+                key_sequence=key_sequence,
+                size=size,
+            )
+        )
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _run()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_run).result()
+
+
+def mockup_golden_diff_detail(golden_path: Path, expected: str, captured: str) -> str:
+    """Return a capped unified diff detail for a mockup golden mismatch.
+
+    The first unified-diff hunk marker is surfaced in the opening sentence as
+    ``region=...`` so close-gate errors name the changed region even when the
+    caller truncates the multiline diff.
+    """
+    diff = difflib.unified_diff(
+        expected.splitlines(),
+        captured.splitlines(),
+        fromfile=f"{golden_path.name} (expected)",
+        tofile=f"{golden_path.name} (actual)",
+        lineterm="",
+    )
+    capped = list(itertools.islice(diff, _DRIFT_DIFF_MAX_LINES + 1))
+    if len(capped) > _DRIFT_DIFF_MAX_LINES:
+        capped[_DRIFT_DIFF_MAX_LINES] = f"... (diff truncated at {_DRIFT_DIFF_MAX_LINES} lines)"
+    region = next((line for line in capped if line.startswith("@@")), "whole-file")
+    first_change = next(
+        (
+            line
+            for line in capped
+            if (line.startswith("-") and not line.startswith("---"))
+            or (line.startswith("+") and not line.startswith("+++"))
+        ),
+        "none",
+    )
+    body = "\n".join(capped)
+    return (
+        f"mockup golden mismatch for {golden_path.name!r}: "
+        f"region={region} first_change={first_change}\n{body}"
+    )
+
+
 def _drift_message(golden_path: Path, expected: str, captured: str) -> str:
     """Build the drift ``AssertionError`` message with a unified diff.
 
@@ -190,7 +303,10 @@ def _drift_message(golden_path: Path, expected: str, captured: str) -> str:
 __all__ = [
     "SNAPSHOT_REGEN_ENV",
     "assert_screen_snapshot",
+    "capture_mockup_golden_screen_text",
+    "capture_mockup_golden_screen_text_sync",
     "capture_screen_text",
+    "mockup_golden_diff_detail",
     "normalize_snapshot",
     "settle_screen",
 ]

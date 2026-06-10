@@ -18,6 +18,7 @@ from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.snapshot.pilot_harness import (
     SNAPSHOT_REGEN_ENV,
     assert_screen_snapshot,
+    capture_mockup_golden_screen_text,
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
@@ -117,6 +118,22 @@ def test_capture_screen_text_deterministic_across_runs() -> None:
         first = await snap()
         second = await snap()
         assert first == second
+
+    asyncio.run(body())
+
+
+def test_capture_mockup_golden_screen_text_mounts_tui() -> None:
+    async def body() -> None:
+        text = await capture_mockup_golden_screen_text(
+            scope="repo",
+            state_path=_REPO_STATE,
+            mode=None,
+            key_sequence=[],
+            size=_SIZE,
+        )
+        assert "Eä" in text
+        assert "ROADMAP" in text
+        assert "QR" in text
 
     asyncio.run(body())
 
