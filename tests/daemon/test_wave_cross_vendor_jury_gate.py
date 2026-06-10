@@ -26,7 +26,7 @@ import os
 import subprocess
 import uuid
 from collections.abc import Callable, Coroutine
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -228,6 +228,16 @@ def _state_payload(*, wave_id: str, effort_bucket: str, title: str) -> dict[str,
                 "agent_role": "executor",
                 "opened_at": _now().isoformat(),
                 "sessions": {},
+                "runtime_baseline": {
+                    "api_duration_ms": 5000,
+                    "total_duration_ms": 7000,
+                    "captured_at": _now().isoformat(),
+                },
+                "runtime_latest": {
+                    "api_duration_ms": 17000,
+                    "total_duration_ms": 23000,
+                    "captured_at": (_now() + timedelta(minutes=5)).isoformat(),
+                },
             }
         },
         "artifacts": {},
