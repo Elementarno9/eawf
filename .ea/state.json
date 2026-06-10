@@ -18369,7 +18369,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T11:25:30.888473Z",
+  "updated_at": "2026-06-10T11:30:33.840207Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73719,7 +73719,10 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
-        "src/eawf/runtime/daemon/methods/state.py"
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/surfaces/cli/commands/lifecycle.py",
+        "tests/unit/test_cli_wave_close_commit.py",
+        "tests/daemon/test_state_methods.py"
       ],
       "gates": [],
       "id": "P30-I05-W09",
