@@ -853,6 +853,58 @@ def test_close_refuses_zero_runtime(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_close_no_runtime_without_flag_still_refuses(tmp_path: Path) -> None:
+    """The no-runtime waiver is opt-in; absence still rejects zero runtime."""
+    from eawf.runtime.daemon.methods import DaemonValidationError
+
+    payload = _build_state_payload()
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError, match="no captured runtime"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["waves"]["P24-I01-W09"]["status"] == "claimed"
+
+    _run(body)
+
+
+def test_close_with_no_runtime_waiver_succeeds(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A close-scoped no-runtime waiver bypasses the enforcing zero-runtime gate."""
+    payload = _build_state_payload()
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "wave_id": "P24-I01-W09",
+            "outcome": "ok",
+            "no_runtime_waiver": True,
+        },
+    )
+
+    async def body() -> None:
+        with caplog.at_level("WARNING", logger="eawf.runtime.daemon.methods.state"):
+            await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        assert written["waves"]["P24-I01-W09"]["status"] == "closed"
+        assert written["actuals"]["P24-I01-W09"]["elapsed_eu"] == pytest.approx(0.0)
+        assert "wave_close_runtime_zero" in caplog.text
+        assert "mode='waived'" in caplog.text
+
+    _run(body)
+
+
 def test_close_allows_nonzero_runtime(tmp_path: Path) -> None:
     """A non-zero runtime delta closes cleanly and persists elapsed EU."""
     payload = _build_state_payload()

@@ -329,6 +329,7 @@ def _wave_close_via_daemon(
     outcome: str,
     resolved_sha: str | None,
     tokens_consumed: int | None,
+    no_runtime_waiver: bool = False,
 ) -> bool:
     """Proxy a wave close through the daemon's ``state.mutate`` RPC.
 
@@ -356,6 +357,8 @@ def _wave_close_via_daemon(
     params: dict[str, Any] = {"wave_id": wave_id, "outcome": outcome, "commit": resolved_sha}
     if tokens_consumed is not None:
         params["tokens_consumed"] = tokens_consumed
+    if no_runtime_waiver:
+        params["no_runtime_waiver"] = True
 
     mutation = Mutation(
         kind=MutationKind.WAVE_CLOSE,
@@ -392,6 +395,7 @@ def _wave_close_via_daemon(
         "outcome": outcome,
         "commit": resolved_sha,
         "tokens_consumed": tokens_consumed,
+        "no_runtime_waiver": no_runtime_waiver,
         "proxied": True,
         "event": result.get("event"),
         "before_version": result.get("before_version"),

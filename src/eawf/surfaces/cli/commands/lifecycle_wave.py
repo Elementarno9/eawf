@@ -46,6 +46,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+NO_RUNTIME_WAIVER_REF = "runtime-zero"
+NO_RUNTIME_WAIVER_REASON = "runtime capture unavailable; operator supplied --no-runtime"
+
 
 def _config_root_for_state_path(state_path: Path) -> Path:
     """Return the root that owns ``.ea/config.yaml`` for *state_path*."""
@@ -281,6 +284,106 @@ def _persist_waivers(
                 ),
                 kind="DaemonError",
             ) from exc
+
+
+def _build_no_runtime_waiver_record(
+    state: State,
+    *,
+    wave_id: str,
+    operator_identity: str | None,
+    state_path: Path,
+    repo_root: Path | None,
+) -> Any:
+    """Build the human waiver evidence row for ``--no-runtime``."""
+    from eawf.workflow.lifecycle.waivers import WaiverInput, apply_waiver
+
+    return apply_waiver(
+        state,
+        wave_id=wave_id,
+        waiver=WaiverInput(gate_id=NO_RUNTIME_WAIVER_REF, reason=NO_RUNTIME_WAIVER_REASON),
+        operator_identity=operator_identity,
+        mode="B",
+        state_path=state_path,
+        repo_root=repo_root,
+    )
+
+
+def _persist_no_runtime_waiver(
+    *,
+    ctx: typer.Context,
+    flags: GlobalFlags,
+    wave_id: str,
+) -> None:
+    """Persist the operator's ``--no-runtime`` waiver via ``evidence.append``."""
+    from eawf.surfaces.cli.scope import resolve_state_path
+
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        raise cli_errors.UserError(
+            "state not loadable; no-runtime waiver cannot be persisted", kind="NotFound"
+        )
+    state, _ = loaded
+    state_path = resolve_state_path(flags.workspace)
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
+    operator_identity = (
+        state.current.active_session_ids[0] if state.current.active_session_ids else None
+    )
+    record = _build_no_runtime_waiver_record(
+        state,
+        wave_id=wave_id,
+        operator_identity=operator_identity,
+        state_path=state_path,
+        repo_root=repo_root,
+    )
+    logger.info(
+        f"_persist_no_runtime_waiver wave={wave_id!r} "
+        f"produced_by={record.produced_by!r} evidence_id={record.id!r}"
+    )
+    if os.environ.get("EAWF_EVIDENCE_DIRECT_WRITE") == "1":
+        return
+
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    try:
+        with DaemonClient() as client:
+            client.call(
+                "evidence.append",
+                {"record": record.model_dump(mode="json")},
+            )
+    except DaemonRpcError as exc:
+        raise cli_errors.UserError(
+            f"daemon rejected evidence.append for no-runtime waiver: code={exc.code} {exc.message}",
+            kind="DaemonError",
+        ) from exc
+    except (OSError, RuntimeError) as exc:
+        raise cli_errors.UserError(
+            (
+                f"daemon unavailable for evidence.append: {exc}; "
+                "set EAWF_EVIDENCE_DIRECT_WRITE=1 to fall back to a direct "
+                "evidence.jsonl append (CI / recovery shell only)"
+            ),
+            kind="DaemonError",
+        ) from exc
+
+
+def _persist_close_waiver_inputs(
+    *,
+    ctx: typer.Context,
+    flags: GlobalFlags,
+    wave_id: str,
+    waive_inputs: list[Any],
+    no_runtime: bool,
+) -> None:
+    """Persist all pre-close waiver evidence rows."""
+    if waive_inputs:
+        _persist_waivers(
+            ctx=ctx,
+            flags=flags,
+            wave_id=wave_id,
+            waive_inputs=waive_inputs,
+        )
+    if no_runtime:
+        _persist_no_runtime_waiver(ctx=ctx, flags=flags, wave_id=wave_id)
 
 
 @wave_app.command("plan")
@@ -534,6 +637,16 @@ def wave_close_cmd(
             help="Final non-negative token tally to persist before closing.",
         ),
     ] = None,
+    no_runtime: Annotated[
+        bool,
+        typer.Option(
+            "--no-runtime",
+            help=(
+                "Operator waiver for a missing runtime capture. Persists a human "
+                "waived EvidenceRecord and lets this close bypass the zero-runtime gate."
+            ),
+        ),
+    ] = False,
     waive: Annotated[
         list[str] | None,
         typer.Option(
@@ -606,6 +719,10 @@ def wave_close_cmd(
     compute (W06) sees the waivers when it scores the closed wave.
     Waivers are operator-only — the active session MUST carry the
     OPERATOR role.
+
+    P30-I05-W09: ``--no-runtime`` is a close-scoped operator waiver for
+    missing runtime capture. It writes a human ``EvidenceRecord`` and
+    threads ``no_runtime_waiver=True`` into the daemon close mutation.
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.surfaces.cli.scope import resolve_state_path
@@ -663,19 +780,19 @@ def wave_close_cmd(
             cli_errors.emit_error(err, flags=flags)
             return
 
-    # W11: persist the operator waivers (if any) BEFORE the close +
-    # readiness compute so the readiness view sees the waiver rows.
-    if waive_inputs:
-        try:
-            _persist_waivers(
-                ctx=ctx,
-                flags=flags,
-                wave_id=wave_id,
-                waive_inputs=waive_inputs,
-            )
-        except cli_errors.CliError as err:
-            cli_errors.emit_error(err, flags=flags)
-            return
+    # Persist waiver evidence BEFORE the close + readiness compute so the
+    # readiness view sees the rows.
+    try:
+        _persist_close_waiver_inputs(
+            ctx=ctx,
+            flags=flags,
+            wave_id=wave_id,
+            waive_inputs=waive_inputs,
+            no_runtime=no_runtime,
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
 
     # W09 daemon-proxy canary: route the close through ``state.mutate``
     # when ``daemon.proxy_enabled=true`` in the merged config. Falls
@@ -690,6 +807,7 @@ def wave_close_cmd(
             outcome=outcome,
             resolved_sha=resolved_sha,
             tokens_consumed=tokens_consumed,
+            no_runtime_waiver=no_runtime,
         )
         if proxied:
             return
@@ -773,6 +891,7 @@ def wave_close_cmd(
             "outcome": outcome,
             "commit": resolved_sha,
             "tokens_consumed": tokens_consumed,
+            "no_runtime_waiver": no_runtime,
         },
         scope_id=wave_id,
         text=f"wave close {wave_id} outcome={outcome!r}",
@@ -781,6 +900,7 @@ def wave_close_cmd(
             "outcome": outcome,
             "commit": resolved_sha,
             "tokens_consumed": tokens_consumed,
+            "no_runtime_waiver": no_runtime,
             "readiness_warnings_count": (
                 len(readiness_holder[0].warnings) if readiness_holder else 0
             ),

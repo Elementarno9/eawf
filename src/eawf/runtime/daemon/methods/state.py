@@ -801,6 +801,11 @@ def _enforce_nonzero_runtime_close(
         f"wave {wave_id!r} has no captured runtime; refusing silent 0-EU close "
         "without a runtime waiver"
     )
+    if mutation.params.get("no_runtime_waiver") is True:
+        logger.warning(
+            f"wave_close_runtime_zero wave={wave_id!r} mode='waived' message={message!r}"
+        )
+        return
     if _runtime_zero_close_enforces(
         state,
         wave_id=wave_id,

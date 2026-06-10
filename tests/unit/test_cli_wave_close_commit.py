@@ -19,12 +19,15 @@ host's git state.
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from eawf.kernel.state.models import State
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands import lifecycle as lifecycle_cli
+from eawf.surfaces.cli.commands import lifecycle_wave
 from eawf.surfaces.cli.flags import GlobalFlags
 
 
@@ -198,3 +201,107 @@ def test_wave_close_daemon_proxy_forwards_tokens_consumed(
     assert captured["params"]["tokens_consumed"] == 1234
     assert captured["params"]["wave_id"] == "P05-I01-W01"
     assert captured["params"]["outcome"] == "ok"
+
+
+def test_wave_close_daemon_proxy_forwards_no_runtime_waiver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bespoke wave-close daemon proxy carries the close-scoped runtime waiver."""
+    captured: dict[str, Any] = {}
+
+    class FakeClient:
+        def __enter__(self) -> FakeClient:
+            return self
+
+        def __exit__(self, *_args: Any) -> None:
+            return None
+
+        def state_mutate(self, mutation: Any, *, repo_root: str | None = None) -> dict[str, Any]:
+            captured["params"] = dict(mutation.params)
+            captured["repo_root"] = repo_root
+            return {
+                "event": {"id": "EV-1"},
+                "before_version": "before",
+                "after_version": "after",
+            }
+
+    monkeypatch.setattr("eawf.surfaces.cli._mutation._daemon_reachable", lambda: True)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", FakeClient)
+
+    handled = lifecycle_cli._wave_close_via_daemon(
+        flags=GlobalFlags(json_output=True),
+        wave_id="P05-I01-W01",
+        outcome="ok",
+        resolved_sha=None,
+        tokens_consumed=None,
+        no_runtime_waiver=True,
+    )
+
+    assert handled is True
+    assert captured["params"]["no_runtime_waiver"] is True
+    assert captured["params"]["wave_id"] == "P05-I01-W01"
+    assert captured["params"]["outcome"] == "ok"
+
+
+def test_no_runtime_waiver_records_human_producer(tmp_path: Path) -> None:
+    """The no-runtime waiver evidence row is human-produced and waived."""
+    state = State.model_validate(
+        {
+            "schema_version": "1.0",
+            "scope_kind": "repo",
+            "urn": "urn:eawf:v1:state:ABC",
+            "updated_at": "2026-05-28T00:00:00Z",
+            "project": {
+                "code": "ABC",
+                "slug": "abc",
+                "title": "ABC",
+                "description": None,
+                "domains": ["x"],
+                "default_branch": "main",
+                "status": "active",
+                "repo_urn": "urn:eawf:v1:repo:ABC",
+            },
+            "current": {
+                "project_code": "ABC",
+                "active_session_ids": ["SES-OP"],
+            },
+            "workspace": None,
+            "phases": {},
+            "iters": {},
+            "waves": {},
+            "artifacts": {},
+            "agent_sessions": {
+                "SES-OP": {
+                    "id": "SES-OP",
+                    "role": "operator",
+                    "runtime": "codex",
+                    "scope_id": "P05-I01-W01",
+                    "status": "active",
+                    "claimed_wave_ids": [],
+                    "worktree_ids": [],
+                    "artifact_ids": [],
+                    "started_at": "2026-05-28T00:00:00Z",
+                    "ended_at": None,
+                    "summary": None,
+                    "agent_principal_id": None,
+                }
+            },
+            "plugins": {},
+            "indexes": {},
+        }
+    )
+
+    record = lifecycle_wave._build_no_runtime_waiver_record(
+        state,
+        wave_id="P05-I01-W01",
+        operator_identity="SES-OP",
+        state_path=tmp_path / ".ea" / "state.json",
+        repo_root=tmp_path,
+    )
+
+    assert record.produced_by == "human"
+    assert record.status == "waived"
+    assert record.evidence_kind == "attested"
+    assert record.refs == [lifecycle_wave.NO_RUNTIME_WAIVER_REF]
+    assert record.metrics is not None
+    assert record.metrics["operator_session"] == "SES-OP"
