@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -63,6 +64,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
@@ -77,6 +79,7 @@ from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.runtime.runtimes.selector import select_adapter
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.runtime.session.store import SessionConflict, start_session
+from eawf.workflow.dispatch.llm_assist import assist_with_schema
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope
 from eawf.workflow.dispatch.retry import spawn_with_retry
 from eawf.workflow.dispatch.routing import model_for_runtime
@@ -528,6 +531,32 @@ _DEFAULT_SPAWN_ROLE: AgentSessionRole = AgentSessionRole.EXECUTOR
 _DEFAULT_SPAWN_EFFORT: EffortBucket = EffortBucket.M
 
 
+def _validate_executor_body(raw: object) -> ExecutorReportBody:
+    """Force the spawned executor's JSON-decoded output to an ``ExecutorReportBody``.
+
+    The forced-schema validator the live-spawn lane hands
+    :func:`~eawf.workflow.dispatch.llm_assist.assist_with_schema`. The
+    executor lane forces the narrow
+    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
+    (rather than the whole ``agent_end`` union) so a spawn that emits a
+    non-executor body — or omits the executor-required ``wave_id`` /
+    ``outcome`` — is rejected and re-asked, not silently accepted as a
+    different role's body.
+
+    Args:
+        raw: JSON-decoded spawn output (the assist loop decodes the
+            ``text`` before handing it here).
+
+    Returns:
+        The validated :class:`ExecutorReportBody`.
+
+    Raises:
+        pydantic.ValidationError: When *raw* does not satisfy the executor
+            report-body schema (the assist loop catches this to re-ask).
+    """
+    return ExecutorReportBody.model_validate(raw)
+
+
 def _resolve_spawn_model(
     state_path: Path, *, wave_id: str, runtime: str, override: str | None
 ) -> str:
@@ -679,6 +708,75 @@ def _find_active_executor(state: State, *, wave_id: str, runtime: str) -> str | 
     return None
 
 
+async def _bind_executor_report(
+    accepted: SpawnResult,
+    *,
+    prompt: str,
+    serving_runtime: str,
+    spawn_once: Callable[[str], Awaitable[SpawnResult]],
+) -> ExecutorReportBody:
+    """Bind the spawned executor's real output to a validated report body.
+
+    Drives :func:`~eawf.workflow.dispatch.llm_assist.assist_with_schema`
+    over the spawned agent's OWN ``text`` to populate an
+    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`,
+    replacing the runner's synthetic placeholder. The first assist spawn
+    reuses *accepted* (the already-completed, already-priced spawn) so the
+    initial attempt is not double-spawned; each subsequent re-ask drives a
+    fresh spawn of the correction prompt via *spawn_once* on the serving
+    runtime. The assist loop's correction notice names the validation
+    failure, and on ceiling-exhaustion the loop raises
+    :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError` — no
+    synthetic body is ever persisted on a parse failure.
+
+    Args:
+        accepted: The already-completed spawn whose ``text`` is validated
+            first (reused so the initial spawn is not repeated).
+        prompt: The rendered dispatch prompt; the assist loop appends a
+            correction notice to it on a re-ask.
+        serving_runtime: The runtime the accepted spawn ran on, recorded for
+            the trace log.
+        spawn_once: The closure that drives one fresh spawn on the serving
+            runtime for a re-ask prompt.
+
+    Returns:
+        The validated :class:`ExecutorReportBody` parsed from the agent's
+        own output.
+
+    Raises:
+        eawf.workflow.dispatch.llm_assist.LLMAssistError: When every spawn
+            (the reused initial plus the re-asks, up to the loop's ceiling)
+            produced output that failed the executor report-body schema.
+    """
+    spawns = 0
+
+    async def _assist_spawn(reask_prompt: str) -> SpawnResult:
+        nonlocal spawns
+        spawns += 1
+        # The first assist iteration validates the already-completed accepted
+        # spawn (no re-spawn); re-asks spawn fresh on the serving runtime so
+        # the correction notice reaches the model.
+        if spawns == 1:
+            return accepted
+        return await spawn_once(reask_prompt)
+
+    result = await assist_with_schema(
+        prompt,
+        spawn=_assist_spawn,
+        validator=_validate_executor_body,
+    )
+    body = result.body
+    logger.info(
+        f"_bind_executor_report runtime={serving_runtime!r} "
+        f"attempts={result.attempts_used} verdict={body.verdict.value}"
+    )
+    # The forced validator is ExecutorReportBody, so the assist loop's body
+    # is by construction an executor body; narrow for the typed return.
+    if not isinstance(body, ExecutorReportBody):  # pragma: no cover - validator forces this
+        raise TypeError(f"assist returned non-executor body: {body.role!r}")
+    return body
+
+
 async def _spawn_and_dispatch(
     ctx: MethodContext,
     *,
@@ -709,10 +807,19 @@ async def _spawn_and_dispatch(
        an availability error, and halts on auth.
     6. Price the spawn via
        :func:`eawf.runtime.runtimes.metering.price_spawn_result`.
-    7. Drive :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch`
-       with the registered session id so the ``agent_end`` report emit
-       fires (keyed on the serving runtime, which a V5 switch may have moved
-       past the originally-resolved one).
+    7. Bind the spawned agent's OWN output to a validated
+       :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
+       through the bounded re-ask loop (:func:`_bind_executor_report`):
+       the first assist iteration validates the already-completed spawn,
+       each re-ask spawns fresh with a correction notice, and
+       ceiling-exhaustion raises
+       :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError` (no
+       synthetic body is persisted on a parse failure).
+    8. Drive :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch`
+       with the registered session id AND the validated body so the
+       ``agent_end`` report persists the agent's words (keyed on the
+       serving runtime, which a V5 switch may have moved past the
+       originally-resolved one).
 
     Args:
         ctx: Daemon method context — supplies ``state_path``, ``event_path``,
@@ -736,6 +843,10 @@ async def _spawn_and_dispatch(
         eawf.workflow.dispatch.retry.RetryExhaustedError: When the bounded
             retry loop terminated without a usable result (an auth halt, a
             switch ladder run out of runtimes, or the attempt ceiling hit).
+        eawf.workflow.dispatch.llm_assist.LLMAssistError: When the spawned
+            agent's output never validated against the executor report-body
+            schema across the schema-assist re-ask ceiling (no synthetic
+            body is persisted on this path).
     """
     if ctx.state_path is None or ctx.event_path is None:
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
@@ -828,9 +939,39 @@ async def _spawn_and_dispatch(
         cache_read_input_tokens=metered.cache_read_input_tokens,
     )
 
-    # 7. Drive the runner with the registered session id so the
-    # ``agent_end`` executor-report emit fires. The serving runtime is the
-    # one the accepted spawn ran on (a V5 switch may have moved it).
+    # 7. Bind the spawned agent's OWN output to a validated ExecutorReportBody
+    # through the bounded re-ask loop. The first assist spawn reuses the
+    # already-completed accepted spawn_result (no double-spawn of the initial
+    # attempt); each re-ask drives a fresh spawn of the correction prompt on
+    # the serving runtime. On ceiling-exhaustion the loop raises LLMAssistError
+    # and NO synthetic body is persisted — the report carries the agent's
+    # words or nothing.
+    serving_model = spawn_result.model
+
+    async def _spawn_correction(reask_prompt: str) -> SpawnResult:
+        # A re-ask spawns the correction prompt on the serving runtime's
+        # adapter + the model the accepted spawn was requested with (the
+        # runtime the accepted spawn ran on), so the model sees the
+        # validation-failure notice the assist loop appended.
+        return await adapter.spawn_session(
+            reask_prompt,
+            model=serving_model,
+            cwd=str(state_path.parent.parent),
+            denied_tools=sorted(denied),
+            on_spawn=captured_pid.append,
+        )
+
+    report_body = await _bind_executor_report(
+        spawn_result,
+        prompt=envelope.prompt,
+        serving_runtime=serving_runtime,
+        spawn_once=_spawn_correction,
+    )
+
+    # 8. Drive the runner with the registered session id + the validated body
+    # so the ``agent_end`` executor-report emit persists the agent's own
+    # outcome / files_changed / verdict. The serving runtime is the one the
+    # accepted spawn ran on (a V5 switch may have moved it).
     runtime_triple = _runtime_triple(serving_runtime)
     result: DispatchResult = run_dispatch(
         ctx,
@@ -844,6 +985,7 @@ async def _spawn_and_dispatch(
         cost_usd=metered.cost_usd,
         trace_request_id=trace_request_id,
         session_id=session_id,
+        report_body=report_body,
     )
     # A V5 reactive switch moved the serving runtime past the originally-
     # resolved one, so the attempt records the swap as a SWITCH_ON_ERROR;

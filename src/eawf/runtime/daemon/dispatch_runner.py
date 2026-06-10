@@ -629,10 +629,17 @@ def emit_agent_end_report(
     verdict: AgentReportVerdict | None = None,
     confidence: Confidence = Confidence.HIGH,
     switched: bool = False,
+    report_body: AgentReportBody | None = None,
 ) -> str:
     """Emit a typed ``agent_end`` report on dispatch completion.
 
-    Builds the role-appropriate
+    When *report_body* is supplied (the live-spawn path), it is the
+    already-validated body parsed from the spawned agent's OWN output via
+    the schema-assist re-ask loop, and it is persisted verbatim — the
+    persisted row carries the agent's words (outcome / files_changed /
+    verdict), not a runner-minted placeholder. When *report_body* is
+    ``None`` (the hand-fed-outcome path and the direct unit-test callers)
+    the runner builds the role-appropriate
     :class:`~eawf.kernel.store.kinds.agent_report.AgentReportCommonBody`
     subclass for the dispatched session and persists it through the
     canonical agent-report writer
@@ -678,9 +685,18 @@ def emit_agent_end_report(
         runtime: Runtime that served the dispatch, recorded on the
             report header.
         verdict: Report verdict; derived from *switched* when ``None``.
-        confidence: Report confidence (defaults to ``high``).
+            Ignored when *report_body* is supplied (the spawned agent's
+            own verdict is authoritative on the live-spawn path).
+        confidence: Report confidence (defaults to ``high``). Ignored when
+            *report_body* is supplied.
         switched: ``True`` when a V5 fallback fired; feeds the derived
-            verdict when *verdict* is ``None``.
+            verdict when *verdict* is ``None`` and *report_body* is
+            ``None``.
+        report_body: Optional already-validated typed body parsed from the
+            spawned agent's own output. When supplied it is persisted
+            verbatim (the synthetic completion body is NOT minted); when
+            ``None`` the runner builds the role-appropriate completion
+            body from *outcome* / *files_changed* / *tests_run*.
 
     Returns:
         The id of the appended role-specific report envelope.
@@ -710,17 +726,26 @@ def emit_agent_end_report(
     session = state.agent_sessions.get(session_id)
     if session is None:
         raise KeyError(f"unknown agent session: {session_id!r}")
-    resolved_verdict = verdict if verdict is not None else _completion_verdict(switched=switched)
-    body = _build_completion_body(
-        role=session.role,
-        wave_id=wave_id,
-        commit_sha=commit_sha,
-        outcome=outcome,
-        files_changed=files_changed,
-        tests_run=tests_run,
-        verdict=resolved_verdict,
-        confidence=confidence,
-    )
+    if report_body is not None:
+        # Live-spawn path: persist the agent's OWN validated body verbatim.
+        # Its verdict / outcome / files_changed are authoritative — the
+        # runner does not mint a synthetic completion body here.
+        body: AgentReportBody = report_body
+        resolved_verdict = report_body.verdict
+    else:
+        resolved_verdict = (
+            verdict if verdict is not None else _completion_verdict(switched=switched)
+        )
+        body = _build_completion_body(
+            role=session.role,
+            wave_id=wave_id,
+            commit_sha=commit_sha,
+            outcome=outcome,
+            files_changed=files_changed,
+            tests_run=tests_run,
+            verdict=resolved_verdict,
+            confidence=confidence,
+        )
     result = append_agent_report(
         state=state,
         state_path=state_path,
@@ -818,6 +843,7 @@ def run_dispatch(
     tests_run: list[str] | None = None,
     verdict: AgentReportVerdict | None = None,
     confidence: Confidence = Confidence.HIGH,
+    report_body: AgentReportBody | None = None,
 ) -> DispatchResult:
     """Drive one wave dispatch attempt, emitting the C09 dispatch events.
 
@@ -863,8 +889,16 @@ def run_dispatch(
         files_changed: Repo-relative paths the dispatch changed (report).
         tests_run: Test commands the dispatch executed (report).
         verdict: ``agent_end`` report verdict; derived from the fallback
-            outcome when ``None``.
+            outcome when ``None``. Ignored when *report_body* is supplied.
         confidence: ``agent_end`` report confidence (defaults to ``high``).
+            Ignored when *report_body* is supplied.
+        report_body: Optional already-validated typed report body parsed
+            from the spawned agent's own output. When supplied it is
+            threaded into :func:`emit_agent_end_report` and persisted
+            verbatim instead of the runner minting a synthetic completion
+            body from *outcome*. The live-spawn caller supplies this so the
+            persisted report carries the agent's words; the hand-fed-outcome
+            caller leaves it ``None`` (the synthetic body is built).
 
     Returns:
         A :class:`DispatchResult` naming the serving runtime, its attempt
@@ -937,6 +971,10 @@ def run_dispatch(
 
     report_id: str | None = None
     if session_id is not None and ctx.state_path is not None:
+        # On the hand-fed-outcome path the runner mints a fallback outcome
+        # string when the caller omits one. The live-spawn path supplies
+        # *report_body* (the agent's OWN validated body) so that fallback is
+        # never the persisted source — the synthetic string is bypassed.
         report_id = emit_agent_end_report(
             ctx,
             session_id=session_id,
@@ -951,6 +989,7 @@ def run_dispatch(
             verdict=verdict,
             confidence=confidence,
             switched=switched,
+            report_body=report_body,
         )
 
     logger.info(

@@ -29,6 +29,7 @@ The load-bearing assertions, one per wave success criterion:
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -56,6 +57,29 @@ _WAVE_ID = "P29-I04-W01"
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 _T1 = datetime(2026, 6, 1, 12, 0, 5, tzinfo=UTC)
 _STUB_PID = 54321
+
+
+def _executor_report_json(*, wave_id: str = _WAVE_ID, verdict: str = "pass") -> str:
+    """A valid ``ExecutorReportBody`` JSON string the stub spawn returns.
+
+    The live-spawn report path now binds the spawned agent's OWN text to a
+    validated :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
+    via the schema-assist re-ask loop, so the stub must emit schema-valid
+    JSON (not free prose). The ``wave_id`` matches the dispatched wave so the
+    post-execution verify gate passes.
+    """
+    return json.dumps(
+        {
+            "role": "executor",
+            "verdict": verdict,
+            "confidence": "high",
+            "summary": "executor implemented the wave",
+            "wave_id": wave_id,
+            "files_changed": ["src/eawf/runtime/daemon/methods/agent.py"],
+            "tests_run": ["uv run pytest tests/daemon -q"],
+            "outcome": "bound the spawned executor output to the report body",
+        }
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -103,7 +127,7 @@ class _StubAdapter:
             resolved_model="claude-opus-4-8",
             subprocess_pid=_STUB_PID,
             exit_status=0,
-            text="the executor answer text",
+            text=_executor_report_json(),
             input_tokens=100,
             output_tokens=42,
             cache_creation_input_tokens=80,
@@ -502,7 +526,7 @@ class _VendorStubAdapter(_StubAdapter):
             resolved_model=None,
             subprocess_pid=_STUB_PID,
             exit_status=0,
-            text="the executor answer text",
+            text=_executor_report_json(),
             input_tokens=100,
             output_tokens=42,
             cache_creation_input_tokens=80,

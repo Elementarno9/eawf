@@ -53,6 +53,25 @@ _WAVE_ID = "P29-I04-W01"
 _FAKE_PID = 4321
 
 
+#: The spawned agent's modeled answer: a schema-valid ``ExecutorReportBody``
+#: JSON string. The live-spawn report path binds the agent's OWN answer text to
+#: a validated executor body via the schema-assist re-ask loop, so the canned
+#: vendor answer must be valid executor JSON (not free prose). ``wave_id``
+#: matches the dispatched wave (the verify gate equality check).
+_EXECUTOR_ANSWER = json.dumps(
+    {
+        "role": "executor",
+        "verdict": "pass",
+        "confidence": "high",
+        "summary": "executor implemented the wave",
+        "wave_id": _WAVE_ID,
+        "files_changed": ["src/eawf/runtime/daemon/methods/agent.py"],
+        "tests_run": ["uv run pytest tests/daemon -q"],
+        "outcome": "spawned through the real adapter and bound the report",
+    }
+)
+
+
 # --------------------------------------------------------------------------- #
 # Canned vendor event streams (captured shapes; NEVER a real subprocess).
 # --------------------------------------------------------------------------- #
@@ -66,7 +85,7 @@ _CODEX_EVENTS: list[dict[str, object]] = [
     {"type": "turn.started"},
     {
         "type": "item.completed",
-        "item": {"id": "item_0", "type": "agent_message", "text": "codex answer"},
+        "item": {"id": "item_0", "type": "agent_message", "text": _EXECUTOR_ANSWER},
     },
     {
         "type": "turn.completed",
@@ -85,7 +104,7 @@ _OPENCODE_EVENTS: list[dict[str, object]] = [
     {
         "type": "text",
         "sessionID": "ses-opencode-1",
-        "part": {"type": "text", "text": "opencode answer"},
+        "part": {"type": "text", "text": _EXECUTOR_ANSWER},
     },
     {
         "type": "step_finish",
@@ -383,7 +402,7 @@ def test_codex_spawn_result_carries_real_runtime_and_tokens(
         {"type": "thread.started", "thread_id": "thr-codex-2"},
         {
             "type": "item.completed",
-            "item": {"type": "agent_message", "text": "x"},
+            "item": {"type": "agent_message", "text": _EXECUTOR_ANSWER},
         },
         {"type": "turn.completed", "usage": {"input_tokens": 1000, "output_tokens": 0}},
     ]
