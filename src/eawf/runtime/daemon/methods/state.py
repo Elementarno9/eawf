@@ -125,6 +125,7 @@ from eawf.workflow.lifecycle.transitions import (
     remove_wave_plan,
     set_wave_deps,
 )
+from eawf.workflow.lifecycle.wave import RuntimeDelta, compute_runtime_delta
 from eawf.workflow.verify.models import CloseReadiness
 
 logger = logging.getLogger(__name__)
@@ -533,6 +534,7 @@ def _apply_wave_close(
     *,
     wave_session_rollup: WaveSessionRollup | None = None,
     elapsed_eu: float | None = None,
+    runtime_delta: RuntimeDelta | None = None,
 ) -> None:
     """Apply :attr:`MutationKind.WAVE_CLOSE` — delegate to ``close_wave``.
 
@@ -541,13 +543,18 @@ def _apply_wave_close(
     ``--commit <ref>`` BEFORE calling the daemon so the daemon never
     has to invoke git.
 
-    *elapsed_eu* is the telemetry-derived measured runtime (the wave's
-    session ``duration_ms`` converted to EU by :func:`_wave_close_elapsed_eu`)
-    that the auto-created :class:`ActualSummary` records on
-    ``elapsed_eu``; ``None`` leaves the auto-created elapsed at ``0.0``.
+    *elapsed_eu* is the measured runtime EU that the auto-created
+    :class:`ActualSummary` records on ``elapsed_eu``; it may come from the
+    runtime baseline/latest delta or from the legacy telemetry rollup.
+    ``None`` leaves the auto-created elapsed at ``0.0``.
     """
     params = mutation.params
     tokens_raw = params.get("tokens_consumed")
+    close_tokens = None
+    if runtime_delta is not None:
+        close_tokens = runtime_delta.actual_tokens
+    elif tokens_raw is not None:
+        close_tokens = int(tokens_raw)
     # WaveSessionRollup only carries ``attention_eu`` today (see
     # :class:`eawf.observability.telemetry.join.WaveSessionRollup`). Until the
     # rollup gains a separate runtime-EU column, runtime EU stays ``None`` so
@@ -561,10 +568,13 @@ def _apply_wave_close(
         state,
         wave_id=str(params["wave_id"]),
         outcome=str(params["outcome"]),
-        tokens_consumed=int(tokens_raw) if tokens_raw is not None else None,
+        tokens_consumed=close_tokens,
         actual_attention_eu=rollup_attention_eu,
-        actual_agent_runtime_eu=None,
+        actual_agent_runtime_eu=(
+            runtime_delta.agent_runtime_eu if runtime_delta is not None else None
+        ),
         actual_elapsed_eu=elapsed_eu,
+        actual_cost_usd=runtime_delta.actual_cost_usd if runtime_delta is not None else None,
     )
     commit = params.get("commit")
     if commit is not None:
@@ -599,6 +609,26 @@ def _wave_close_elapsed_eu(
     if wave_session_rollup is None:
         return None
     return _duration_ms_to_eu(wave_session_rollup.duration_ms, eu_minutes=eu_minutes)
+
+
+def _wave_runtime_delta(
+    state: State,
+    mutation: Mutation,
+    *,
+    eu_minutes: float,
+) -> RuntimeDelta | None:
+    """Return the close-time runtime delta for the wave, when captured."""
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id:
+        return None
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return None
+    return compute_runtime_delta(
+        wave.runtime_baseline,
+        wave.runtime_latest,
+        eu_minutes=eu_minutes,
+    )
 
 
 def _wave_close_rollup_config(repo_root: Path) -> tuple[str, float]:
@@ -2484,24 +2514,34 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                     )
                     wave_id = str(mutation.params.get("wave_id", ""))
                     actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
+                    _, _close_eu_minutes = _wave_close_rollup_config(repo_anchor)
+                    runtime_delta = _wave_runtime_delta(
+                        state,
+                        mutation,
+                        eu_minutes=_close_eu_minutes,
+                    )
                     wave_close_rollup = _load_wave_session_rollup(
                         state,
                         mutation,
                         state_path=state_path,
                         repo_root=repo_anchor,
                     )
-                    # Auto-derive measured elapsed EU from the same telemetry
-                    # rollup so the close-time ActualSummary records real
-                    # runtime; a wave with no captured runtime keeps 0.0.
-                    _, _close_eu_minutes = _wave_close_rollup_config(repo_anchor)
-                    wave_close_elapsed_eu = _wave_close_elapsed_eu(
-                        wave_close_rollup, eu_minutes=_close_eu_minutes
+                    # Prefer cumulative runtime sidecar deltas when present;
+                    # fall back to the older telemetry rollup path.
+                    wave_close_elapsed_eu = (
+                        runtime_delta.elapsed_eu
+                        if runtime_delta is not None
+                        else _wave_close_elapsed_eu(
+                            wave_close_rollup,
+                            eu_minutes=_close_eu_minutes,
+                        )
                     )
                     _apply_wave_close(
                         state,
                         mutation,
                         wave_session_rollup=wave_close_rollup,
                         elapsed_eu=wave_close_elapsed_eu,
+                        runtime_delta=runtime_delta,
                     )
                 else:
                     apply_func(state, mutation)

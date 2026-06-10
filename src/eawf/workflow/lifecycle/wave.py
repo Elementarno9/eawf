@@ -11,6 +11,7 @@ working after the per-entity split.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from eawf.kernel.spec.common import CriterionSpec
@@ -23,7 +24,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import ActualSummary, RuntimeBaseline, State, Wave
+from eawf.kernel.state.models import ActualSummary, RuntimeBaseline, RuntimeLatest, State, Wave
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import (
     LifecycleError,
@@ -43,6 +44,87 @@ logger = logging.getLogger(__name__)
 def _capture_runtime_baseline() -> RuntimeBaseline | None:
     """Return a claim-time runtime sidecar snapshot, when one is available."""
     return None
+
+
+@dataclass(frozen=True)
+class RuntimeDelta:
+    """Close-time runtime delta derived from baseline and latest counters."""
+
+    elapsed_eu: float
+    agent_runtime_eu: float
+    actual_tokens: int
+    actual_cost_usd: float
+    api_duration_ms: int
+
+
+def _counter_delta(
+    field_name: str,
+    baseline_value: int | float | None,
+    latest_value: int | float | None,
+) -> int | float | None:
+    """Return a non-negative counter delta, or ``None`` when either side is absent."""
+    if baseline_value is None or latest_value is None:
+        return None
+    delta = latest_value - baseline_value
+    if delta < 0:
+        raise LifecycleError(
+            f"runtime counter {field_name} decreased: "
+            f"baseline={baseline_value!r} latest={latest_value!r}"
+        )
+    return delta
+
+
+def compute_runtime_delta(
+    baseline: RuntimeBaseline | None,
+    latest: RuntimeLatest | None,
+    *,
+    eu_minutes: float,
+) -> RuntimeDelta | None:
+    """Return captured runtime delta between claim baseline and latest counters.
+
+    ``api_duration_ms`` is the v0.6 effort basis until W07 makes the basis
+    configurable. Missing baseline/latest/API counters mean there is no captured
+    runtime to apply; comparable counters that move backwards reject the close
+    because the cumulative sidecar reset or regressed.
+    """
+    if baseline is None or latest is None:
+        return None
+    if eu_minutes <= 0.0:
+        raise LifecycleError(f"eu_minutes must be positive: {eu_minutes!r}")
+
+    api_duration_ms = _counter_delta(
+        "api_duration_ms", baseline.api_duration_ms, latest.api_duration_ms
+    )
+    if api_duration_ms is None:
+        return None
+
+    # Guard every comparable counter against sidecar reset/regression, even
+    # when only api_duration_ms drives EU in this wave.
+    _counter_delta("total_duration_ms", baseline.total_duration_ms, latest.total_duration_ms)
+    cost_usd_delta = _counter_delta("cost_usd", baseline.cost_usd, latest.cost_usd)
+    token_delta = 0
+    for field_name in (
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+    ):
+        value = _counter_delta(
+            field_name,
+            getattr(baseline, field_name),
+            getattr(latest, field_name),
+        )
+        if value is not None:
+            token_delta += int(value)
+
+    elapsed_eu = float(api_duration_ms) / (eu_minutes * 60_000.0)
+    return RuntimeDelta(
+        elapsed_eu=elapsed_eu,
+        agent_runtime_eu=elapsed_eu,
+        actual_tokens=token_delta,
+        actual_cost_usd=float(cost_usd_delta) if cost_usd_delta is not None else 0.0,
+        api_duration_ms=int(api_duration_ms),
+    )
 
 
 def plan_wave(
@@ -598,6 +680,7 @@ def close_wave(
     actual_attention_eu: float | None = None,
     actual_agent_runtime_eu: float | None = None,
     actual_elapsed_eu: float | None = None,
+    actual_cost_usd: float | None = None,
 ) -> Wave:
     """Close a claimed/in-progress wave with an outcome string.
 
@@ -647,6 +730,10 @@ def close_wave(
             measured session runtime in EU) for an auto-created
             :class:`ActualSummary`. ``None`` leaves the auto-created
             ``elapsed_eu`` at ``0.0``.
+        actual_cost_usd: Optional captured cost delta for an auto-created or
+            refreshed :class:`ActualSummary`. ``None`` leaves the cost at the
+            historical ``0.0`` default for new records and preserves existing
+            cost on operator-authored records.
 
     Raises:
         LifecycleError: when *wave_id* is unknown, the wave is not
@@ -679,6 +766,8 @@ def close_wave(
         )
     if actual_elapsed_eu is not None and actual_elapsed_eu < 0.0:
         raise LifecycleError(f"actual_elapsed_eu must be non-negative; got {actual_elapsed_eu}")
+    if actual_cost_usd is not None and actual_cost_usd < 0.0:
+        raise LifecycleError(f"actual_cost_usd must be non-negative; got {actual_cost_usd}")
     wave.status = WaveStatus.CLOSED
     wave.outcome = outcome
     now = datetime.now(UTC)
@@ -695,6 +784,7 @@ def close_wave(
         state.actuals = {}
     existing = state.actuals.get(wave_id)
     auto_elapsed_eu = actual_elapsed_eu if actual_elapsed_eu is not None else 0.0
+    auto_cost_usd = actual_cost_usd if actual_cost_usd is not None else 0.0
     if existing is None:
         state.actuals[wave_id] = ActualSummary(
             id=f"ACT-{wave_id}",
@@ -704,17 +794,19 @@ def close_wave(
             attention_eu=actual_attention_eu,
             agent_runtime_eu=actual_agent_runtime_eu,
             actual_tokens=wave.tokens_consumed,
-            actual_cost_usd=0.0,
+            actual_cost_usd=auto_cost_usd,
             current_store_record_id=f"REC-{wave_id}",
             updated_at=now,
         )
     else:
         existing.status = ActualStatus.DONE
         existing.actual_tokens = wave.tokens_consumed
+        if actual_cost_usd is not None:
+            existing.actual_cost_usd = actual_cost_usd
         existing.updated_at = now
     logger.info(
         f"close_wave id={wave_id} outcome={outcome!r} "
-        f"actual_tokens={wave.tokens_consumed} actual_cost_usd=0.0 "
+        f"actual_tokens={wave.tokens_consumed} actual_cost_usd={auto_cost_usd} "
         f"actual_attention_eu={actual_attention_eu} elapsed_eu={auto_elapsed_eu}"
     )
     return wave

@@ -714,6 +714,52 @@ def test_mutate_wave_close_derives_elapsed_eu_from_telemetry_duration(
     _run(body)
 
 
+def test_mutate_wave_close_uses_runtime_delta_when_captured(tmp_path: Path) -> None:
+    """Baseline/latest counters drive close-time runtime actuals."""
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    assert isinstance(wave, dict)
+    wave["runtime_baseline"] = {
+        "api_duration_ms": 5000,
+        "total_duration_ms": 7000,
+        "cost_usd": 0.10,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "captured_at": _now().isoformat(),
+    }
+    wave["runtime_latest"] = {
+        "api_duration_ms": 17000,
+        "total_duration_ms": 23000,
+        "cost_usd": 0.52,
+        "input_tokens": 100,
+        "output_tokens": 50,
+        "cache_creation_input_tokens": 5,
+        "cache_read_input_tokens": 7,
+        "captured_at": (_now() + timedelta(minutes=5)).isoformat(),
+    }
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        actual = written["actuals"]["P24-I01-W09"]
+        expected_eu = 12000 / (30 * 60_000)
+        assert actual["elapsed_eu"] == pytest.approx(expected_eu)
+        assert actual["agent_runtime_eu"] == pytest.approx(expected_eu)
+        assert actual["actual_tokens"] == 162
+        assert actual["actual_cost_usd"] == pytest.approx(0.42)
+
+    _run(body)
+
+
 def test_mutate_wave_close_no_telemetry_leaves_elapsed_eu_zero(tmp_path: Path) -> None:
     """A close with no captured runtime keeps the honest zero-EU actual."""
     payload = _build_state_payload()

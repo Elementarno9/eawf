@@ -30,7 +30,13 @@ from eawf.kernel.state.enums import (
     ScopeKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import CurrentPointers, Project, RuntimeBaseline, State
+from eawf.kernel.state.models import (
+    CurrentPointers,
+    Project,
+    RuntimeBaseline,
+    RuntimeLatest,
+    State,
+)
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
 from eawf.workflow.lifecycle import wave as wave_lifecycle
@@ -42,6 +48,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from eawf.workflow.lifecycle.wave import compute_runtime_delta
 from tests.conftest import make_intent
 
 
@@ -319,6 +326,53 @@ def test_close_wave_no_elapsed_eu_leaves_zero() -> None:
 
     assert state.actuals is not None
     assert state.actuals["P01-I01-W01"].elapsed_eu == pytest.approx(0.0)
+
+
+def test_compute_runtime_delta_absent_baseline_returns_none() -> None:
+    latest = RuntimeLatest(
+        api_duration_ms=17000,
+        cost_usd=0.42,
+        input_tokens=100,
+        output_tokens=50,
+        captured_at=datetime.now(UTC),
+    )
+
+    assert compute_runtime_delta(None, latest, eu_minutes=30.0) is None
+
+
+def test_compute_runtime_delta_equal_counters_yields_zero_eu() -> None:
+    captured_at = datetime.now(UTC)
+    baseline = RuntimeBaseline(
+        api_duration_ms=5000,
+        cost_usd=0.25,
+        input_tokens=10,
+        output_tokens=20,
+        captured_at=captured_at,
+    )
+    latest = RuntimeLatest(
+        api_duration_ms=5000,
+        cost_usd=0.25,
+        input_tokens=10,
+        output_tokens=20,
+        captured_at=captured_at,
+    )
+
+    delta = compute_runtime_delta(baseline, latest, eu_minutes=30.0)
+
+    assert delta is not None
+    assert delta.elapsed_eu == pytest.approx(0.0)
+    assert delta.agent_runtime_eu == pytest.approx(0.0)
+    assert delta.actual_tokens == 0
+    assert delta.actual_cost_usd == pytest.approx(0.0)
+
+
+def test_compute_runtime_delta_latest_below_baseline_raises() -> None:
+    captured_at = datetime.now(UTC)
+    baseline = RuntimeBaseline(api_duration_ms=5000, captured_at=captured_at)
+    latest = RuntimeLatest(api_duration_ms=4999, captured_at=captured_at)
+
+    with pytest.raises(LifecycleError, match="api_duration_ms"):
+        compute_runtime_delta(baseline, latest, eu_minutes=30.0)
 
 
 def test_close_wave_tokens_consumed_param_sets_final_tally() -> None:
