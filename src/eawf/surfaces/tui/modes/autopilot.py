@@ -124,6 +124,7 @@ if TYPE_CHECKING:
 
     from eawf.kernel.state.models import State, Wave
     from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+    from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
     from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
 logger = logging.getLogger(__name__)
@@ -234,6 +235,22 @@ SKIP_NO_TARGET: str = "skip: no ready wave to skip"
 #: semantics yet, so the control honestly reports the capability is deferred
 #: rather than firing a doomed RPC and dressing up the method-not-found.
 ARM_DEFERRED: str = "arm: deferred (launch-flow not yet available)"
+
+#: Id of the inline multi-select checklist (``m``) hosting the reused
+#: ``MultichoiceChecklist`` whose choices are EXACTLY the ready frontier ids.
+MULTI_SELECT_ID: str = "autopilot-multiselect"
+
+#: The checklist header prefix the shell passes -- a plain caption (no
+#: config-modal ``[type]`` cell) so it reads as a wave-claim batch.
+MULTI_SELECT_PREFIX: str = "claim batch "
+
+#: Result line when ``m`` opens on an empty frontier -- nothing to select.
+MULTI_SELECT_NO_TARGET: str = "select: no ready wave to select"
+
+#: Result lines after a committed batch (``Enter``): the staged wave ids trail
+#: the first; the second covers a commit with no wave checked.
+MULTI_SELECT_COMMITTED: str = "select: staged"
+MULTI_SELECT_EMPTY_COMMIT: str = "select: nothing staged (no wave checked)"
 
 #: Footer hints for the Autopilot pane (full key names, arrows primary). The
 #: intervention keys ride after dispatch so they are discoverable; the
@@ -672,6 +689,7 @@ class AutopilotModeScreen(ScopeScreen):
         Binding("K", "kill_selected", "kill", show=False),
         Binding("space", "toggle_pause", "pause", show=False),
         Binding("a", "arm_flow", "arm", show=False),
+        Binding("m", "open_multi_select", "select", show=False),
     ]
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _AUTOPILOT_HINTS
@@ -689,6 +707,9 @@ class AutopilotModeScreen(ScopeScreen):
         super().__init__()
         self._rows: tuple[ReadyWaveRow, ...] = ()
         self._blocked: tuple[BlockedWaveRow, ...] = ()
+        #: The wave ids the operator last staged through the multi-select shell
+        #: (``m`` -> Space-toggle -> Enter). Empty until a batch commits.
+        self._claim_batch: tuple[str, ...] = ()
 
     def compose_body(self) -> ComposeResult:
         """Yield the frontier header, the (empty) ready/blocked list, and the result.
@@ -957,6 +978,71 @@ class AutopilotModeScreen(ScopeScreen):
         """
         self._set_result(f"[$warn]{ARM_DEFERRED}[/]")
         logger.info("action_arm_flow deferred")
+
+    def action_open_multi_select(self) -> None:
+        """Open the multi-select wave-claim shell over the ready frontier (``m``).
+
+        Mounts the reused
+        :class:`~eawf.surfaces.tui.screens.overlays.multichoice_checklist.MultichoiceChecklist`
+        whose choices are EXACTLY the ready frontier wave ids -- single-sourced
+        from :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier` via
+        :attr:`_rows`, so a non-ready (deps-not-CLOSED) wave is never a
+        selectable choice. Inside the checklist ``Space`` toggles a wave's
+        ``[X]`` membership and ``Enter`` commits the batch; the checklist owns
+        the keyboard while open so the pane's ``space`` (pause) binding does not
+        fire under it. With no ready wave there is nothing to select, surfaced
+        honestly without mounting an empty checklist; a no-op when one is
+        already open.
+        """
+        if self.query(f"#{MULTI_SELECT_ID}"):
+            return
+        choices = tuple(row.wave_id for row in self._rows)
+        if not choices:
+            self._set_result(f"[$warn]{MULTI_SELECT_NO_TARGET}[/]")
+            return
+        from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
+
+        checklist = MultichoiceChecklist(
+            choices=choices,
+            selected=list(self._claim_batch),
+            prefix=MULTI_SELECT_PREFIX,
+            id=MULTI_SELECT_ID,
+        )
+        listing = self.query(f"#{FRONTIER_LIST_ID}")
+        if not listing:
+            return
+        listing.first(VerticalScroll).mount(checklist)
+        logger.info(f"action_open_multi_select choices={len(choices)}")
+
+    def on_multichoice_checklist_committed(self, message: MultichoiceChecklist.Committed) -> None:
+        """Stage the committed wave-claim batch (``Enter`` in the checklist).
+
+        Records the selected wave ids as the staged claim batch and tears the
+        checklist down. The selected list is single-sourced from the ready
+        frontier choices, so every staged id is a genuinely claim-ready wave.
+        Wiring the batch to the daemon claim RPC is a later wave; this shell
+        records the batch and surfaces it honestly.
+        """
+        message.stop()
+        self._claim_batch = tuple(message.selected)
+        self._teardown_multi_select()
+        if self._claim_batch:
+            staged = " ".join(escape_markup(wave_id) for wave_id in self._claim_batch)
+            self._set_result(f"[$ok]{MULTI_SELECT_COMMITTED}[/] [$muted]{staged}[/]")
+        else:
+            self._set_result(f"[$warn]{MULTI_SELECT_EMPTY_COMMIT}[/]")
+        logger.info(f"multi_select_committed count={len(self._claim_batch)}")
+
+    def on_multichoice_checklist_cancelled(self, message: MultichoiceChecklist.Cancelled) -> None:
+        """Abort the multi-select shell without staging (``Esc`` in the checklist)."""
+        message.stop()
+        self._teardown_multi_select()
+        logger.debug("multi_select_cancelled")
+
+    def _teardown_multi_select(self) -> None:
+        """Remove the mounted multi-select checklist, if present."""
+        for widget in self.query(f"#{MULTI_SELECT_ID}"):
+            widget.remove()
 
     def _confirm_then_kill(
         self,
@@ -1290,6 +1376,11 @@ __all__ = [
     "HALT_NO_TARGET",
     "KILL_NO_DAEMON",
     "KILL_NO_TARGET",
+    "MULTI_SELECT_COMMITTED",
+    "MULTI_SELECT_EMPTY_COMMIT",
+    "MULTI_SELECT_ID",
+    "MULTI_SELECT_NO_TARGET",
+    "MULTI_SELECT_PREFIX",
     "PAUSE_NO_DAEMON",
     "READY_CAPTION",
     "READY_SECTION_ID",

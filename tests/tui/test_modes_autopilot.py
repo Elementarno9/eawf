@@ -59,6 +59,9 @@ from eawf.surfaces.tui.modes.autopilot import (
     HALT_NO_TARGET,
     KILL_NO_DAEMON,
     KILL_NO_TARGET,
+    MULTI_SELECT_COMMITTED,
+    MULTI_SELECT_ID,
+    MULTI_SELECT_NO_TARGET,
     PAUSE_NO_DAEMON,
     SKIP_NO_NEXT,
     SKIP_NO_TARGET,
@@ -70,11 +73,13 @@ from eawf.surfaces.tui.modes.autopilot import (
     render_ready_row,
 )
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
 )
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 
@@ -1138,5 +1143,234 @@ def test_autopilot_pause_no_daemon_surfaces_honest_unavailable(
             assert isinstance(pane, AutopilotModeScreen)
             result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
             assert PAUSE_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# m (multi-select wave-claim shell) -- the [X] toggle over the ready frontier
+# --------------------------------------------------------------------------
+
+
+def _three_ready_state() -> State:
+    """Build a state whose frontier has THREE simultaneously-ready waves.
+
+    W01 is CLOSED; W02 / W03 / W04 are each PENDING in their OWN iter with W01
+    CLOSED as their only dep, so no lower-numbered-sibling gate holds any of
+    them -- all three are ready at once. W05 depends on the missing W99 (an
+    unresolved dep), so it is NOT dep-ready and stays off the frontier. The
+    ready frontier is therefore ``(W02, W03, W04)`` in claim order, and the
+    blocked band carries W05.
+    """
+    waves = {
+        "P01-I01-W01": _wave("P01-I01-W01", status=WaveStatus.CLOSED),
+        "P01-I01-W02": _wave("P01-I01-W02", status=WaveStatus.PENDING, deps=["P01-I01-W01"]),
+        "P01-I02-W03": _wave(
+            "P01-I02-W03",
+            status=WaveStatus.PENDING,
+            deps=["P01-I01-W01"],
+            iter_id="P01-I02",
+        ),
+        "P01-I03-W04": _wave(
+            "P01-I03-W04",
+            status=WaveStatus.PENDING,
+            deps=["P01-I01-W01"],
+            iter_id="P01-I03",
+        ),
+        "P01-I04-W05": _wave(
+            "P01-I04-W05",
+            status=WaveStatus.PENDING,
+            deps=["P01-I04-W99"],  # unresolved dep -> blocked, never selectable
+            iter_id="P01-I04",
+        ),
+    }
+    return _state(waves=waves)
+
+
+def test_autopilot_multi_select_binding_exists() -> None:
+    """The Autopilot pane binds ``m`` to the multi-select shell action."""
+    keys = {
+        binding.key: binding.action
+        for binding in AutopilotModeScreen.BINDINGS
+        if hasattr(binding, "key")
+    }
+    assert keys.get("m") == "open_multi_select"
+    # The live pause binding (space) is untouched -- multi-select rides on m.
+    assert keys.get("space") == "toggle_pause"
+
+
+def test_autopilot_multi_select_space_twice_checks_exactly_two_rows(tmp_path: Path) -> None:
+    """``m`` then Space x2 selects exactly two ready frontier waves shown ``[X]``.
+
+    The load-bearing success criterion: with three ready frontier waves the
+    multi-select shell lists all three as selectable choices; pressing Space on
+    two distinct rows (moving the checklist cursor between them) leaves exactly
+    two checked, rendered with the filled ``check_on`` (``[X]``) mark and the
+    third still hollow. The selection model (``selected_items``) and the
+    rendered marks agree.
+    """
+    state = _three_ready_state()
+    state_path = _write_state(tmp_path, state)
+    expected = compute_ready_frontier(build_frontier_items(state)).ready_ids
+    assert expected == ("P01-I01-W02", "P01-I02-W03", "P01-I03-W04")
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)  # -> autopilot
+            await settle_screen(pilot)
+            await pilot.press("m")  # open the multi-select shell
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            checklist = pane.query_one(f"#{MULTI_SELECT_ID}", MultichoiceChecklist)
+            # All three ready frontier waves are selectable choices.
+            assert checklist._choices == expected
+            checklist.focus()
+            await pilot.press("space")  # check the first ready wave (W02)
+            await pilot.press("down")  # move cursor to W03
+            await pilot.press("space")  # check the second ready wave (W03)
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            # Exactly two waves are selected, in declaration (claim) order.
+            assert checklist.selected_items() == ["P01-I01-W02", "P01-I02-W03"]
+            # The rendered checklist shows exactly two filled [X] marks.
+            mode = getattr(app, "render_mode", "unicode")
+            check_on = chrome("check_on", mode=mode)
+            rendered = str(checklist.render())
+            assert rendered.count(check_on) == 2
+
+    asyncio.run(body())
+
+
+def test_autopilot_multi_select_excludes_non_ready_waves(tmp_path: Path) -> None:
+    """A non-ready (deps-not-CLOSED) wave is never a selectable choice.
+
+    The shell single-sources its choices from ``compute_ready_frontier``, so
+    the blocked W05 (its dep unresolved) is absent from the checklist choices --
+    it can never be toggled into the claim batch.
+    """
+    state = _three_ready_state()
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("m")
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            checklist = pane.query_one(f"#{MULTI_SELECT_ID}", MultichoiceChecklist)
+            # The blocked wave is not a selectable choice (single-sourced frontier).
+            assert "P01-I04-W05" not in checklist._choices
+            assert set(checklist._choices) == {
+                "P01-I01-W02",
+                "P01-I02-W03",
+                "P01-I03-W04",
+            }
+
+    asyncio.run(body())
+
+
+def test_autopilot_multi_select_commit_stages_batch_and_tears_down(tmp_path: Path) -> None:
+    """Committing the checklist (``Enter``) stages the batch and tears it down.
+
+    After checking two waves and pressing ``Enter``, the shell records the
+    staged claim batch, removes the checklist, and surfaces the staged ids on
+    the result line (single-sourced from the ready frontier choices).
+    """
+    state = _three_ready_state()
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("m")
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            checklist = pane.query_one(f"#{MULTI_SELECT_ID}", MultichoiceChecklist)
+            checklist.focus()
+            await pilot.press("space")  # W02
+            await pilot.press("down", "down")  # cursor -> W04
+            await pilot.press("space")  # W04
+            await pilot.press("enter")  # commit the batch
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            # The checklist tore down on commit.
+            assert not pane.query(f"#{MULTI_SELECT_ID}")
+            assert pane._claim_batch == ("P01-I01-W02", "P01-I03-W04")
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert MULTI_SELECT_COMMITTED in rendered
+            assert "P01-I01-W02" in rendered
+            assert "P01-I03-W04" in rendered
+
+    asyncio.run(body())
+
+
+def test_autopilot_multi_select_empty_frontier_surfaces_no_target(tmp_path: Path) -> None:
+    """``m`` on an empty frontier surfaces the honest no-target line (no overlay).
+
+    An honest-empty frontier has no ready wave to select, so the shell must
+    report there is nothing to select rather than mounting an empty checklist
+    that reads as a primed batch.
+    """
+    state_path = _write_state(tmp_path, _state())  # empty frontier
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("m")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            assert not pane.query(f"#{MULTI_SELECT_ID}")  # no checklist mounted
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert MULTI_SELECT_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_multi_select_cancel_tears_down_without_staging(tmp_path: Path) -> None:
+    """``Esc`` in the checklist aborts the batch without staging (no commit).
+
+    Cancelling the multi-select shell tears the checklist down and leaves the
+    staged claim batch empty -- a toggled-but-cancelled selection never stages.
+    """
+    state_path = _write_state(tmp_path, _three_ready_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("m")
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            checklist = pane.query_one(f"#{MULTI_SELECT_ID}", MultichoiceChecklist)
+            checklist.focus()
+            await pilot.press("space")  # check W02
+            await pilot.press("escape")  # abort
+            await settle_screen(pilot)
+            await app.workers.wait_for_complete()
+            assert not pane.query(f"#{MULTI_SELECT_ID}")  # torn down
+            assert pane._claim_batch == ()
 
     asyncio.run(body())
