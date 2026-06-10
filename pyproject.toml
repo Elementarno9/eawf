@@ -170,7 +170,8 @@ ignore = []
 # (block-bloat heuristics over Markdown + docstrings); EAWF019 is the
 # math-explainer facet-presence + citation-resolution rule; EAWF020 is the
 # changelog-laconic-bullet rule (renumbered from the original EAWF016 so the
-# title-clarity rule could take 016 per the doc-clarity code map).
+# title-clarity rule could take 016 per the doc-clarity code map); EAWF023 is
+# the artifact-placement + mandatory date-stem rule.
 external = [
     "EAWF001",
     "EAWF002",
@@ -186,6 +187,7 @@ external = [
     "EAWF018",
     "EAWF019",
     "EAWF020",
+    "EAWF023",
 ]
 
 [tool.ruff.lint.mccabe]
@@ -248,7 +250,7 @@ max-complexity = 10
 # EAWF011 cognitive-complexity gate, EAWF016 entity-title-clarity, EAWF017
 # inline-reference tabulation, EAWF018 structure-smell advisory, EAWF019
 # math-explainer facet-presence + citation-resolution, EAWF020
-# changelog-laconic-bullet). Ruff carries
+# changelog-laconic-bullet, EAWF023 artifact-placement + date-stem). Ruff carries
 # no ``EAWF`` plugin, so these checks read their config from this table rather
 # than ``[tool.ruff.lint]``. ``enabled`` is the rule allow-list a pre-commit
 # dispatcher iterates; per-rule knobs live in the sub-tables (EAWF010 /
@@ -264,6 +266,7 @@ enabled = [
     "EAWF018",
     "EAWF019",
     "EAWF020",
+    "EAWF023",
 ]
 
 [tool.eawf.lint.eawf018]

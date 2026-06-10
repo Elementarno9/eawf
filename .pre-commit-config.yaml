@@ -317,6 +317,22 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: eawf023-artifact-placement
+        name: eawf023-artifact-placement
+        entry: uv run eawf hook eawf023-artifact-placement
+        language: system
+        # EAWF023 over the whole git-tracked .ea/artifacts/**/*.md tree:
+        # every durable artifact must live under its canonical kind
+        # sub-directory (audits/, research/, incidents/, ...) and lead with
+        # a YYYY-MM-DD- date stem. A pre-convention legacy baseline is
+        # grandfathered so the clean tree passes; a NEW misplaced or
+        # date-stem-less artifact reds the commit. Scans the full tracked
+        # tree (not a staged delta) so a misfiled artifact is caught
+        # regardless of which files the commit touched -- so always-run with
+        # no file filter. BLOCKS: a violation fails the commit.
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: plugin-doctor-drift
         name: plugin-doctor-drift
         entry: uv run eawf hook plugin-doctor-drift

@@ -53,6 +53,68 @@ BriefPathStr = Annotated[
 ]
 
 
+# Canonical artifact kind -> sub-directory under .ea/artifacts/. The map IS the
+# placement contract: an artifact of a given kind lives under exactly one
+# sub-directory and nowhere else. Mirrors the promote-side `_KIND_SUBDIR` router
+# in `eawf.surfaces.cli.commands.draft` so the model boundary and the promoter
+# never drift on where a kind files. The EAWF023 placement lint enforces the
+# same contract over the whole git-tracked artifact tree.
+ARTIFACT_KIND_SUBDIR: dict[str, str] = {
+    "research": "research",
+    "audit": "audits",
+    "plan": "plans",
+    "hypothesis": "hypotheses",
+    "decision": "decisions",
+    "incident": "incidents",
+}
+
+
+def artifact_path_str(kind: str) -> Any:
+    """Return an ``Annotated[str, ...]`` validating an artifact path for ``kind``.
+
+    The returned annotation accepts a repo-relative path under the kind's
+    canonical ``.ea/artifacts/<subdir>/`` sub-directory whose filename stem
+    leads with a ``YYYY-MM-DD-`` date prefix, e.g.
+    ``.ea/artifacts/audits/2026-06-11-p30-i14-closeout.md``. A nested
+    sub-directory under the kind subdir (e.g. ``research/long-term/``) is
+    allowed; the date stem applies to the terminal filename. This is the
+    model-boundary twin of the EAWF023 placement lint.
+
+    Args:
+        kind: A canonical artifact kind (a key of
+            :data:`ARTIFACT_KIND_SUBDIR`).
+
+    Returns:
+        An ``Annotated[str, Field(...)]`` type enforcing the kind's path
+        contract, suitable as a Pydantic field annotation.
+
+    Raises:
+        ValueError: When ``kind`` is not a canonical artifact kind.
+    """
+    subdir = ARTIFACT_KIND_SUBDIR.get(kind)
+    if subdir is None:
+        allowed = ", ".join(sorted(ARTIFACT_KIND_SUBDIR))
+        raise ValueError(f"unknown artifact kind: {kind!r} (allowed: {allowed})")
+    pattern = rf"^\.ea/artifacts/{subdir}/(.+/)?\d{{4}}-\d{{2}}-\d{{2}}-.+\.md$"
+    return Annotated[str, Field(min_length=1, pattern=pattern)]
+
+
+# Repo-relative path to any durable artifact: a file under one of the canonical
+# kind sub-directories whose filename stem leads with a YYYY-MM-DD- date prefix.
+# The generic (kind-agnostic) twin of :func:`artifact_path_str`; use the factory
+# when a field is pinned to one kind, this when any artifact path is acceptable.
+ArtifactPathStr = Annotated[
+    str,
+    Field(
+        min_length=1,
+        pattern=(
+            r"^\.ea/artifacts/(audits|research|plans|hypotheses|decisions|incidents)/"
+            r"(.+/)?\d{4}-\d{2}-\d{2}-.+\.md$"
+        ),
+    ),
+]
+
+
 # Repo-relative path under tests/. Extension is intentionally loose so the
 # same TestRef can point at .py, .svg snapshots, .json fixtures, .md golden
 # files, .txt diff baselines, asciinema casts, or future test artefacts.

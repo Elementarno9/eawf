@@ -1306,6 +1306,61 @@ def sigil_totality(ctx: typer.Context) -> None:
     raise typer.Exit(exit_codes.USER_ERROR)
 
 
+def _git_tracked_artifacts(*, cwd: Path) -> list[str]:
+    """Return git-tracked ``.ea/artifacts/**/*.md`` paths under ``cwd``.
+
+    The EAWF023 placement gate scans the whole tracked artifact tree (not
+    a staged delta) so a misplaced or date-stem-less artifact reds CI
+    irrespective of which files the commit touched. A failed git
+    invocation yields an empty list (fail-open) — the authoritative
+    backstop is the same gate on the next clean run.
+    """
+    proc = subprocess.run(
+        ["git", "ls-files", ".ea/artifacts/**/*.md", ".ea/artifacts/*.md"],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        return []
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
+@hook_app.command(name="eawf023-artifact-placement")
+def eawf023_artifact_placement(
+    ctx: typer.Context,
+    files: _FilesArg = None,
+) -> None:
+    """Reject misplaced or date-stem-less artifacts under ``.ea/artifacts/``.
+
+    Walks the git-tracked ``.ea/artifacts/**/*.md`` set (or an explicit
+    file list, for tests) and runs the EAWF023 placement rule: each
+    artifact must live under its canonical kind sub-directory
+    (``audits/``, ``research/``, ``incidents/``, ...) and its filename
+    stem must lead with a ``YYYY-MM-DD-`` date prefix. A pre-convention
+    legacy baseline is grandfathered so the clean tree passes. The scan
+    covers the whole tracked tree (not a staged delta) so a misplaced
+    artifact reds CI regardless of which files the commit touched. Exits
+    1 on a violation, 0 when clean.
+    """
+    from eawf.platform.lint.eawf023_artifact_placement import check_artifact_paths
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = files if files else _git_tracked_artifacts(cwd=cwd)
+    violations = check_artifact_paths(paths)
+    rows = [f"  {v.path}: {v.render()}" for v in violations]
+    _emit_static_lint_result(
+        hook_name="eawf023-artifact-placement",
+        rows=rows,
+        scanned=len(paths),
+        flags=flags,
+        blocking=True,
+    )
+
+
 def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
     """Return ``(1-based new lineno, text)`` for lines the staged diff added.
 
