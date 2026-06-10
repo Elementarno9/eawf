@@ -20,6 +20,8 @@ zero-EU state until a measured actual exists — even though
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -164,29 +166,63 @@ def test_claim_wave_no_bucket_rejects_before_estimate() -> None:
     assert not (state.estimates or {})
 
 
-def test_claim_wave_captures_runtime_baseline_when_available(
+def test_claim_wave_captures_runtime_baseline_from_real_sidecar(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Claim snapshots the primed runtime counters on the first claim."""
+    """Claim reads the session-keyed sidecar and stamps a real baseline.
+
+    Exercises the production read path end-to-end (no monkeypatch of the
+    capture helper): a sidecar written for the claim session is read back
+    and converted into the stamped baseline.
+    """
+    from eawf.runtime.runtime_counter_sidecar import (
+        RuntimeCounterSidecar,
+        sidecar_path_for_statusline_cache,
+    )
+    from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
+    from eawf.runtime.runtimes.claude.statusline import cache_path_for
+
+    monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path))
+    session_id = "SES-real"
+    sidecar = RuntimeCounterSidecar(sidecar_path_for_statusline_cache(cache_path_for(session_id)))
+    sidecar.write(
+        RuntimeCounters(
+            api_duration_ms=100,
+            total_duration_ms=125,
+            cost_usd=Decimal("0.25"),
+            input_tokens=10,
+            output_tokens=20,
+            cache_creation_input_tokens=3,
+            cache_read_input_tokens=7,
+        )
+    )
+
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.M)
-    captured_at = datetime(2026, 6, 10, 12, 0, tzinfo=UTC)
-    baseline = RuntimeBaseline(
-        api_duration_ms=100,
-        total_duration_ms=125,
-        cost_usd=0.25,
-        input_tokens=10,
-        output_tokens=20,
-        cache_creation_input_tokens=3,
-        cache_read_input_tokens=7,
-        captured_at=captured_at,
-    )
-    monkeypatch.setattr(wave_lifecycle, "_capture_runtime_baseline", lambda: baseline)
+    wave = claim_wave(state, wave_id="P01-I01-W01", session_id=session_id)
 
-    wave = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    assert wave.runtime_baseline is not None
+    assert wave.runtime_baseline.api_duration_ms == 100
+    assert wave.runtime_baseline.total_duration_ms == 125
+    assert wave.runtime_baseline.cost_usd == pytest.approx(0.25)
+    assert wave.runtime_baseline.input_tokens == 10
+    assert wave.runtime_baseline.cache_read_input_tokens == 7
+    assert wave.runtime_baseline.captured_at is not None
 
-    assert wave.runtime_baseline == baseline
-    assert wave.runtime_baseline.captured_at == captured_at
+
+def test_claim_wave_runtime_baseline_none_when_sidecar_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No sidecar for the claim session stamps no baseline (honest miss)."""
+    monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path))
+    state = _empty_state()
+    _seed_wave(state, effort_bucket=EffortBucket.M)
+
+    wave = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-absent")
+
+    assert wave.runtime_baseline is None
 
 
 def test_claim_wave_preserves_runtime_baseline_on_idempotent_reclaim(
@@ -218,7 +254,7 @@ def test_claim_wave_preserves_runtime_baseline_on_idempotent_reclaim(
     captures = [first_baseline, second_baseline]
     calls = 0
 
-    def capture() -> RuntimeBaseline:
+    def capture(session_id: str) -> RuntimeBaseline:
         nonlocal calls
         calls += 1
         return captures[calls - 1]

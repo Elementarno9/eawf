@@ -43,9 +43,40 @@ from eawf.workflow.lifecycle.spec import (
 logger = logging.getLogger(__name__)
 
 
-def _capture_runtime_baseline() -> RuntimeBaseline | None:
-    """Return a claim-time runtime sidecar snapshot, when one is available."""
-    return None
+def _capture_runtime_baseline(session_id: str) -> RuntimeBaseline | None:
+    """Return a claim-time runtime sidecar snapshot, when one is available.
+
+    Reads the statusline runtime-counter sidecar keyed by *session_id* and
+    converts the cumulative counters into a baseline stamped at claim time.
+    Returns ``None`` when no sidecar exists for the session (the common case
+    when a wave is claimed outside an instrumented Claude Code session) so the
+    close-time delta degrades to "no captured runtime" rather than subtracting
+    against a phantom zero baseline.
+
+    Args:
+        session_id: Claim session id, used to resolve the session-keyed
+            statusline cache path the sidecar lives beside.
+    """
+    from eawf.runtime.runtime_counter_sidecar import (
+        RuntimeCounterSidecar,
+        sidecar_path_for_statusline_cache,
+    )
+    from eawf.runtime.runtimes.claude.statusline import cache_path_for
+
+    sidecar = RuntimeCounterSidecar(sidecar_path_for_statusline_cache(cache_path_for(session_id)))
+    counters = sidecar.read()
+    if counters is None:
+        return None
+    return RuntimeBaseline(
+        api_duration_ms=counters.api_duration_ms,
+        total_duration_ms=counters.total_duration_ms,
+        cost_usd=float(counters.cost_usd) if counters.cost_usd is not None else None,
+        input_tokens=counters.input_tokens,
+        output_tokens=counters.output_tokens,
+        cache_creation_input_tokens=counters.cache_creation_input_tokens,
+        cache_read_input_tokens=counters.cache_read_input_tokens,
+        captured_at=datetime.now(UTC),
+    )
 
 
 @dataclass(frozen=True)
@@ -592,7 +623,7 @@ def claim_wave(
     if wave.claimed_at is None:
         wave.claimed_at = datetime.now(UTC)
     if wave.runtime_baseline is None:
-        wave.runtime_baseline = _capture_runtime_baseline()
+        wave.runtime_baseline = _capture_runtime_baseline(session_id)
     if wave_id not in state.current.active_wave_ids:
         state.current.active_wave_ids.append(wave_id)
     # Lifecycle guard: a wave must never run under a PLANNED iter, so the
