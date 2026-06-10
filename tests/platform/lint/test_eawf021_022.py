@@ -40,6 +40,8 @@ from eawf.platform.lint.eawf022_propose_coverage import (
 from eawf.platform.lint.eawf022_propose_coverage import (
     check_coverage,
     check_source_brief_coverage,
+    missing_intent_finding,
+    missing_planned_steps_finding,
 )
 from eawf.platform.lint.eawf022_propose_coverage import (
     check_source as check_eawf022_source,
@@ -286,6 +288,27 @@ def test_check_source_brief_coverage_clean_when_all_units_covered() -> None:
     ]
     findings = check_source_brief_coverage(units, covered_span_ids={"U-000", "U-001"}, deferrals=[])
     assert findings == []
+
+
+# ---- EAWF022: intent-present findings (None / empty-required-steps) ----------
+
+
+def test_missing_intent_finding_names_the_wave_and_is_eawf022() -> None:
+    # A wave reaching coverage with no intent is a hard finding naming the wave.
+    finding = missing_intent_finding("P30-I04-W03")
+    assert finding.code == EAWF022_CODE
+    assert finding.snippet == "P30-I04-W03"
+    assert "no intent" in finding.reason
+    assert "P30-I04-W03" in finding.render()
+
+
+def test_missing_planned_steps_finding_names_the_wave_and_is_eawf022() -> None:
+    # A required-intent wave with empty planned_steps is a finding, not a no-op.
+    finding = missing_planned_steps_finding("P30-I04-W03")
+    assert finding.code == EAWF022_CODE
+    assert finding.snippet == "P30-I04-W03"
+    assert "empty planned_steps" in finding.reason
+    assert "P30-I04-W03" in finding.render()
 
 
 # ---- composition behind validate_prose --------------------------------------

@@ -68,6 +68,61 @@ class CoverageGapViolation:
         return f"{self.lineno}:{self.col_offset}: {RULE_CODE} {self.reason}: {self.snippet!r}"
 
 
+def missing_intent_finding(wave_id: str) -> CoverageGapViolation:
+    """Return the EAWF022 finding for a wave reaching coverage without intent.
+
+    The coverage diff is a property of a wave's typed
+    :class:`~eawf.kernel.spec.intent.IntentBrief`: with no intent there are no
+    ``planned_steps`` to score the criteria against, so a wave reaching the
+    sync coverage gate with ``intent=None`` enumerates no deliverables the
+    criteria could be diffed against. That is a hard finding rather than a
+    silent pass -- a wave that materialises criteria must carry the intent the
+    criteria are supposed to cover. New waves always carry an intent (the
+    ``plan_wave`` authoring guard rejects ``None``), so this finding only fires
+    for a legacy on-disk wave whose row predates that guard.
+
+    Args:
+        wave_id: The wave id reaching coverage with no intent, surfaced as the
+            finding snippet so the reject message names the offending wave.
+
+    Returns:
+        A single span-level :class:`CoverageGapViolation`.
+    """
+    return CoverageGapViolation(
+        lineno=1,
+        col_offset=0,
+        snippet=wave_id,
+        reason="wave reached coverage with no intent to diff criteria against",
+    )
+
+
+def missing_planned_steps_finding(wave_id: str) -> CoverageGapViolation:
+    """Return the EAWF022 finding for a required-intent wave with no planned steps.
+
+    A required-intent wave (one distilled ``--from-briefs`` so it carries at
+    least one ``source_brief_ids`` entry) with an empty ``planned_steps`` list
+    enumerates no deliverables for the planned-step coverage diff to score the
+    criteria against. An empty step list is a vacuous no-op pass -- the diff
+    has nothing to flag -- which lets a wave that owes the planner a step list
+    sync with no planned-step coverage at all. That is a finding rather than a
+    clean no-op so the planner is forced to author the steps the source brief
+    expects.
+
+    Args:
+        wave_id: The required-intent wave id with empty planned steps, surfaced
+            as the finding snippet so the reject message names the wave.
+
+    Returns:
+        A single span-level :class:`CoverageGapViolation`.
+    """
+    return CoverageGapViolation(
+        lineno=1,
+        col_offset=0,
+        snippet=wave_id,
+        reason="required-intent wave has empty planned_steps with nothing to cover",
+    )
+
+
 def check_coverage(
     units: list[SourceUnit],
     covered_span_ids: set[str],
@@ -182,4 +237,6 @@ __all__ = [
     "check_coverage",
     "check_source",
     "check_source_brief_coverage",
+    "missing_intent_finding",
+    "missing_planned_steps_finding",
 ]

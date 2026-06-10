@@ -71,6 +71,8 @@ from eawf.platform.lint.eawf021_measurable_criterion import (
 )
 from eawf.platform.lint.eawf022_propose_coverage import (
     CoverageGapViolation,
+    missing_intent_finding,
+    missing_planned_steps_finding,
 )
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
@@ -964,14 +966,31 @@ def _run_measurability_lint(criteria: list[CriterionSpec]) -> list[Measurability
 def _run_coverage_lint(
     criteria: list[CriterionSpec],
     *,
+    wave_id: str,
     intent: IntentBrief | None,
     repo_root: Path,
 ) -> list[CoverageGapViolation]:
     """Return every EAWF022 coverage gap of a wave's brief detail by *criteria*.
 
-    Thin daemon-side delegate to the
-    :mod:`eawf.workflow.propose.coverage` diffs so the sync path and the
-    ``/roadmap propose`` render run one implementation. Two diffs run:
+    Daemon-side delegate to the :mod:`eawf.workflow.propose.coverage` diffs so
+    the sync path and the ``/roadmap propose`` render run one implementation.
+    The coverage diff is a property of a wave's typed intent, so the gate first
+    requires the intent to be present and populated before any diff runs:
+
+    - ``intent`` is ``None`` -- a wave reaching the sync coverage gate with no
+      intent has no enumerated deliverables to diff the criteria against, which
+      is a hard finding (:func:`missing_intent_finding`) rather than a silent
+      pass. New waves always carry an intent (the ``plan_wave`` authoring guard
+      rejects ``None``); a legacy on-disk wave whose row predates that guard is
+      the only path here.
+    - a required-intent wave (``source_brief_ids`` non-empty) with an empty
+      ``planned_steps`` -- the empty step list is a vacuous no-op for the
+      planned-step diff, which let a wave that owes the planner a step list
+      sync with no planned-step coverage. That is a finding
+      (:func:`missing_planned_steps_finding`) rather than a clean no-op pass.
+
+    Once the intent is present and (for a required-intent wave) has steps, two
+    diffs run:
 
     - :func:`~eawf.workflow.propose.coverage.coverage_gaps` over the wave's
       ``planned_steps``: a planned step no criterion topically addresses is a
@@ -979,13 +998,12 @@ def _run_coverage_lint(
     - :func:`~eawf.workflow.propose.coverage.source_brief_coverage_gaps` over
       the referenced source-brief document(s): a source-brief deliverable the
       planner never wrote a step for is a finding too. This leg closes the
-      boundary the ``planned_steps`` diff cannot see -- and, for a
-      required-intent wave, an empty ``planned_steps`` no longer short-circuits
-      the coverage check, because the source brief still enumerates
-      deliverables.
+      boundary the ``planned_steps`` diff cannot see.
 
     Args:
         criteria: The parsed criterion rows from the spec body.
+        wave_id: The wave whose intent is being scored, surfaced as the snippet
+            of the intent-present findings so a reject names the wave.
         intent: The wave's :class:`~eawf.kernel.spec.intent.IntentBrief`, or
             ``None`` when the wave carries no intent.
         repo_root: The repo working-tree root the brief's ``source_brief_ids``
@@ -993,12 +1011,16 @@ def _run_coverage_lint(
 
     Returns:
         One finding per uncovered planned-step span and per uncovered
-        source-brief unit; empty when every brief detail is covered.
+        source-brief unit, plus the intent-present findings; empty only when an
+        intent is present, populated, and every brief detail is covered.
     """
-    planned_steps = list(intent.planned_steps) if intent is not None else []
-    findings = coverage_gaps(criteria, planned_steps=planned_steps)
-    if intent is not None:
-        findings += source_brief_coverage_gaps(criteria, intent=intent, repo_root=repo_root)
+    if intent is None:
+        return [missing_intent_finding(wave_id)]
+    findings: list[CoverageGapViolation] = []
+    if intent.is_required_intent and not intent.planned_steps:
+        findings.append(missing_planned_steps_finding(wave_id))
+    findings += coverage_gaps(criteria, planned_steps=list(intent.planned_steps))
+    findings += source_brief_coverage_gaps(criteria, intent=intent, repo_root=repo_root)
     return findings
 
 
@@ -1200,7 +1222,9 @@ def _apply_sync_locked(
         )
 
     measurability = _run_measurability_lint(criteria)
-    coverage = _run_coverage_lint(criteria, intent=wave.intent, repo_root=repo_root)
+    coverage = _run_coverage_lint(
+        criteria, wave_id=args.wave_id, intent=wave.intent, repo_root=repo_root
+    )
     if measurability or coverage:
         raise DaemonValidationError(_render_lint_findings(measurability, coverage))
 

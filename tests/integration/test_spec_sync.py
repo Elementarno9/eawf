@@ -110,7 +110,11 @@ def _wrap_body(yaml_block: str) -> str:
 
 
 def _state_payload(
-    *, status: str, planned_steps: list[str], source_brief_ids: list[str] | None = None
+    *,
+    status: str,
+    planned_steps: list[str],
+    source_brief_ids: list[str] | None = None,
+    intent_present: bool = True,
 ) -> dict[str, Any]:
     """A minimal valid State with one wave under P29-I12 in *status*.
 
@@ -119,14 +123,20 @@ def _state_payload(
     against. Pass ``planned_steps=[]`` to make the planned-step coverage leg a
     no-op. Pass ``source_brief_ids`` to make the wave required-intent so the
     source-brief coverage leg reads the referenced document(s) even when
-    ``planned_steps`` is empty.
+    ``planned_steps`` is empty. Pass ``intent_present=False`` to model a legacy
+    on-disk wave whose row carries no intent at all, which the coverage gate
+    now rejects rather than silently passing.
     """
-    intent = {
-        "problem": "materialise parsed criteria + gates onto the wave row",
-        "desired_outcome": "the wave row carries typed criteria + gates from its spec body",
-        "planned_steps": list(planned_steps),
-        "source_brief_ids": list(source_brief_ids) if source_brief_ids is not None else [],
-    }
+    intent: dict[str, Any] | None
+    if intent_present:
+        intent = {
+            "problem": "materialise parsed criteria + gates onto the wave row",
+            "desired_outcome": "the wave row carries typed criteria + gates from its spec body",
+            "planned_steps": list(planned_steps),
+            "source_brief_ids": list(source_brief_ids) if source_brief_ids is not None else [],
+        }
+    else:
+        intent = None
     return {
         "schema_version": "1.0",
         "scope_kind": "repo",
@@ -410,6 +420,84 @@ def test_sync_rejects_uncovered_source_brief_unit_with_empty_planned_steps(
         with pytest.raises(DaemonValidationError) as exc:
             await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
         assert "EAWF022" in str(exc.value)
+
+    _run(body)
+    wave = _load_wave(state_path)
+    assert wave.success_criteria == []
+    assert wave.gates == []
+
+
+# --------------------------------------------------------------------------- #
+# EAWF022 intent-present — a wave reaching sync with no intent is rejected.
+# --------------------------------------------------------------------------- #
+def test_sync_rejects_wave_with_no_intent(tmp_path: Path) -> None:
+    """A legacy on-disk wave with ``intent=None`` trips EAWF022; no state write.
+
+    The plan_wave authoring guard rejects ``None`` for new waves, but a legacy
+    on-disk wave whose row predates that guard can still carry no intent. With
+    no intent there are no planned steps to diff the criteria against, so the
+    coverage gate rejects the sync rather than silently passing; no state write
+    lands.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(status="pending", planned_steps=[], intent_present=False),
+    )
+    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError) as exc:
+            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        assert "EAWF022" in str(exc.value)
+        assert "no intent" in str(exc.value)
+
+    _run(body)
+    wave = _load_wave(state_path)
+    assert wave.success_criteria == []
+    assert wave.gates == []
+
+
+# --------------------------------------------------------------------------- #
+# EAWF022 intent-present — a required-intent wave with empty planned_steps is a
+# finding from the planned-step arm even when the source brief is fully covered.
+# --------------------------------------------------------------------------- #
+def test_sync_rejects_required_intent_empty_planned_steps(tmp_path: Path) -> None:
+    """An empty ``planned_steps`` on a required-intent wave trips EAWF022.
+
+    The wave is required-intent (its ``source_brief_ids`` names an on-disk
+    brief) and the brief's single deliverable IS covered by the ``_GOOD_YAML``
+    criterion (they share the significant token ``rows``), so the source-brief
+    leg is clean. The empty ``planned_steps`` list is no longer a vacuous no-op
+    pass: the planned-step arm surfaces the empty step list as its own finding,
+    so the sync is rejected and no state write lands.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    brief = repo_root / ".ea" / "local" / "research" / "brief.md"
+    brief.parent.mkdir(parents=True, exist_ok=True)
+    brief.write_text("Materialise the parsed rows onto the wave row.\n", encoding="utf-8")
+    state_path = repo_root / ".ea" / "state.json"
+    _write_state(
+        state_path,
+        _state_payload(
+            status="pending",
+            planned_steps=[],
+            source_brief_ids=[".ea/local/research/brief.md"],
+        ),
+    )
+    _write_spec_file(repo_root, _wrap_body(_GOOD_YAML))
+    ctx = _build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        with pytest.raises(DaemonValidationError) as exc:
+            await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
+        message = str(exc.value)
+        assert "EAWF022" in message
+        assert "empty planned_steps" in message
 
     _run(body)
     wave = _load_wave(state_path)
