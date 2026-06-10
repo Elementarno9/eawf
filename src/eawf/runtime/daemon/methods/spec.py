@@ -158,7 +158,16 @@ class PromoteParams(BaseModel):
 
 
 class ArchiveParams(BaseModel):
-    """Params for :func:`archive`."""
+    """Params for :func:`archive`.
+
+    Attributes:
+        force: When ``True``, bypass the IMPLEMENTED-status gate so a spec
+            in an earlier lifecycle status (e.g. DRAFT) can be archived.
+            The blob-SHA recording and the cache-entry lookup are
+            unaffected — a forced archive still records the body's blob SHA
+            for ``spec show --from-git`` recovery and still raises when the
+            scope was never initialised.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -167,6 +176,7 @@ class ArchiveParams(BaseModel):
     repo_root: str | None = None
     idempotency_key: str | None = None
     cache_dir: str | None = None
+    force: bool = False
 
 
 class SyncParams(BaseModel):
@@ -838,12 +848,15 @@ async def promote(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Atomically ``git rm`` the spec file + write the archived cache entry.
 
-    Requires the source spec to be in IMPLEMENTED state. The ``git
-    rm`` step uses ``subprocess.run`` with a fixed argv — the daemon
-    refuses to run when the path is outside the repo root. After
-    ``git rm`` succeeds the cache entry is written with the blob SHA
-    of the body that was just removed so :func:`eawf spec show
-    <urn> --from-git` can locate the body via ``git log -- <path>``.
+    Requires the source spec to be in IMPLEMENTED state unless
+    ``force=True`` relaxes the gate — a forced archive may run from an
+    earlier lifecycle status (e.g. DRAFT). The ``git rm`` step uses
+    ``subprocess.run`` with a fixed argv — the daemon refuses to run when
+    the path is outside the repo root. After ``git rm`` succeeds the cache
+    entry is written with the blob SHA of the body that was just removed so
+    :func:`eawf spec show <urn> --from-git` can locate the body via ``git
+    log -- <path>``. ``force`` only bypasses the status gate; the
+    cache-entry lookup still raises when the scope was never initialised.
     """
     try:
         args = ArchiveParams.model_validate(params)
@@ -878,10 +891,10 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 f"validation_failed: scope_id={args.scope_id!r} not initialised; "
                 "run spec.init first"
             )
-        if existing.status != "IMPLEMENTED":
+        if not args.force and existing.status != "IMPLEMENTED":
             raise ValueError(
                 f"validation_failed: cannot archive from status={existing.status!r}; "
-                "expected 'IMPLEMENTED'"
+                "expected 'IMPLEMENTED' (pass force=True to override)"
             )
         if not file_path.is_file():
             raise ValueError(
