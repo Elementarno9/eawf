@@ -17316,7 +17316,8 @@
         "P30-I05-W09",
         "P30-I05-W11",
         "P30-I05-W12",
-        "P30-I05-W13"
+        "P30-I05-W13",
+        "P30-I05-W14"
       ]
     },
     "P30-I06": {
@@ -18497,7 +18498,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T14:46:24.744951Z",
+  "updated_at": "2026-06-10T15:39:34.133414Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74290,6 +74291,71 @@
         }
       ],
       "title": "Re-pin sibling daemon gate fixtures to EUCAP runtime close path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I05-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "_capture_runtime_baseline was a return-None stub, so no production path ever stamped Wave.runtime_baseline and the EUCAP delta could never fire on a live close. Give it the claim session_id, read the session-keyed statusline runtime-counter sidecar, and stamp a real baseline; return None only on a genuine sidecar miss.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "tests/unit/test_wave_close_actuals.py"
+      ],
+      "gates": [],
+      "id": "P30-I05-W14",
+      "intent": {
+        "desired_outcome": "Claim reads the session-keyed runtime sidecar and stamps a real baseline; the close-time delta can fire on a live wave; tests exercise the real read, not a monkeypatch.",
+        "evidence_refs": [
+          "src/eawf/workflow/lifecycle/wave.py:46",
+          "src/eawf/runtime/runtime_counter_sidecar.py:50"
+        ],
+        "planned_steps": [
+          "Add session_id param to _capture_runtime_baseline and read the sidecar via cache_path_for + sidecar_path_for_statusline_cache",
+          "Convert RuntimeCounters to RuntimeBaseline stamped at now",
+          "Replace the monkeypatch-only tests with a real-sidecar read test plus a missing-sidecar None test"
+        ],
+        "priority_rationale": "Audit P30-I05 flagged W01(a) as the one idle contract in the iter; P30's thesis is never ship an idle contract, so this is remediated before the iter closes.",
+        "problem": "_capture_runtime_baseline was a return-None stub; no production path stamped Wave.runtime_baseline, so EUCAP capture was idle and every live close forced the --no-runtime waiver.",
+        "risks": [
+          "eawf wave-claim session id may not match the CC statusline session id",
+          "so a real baseline is captured only when the operator threads the matching session; the None degrade path keeps that safe."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I05",
+      "opened_at": "2026-06-10T15:39:34.133209Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_capture_runtime_baseline(session_id) reads the statusline runtime-counter sidecar and stamps Wave.runtime_baseline from real counters with no monkeypatch; a missing sidecar returns None; the idempotent re-claim still captures exactly once",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_capture_runtime_baseline(session_id) reads the statusline runtime-counter sidecar and stamps Wave.runtime_baseline from real counters with no monkeypatch; a missing sidecar returns None; the idempotent re-claim still captures exactly once",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire claim-time baseline capture to read the real runtime sidecar",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
