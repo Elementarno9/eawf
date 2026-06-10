@@ -18344,7 +18344,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T10:29:47.245107Z",
+  "updated_at": "2026-06-10T10:31:18.996547Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73549,7 +73549,10 @@
       "effort_bucket": "L",
       "file_scopes": [
         "src/eawf/runtime/daemon/methods/state.py",
-        ".pre-commit-config.yaml"
+        ".pre-commit-config.yaml",
+        "tests/daemon/test_state_methods.py",
+        "tests/unit/test_idle_contract_gate.py",
+        "tools/idle_contract_gate.py"
       ],
       "gates": [],
       "id": "P30-I05-W08",
