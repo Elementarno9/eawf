@@ -458,6 +458,10 @@ class RuntimeBaseline(_StrictModel):
     captured_at: UtcDatetime
 
 
+class RuntimeLatest(RuntimeBaseline):
+    """Latest cumulative runtime counters captured while a wave is active."""
+
+
 class Wave(_DescribedEntity):
     """Atomic execution unit under an iter.
 
@@ -497,6 +501,7 @@ class Wave(_DescribedEntity):
     opened_at: UtcDatetime
     claimed_at: UtcDatetime | None = None
     runtime_baseline: RuntimeBaseline | None = None
+    runtime_latest: RuntimeLatest | None = None
     closed_at: UtcDatetime | None = None
     sessions: dict[int, SessionAttempt] = Field(default_factory=dict)
     runtime_preference: list[str] | None = None
@@ -975,6 +980,8 @@ class State(_StrictModel):
     wave for an explicit on-disk row. The ``1.9`` edge adds the optional
     :attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills
     ``runtime_baseline: None`` on every wave for an explicit on-disk row.
+    ``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults
+    to ``None`` until the runtime.capture daemon RPC records fresh counters.
     """
 
     schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"]

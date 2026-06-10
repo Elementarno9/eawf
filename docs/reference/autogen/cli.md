@@ -75,6 +75,7 @@ Backfill entity titles/descriptions across all five kinds.
 | Verb | Summary |
 |---|---|
 | `titles` | Sweep + normalize entity titles across all five kinds. |
+| `wave-intents` | Backfill missing ``Wave.intent`` on explicit closed synced waves. |
 
 ### `eawf backlog`
 

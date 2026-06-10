@@ -72,7 +72,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import State, Wave
+from eawf.kernel.state.models import RuntimeLatest, State, Wave
 from eawf.kernel.state.mutations import (
     DecisionMutationError,
     MemoryMutationError,
@@ -106,6 +106,7 @@ from eawf.runtime.daemon.methods import (
     register,
 )
 from eawf.runtime.daemon.wal import WalRecord
+from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     activate_phase,
@@ -240,6 +241,33 @@ class DigestResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     version: str
+
+
+class RuntimeCaptureParams(RuntimeCounters):
+    """Params for :func:`runtime_capture`.
+
+    The runtime-owned counters are cumulative, so this RPC records the latest
+    observed snapshot onto every active wave. ``session_id`` is optional
+    correlation metadata; the active wave set remains canonical state.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_root: str | None = None
+    session_id: str | None = None
+    captured_at: datetime | None = None
+
+
+class RuntimeCaptureResult(BaseModel):
+    """Result of :func:`runtime_capture`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    active_wave_ids: list[str]
+    active_count: int
+    before_version: str
+    after_version: str
+    event: dict[str, Any]
 
 
 class WaveLandParams(BaseModel):
@@ -2033,6 +2061,67 @@ def _build_worktree_event_envelope(
     )
 
 
+def _build_runtime_capture_event_envelope(
+    *,
+    active_wave_ids: list[str],
+    params: dict[str, Any],
+    before_version: str,
+    after_version: str,
+) -> Envelope:
+    """Build the event row emitted after a runtime.capture write."""
+    now = datetime.now(UTC)
+    scope_id = ",".join(active_wave_ids)
+    args_raw = orjson.dumps(params, option=orjson.OPT_SORT_KEYS)
+    extras: dict[str, str | int | float | bool] = {
+        "active_count": len(active_wave_ids),
+        "active_wave_ids": scope_id,
+    }
+    session_id = params.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        extras["session_id"] = session_id
+    payload = EventPayload(
+        timestamp=now,
+        event_type="runtime.capture",
+        event_kind=None,
+        actor="daemon",
+        command="runtime.capture",
+        args_hash=hashlib.sha256(args_raw).hexdigest()[:16],
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="ok",
+        message=f"runtime.capture active_count={len(active_wave_ids)}",
+        extras=extras,
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=scope_id,
+        created_at=now,
+        updated_at=None,
+        summary=f"runtime.capture active_count={len(active_wave_ids)}",
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
+    """Convert capture params into the state-model runtime snapshot."""
+    captured_at = params.captured_at or datetime.now(UTC)
+    cost_usd = float(params.cost_usd) if params.cost_usd is not None else None
+    return RuntimeLatest(
+        api_duration_ms=params.api_duration_ms,
+        total_duration_ms=params.total_duration_ms,
+        cost_usd=cost_usd,
+        input_tokens=params.input_tokens,
+        output_tokens=params.output_tokens,
+        cache_creation_input_tokens=params.cache_creation_input_tokens,
+        cache_read_input_tokens=params.cache_read_input_tokens,
+        captured_at=captured_at,
+    )
+
+
 def _commit_worktree_state(
     *,
     ctx: MethodContext,
@@ -2186,6 +2275,110 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             now=datetime.now(UTC),
         )
     return DigestResult(version=version).model_dump(mode="json")
+
+
+@register("runtime.capture")
+async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Persist latest runtime counters onto every active wave.
+
+    Args:
+        ctx: Server context; state, event, and WAL paths are resolved the same
+            way as ``state.mutate``.
+        params: Strict :class:`RuntimeCaptureParams` payload.
+
+    Returns:
+        Dict matching :class:`RuntimeCaptureResult`.
+
+    Raises:
+        DaemonValidationError: When params fail validation, no active waves are
+            registered, an active wave id is missing, or post-write state
+            validation rejects the candidate payload.
+    """
+    try:
+        args = RuntimeCaptureParams.model_validate(params)
+    except ValidationError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+
+    state_path, event_path, wal_path = _resolve_mutator_paths(
+        repo_root=args.repo_root,
+        ctx=ctx,
+    )
+
+    from eawf.runtime.lock import portalock
+
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(state_path, timeout=5.0):
+            state, payload = _read_state(state_path)
+            before_version = _state_version(payload)
+            active_wave_ids = list(state.current.active_wave_ids)
+            if not active_wave_ids:
+                raise DaemonValidationError(
+                    "validation_failed: runtime.capture requires active waves"
+                )
+
+            latest = _runtime_latest_from_params(args)
+            for wave_id in active_wave_ids:
+                wave = state.waves.get(wave_id)
+                if wave is None:
+                    raise DaemonValidationError(
+                        f"validation_failed: active wave missing: {wave_id!r}"
+                    )
+                wave.runtime_latest = latest
+            if len(active_wave_ids) > 1:
+                logger.warning(f"runtime_capture active_count={len(active_wave_ids)}")
+
+            state.updated_at = datetime.now(UTC)
+            new_payload = state.model_dump(mode="json")
+            post = validate_state(new_payload, strict_optional=False)
+            if post.state is None:
+                raise DaemonValidationError(
+                    "validation_failed: post-mutation schema invalid: "
+                    + "; ".join(post.schema_errors[:3])
+                )
+            if post.violations:
+                violation_codes = ",".join(v.code for v in post.violations)
+                raise DaemonValidationError(
+                    f"validation_failed: post-mutation invariants violated: {violation_codes}"
+                )
+            after_version = _state_version(new_payload)
+            event_params = args.model_dump(mode="json", exclude={"repo_root"})
+            envelope = _build_runtime_capture_event_envelope(
+                active_wave_ids=active_wave_ids,
+                params=event_params,
+                before_version=before_version,
+                after_version=after_version,
+            )
+            record_id = uuid.uuid4().hex
+            record = WalRecord(
+                record_id=record_id,
+                envelope=envelope,
+                idempotency_key=None,
+                written_at=datetime.now(UTC),
+                before_state_version=before_version,
+                after_state_version=after_version,
+            )
+            wal.write_pending(wal_path, record)
+            atomic_write_json_locked(state_path, new_payload)
+            wal.mark_applied(wal_path, record_id)
+            append_envelope(event_path, envelope)
+            wal.mark_fsynced(wal_path, record_id)
+            if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+                ctx.bus.publish(envelope)
+            ctx.last_event_id = envelope.id
+            logger.info(
+                f"runtime_capture active_count={len(active_wave_ids)} "
+                f"before={before_version} after={after_version} envelope_id={envelope.id!r}"
+            )
+            return RuntimeCaptureResult(
+                active_wave_ids=active_wave_ids,
+                active_count=len(active_wave_ids),
+                before_version=before_version,
+                after_version=after_version,
+                event=envelope.model_dump(mode="json"),
+            ).model_dump(mode="json")
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
 
 
 @register("state.mutate")
@@ -2560,6 +2753,7 @@ __all__ = [
     "VALIDATION_FAILED",
     "_APPLY_REGISTRY",
     "event_store_path_for",
+    "runtime_capture",
     "wave_autoland_rpc",
     "wave_land_batch_rpc",
     "wave_land_rpc",
