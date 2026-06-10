@@ -205,7 +205,9 @@ def test_tokens_consumed_increments_live(tmp_path: Path) -> None:
     tokens = _tokens()
     accrued = accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=tokens)
 
-    assert accrued is True
+    # The accrual returns the token-cap interlock outcome (truthy), not a bool.
+    assert accrued is not None
+    assert accrued.terminated is False
     # tokens_consumed == sum of every billed token field (the burn-gauge unit).
     assert _persisted_consumed(state_path) == tokens.total
     assert tokens.total == 1200 + 340 + 8000 + 64000
@@ -307,7 +309,8 @@ def test_accrue_tokens_consumed_zero_delta_leaves_counter(tmp_path: Path) -> Non
 
     accrued = accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=zero)
 
-    assert accrued is True
+    assert accrued is not None
+    assert accrued.terminated is False
     assert _persisted_consumed(state_path) == 42
     assert len(sub.queue) == 1
 
@@ -316,9 +319,9 @@ def test_accrue_tokens_consumed_zero_delta_leaves_counter(tmp_path: Path) -> Non
 
 
 def test_accrue_tokens_consumed_skips_without_state_path() -> None:
-    """The accrual is a no-op (returns ``False``) when no state is wired."""
+    """The accrual is a no-op (returns ``None``) when no state is wired."""
     ctx = _ctx(None, bus=EventBus())
-    assert accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=_tokens()) is False
+    assert accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=_tokens()) is None
 
 
 def test_accrue_tokens_consumed_busless_context_still_persists(tmp_path: Path) -> None:
@@ -328,7 +331,8 @@ def test_accrue_tokens_consumed_busless_context_still_persists(tmp_path: Path) -
 
     accrued = accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=_tokens())
 
-    assert accrued is True
+    assert accrued is not None
+    assert accrued.terminated is False
     assert _persisted_consumed(state_path) == _tokens().total
 
 

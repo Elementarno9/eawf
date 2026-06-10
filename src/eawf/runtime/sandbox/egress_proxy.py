@@ -46,11 +46,112 @@ import logging
 import os
 import sys
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.runtime.sandbox.egress import EgressDecision, classify_egress
 
 logger = logging.getLogger(__name__)
+
+#: The closed set of sandbox-enforcement event kinds. One per enforcement
+#: boundary the floor guards: an ``argv-deny`` (the argv-policy validator
+#: rejected a head), an ``egress-block`` (the egress proxy refused a host),
+#: an ``env-scrub`` (a cred-bearing env var was dropped from the child
+#: env), and a ``cwd-guard`` (a spawn cwd resolved outside the repo root).
+EnforcementKind = Literal["argv-deny", "egress-block", "env-scrub", "cwd-guard"]
+
+#: The closed severity ladder a denial timeline is sorted / filtered on.
+#: ``block`` is a hard refusal (the action did not happen); ``warn`` is a
+#: degraded-but-continued path (e.g. an unjailed fallback on a host with no
+#: wrapper); ``info`` records a benign scrub that dropped nothing sensitive.
+EnforcementSeverity = Literal["info", "warn", "block"]
+
+
+class SandboxEnforcementEvent(BaseModel):
+    """One sandbox-enforcement decision, persisted to the event feed.
+
+    A TUI denial-timeline surface reads these rows to show, per session,
+    what the floor refused and why. The shape is intentionally flat + the
+    five named fields the wave's C2 success criterion pins: ``ts``,
+    ``session``, ``kind``, ``target``, ``severity``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ts: datetime
+    session: str
+    kind: EnforcementKind
+    target: str = Field(min_length=0)
+    severity: EnforcementSeverity = "block"
+
+
+#: A sink the sandbox boundary calls with one enforcement event. Production
+#: passes a recorder that persists through the daemon canonical event
+#: writer; tests pass a fake that records into a list. ``None`` (the
+#: default everywhere) means the boundary only logs -- a sink-less context
+#: (a unit test of the pure classifier) does not persist.
+EnforcementSink = Callable[[SandboxEnforcementEvent], None]
+
+
+def make_enforcement_event(
+    *,
+    session: str,
+    kind: EnforcementKind,
+    target: str,
+    severity: EnforcementSeverity = "block",
+) -> SandboxEnforcementEvent:
+    """Build a :class:`SandboxEnforcementEvent` stamped at the current UTC.
+
+    The single construction helper so every boundary stamps ``ts`` the same
+    way (UTC, fail-fast through the model's validators) rather than each
+    call site minting a naive datetime.
+
+    Args:
+        session: The spawning session id the enforcement applies to.
+        kind: Which enforcement boundary fired (closed
+            :data:`EnforcementKind`).
+        target: The thing that was refused / scrubbed -- a host:port for an
+            egress block, an argv head for an argv-deny, a variable name for
+            an env-scrub, a path for a cwd-guard.
+        severity: The :data:`EnforcementSeverity` rung (defaults to the
+            hard ``block``).
+
+    Returns:
+        The validated event row, ready to hand to an :data:`EnforcementSink`.
+    """
+    return SandboxEnforcementEvent(
+        ts=datetime.now(UTC),
+        session=session,
+        kind=kind,
+        target=target,
+        severity=severity,
+    )
+
+
+def emit_enforcement(
+    sink: EnforcementSink | None,
+    event: SandboxEnforcementEvent,
+) -> None:
+    """Hand *event* to *sink* when one is wired, always logging the decision.
+
+    The boundary always logs the structured decision line (so triage works
+    without a feed), then persists through *sink* only when a sink is
+    attached. A sink-less context (a pure-classifier unit test) is a no-op
+    on the persistence side -- the log line is still emitted.
+
+    Args:
+        sink: The :data:`EnforcementSink` to persist through, or ``None``.
+        event: The enforcement decision to record.
+    """
+    logger.warning(
+        f"emit_enforcement session={event.session!r} kind={event.kind} "
+        f"target={event.target!r} severity={event.severity}"
+    )
+    if sink is not None:
+        sink(event)
 
 #: The request verb the child sends. Anything else is a malformed request
 #: and is refused without opening outbound.
@@ -173,13 +274,17 @@ async def handle_egress_connection(
     gate_phase: bool = False,
     extra_allow: frozenset[str] = frozenset(),
     connector: OutboundConnector | None = None,
+    session: str = "",
+    sink: EnforcementSink | None = None,
 ) -> EgressDecision:
     """Serve one child connection: read the request, enforce, tunnel/deny.
 
     Reads the ``CONNECT host:port`` line, runs the policy, and either
     opens an outbound connection and tunnels, or writes ``DENY <reason>``
     and closes. A denied (or malformed) request NEVER calls *connector*,
-    so a refused host cannot reach the network.
+    so a refused host cannot reach the network. Each refusal is persisted
+    as an ``egress-block`` enforcement event through *sink* (when wired) so
+    a denial-timeline surface can read the blocked host.
 
     Args:
         reader: The client (child) read stream.
@@ -191,6 +296,10 @@ async def handle_egress_connection(
         connector: The outbound-connect coroutine. Defaults to
             :func:`asyncio.open_connection`; tests inject a fake so no
             real network is touched.
+        session: The spawning session id stamped on an ``egress-block``
+            enforcement event when a host is refused.
+        sink: The :data:`EnforcementSink` an ``egress-block`` event is
+            persisted through; ``None`` only logs.
 
     Returns:
         The :class:`EgressDecision` the request produced -- returned so the
@@ -208,6 +317,14 @@ async def handle_egress_connection(
         await writer.drain()
         writer.close()
         logger.warning(f"handle_egress_connection lane={lane!r} reason={decision.reason}")
+        emit_enforcement(
+            sink,
+            make_enforcement_event(
+                session=session,
+                kind="egress-block",
+                target=f"malformed:{decision.reason}",
+            ),
+        )
         return decision
 
     host, port = parsed
@@ -222,6 +339,14 @@ async def handle_egress_connection(
         writer.write(f"DENY {decision.reason}\n".encode("ascii"))
         await writer.drain()
         writer.close()
+        emit_enforcement(
+            sink,
+            make_enforcement_event(
+                session=session,
+                kind="egress-block",
+                target=f"{host}:{port}",
+            ),
+        )
         return decision
 
     upstream_reader, upstream_writer = await open_conn(decision.host, port)
@@ -241,6 +366,8 @@ async def start_egress_proxy(
     gate_phase: bool = False,
     extra_allow: frozenset[str] = frozenset(),
     connector: OutboundConnector | None = None,
+    session: str = "",
+    sink: EnforcementSink | None = None,
 ) -> asyncio.Server:
     """Bind the UDS egress proxy at *socket_path* and start serving.
 
@@ -295,6 +422,8 @@ async def start_egress_proxy(
             gate_phase=gate_phase,
             extra_allow=extra_allow,
             connector=connector,
+            session=session,
+            sink=sink,
         )
 
     server = await asyncio.start_unix_server(_on_connect, path=os.fspath(socket_path))
@@ -303,11 +432,42 @@ async def start_egress_proxy(
     return server
 
 
+def egress_socket_env(socket_path: Path) -> dict[str, str]:
+    """Return the env keys a jailed child uses to reach the egress proxy.
+
+    The child's outbound path is the UDS at *socket_path*; the floor hands
+    it the socket location through two env keys the child's network shim
+    reads (``EAWF_EGRESS_SOCKET`` + the standard ``ALL_PROXY`` so a
+    proxy-aware client picks it up). The keys carry the ``EAWF_`` /
+    ``*_PROXY`` shape the env-scrub allowlist would otherwise drop, so the
+    spawn merges them onto the scrubbed child env explicitly after the
+    scrub rather than relying on the allowlist to pass them.
+
+    Args:
+        socket_path: The bound UDS the proxy listens on.
+
+    Returns:
+        The env-key overlay routing the child's outbound through the proxy.
+    """
+    socket_uri = f"unix://{os.fspath(socket_path)}"
+    return {
+        "EAWF_EGRESS_SOCKET": os.fspath(socket_path),
+        "ALL_PROXY": socket_uri,
+    }
+
+
 __all__ = [
     "EgressUnavailableOnWindowsError",
+    "EnforcementKind",
+    "EnforcementSeverity",
+    "EnforcementSink",
     "OutboundConnector",
+    "SandboxEnforcementEvent",
     "SandboxError",
     "egress_proxy_supported",
+    "egress_socket_env",
+    "emit_enforcement",
     "handle_egress_connection",
+    "make_enforcement_event",
     "start_egress_proxy",
 ]

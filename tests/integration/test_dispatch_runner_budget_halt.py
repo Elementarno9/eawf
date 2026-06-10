@@ -198,9 +198,11 @@ def test_accrue_invokes_interlock_with_post_increment_consumption(
     monkeypatch.setattr(dispatch_runner, "enforce_token_cap", _fake_enforce)
 
     # A 2000-token delta crosses the 1.5x cap of a 1000 budget (cap == 1500).
-    persisted = accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=_tokens(2000))
+    outcome = accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=_tokens(2000))
 
-    assert persisted is True
+    # The accrual now returns the interlock outcome (truthy), not a bool.
+    assert outcome is not None
+    assert outcome.terminated is False
     # The interlock saw the POST-increment cumulative consumption (0 + 2000).
     assert captured["consumed"] == 2000
     assert captured["base_budget"] == 1000
@@ -248,7 +250,7 @@ def test_accrue_invokes_interlock_even_without_budget(
 def test_accrue_stateless_context_skips_interlock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A stateless context returns False and never reaches the interlock."""
+    """A stateless context returns None and never reaches the interlock."""
     called = False
 
     def _fake_enforce(**_kwargs: Any) -> InterlockOutcome:
@@ -268,5 +270,5 @@ def test_accrue_stateless_context_skips_interlock(
         state_path=None,
     )
 
-    assert accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=_tokens(2000)) is False
+    assert accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=_tokens(2000)) is None
     assert called is False

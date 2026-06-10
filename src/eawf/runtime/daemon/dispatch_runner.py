@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -79,10 +80,11 @@ from eawf.kernel.store.kinds.events import (
 )
 from eawf.kernel.store.kinds.events.base import RuntimeTriple, TracedEventPayload
 from eawf.observability.telemetry.models import RuntimeErrorClass
-from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER
+from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER, EnforceMode
 from eawf.runtime.budget.service import record_consumption
-from eawf.runtime.daemon.budget_interlock import enforce_token_cap
+from eawf.runtime.daemon.budget_interlock import InterlockOutcome, enforce_token_cap
 from eawf.runtime.lock import portalock
+from eawf.runtime.sandbox.egress_proxy import SandboxEnforcementEvent
 from eawf.workflow.agent_report.store import append_agent_report
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle.wave import start_wave
@@ -154,6 +156,11 @@ class DispatchResult:
             The report lands in the role-specific ``executor_report``
             store, not the event store, so it is intentionally kept off
             :attr:`event_ids`.
+        terminated: ``True`` when the post-accrual token-cap interlock
+            HALTed under ``hard`` enforce AND an addressable spawn pgid was
+            threaded in, so the kill ladder reaped the wave's process group.
+            ``False`` on every soft / under-cap dispatch and on a HALT with
+            no addressable pgid.
     """
 
     runtime: RuntimeTriple
@@ -161,6 +168,7 @@ class DispatchResult:
     switched: bool
     event_ids: tuple[str, ...]
     report_id: str | None = None
+    terminated: bool = False
 
 
 def _event_path(ctx: MethodContext) -> Path:
@@ -233,6 +241,103 @@ def _emit(
         f"emit event_type={body['event_type']!r} scope={scope_id!r} envelope_id={envelope.id!r}"
     )
     return envelope.id
+
+
+def persist_enforcement_event(
+    ctx: MethodContext,
+    event: SandboxEnforcementEvent,
+) -> str:
+    """Persist one sandbox-enforcement event to the event feed.
+
+    The sandbox boundary (egress proxy, env-scrub, argv-policy, cwd-guard)
+    hands its :class:`~eawf.runtime.sandbox.egress_proxy.SandboxEnforcementEvent`
+    here; the runner folds it into the generic
+    :class:`~eawf.kernel.store.envelope.Envelope` as a flat
+    :class:`~eawf.kernel.store.kinds.event.EventPayload` and appends it
+    through the daemon canonical event writer
+    (:func:`eawf.kernel.store.append.append_envelope` -- the same portalock +
+    fsync path every other dispatch event takes). The five named
+    enforcement fields (``ts``, ``session``, ``kind``, ``target``,
+    ``severity``) ride the payload's ``extras`` map so a TUI denial-timeline
+    surface can read the row off the event feed without a parallel store.
+
+    Args:
+        ctx: Daemon method context -- supplies ``event_path`` + ``bus``.
+        event: The enforcement decision to persist.
+
+    Returns:
+        The id of the appended envelope.
+
+    Raises:
+        RuntimeError: When ``ctx.event_path`` is not configured.
+    """
+    event_path = _event_path(ctx)
+    now = datetime.now(UTC)
+    summary = (
+        f"sandbox_enforcement kind={event.kind} target={event.target!r} "
+        f"severity={event.severity}"
+    )
+    payload = EventPayload(
+        timestamp=event.ts,
+        event_type=f"sandbox.enforcement.{event.kind}",
+        actor="daemon",
+        command="dispatch_runner.persist_enforcement_event",
+        args_hash="",
+        status=event.severity,
+        message=summary,
+        extras={
+            "ts": event.ts.isoformat(),
+            "session": event.session,
+            "kind": event.kind,
+            "target": event.target,
+            "severity": event.severity,
+        },
+    ).model_dump(mode="json")
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=event.session or None,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    append_envelope(event_path, envelope)
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(envelope)
+    ctx.last_event_id = envelope.id
+    logger.info(
+        f"persist_enforcement_event kind={event.kind} session={event.session!r} "
+        f"target={event.target!r} severity={event.severity} envelope_id={envelope.id!r}"
+    )
+    return envelope.id
+
+
+def enforcement_sink(ctx: MethodContext) -> Callable[[SandboxEnforcementEvent], None]:
+    """Return an :data:`~eawf.runtime.sandbox.egress_proxy.EnforcementSink` bound to *ctx*.
+
+    The sandbox boundary takes a sink that accepts one
+    :class:`~eawf.runtime.sandbox.egress_proxy.SandboxEnforcementEvent` and
+    returns ``None``; this binds that sink to the daemon context so a
+    boundary fire persists through :func:`persist_enforcement_event` (the
+    canonical event-feed writer). Wiring the boundary with this sink is how
+    a spawned session's argv-deny / egress-block / env-scrub / cwd-guard
+    decisions reach the TUI denial timeline.
+
+    Args:
+        ctx: Daemon method context the persisted events are written through.
+
+    Returns:
+        The closure the sandbox boundary calls per enforcement decision.
+    """
+
+    def _sink(event: SandboxEnforcementEvent) -> None:
+        persist_enforcement_event(ctx, event)
+
+    return _sink
 
 
 def emit_runtime_switched(
@@ -404,7 +509,9 @@ def accrue_tokens_consumed(
     *,
     wave_id: str,
     tokens: DispatchTokens,
-) -> bool:
+    pgid: int | None = None,
+    enforce: EnforceMode = DEFAULT_ENFORCE,
+) -> InterlockOutcome | None:
     """Fold a dispatch's token tally into ``Wave.tokens_consumed``, live.
 
     Called once per ``dispatch_cost`` event so the live burn gauge on the
@@ -425,16 +532,19 @@ def accrue_tokens_consumed(
     (:func:`eawf.runtime.daemon.budget_interlock.enforce_token_cap`) classifies
     the post-increment burn against the wave's budget and, under ``hard``
     enforce at the cap, reaps the wave's spawned process group via the kill
-    ladder. The enforce mode + multiplier default to the documented config
-    defaults (``soft`` / ``1.5``); ``soft`` never reaches HALT so the
-    interlock is a no-op on the hot path under the default mode. The pgid is
-    ``None`` today (the mutating dispatch spawn is dark -- no live pid
-    registry yet, C6); a hard-cap breach is computed and logged but not
-    signalled until I04-W03 threads the real pgid through.
+    ladder. The *pgid* is the captured process-group id of the live spawn
+    (the spawn's child pid, since the jail wrapper is the group leader): the
+    live-dispatch caller threads it in so a hard-cap breach can
+    ``os.killpg`` the runaway group (``terminated=True`` on the returned
+    :class:`~eawf.runtime.daemon.budget_interlock.InterlockOutcome`). A
+    ``None`` pgid (a stateless / plan-only caller) still computes + logs the
+    decision but sends no signal. *enforce* defaults to the documented
+    config default (``soft``, which never reaches HALT); the live caller
+    threads the config-resolved mode so ``hard`` can fire.
 
-    The accrual is opt-in and tolerant: it is skipped (returning
-    ``False``) when ``ctx.state_path`` is unset (stateless unit-test
-    contexts). The total delta is the sum of every billed token field
+    The accrual is opt-in and tolerant: it is skipped (returning ``None``)
+    when ``ctx.state_path`` is unset (stateless unit-test contexts). The
+    total delta is the sum of every billed token field
     (:attr:`DispatchTokens.total`); a zero delta still rewrites the state
     (bumping the revision) but leaves the counter unchanged.
 
@@ -442,10 +552,17 @@ def accrue_tokens_consumed(
         ctx: Daemon method context — supplies ``state_path`` + ``bus``.
         wave_id: ``W<NN>`` wave the dispatch served.
         tokens: Per-invocation token tally from the dispatch.
+        pgid: Process-group id of the wave's live spawn, threaded so a
+            hard-cap breach can reap the group. ``None`` (the default)
+            computes + logs the decision but signals nothing.
+        enforce: Enforce mode the interlock runs under -- ``soft`` (default,
+            never HALTs) or ``hard`` (HALTs + reaps at the cap).
 
     Returns:
-        ``True`` when the accrual was persisted; ``False`` when it was
-        skipped (no ``state_path``).
+        The :class:`~eawf.runtime.daemon.budget_interlock.InterlockOutcome`
+        the token-cap interlock produced (carrying ``terminated`` +
+        ``decision``), or ``None`` when the accrual was skipped (no
+        ``state_path``).
 
     Raises:
         KeyError: When *wave_id* is absent from ``state.json`` — the
@@ -453,7 +570,7 @@ def accrue_tokens_consumed(
             is a fail-fast inconsistency the caller must surface.
     """
     if ctx.state_path is None:
-        return False
+        return None
     delta = tokens.total
     state_path = Path(ctx.state_path)
     with portalock.acquire(state_path, timeout=5.0):
@@ -476,22 +593,22 @@ def accrue_tokens_consumed(
     # Safety-floor token-cap interlock: classify the post-increment burn
     # against the wave's budget and, on a hard-enforce HALT, reap the wave's
     # spawned process group. Run outside the state portalock so the kill
-    # ladder never signals while holding the state lock. The enforce mode +
-    # multiplier are the documented real defaults (soft never reaches HALT,
-    # so this stays a no-op on the hot path under the default mode);
-    # config-resolved enforce mode lands with the live-dispatch pgid feed
-    # (I04-W03). pgid is None today because the mutating dispatch spawn is
-    # dark (no live pid registry yet -- C6): a hard-cap breach is computed
-    # and loudly logged but not signalled until I04-W03 threads the pgid.
-    enforce_token_cap(
+    # ladder never signals while holding the state lock. The pgid is the
+    # captured process-group id of the live spawn (None on stateless /
+    # plan-only callers, which compute + log the decision but signal
+    # nothing); enforce is the config-resolved mode the live caller threads.
+    outcome = enforce_token_cap(
         consumed=tokens_consumed,
         base_budget=token_budget,
-        enforce=DEFAULT_ENFORCE,
+        enforce=enforce,
         multiplier=DEFAULT_MULTIPLIER,
-        pgid=None,
+        pgid=pgid,
     )
-    logger.info(f"accrue_tokens_consumed wave={wave_id} delta={delta} consumed={tokens_consumed}")
-    return True
+    logger.info(
+        f"accrue_tokens_consumed wave={wave_id} delta={delta} consumed={tokens_consumed} "
+        f"pgid={pgid} terminated={outcome.terminated}"
+    )
+    return outcome
 
 
 def _completion_verdict(*, switched: bool) -> AgentReportVerdict:
@@ -844,6 +961,8 @@ def run_dispatch(
     verdict: AgentReportVerdict | None = None,
     confidence: Confidence = Confidence.HIGH,
     report_body: AgentReportBody | None = None,
+    pgid: int | None = None,
+    enforce: EnforceMode = DEFAULT_ENFORCE,
 ) -> DispatchResult:
     """Drive one wave dispatch attempt, emitting the C09 dispatch events.
 
@@ -966,8 +1085,13 @@ def run_dispatch(
     # burn gauge advances during execution. Routes through the daemon
     # canonical state writer (portalock + atomic write) and triggers a
     # STATE_REVISION on both feeds (mtime-poll via the state.json write +
-    # daemon-push via the bus). Skipped on a stateless context.
-    accrue_tokens_consumed(ctx, wave_id=wave_id, tokens=tokens)
+    # daemon-push via the bus). Skipped on a stateless context. The captured
+    # spawn pgid + config-resolved enforce mode thread through so a hard-cap
+    # breach can reap the live wave's process group.
+    interlock = accrue_tokens_consumed(
+        ctx, wave_id=wave_id, tokens=tokens, pgid=pgid, enforce=enforce
+    )
+    terminated = interlock is not None and interlock.terminated
 
     report_id: str | None = None
     if session_id is not None and ctx.state_path is not None:
@@ -994,7 +1118,8 @@ def run_dispatch(
 
     logger.info(
         f"run_dispatch wave={wave_id} serving_runtime={serving_runtime} "
-        f"switched={switched} events={len(event_ids)} report_id={report_id!r}"
+        f"switched={switched} events={len(event_ids)} report_id={report_id!r} "
+        f"terminated={terminated}"
     )
     return DispatchResult(
         runtime=serving_runtime,
@@ -1002,4 +1127,5 @@ def run_dispatch(
         switched=switched,
         event_ids=tuple(event_ids),
         report_id=report_id,
+        terminated=terminated,
     )
