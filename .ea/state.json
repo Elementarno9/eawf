@@ -4643,6 +4643,18 @@
       "scope_id": "P30-I04-W09",
       "status": "done",
       "updated_at": "2026-06-10T04:01:58.177279Z"
+    },
+    "P30-I04-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W10",
+      "scope_id": "P30-I04-W10",
+      "status": "done",
+      "updated_at": "2026-06-10T04:39:32.538413Z"
     }
   },
   "agent_sessions": {
@@ -15203,6 +15215,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I04-W09",
       "updated_at": "2026-06-10T03:41:52.172644Z"
+    },
+    "P30-I04-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W10-bucket-20260610T043923Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I04-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I04-W10",
+      "updated_at": "2026-06-10T04:39:23.158363Z"
     }
   },
   "goals": {
@@ -18086,7 +18111,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T04:26:40.665260Z",
+  "updated_at": "2026-06-10T04:39:32.538808Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -70277,10 +70302,10 @@
     "P30-I04-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "codex-p30-i04-w10",
+      "claimed_at": "2026-06-10T04:28:56.589494Z",
+      "closed_at": "2026-06-10T04:39:32.538413Z",
+      "commit": "da3d7ec15cc9b33b5633eacfa8d80e3f9a7a4799",
       "deps": [
         "P30-I04-W03",
         "P30-I04-W06",
@@ -70292,42 +70317,101 @@
       "file_scopes": [
         "tools/idle_contract_gate.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_idle_contract_gate.py::test_cli_returns_zero_on_pass",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_idle_contract_gate.py::test_main_returns_nonzero_when_required_intent_guard_idle",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I04-W10",
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.825066Z",
-      "outcome": null,
+      "outcome": "Proved I03 idle contracts fire through the idle-contract gate",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W10-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_idle_contract_gate_passes_when_i03_contracts_wired asserts the gate exits 0",
+          "measurable_signal": "test_cli_returns_zero_on_pass asserts tools/idle_contract_gate.py main returns zero on the current tree",
           "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "Running the idle-contract gate against the shipped profile set with all three I03 probes wired exits zero.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the shipped idle-contract gate CLI-wrapper regression",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/unit/test_idle_contract_gate.py::test_cli_returns_zero_on_pass exits zero and proves the idle-contract gate main path passes with the I03 required-intent, UI affordance-parity, and mockup_golden_diff probes wired.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W10-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "behavioral",
-          "measurable_signal": "test_idle_contract_gate_fails_on_idle_require_intent asserts non-zero exit naming the idled contract",
+          "measurable_signal": "test_main_returns_nonzero_when_required_intent_guard_idle asserts main returns non-zero and stderr includes required-intent guard is idle",
           "oracle_tier": null,
-          "quality_dimension": "maintainability",
+          "quality_dimension": "reliability",
           "required": true,
-          "response": null,
-          "text": "Monkeypatching the require-intent guard to a no-op makes the gate exit non-zero, naming the idled contract.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the required-intent idle-regression test",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/unit/test_idle_contract_gate.py::test_main_returns_nonzero_when_required_intent_guard_idle exits zero and proves monkeypatching the required-intent guard to a no-op makes the gate fail while naming the idled contract.",
           "waiver_reason": null
         }
       ],
@@ -79822,6 +79906,17 @@
       "path": ".claude/worktrees/p30-w08",
       "status": "active",
       "wave_id": "P30-I04-W08"
+    },
+    "WT-P30-I04-W10-1781065737": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-w10",
+      "created_at": "2026-06-10T04:28:57.487146Z",
+      "id": "WT-P30-I04-W10-1781065737",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i04-w10",
+      "path": ".claude/worktrees/p30-w10",
+      "status": "active",
+      "wave_id": "P30-I04-W10"
     }
   }
 }
