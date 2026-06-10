@@ -456,6 +456,28 @@ def active_executor_sessions(state: State | None) -> list[AgentSession]:
     )
 
 
+def parity_session_ids(state: State | None) -> tuple[str, ...]:
+    """Return the id-sorted ACTIVE-executor session ids -- the parity-set key.
+
+    The parity lens lays out one tile per ACTIVE executor session
+    (:func:`active_executor_sessions`); this is the stable id key over that
+    set, used by the poll backstop to decide whether the dispatched fleet
+    changed since the last render. When a poll tick reveals the SAME set of
+    ACTIVE executors the body is left untouched (so the live-pushed event rows
+    are not clobbered); when it reveals an added / removed / re-keyed session
+    the body recomposes so the parity grid re-derives its tiles -- the
+    always-on poll backstop the project's TUI-staleness lesson pins beside the
+    push. Returns an empty tuple for the honest-empty / unbound path.
+
+    Args:
+        state: The bound read-only state, or ``None`` (fresh / user scope).
+
+    Returns:
+        The ACTIVE executor session ids, id-sorted; empty when none exist.
+    """
+    return tuple(sess.id for sess in active_executor_sessions(state))
+
+
 def tile_dom_id(session_id: str) -> str:
     """Return the DOM id for *session_id*'s grid tile.
 
@@ -562,13 +584,17 @@ class WatchTile(Vertical):
 
 
 class WatchGrid(Widget):
-    """The parallel multi-session watch grid: one tile per ACTIVE executor.
+    """The fleet parity grid: the side-by-side watch lens over many sessions.
 
-    Lays out one :class:`WatchTile` per ACTIVE executor session in a
-    :class:`~textual.containers.Grid`; a pushed event routes to the one tile
-    whose session wave it names and not the others (:meth:`append_event`).
-    With zero dispatched sessions it shows the honest-empty :data:`EMPTY_NOTICE`
-    rather than a blank grid; when the host App reports a daemon-unreachable
+    The parity lens of the Watch mode: it lays out one :class:`WatchTile` per
+    ACTIVE executor session side-by-side in a
+    :class:`~textual.containers.Grid`, so two or more dispatched sessions read
+    in parallel rather than one zoomed session at a time. Each tile is fed by
+    the App's single ``event.subscribe`` fan-out -- a pushed event routes to
+    the one tile whose session wave it names and not the others
+    (:meth:`append_event`) -- never a second daemon subscription. With zero
+    dispatched sessions it shows the honest-empty :data:`EMPTY_NOTICE` rather
+    than a fabricated grid; when the host App reports a daemon-unreachable
     degraded state it shows :data:`WATCH_DEGRADED` so the operator knows the
     tiles are not streaming rather than merely quiet.
     """
@@ -716,13 +742,26 @@ class VerdictRollupPane(Widget):
 
 
 class AgentWatchModeScreen(ScopeScreen):
-    """Live agent-watch zoom: stream one dispatched session, cancel it.
+    """Live agent-watch: the fleet parity lens over the dispatched sessions.
 
-    Reuses the App's live-event seam (registering as a
-    :class:`~eawf.surfaces.tui.modes.feed.FeedListener`) but filters the
-    stream to the single watched session, keyed on the wave id the executor
-    :class:`~eawf.kernel.state.models.AgentSession` scopes to. The default
-    target is the most-recent ACTIVE executor session
+    With two or more ACTIVE executor sessions the body is the fleet parity
+    :class:`WatchGrid` -- every session side-by-side, each streaming its own
+    events; with one (or zero) it is the single-session zoom (or the
+    honest-empty banner). Both surfaces are fed by the SAME live seams, never a
+    second daemon subscription:
+
+    * the **push** -- the screen registers as a
+      :class:`~eawf.surfaces.tui.modes.feed.FeedListener`, so the App's single
+      ``event.subscribe`` fan-out routes each envelope to the matching tile
+      (grid) or the watched stream (zoom); and
+    * the **poll backstop** -- the screen watches the App's reactive ``state``
+      (which the binder refreshes from BOTH daemon-push and the always-on
+      mtime-poll), so a tick that changes the ACTIVE-executor fleet
+      (:func:`parity_session_ids`) recomposes the body to re-derive the parity
+      grid. A tick that leaves the fleet unchanged is a no-op, so the
+      live-pushed event rows are not clobbered.
+
+    The default zoom target is the most-recent ACTIVE executor session
     (:func:`pick_watch_target`); the cancel action asks the daemon to stop the
     spawned child via the ``agent.kill`` RPC and surfaces the typed result
     honestly.
@@ -786,26 +825,36 @@ class AgentWatchModeScreen(ScopeScreen):
     #: still-idle cancel line but never clobbers an issued cancel's result.
     _cancel_issued: bool = False
 
-    #: The multi-session grid, mounted in place of the single-session zoom when
+    #: The fleet parity grid, mounted in place of the single-session zoom when
     #: two or more ACTIVE executor sessions are dispatched; ``None`` in the
     #: single-session / honest-empty path.
     _grid: WatchGrid | None = None
 
+    #: The ACTIVE-executor session-id set the body was last composed for, so
+    #: the poll backstop recomposes only when the dispatched fleet actually
+    #: changes (an added / removed / re-keyed session) and leaves the live-
+    #: pushed event rows untouched on a no-op tick. Seeded on every compose.
+    _parity_ids: tuple[str, ...] = ()
+
     def compose_body(self) -> ComposeResult:
-        """Yield the fleet verdict rollup then the grid OR single-session zoom.
+        """Yield the fleet verdict rollup then the parity grid OR the zoom.
 
         The fleet :class:`VerdictRollupPane` leads the body (each wave's latest
         auditor verdict, outcome-tinted, or the honest-empty rollup line) above
         the live surface. When two or more ACTIVE executor sessions are
-        dispatched the live surface is the parallel :class:`WatchGrid` -- one
-        tile per session, each streaming its own session's events. Otherwise it
-        is the single-session zoom: a header leading with the watched target's
-        lifecycle sigil (or the honest-empty banner), a stream column starting
-        with a single live-waiting / honest-empty notice, and the cancel result
-        line.
+        dispatched the live surface is the fleet parity :class:`WatchGrid` --
+        every session side-by-side, each streaming its own session's events.
+        Otherwise it is the single-session zoom: a header leading with the
+        watched target's lifecycle sigil (or the honest-empty banner), a stream
+        column starting with a single live-waiting / honest-empty notice, and
+        the cancel result line. The ACTIVE-executor fleet this body is composed
+        for is recorded so the poll backstop (:meth:`_on_app_state`) recomposes
+        only when that fleet changes.
         """
         sessions = active_executor_sessions(self._current_state())
         mode = self._render_mode()
+        self._parity_ids = tuple(sess.id for sess in sessions)
+        self._grid = None
         yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
         if len(sessions) >= 2:
             self._grid = WatchGrid(sessions, degraded=self._degraded(), mode=mode)
@@ -831,9 +880,24 @@ class AgentWatchModeScreen(ScopeScreen):
         super().on_mount()
         if hasattr(self.app, "render_mode"):
             self.watch(self.app, "render_mode", self._on_render_mode)
+        if hasattr(self.app, "state"):
+            self.watch(self.app, "state", self._on_app_state)
         register = getattr(self.app, "register_feed_listener", None)
         if callable(register):
             register(self)
+        self._seed_from_buffer()
+
+    def _seed_from_buffer(self) -> None:
+        """Seed the freshly-composed surface from the App's live event buffer.
+
+        Replays the App's oldest-first live buffer into the current surface so
+        a mode switch (or a poll-backstop recompose) shows the events that
+        arrived before this body existed: into every parity tile that names the
+        envelope's wave when the grid is mounted, else into the single-session
+        zoom filtered to the watched session. Each envelope is prepended, so the
+        most recent buffered event ends on top. A bare harness without the App
+        buffer degrades to an empty surface.
+        """
         buffer = getattr(self.app, "live_event_buffer", ())
         if self._grid is not None:
             for envelope in buffer:
@@ -842,6 +906,52 @@ class AgentWatchModeScreen(ScopeScreen):
         for envelope in buffer:
             if is_watched_event(envelope, self.target):
                 self._render_event(envelope)
+
+    def _on_app_state(self, new_state: State | None) -> None:
+        """Recompose the body when a poll tick changes the ACTIVE-executor fleet.
+
+        The poll backstop the project's TUI-staleness lesson pins beside the
+        push: the App's reactive ``state`` is refreshed from BOTH the daemon
+        push and the always-on mtime-poll, so a session newly dispatched (or
+        closed) becomes visible without an app restart even when the push
+        dropped the envelope. When the new fleet of ACTIVE executor sessions
+        (:func:`parity_session_ids`) differs from the set the body was last
+        composed for, the body recomposes so the parity grid re-derives its
+        tiles (a 1->2 fleet swaps the zoom for the side-by-side grid, a 2->0
+        fleet swaps it for the honest-empty notice). An unchanged fleet is a
+        no-op, so the live-pushed event rows already streamed into the tiles
+        are not clobbered by a churn of the DOM on every quiet poll tick.
+
+        Args:
+            new_state: The fresh read-only state revision from the binder, or
+                ``None`` when the binder clears it.
+        """
+        if not self.is_mounted:
+            return
+        from eawf.kernel.state.models import State
+
+        resolved = new_state if isinstance(new_state, State) else None
+        if parity_session_ids(resolved) == self._parity_ids:
+            return
+        logger.info(
+            f"agent_watch_parity_recompose was={list(self._parity_ids)} "
+            f"now={list(parity_session_ids(resolved))}"
+        )
+        self.call_after_refresh(self._recompose_and_reseed)
+
+    async def _recompose_and_reseed(self) -> None:
+        """Recompose the body for the new fleet, then re-seed it from the buffer.
+
+        Rebuilds the body so the parity grid (or zoom / honest-empty notice)
+        re-derives for the new ACTIVE-executor fleet, then replays the App's
+        live buffer into the freshly-composed surface so it shows the events
+        that arrived before it existed. Run on the event loop via
+        :meth:`~textual.message_pump.MessagePump.call_after_refresh` so the
+        async :meth:`~textual.widget.Widget.recompose` is awaited rather than
+        left dangling.
+        """
+        await self.recompose()
+        self._seed_from_buffer()
 
     def _on_render_mode(self, _mode: object) -> None:
         """Repaint the mode-sensitive chrome when the App's render mode flips.
@@ -1131,6 +1241,7 @@ __all__ = [
     "active_executor_sessions",
     "cancel_mark",
     "is_watched_event",
+    "parity_session_ids",
     "pick_watch_target",
     "render_verdict_rollup_row",
     "render_watch_header",
