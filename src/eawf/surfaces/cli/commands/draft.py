@@ -26,7 +26,22 @@ draft_app = typer.Typer(
 )
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)?$")
-_PROMOTABLE_KINDS = {"research", "audit", "plan", "hypothesis", "decision", "incident"}
+
+# Canonical kind -> subdir router. Each promotable draft kind has exactly one
+# home under ``.ea/artifacts/``; placement resolves through this map instead of
+# treating the singular kind token as the subdir (which produced ``audit/``
+# rather than the canonical ``audits/``). The map IS the source of truth for
+# both the promotable-kind set and the subdir layout, so adding a kind means
+# adding one row here.
+_KIND_SUBDIR: dict[str, str] = {
+    "research": "research",
+    "audit": "audits",
+    "plan": "plans",
+    "hypothesis": "hypotheses",
+    "decision": "decisions",
+    "incident": "incidents",
+}
+_PROMOTABLE_KINDS = frozenset(_KIND_SUBDIR)
 
 
 def _flags(ctx: typer.Context) -> GlobalFlags:
@@ -43,9 +58,10 @@ def _draft_path(root: Path, kind: str, slug: str) -> Path:
 
 
 def _artifact_path(root: Path, kind: str, slug: str) -> Path:
+    artifacts = root / ".ea" / "artifacts"
     if "/" in slug:
-        return root / ".ea" / "artifacts" / kind / f"{slug}.md"
-    return root / ".ea" / "artifacts" / f"{kind}-{slug}.md"
+        return artifacts / _KIND_SUBDIR[kind] / f"{slug}.md"
+    return artifacts / f"{kind}-{slug}.md"
 
 
 def _artifact_id(kind: str, slug: str) -> str:
