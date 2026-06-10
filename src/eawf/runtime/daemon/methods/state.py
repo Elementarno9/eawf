@@ -63,6 +63,7 @@ from typing import Any, Final
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.spec.common import grandfather_criterion, validate_criterion_gate_refs
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
@@ -616,6 +617,7 @@ def _wave_runtime_delta(
     mutation: Mutation,
     *,
     eu_minutes: float,
+    eu_basis: EuBasis,
 ) -> RuntimeDelta | None:
     """Return the close-time runtime delta for the wave, when captured."""
     wave_id = str(mutation.params.get("wave_id", ""))
@@ -628,24 +630,30 @@ def _wave_runtime_delta(
         wave.runtime_baseline,
         wave.runtime_latest,
         eu_minutes=eu_minutes,
+        eu_basis=eu_basis,
     )
 
 
-def _wave_close_rollup_config(repo_root: Path) -> tuple[str, float]:
-    """Return ``(telemetry.db_kind, estimation.eu_minutes)`` for close rollups."""
+def _wave_close_rollup_config(repo_root: Path) -> tuple[str, float, EuBasis]:
+    """Return close-time telemetry DB, EU minutes, and runtime-basis config."""
     try:
         from eawf.kernel.config.layered import get_dotted, merge_config
 
         merged, _sources = merge_config(repo=repo_root)
         db_kind = str(get_dotted(merged, "telemetry.db_kind"))
         eu_minutes = float(get_dotted(merged, "estimation.eu_minutes"))
+        eu_basis_raw = str(get_dotted(merged, "estimation.eu_basis"))
     except Exception as exc:
         logger.warning(f"wave_close_rollup config='default' err={exc!s}")
-        return "sqlite", DEFAULT_EU_MINUTES
+        return "sqlite", DEFAULT_EU_MINUTES, EuBasis.API_DURATION
+    try:
+        eu_basis = EuBasis(eu_basis_raw)
+    except ValueError as exc:
+        raise LifecycleError(f"invalid estimation.eu_basis: {eu_basis_raw!r}") from exc
     if eu_minutes <= 0.0:
         logger.warning(f"wave_close_rollup eu_minutes={eu_minutes!r} invalid; using default")
         eu_minutes = DEFAULT_EU_MINUTES
-    return db_kind, eu_minutes
+    return db_kind, eu_minutes, eu_basis
 
 
 def _load_wave_session_rollup(
@@ -669,7 +677,7 @@ def _load_wave_session_rollup(
     if not db_path.exists():
         return None
 
-    db_kind, eu_minutes = _wave_close_rollup_config(repo_root)
+    db_kind, eu_minutes, _eu_basis = _wave_close_rollup_config(repo_root)
     store = open_store(db_kind, db_path)  # type: ignore[arg-type]
     try:
         rows = store.fetch_all("telemetry_sessions", TelemetrySession)
@@ -2514,11 +2522,12 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                     )
                     wave_id = str(mutation.params.get("wave_id", ""))
                     actual_written_auto = bool(wave_id and wave_id not in (state.actuals or {}))
-                    _, _close_eu_minutes = _wave_close_rollup_config(repo_anchor)
+                    _, _close_eu_minutes, _close_eu_basis = _wave_close_rollup_config(repo_anchor)
                     runtime_delta = _wave_runtime_delta(
                         state,
                         mutation,
                         eu_minutes=_close_eu_minutes,
+                        eu_basis=_close_eu_basis,
                     )
                     wave_close_rollup = _load_wave_session_rollup(
                         state,

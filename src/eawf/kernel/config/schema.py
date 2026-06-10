@@ -46,6 +46,14 @@ class AutoChoose(StrEnum):
     ALWAYS = "always"
 
 
+class EuBasis(StrEnum):
+    """Captured quantity used to convert runtime counters into elapsed EU."""
+
+    API_DURATION = "api_duration"
+    TOKENS = "tokens"
+    WALL_CLOCK = "wall_clock"
+
+
 class VcsReleaseConventionsConfig(BaseModel):
     """Release cadence conventions under ``vcs.conventions``."""
 
@@ -114,6 +122,7 @@ class EstimationConfig(BaseModel):
 
     enabled: bool = True
     eu_minutes: float = Field(default=30.0, gt=0.0)
+    eu_basis: EuBasis = EuBasis.API_DURATION
     realtime_recalibration: bool = False
     calibration_profile: str = "eawf_v0_lockbox_2026_05"
     idle_policy: str = "D30_non_agent_gap"
@@ -286,6 +295,7 @@ __all__ = [
     "CommitSubjectStyle",
     "EstimationConfig",
     "EstimationDisplayConfig",
+    "EuBasis",
     "PreferencesConfig",
     "ProseConfig",
     "ProseLevel",

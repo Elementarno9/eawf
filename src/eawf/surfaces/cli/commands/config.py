@@ -57,6 +57,7 @@ from eawf.kernel.config.registry import (
     registry_lookup,
     tabs_sorted,
 )
+from eawf.kernel.config.schema import EstimationConfig
 from eawf.runtime.lock import portalock
 from eawf.runtime.vcs.coauthor import VcsConfig
 from eawf.surfaces.cli.errors import StateConflict, UserError, ValidationError, emit_error
@@ -113,7 +114,7 @@ class _ConfigSchema(BaseModel):
     storage: dict[str, Any]
     research: dict[str, Any]
     planning: dict[str, Any]
-    estimation: dict[str, Any]
+    estimation: EstimationConfig
     audit: dict[str, Any]
     ship: dict[str, Any]
     review: dict[str, Any]

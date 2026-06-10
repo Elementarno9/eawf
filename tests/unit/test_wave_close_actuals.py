@@ -23,6 +23,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.state.enums import (
     Confidence,
     EffortBucket,
@@ -37,6 +38,7 @@ from eawf.kernel.state.models import (
     RuntimeLatest,
     State,
 )
+from eawf.observability.telemetry.join import DEFAULT_TOKENS_PER_EU
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
 from eawf.workflow.lifecycle import wave as wave_lifecycle
@@ -364,6 +366,60 @@ def test_compute_runtime_delta_equal_counters_yields_zero_eu() -> None:
     assert delta.agent_runtime_eu == pytest.approx(0.0)
     assert delta.actual_tokens == 0
     assert delta.actual_cost_usd == pytest.approx(0.0)
+
+
+def test_eu_basis_api_duration_default() -> None:
+    captured_at = datetime.now(UTC)
+    baseline = RuntimeBaseline(
+        api_duration_ms=5000,
+        total_duration_ms=8000,
+        input_tokens=100,
+        captured_at=captured_at,
+    )
+    latest = RuntimeLatest(
+        api_duration_ms=17000,
+        total_duration_ms=48000,
+        input_tokens=500,
+        captured_at=captured_at,
+    )
+
+    delta = compute_runtime_delta(baseline, latest, eu_minutes=30.0)
+
+    assert delta is not None
+    assert delta.elapsed_eu == pytest.approx(12000 / (30 * 60_000))
+    assert delta.agent_runtime_eu == pytest.approx(delta.elapsed_eu)
+
+
+def test_eu_basis_tokens_uses_token_delta() -> None:
+    captured_at = datetime.now(UTC)
+    baseline = RuntimeBaseline(
+        api_duration_ms=5000,
+        input_tokens=100,
+        output_tokens=20,
+        cache_creation_input_tokens=5,
+        cache_read_input_tokens=15,
+        captured_at=captured_at,
+    )
+    latest = RuntimeLatest(
+        api_duration_ms=17000,
+        input_tokens=600,
+        output_tokens=220,
+        cache_creation_input_tokens=55,
+        cache_read_input_tokens=65,
+        captured_at=captured_at,
+    )
+
+    delta = compute_runtime_delta(
+        baseline,
+        latest,
+        eu_minutes=30.0,
+        eu_basis=EuBasis.TOKENS,
+    )
+
+    assert delta is not None
+    assert delta.actual_tokens == 800
+    assert delta.elapsed_eu == pytest.approx(800 / DEFAULT_TOKENS_PER_EU)
+    assert delta.agent_runtime_eu == pytest.approx(delta.elapsed_eu)
 
 
 def test_compute_runtime_delta_latest_below_baseline_raises() -> None:

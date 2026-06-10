@@ -208,6 +208,15 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="estimation",
+        key="estimation.eu_basis",
+        label="Elapsed EU basis",
+        type="choice",
+        default="api_duration",
+        description="Captured quantity used to convert runtime counters into elapsed EU.",
+        choices=("api_duration", "tokens", "wall_clock"),
+    ),
+    ConfigKey(
+        tab="estimation",
         key="estimation.eu_minutes",
         label="Minutes per estimation unit (EU)",
         type="int",

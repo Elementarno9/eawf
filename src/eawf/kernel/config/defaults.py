@@ -228,6 +228,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "estimation": {
         "enabled": True,
         "eu_minutes": 30,
+        "eu_basis": "api_duration",
         "realtime_recalibration": False,
         "calibration_profile": "eawf_v0_lockbox_2026_05",
         "idle_policy": "D30_non_agent_gap",

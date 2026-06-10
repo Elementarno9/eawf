@@ -10,6 +10,7 @@ from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.models import TelemetrySession
 
 DEFAULT_EU_MINUTES = 30.0
+DEFAULT_TOKENS_PER_EU = 200_000.0
 
 
 class WaveAttemptRollup(BaseModel):
@@ -128,8 +129,22 @@ def _duration_ms_to_eu(duration_ms: int | None, *, eu_minutes: float) -> float |
     return duration_ms / (eu_minutes * 60_000.0)
 
 
+def _tokens_to_eu(
+    tokens: int | None,
+    *,
+    tokens_per_eu: float = DEFAULT_TOKENS_PER_EU,
+) -> float | None:
+    """Convert runtime token delta to effort units."""
+    if tokens is None:
+        return None
+    if tokens_per_eu <= 0.0:
+        raise ValueError(f"tokens_per_eu must be positive: {tokens_per_eu!r}")
+    return tokens / tokens_per_eu
+
+
 __all__ = [
     "DEFAULT_EU_MINUTES",
+    "DEFAULT_TOKENS_PER_EU",
     "WaveAttemptRollup",
     "WaveSessionRollup",
     "rollup_wave_sessions",

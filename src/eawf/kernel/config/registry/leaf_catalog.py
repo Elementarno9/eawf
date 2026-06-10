@@ -671,6 +671,15 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
+        key="estimation.eu_basis",
+        domain="estimation",
+        type="literal",
+        default="api_duration",
+        writable_layers=_WRITABLE_GWR,
+        description="Captured quantity used to convert runtime counters into elapsed EU.",
+        choices=("api_duration", "tokens", "wall_clock"),
+    ),
+    LeafKey(
         key="estimation.realtime_recalibration",
         domain="estimation",
         type="bool",

@@ -26,10 +26,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.kernel.config import layered
 from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.kernel.config.layered import LAYER_ORDER, merge_config
+from eawf.kernel.config.schema import EstimationConfig
 
 
 @pytest.fixture(autouse=True)
@@ -342,6 +344,11 @@ def test_merge_does_not_mutate_built_in_defaults() -> None:
 def test_get_dotted_returns_value_for_known_key() -> None:
     merged, _ = merge_config(workspace=None, repo=None, env={}, cli_overrides={})
     assert layered.get_dotted(merged, "estimation.eu_minutes") == 30
+
+
+def test_eu_basis_rejects_unknown() -> None:
+    with pytest.raises(ValidationError):
+        EstimationConfig.model_validate({"eu_basis": "idle_calendar"})
 
 
 def test_get_dotted_raises_for_missing_key() -> None:

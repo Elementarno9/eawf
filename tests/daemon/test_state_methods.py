@@ -42,6 +42,7 @@ from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.kinds.event import EventKind
 from eawf.kernel.store.paths import store_path
+from eawf.observability.telemetry.join import DEFAULT_TOKENS_PER_EU
 from eawf.runtime.daemon import PROTOCOL_VERSION, recovery, wal
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
@@ -261,6 +262,16 @@ def _write_verify_profile(root: Path, *, enforce: bool) -> None:
                 "",
             ]
         ),
+        encoding="utf-8",
+    )
+
+
+def _write_eu_basis_config(root: Path, *, eu_basis: str) -> None:
+    """Write a repo config overriding the close-time EU basis."""
+    config_dir = root / ".ea"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.joinpath("config.yaml").write_text(
+        f"estimation:\n  eu_basis: {eu_basis}\n",
         encoding="utf-8",
     )
 
@@ -756,6 +767,47 @@ def test_mutate_wave_close_uses_runtime_delta_when_captured(tmp_path: Path) -> N
         assert actual["agent_runtime_eu"] == pytest.approx(expected_eu)
         assert actual["actual_tokens"] == 162
         assert actual["actual_cost_usd"] == pytest.approx(0.42)
+
+    _run(body)
+
+
+def test_mutate_wave_close_uses_configured_token_basis(tmp_path: Path) -> None:
+    """``estimation.eu_basis=tokens`` derives elapsed EU from token delta."""
+    _write_eu_basis_config(tmp_path, eu_basis="tokens")
+    payload = _build_state_payload()
+    wave = payload["waves"]["P24-I01-W09"]  # type: ignore[index]
+    assert isinstance(wave, dict)
+    wave["runtime_baseline"] = {
+        "api_duration_ms": 5000,
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "cache_creation_input_tokens": 5,
+        "cache_read_input_tokens": 15,
+        "captured_at": _now().isoformat(),
+    }
+    wave["runtime_latest"] = {
+        "api_duration_ms": 17000,
+        "input_tokens": 600,
+        "output_tokens": 220,
+        "cache_creation_input_tokens": 55,
+        "cache_read_input_tokens": 65,
+        "captured_at": (_now() + timedelta(minutes=5)).isoformat(),
+    }
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id="P24-I01-W09",
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": "P24-I01-W09", "outcome": "ok"},
+    )
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": mutation.model_dump(mode="json")})
+        written = orjson.loads(state_path.read_bytes())
+        actual = written["actuals"]["P24-I01-W09"]
+        assert actual["elapsed_eu"] == pytest.approx(800 / DEFAULT_TOKENS_PER_EU)
+        assert actual["agent_runtime_eu"] == pytest.approx(800 / DEFAULT_TOKENS_PER_EU)
+        assert actual["actual_tokens"] == 800
 
     _run(body)
 

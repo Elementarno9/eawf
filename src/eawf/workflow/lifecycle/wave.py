@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.spec.intent import IntentBrief, has_authoring_body
 from eawf.kernel.state.enums import (
@@ -25,6 +26,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import ActualSummary, RuntimeBaseline, RuntimeLatest, State, Wave
+from eawf.observability.telemetry.join import _duration_ms_to_eu, _tokens_to_eu
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import (
     LifecycleError,
@@ -79,13 +81,14 @@ def compute_runtime_delta(
     latest: RuntimeLatest | None,
     *,
     eu_minutes: float,
+    eu_basis: EuBasis = EuBasis.API_DURATION,
 ) -> RuntimeDelta | None:
     """Return captured runtime delta between claim baseline and latest counters.
 
-    ``api_duration_ms`` is the v0.6 effort basis until W07 makes the basis
-    configurable. Missing baseline/latest/API counters mean there is no captured
-    runtime to apply; comparable counters that move backwards reject the close
-    because the cumulative sidecar reset or regressed.
+    ``eu_basis`` selects which captured quantity derives elapsed EU.
+    Missing baseline/latest/chosen-basis counters mean there is no captured
+    runtime to apply; comparable counters that move backwards reject the
+    close because the cumulative sidecar reset or regressed.
     """
     if baseline is None or latest is None:
         return None
@@ -95,14 +98,12 @@ def compute_runtime_delta(
     api_duration_ms = _counter_delta(
         "api_duration_ms", baseline.api_duration_ms, latest.api_duration_ms
     )
-    if api_duration_ms is None:
-        return None
-
-    # Guard every comparable counter against sidecar reset/regression, even
-    # when only api_duration_ms drives EU in this wave.
-    _counter_delta("total_duration_ms", baseline.total_duration_ms, latest.total_duration_ms)
+    total_duration_ms = _counter_delta(
+        "total_duration_ms", baseline.total_duration_ms, latest.total_duration_ms
+    )
     cost_usd_delta = _counter_delta("cost_usd", baseline.cost_usd, latest.cost_usd)
     token_delta = 0
+    token_seen = False
     for field_name in (
         "input_tokens",
         "output_tokens",
@@ -116,15 +117,42 @@ def compute_runtime_delta(
         )
         if value is not None:
             token_delta += int(value)
+            token_seen = True
 
-    elapsed_eu = float(api_duration_ms) / (eu_minutes * 60_000.0)
+    elapsed_eu = _runtime_basis_eu(
+        eu_basis,
+        api_duration_ms=int(api_duration_ms) if api_duration_ms is not None else None,
+        total_duration_ms=int(total_duration_ms) if total_duration_ms is not None else None,
+        token_delta=token_delta if token_seen else None,
+        eu_minutes=eu_minutes,
+    )
+    if elapsed_eu is None:
+        return None
     return RuntimeDelta(
         elapsed_eu=elapsed_eu,
         agent_runtime_eu=elapsed_eu,
         actual_tokens=token_delta,
         actual_cost_usd=float(cost_usd_delta) if cost_usd_delta is not None else 0.0,
-        api_duration_ms=int(api_duration_ms),
+        api_duration_ms=int(api_duration_ms) if api_duration_ms is not None else 0,
     )
+
+
+def _runtime_basis_eu(
+    eu_basis: EuBasis,
+    *,
+    api_duration_ms: int | None,
+    total_duration_ms: int | None,
+    token_delta: int | None,
+    eu_minutes: float,
+) -> float | None:
+    """Convert the selected runtime basis into effort units."""
+    if eu_basis is EuBasis.API_DURATION:
+        return _duration_ms_to_eu(api_duration_ms, eu_minutes=eu_minutes)
+    if eu_basis is EuBasis.TOKENS:
+        return _tokens_to_eu(token_delta)
+    if eu_basis is EuBasis.WALL_CLOCK:
+        return _duration_ms_to_eu(total_duration_ms, eu_minutes=eu_minutes)
+    raise LifecycleError(f"unknown eu_basis: {eu_basis!r}")
 
 
 def plan_wave(

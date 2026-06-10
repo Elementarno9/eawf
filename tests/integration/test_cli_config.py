@@ -93,6 +93,25 @@ def test_get_returns_built_in_default_with_built_in_source(repo_root: Path) -> N
     assert body == {"key": "estimation.eu_minutes", "value": 30, "source": "built-in"}
 
 
+def test_get_eu_basis_returns_api_duration_default(repo_root: Path) -> None:
+    result = runner.invoke(app, ["--json", "config", "get", "estimation.eu_basis"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    assert body == {"key": "estimation.eu_basis", "value": "api_duration", "source": "built-in"}
+
+
+def test_validate_rejects_unknown_eu_basis(repo_root: Path) -> None:
+    (repo_root / ".ea" / "config.yaml").write_text(
+        "estimation:\n  eu_basis: idle_calendar\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["config", "validate"])
+
+    assert result.exit_code == 2, result.output
+    assert "eu_basis" in result.output
+
+
 def test_set_overrides_built_in_via_repo_layer(repo_root: Path) -> None:
     runner.invoke(app, ["config", "set", "estimation.eu_minutes", "60", "--scope", "repo"])
     result = runner.invoke(app, ["--json", "config", "get", "estimation.eu_minutes"])
