@@ -5052,6 +5052,18 @@
       "status": "done",
       "updated_at": "2026-06-10T21:23:27.720852Z"
     },
+    "P30-I07-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W07",
+      "scope_id": "P30-I07-W07",
+      "status": "done",
+      "updated_at": "2026-06-10T22:06:57.908227Z"
+    },
     "P30-I07-W08": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5088,6 +5100,18 @@
       "status": "done",
       "updated_at": "2026-06-10T21:26:50.242094Z"
     },
+    "P30-I14-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W01",
+      "scope_id": "P30-I14-W01",
+      "status": "done",
+      "updated_at": "2026-06-10T22:06:59.589077Z"
+    },
     "P30-I14-W05": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5099,6 +5123,30 @@
       "scope_id": "P30-I14-W05",
       "status": "done",
       "updated_at": "2026-06-10T21:58:22.979491Z"
+    },
+    "P30-I14-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W08",
+      "scope_id": "P30-I14-W08",
+      "status": "done",
+      "updated_at": "2026-06-10T22:06:58.751927Z"
+    },
+    "P30-I14-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W10",
+      "scope_id": "P30-I14-W10",
+      "status": "done",
+      "updated_at": "2026-06-10T22:08:59.089579Z"
     }
   },
   "agent_sessions": {
@@ -8183,14 +8231,12 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I07-W07",
       "P30-I07-W13",
       "P30-I07-W15",
       "P30-I07-W09",
-      "P30-I14-W10",
       "P30-I08-W01",
-      "P30-I14-W08",
-      "P30-I14-W01"
+      "P30-I14-W03",
+      "P30-I14-W04"
     ],
     "iter_id": "P30-I08",
     "phase_id": "P30",
@@ -16291,6 +16337,32 @@
       "scope_id": "P30-I14-W01",
       "updated_at": "2026-06-10T21:56:24.963362Z"
     },
+    "P30-I14-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W03-bucket-20260610T220829Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I14-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I14-W03",
+      "updated_at": "2026-06-10T22:08:29.762156Z"
+    },
+    "P30-I14-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I14-W04-bucket-20260610T220830Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I14-W04",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I14-W04",
+      "updated_at": "2026-06-10T22:08:30.320403Z"
+    },
     "P30-I14-W05": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I14-W05-bucket-20260610T215344Z",
@@ -19254,7 +19326,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T21:58:22.979719Z",
+  "updated_at": "2026-06-10T22:08:59.089781Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -76294,8 +76366,8 @@
       ],
       "claim_session_id": "flow-p30-i07-w07",
       "claimed_at": "2026-06-10T21:23:35.785350Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:06:57.908227Z",
+      "commit": "b80df9870286f8b6c28f883ae380d1adcf0ae777",
       "deps": [
         "P30-I07-W06"
       ],
@@ -76310,12 +76382,12 @@
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.779611Z",
-      "outcome": null,
+      "outcome": "Fleet claim batch dispatches each staged wave via agent.dispatch(spawn=True) on a worker; daemon-unavailable issues zero RPCs + honest 'not issued' line; a rejected wave reads rejected while others proceed. 1746 tui tests green, 1400 LOC cap. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80393,8 +80465,8 @@
       ],
       "claim_session_id": "flow-p30-i14-w01",
       "claimed_at": "2026-06-10T21:56:24.962841Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:06:59.589077Z",
+      "commit": "88a9465e8b9e1ad066db3c2c8772f1275310dd3e",
       "deps": [],
       "description": "The daemon never auto-GCs the WAL (gc_done_records fires only via the wal.gc RPC / replay-wal --gc), so .ea/locks/wal grows unbounded. Add an async run_wal_gc_loop scheduled like the existing ttl/stale-wave sweeps, tuned by env vars (the daemon is global, env-keyed not layered-config), wired into both _run_server and _run_windows_server with cancel-in-finally.",
       "dispatch_history": [],
@@ -80409,12 +80481,12 @@
       "intent": null,
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T12:29:17.766428Z",
-      "outcome": null,
+      "outcome": "Daemon WAL-GC sweep loop wired into both server entrypoints (cancel-in-finally), clock-injected, non-positive env guards. 55+734 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80502,8 +80574,8 @@
     "P30-I14-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i14-w03",
+      "claimed_at": "2026-06-10T22:08:29.761787Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -80524,7 +80596,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80549,8 +80621,8 @@
     "P30-I14-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i14-w04",
+      "claimed_at": "2026-06-10T22:08:30.320312Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -80573,7 +80645,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80604,7 +80676,7 @@
       "claim_session_id": "flow-p30-i14-w05",
       "claimed_at": "2026-06-10T21:53:44.849097Z",
       "closed_at": "2026-06-10T21:58:22.979491Z",
-      "commit": "74fd28276aa1c8e17b2d2137a008bf223a631b23",
+      "commit": "457e6fad3f594cd19a390f80846e4e0110e52509",
       "deps": [],
       "description": "The artifact builder uses a slug-/ heuristic to place promoted artifacts, diverging from the canonical kind subdirs. Add a _KIND_SUBDIR map over the already-validated _PROMOTABLE_KINDS (incl. a releases entry) so placement is a pure lookup, not a heuristic.",
       "dispatch_history": [],
@@ -80765,8 +80837,8 @@
       ],
       "claim_session_id": "flow-p30-i14-w08",
       "claimed_at": "2026-06-10T21:56:24.432181Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:06:58.751927Z",
+      "commit": "58ee58313d8bdfe343110c967af4a836a4717d38",
       "deps": [],
       "description": "spec.archive rejects anything but IMPLEMENTED, but the in-band init->sync flow never sets IMPLEMENTED, so archive is unreachable for the specs P29-I13 uses. Add an explicit force flag to ArchiveParams that skips the status check (still requires the cache entry + file present); the close cascade passes force=True. Blob SHA still recorded for git recovery.",
       "dispatch_history": [],
@@ -80780,12 +80852,12 @@
       "intent": null,
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T12:29:17.767626Z",
-      "outcome": null,
+      "outcome": "spec.archive relaxed behind force flag: force=False keeps DRAFT rejection, force=True archives + records blob SHA (spec show --from-git recovers), missing cache still raises. 18 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80875,8 +80947,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i14-w10",
       "claimed_at": "2026-06-10T21:53:45.396246Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:08:59.089579Z",
+      "commit": "457e6fad3f594cd19a390f80846e4e0110e52509",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -80898,12 +80970,12 @@
       },
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T16:37:45.751872Z",
-      "outcome": null,
+      "outcome": "build_wave_sha_index batches per-wave git-log shellouts into one pass; detect_git_state_drift 843 closed waves 33s->0.055s; deterministic integration-over-transient twin resolution. 30+218 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
