@@ -8029,7 +8029,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I06-W10"
+    ],
     "iter_id": "P30-I06",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15920,6 +15922,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I06-W09",
       "updated_at": "2026-06-10T19:04:37.663625Z"
+    },
+    "P30-I06-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W10-bucket-20260610T202541Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I06-W10",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I06-W10",
+      "updated_at": "2026-06-10T20:25:41.239026Z"
     }
   },
   "goals": {
@@ -17665,7 +17680,8 @@
         "P30-I06-W06",
         "P30-I06-W08",
         "P30-I06-W07",
-        "P30-I06-W09"
+        "P30-I06-W09",
+        "P30-I06-W10"
       ]
     },
     "P30-I07": {
@@ -18833,7 +18849,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T20:17:58.911113Z",
+  "updated_at": "2026-06-10T20:25:41.239255Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -68713,7 +68729,7 @@
       "claim_session_id": "op-p30-i02",
       "claimed_at": "2026-06-09T16:48:04.992697Z",
       "closed_at": "2026-06-09T16:48:20.944759Z",
-      "commit": "faa2442fe06159952e4d9152b30abcd65e938f50",
+      "commit": "ec5cdb11db1f35b3262da0feada5d43935c19b02",
       "deps": [
         "P30-I02-W01"
       ],
@@ -69357,7 +69373,7 @@
       "claim_session_id": "op-p30-i02",
       "claimed_at": "2026-06-09T16:49:09.923134Z",
       "closed_at": "2026-06-09T16:49:23.831746Z",
-      "commit": "0416f1fa7cf60a7b321eee21cdf09cb9fc6e89d0",
+      "commit": "3d86273dd0fc13cc20905effa07279ed62f004b9",
       "deps": [
         "P30-I02-W02"
       ],
@@ -69513,7 +69529,7 @@
       "claim_session_id": "op-p30-i02",
       "claimed_at": "2026-06-09T18:00:12.224025Z",
       "closed_at": "2026-06-09T18:00:33.965771Z",
-      "commit": "0de30f7a1a0168bd411247e43a746518acb9b580",
+      "commit": "fb4f2ea96947c1d79ea5f0ce9c9fc1715df51d36",
       "deps": [
         "P30-I02-W02"
       ],
@@ -70153,7 +70169,7 @@
       "claim_session_id": "op-p30-i02",
       "claimed_at": "2026-06-09T18:36:50.801756Z",
       "closed_at": "2026-06-09T18:38:41.090377Z",
-      "commit": "5d7995a8a7cbc9d58153d509e7602c71b643518e",
+      "commit": "9543ffb86f04c97ffbd7f15cde3b36a6702f8c09",
       "deps": [
         "P30-I02-W02"
       ],
@@ -70319,7 +70335,7 @@
       "claim_session_id": "operator-flow-close",
       "claimed_at": "2026-06-09T21:13:55.317418Z",
       "closed_at": "2026-06-09T21:14:42.156408Z",
-      "commit": "aaf668d022b49a2ebff252f3fe45062f40e97a7f",
+      "commit": "c8b4b227ad8e84b7b6891a3db5abd300999292ce",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W02"
@@ -70886,7 +70902,7 @@
       "claim_session_id": "operator-flow-close",
       "claimed_at": "2026-06-09T21:13:58.189550Z",
       "closed_at": "2026-06-09T21:17:48.347924Z",
-      "commit": "b89f42711f6522e5076ca81a38142c10cfe2c5fe",
+      "commit": "7505cb7cc909c374d779df12247b2c86a1db2ca6",
       "deps": [
         "P30-I02-W01",
         "P30-I02-W03"
@@ -74414,7 +74430,7 @@
       "claim_session_id": "opus-fasttest-w11",
       "claimed_at": "2026-06-10T13:28:55.954355Z",
       "closed_at": "2026-06-10T13:34:48.095288Z",
-      "commit": "8f5900f92918c8e6be5696eecc97cd933dff12d9",
+      "commit": "ad31b35a8d08b7c2b205d9f223a6a3aaacfde8d9",
       "deps": [],
       "description": "Add a justfile with parallel test recipes mirroring CI, document just test as the fast-suite command, route agent full-suite runs through it, and drop the false slow-marker exclusion claim.",
       "dispatch_history": [],
@@ -75239,7 +75255,7 @@
       "claim_session_id": "flow-p30-i06-w06",
       "claimed_at": "2026-06-10T19:53:07.353681Z",
       "closed_at": "2026-06-10T19:59:53.314491Z",
-      "commit": "58d1c196574b8fa9be3e1fc50386fd54c2360b18",
+      "commit": "a655ba918470f370090a3437b31577f0886c97fa",
       "deps": [
         "P30-I06-W05"
       ],
@@ -75496,6 +75512,69 @@
         }
       ],
       "title": "Hold an advisory cross-vendor jury non-blocking on any non-pass",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I06-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30-i06-w10",
+      "claimed_at": "2026-06-10T20:25:41.238896Z",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "W02 added the 'eawf dispatch wave' verb, drifting the committed docs/reference/autogen/cli.md from a fresh introspection. Regenerate the autogen tree so the docs-autogen drift gate is green.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "docs/reference/autogen/cli.md"
+      ],
+      "gates": [],
+      "id": "P30-I06-W10",
+      "intent": {
+        "desired_outcome": "The committed autogen CLI reference matches a fresh generate_all so the drift gate is green.",
+        "evidence_refs": [
+          "docs/reference/autogen/cli.md",
+          "src/eawf/platform/docs/autogen.py:479"
+        ],
+        "planned_steps": [
+          "Run autogen.generate_all",
+          "Commit the regenerated cli.md"
+        ],
+        "priority_rationale": "Blocks the I06 close gauntlet: the docs-autogen drift gate fails until the CLI reference is regenerated for the new verb.",
+        "problem": "The dispatch wave verb added in W02 drifted the committed autogen CLI reference, reddening the docs-autogen drift gate.",
+        "risks": [
+          "None: pure generated-doc regen",
+          "config-independent CLI introspection."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I06",
+      "opened_at": "2026-06-10T20:25:40.772216Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "docs/reference/autogen/cli.md matches autogen.generate_all output; test_docs_autogen drift gate passes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "docs/reference/autogen/cli.md matches autogen.generate_all output; test_docs_autogen drift gate passes",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Regenerate autogen CLI reference for the dispatch wave verb",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
