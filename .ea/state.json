@@ -18209,7 +18209,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:41:04.468541Z",
+  "updated_at": "2026-06-10T05:42:45.585223Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -70754,7 +70754,15 @@
         "src/eawf/kernel/migrations/_base.py",
         "src/eawf/kernel/migrations/v1_8_to_v1_9.py",
         "src/eawf/schemas/state.schema.json",
-        "tests/unit/test_state_migration.py"
+        "tests/unit/test_state_migration.py",
+        "tests/snapshots/tui/golden/repo_screen.txt",
+        "tests/snapshots/tui/golden/roadmap_scrolled_long_iter.txt",
+        "tests/snapshots/tui/golden/stale_schema_banner.txt",
+        "tests/snapshots/tui/golden/user_screen.txt",
+        "tests/snapshots/tui/golden/workspace_screen.txt",
+        "tests/tui/golden/reskin_w22/multichoice_checklist.txt",
+        "tests/unit/test_intent_brief.py",
+        "tests/unit/test_migrate.py"
       ],
       "gates": [],
       "id": "P30-I05-W01",
