@@ -769,6 +769,128 @@ def test_resolve_detail_wave_attempt_rollup_uses_reports_and_errors() -> None:
 
 
 # --------------------------------------------------------------------------
+# Evidence tab — wave provenance + dispatch history (P30-I07-W04)
+# --------------------------------------------------------------------------
+
+
+def _state_with_claimed_switch_wave() -> tuple[State, str]:
+    """Return a state whose wave is claimed + carries a runtime-switch row.
+
+    Builds on :func:`_state_with_attempted_wave` (two attempts, one
+    ``SWITCH_ON_ERROR`` dispatch annotation carrying a ``reason``) and
+    additionally stamps ``claimed_at`` so the provenance ``claimed`` row
+    renders a real work-start time rather than the em-dash sentinel.
+    """
+    state, wave_id = _state_with_attempted_wave()
+    claimed_at = datetime(2026, 5, 27, 11, 55, tzinfo=UTC)
+    claimed = state.waves[wave_id].model_copy(update={"claimed_at": claimed_at})
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = claimed
+    return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def test_resolve_detail_claimed_wave_renders_claimed_row_and_switch_reason() -> None:
+    """A claimed wave + runtime-switch annotation: claimed row + reason render."""
+    state, wave_id = _state_with_claimed_switch_wave()
+    card = resolve_detail(state, wave_id)
+    rows = dict(card.evidence)
+    # The claimed-at work-start fact renders a real time, not the sentinel.
+    assert rows["claimed"] == str(state.waves[wave_id].claimed_at)
+    assert rows["claimed"] != "—"
+    # The runtime-switch annotation's reason is appended to its attempt row.
+    switch = state.waves[wave_id].dispatch_history[1]
+    attempt_value = rows[f"attempt {switch.attempt}"]
+    assert switch.note.value in attempt_value
+    assert switch.reason is not None
+    assert switch.reason in attempt_value
+
+
+def test_resolve_detail_unclaimed_wave_renders_em_dash_not_start_time() -> None:
+    """An unclaimed wave renders the em-dash sentinel, not a fabricated start."""
+    state, wave_id = _state_with_attempted_wave()
+    # The fixture-derived wave leaves ``claimed_at`` unset.
+    assert state.waves[wave_id].claimed_at is None
+    card = resolve_detail(state, wave_id)
+    rows = dict(card.evidence)
+    # The claimed row is the honest em-dash sentinel -- never a fabricated time.
+    assert rows["claimed"] == "—"
+    # No ISO start time is invented for the unclaimed wave.
+    assert "2026" not in rows["claimed"]
+
+
+def test_resolve_detail_dispatch_row_without_reason_omits_reason_suffix() -> None:
+    """A dispatch annotation with no reason renders note + runtime, no suffix.
+
+    Boundary: the first (``FRESH_DISPATCH``) annotation in the attempted
+    fixture carries no ``reason``, so its attempt row stays the bare
+    ``note (runtime)`` form with no trailing reason suffix.
+    """
+    state, wave_id = _state_with_attempted_wave()
+    fresh = state.waves[wave_id].dispatch_history[0]
+    assert fresh.reason is None
+    card = resolve_detail(state, wave_id)
+    rows = dict(card.evidence)
+    attempt_value = rows[f"attempt {fresh.attempt}"]
+    assert attempt_value == f"{fresh.note.value} ({fresh.runtime_to})"
+    # No reason em-dash suffix is fabricated for a reason-less annotation.
+    assert " — " not in attempt_value
+
+
+def test_detail_modal_paints_claimed_row_and_switch_reason() -> None:
+    """The evidence tab paints the claimed-at row and the switch reason (Pilot)."""
+
+    async def body_fn() -> None:
+        state, wave_id = _state_with_claimed_switch_wave()
+        switch = state.waves[wave_id].dispatch_history[1]
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-evidence"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            assert "claimed" in rendered
+            assert switch.reason is not None
+            assert switch.reason in rendered
+
+    asyncio.run(body_fn())
+
+
+def test_detail_modal_unclaimed_wave_paints_em_dash_sentinel() -> None:
+    """The evidence tab paints the em-dash claimed sentinel for an unclaimed wave."""
+
+    async def body_fn() -> None:
+        state, wave_id = _state_with_attempted_wave()
+        assert state.waves[wave_id].claimed_at is None
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-evidence"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            # The claimed label is painted with the honest em-dash sentinel.
+            assert "claimed" in rendered
+            assert "—" in rendered
+
+    asyncio.run(body_fn())
+
+
+# --------------------------------------------------------------------------
 # render_file_tree — wave file_scopes render as a collapsed tree (review fix)
 # --------------------------------------------------------------------------
 

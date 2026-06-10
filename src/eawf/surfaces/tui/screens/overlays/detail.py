@@ -250,8 +250,10 @@ class DetailCard:
             under a ``criterion`` header per distinct criterion id, each
             ``gate`` row naming the gate's check kind. Empty for a wave with
             no gates, so the modal renders no gates tab (absent, not empty).
-        evidence: The ``evidence`` group — the wave's attempt rollup +
-            dispatch-history rows (I06 folds in the report rollup).
+        evidence: The ``evidence`` group — the wave's auditor verdict, the
+            attempt rollup, and the provenance / dispatch-history rows (the
+            ``claimed`` work-start row plus one row per dispatch annotation,
+            each appending any runtime-switch reason).
         runtime: The ``runtime`` group — size + honest-empty EU / token
             rows (I04 fills real runtime telemetry). A no-runtime wave's
             EU / token rows are the shared
@@ -514,6 +516,39 @@ def _latest_auditor_verdict(
     return latest
 
 
+def _dispatch_history_rows(wave: Wave) -> tuple[tuple[str, str], ...]:
+    """Build the evidence-tab provenance + dispatch-history rows for *wave*.
+
+    Surfaces two honest provenance facts the evidence tab folds in:
+
+    - A ``claimed`` row carrying the wave's :attr:`~eawf.kernel.state.models.Wave.claimed_at`
+      work-start time, formatted via :func:`_fmt_dt`. An unclaimed wave
+      (``claimed_at is None``) renders the em-dash sentinel, never a
+      fabricated start time -- a wave that has not been claimed has no
+      work-start fact to elapse from.
+    - One row per :class:`~eawf.kernel.state.models.DispatchAnnotation` in
+      :attr:`~eawf.kernel.state.models.Wave.dispatch_history`: the row value
+      names the transition note plus its runtime, and when the annotation
+      carries a runtime-switch reason that reason is appended so an operator
+      sees why a runtime swap happened.
+
+    Args:
+        wave: The resolved wave.
+
+    Returns:
+        Ordered ``(label, value)`` rows: the ``claimed`` row first, then one
+        ``attempt N`` row per dispatch annotation.
+    """
+    rows: list[tuple[str, str]] = [("claimed", _fmt_dt(wave.claimed_at))]
+    for ann in wave.dispatch_history:
+        runtime = ann.runtime_to or ann.runtime_from or "—"
+        value = f"{ann.note.value} ({runtime})"
+        if ann.reason is not None:
+            value = f"{value} — {ann.reason}"
+        rows.append((f"attempt {ann.attempt}", value))
+    return tuple(rows)
+
+
 def _auditor_verdict_rows(
     reports: Iterable[AgentReportRow],
 ) -> tuple[tuple[str, str], ...]:
@@ -612,9 +647,11 @@ def _wave_card(
     )
     evidence: list[tuple[str, str]] = list(_auditor_verdict_rows(report_rows))
     evidence.extend(_attempt_rollup_rows(attempt_rollup))
-    for ann in wave.dispatch_history:
-        runtime = ann.runtime_to or ann.runtime_from or "—"
-        evidence.append((f"attempt {ann.attempt}", f"{ann.note.value} ({runtime})"))
+    # Provenance + dispatch history: the claimed-at work-start fact (em-dash
+    # sentinel when unclaimed, never a fabricated start time) plus one row
+    # per dispatch annotation, appending any runtime-switch reason so the
+    # operator sees why a runtime swap happened.
+    evidence.extend(_dispatch_history_rows(wave))
 
     return DetailCard(
         title=f"wave {wave.id}",
