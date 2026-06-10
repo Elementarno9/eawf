@@ -4523,6 +4523,18 @@
       "scope_id": "P30-I03-W08",
       "status": "done",
       "updated_at": "2026-06-09T23:24:27.033832Z"
+    },
+    "P30-I03-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I03-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I03-W09",
+      "scope_id": "P30-I03-W09",
+      "status": "done",
+      "updated_at": "2026-06-10T00:10:39.273908Z"
     }
   },
   "agent_sessions": {
@@ -5011,6 +5023,16 @@
       "size_bytes": null,
       "uri": "repo:.ea/artifacts/audits/2026-06-10-A59-P30-i02-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P30-I02/ART-A59-P30-i02"
+    },
+    "ART-A60-P30-i03": {
+      "created_at": "2026-06-10T00:11:20.881914Z",
+      "id": "ART-A60-P30-i03",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-10-A60-P30-i03-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I03/ART-A60-P30-i03"
     },
     "ART-audit-2026-05-28-p28-i03-deep-audit": {
       "created_at": "2026-05-28T17:20:28.291247Z",
@@ -5966,6 +5988,17 @@
       "scope_id": "P30-I02",
       "status": "complete",
       "verdict": "minor"
+    },
+    "A60-P30-i03": {
+      "check_results": [],
+      "created_at": "2026-06-10T00:11:21.472998Z",
+      "id": "A60-P30-i03",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A60-P30-i03",
+      "scope_id": "P30-I03",
+      "status": "complete",
+      "verdict": "pass"
     },
     "P28-I03-audit": {
       "check_results": [
@@ -7523,7 +7556,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I03",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -14932,6 +14965,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I03-W08",
       "updated_at": "2026-06-09T23:24:07.387767Z"
+    },
+    "P30-I03-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I03-W09-bucket-20260610T001036Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I03-W09",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I03-W09",
+      "updated_at": "2026-06-10T00:10:36.194062Z"
     }
   },
   "goals": {
@@ -16572,16 +16618,16 @@
       ]
     },
     "P30-I03": {
-      "audit_id": null,
+      "audit_id": "A60-P30-i03",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-10T00:11:21.970634Z",
       "description": "Close P30 observation 1: skill output drifts because the per-skill typed body model is never validated at emit and the descriptive prose has drifted from shipped P29 symbols. Bind body-validation-at-emit in run_skill (SKILL-1..3,6), validate_prose over envelope bodies (SKILL-5), lean/explain presets (SKILL-4), reconcile registry.py prose (SKILL-7), and a prose-vs-symbol drift oracle (SKILL-8). Each binding gets a fires-on-happy-path proof and a blocks-on-violation negative test.",
       "estimate_id": null,
       "id": "P30-I03",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753341Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Skill-output structure — validate typed bodies at emit + reconcile prose",
       "trigger": "none",
       "wave_ids": [
@@ -16592,7 +16638,8 @@
         "P30-I03-W08",
         "P30-I03-W03",
         "P30-I03-W05",
-        "P30-I03-W06"
+        "P30-I03-W06",
+        "P30-I03-W09"
       ]
     },
     "P30-I04": {
@@ -17099,6 +17146,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I02-close-A59-P30-i02",
       "summary": "iter P30-I02 closed with audit A59-P30-i02; waves closed=34; outcomes P30-I02-W01: Rotated accent+primary teal->green across the three theme variable maps + Theme ctors (WONG #... | P30-I02-W02: New pure widgets/sigils.py keystone: Sigil enum (5 lifecycle) + glyph/chrome/tint over unicod... | P30-I02-W03: Reskin wave; gate G-01 scored deterministically in-process.",
+      "tier": "working"
+    },
+    "MEM-P30-I03-close-A60-P30-i03": {
+      "confidence": "high",
+      "id": "MEM-P30-I03-close-A60-P30-i03",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-10T00:11:21.970634Z",
+      "scope_id": "P30-I03",
+      "status": "active",
+      "store_record_id": "MEM-P30-I03-close-A60-P30-i03",
+      "summary": "iter P30-I03 closed with audit A60-P30-i03; waves closed=9; outcomes P30-I03-W01: SKILL_BODY_MODELS + body_model_for live in workflow/skills/bodies; CLI _skill_body_models re-... | P30-I03-W02: run_skill validates registered dict bodies via model_validate pre-envelope: drifted extra-for... | P30-I03-W03: Planning PrepBody model_validator enforces non-empty reconciled dag + no dangling deps (Valid...",
       "tier": "working"
     }
   },
@@ -17803,7 +17861,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-09T23:44:52.054624Z",
+  "updated_at": "2026-06-10T00:11:21.971151Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -69112,6 +69170,84 @@
         }
       ],
       "title": "SKILL-8 Prose-vs-symbol drift oracle for registry.py",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I03-W09": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": "operator-flow-i03",
+      "claimed_at": "2026-06-10T00:10:36.194053Z",
+      "closed_at": "2026-06-10T00:10:39.273908Z",
+      "commit": "50de4becc10b65f99bec8a8adaa3dec06dfcd9c4",
+      "deps": [],
+      "description": "The AGENTS.md source block in core.yaml still points IntentBrief and NarrativeBundle at the dead kernel.spec.research home (W07 reconciled registry.py only; the audit flagged this sibling drift). IntentBrief lives at kernel.spec.intent and NarrativeBundle at surfaces.render.narrative; the rendered AGENTS.md and the two agents_md goldens follow the source fix.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/platform/profiles/data/core.yaml",
+        "tests/golden/agents_md/core_only.md",
+        "tests/golden/agents_md/core_python_research.md",
+        "AGENTS.md"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/golden/test_golden_agents_md.py",
+              "tests/unit/test_lint_hooks.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I03-W09",
+      "intent": null,
+      "iter_id": "P30-I03",
+      "opened_at": "2026-06-09T23:53:56.607580Z",
+      "outcome": "AGENTS-source refs reconciled (IntentBrief at kernel.spec.intent, NarrativeBundle at surfaces.render.narrative, v0.4 stamp dropped); AGENTS.md re-synced incl. landed zone/code-craft blocks; quality/agent_driven prose unwrapped for the no-manual-wrap lint; agents_md goldens regenerated.",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the agents_md golden suite, the lint-hook suite, and the platform profile suites pass against the reconciled source + render; pytest exit zero",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the agents_md golden + lint-hook suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The AGENTS.md source block in core.yaml names the live homes (IntentBrief at kernel.spec.intent, NarrativeBundle at surfaces.render.narrative) with the stale v0.4 stamp dropped; the re-rendered AGENTS.md passes the no-manual-wrap lint (the freshly synced quality/agent_driven prose unwrapped at source); and the two agents_md goldens match the reconciled render byte-for-byte.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Reconcile AGENTS-source IntentBrief/NarrativeBundle refs to live homes",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
