@@ -4835,6 +4835,18 @@
       "scope_id": "P30-I05-W14",
       "status": "done",
       "updated_at": "2026-06-10T15:41:39.199213Z"
+    },
+    "P30-I05-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W15",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W15",
+      "scope_id": "P30-I05-W15",
+      "status": "done",
+      "updated_at": "2026-06-10T15:50:38.253520Z"
     }
   },
   "agent_sessions": {
@@ -15624,6 +15636,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I05-W14",
       "updated_at": "2026-06-10T15:39:47.282033Z"
+    },
+    "P30-I05-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W15-bucket-20260610T155001Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I05-W15",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I05-W15",
+      "updated_at": "2026-06-10T15:50:01.829286Z"
     }
   },
   "goals": {
@@ -18524,7 +18549,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T15:49:49.783398Z",
+  "updated_at": "2026-06-10T15:50:38.253737Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74389,10 +74414,10 @@
     "P30-I05-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i05-w15",
+      "claimed_at": "2026-06-10T15:50:01.829278Z",
+      "closed_at": "2026-06-10T15:50:38.253520Z",
+      "commit": "1dedcdb5d54f2ad07766c3dcbfb21a0f7b0c5d17",
       "deps": [],
       "description": "Polish sweep flagged _tokens_to_eu's keyword-only tokens_per_eu param plus its <=0.0 guard as YAGNI: the sole caller (_runtime_basis_eu) never overrides it, and the eu_basis choice already happens at the call site. Divide by the module constant directly.",
       "dispatch_history": [],
@@ -74422,12 +74447,12 @@
       },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-10T15:49:49.783229Z",
-      "outcome": null,
+      "outcome": "Removed the dead tokens_per_eu param + unreachable guard from _tokens_to_eu; divides by DEFAULT_TOKENS_PER_EU directly. 64 close-actuals/telemetry tests green, mypy clean. Polish-sweep YAGNI nit resolved.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
