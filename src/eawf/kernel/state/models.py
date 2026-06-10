@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.common import CriterionSpec, GateSpec
@@ -63,6 +63,7 @@ from eawf.kernel.state.ids import (
     RE_PHASE,
     RE_PROJECT_CODE,
     RE_WAVE,
+    natural_key,
 )
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.urn import URN_KINDS
@@ -361,6 +362,22 @@ class Iter(_DescribedEntity):
     opened_at: UtcDatetime
     closed_at: UtcDatetime | None = None
     intent: IntentBrief | None = None
+
+    @field_validator("wave_ids")
+    @classmethod
+    def _normalize_wave_ids(cls, wave_ids: list[WaveIdStr]) -> list[WaveIdStr]:
+        """Sort ``wave_ids`` into ascending natural-id order on every validation.
+
+        Stored iters from before this rule kept ``wave_ids`` in append order,
+        which diverges from ascending ``W##`` order whenever a wave was claimed
+        out-of-order or a reactive wave landed after a higher-numbered sibling.
+        Normalizing here is self-healing: loading then persisting state rewrites
+        a divergent iter to ascending order with no separate migration step, and
+        every render site that iterates ``wave_ids`` gets ascending order for
+        free. The sort is idempotent (an already-sorted list is unchanged) and
+        total (membership is preserved; only the order changes).
+        """
+        return sorted(wave_ids, key=natural_key)
 
 
 class SessionAttempt(_StrictModel):
