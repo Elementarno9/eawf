@@ -17238,7 +17238,9 @@
         "P30-I05-W07",
         "P30-I05-W08",
         "P30-I05-W10",
-        "P30-I05-W09"
+        "P30-I05-W09",
+        "P30-I05-W11",
+        "P30-I05-W12"
       ]
     },
     "P30-I06": {
@@ -18419,7 +18421,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T11:58:16.035081Z",
+  "updated_at": "2026-06-10T13:27:22.700494Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73990,6 +73992,136 @@
         }
       ],
       "title": "EUCAP-10 Spike wall-clock fallback when cost block absent",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I05-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Add a justfile with parallel test recipes mirroring CI, document just test as the fast-suite command, route agent full-suite runs through it, and drop the false slow-marker exclusion claim.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "justfile",
+        "CONTRIBUTING.md",
+        "pyproject.toml",
+        "src/eawf/platform/profiles/data/python.yaml",
+        "AGENTS.md"
+      ],
+      "gates": [],
+      "id": "P30-I05-W11",
+      "intent": {
+        "desired_outcome": "A one-word just test command mirrors CI parallelism and agents are told to use it; targeted uv run pytest stays serial-fast for TDD",
+        "evidence_refs": [
+          "pyproject.toml",
+          "CONTRIBUTING.md",
+          ".github/workflows/ci.yaml"
+        ],
+        "planned_steps": [
+          "Add justfile with test/test-all/test-tui recipes",
+          "Update CONTRIBUTING.md fast-suite command and just install note",
+          "Add python.yaml test-discipline bullet and re-render AGENTS.md",
+          "Drop false slow-marker exclusion claim in pyproject"
+        ],
+        "priority_rationale": "Every agent and contributor pays the serial-suite tax on the default command CONTRIBUTING documents; a justfile makes the fast path one word without slowing targeted TDD runs.",
+        "problem": "Bare uv run pytest runs all 11k tests single-process serial because addopts has no -n; CI is fast only via explicit -n auto",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I05",
+      "opened_at": "2026-06-10T13:27:22.072736Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "slow marker description drops the false excluded-from-default-run claim",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "slow marker description drops the false excluded-from-default-run claim",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add justfile fast-test ergonomics plus marker honesty",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I05-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Remove the eager kernel.config.registry import from import eawf.surfaces.cli.app by lazily resolving PANEL_ORDER and moving the import-time drift guard into a unit test, shaving registry cost off every CLI/worker/e2e cold start.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/help_panels.py",
+        "tests/integration/test_cli_help_groups.py"
+      ],
+      "gates": [],
+      "id": "P30-I05-W12",
+      "intent": {
+        "desired_outcome": "import eawf.surfaces.cli.app no longer imports kernel.config.registry; ~50ms shaved off every cold start with help rendering and the drift guard preserved",
+        "evidence_refs": [
+          "src/eawf/surfaces/cli/help_panels.py",
+          "src/eawf/kernel/spec/__init__.py"
+        ],
+        "planned_steps": [
+          "Drop eager tabs_sorted import",
+          "Make PANEL_ORDER lazy via functools.cache plus module __getattr__",
+          "Move import-time drift guard into a unit test",
+          "Verify cold start no longer imports registry and help still renders"
+        ],
+        "priority_rationale": "The registry chain is import-time but only needed at --help; each xdist worker and cold e2e subprocess re-pays it, capping the parallel-test win this iter is chasing.",
+        "problem": "help_panels.py runs PANEL_ORDER = tabs_sorted() at import, dragging the kernel.config.registry chain (~50ms) onto every CLI/worker/e2e cold start though it is only needed at --help",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I05",
+      "opened_at": "2026-06-10T13:27:22.700293Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "eawf --help still renders panels in alphabetical order with existing help-group tests green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf --help still renders panels in alphabetical order with existing help-group tests green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Defer registry import in help_panels cold path",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
