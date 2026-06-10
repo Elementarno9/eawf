@@ -4991,6 +4991,18 @@
       "scope_id": "P30-I07-W01",
       "status": "done",
       "updated_at": "2026-06-10T21:01:31.518230Z"
+    },
+    "P30-I07-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W02",
+      "scope_id": "P30-I07-W02",
+      "status": "done",
+      "updated_at": "2026-06-10T21:08:52.441800Z"
     }
   },
   "agent_sessions": {
@@ -8074,7 +8086,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I07-W06",
+      "P30-I07-W10"
+    ],
     "iter_id": "P30-I07",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -8671,7 +8686,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -15991,6 +16006,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I07-W01",
       "updated_at": "2026-06-10T20:44:23.000993Z"
+    },
+    "P30-I07-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W02-bucket-20260610T210224Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I07-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I07-W02",
+      "updated_at": "2026-06-10T21:02:24.299770Z"
+    },
+    "P30-I07-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W06-bucket-20260610T210548Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I07-W06",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I07-W06",
+      "updated_at": "2026-06-10T21:05:48.021333Z"
+    },
+    "P30-I07-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W10-bucket-20260610T210548Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I07-W10",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I07-W10",
+      "updated_at": "2026-06-10T21:05:48.512717Z"
     }
   },
   "goals": {
@@ -18916,7 +18970,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T21:01:31.518416Z",
+  "updated_at": "2026-06-10T21:08:52.442005Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -75704,10 +75758,10 @@
     "P30-I07-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i07-w02",
+      "claimed_at": "2026-06-10T21:02:24.299219Z",
+      "closed_at": "2026-06-10T21:08:52.441800Z",
+      "commit": "ab6a93b70238c3e268e33cf72c53771fd5ee45e1",
       "deps": [
         "P30-I07-W01"
       ],
@@ -75716,19 +75770,20 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/surfaces/tui/screens/overlays/detail.py",
-        "src/eawf/kernel/spec/common.py"
+        "src/eawf/kernel/spec/common.py",
+        "tests/tui/test_overlays_detail.py"
       ],
       "gates": [],
       "id": "P30-I07-W02",
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.777711Z",
-      "outcome": null,
+      "outcome": "Gates section: Wave.gates GateSpec rows grouped under criterion_id; gate-less wave omits the section header. 7 gate + 96 detail/snapshot tests green, no drift, mypy/ruff clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -75904,8 +75959,8 @@
         "P30-I07-W07",
         "P30-I07-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w06",
+      "claimed_at": "2026-06-10T21:05:48.020946Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -75926,7 +75981,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76107,8 +76162,8 @@
       "blocks": [
         "P30-I07-W11"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w10",
+      "claimed_at": "2026-06-10T21:05:48.512636Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -76129,7 +76184,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
