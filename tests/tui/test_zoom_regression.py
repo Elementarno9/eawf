@@ -68,10 +68,16 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import UserScreen, WorkspaceScreen
+from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
 from eawf.surfaces.tui.scopes.user import PortfolioTable
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
+from eawf.surfaces.tui.widgets.workspace_table import (
+    WorkspaceTable,
+    _sigil_hex,
+    repo_row_from_path,
+    repo_row_sigil,
+)
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
@@ -488,5 +494,227 @@ def test_exit_zoom_restores_focus_to_browse_table() -> None:
             focused = app.focused
             assert focused is not None
             assert isinstance(focused, WorkspaceTable)
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# P30-I08-W04: the zoom quadrant in the reskin (green/sigil title + shared
+# accent-dim focus tint across both scopes)
+# --------------------------------------------------------------------------
+
+
+def _expected_title(repo_code: str, repo_path: str, *, mode: str) -> str:
+    """Return the green/sigil quadrant title the shared grid helpers produce.
+
+    Built off the same
+    :func:`~eawf.surfaces.tui.widgets.workspace_table.repo_row_sigil` +
+    :func:`~eawf.surfaces.tui.widgets.workspace_table._sigil_hex` pipeline the
+    parent grid row uses, so the test pins parity with the grid rather than
+    hard-coding a glyph -- a retune of the sigil / tint lands in one place and
+    both the title and this expectation track it.
+
+    Args:
+        repo_code: The focused repo's project code.
+        repo_path: The focused repo's on-disk path (the sigil's state source).
+        mode: The render-mode label selecting the glyph column.
+
+    Returns:
+        The expected ``<tinted-sigil> REPO . <code>`` markup.
+    """
+    row = repo_row_from_path(repo_code, repo_path)
+    from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_BAND_PALETTE
+
+    sigil = _sigil_hex(repo_row_sigil(row), mode=mode, palette=DEFAULT_BAND_PALETTE)
+    return f"{sigil} REPO · {repo_code}"
+
+
+def test_quadrant_title_renders_green_sigil_language() -> None:
+    """The quadrant header leads with the parent grid's tinted lifecycle sigil.
+
+    The reskin replaces the bare ``REPO . <code>`` header with the green/sigil
+    language: the title is built through the SAME ``repo_row_sigil`` /
+    ``_sigil_hex`` helpers the parent grid row wears, so a stale fixture repo's
+    header opens with the muted ABANDONED circled-slash span exactly as its grid
+    row does. Asserting against the shared-helper expectation (not a literal
+    glyph) pins the parity invariant: the title and the row read the same sigil.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            assert app.state is not None
+            assert app.state.workspace is not None
+            repo_path = app.state.workspace.repos[_FIXTURE_REPO].path
+            title = screen._quadrant_title(_FIXTURE_REPO, repo_path)
+            assert title == _expected_title(_FIXTURE_REPO, repo_path, mode=app.render_mode)
+            # The green/sigil span leads; the plain label trails it.
+            assert title.endswith(f" REPO · {_FIXTURE_REPO}")
+            assert title.startswith("[")
+
+    asyncio.run(body())
+
+
+def test_quadrant_title_tracks_render_mode_ascii() -> None:
+    """The quadrant title resolves the ASCII glyph column under ASCII mode.
+
+    The title threads the App's resolved ``render_mode`` into the sigil column
+    just as every other reskin surface does, so an ASCII-mode operator sees the
+    deconflicted ASCII sigil (never a unicode box). Boundary check on the
+    mode-selection branch: the ascii title differs from the unicode one and
+    still matches the shared-helper ascii expectation.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            assert app.state is not None
+            assert app.state.workspace is not None
+            repo_path = app.state.workspace.repos[_FIXTURE_REPO].path
+            app.render_mode = "ascii"
+            await pilot.pause()
+            ascii_title = screen._quadrant_title(_FIXTURE_REPO, repo_path)
+            assert ascii_title == _expected_title(_FIXTURE_REPO, repo_path, mode="ascii")
+            app.render_mode = "unicode"
+            await pilot.pause()
+            unicode_title = screen._quadrant_title(_FIXTURE_REPO, repo_path)
+            assert ascii_title != unicode_title
+
+    asyncio.run(body())
+
+
+def test_zoom_render_mode_falls_back_under_bare_harness() -> None:
+    """``_zoom_render_mode`` defaults to the unicode mode off a host App.
+
+    Error-path / boundary cover for the mode resolver: a bare object with no
+    ``render_mode`` attribute (the off-app harness) must resolve the shared
+    default rather than raise ``AttributeError``, so the title helper still
+    renders a glyph column when no App is mounted.
+    """
+    from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+
+    mixin = RepoZoomMixin()
+    mixin.app = object()  # type: ignore[assignment]
+    assert mixin._zoom_render_mode() == DEFAULT_RENDER_MODE
+
+
+def test_zoom_quadrant_shares_one_accent_dim_focus_tint_workspace() -> None:
+    """Exactly one workspace quadrant pane wears the ``-focused`` accent-dim tint.
+
+    The criterion's focus half: the quadrant panes share ONE accent-dim focus
+    tint with the parent table -- the global ``.pane.-focused`` rule lifts the
+    pane owning keyboard focus to the bright ``$primary`` border while the rest
+    stay the dim ``$accent`` border. On zoom the roadmap pane holds focus, so it
+    (and only it) carries ``-focused``; the four panes are the same ``.pane``
+    class the parent ``#pane-workspace`` table wears, so the tint is shared.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert screen.zoomed
+            panes = list(screen.query("#zoom-quadrant .pane"))
+            assert len(panes) == 4
+            focused_panes = [p for p in panes if p.has_class("-focused")]
+            assert len(focused_panes) == 1
+            # The lit pane is the one that owns the focused widget.
+            assert app.focused is not None
+            assert app.focused in focused_panes[0].walk_children(with_self=True)
+            # The parent table pane wears the same .pane class the tint keys on.
+            assert screen.query_one("#pane-workspace").has_class("pane")
+
+    asyncio.run(body())
+
+
+def test_zoom_quadrant_shares_one_accent_dim_focus_tint_portfolio() -> None:
+    """The portfolio (user) scope shares the identical one-pane focus tint.
+
+    The criterion's "from either scope" half: zooming a repo from the user
+    portfolio table mounts the same quadrant and lights exactly one pane via the
+    same shared ``.pane.-focused`` accent-dim rule, proving the tint is one
+    vocabulary across both hosts (the user scope reuses the mixin verbatim).
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="user", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, UserScreen)
+            screen.query_one(PortfolioTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert screen.zoomed
+            panes = list(screen.query("#zoom-quadrant .pane"))
+            assert len(panes) == 4
+            focused_panes = [p for p in panes if p.has_class("-focused")]
+            assert len(focused_panes) == 1
+            assert app.focused is not None
+            assert app.focused in focused_panes[0].walk_children(with_self=True)
+            assert screen.query_one("#pane-portfolio").has_class("pane")
+
+    asyncio.run(body())
+
+
+def test_zoom_focus_tint_follows_focus_movement() -> None:
+    """Moving focus across quadrant panes moves the single accent-dim tint.
+
+    The focus tint is live, not a one-shot mount paint: when the operator tabs
+    focus from the roadmap pane to another quadrant widget, the ``-focused``
+    border follows so still exactly one pane is lit -- the
+    ``on_descendant_focus`` repaint keeps the shared tint in lockstep with the
+    real focus, matching the parent table's moving row highlight.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            screen = app.screen
+            assert isinstance(screen, WorkspaceScreen)
+            screen.query_one(WorkspaceTable).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert screen.zoomed
+            roadmap_pane = next(
+                p
+                for p in screen.query("#zoom-quadrant .pane")
+                if screen.query_one("#zoom-roadmap") in p.walk_children(with_self=True)
+            )
+            assert roadmap_pane.has_class("-focused")
+            # Move focus onto the backlog table (a different quadrant pane).
+            screen.query_one("#zoom-backlog").focus()
+            await pilot.pause()
+            backlog_pane = next(
+                p
+                for p in screen.query("#zoom-quadrant .pane")
+                if screen.query_one("#zoom-backlog") in p.walk_children(with_self=True)
+            )
+            lit = [p for p in screen.query("#zoom-quadrant .pane") if p.has_class("-focused")]
+            assert lit == [backlog_pane]
+            assert not roadmap_pane.has_class("-focused")
 
     asyncio.run(body())

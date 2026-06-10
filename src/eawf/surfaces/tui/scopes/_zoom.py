@@ -50,12 +50,20 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.state_binding import load_state
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.git_pane import GitPane
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
 from eawf.surfaces.tui.widgets.status_pane import StatusPane
-from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
+from eawf.surfaces.tui.widgets.workspace_table import (
+    WorkspaceTable,
+    _band_palette,
+    _sigil_hex,
+    repo_row_from_path,
+    repo_row_sigil,
+)
 
 if TYPE_CHECKING:
+    from textual.events import DescendantFocus
     from textual.screen import Screen
 
     from eawf.kernel.state.models import State, WorkspaceRepoRef
@@ -65,6 +73,15 @@ else:
     _Base = object
 
 logger = logging.getLogger(__name__)
+
+#: Selector for the four bordered quadrant panes the shared accent-dim focus
+#: tint plays across. Each is the ``.pane`` wrapper of one quadrant widget
+#: (roadmap / status / git / backlog); the pane whose widget currently holds
+#: keyboard focus lifts to the bright ``$primary`` border via the global
+#: ``.pane.-focused`` rule, every other pane stays the dim ``$accent`` border --
+#: the same accent-dim border vocabulary the parent table's panes wear, so the
+#: zoomed quadrant shares ONE focus tint with the grid it sprang from.
+_QUADRANT_PANE_SELECTOR: str = "#zoom-quadrant .pane"
 
 
 class RepoZoomMixin(_Base):
@@ -233,7 +250,7 @@ class RepoZoomMixin(_Base):
         git = GitPane(id="zoom-git", cwd=repo_path)
         backlog = BacklogTable(id="zoom-backlog")
         quadrant = Vertical(
-            Static(f"REPO · {repo_code}", classes="pane-title"),
+            Static(self._quadrant_title(repo_code, ref.path), classes="pane-title"),
             Horizontal(
                 Vertical(Static("ROADMAP", classes="pane-title"), roadmap, classes="pane"),
                 Vertical(Static("STATUS", classes="pane-title"), status, classes="pane"),
@@ -258,6 +275,102 @@ class RepoZoomMixin(_Base):
         # the arrow keys land in the zoomed view instead of nowhere.
         self.call_after_refresh(self._seed_quadrant, repo_state)
         self.call_after_refresh(self._focus_zoom_quadrant)
+        # Paint the shared accent-dim focus tint once the panes mount, so the
+        # roadmap pane the deferred focus pass lands on reads as the bright
+        # ``$primary`` border (its sibling panes stay the dim ``$accent``),
+        # mirroring the parent grid's focused-row highlight from the first
+        # frame rather than only after the operator moves focus.
+        self.call_after_refresh(self._repaint_zoom_focus)
+
+    def _quadrant_title(self, repo_code: str, repo_path: str) -> str:
+        """Render the quadrant header in the green/sigil language as Rich markup.
+
+        The header leads with the focused repo's lifecycle sigil -- the same
+        :func:`~eawf.surfaces.tui.widgets.workspace_table.repo_row_sigil` mark the
+        parent grid row wears (RUNNING for an active-phase repo, ABANDONED for a
+        stale one, CLOSED otherwise), tinted through the shared
+        :func:`~eawf.surfaces.tui.widgets.workspace_table._sigil_hex` so the calm
+        CLOSED green / RUNNING amber / ABANDONED grey track the active theme --
+        then ``REPO . <code>``. Because the title is a Rich-markup-capable
+        :class:`~textual.widgets.Static` (not a DataTable cell), the tinted span
+        renders directly. The sigil + tint are read off the focused repo's own
+        ``state.json`` via :func:`repo_row_from_path` so the mark matches the row
+        the operator zoomed from.
+
+        Args:
+            repo_code: The focused repo's project code (the header label).
+            repo_path: The focused repo's on-disk path (the sigil's state source).
+
+        Returns:
+            The Rich-markup header string ``<tinted-sigil> REPO . <code>``.
+        """
+        row = repo_row_from_path(repo_code, repo_path)
+        sigil = _sigil_hex(
+            repo_row_sigil(row), mode=self._zoom_render_mode(), palette=self._zoom_palette()
+        )
+        return f"{sigil} REPO · {repo_code}"
+
+    def _zoom_render_mode(self) -> RenderMode:
+        """Return the App's resolved render mode, or the unicode default.
+
+        Selects the sigil's ASCII / unicode glyph column. Falls back to the
+        shared :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` under a
+        bare harness whose host App carries no ``render_mode`` attribute, so the
+        title still resolves a glyph off-app.
+
+        Returns:
+            The active ``"unicode"`` / ``"ascii"`` render-mode label.
+        """
+        return cast(RenderMode, getattr(self.app, "render_mode", DEFAULT_RENDER_MODE))
+
+    def _zoom_palette(self) -> dict[str, str]:
+        """Return the theme-resolved status-tint band + brand palette for the sigil.
+
+        Threads the App through the shared
+        :func:`~eawf.surfaces.tui.widgets.workspace_table._band_palette` so the
+        quadrant title's CLOSED green is read off the same ``ok`` band the parent
+        grid bakes its row sigils with -- one tint source, no drift between the
+        zoomed header and the row it sprang from.
+
+        Returns:
+            A ``{"ok"|"warn"|"err"|"accent": "#rrggbb"}`` band map.
+        """
+        return _band_palette(cast(Any, self.app))
+
+    async def on_descendant_focus(self, _event: DescendantFocus) -> None:
+        """Repaint the quadrant's shared focus tint when descendant focus moves.
+
+        Textual posts ``DescendantFocus`` to the screen whenever a child widget
+        gains keyboard focus. While a quadrant is mounted, that means the
+        operator moved focus onto a new quadrant pane (or the browse table on
+        exit), so the ``.pane.-focused`` accent-dim tint must follow: the pane
+        owning the freshly-focused widget lifts to the bright border, the rest
+        recede. A no-op when not zoomed so a browse-mode focus change never pays
+        the repaint.
+
+        Args:
+            _event: The Textual descendant-focus event (the new focus target is
+                read off ``app.focused``, so the event payload is unused).
+        """
+        if self.zoomed:
+            self._repaint_zoom_focus()
+
+    def _repaint_zoom_focus(self) -> None:
+        """Toggle the ``.pane.-focused`` tint onto the quadrant pane that owns focus.
+
+        Walks the four bordered quadrant panes (:data:`_QUADRANT_PANE_SELECTOR`)
+        and sets the ``-focused`` class on exactly the one whose subtree contains
+        the App's currently-focused widget, clearing it on the others. The global
+        ``.pane.-focused`` rule then paints that pane the bright ``$primary``
+        border while its siblings keep the dim ``$accent`` border -- the same
+        accent-dim focus vocabulary the parent table's panes share, so the zoom
+        and the grid read as one surface. A no-op (every pane cleared) when
+        nothing in the quadrant holds focus.
+        """
+        focused = self.app.focused
+        for pane in self.query(_QUADRANT_PANE_SELECTOR):
+            owns_focus = focused is not None and focused in pane.walk_children(with_self=True)
+            pane.set_class(owns_focus, "-focused")
 
     def _seed_quadrant(self, repo_state: State | None) -> None:
         """Assign the focused repo's state into the mounted quadrant widgets.
