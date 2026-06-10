@@ -40,6 +40,12 @@ def state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(state_dir / "instrument-probe.json"))
     monkeypatch.delenv("EAWF_BLITZ_DEPTH", raising=False)
     monkeypatch.delenv("EAWF_BLITZ_DEPTH_COUNTER", raising=False)
+    # Isolate the global config layer so the no-flag depth resolves to the
+    # built-in ``medium`` default rather than the developer's machine-global
+    # ``research.default_depth`` leaf (the stage now reads that leaf).
+    from eawf.kernel.config import layered
+
+    monkeypatch.setattr(layered, "global_config_path", lambda: tmp_path / "absent-global.yaml")
     return state_dir
 
 

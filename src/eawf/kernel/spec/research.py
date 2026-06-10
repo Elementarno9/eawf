@@ -27,7 +27,9 @@ question-slot count the skill's v0.1 synthesis path pre-allocates.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
+from typing import Any
 
 
 class ResearchDepth(StrEnum):
@@ -90,6 +92,51 @@ def coerce_research_depth(raw: str | None) -> ResearchDepth:
         return DEFAULT_RESEARCH_DEPTH
 
 
+#: Dotted layered-config leaf the research stage resolves its no-flag default
+#: from. Kept here so the leaf name has one home next to the ladder it feeds.
+RESEARCH_DEFAULT_DEPTH_KEY: str = "research.default_depth"
+
+
+def resolve_default_research_depth(merged_config: Mapping[str, Any]) -> ResearchDepth:
+    """Resolve the no-flag research default from a merged layered-config dict.
+
+    The research stage calls this when no ``--depth`` flag is supplied so the
+    ``research.default_depth`` config leaf is honoured rather than the bare
+    module constant. The caller owns the layered-config merge (this module
+    stays free of any config-layer import so the one-way
+    ``config -> spec.research`` dependency holds); pass the nested ``merged``
+    dict :func:`eawf.kernel.config.layered.merge_config` returns.
+
+    A missing leaf falls back to :data:`DEFAULT_RESEARCH_DEPTH` — an absent
+    key just means "ships with the default". A *present* leaf set to an
+    out-of-ladder token is a real misconfiguration and raises, unlike the
+    lenient ``--depth`` flag path in :func:`coerce_research_depth` where a
+    transient CLI typo must never abort a run.
+
+    Args:
+        merged_config: The composed layered-config dict (nested form).
+
+    Returns:
+        The configured :class:`ResearchDepth`, or :data:`DEFAULT_RESEARCH_DEPTH`
+        when the leaf is absent.
+
+    Raises:
+        ValueError: the ``research.default_depth`` leaf is present but holds
+            a token outside the closed ladder.
+    """
+    research = merged_config.get("research")
+    if not isinstance(research, Mapping) or "default_depth" not in research:
+        return DEFAULT_RESEARCH_DEPTH
+    raw = research["default_depth"]
+    try:
+        return ResearchDepth(raw)
+    except ValueError:
+        raise ValueError(
+            f"invalid {RESEARCH_DEFAULT_DEPTH_KEY!r} config value: {raw!r} "
+            f"(expected one of {RESEARCH_DEPTH_VALUES})"
+        ) from None
+
+
 def research_depth_question_slots(depth: ResearchDepth) -> int:
     """Return the synthetic question-slot count for *depth*.
 
@@ -118,9 +165,11 @@ def research_depth_emits_fanout(depth: ResearchDepth) -> bool:
 
 __all__ = [
     "DEFAULT_RESEARCH_DEPTH",
+    "RESEARCH_DEFAULT_DEPTH_KEY",
     "RESEARCH_DEPTH_VALUES",
     "ResearchDepth",
     "coerce_research_depth",
     "research_depth_emits_fanout",
     "research_depth_question_slots",
+    "resolve_default_research_depth",
 ]

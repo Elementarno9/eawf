@@ -24,10 +24,12 @@ Honoured flags (per the W02 acceptance contract):
 
 - ``--depth shallow|medium|deep|exhaustive`` — passed via
   ``ctx.args["depth"]`` and resolved against the canonical
-  :class:`~eawf.kernel.spec.research.ResearchDepth` ladder (default
-  ``medium``); controls the number of synthesised question slots and the
-  body's ``recommendation.confidence`` default. Unknown tokens fall back
-  to the default depth rather than aborting the run.
+  :class:`~eawf.kernel.spec.research.ResearchDepth` ladder; controls the
+  number of synthesised question slots and the body's
+  ``recommendation.confidence`` default. An unknown flag value falls back
+  to the default depth rather than aborting the run. With no flag the
+  stage reads the ``research.default_depth`` layered-config leaf (default
+  ``medium``); a leaf set to an out-of-ladder token aborts the run.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from eawf.kernel.spec.research import (
@@ -44,6 +47,7 @@ from eawf.kernel.spec.research import (
     coerce_research_depth,
     research_depth_emits_fanout,
     research_depth_question_slots,
+    resolve_default_research_depth,
 )
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.append import append_envelope
@@ -167,8 +171,7 @@ class ResearchSkill(SkillAction):
     name: SkillName = "/research"
 
     def _gather(self, run: ActionRun) -> _ResearchInputs:
-        raw_depth = run.args.get("depth")
-        depth = coerce_research_depth(str(raw_depth) if raw_depth is not None else None)
+        depth = self._resolve_depth(run)
         topic = str(run.args.get("topic") or run.args.get("message") or run.scope_id)
         return _ResearchInputs(
             depth=depth,
@@ -177,6 +180,47 @@ class ResearchSkill(SkillAction):
             final_requested=_bool_arg(run.args, "final", "save", default=False),
             blitz_enabled=_bool_arg(run.args, "blitz", default=True),
         )
+
+    def _resolve_depth(self, run: ActionRun) -> ResearchDepth:
+        """Resolve the survey depth for this run.
+
+        An explicit ``--depth`` flag wins and is coerced leniently (an
+        out-of-ladder token falls back to the default rather than aborting,
+        per the skill's documented flag contract). With no flag the stage
+        honours the ``research.default_depth`` layered-config leaf — closing
+        the standing idle config contract where the leaf was registered but
+        nothing read it. A misconfigured leaf (out-of-ladder token) raises
+        out of :func:`resolve_default_research_depth`; the engine maps the
+        raise onto a ``status=failed`` envelope.
+
+        Returns:
+            The resolved canonical :class:`ResearchDepth`.
+        """
+        raw_depth = run.args.get("depth")
+        if raw_depth is not None:
+            return coerce_research_depth(str(raw_depth))
+        merged = self._merged_config(run.state_path)
+        return resolve_default_research_depth(merged)
+
+    @staticmethod
+    def _merged_config(state_path: Path) -> dict[str, Any]:
+        """Compose the layered config anchored at the active repo.
+
+        Deferred import mirrors :func:`eawf.workflow.skills._common.has_research_profile`
+        so the skill does not pull the profile/Yaml machinery at import time.
+        The anchor (``<repo>``) is the state file's grandparent (``.ea`` is the
+        parent). A merge failure degrades to an empty mapping so the caller
+        falls back to the built-in default rather than crashing the run.
+        """
+        from eawf.kernel.config.layered import merge_config
+
+        anchor = state_path.parent.parent
+        try:
+            merged, _sources = merge_config(repo=anchor, workspace=anchor)
+        except Exception as exc:  # pragma: no cover - defensive only
+            logger.debug(f"_merged_config merge_error={exc!r}")
+            return {}
+        return merged
 
     def _validate(self, run: ActionRun, inputs: _ResearchInputs) -> SkillResult | None:
         # The probe (engine-owned) is the only up-front gate; nothing else to
