@@ -5063,6 +5063,18 @@
       "scope_id": "P30-I07-W10",
       "status": "done",
       "updated_at": "2026-06-10T21:14:25.386469Z"
+    },
+    "P30-I07-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W11",
+      "scope_id": "P30-I07-W11",
+      "status": "done",
+      "updated_at": "2026-06-10T21:26:50.242094Z"
     }
   },
   "agent_sessions": {
@@ -8147,7 +8159,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I07-W11",
       "P30-I07-W07",
       "P30-I07-W08"
     ],
@@ -19109,7 +19120,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T21:26:23.270937Z",
+  "updated_at": "2026-06-10T21:26:50.242288Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -76353,8 +76364,8 @@
       ],
       "claim_session_id": "flow-p30-i07-w11",
       "claimed_at": "2026-06-10T21:15:07.927547Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T21:26:50.242094Z",
+      "commit": "ed65e93f0e11e2e1c014b87332209e28de84914c",
       "deps": [
         "P30-I07-W10"
       ],
@@ -76369,12 +76380,12 @@
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.780515Z",
-      "outcome": null,
+      "outcome": "ComposeCampaignModal + n key wired to research.stage_campaign off-thread; board re-renders the new node; Esc=zero RPCs; empty-topic surfaces honest daemon rejection (replaced an idle-contract stub). 112 tests green, mypy/ruff clean. Cherry-picked from worktree.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
