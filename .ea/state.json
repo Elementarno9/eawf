@@ -4907,6 +4907,30 @@
       "scope_id": "P30-I06-W04",
       "status": "done",
       "updated_at": "2026-06-10T18:45:04.923439Z"
+    },
+    "P30-I06-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W05",
+      "scope_id": "P30-I06-W05",
+      "status": "done",
+      "updated_at": "2026-06-10T19:51:59.655977Z"
+    },
+    "P30-I06-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W09",
+      "scope_id": "P30-I06-W09",
+      "status": "done",
+      "updated_at": "2026-06-10T19:39:05.684004Z"
     }
   },
   "agent_sessions": {
@@ -15795,6 +15819,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I06-W04",
       "updated_at": "2026-06-10T18:39:35.549117Z"
+    },
+    "P30-I06-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W05-bucket-20260610T184521Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I06-W05",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I06-W05",
+      "updated_at": "2026-06-10T18:45:21.780806Z"
+    },
+    "P30-I06-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W09-bucket-20260610T190437Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I06-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I06-W09",
+      "updated_at": "2026-06-10T19:04:37.663625Z"
     }
   },
   "goals": {
@@ -17539,7 +17589,8 @@
         "P30-I06-W04",
         "P30-I06-W06",
         "P30-I06-W08",
-        "P30-I06-W07"
+        "P30-I06-W07",
+        "P30-I06-W09"
       ]
     },
     "P30-I07": {
@@ -18707,7 +18758,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T18:45:04.923658Z",
+  "updated_at": "2026-06-10T19:51:59.656166Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -75047,10 +75098,10 @@
       "blocks": [
         "P30-I06-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i06-w05",
+      "claimed_at": "2026-06-10T18:45:21.780798Z",
+      "closed_at": "2026-06-10T19:51:59.655977Z",
+      "commit": "d0742dca995144a9df8a6e365f9bdf4b0006d042",
       "deps": [],
       "description": "Extend RenderBlockTier with a per-agent_role role-rule tier and inject the resolved role rules into RoleContract.system_prompt inside build_role_contract, so the dispatched child's prompt carries profile-sourced role rules additively.",
       "dispatch_history": [],
@@ -75058,19 +75109,20 @@
       "file_scopes": [
         "src/eawf/platform/render_block.py",
         "src/eawf/workflow/dispatch/renderer.py",
-        "src/eawf/workflow/agents/specs/models.py"
+        "src/eawf/platform/profiles/models.py",
+        "tests/unit/test_dispatch_role_tier.py"
       ],
       "gates": [],
       "id": "P30-I06-W05",
       "intent": null,
       "iter_id": "P30-I06",
       "opened_at": "2026-06-09T12:29:17.761377Z",
-      "outcome": null,
+      "outcome": "Per-role dispatch render tier: executor block injects; absent/cross-role byte-identical no-op; 12 tests + renderer/compose/golden green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -75298,6 +75350,70 @@
         }
       ],
       "title": "FLEET-8 wire codex tool-deny (allowlist inversion) on spawn argv",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I06-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30-i06-w09",
+      "claimed_at": "2026-06-10T19:04:37.663617Z",
+      "closed_at": "2026-06-10T19:39:05.684004Z",
+      "commit": "1197c64ad9976d512f8c7da6b54a974d2bdc5e54",
+      "deps": [],
+      "description": "run_oracle held a jury FAIL advisory (uncalibrated jury) but let NEEDS_USER (split / sub-quorum) block the close. With codex/opencode jurors still stubs the jury cannot reach quorum, so every L/judgment-role wave intermittently blocks on a spurious NEEDS_USER. Generalize the advisory hold to ANY non-pass so an advisory jury only logs; TRUST-4 (I09) grants real blocking authority.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/verify/oracle.py",
+        "tests/daemon/test_wave_cross_vendor_jury_gate.py"
+      ],
+      "gates": [],
+      "id": "P30-I06-W09",
+      "intent": {
+        "desired_outcome": "An advisory jury never blocks a close (logs the non-pass at WARNING + oracle detail); blocking authority is granted only by TRUST-4 calibration in I09.",
+        "evidence_refs": [
+          "src/eawf/workflow/verify/oracle.py:217",
+          "src/eawf/observability/eval/cross_vendor_jury.py:33"
+        ],
+        "planned_steps": [
+          "Generalize run_oracle advisory hold from FAIL-only to any non-pass under advisory authority",
+          "Update split-no-veto + sub-quorum jury-gate tests to assert advisory close-proceeds + WARNING",
+          "Run oracle + jury-gate + spec-jury + dispatch-close suites"
+        ],
+        "priority_rationale": "Blocks the P30 autonomous drive: every L/XL or auditor/reviewer/planner wave routes to the always-jury, which cannot reach cross-vendor quorum until I06-W08 + I09 wire and validate it.",
+        "problem": "An advisory (uncalibrated) jury blocked closes on NEEDS_USER while holding FAIL advisory; stub codex/opencode jurors cause spurious sub-quorum NEEDS_USER that blocks every L/judgment-role wave.",
+        "risks": [
+          "A genuine split that should surface is now only logged; mitigated by the operator standing proceed-approval for P30 and I09 TRUST-4 restoring blocking on a calibrated jury."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I06",
+      "opened_at": "2026-06-10T19:04:26.808309Z",
+      "outcome": "Generalized run_oracle advisory hold to any non-pass: an uncalibrated cross-vendor jury (advisory authority) now logs NEEDS_USER/FAIL at WARNING and proceeds, not blocks. Re-pinned 3 jury-gate tests + module docstring; 116 jury/oracle/close green, mypy clean. Unblocks L/judgment-role closes; TRUST-4 (I09) grants real blocking.",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "run_oracle returns status=pass and logs a WARNING when the cross-vendor jury outcome is non-pass and jury_block_authority is advisory; a close no longer blocks on a jury NEEDS_USER while the jury is uncalibrated",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "run_oracle returns status=pass and logs a WARNING when the cross-vendor jury outcome is non-pass and jury_block_authority is advisory; a close no longer blocks on a jury NEEDS_USER while the jury is uncalibrated",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Hold an advisory cross-vendor jury non-blocking on any non-pass",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
