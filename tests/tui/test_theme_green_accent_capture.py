@@ -38,7 +38,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
@@ -46,6 +46,8 @@ from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT
 from eawf.surfaces.tui.widgets.header import Header
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+
+from ._palette_harness import PaletteHarnessApp
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -112,7 +114,7 @@ def _cell_fg_hexes(widget: object) -> _CellMap:
     return out
 
 
-class _Harness(App[None]):
+class _Harness(PaletteHarnessApp):
     """Minimal app mounting the two colour-bearing widgets for capture."""
 
     CSS = """

@@ -18,6 +18,7 @@ Registration and the default-theme apply happen in ``__init__`` (not
 from __future__ import annotations
 
 from textual.app import App
+from textual.filter import Monochrome
 
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 
@@ -32,6 +33,10 @@ class PaletteHarnessApp(App[None]):
 
     def __init__(self) -> None:
         super().__init__()
+        # Colour-capture tests must keep true foregrounds even under NO_COLOR.
+        self._filters = [
+            filter_ for filter_ in self._filters if not isinstance(filter_, Monochrome)
+        ]
         for theme in EA_THEMES:
             self.register_theme(theme)
         self.theme = LOGICAL_THEMES["dark"]
