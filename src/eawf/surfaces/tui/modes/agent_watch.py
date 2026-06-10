@@ -53,8 +53,9 @@ from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Grid, Vertical, VerticalScroll
 from textual.reactive import reactive
+from textual.widget import Widget
 from textual.widgets import Static
 
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
@@ -66,7 +67,7 @@ from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
+    from eawf.kernel.state.models import AgentSession, State
     from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,25 @@ CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
 
 #: Result line when there is no session to cancel.
 CANCEL_NO_TARGET: str = "cancel: no session to cancel"
+
+#: Id of the multi-session watch-grid container -- the parallel tile pane the
+#: grid surface mounts one tile per ACTIVE executor session into.
+WATCH_GRID_ID: str = "watch-grid"
+
+#: Id of the grid's honest-empty notice (zero dispatched sessions) and of its
+#: honest-degraded notice (daemon unreachable). The grid shows exactly one of
+#: these in place of any tiles when there is nothing to lay out.
+WATCH_GRID_EMPTY_ID: str = "watch-grid-empty"
+
+#: CSS class on each session tile in the grid.
+WATCH_TILE_CLASS: str = "watch-tile"
+
+#: CSS class on a tile's scrollable event-row column.
+WATCH_TILE_LIST_CLASS: str = "watch-tile-list"
+
+#: CSS class on each rendered event row inside a tile (shared with the Feed
+#: row class so every live-stream surface styles its rows identically).
+WATCH_TILE_ROW_CLASS: str = FEED_ROW_CLASS
 
 #: The watched session's lifecycle status -> the lifecycle :class:`Sigil` its
 #: header mark draws from. An ACTIVE session wears the RUNNING diamond (the
@@ -329,6 +349,240 @@ def is_watched_event(envelope: Envelope, target: WatchTarget | None) -> bool:
     return envelope.scope_id == target.wave_id
 
 
+def active_executor_sessions(state: State | None) -> list[AgentSession]:
+    """Return the ACTIVE executor sessions to lay out as grid tiles.
+
+    The multi-session grid shows one tile per ACTIVE executor
+    :class:`~eawf.kernel.state.models.AgentSession` -- the live spawn engine
+    registers one EXECUTOR session per dispatch, and only the ACTIVE ones are
+    still streaming, so a tile per ACTIVE executor is the parallel watch
+    surface. Ordered by :attr:`~eawf.kernel.state.models.AgentSession.id` so
+    the tile layout is stable across re-renders (the dict insertion order is
+    not load-bearing). An unbound or session-free state yields an empty list --
+    the honest-empty grid path.
+
+    Args:
+        state: The bound read-only state, or ``None`` (fresh / user scope).
+
+    Returns:
+        The ACTIVE executor sessions, id-sorted; empty when none exist.
+    """
+    if state is None or not state.agent_sessions:
+        return []
+    return sorted(
+        (
+            sess
+            for sess in state.agent_sessions.values()
+            if sess.role is AgentSessionRole.EXECUTOR and sess.status is AgentSessionStatus.ACTIVE
+        ),
+        key=lambda sess: sess.id,
+    )
+
+
+def tile_dom_id(session_id: str) -> str:
+    """Return the DOM id for *session_id*'s grid tile.
+
+    Namespaces the session id under a ``watch-tile--`` prefix so two tiles for
+    two sessions never collide, and so a pushed event routes to exactly one
+    tile by id. The session id is the record key (an :data:`IdStr`), so the
+    composed id is a stable, unique DOM selector.
+
+    Args:
+        session_id: The watched session's record id.
+
+    Returns:
+        The tile's DOM id (e.g. ``watch-tile--S-1``).
+    """
+    return f"watch-tile--{session_id}"
+
+
+def session_routes_event(session: AgentSession, envelope: Envelope) -> bool:
+    """Return whether *envelope* routes to *session*'s tile.
+
+    A grid tile streams exactly one session, keyed -- like the single-session
+    zoom (:func:`is_watched_event`) -- on the wave id: the executor session
+    scopes to a wave (``scope_id``) and the C09 dispatch events stamp the same
+    wave id as their own ``scope_id``. So an envelope routes to a session's
+    tile exactly when its ``scope_id`` matches the session's ``scope_id``. With
+    two ACTIVE executors on two different waves a pushed event lands in the one
+    tile whose wave it names and not the other's.
+
+    Args:
+        session: The session owning a tile.
+        envelope: A live event envelope from the App fan-out.
+
+    Returns:
+        ``True`` when the envelope belongs to this session's tile stream.
+    """
+    return envelope.scope_id is not None and envelope.scope_id == session.scope_id
+
+
+class WatchTile(Vertical):
+    """One session's tile in the parallel watch grid.
+
+    Leads with a header line naming the session (its lifecycle sigil + wave +
+    runtime) and a scrollable, newest-first column of the session's streamed
+    event rows. A pushed event routes here (:meth:`route_event`) only when its
+    ``scope_id`` matches the tile's session wave, so a tile shows exactly its
+    own session's stream and never a sibling tile's.
+    """
+
+    def __init__(self, session: AgentSession, *, mode: RenderMode) -> None:
+        """Build a tile for *session* in render *mode*.
+
+        Args:
+            session: The ACTIVE executor session this tile streams.
+            mode: The App's resolved render-mode label -- selects the header
+                sigil's ASCII / unicode column.
+        """
+        super().__init__(id=tile_dom_id(session.id), classes=WATCH_TILE_CLASS)
+        self._session = session
+        self._mode = mode
+
+    @property
+    def session_id(self) -> str:
+        """Return the record id of the session this tile streams."""
+        return self._session.id
+
+    def compose(self) -> ComposeResult:
+        """Yield the tile header line and the scrollable event column."""
+        yield Static(self._header_markup(), classes="watch-tile-header")
+        yield VerticalScroll(classes=WATCH_TILE_LIST_CLASS)
+
+    def _header_markup(self) -> str:
+        """Return the tile header markup: session sigil + wave + runtime."""
+        sigil = session_sigil_markup(self._session.status, mode=self._mode)
+        return (
+            f"{sigil} [$accent]{escape_markup(self._session.scope_id)}[/] "
+            f"[$muted]{escape_markup(self._session.runtime)}[/]"
+        )
+
+    def route_event(self, envelope: Envelope) -> bool:
+        """Prepend *envelope* to this tile's column when it routes here.
+
+        The per-tile fan-out entry point: a no-op when the tile has been
+        unmounted between the grid scheduling the push and this running, or
+        when the envelope does not route to this session's wave (the routing
+        predicate :func:`session_routes_event` keys on ``scope_id``). Returns
+        whether the event landed so the grid can assert per-tile routing.
+
+        Args:
+            envelope: The live event envelope from the grid fan-out.
+
+        Returns:
+            ``True`` when the envelope was rendered into this tile.
+        """
+        if not self.is_mounted or not session_routes_event(self._session, envelope):
+            return False
+        listing = self.query_one(f".{WATCH_TILE_LIST_CLASS}", VerticalScroll)
+        row = Static(format_event_row(envelope), classes=WATCH_TILE_ROW_CLASS)
+        listing.mount(row, before=0)
+        logger.debug(
+            f"route_event session={self.session_id!r} id={envelope.id!r} "
+            f"kind={envelope.kind.value!r}"
+        )
+        return True
+
+
+class WatchGrid(Widget):
+    """The parallel multi-session watch grid: one tile per ACTIVE executor.
+
+    Lays out one :class:`WatchTile` per ACTIVE executor session in a
+    :class:`~textual.containers.Grid`; a pushed event routes to the one tile
+    whose session wave it names and not the others (:meth:`append_event`).
+    With zero dispatched sessions it shows the honest-empty :data:`EMPTY_NOTICE`
+    rather than a blank grid; when the host App reports a daemon-unreachable
+    degraded state it shows :data:`WATCH_DEGRADED` so the operator knows the
+    tiles are not streaming rather than merely quiet.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    WatchGrid {
+        height: 1fr;
+    }
+    WatchGrid #watch-grid {
+        height: 1fr;
+        grid-size: 2;
+        grid-gutter: 1;
+    }
+    WatchGrid .watch-tile {
+        height: 1fr;
+        border: solid $accent;
+        padding: 0 1;
+    }
+    WatchGrid .watch-tile-header {
+        height: auto;
+        margin-bottom: 1;
+    }
+    WatchGrid .watch-tile-list {
+        height: 1fr;
+    }
+    WatchGrid #watch-grid-empty {
+        height: 1fr;
+        color: $muted;
+        padding: 1 2;
+    }
+    """
+
+    def __init__(self, sessions: list[AgentSession], *, degraded: bool, mode: RenderMode) -> None:
+        """Build the grid over *sessions* in render *mode*.
+
+        Args:
+            sessions: The ACTIVE executor sessions to lay out as tiles
+                (:func:`active_executor_sessions`); empty drives the
+                honest-empty / honest-degraded notice.
+            degraded: Whether the host App reports a daemon-unreachable state,
+                so the empty notice reads as degraded rather than honest-empty.
+            mode: The App's resolved render-mode label, threaded into each
+                tile's header sigil.
+        """
+        super().__init__()
+        self._sessions = sessions
+        self._degraded = degraded
+        self._mode = mode
+
+    def compose(self) -> ComposeResult:
+        """Yield either the tile grid or the honest-empty / degraded notice."""
+        if not self._sessions:
+            yield Static(self._empty_notice(), id=WATCH_GRID_EMPTY_ID)
+            return
+        with Grid(id=WATCH_GRID_ID):
+            for session in self._sessions:
+                yield WatchTile(session, mode=self._mode)
+
+    def _empty_notice(self) -> str:
+        """Return the grid's empty-notice text for the current daemon state.
+
+        Returns:
+            :data:`WATCH_DEGRADED` when the host App reports degraded (daemon
+            unreachable), else the honest-empty :data:`EMPTY_NOTICE`.
+        """
+        return WATCH_DEGRADED if self._degraded else EMPTY_NOTICE
+
+    def append_event(self, envelope: Envelope) -> str | None:
+        """Route one live *envelope* to the matching tile, if any.
+
+        The grid fan-out entry point: a no-op when the grid has been unmounted,
+        or when no tile's session wave matches the envelope. Routes the
+        envelope to the single matching tile (:meth:`WatchTile.route_event`)
+        and returns that tile's session id so a caller can assert the event
+        landed in its OWN tile and not a sibling's.
+
+        Args:
+            envelope: The live event envelope from the App fan-out.
+
+        Returns:
+            The session id of the tile the event landed in, or ``None`` when
+            no tile matched (the grid is empty or the wave is off-grid).
+        """
+        if not self.is_mounted:
+            return None
+        for tile in self.query(f".{WATCH_TILE_CLASS}").results(WatchTile):
+            if tile.route_event(envelope):
+                return tile.session_id
+        return None
+
+
 class AgentWatchModeScreen(ScopeScreen):
     """Live agent-watch zoom: stream one dispatched session, cancel it.
 
@@ -391,25 +645,37 @@ class AgentWatchModeScreen(ScopeScreen):
         render_hint_label("q", "quit"),
     )
 
-    #: The session being watched, resolved on mount from the bound state.
+    #: The session being watched, resolved on mount from the bound state. In
+    #: the single-session path this is the zoom target; in the multi-session
+    #: grid path it stays ``None`` (the grid streams every ACTIVE executor).
     target: reactive[WatchTarget | None] = reactive(None, init=False)
 
     #: Whether a cancel has been issued, so a render-mode flip repaints the
     #: still-idle cancel line but never clobbers an issued cancel's result.
     _cancel_issued: bool = False
 
-    def compose_body(self) -> ComposeResult:
-        """Yield the watched-session header, the stream column, and the result.
+    #: The multi-session grid, mounted in place of the single-session zoom when
+    #: two or more ACTIVE executor sessions are dispatched; ``None`` in the
+    #: single-session / honest-empty path.
+    _grid: WatchGrid | None = None
 
-        The header leads with the watched target's lifecycle sigil (or the
-        honest-empty banner); the stream list starts with a single live-waiting
-        / honest-empty notice that :meth:`on_mount` replaces with the seeded
-        rows and :meth:`append_event` prepends live ones to; the result line
-        carries the cancel surface (the idle cancel-look line until ``k`` is
-        pressed).
+    def compose_body(self) -> ComposeResult:
+        """Yield the parallel grid OR the single-session zoom for this scope.
+
+        When two or more ACTIVE executor sessions are dispatched the body is the
+        parallel :class:`WatchGrid` -- one tile per session, each streaming its
+        own session's events. Otherwise it is the single-session zoom: a header
+        leading with the watched target's lifecycle sigil (or the honest-empty
+        banner), a stream column starting with a single live-waiting /
+        honest-empty notice, and the cancel result line.
         """
-        self.target = self._pick_target()
+        sessions = active_executor_sessions(self._current_state())
         mode = self._render_mode()
+        if len(sessions) >= 2:
+            self._grid = WatchGrid(sessions, degraded=self._degraded(), mode=mode)
+            yield self._grid
+            return
+        self.target = self._pick_target()
         with Vertical(id="watch-body"):
             yield Static(render_watch_header(self.target, mode=mode), id=WATCH_HEADER_ID)
             with VerticalScroll(id=WATCH_LIST_ID):
@@ -433,6 +699,10 @@ class AgentWatchModeScreen(ScopeScreen):
         if callable(register):
             register(self)
         buffer = getattr(self.app, "live_event_buffer", ())
+        if self._grid is not None:
+            for envelope in buffer:
+                self._grid.append_event(envelope)
+            return
         for envelope in buffer:
             if is_watched_event(envelope, self.target):
                 self._render_event(envelope)
@@ -464,17 +734,22 @@ class AgentWatchModeScreen(ScopeScreen):
             unregister(self)
 
     def append_event(self, envelope: Envelope) -> None:
-        """Prepend one live *envelope* to the top of the stream, if watched.
+        """Route one live *envelope* to its tile (grid) or stream (zoom).
 
         The App-fan-out entry point: a no-op when the pane has been unmounted
-        between the App scheduling the push and this running, or when the
-        envelope does not belong to the watched session's stream (the zoom
-        shows one session, not the whole feed).
+        between the App scheduling the push and this running. In the
+        multi-session grid path the envelope routes to the one tile whose
+        session wave it names (:meth:`WatchGrid.append_event`); in the
+        single-session zoom path it prepends to the stream only when it belongs
+        to the watched session (the zoom shows one session, not the whole feed).
 
         Args:
             envelope: The live event envelope from the App fan-out.
         """
         if not self.is_mounted:
+            return
+        if self._grid is not None:
+            self._grid.append_event(envelope)
             return
         if not is_watched_event(envelope, self.target):
             return
@@ -637,6 +912,16 @@ class AgentWatchModeScreen(ScopeScreen):
         app_state = getattr(self.app, "state", None)
         return app_state if isinstance(app_state, State) else None
 
+    def _degraded(self) -> bool:
+        """Return whether the host App reports a daemon-unreachable state.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.degraded` into the grid so a
+        zero-tile grid reads as honest-degraded rather than honest-empty when
+        the daemon is unreachable; a bare harness without the flag reads as not
+        degraded.
+        """
+        return bool(getattr(self.app, "degraded", False))
+
     def _daemon_available(self) -> bool:
         """Return whether the App reports a reachable daemon socket.
 
@@ -662,15 +947,25 @@ __all__ = [
     "EMPTY_NOTICE",
     "WATCH_DEGRADED",
     "WATCH_EMPTY_ID",
+    "WATCH_GRID_EMPTY_ID",
+    "WATCH_GRID_ID",
     "WATCH_HEADER_ID",
     "WATCH_LIST_ID",
     "WATCH_RESULT_ID",
     "WATCH_ROW_CLASS",
+    "WATCH_TILE_CLASS",
+    "WATCH_TILE_LIST_CLASS",
+    "WATCH_TILE_ROW_CLASS",
     "AgentWatchModeScreen",
+    "WatchGrid",
     "WatchTarget",
+    "WatchTile",
+    "active_executor_sessions",
     "cancel_mark",
     "is_watched_event",
     "pick_watch_target",
     "render_watch_header",
+    "session_routes_event",
     "session_sigil_markup",
+    "tile_dom_id",
 ]

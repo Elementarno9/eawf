@@ -56,11 +56,16 @@ from eawf.surfaces.tui.modes.agent_watch import (
     WATCH_EMPTY_ID,
     WATCH_RESULT_ID,
     WATCH_ROW_CLASS,
+    WATCH_TILE_CLASS,
+    WATCH_TILE_ROW_CLASS,
     AgentWatchModeScreen,
+    WatchGrid,
     WatchTarget,
+    WatchTile,
     is_watched_event,
     pick_watch_target,
     render_watch_header,
+    tile_dom_id,
 )
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
@@ -453,6 +458,54 @@ def test_agent_watch_pane_seeds_filtered_from_app_buffer(tmp_path: Path) -> None
             frame = normalize_snapshot(capture_screen_text(app))
             assert "buffered watched" in frame
             assert "buffered other" not in frame
+
+    asyncio.run(body())
+
+
+def test_agent_watch_mode_mounts_grid_for_two_active_executors(tmp_path: Path) -> None:
+    """Two ACTIVE executor sessions switch the mode body to the parallel grid.
+
+    With two ACTIVE executor sessions on two waves, the agent-watch mode mounts
+    the :class:`WatchGrid` (one tile per session) in place of the single-session
+    zoom; one pushed event per session routes to its OWN tile and not the
+    other's.
+    """
+    state = _state(
+        sessions={
+            "S-1": _session("S-1", scope_id="P01-I01-W01"),
+            "S-2": _session("S-2", scope_id="P01-I01-W02"),
+        }
+    )
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(160, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)  # -> agent_watch
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            grid = pane.query_one(WatchGrid)
+            assert len(grid.query(f".{WATCH_TILE_CLASS}")) == 2
+            # One event for each session's wave, pushed through the App fan-out.
+            await app._on_event(_event("EV-A", scope_id="P01-I01-W01", summary="for S-1"))
+            await app._on_event(_event("EV-B", scope_id="P01-I01-W02", summary="for S-2"))
+            await settle_screen(pilot)
+            tile_a = grid.query_one(f"#{tile_dom_id('S-1')}", WatchTile)
+            tile_b = grid.query_one(f"#{tile_dom_id('S-2')}", WatchTile)
+            rows_a = [
+                str(r.render())
+                for r in tile_a.query(f".{WATCH_TILE_ROW_CLASS}").results()  # type: ignore[var-annotated]
+            ]
+            rows_b = [
+                str(r.render())
+                for r in tile_b.query(f".{WATCH_TILE_ROW_CLASS}").results()  # type: ignore[var-annotated]
+            ]
+            assert any("for S-1" in row for row in rows_a)
+            assert all("for S-2" not in row for row in rows_a)
+            assert any("for S-2" in row for row in rows_b)
+            assert all("for S-1" not in row for row in rows_b)
 
     asyncio.run(body())
 
