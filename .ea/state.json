@@ -18359,7 +18359,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T10:33:12.776632Z",
+  "updated_at": "2026-06-10T11:19:07.862590Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -82928,10 +82928,10 @@
       "branch": "feature/eawf-v0.6-p30-i05-w08",
       "created_at": "2026-06-10T10:33:12.776632Z",
       "id": "WT-P30-I05-W08-1781087592",
-      "merged_commit": null,
+      "merged_commit": "f85aae6f",
       "owner_session_id": "codex-p30-i05-w08",
       "path": ".ea/worktrees/p30-i05-w08",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P30-I05-W08"
     }
   }
