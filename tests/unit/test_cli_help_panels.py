@@ -1,8 +1,11 @@
 """Unit tests for :mod:`eawf.surfaces.cli.help_panels`.
 
-Cover the boundary cases of the panel mapping helpers plus the import-time
-guard that ties the panel set back to the metadata registry — a future tab
-rename in :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` must surface here.
+Cover the boundary cases of the panel mapping helpers plus the drift guard
+that ties the panel set back to the metadata registry — a future tab rename
+in :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` must surface here. The
+guard lives in this test (not at module import) so the registry chain stays
+off the cold ``import eawf.surfaces.cli.app`` path; :data:`PANEL_ORDER` is
+resolved lazily through the module's PEP 562 ``__getattr__``.
 """
 
 from __future__ import annotations
@@ -27,14 +30,26 @@ def test_panel_order_is_alphabetical() -> None:
     assert list(help_panels.PANEL_ORDER) == sorted(help_panels.PANEL_ORDER)
 
 
-def test_every_assigned_panel_is_a_registry_tab() -> None:
-    """The values of :data:`COMMAND_PANELS` are a subset of :data:`PANEL_ORDER`.
+def test_command_panels_are_a_subset_of_registry_tabs() -> None:
+    """The values of :data:`COMMAND_PANELS` are a subset of the registry tabs.
 
-    Mirrors the assertion baked into module load — explicit test ensures
-    the contract is exercised even when the module is already imported.
+    This is the drift guard that used to run at module import via
+    ``_assert_panels_match_registry`` — relocated here so a
+    :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tab rename still
+    forces a coordinated edit without pulling the registry onto the cold
+    CLI tree-build path. Reads :func:`tabs_sorted` directly so the test
+    does not depend on the lazy ``PANEL_ORDER`` accessor.
     """
-    unknown = set(help_panels.COMMAND_PANELS.values()) - set(help_panels.PANEL_ORDER)
+    unknown = set(help_panels.COMMAND_PANELS.values()) - set(tabs_sorted())
     assert not unknown, f"unknown panel(s) in COMMAND_PANELS: {sorted(unknown)}"
+
+
+def test_module_getattr_rejects_unknown_attribute() -> None:
+    """Error path: the PEP 562 ``__getattr__`` only resolves ``PANEL_ORDER``;
+    any other missing attribute raises ``AttributeError`` so typos fail
+    loud rather than silently returning ``None``."""
+    with pytest.raises(AttributeError, match="no attribute 'does_not_exist'"):
+        help_panels.does_not_exist  # type: ignore[attr-defined]  # noqa: B018
 
 
 def test_panel_for_known_command_returns_panel() -> None:
@@ -54,20 +69,25 @@ def test_panel_for_unknown_command_returns_none() -> None:
     assert help_panels.panel_for("") is None
 
 
-def test_assert_panels_match_registry_rejects_drift(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Error path: the module-load assertion fires when ``COMMAND_PANELS``
-    references a panel name absent from :data:`PANEL_ORDER`.
+def test_command_panels_subset_check_catches_injected_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Error path: a bogus panel name is flagged by the subset check.
 
-    The test patches the module-local mapping to inject a bogus panel, then
-    re-runs the guard. The real module is left untouched.
+    Injects a panel value absent from the registry tabs and asserts the
+    drift computation surfaces it — proving the relocated guard still bites
+    after a future tab rename. The real module mapping is restored by
+    monkeypatch teardown.
     """
     monkeypatch.setitem(help_panels.COMMAND_PANELS, "phony-cmd", "not-a-tab")
-    with pytest.raises(AssertionError, match=r"unknown panel\(s\) in COMMAND_PANELS"):
-        help_panels._assert_panels_match_registry()
+    unknown = set(help_panels.COMMAND_PANELS.values()) - set(tabs_sorted())
+    assert "not-a-tab" in unknown
 
 
-def test_module_load_guard_passes_on_clean_import() -> None:
-    """Re-importing the module under a clean monkeypatch state succeeds."""
+def test_panel_order_resolves_lazily_and_survives_reload() -> None:
+    """``PANEL_ORDER`` resolves through PEP 562 ``__getattr__`` and survives
+    a module reload — the public surface stays intact after the eager
+    module-level binding was replaced by a lazy accessor."""
     importlib.reload(help_panels)
     # Sanity: the public surface survives reload.
     assert "RegistryOrderedTyperGroup" in dir(help_panels)

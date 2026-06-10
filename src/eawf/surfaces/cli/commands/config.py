@@ -42,27 +42,26 @@ import logging
 import os
 import secrets
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
 import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydValidationError
 
-from eawf.kernel.config.registry import (
-    CONFIG_REGISTRY,
-    ConfigKey,
-    coerce_and_validate,
-    keys_for_tab,
-    registry_lookup,
-    tabs_sorted,
-)
 from eawf.kernel.config.schema import EstimationConfig
 from eawf.runtime.lock import portalock
 from eawf.runtime.vcs.coauthor import VcsConfig
 from eawf.surfaces.cli.errors import StateConflict, UserError, ValidationError, emit_error
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+
+if TYPE_CHECKING:
+    # Annotation-only — the runtime registry symbols are imported function-local
+    # (in ``config_menu``) so the registry chain stays off the cold CLI
+    # tree-build path. ``from __future__ import annotations`` keeps these
+    # ``ConfigKey`` hints unevaluated at runtime.
+    from eawf.kernel.config.registry import ConfigKey
 
 logger = logging.getLogger(__name__)
 
@@ -821,6 +820,12 @@ def config_menu(
     import yaml
 
     from eawf.kernel.config.layered import WRITABLE_LAYERS, layer_path, merge_config
+    from eawf.kernel.config.registry import (
+        CONFIG_REGISTRY,
+        coerce_and_validate,
+        keys_for_tab,
+        tabs_sorted,
+    )
 
     flags: GlobalFlags = ctx.obj
     repo, workspace = _resolve_anchors(flags)
@@ -945,22 +950,14 @@ def config_menu(
 # Re-export the orjson dependency to keep import surface explicit when callers
 # need the exact serialiser used by the CLI envelope. (Some tests stub stdout
 # decoders against this.)
+#
+# The registry-lookup round-trip contract that used to run here at module load
+# (``_menu_registry_check``) moved to the unit test
+# ``test_registry_lookup_round_trips_every_entry`` so importing this command
+# module no longer drags the ``eawf.kernel.config.registry`` chain onto the
+# cold CLI tree-build path.
 __all__ = [
     "_save_value_to_layer",
     "config_app",
     "orjson",
 ]
-
-
-def _menu_registry_check() -> None:
-    """Module-load contract: every registry entry's lookup round-trips by key.
-
-    Cheap sanity check that the registry import + lookup helpers are wired.
-    A KeyError here means the registry got out of sync with the menu's
-    expectations and the module fails to import — loud, deterministic.
-    """
-    for entry in CONFIG_REGISTRY:
-        assert registry_lookup(entry.key) is entry, f"registry_lookup mismatch for {entry.key!r}"
-
-
-_menu_registry_check()

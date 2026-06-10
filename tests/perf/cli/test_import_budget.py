@@ -30,18 +30,22 @@ This suite has two gates:
   for local dev on a busy machine, mirroring
   ``tests/perf/tui/test_perf_budget.py``.
 
-Two residuals are deliberately *not* in :data:`FORBIDDEN_MODULES`
-because they live in shared CLI infra (out of scope for the
+One residual is deliberately *not* in :data:`FORBIDDEN_MODULES`
+because it lives in shared CLI infra (out of scope for the
 command-handler sweep, tracked as a Phase-2 follow-up):
 
 * ``pydantic`` / ``pydantic_core`` — :mod:`eawf.surfaces.cli.errors` builds the
   ``ErrorEnvelope`` BaseModel at module load.
-* ``eawf.kernel.config.registry`` — :mod:`eawf.surfaces.cli.help_panels` calls
-  ``tabs_sorted()`` at module load to build ``PANEL_ORDER``.
 * ``eawf.kernel.state.models`` / ``eawf.runtime.sandbox.policy`` —
   lifecycle command modules import mutation/state surfaces while the Typer tree
   is built. ``roadmap_plan`` must not add ``yaml`` or other plan-only imports
   to that residual.
+
+P30-I05-W12 retired the ``eawf.kernel.config.registry`` residual: both
+:mod:`eawf.surfaces.cli.help_panels` (lazy ``PANEL_ORDER`` accessor) and
+:mod:`eawf.surfaces.cli.commands.config` (function-local registry imports,
+import-time round-trip guard moved to a unit test) stopped pulling the
+registry onto the tree-build path, so it is now a guarded forbidden module.
 """
 
 from __future__ import annotations
@@ -62,6 +66,7 @@ FORBIDDEN_MODULES: tuple[str, ...] = (
     "eawf.kernel.config.profile",
     "eawf.kernel.config.loader",
     "eawf.kernel.config.layered",
+    "eawf.kernel.config.registry",
     "eawf.runtime.daemon.main",
     "eawf.runtime.mcp.installer",
     "eawf.kernel.store.kinds",

@@ -10,8 +10,9 @@ Public API:
 
 - :data:`COMMAND_PANELS` — command name → panel name (panel name is one of
   the :data:`eawf.kernel.config.registry.CONFIG_REGISTRY` tabs).
-- :data:`PANEL_ORDER` — alphabetical tuple of panel names; the
-  :class:`RegistryOrderedTyperGroup` uses this to enforce panel ordering.
+- :data:`PANEL_ORDER` — alphabetical tuple of panel names, resolved lazily
+  (PEP 562 ``__getattr__`` → :func:`_panel_order`) so the registry import
+  stays off the cold ``import eawf.surfaces.cli.app`` path.
 - :func:`panel_for` — resolve a command name to its panel.
 - :class:`RegistryOrderedTyperGroup` — :class:`typer.core.TyperGroup`
   subclass that returns commands sorted by ``(panel, name)`` so Rich's
@@ -25,30 +26,71 @@ Ordering policy (mirrors :mod:`eawf.kernel.config.registry`):
   sorts; the custom subclass re-sorts after partitioning by panel).
 
 Hidden commands (e.g. ``scope-debug``) are not assigned a panel — Rich
-filters them out of the rendered help anyway. The module asserts at import
-time that every assigned panel name belongs to the registry tab set so a
-future :data:`CONFIG_REGISTRY` rename forces a coordinated edit here.
+filters them out of the rendered help anyway. The drift guard that every
+assigned panel name belongs to the registry tab set lives in the unit test
+``test_command_panels_are_a_subset_of_registry_tabs`` rather than at import
+time, so a :data:`CONFIG_REGISTRY` rename still forces a coordinated edit
+without dragging the registry chain onto the cold CLI tree-build path.
 """
 
 from __future__ import annotations
 
+import functools
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from typer.core import TyperGroup
-
-from eawf.kernel.config.registry import tabs_sorted
 
 if TYPE_CHECKING:
     import click
 
+    # Lazily provided by the module ``__getattr__`` below (PEP 562); declared
+    # here so static analysers see the public ``PANEL_ORDER`` symbol without
+    # the eager registry import paying off at module load.
+    PANEL_ORDER: tuple[str, ...]
+
 logger = logging.getLogger(__name__)
 
 
-# Alphabetical tuple of panel names — sourced from the metadata registry so
-# the panel set cannot drift from the config menu's tab set without an
-# import-time assertion failure (see :func:`_assert_panels_match_registry`).
-PANEL_ORDER: tuple[str, ...] = tabs_sorted()
+@functools.cache
+def _panel_order() -> tuple[str, ...]:
+    """Return the alphabetical tuple of panel names, sourced from the registry.
+
+    The :mod:`eawf.kernel.config.registry` import is function-local so the
+    cold ``import eawf.surfaces.cli.app`` path (shell completion, every xdist
+    worker, every e2e subprocess) does not pay the registry chain's ~55 ms
+    load just to build the Typer tree — the panel order is only needed when
+    ``--help`` actually renders. :func:`functools.cache` memoises the
+    one-time sort.
+
+    Returns:
+        The registry tab names in alphabetical order.
+    """
+    from eawf.kernel.config.registry import tabs_sorted
+
+    return tabs_sorted()
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve :data:`PANEL_ORDER` lazily on first access (PEP 562).
+
+    Keeps the public ``PANEL_ORDER`` symbol importable without importing the
+    registry at module load; the first attribute access delegates to
+    :func:`_panel_order` (which imports the registry) and the result is
+    cached there.
+
+    Args:
+        name: The attribute name being resolved.
+
+    Returns:
+        The resolved :data:`PANEL_ORDER` tuple.
+
+    Raises:
+        AttributeError: when *name* is not a lazily exported symbol.
+    """
+    if name == "PANEL_ORDER":
+        return _panel_order()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # Command name → panel name. Every non-hidden command registered on the root
@@ -141,28 +183,6 @@ COMMAND_PANELS: dict[str, str] = {
     "worktree": "worktrees",
     "dispatch": "worktrees",
 }
-
-
-def _assert_panels_match_registry() -> None:
-    """Module-load guard: every assigned panel must be a registered tab.
-
-    Raises:
-        AssertionError: When :data:`COMMAND_PANELS` references a panel name
-            that no longer appears in :data:`PANEL_ORDER` — typically caused
-            by a tab rename in :data:`eawf.kernel.config.registry.CONFIG_REGISTRY`
-            without a matching edit here.
-    """
-    assigned = set(COMMAND_PANELS.values())
-    registry = set(PANEL_ORDER)
-    unknown = assigned - registry
-    if unknown:
-        raise AssertionError(
-            f"unknown panel(s) in COMMAND_PANELS: {sorted(unknown)} "
-            f"(registry tabs: {sorted(registry)})"
-        )
-
-
-_assert_panels_match_registry()
 
 
 def panel_for(command_name: str) -> str | None:
