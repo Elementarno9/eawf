@@ -4667,6 +4667,18 @@
       "scope_id": "P30-I04-W11",
       "status": "done",
       "updated_at": "2026-06-10T05:00:56.696860Z"
+    },
+    "P30-I05-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W02",
+      "scope_id": "P30-I05-W02",
+      "status": "done",
+      "updated_at": "2026-06-10T05:41:04.468238Z"
     }
   },
   "agent_sessions": {
@@ -7709,8 +7721,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I05-W01",
-      "P30-I05-W02"
+      "P30-I05-W01"
     ],
     "iter_id": "P30-I05",
     "phase_id": "P30",
@@ -15293,7 +15304,7 @@
     },
     "P30-I05-W02": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I05-W02-bucket-20260610T051758Z",
+      "current_store_record_id": "EST-P30-I05-W02-bucket-20260610T054103Z",
       "display": "0.5 EU · exp ~15m · pess ~54m",
       "expected_eu": 0.5,
       "expected_minutes": 15.0,
@@ -15302,7 +15313,7 @@
       "pessimistic_minutes": 54.0,
       "reference_class": "bucket:S",
       "scope_id": "P30-I05-W02",
-      "updated_at": "2026-06-10T05:17:58.958843Z"
+      "updated_at": "2026-06-10T05:41:03.866833Z"
     }
   },
   "goals": {
@@ -18198,7 +18209,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:23:20.947496Z",
+  "updated_at": "2026-06-10T05:41:04.468541Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -70798,8 +70809,8 @@
       ],
       "claim_session_id": "codex-p30-i05-w02",
       "claimed_at": "2026-06-10T05:17:58.958836Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T05:41:04.468238Z",
+      "commit": "60ab167b671a1924e09f96c0ad53703dd3ac7d7d",
       "deps": [],
       "description": "Add a pure parse_runtime_counters(claude_payload) -> RuntimeCounters | None plus a strict RuntimeCounters model carrying api_duration_ms, total_duration_ms, cost_usd, and the four token counts, reusing the recognition order proven in context_tokens._extract_usage. New module runtime_counters.py.",
       "dispatch_history": [],
@@ -70813,41 +70824,119 @@
         "tests/unit/test_statusline_context_tokens.py",
         "tests/unit/test_runtime_counters.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_runtime_counters.py::test_parse_runtime_counters_real_status_payload",
+              "tests/unit/test_runtime_counters.py::test_parse_runtime_counters_missing_cost_returns_none",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_runtime_counters.py::test_runtime_counters_rejects_unknown_keys",
+              "tests/unit/test_runtime_counters.py::test_parse_runtime_counters_drops_type_mismatched_fields",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I05-W02",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "Claude Code cost payloads parse into strict RuntimeCounters or degrade to None without crashing.",
+        "evidence_refs": [
+          "src/eawf/runtime/runtimes/claude/runtime_counters.py",
+          "tests/unit/test_runtime_counters.py"
+        ],
+        "planned_steps": [
+          "Parse Claude Code cost blocks into RuntimeCounters with api_duration_ms and cost_usd",
+          "Return None without raising when no cost block exists",
+          "Keep RuntimeCounters strict while the parser drops wrong-typed fields"
+        ],
+        "priority_rationale": "P30-I05 downstream capture, sidecar, and close-delta waves depend on a stable runtime counter shape.",
+        "problem": "Runtime cost payloads need a typed parser before claim and close runtime accounting can consume them.",
+        "risks": [
+          "Payload shape drift could hide fields if aliases are incomplete"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.760497Z",
-      "outcome": null,
+      "outcome": "Parsed Claude Code cost payloads into strict RuntimeCounters with degrade-not-crash behavior and scrubbed path-neutral fixtures",
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W02-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_parse_runtime_counters_reads_cost_block and test_parse_runtime_counters_missing_cost_returns_none both pass",
-          "oracle_tier": null,
+          "measurable_signal": "test_parse_runtime_counters_real_status_payload asserts api_duration_ms and cost_usd, and test_parse_runtime_counters_missing_cost_returns_none asserts the no-cost None path",
+          "oracle_tier": 2,
           "quality_dimension": "reliability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the runtime counter real-payload and no-cost pytest cases",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A real-shape CC payload with a cost block parses into typed counters whose api_duration_ms and cost_usd match the input; a payload with no cost key returns None and never raises (degrade-not-crash).",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W02-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "structural",
-          "measurable_signal": "test_parse_runtime_counters_rejects_extra raises ValidationError; test_parse_runtime_counters_bad_types_drop drops a string-for-int field",
-          "oracle_tier": null,
+          "measurable_signal": "test_runtime_counters_rejects_unknown_keys raises ValidationError and test_parse_runtime_counters_drops_type_mismatched_fields asserts wrong-typed fields are omitted",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the runtime counter strict-extra and wrong-type degradation pytest cases",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "RuntimeCounters rejects unknown keys (extra=forbid) and drops type-mismatched fields rather than raising, mirroring _extract_usage.",
           "waiver_reason": null
         }
@@ -70855,7 +70944,7 @@
       "title": "EUCAP-2 Parse CC cost block into typed RuntimeCounters",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": "WT-P30-I05-W02-1781068680"
+      "worktree_id": null
     },
     "P30-I05-W03": {
       "agent_role": "executor",
@@ -80246,10 +80335,10 @@
       "branch": "feature/eawf-v0.6-p30-i05-w02",
       "created_at": "2026-06-10T05:18:00.805336Z",
       "id": "WT-P30-I05-W02-1781068680",
-      "merged_commit": null,
+      "merged_commit": "b28a3f76",
       "owner_session_id": "codex-p30-i05-w02",
       "path": ".ea/worktrees/p30-i05-w02",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P30-I05-W02"
     }
   }
