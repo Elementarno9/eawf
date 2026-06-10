@@ -50,6 +50,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: Process-level timestamp (wall-clock seconds) of the last opportunistic
+#: fallback-WAL GC sweep, or ``None`` when this process has never swept. The
+#: daemon owns a background sweep loop; the daemonless fallback path has no
+#: loop, so it piggybacks the sweep onto a write -- but throttled to at most
+#: once per interval per process so a burst of CI mutations does not re-scan
+#: the WAL on every call. Reset to ``None`` only by tests.
+_LAST_FALLBACK_WAL_GC_AT: float | None = None
+
 
 class StateValidationError(ValueError):
     """Candidate ``state.json`` payload failed strict invariant validation.
@@ -228,6 +236,85 @@ def fallback_wal_dir(state_path: Path) -> Path:
     return state_path.parent / "locks" / "wal"
 
 
+def _maybe_gc_fallback_wal(
+    wal_dir: Path,
+    *,
+    now: datetime | None = None,
+    interval_seconds: int | None = None,
+    retention_seconds: int | None = None,
+) -> list[Path]:
+    """Opportunistically GC the repo-local fallback WAL, throttled per process.
+
+    The daemon runs a background sweep loop
+    (:func:`eawf.runtime.daemon.wal.run_wal_gc_loop`) that retires aged
+    ``.fsynced.json`` records. The daemonless fallback path (the V1 carve-out:
+    CI / one-shot / recovery shell) has no such loop, so the repo-local WAL
+    under ``.ea/locks/wal/`` would accrete unbounded. This helper piggybacks a
+    single :func:`eawf.runtime.daemon.wal.gc_done_records` sweep onto a fallback
+    write, but a process-level sentinel
+    (:data:`_LAST_FALLBACK_WAL_GC_AT`) throttles it to at most once per
+    *interval_seconds*: a burst of mutations in one process sweeps once, not on
+    every call.
+
+    The throttle is best-effort and never raises -- a sweep failure must not
+    sink the mutation that triggered it, since GC is a janitor, not part of the
+    durable write. Both the interval and the retention window default to the
+    daemon's resolved values so the fallback path matches daemon behaviour.
+
+    Args:
+        wal_dir: The repo-local fallback WAL directory (from
+            :func:`fallback_wal_dir`). A missing directory is a no-op.
+        now: Reference clock for the throttle check and the sweep cutoff.
+            Injected by tests to drive the interval boundary deterministically;
+            defaults to ``datetime.now(UTC)``.
+        interval_seconds: Minimum seconds between sweeps in this process.
+            Defaults to the daemon-resolved WAL-GC interval.
+        retention_seconds: Records whose mtime is older than this are swept.
+            Defaults to the daemon-resolved retention window.
+
+    Returns:
+        Paths unlinked by the sweep, or an empty list when the throttle
+        suppressed the sweep, the directory is missing, or the sweep failed.
+    """
+    global _LAST_FALLBACK_WAL_GC_AT
+
+    from eawf.runtime.daemon.wal import (
+        gc_done_records,
+        resolve_wal_gc_interval_seconds,
+        resolve_wal_retention_seconds,
+    )
+
+    reference = (now or datetime.now(UTC)).timestamp()
+    if interval_seconds is not None:
+        interval = interval_seconds
+    else:
+        interval = resolve_wal_gc_interval_seconds()
+    last = _LAST_FALLBACK_WAL_GC_AT
+    if last is not None and reference - last < interval:
+        logger.debug(
+            f"_maybe_gc_fallback_wal throttled wal_dir={str(wal_dir)!r} "
+            f"since_last={reference - last:.0f} interval={interval}"
+        )
+        return []
+
+    # Claim the throttle slot BEFORE sweeping so a sweep failure still arms the
+    # interval -- a persistently failing sweep must not re-fire on every write.
+    _LAST_FALLBACK_WAL_GC_AT = reference
+    retention = (
+        retention_seconds if retention_seconds is not None else resolve_wal_retention_seconds()
+    )
+    try:
+        removed = gc_done_records(wal_dir, max_age_seconds=retention, now=now)
+    except OSError:
+        logger.warning(f"_maybe_gc_fallback_wal sweep failed wal_dir={str(wal_dir)!r}")
+        return []
+    logger.info(
+        f"_maybe_gc_fallback_wal swept wal_dir={str(wal_dir)!r} "
+        f"removed={len(removed)} retention={retention}"
+    )
+    return removed
+
+
 def commit_mutation(
     state_path: Path,
     *,
@@ -339,6 +426,11 @@ def commit_mutation(
         f"commit_mutation command={command!r} scope={scope_id!r} "
         f"before={before_version} after={after_version} record={record_id!r}"
     )
+    # The daemon's background sweep loop never runs on the fallback path, so
+    # piggyback an opportunistic GC of aged fsynced records here. Throttled to
+    # once per interval per process; never raises (GC is a janitor, not part of
+    # the durable write).
+    _maybe_gc_fallback_wal(wal_dir)
     return payload
 
 
