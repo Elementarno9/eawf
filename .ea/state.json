@@ -18262,7 +18262,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:51:06.627750Z",
+  "updated_at": "2026-06-10T09:34:23.008232Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -72024,7 +72024,10 @@
         "tests/daemon/test_state_methods.py",
         "tests/unit/daemon/test_runtime_capture.py",
         "tests/unit/test_state_models.py",
-        "tests/unit/test_wave_close_actuals.py"
+        "tests/unit/test_wave_close_actuals.py",
+        "src/eawf/schemas/state.schema.json",
+        "docs/reference/autogen/state.schema.json",
+        "docs/reference/autogen/cli.md"
       ],
       "gates": [],
       "id": "P30-I05-W04",
