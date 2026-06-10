@@ -2,7 +2,7 @@
 
 A *drift* is a path-shaped token inside a wave's ``success_criteria`` that
 does not resolve to any file on disk. Two failure modes observed during the
-P23 audit (see ``.ea/artifacts/A29-P23-ship-gate.md`` followups F2):
+P23 audit (see ``.ea/artifacts/audits/A29-P23-ship-gate.md`` followups F2):
 
 - A test path wildcard like ``tests/unit/test_state_urn*.py`` that matches no
   file (the real module was ``tests/unit/test_urn.py``).

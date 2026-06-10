@@ -561,16 +561,82 @@ def _resolve_scan_paths(
     if files:
         return files
     candidates = relevant_for_hook(hook_name, base, cwd=cwd, staged=True)
-    return [p for p in candidates if not _is_state_bookkeeping_path(p)]
+    relocated = _pure_relocation_destinations(cwd=cwd)
+    return [p for p in candidates if not _is_state_bookkeeping_path(p) and p not in relocated]
+
+
+_PURE_RENAME_STATUS_RE = re.compile(r"^R100\t(?P<old>.+)\t(?P<new>.+)$")
+
+
+def _pure_relocation_destinations(*, cwd: Path) -> frozenset[str]:
+    """Return staged destinations of content-identical relocations (``R100``).
+
+    A pure ``git mv`` carries a file's already-committed body to a new path
+    without changing a byte, so re-linting that body would re-flag pre-existing
+    findings the relocation neither introduced nor can fix in scope. ``git``'s
+    ``R100`` similarity score marks exactly these moves; a move that also edits
+    the body scores below 100 and stays in scope so its edited lines are linted.
+    """
+    proc = subprocess.run(
+        ["git", "diff", "--cached", "--name-status", "--find-renames"],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        return frozenset()
+    return frozenset(
+        match.group("new")
+        for line in proc.stdout.splitlines()
+        if (match := _PURE_RENAME_STATUS_RE.match(line)) is not None
+    )
 
 
 _DIFF_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
+_RENAME_STATUS_RE = re.compile(r"^R\d*\t(?P<old>.+)\t(?P<new>.+)$")
+
+
+def _staged_diff_pathspec(rel: str, *, cwd: Path) -> list[str]:
+    """Return the pathspec to diff ``rel`` with so rename detection can fire.
+
+    ``git`` only resolves a rename when both endpoints are inside the diff
+    pathspec. A relocated artifact's old path is *not* ``rel``, so scoping the
+    diff to ``rel`` alone hides the source and ``-M`` reports the whole file as
+    added. When ``rel`` is the destination of a staged rename, this widens the
+    pathspec to include the source so ``-M`` pairs them; otherwise ``rel``
+    alone (an in-place edit or fresh add) suffices.
+    """
+    proc = subprocess.run(
+        ["git", "diff", "--cached", "--name-status", "--find-renames"],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode == 0:
+        for line in proc.stdout.splitlines():
+            match = _RENAME_STATUS_RE.match(line)
+            if match is not None and match.group("new") == rel:
+                return [match.group("old"), rel]
+    return [rel]
 
 
 def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
-    """Return 1-based new-file lines added by the staged diff."""
+    """Return 1-based new-file lines added by the staged diff.
+
+    ``--find-renames`` (``-M``) keeps a relocation from masquerading as a brand
+    new file: without it ``git diff --cached`` reports every line of a moved
+    artifact as freshly added, so a pure ``git mv`` would re-expose the entire
+    pre-existing body to the diff-scoped chassis lints. With rename detection a
+    pure move yields zero added-line candidates and a move-with-edit surfaces
+    only the lines the edit actually touched.
+    """
+    pathspec = _staged_diff_pathspec(rel, cwd=cwd)
     proc = subprocess.run(
-        ["git", "diff", "--cached", "--unified=0", "--", rel],
+        ["git", "diff", "--cached", "--unified=0", "--find-renames", "--", *pathspec],
         cwd=cwd,
         check=False,
         capture_output=True,
@@ -1246,10 +1312,13 @@ def _staged_added_lines(rel: str, *, cwd: Path) -> list[tuple[int, str]]:
     Companion of :func:`_staged_added_line_candidates`, but returns the line
     *text* alongside the number so a content lint (EAWF016 title-clarity) can
     inspect only the freshly-authored ``state.json`` lines. The leading ``+``
-    of each added diff line is stripped.
+    of each added diff line is stripped. ``--find-renames`` (``-M``) keeps a
+    relocated file from reporting its whole body as added (mirrors
+    :func:`_staged_added_line_candidates`).
     """
+    pathspec = _staged_diff_pathspec(rel, cwd=cwd)
     proc = subprocess.run(
-        ["git", "diff", "--cached", "--unified=0", "--", rel],
+        ["git", "diff", "--cached", "--unified=0", "--find-renames", "--", *pathspec],
         cwd=cwd,
         check=False,
         capture_output=True,

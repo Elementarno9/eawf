@@ -453,6 +453,68 @@ def test_eawf014_staged_scope_skips_agents_md_goldens(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
+def _init_repo_with_committed_file(tmp_path: Path, *, rel: str, body: str) -> Path:
+    """Init a repo and commit `rel` with `body` so it can later be relocated."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(["init", "-q"], repo)
+    _git(["config", "user.email", "noreply@anthropic.com"], repo)
+    _git(["config", "user.name", "Test"], repo)
+    # Detach the operator's global pre-commit hooks (``core.hooksPath``) so a
+    # seed body carrying a deliberate leak fixture commits without the global
+    # path-leak gate blocking the test setup.
+    _git(["config", "core.hooksPath", str(repo / ".disabled-hooks")], repo)
+    target = repo / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
+    _git(["add", rel], repo)
+    _git(["commit", "-qm", "seed"], repo)
+    return repo
+
+
+def test_path_leak_lint_skips_pure_relocation_of_committed_leak(tmp_path: Path) -> None:
+    # A pure `git mv` carries an already-committed leak to a new path without
+    # changing a byte; the gate must not re-flag pre-existing debt the move
+    # neither introduced nor can fix (forward-fix-only hygiene).
+    leak_body = 'p = "/Users/realuser/x"\n'  # pragma: allowlist secret
+    repo = _init_repo_with_committed_file(tmp_path, rel="old/leak.py", body=leak_body)
+    (repo / "new").mkdir()
+    _git(["mv", "old/leak.py", "new/leak.py"], repo)
+    result = runner.invoke(app, ["-w", str(repo), "hook", "path-leak-lint"])
+    assert result.exit_code == 0, result.stdout
+    assert "clean" in result.stdout.lower()
+
+
+def test_eawf013_skips_pure_relocation_of_committed_debt(tmp_path: Path) -> None:
+    # A relocated pre-chassis artifact must not re-trip the full-content
+    # citation gate on its already-committed body.
+    debt_body = "# Audit\n\n## References\n\n[1] `repo/path.py`\n[2] `repo/other.py`\n"
+    repo = _init_repo_with_committed_file(tmp_path, rel="legacy-audit.md", body=debt_body)
+    (repo / "audits").mkdir()
+    _git(["mv", "legacy-audit.md", "audits/legacy-audit.md"], repo)
+    result = runner.invoke(app, ["-w", str(repo), "hook", "eawf013-bracket-position"])
+    assert result.exit_code == 0, result.stdout
+
+
+def test_path_leak_lint_flags_relocation_with_added_leak(tmp_path: Path) -> None:
+    # A move that ALSO edits the body (similarity below R100) stays in scope:
+    # a leak introduced by the edit is still flagged, so the relocation skip
+    # cannot smuggle a fresh leak past the gate.
+    clean_body = "x = 1\n" * 20
+    repo = _init_repo_with_committed_file(tmp_path, rel="old/mod.py", body=clean_body)
+    (repo / "new").mkdir()
+    _git(["mv", "old/mod.py", "new/mod.py"], repo)
+    moved = repo / "new" / "mod.py"
+    moved.write_text(
+        clean_body + 'leak = "/Users/realuser/x"\n',  # pragma: allowlist secret
+        encoding="utf-8",
+    )
+    _git(["add", "new/mod.py"], repo)
+    result = runner.invoke(app, ["-w", str(repo), "hook", "path-leak-lint"])
+    assert result.exit_code == 1, result.stdout
+    assert "new/mod.py" in result.stdout
+
+
 def test_eawf015_ears_advisory_cli_warns_without_blocking(tmp_path: Path) -> None:
     note = tmp_path / "note.md"
     note.write_text("The operator should review this before merge.\n")
