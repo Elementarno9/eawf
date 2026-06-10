@@ -57,10 +57,14 @@ eawf plugin doctor opencode
 Run the focused check for the area you changed, then run the full repository gates before committing:
 
 ```bash
-uv run pytest
+just test
 uv run mypy src/
 uv run pre-commit run --all-files
 ```
+
+`just test` runs the suite in parallel (`-n auto`), mirroring CI; bare `uv run pytest` is single-process and grows to minutes as the suite grows, so prefer `just test` for a full run. For a targeted run while iterating, keep using `uv run pytest <path>::<test>` — single-process is fastest for one test. `just test-all` is the full CI mirror (adds the real-daemon e2e tier + perf timing); `just test-tui` runs only the TUI render snapshots + perf budget.
+
+Install `just` with `brew install just` (macOS) or `cargo install just` (any OS, including Windows); the `just` project's README lists more install options.
 
 ## Project Rules
 

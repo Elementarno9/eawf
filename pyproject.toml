@@ -125,7 +125,7 @@ markers = [
     "integration: integration tests crossing module boundaries",
     "property: Hypothesis-driven property tests",
     "golden: golden-output regression tests",
-    "slow: long-running tests (excluded from default run)",
+    "slow: long-running tests",
     "acceptance: phase-gate end-to-end acceptance scenarios",
     "eval: skill-dispatch golden-envelope regression suite (opt-in)",
     "golden_scenarios: end-to-end lifecycle golden-tree scenarios",
