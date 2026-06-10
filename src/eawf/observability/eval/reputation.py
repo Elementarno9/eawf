@@ -601,6 +601,73 @@ def _murphy_decomposition(
     return brier, reliability, resolution
 
 
+def expected_calibration_error(
+    forecasts: list[float],
+    outcomes: list[float],
+    *,
+    bins: int = _MURPHY_BINS,
+) -> float:
+    """Return the bucketed expected calibration error (ECE) of a forecast set.
+
+    ECE partitions the forecast probabilities into *bins* equal-width buckets,
+    and within each non-empty bucket measures the gap between the bucket's mean
+    forecast (the confidence the jury claimed) and the bucket's observed
+    frequency (the accuracy it actually achieved). The per-bucket gaps are then
+    averaged weighted by bucket population::
+
+        ece = sum_k (n_k / N) * |mean_forecast_k - observed_freq_k|
+
+    A perfectly calibrated forecaster -- one whose claimed confidence matches
+    its realized accuracy in every bucket -- scores ``0.0``. The metric is in
+    ``[0.0, 1.0]`` and lower is better. Unlike the Murphy reliability term
+    (which squares the gap), ECE keeps the gap linear, so it reads directly as
+    "on average, how far off was the stated confidence".
+
+    The bucketing mirrors :func:`_murphy_decomposition`: a right-closed index in
+    ``[0, bins - 1]`` so a forecast of exactly ``1.0`` lands in the top bucket
+    rather than overflowing.
+
+    Args:
+        forecasts: Forecast probabilities in ``[0.0, 1.0]``, one per outcome.
+            Must be non-empty and the same length as *outcomes*.
+        outcomes: Realized outcomes, each ``0.0`` or ``1.0``, aligned to
+            *forecasts*.
+        bins: Number of equal-width buckets to partition the forecasts into
+            (``>= 1``). Defaults to :data:`_MURPHY_BINS`.
+
+    Returns:
+        The expected calibration error in ``[0.0, 1.0]``.
+
+    Raises:
+        ValueError: When *forecasts* is empty, when *forecasts* and *outcomes*
+            differ in length, or when *bins* is below 1.
+    """
+    if not forecasts:
+        raise ValueError("cannot compute ece over an empty forecast set")
+    if len(forecasts) != len(outcomes):
+        raise ValueError(
+            f"forecast/outcome length mismatch: {len(forecasts)} vs {len(outcomes)}"
+        )
+    if bins < 1:
+        raise ValueError(f"ece needs at least 1 bin: {bins!r}")
+
+    n = len(forecasts)
+    bin_forecasts: dict[int, list[float]] = defaultdict(list)
+    bin_outcomes: dict[int, list[float]] = defaultdict(list)
+    for forecast, outcome in zip(forecasts, outcomes, strict=True):
+        index = min(int(forecast * bins), bins - 1)
+        bin_forecasts[index].append(forecast)
+        bin_outcomes[index].append(outcome)
+
+    ece = 0.0
+    for index, members in bin_forecasts.items():
+        n_k = len(members)
+        mean_forecast = math.fsum(members) / n_k
+        observed_freq = math.fsum(bin_outcomes[index]) / n_k
+        ece += (n_k / n) * abs(mean_forecast - observed_freq)
+    return ece
+
+
 def _beta_posterior_interval(
     *,
     held_count: int,
@@ -868,6 +935,7 @@ __all__ = [
     "build_verdict_outcomes",
     "compute_role_reliability",
     "confidence_to_float",
+    "expected_calibration_error",
     "fleet_verdict_rollup",
     "map_reliability_to_tier",
 ]
