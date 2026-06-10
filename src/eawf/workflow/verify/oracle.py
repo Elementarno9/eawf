@@ -214,7 +214,15 @@ async def run_oracle(
             spawn_factory=spawn_factory,
             repo_root=repo_root,
         )
-        if jr.outcome is JuryAggregateOutcome.FAIL and jury_block_authority(wave) == "advisory":
+        status = _jury_outcome_status(jr.outcome)
+        # An uncalibrated jury holds only ADVISORY authority, so it logs but
+        # never blocks a close on ANY non-pass outcome -- a substantive veto
+        # (FAIL) or an unresolved split / sub-quorum (NEEDS_USER, e.g.
+        # cross-vendor jurors that cannot yet convene to quorum). The non-pass
+        # signal is preserved in the WARNING log + the OracleResult detail.
+        # TRUST-4 replaces jury_block_authority with the earned-authority
+        # computation that lets a calibrated jury block on a non-pass.
+        if status != "pass" and jury_block_authority(wave) == "advisory":
             logger.warning(
                 f"run_oracle jury_veto_advisory criterion={criterion.id!r} wave={wave.id} "
                 f"outcome={jr.outcome.value} authority=advisory close_proceeds=True"
@@ -228,7 +236,6 @@ async def run_oracle(
                     "until TRUST-4 earned-authority calibration"
                 ),
             )
-        status = _jury_outcome_status(jr.outcome)
         logger.info(
             f"run_oracle jury criterion={criterion.id!r} wave={wave.id} "
             f"outcome={jr.outcome.value} status={status}"
