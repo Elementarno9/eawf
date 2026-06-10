@@ -438,6 +438,26 @@ class DispatchAnnotation(_StrictModel):
     reason: str | None = None
 
 
+class RuntimeBaseline(_StrictModel):
+    """Cumulative runtime counters captured when a wave is first claimed.
+
+    The baseline is the "before" snapshot used by later close-time telemetry
+    readers to subtract already-spent runtime/cost/token counters from the
+    same runtime sidecar. Numeric fields are optional because not every runtime
+    reports every counter; ``captured_at`` is required so consumers can order
+    and audit the snapshot.
+    """
+
+    api_duration_ms: Annotated[int, Field(ge=0)] | None = None
+    total_duration_ms: Annotated[int, Field(ge=0)] | None = None
+    cost_usd: Annotated[float, Field(ge=0.0)] | None = None
+    input_tokens: Annotated[int, Field(ge=0)] | None = None
+    output_tokens: Annotated[int, Field(ge=0)] | None = None
+    cache_creation_input_tokens: Annotated[int, Field(ge=0)] | None = None
+    cache_read_input_tokens: Annotated[int, Field(ge=0)] | None = None
+    captured_at: UtcDatetime
+
+
 class Wave(_DescribedEntity):
     """Atomic execution unit under an iter.
 
@@ -476,6 +496,7 @@ class Wave(_DescribedEntity):
     commit: ShaStr | None = None
     opened_at: UtcDatetime
     claimed_at: UtcDatetime | None = None
+    runtime_baseline: RuntimeBaseline | None = None
     closed_at: UtcDatetime | None = None
     sessions: dict[int, SessionAttempt] = Field(default_factory=dict)
     runtime_preference: list[str] | None = None
@@ -930,16 +951,13 @@ class Principal(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts ``"1.0"``, ``"1.1"``, ``"1.2"``, ``"1.3"``,
-    ``"1.4"``, ``"1.5"``, and ``"1.6"`` so an on-disk state written before
-    any bump still re-validates after the model advances — the migrate
-    chain rewrites the version string in place, but a read of an
-    un-migrated state must never reject. The accepted set drives the
-    migrate guard's model-supported max, so the literals move in lockstep
-    with the migration steps (``v1_0_to_v1_1``, ``v1_1_to_v1_2``,
-    ``v1_2_to_v1_3``, ``v1_3_to_v1_4``, ``v1_4_to_v1_5``,
-    ``v1_5_to_v1_6``, ``v1_6_to_v1_7``). The ``1.5`` edge is purely
-    additive — it registers
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.9"`` range so
+    an on-disk state written before any bump still re-validates after the
+    model advances — the migrate chain rewrites the version string in place,
+    but a read of an un-migrated state must never reject. The accepted set
+    drives the migrate guard's model-supported max, so the literals move in
+    lockstep with the migration steps (``v1_0_to_v1_1`` through
+    ``v1_8_to_v1_9``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -954,10 +972,12 @@ class State(_StrictModel):
     additive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a
     state written before the bump re-validates with the list defaulted and no
     historical fact changes; the migrate chain backfills ``gates: []`` on every
-    wave for an explicit on-disk row.
+    wave for an explicit on-disk row. The ``1.9`` edge adds the optional
+    :attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills
+    ``runtime_baseline: None`` on every wave for an explicit on-disk row.
     """
 
-    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"]
+    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime

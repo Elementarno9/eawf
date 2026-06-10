@@ -562,6 +562,14 @@ def test_state_accepts_schema_version_1_4() -> None:
     assert state.schema_version == "1.4"
 
 
+def test_state_accepts_schema_version_1_9() -> None:
+    """The State model accepts the v1.9 ``schema_version`` literal."""
+    payload = _empty_state().model_dump(mode="json")
+    payload["schema_version"] = "1.9"
+    state = State.model_validate(payload)
+    assert state.schema_version == "1.9"
+
+
 # ---------------------------------------------------------------------------
 # Principal (C01-IMPL W02 placeholder — c01-foundations §5.3.19 + Q3 2026-05-18)
 # ---------------------------------------------------------------------------

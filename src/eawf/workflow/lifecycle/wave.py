@@ -23,7 +23,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import ActualSummary, State, Wave
+from eawf.kernel.state.models import ActualSummary, RuntimeBaseline, State, Wave
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.lifecycle._errors import (
     LifecycleError,
@@ -38,6 +38,11 @@ from eawf.workflow.lifecycle.spec import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _capture_runtime_baseline() -> RuntimeBaseline | None:
+    """Return a claim-time runtime sidecar snapshot, when one is available."""
+    return None
 
 
 def plan_wave(
@@ -385,10 +390,12 @@ def claim_wave(
     sibling-lock + status check delivers exactly-once semantics.
 
     On the first claim the wave's ``claimed_at`` work-start fact is
-    stamped (``datetime.now(UTC)``). ``claimed_at`` is the anchor the
-    elapsed-clock consumers use instead of ``opened_at`` (plan/creation
-    time), so a wave planned hours before it is claimed does not inflate
-    its elapsed clock. An existing ``claimed_at`` is preserved on re-entry.
+    stamped (``datetime.now(UTC)``), and any available runtime sidecar
+    counters are captured into ``runtime_baseline``. ``claimed_at`` is the
+    anchor the elapsed-clock consumers use instead of ``opened_at``
+    (plan/creation time), so a wave planned hours before it is claimed does
+    not inflate its elapsed clock. Existing ``claimed_at`` and
+    ``runtime_baseline`` values are preserved on re-entry.
 
     P19-W02 dep + monotonic gates:
 
@@ -474,6 +481,8 @@ def claim_wave(
     # a re-entry never re-bases the clock to a later wall-clock.
     if wave.claimed_at is None:
         wave.claimed_at = datetime.now(UTC)
+    if wave.runtime_baseline is None:
+        wave.runtime_baseline = _capture_runtime_baseline()
     if wave_id not in state.current.active_wave_ids:
         state.current.active_wave_ids.append(wave_id)
     # Lifecycle guard: a wave must never run under a PLANNED iter, so the

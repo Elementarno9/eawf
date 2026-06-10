@@ -22,10 +22,12 @@ seventh edge (v1.6 -> v1.7) retypes ``Wave.success_criteria`` from
 into a grandfathered ``CriterionSpec`` row — a real per-wave backfill, not a
 bare version bump. The eighth edge (v1.7 -> v1.8) adds the typed
 ``Wave.gates`` list (the per-wave ``GateSpec`` close-gate rows) and backfills
-an explicit ``gates: []`` on every wave — additive, replay-safe. The live
+an explicit ``gates: []`` on every wave — additive, replay-safe. The ninth
+edge (v1.8 -> v1.9) adds ``Wave.runtime_baseline`` and backfills
+``runtime_baseline: None`` on every wave — additive, replay-safe. The live
 :class:`eawf.kernel.state.models.State` model accepts ``"1.0"``, ``"1.1"``,
 ``"1.2"``, ``"1.3"``, ``"1.4"``, ``"1.5"``, ``"1.6"``, ``"1.7"``, and
-``"1.8"``, so a migrated state re-loads under the live model. The suite
+``"1.8"``, and ``"1.9"``, so a migrated state re-loads under the live model. The suite
 exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
@@ -745,7 +747,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.8"
+    assert model_supported_max_version() == "1.9"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -793,9 +795,14 @@ def test_guard_target_supported_permits_v1_8_now_model_advanced() -> None:
     guard_target_supported("1.8")
 
 
+def test_guard_target_supported_permits_v1_9_now_model_advanced() -> None:
+    """The guard permits 1.9 now the live model accepts it (the runtime baseline bump)."""
+    guard_target_supported("1.9")
+
+
 def test_guard_target_supported_rejects_target_above_max() -> None:
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        guard_target_supported("1.9")
+        guard_target_supported("2.0")
 
 
 def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> None:
@@ -806,11 +813,11 @@ def test_run_chain_refuses_unsupported_target_with_no_write(tmp_path: Path) -> N
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     with pytest.raises(MigrationError, match="exceeds model-supported max"):
-        run_chain(state_path, chain=chain, from_version="1.0", to_version="1.9")
+        run_chain(state_path, chain=chain, from_version="1.0", to_version="2.0")
 
     # The on-disk state is byte-for-byte unchanged and no backup was taken.
     assert state_path.read_bytes() == before
-    backup = backup_path_for(state_path, from_version="1.0", to_version="1.9")
+    backup = backup_path_for(state_path, from_version="1.0", to_version="2.0")
     assert not backup.exists()
 
 
@@ -851,7 +858,7 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     before = state_path.read_bytes()
 
     monkeypatch.setenv("EA_STATE", str(state_path))
-    result = CliRunner().invoke(app, ["migrate", "--to", "1.9"])
+    result = CliRunner().invoke(app, ["migrate", "--to", "2.0"])
 
     assert result.exit_code != 0
     assert "exceeds model-supported max" in result.stdout
@@ -859,14 +866,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_8(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_9(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.8) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.9) walks the full chain + re-loads.
 
-    The default target advanced to 1.8 with the Wave.gates bump, so a bare
+    The default target advanced to 1.9 with the runtime-baseline bump, so a bare
     migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5 -> 1.6
-    -> 1.7 -> 1.8 and lands a re-loadable v1.8 state.
+    -> 1.7 -> 1.8 -> 1.9 and lands a re-loadable v1.9 state.
     """
     from typer.testing import CliRunner
 
@@ -881,7 +888,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_8(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.8"
+    assert reloaded.schema_version == "1.9"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(

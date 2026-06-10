@@ -30,9 +30,10 @@ from eawf.kernel.state.enums import (
     ScopeKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import CurrentPointers, Project, State
+from eawf.kernel.state.models import CurrentPointers, Project, RuntimeBaseline, State
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
+from eawf.workflow.lifecycle import wave as wave_lifecycle
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.transitions import (
     claim_wave,
@@ -152,6 +153,76 @@ def test_claim_wave_no_bucket_rejects_before_estimate() -> None:
 
     # Rejected claim -> no estimate seeded; the dict stays None/empty.
     assert not (state.estimates or {})
+
+
+def test_claim_wave_captures_runtime_baseline_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Claim snapshots the primed runtime counters on the first claim."""
+    state = _empty_state()
+    _seed_wave(state, effort_bucket=EffortBucket.M)
+    captured_at = datetime(2026, 6, 10, 12, 0, tzinfo=UTC)
+    baseline = RuntimeBaseline(
+        api_duration_ms=100,
+        total_duration_ms=125,
+        cost_usd=0.25,
+        input_tokens=10,
+        output_tokens=20,
+        cache_creation_input_tokens=3,
+        cache_read_input_tokens=7,
+        captured_at=captured_at,
+    )
+    monkeypatch.setattr(wave_lifecycle, "_capture_runtime_baseline", lambda: baseline)
+
+    wave = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert wave.runtime_baseline == baseline
+    assert wave.runtime_baseline.captured_at == captured_at
+
+
+def test_claim_wave_preserves_runtime_baseline_on_idempotent_reclaim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A same-session re-claim does not re-snapshot runtime counters."""
+    state = _empty_state()
+    _seed_wave(state, effort_bucket=EffortBucket.M)
+    first_baseline = RuntimeBaseline(
+        api_duration_ms=100,
+        total_duration_ms=125,
+        cost_usd=0.25,
+        input_tokens=10,
+        output_tokens=20,
+        cache_creation_input_tokens=3,
+        cache_read_input_tokens=7,
+        captured_at=datetime(2026, 6, 10, 12, 0, tzinfo=UTC),
+    )
+    second_baseline = RuntimeBaseline(
+        api_duration_ms=999,
+        total_duration_ms=999,
+        cost_usd=9.99,
+        input_tokens=999,
+        output_tokens=999,
+        cache_creation_input_tokens=999,
+        cache_read_input_tokens=999,
+        captured_at=datetime(2026, 6, 10, 13, 0, tzinfo=UTC),
+    )
+    captures = [first_baseline, second_baseline]
+    calls = 0
+
+    def capture() -> RuntimeBaseline:
+        nonlocal calls
+        calls += 1
+        return captures[calls - 1]
+
+    monkeypatch.setattr(wave_lifecycle, "_capture_runtime_baseline", capture)
+
+    first = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    original_claimed_at = first.claimed_at
+    again = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+
+    assert calls == 1
+    assert again.claimed_at == original_claimed_at
+    assert again.runtime_baseline == first_baseline
 
 
 # ---- close_wave upserts ActualSummary (P28-I02-W03 token-only auto-actual) ---
