@@ -7780,7 +7780,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I05-W07"
+    ],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15424,6 +15426,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I05-W06",
       "updated_at": "2026-06-10T10:10:28.284241Z"
+    },
+    "P30-I05-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W07-bucket-20260610T101208Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I05-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I05-W07",
+      "updated_at": "2026-06-10T10:12:08.805243Z"
     }
   },
   "goals": {
@@ -18319,7 +18334,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T10:10:33.434751Z",
+  "updated_at": "2026-06-10T10:12:17.121666Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73398,8 +73413,8 @@
     "P30-I05-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w07",
+      "claimed_at": "2026-06-10T10:12:08.805222Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -73423,7 +73438,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -73443,7 +73458,7 @@
       "title": "EUCAP-7 Wire configurable EU basis (api_duration default)",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I05-W07-1781086337"
     },
     "P30-I05-W08": {
       "agent_role": "executor",
@@ -82806,6 +82821,17 @@
       "path": ".ea/worktrees/p30-i05-w06",
       "status": "merged",
       "wave_id": "P30-I05-W06"
+    },
+    "WT-P30-I05-W07-1781086337": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i05-w07",
+      "created_at": "2026-06-10T10:12:17.121666Z",
+      "id": "WT-P30-I05-W07-1781086337",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i05-w07",
+      "path": ".ea/worktrees/p30-i05-w07",
+      "status": "active",
+      "wave_id": "P30-I05-W07"
     }
   }
 }
