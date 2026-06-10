@@ -4547,6 +4547,54 @@
       "scope_id": "P30-I04-W01",
       "status": "done",
       "updated_at": "2026-06-10T01:13:44.953186Z"
+    },
+    "P30-I04-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W02",
+      "scope_id": "P30-I04-W02",
+      "status": "done",
+      "updated_at": "2026-06-10T03:18:07.884729Z"
+    },
+    "P30-I04-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W03",
+      "scope_id": "P30-I04-W03",
+      "status": "done",
+      "updated_at": "2026-06-10T03:18:19.697786Z"
+    },
+    "P30-I04-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W04",
+      "scope_id": "P30-I04-W04",
+      "status": "done",
+      "updated_at": "2026-06-10T03:18:33.959324Z"
+    },
+    "P30-I04-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W07",
+      "scope_id": "P30-I04-W07",
+      "status": "done",
+      "updated_at": "2026-06-10T03:25:10.198652Z"
     }
   },
   "agent_sessions": {
@@ -15003,6 +15051,58 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I04-W01",
       "updated_at": "2026-06-10T01:13:21.101366Z"
+    },
+    "P30-I04-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W02-bucket-20260610T011515Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I04-W02",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I04-W02",
+      "updated_at": "2026-06-10T01:15:15.235348Z"
+    },
+    "P30-I04-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W03-bucket-20260610T011515Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I04-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I04-W03",
+      "updated_at": "2026-06-10T01:15:15.723523Z"
+    },
+    "P30-I04-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W04-bucket-20260610T011516Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I04-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I04-W04",
+      "updated_at": "2026-06-10T01:15:16.212022Z"
+    },
+    "P30-I04-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W07-bucket-20260610T032445Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I04-W07",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I04-W07",
+      "updated_at": "2026-06-10T03:24:45.451131Z"
     }
   },
   "goals": {
@@ -17886,7 +17986,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T01:13:52.043891Z",
+  "updated_at": "2026-06-10T03:25:10.199016Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -69362,10 +69462,10 @@
     "P30-I04-W02": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-p30-i04",
+      "claimed_at": "2026-06-10T01:15:15.235342Z",
+      "closed_at": "2026-06-10T03:18:07.884729Z",
+      "commit": "c4e02973019f3eff98c1cf3989856b09af403f0d",
       "deps": [
         "P30-I04-W01"
       ],
@@ -69381,10 +69481,10 @@
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.772649Z",
-      "outcome": null,
+      "outcome": "Implemented non-empty intent body guard and tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -69425,10 +69525,10 @@
       "blocks": [
         "P30-I04-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-p30-i04",
+      "claimed_at": "2026-06-10T01:15:15.723518Z",
+      "closed_at": "2026-06-10T03:18:19.697786Z",
+      "commit": "729f0ebb16cdb5011f71976a31fb8d857ed4226d",
       "deps": [
         "P30-I04-W01"
       ],
@@ -69444,10 +69544,10 @@
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.773074Z",
-      "outcome": null,
+      "outcome": "Implemented EAWF022 required-intent sync guards and tests",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -69489,10 +69589,10 @@
         "P30-I04-W05",
         "P30-I04-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-p30-i04",
+      "claimed_at": "2026-06-10T01:15:16.212016Z",
+      "closed_at": "2026-06-10T03:18:33.959324Z",
+      "commit": "a32f6a59290cc042b5e169d833fa49ea9fb7cd6f",
       "deps": [
         "P30-I04-W01"
       ],
@@ -69509,10 +69609,10 @@
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.773515Z",
-      "outcome": null,
+      "outcome": "Implemented UI affordance_parity sync requirement and cap-safe helper split",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -69684,10 +69784,10 @@
       "blocks": [
         "P30-I04-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "codex-p30-i04-w07-close",
+      "claimed_at": "2026-06-10T01:15:16.695190Z",
+      "closed_at": "2026-06-10T03:25:10.198652Z",
+      "commit": "5a8f482b59e3c6e62b8a0284feeb65fb1f3c315a",
       "deps": [
         "P30-I04-W01"
       ],
@@ -69699,42 +69799,151 @@
         "src/eawf/workflow/skills/bodies/wave_spec.py",
         "src/eawf/surfaces/tui/snapshot/pilot_harness.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_mockup_golden_capture.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_spec_validators.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I04-W07",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "W07 carries deterministic criteria and gates for mockup golden capture before close.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "mockup pick writes normalize_snapshot content and mockup_golden_path",
+          "UI wave without mockup_golden_path or mockup_waiver_reason is rejected",
+          "affordance_parity validates HOME mode advertised keys"
+        ],
+        "priority_rationale": "Attach the intent needed by EAWF022 so the already landed W07 implementation can close through deterministic gates instead of jury fallback.",
+        "problem": "Legacy UI-scope W07 has no typed intent so spec sync cannot score coverage.",
+        "risks": [
+          "affordance_parity is a required UI-scope gate even though W07 primarily changes mockup-spec authoring helpers"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.773962Z",
-      "outcome": null,
+      "outcome": "Implemented mockup golden capture with deterministic spec gates",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W07-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_mockup_pick_writes_golden asserts the golden file content equals normalize_snapshot(variant.layout) and the body carries mockup_golden_path",
-          "oracle_tier": null,
+          "measurable_signal": "test_mockup_golden_capture.py asserts normalized golden bytes and stamped mockup_golden_path; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "The /mockup pick handler writes a golden whose content equals normalize_snapshot of the chosen variant layout, and stamps mockup_golden_path on the wave spec body.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the mockup golden capture unit suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/unit/test_mockup_golden_capture.py exits zero and asserts the /mockup pick handler writes normalize_snapshot content plus mockup_golden_path.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W07-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "behavioral",
-          "measurable_signal": "test_mockup_pick_requires_variant_or_waiver asserts DaemonValidationError for a UI wave missing both golden and waiver",
-          "oracle_tier": null,
+          "measurable_signal": "test_spec_validators.py asserts UI wave rejection without mockup_golden_path or mockup_waiver_reason; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "reliability",
           "required": true,
-          "response": null,
-          "text": "A UI wave with neither a captured mockup golden nor a mockup_waiver_reason is rejected at spec authoring, mirroring AUTH-4's band-conditional require.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the UI mockup-reference validator unit suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/unit/test_spec_validators.py exits zero and asserts a UI wave with neither mockup golden nor mockup_waiver_reason is rejected.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "structural",
+          "measurable_signal": "affordance_parity HOME mode probe finds no dead advertised key before close",
+          "oracle_tier": 2,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "affordance_parity",
+            "jury_reason": null,
+            "locus": "tui_pilot",
+            "object": "HOME mode advertised key bindings",
+            "observe": "validates",
+            "quantifier": "single"
+          },
+          "text": "affordance_parity validates the HOME mode advertised keys so the UI-scope wave has a structural T2 gate before jury fallback.",
           "waiver_reason": null
         }
       ],
