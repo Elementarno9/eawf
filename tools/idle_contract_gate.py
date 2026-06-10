@@ -11,7 +11,7 @@ shipped ``quality`` profile turns it on for a non-empty UI/UX band. This gate
 makes "wired + band-scoped, not idle, not global" a CHECKED invariant rather
 than a hope.
 
-Three gates run from :func:`main`, in precedence order, and any failing
+Four gates run from :func:`main`, in precedence order, and any failing
 exits non-zero:
 
 - :func:`check_idle_contract` -- the original single B091 spec-jury contract
@@ -24,6 +24,11 @@ exits non-zero:
   binding regress to idle, the drifted body would emit silently and this probe
   stops raising -- failing the gate. This is the meta-binding that keeps the
   emit-validation binding from silently going dead.
+- :func:`check_i03_contracts` -- three in-process probes for the I03 contracts:
+  the authored-wave intent guard must reject ``intent=None``, the UI-scope
+  require-gate must reject a UI wave with no ``affordance_parity`` gate, and
+  ``mockup_golden_diff`` must be a registered ``CheckKind`` with a mapped
+  ``OracleTier``.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
   flags any newly-defined contract (a ``check_*`` / ``*_gate`` / ``*_lint``
   function, a ``CheckKind`` runner registration, an ``OracleTier`` dispatch
@@ -65,12 +70,13 @@ without editing shipped profiles or the engine. Each returns a typed
 
 Invocation:
 
-    python3 tools/idle_contract_gate.py
+    uv run tools/idle_contract_gate.py
 
 Exit codes:
 - ``0`` -- the producer is importable + wired on for a non-empty band that
   resolves band-scoped (not global), AND the emit-time body validation rejects
-  a drifted body, AND no newly-defined contract in the staged diff ships idle.
+  a drifted body, AND all I03 probes fire, AND no newly-defined contract in the
+  staged diff ships idle.
 - ``1`` -- a contract failed (the failure is named on stderr).
 """
 
@@ -79,20 +85,30 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import get_args
 
 import pydantic
 
-from eawf.kernel.state.enums import WaveStatus
-from eawf.kernel.state.models import Wave
+from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
+from eawf.kernel.state.enums import EffortBucket, ProjectStatus, ScopeKind, WaveStatus
+from eawf.kernel.state.models import CurrentPointers, Project, State, Wave
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
+from eawf.runtime.daemon.methods import DaemonValidationError
+from eawf.runtime.daemon.methods.spec_sync_lints import (
+    require_affordance_parity_for_ui_scope as _require_affordance_parity_for_ui_scope,
+)
 from eawf.surfaces.render.envelope import OutputEnvelope
+from eawf.workflow.audit_dsl.models import CheckKind
+from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
 from eawf.workflow.dispatch.spec_jury import produce_spec_jury_verdict  # noqa: F401
+from eawf.workflow.lifecycle.transitions import LifecycleError, open_iter, open_phase
+from eawf.workflow.lifecycle.wave import plan_wave as _plan_wave
 from eawf.workflow.skills.engine import (
     ProbeOutcome,
     Skill,
@@ -131,6 +147,9 @@ class GateFailure(StrEnum):
     PRODUCER_IDLE = "producer_idle"
     BAND_ENFORCES_GLOBALLY = "band_enforces_globally"
     BODY_VALIDATION_IDLE = "body_validation_idle"
+    REQUIRED_INTENT_IDLE = "required_intent_idle"
+    UI_REQUIRE_GATE_IDLE = "ui_require_gate_idle"
+    MOCKUP_GOLDEN_DIFF_IDLE = "mockup_golden_diff_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -402,6 +421,223 @@ def check_skill_body_binding(
             f"extra-forbid key on the {_PROBE_SKILL_NAME} body model) was emitted "
             "through run_skill WITHOUT raising pydantic.ValidationError; the "
             "body-validation-at-emit binding regressed to a no-op"
+        ),
+    )
+
+
+# =========================================================================== #
+# I03 contract probes: intent guard, UI require-gate, mockup golden tier.
+# =========================================================================== #
+
+#: A ``plan_wave``-shaped callable. ``Callable[..., object]`` is intentional:
+#: the real function is keyword-only after ``state``, and tests inject a
+#: no-op stand-in to prove the gate fails when the guard stops rejecting.
+type PlanWaveFn = Callable[..., object]
+
+#: A ``require_affordance_parity_for_ui_scope``-shaped callable. Kept injectable
+#: for the same reason as :data:`PlanWaveFn`.
+type UiRequireGateFn = Callable[..., None]
+
+#: A ``_tier_for_gate_kind``-shaped callable.
+type TierForGateKindFn = Callable[[str], OracleTier]
+
+_I03_PHASE_ID = "P00"
+_I03_ITER_ID = "P00-I01"
+_I03_INTENT_PROBE_WAVE_ID = "P00-I01-W01"
+_I03_UI_PROBE_WAVE_ID = "P00-I01-W02"
+_MOCKUP_GOLDEN_DIFF_KIND = "mockup_golden_diff"
+
+
+def _make_i03_probe_state() -> State:
+    """Build a pure in-process state with one open phase + iter.
+
+    Returns:
+        A validated :class:`State` that is sufficient for
+        :func:`eawf.workflow.lifecycle.wave.plan_wave` to reach the authored
+        wave guards. No files are read or written.
+    """
+    state = State.model_validate(
+        {
+            "schema_version": "1.8",
+            "scope_kind": ScopeKind.REPO.value,
+            "urn": "urn:eawf:v1:state:QR",
+            "updated_at": _PROBE_OPENED_AT.isoformat(),
+            "project": Project(
+                code="QR",
+                slug="qr",
+                title="QR",
+                description=None,
+                domains=["probe"],
+                default_branch="main",
+                status=ProjectStatus.ACTIVE,
+                repo_urn="urn:eawf:v1:repo:QR",
+            ).model_dump(mode="json"),
+            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
+            "workspace": None,
+            "phases": {},
+            "iters": {},
+            "waves": {},
+            "artifacts": {},
+            "agent_sessions": {},
+            "plugins": {},
+            "indexes": {},
+        }
+    )
+    open_phase(state, phase_id=_I03_PHASE_ID, title="Probe phase")
+    open_iter(state, iter_id=_I03_ITER_ID, phase_id=_I03_PHASE_ID, title="Probe iter")
+    return state
+
+
+def _probe_required_intent_guard(plan_wave_fn: PlanWaveFn) -> GateResult | None:
+    """Return a failure when the authored-wave ``intent=None`` guard is idle."""
+    try:
+        plan_wave_fn(
+            _make_i03_probe_state(),
+            wave_id=_I03_INTENT_PROBE_WAVE_ID,
+            iter_id=_I03_ITER_ID,
+            title="Intent probe wave",
+            file_scopes=[_NON_UI_SCOPE],
+            effort_bucket=EffortBucket.M,
+            intent=None,
+        )
+    except LifecycleError as exc:
+        if "has no intent" in str(exc):
+            return None
+        return GateResult(
+            passed=False,
+            failure=GateFailure.REQUIRED_INTENT_IDLE,
+            message=(
+                "required-intent guard did not fire cleanly: expected "
+                f"{_I03_INTENT_PROBE_WAVE_ID!r} with intent=None to raise the "
+                f"'has no intent' LifecycleError, got {exc!r}"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.REQUIRED_INTENT_IDLE,
+        message=(
+            "required-intent guard is idle: a None-intent probe wave planned "
+            "without raising LifecycleError"
+        ),
+    )
+
+
+def _probe_ui_require_contract(ui_require_gate_fn: UiRequireGateFn) -> GateResult | None:
+    """Return a failure when the UI affordance-parity require-gate is idle."""
+    try:
+        ui_require_gate_fn(
+            wave_id=_I03_UI_PROBE_WAVE_ID,
+            file_scopes=[_UI_SCOPE],
+            gates=[],
+        )
+    except DaemonValidationError as exc:
+        if "affordance_parity" in str(exc):
+            return None
+        return GateResult(
+            passed=False,
+            failure=GateFailure.UI_REQUIRE_GATE_IDLE,
+            message=(
+                "UI-scope require-gate did not fire cleanly: expected the "
+                f"ungated probe wave {_I03_UI_PROBE_WAVE_ID!r} to name "
+                f"'affordance_parity', got {exc!r}"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.UI_REQUIRE_GATE_IDLE,
+        message=(
+            "UI-scope require-gate is idle: a UI probe wave with no "
+            "affordance_parity gate was accepted"
+        ),
+    )
+
+
+def _probe_mockup_golden_diff_registration(
+    *,
+    registry: Mapping[str, object],
+    tier_for_gate_kind_fn: TierForGateKindFn,
+) -> GateResult | None:
+    """Return a failure when ``mockup_golden_diff`` is unregistered or unmapped."""
+    check_kinds = set(get_args(CheckKind))
+    if _MOCKUP_GOLDEN_DIFF_KIND not in check_kinds:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.MOCKUP_GOLDEN_DIFF_IDLE,
+            message=(
+                f"{_MOCKUP_GOLDEN_DIFF_KIND} CheckKind is idle: it is absent "
+                "from the CheckKind literal"
+            ),
+        )
+    runner = registry.get(_MOCKUP_GOLDEN_DIFF_KIND)
+    if not callable(runner):
+        return GateResult(
+            passed=False,
+            failure=GateFailure.MOCKUP_GOLDEN_DIFF_IDLE,
+            message=(
+                f"{_MOCKUP_GOLDEN_DIFF_KIND} CheckKind is idle: no callable "
+                "runner is registered in CHECK_REGISTRY"
+            ),
+        )
+    try:
+        tier = tier_for_gate_kind_fn(_MOCKUP_GOLDEN_DIFF_KIND)
+    except ValueError as exc:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.MOCKUP_GOLDEN_DIFF_IDLE,
+            message=(
+                f"{_MOCKUP_GOLDEN_DIFF_KIND} CheckKind is idle: no oracle-tier "
+                f"mapping exists ({exc})"
+            ),
+        )
+    if tier is not OracleTier.T5_GOLDEN:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.MOCKUP_GOLDEN_DIFF_IDLE,
+            message=(
+                f"{_MOCKUP_GOLDEN_DIFF_KIND} CheckKind is mapped to "
+                f"{tier.value!r}, expected {OracleTier.T5_GOLDEN.value!r}"
+            ),
+        )
+    return None
+
+
+def check_i03_contracts(
+    *,
+    plan_wave_fn: PlanWaveFn = _plan_wave,
+    ui_require_gate_fn: UiRequireGateFn = _require_affordance_parity_for_ui_scope,
+    registry: Mapping[str, object] = CHECK_REGISTRY,
+    tier_for_gate_kind_fn: TierForGateKindFn = _tier_for_gate_kind,
+) -> GateResult:
+    """Assert every I03 contract fires through a pure in-process probe.
+
+    Args:
+        plan_wave_fn: Authored-wave planner under test. Defaults to the live
+            :func:`eawf.workflow.lifecycle.wave.plan_wave`; tests inject a
+            no-op to prove the required-intent guard is not idle.
+        ui_require_gate_fn: UI-scope require-gate under test. Defaults to the
+            live affordance-parity sync lint.
+        registry: Audit-DSL check registry under test.
+        tier_for_gate_kind_fn: Gate-kind to oracle-tier mapper under test.
+
+    Returns:
+        A passing :class:`GateResult` only when all three I03 probes fire.
+    """
+    for failure in (
+        _probe_required_intent_guard(plan_wave_fn),
+        _probe_ui_require_contract(ui_require_gate_fn),
+        _probe_mockup_golden_diff_registration(
+            registry=registry,
+            tier_for_gate_kind_fn=tier_for_gate_kind_fn,
+        ),
+    ):
+        if failure is not None:
+            return failure
+    return GateResult(
+        passed=True,
+        failure=None,
+        message=(
+            "idle-contract gate: ok (I03 required-intent guard, UI "
+            "affordance-parity require-gate, and mockup_golden_diff tier mapping fired)"
         ),
     )
 
@@ -883,11 +1119,12 @@ def _render_findings(findings: Sequence[IdleContractFinding]) -> str:
 
 
 def main(argv: list[str]) -> int:
-    """Run all three idle-contract gates over the staged diff and current tree.
+    """Run all idle-contract gates over the staged diff and current tree.
 
     The original B091 single-contract check (:func:`check_idle_contract`) runs
     first, then the emit-validation binding-proof probe
-    (:func:`check_skill_body_binding`), then the meta-gate
+    (:func:`check_skill_body_binding`), then the I03 contract probes
+    (:func:`check_i03_contracts`), then the meta-gate
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
     exit code is non-zero when any fails.
 
@@ -897,7 +1134,7 @@ def main(argv: list[str]) -> int:
             for a CI range check).
 
     Returns:
-        ``0`` when all three gates pass; ``1`` when any fails.
+        ``0`` when all gates pass; ``1`` when any fails.
     """
     diff_range = argv[1] if len(argv) > 1 else "--cached"
 
@@ -918,6 +1155,18 @@ def main(argv: list[str]) -> int:
         print(binding.message)
     else:
         print(binding.message, file=sys.stderr)
+        failed = True
+
+    i03 = check_i03_contracts(
+        plan_wave_fn=_plan_wave,
+        ui_require_gate_fn=_require_affordance_parity_for_ui_scope,
+        registry=CHECK_REGISTRY,
+        tier_for_gate_kind_fn=_tier_for_gate_kind,
+    )
+    if i03.passed:
+        print(i03.message)
+    else:
+        print(i03.message, file=sys.stderr)
         failed = True
 
     # Pass the module-level default sources explicitly so a test (or a future

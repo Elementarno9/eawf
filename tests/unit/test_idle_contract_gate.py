@@ -188,6 +188,62 @@ def test_probe_wave_id_title_carry_no_band_token(mod) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# I03 contract probes -- required intent, UI require-gate, mockup golden tier.
+# --------------------------------------------------------------------------- #
+
+
+def _no_intent_guard_plan_wave(*args, **kwargs):
+    """A ``plan_wave`` stand-in that accepts ``intent=None`` without raising."""
+    del args, kwargs
+    return None
+
+
+def _no_ui_require_gate(*args, **kwargs) -> None:
+    """A UI require-gate stand-in that accepts an ungated UI wave."""
+    del args, kwargs
+
+
+def test_i03_contracts_pass_on_current_tree(mod) -> None:
+    result = mod.check_i03_contracts()
+    assert result.passed is True
+    assert result.failure is None
+
+
+def test_i03_contracts_fail_when_required_intent_guard_idle(mod) -> None:
+    result = mod.check_i03_contracts(plan_wave_fn=_no_intent_guard_plan_wave)
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.REQUIRED_INTENT_IDLE
+    assert "required-intent guard is idle" in result.message
+
+
+def test_main_returns_nonzero_when_required_intent_guard_idle(mod, monkeypatch, capsys) -> None:
+    # End-to-end proof for W10 success criterion 2: neutralizing the imported
+    # plan_wave guard makes main() fail and names the idled contract on stderr.
+    monkeypatch.setattr(mod, "_plan_wave", _no_intent_guard_plan_wave)
+    code = mod.main(["idle_contract_gate.py"])
+    captured = capsys.readouterr()
+    assert code != 0
+    assert "required-intent guard is idle" in captured.err
+
+
+def test_i03_contracts_fail_when_ui_require_gate_idle(mod) -> None:
+    result = mod.check_i03_contracts(ui_require_gate_fn=_no_ui_require_gate)
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.UI_REQUIRE_GATE_IDLE
+    assert "UI-scope require-gate is idle" in result.message
+
+
+def test_i03_contracts_fail_when_mockup_golden_diff_tier_missing(mod) -> None:
+    def _missing_tier(kind: str):
+        raise ValueError(f"unknown gate kind: {kind!r}")
+
+    result = mod.check_i03_contracts(tier_for_gate_kind_fn=_missing_tier)
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.MOCKUP_GOLDEN_DIFF_IDLE
+    assert "mockup_golden_diff" in result.message
+
+
+# --------------------------------------------------------------------------- #
 # CLI wrapper.
 # --------------------------------------------------------------------------- #
 
