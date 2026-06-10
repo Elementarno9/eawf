@@ -4979,6 +4979,18 @@
       "scope_id": "P30-I06-W10",
       "status": "done",
       "updated_at": "2026-06-10T20:26:25.575934Z"
+    },
+    "P30-I07-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W01",
+      "scope_id": "P30-I07-W01",
+      "status": "done",
+      "updated_at": "2026-06-10T21:01:31.518230Z"
     }
   },
   "agent_sessions": {
@@ -8063,7 +8075,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I07",
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -8659,7 +8671,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -15966,6 +15978,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I06-W10",
       "updated_at": "2026-06-10T20:25:41.239026Z"
+    },
+    "P30-I07-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W01-bucket-20260610T204423Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I07-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I07-W01",
+      "updated_at": "2026-06-10T20:44:23.000993Z"
     }
   },
   "goals": {
@@ -17725,7 +17750,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753563Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "TUI surface data-fill plus new U-surfaces (cost, jury, control plane)",
       "trigger": "none",
       "wave_ids": [
@@ -18891,7 +18916,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T20:34:14.021806Z",
+  "updated_at": "2026-06-10T21:01:31.518416Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -75630,29 +75655,31 @@
         "P30-I07-W05",
         "P30-I07-W16"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i07-w01",
+      "claimed_at": "2026-06-10T20:44:22.997226Z",
+      "closed_at": "2026-06-10T21:01:31.518230Z",
+      "commit": "3da927255b98cb4f2e7156cb897b503c00b3c1c1",
       "deps": [],
       "description": "Project each success-criterion's full CriterionSpec shape (oracle_tier, evidence_kind, quality_dimension, measurable_signal, gate_ids, required, response) into the d tab of the wave-detail modal, replacing the criterion.text-only loop. oracle_tier renders read-only as the cheapest-falsifying-tier label.",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/surfaces/tui/screens/overlays/detail.py",
-        "src/eawf/kernel/spec/common.py"
+        "src/eawf/kernel/spec/common.py",
+        "tests/tui/test_overlays_detail.py",
+        "tests/unit/spec/test_assign_oracle_tier.py"
       ],
       "gates": [],
       "id": "P30-I07-W01",
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.761973Z",
-      "outcome": null,
+      "outcome": "Detail criteria tab renders full typed CriterionSpec (tier label + evidence_kind + measurable_signal); grandfathered path badge-free. tier_label formatter added. 111+65+70 tests green, no golden drift, mypy/ruff clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
