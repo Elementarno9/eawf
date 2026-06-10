@@ -4847,6 +4847,18 @@
       "scope_id": "P30-I05-W15",
       "status": "done",
       "updated_at": "2026-06-10T15:50:38.253520Z"
+    },
+    "P30-I05-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W16",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W16",
+      "scope_id": "P30-I05-W16",
+      "status": "done",
+      "updated_at": "2026-06-10T16:04:05.734107Z"
     }
   },
   "agent_sessions": {
@@ -15649,6 +15661,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I05-W15",
       "updated_at": "2026-06-10T15:50:01.829286Z"
+    },
+    "P30-I05-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W16-bucket-20260610T155649Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I05-W16",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I05-W16",
+      "updated_at": "2026-06-10T15:56:49.392525Z"
     }
   },
   "goals": {
@@ -18550,7 +18575,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T15:56:34.328010Z",
+  "updated_at": "2026-06-10T16:04:05.734306Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74492,10 +74517,10 @@
     "P30-I05-W16": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i05-w16",
+      "claimed_at": "2026-06-10T15:56:49.392518Z",
+      "closed_at": "2026-06-10T16:04:05.734107Z",
+      "commit": "aa22631cda7f1543f7bdbbdf713ddffdc51e9a38",
       "deps": [],
       "description": "The full-tree gauntlet caught nine close-gate tests in tests/unit/daemon and tests/workflow/verify still failing under W08's zero-runtime close gate; their CLAIMED-wave fixtures lack runtime data. W08/W13 fixed only tests/daemon. Add runtime_baseline/runtime_latest to each so the close path resolves non-zero EU and exercises the gate under test.",
       "dispatch_history": [],
@@ -74531,12 +74556,12 @@
       },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-10T15:56:34.327741Z",
-      "outcome": null,
+      "outcome": "Added runtime_baseline/runtime_latest fixtures to nine close-gate tests across tests/unit/daemon (5 files) + tests/workflow/verify (test_seams). Full gauntlet now 10669 passed; the only reds are the 7 known config-validate shared-daemon contention flakes that pass isolated (31 passed single-process).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
