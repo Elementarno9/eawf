@@ -4751,6 +4751,18 @@
       "scope_id": "P30-I05-W07",
       "status": "done",
       "updated_at": "2026-06-10T10:29:47.244802Z"
+    },
+    "P30-I05-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W08",
+      "scope_id": "P30-I05-W08",
+      "status": "done",
+      "updated_at": "2026-06-10T11:25:30.888156Z"
     }
   },
   "agent_sessions": {
@@ -7792,9 +7804,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I05-W08"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15454,7 +15464,7 @@
     },
     "P30-I05-W08": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I05-W08-bucket-20260610T103301Z",
+      "current_store_record_id": "EST-P30-I05-W08-bucket-20260610T112121Z",
       "display": "2.0 EU · exp ~60m · pess ~216m",
       "expected_eu": 2.0,
       "expected_minutes": 60.0,
@@ -15463,7 +15473,7 @@
       "pessimistic_minutes": 216.0,
       "reference_class": "bucket:L",
       "scope_id": "P30-I05-W08",
-      "updated_at": "2026-06-10T10:33:01.866704Z"
+      "updated_at": "2026-06-10T11:21:21.154760Z"
     }
   },
   "goals": {
@@ -18359,7 +18369,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T11:19:07.862590Z",
+  "updated_at": "2026-06-10T11:25:30.888473Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73554,8 +73564,8 @@
       ],
       "claim_session_id": "codex-p30-i05-w08",
       "claimed_at": "2026-06-10T10:33:01.866488Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T11:25:30.888156Z",
+      "commit": "f85aae6fd2c8b2772808d5fa520655956cfb41e0",
       "deps": [
         "P30-I05-W06"
       ],
@@ -73569,43 +73579,122 @@
         "tests/unit/test_idle_contract_gate.py",
         "tools/idle_contract_gate.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_state_methods.py::test_close_refuses_zero_runtime",
+              "tests/daemon/test_state_methods.py::test_close_allows_nonzero_runtime",
+              "tests/daemon/test_state_methods.py::test_close_advisory_phase_warns_not_refuses",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_idle_contract_gate.py::test_runtime_gate_is_not_idle",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I05-W08",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "Wave close refuses missing or zero runtime by default, warns under advisory profile, and keeps the runtime gate bound to pre-commit.",
+        "evidence_refs": [
+          "src/eawf/runtime/daemon/methods/state.py",
+          "tools/idle_contract_gate.py",
+          ".pre-commit-config.yaml"
+        ],
+        "planned_steps": [
+          "Refuse wave close when captured elapsed_eu is zero or missing",
+          "Allow advisory-profile zero-runtime close with a warning",
+          "Keep runtime zero-EU close gate bound to the always-run idle-contract pre-commit check"
+        ],
+        "priority_rationale": "Zero-EU actuals would corrupt capacity calibration and mask runtime capture failures.",
+        "problem": "Silent zero-runtime closes can mark waves complete with ActualSummary.elapsed_eu=0.0 and hide missing runtime capture.",
+        "risks": [
+          "Legacy close tests need explicit runtime fixtures so they do not bypass the new guard"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.814573Z",
-      "outcome": null,
+      "outcome": "Refused silent zero-runtime closes by default and kept advisory warning path; parent commit f85aae6f.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W08-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_close_refuses_zero_runtime raises and leaves status unclosed; test_close_allows_nonzero_runtime and test_close_advisory_phase_warns_not_refuses pass",
-          "oracle_tier": null,
+          "measurable_signal": "test_close_refuses_zero_runtime, test_close_allows_nonzero_runtime, and test_close_advisory_phase_warns_not_refuses assert the enforcing, non-zero, and advisory close paths",
+          "oracle_tier": 2,
           "quality_dimension": "reliability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the zero-runtime close pytest gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "Closing a wave with no captured runtime raises LifecycleError (exit 2) and writes no CLOSED status; a wave with a real non-zero delta closes cleanly (the gate does not over-fire); under the advisory dial the same zero-runtime wave WARNS and still closes.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W08-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "structural",
-          "measurable_signal": "test_runtime_gate_is_not_idle fails the idle-contract-gate when the gate is wired but disabled in .pre-commit-config.yaml",
-          "oracle_tier": null,
+          "measurable_signal": "test_runtime_gate_is_not_idle asserts the pre-commit binding is enabled and fails when always_run is disabled",
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the idle-contract pytest gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A profile that wires the runtime gate but never enables it reds the idle-contract meta-gate, proving the contract is bound and not idle (mirrors the B091 guard).",
           "waiver_reason": null
         }
@@ -73613,7 +73702,7 @@
       "title": "EUCAP-8 Close-gate WARNS then REFUSES silent 0-EU close",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": "WT-P30-I05-W08-1781087592"
+      "worktree_id": null
     },
     "P30-I05-W09": {
       "agent_role": "executor",
