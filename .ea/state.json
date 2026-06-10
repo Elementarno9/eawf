@@ -18394,7 +18394,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T11:46:22.335632Z",
+  "updated_at": "2026-06-10T11:49:42.446068Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73891,7 +73891,8 @@
       "dispatch_history": [],
       "effort_bucket": "XS",
       "file_scopes": [
-        "src/eawf/workflow/lifecycle/wave.py"
+        "src/eawf/workflow/lifecycle/wave.py",
+        ".ea/artifacts/research/2026-06-10-P30-I05-W10-wall-clock-fallback.md"
       ],
       "gates": [],
       "id": "P30-I05-W10",
