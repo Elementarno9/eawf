@@ -5124,6 +5124,18 @@
       "status": "done",
       "updated_at": "2026-06-10T22:18:43.103793Z"
     },
+    "P30-I07-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W14",
+      "scope_id": "P30-I07-W14",
+      "status": "done",
+      "updated_at": "2026-06-10T22:39:38.534963Z"
+    },
     "P30-I07-W15": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8339,7 +8351,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I07-W14",
       "P30-I08-W02",
       "P30-I14-W07"
     ],
@@ -19509,7 +19520,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T22:34:35.210865Z",
+  "updated_at": "2026-06-10T22:39:38.535173Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -76905,8 +76916,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i07-w14",
       "claimed_at": "2026-06-10T22:12:08.092120Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:39:38.534963Z",
+      "commit": "41f6c74cddc81028a83be7f3183579015964908f",
       "deps": [
         "P30-I07-W09"
       ],
@@ -76915,19 +76926,23 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/surfaces/tui/modes/evidence.py",
-        "src/eawf/kernel/spec/common.py"
+        "tests/tui/test_modes_evidence.py",
+        "tests/snapshots/tui/golden/evidence_header.txt",
+        "tests/snapshots/tui/golden/evidence_ledger.txt",
+        "tests/snapshots/tui/golden/evidence_rollup.txt",
+        "tests/snapshots/tui/golden/evidence_rollup_empty.txt"
       ],
       "gates": [],
       "id": "P30-I07-W14",
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.815921Z",
-      "outcome": null,
+      "outcome": "Jury-ballot oracle-tier drill: juror x rubric grid (pass/fail/abstain, one fail blocks the row) + OracleTier ladder via real tier_label names marking the scoring tier. set_ballots render seam (fed by tests; production-feed is an I09 forward seam). 420 green, 1336 LOC, 4 goldens regen. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
