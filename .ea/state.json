@@ -4775,6 +4775,18 @@
       "scope_id": "P30-I05-W09",
       "status": "done",
       "updated_at": "2026-06-10T11:46:22.335465Z"
+    },
+    "P30-I05-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W10",
+      "scope_id": "P30-I05-W10",
+      "status": "done",
+      "updated_at": "2026-06-10T11:58:16.034920Z"
     }
   },
   "agent_sessions": {
@@ -7816,9 +7828,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I05-W10"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15504,7 +15514,7 @@
     },
     "P30-I05-W10": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I05-W10-bucket-20260610T115136Z",
+      "current_store_record_id": "EST-P30-I05-W10-bucket-20260610T115758Z",
       "display": "0.25 EU · exp ~8m · pess ~27m",
       "expected_eu": 0.25,
       "expected_minutes": 7.5,
@@ -15513,7 +15523,7 @@
       "pessimistic_minutes": 27.0,
       "reference_class": "bucket:XS",
       "scope_id": "P30-I05-W10",
-      "updated_at": "2026-06-10T11:51:36.326361Z"
+      "updated_at": "2026-06-10T11:57:58.217048Z"
     }
   },
   "goals": {
@@ -18409,7 +18419,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T11:51:36.326623Z",
+  "updated_at": "2026-06-10T11:58:16.035081Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73897,8 +73907,8 @@
       "blocks": [],
       "claim_session_id": "codex-p30-i05-w10",
       "claimed_at": "2026-06-10T11:51:36.326349Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T11:58:16.034920Z",
+      "commit": "40bc62adca3877de9ab1232726915d2d95a549a2",
       "deps": [
         "P30-I05-W06"
       ],
@@ -73909,29 +73919,72 @@
         "src/eawf/workflow/lifecycle/wave.py",
         ".ea/artifacts/research/2026-06-10-P30-I05-W10-wall-clock-fallback.md"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "path": ".ea/artifacts/research/2026-06-10-P30-I05-W10-wall-clock-fallback.md",
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "file_exists",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I05-W10",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "A spike verdict decides whether to add a follow-up wall-clock fallback wave and quantifies the P29 missing-runtime sample.",
+        "evidence_refs": [
+          ".ea/artifacts/research/2026-06-10-P30-I05-W10-wall-clock-fallback.md",
+          "src/eawf/workflow/lifecycle/wave.py",
+          ".ea/state.json"
+        ],
+        "planned_steps": [
+          "Count P29 waves with claimed_at and missing runtime counters",
+          "Estimate wall-clock overcount from closed_at minus claimed_at",
+          "Compare fallback semantics against existing eu_basis=wall_clock",
+          "Record go/no-go verdict and follow-ups in a research artifact"
+        ],
+        "priority_rationale": "The runtime-close path needs a deliberate choice between degraded estimation and explicit waiver before more capacity logic builds on it.",
+        "problem": "When runtime cost blocks are absent, a claimed_at wall-clock fallback could fill elapsed_eu but risks counting idle calendar time.",
+        "risks": [
+          "A wall-clock fallback can look precise while measuring idle time instead of actual runtime"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.815021Z",
-      "outcome": null,
+      "outcome": "Recorded no-go spike for claimed_at wall-clock fallback; 217 P29 missing-runtime waves sampled; parent artifact commit 40bc62a.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "P30-I05-W10-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
           "measurable_signal": "spike brief records a go/no-go verdict plus the count of claimed-but-zero-runtime P29 waves sampled from .ea/state.json; no source files changed in the spike",
-          "oracle_tier": null,
+          "oracle_tier": 2,
           "quality_dimension": "maintainability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "source",
+            "object": "the wall-clock fallback spike brief file exists",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "A brief verdict states whether a wall-clock (now - claimed_at) fallback flagged eu_basis=wall_clock should be added as a follow-up wave, citing how many P29 waves carry a claimed_at but zero captured runtime and quantifying the idle overcount risk.",
           "waiver_reason": null
         }
