@@ -7708,7 +7708,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I05-W01",
+      "P30-I05-W02"
+    ],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15274,6 +15277,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I04-W11",
       "updated_at": "2026-06-10T04:54:33.965251Z"
+    },
+    "P30-I05-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W01-bucket-20260610T051758Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I05-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I05-W01",
+      "updated_at": "2026-06-10T05:17:58.490276Z"
+    },
+    "P30-I05-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W02-bucket-20260610T051758Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I05-W02",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I05-W02",
+      "updated_at": "2026-06-10T05:17:58.958843Z"
     }
   },
   "goals": {
@@ -18169,7 +18198,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:15:32.770025Z",
+  "updated_at": "2026-06-10T05:18:00.805336Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -70695,8 +70724,8 @@
         "P30-I05-W04",
         "P30-I05-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w01",
+      "claimed_at": "2026-06-10T05:17:58.490269Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -70715,7 +70744,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -70749,7 +70778,7 @@
       "title": "EUCAP-1 Add RuntimeBaseline field + snapshot at wave claim",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I05-W01-1781068679"
     },
     "P30-I05-W02": {
       "agent_role": "executor",
@@ -70758,8 +70787,8 @@
         "P30-I05-W04",
         "P30-I05-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w02",
+      "claimed_at": "2026-06-10T05:17:58.958836Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -70778,7 +70807,7 @@
       "outcome": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -70812,7 +70841,7 @@
       "title": "EUCAP-2 Parse CC cost block into typed RuntimeCounters",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I05-W02-1781068680"
     },
     "P30-I05-W03": {
       "agent_role": "executor",
@@ -80186,6 +80215,28 @@
       "path": ".claude/worktrees/p30-w10",
       "status": "active",
       "wave_id": "P30-I04-W10"
+    },
+    "WT-P30-I05-W01-1781068679": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i05-w01",
+      "created_at": "2026-06-10T05:17:59.882396Z",
+      "id": "WT-P30-I05-W01-1781068679",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i05-w01",
+      "path": ".ea/worktrees/p30-i05-w01",
+      "status": "active",
+      "wave_id": "P30-I05-W01"
+    },
+    "WT-P30-I05-W02-1781068680": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i05-w02",
+      "created_at": "2026-06-10T05:18:00.805336Z",
+      "id": "WT-P30-I05-W02-1781068680",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i05-w02",
+      "path": ".ea/worktrees/p30-i05-w02",
+      "status": "active",
+      "wave_id": "P30-I05-W02"
     }
   }
 }
