@@ -16,13 +16,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_BAND_PALETTE, DEFAULT_RENDER_MODE, EMPTY_STATE
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
+from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 from eawf.surfaces.tui.widgets.workspace_table import (
+    PortfolioTotals,
     RepoRow,
     _phase_cell,
+    _repo_cell_markup,
+    _totals_phase_cell,
     active_phase_completion,
     build_repo_rows,
     completion_pair,
+    repo_row_sigil,
+    totals_row_sigil,
+    warn_chip_markup,
 )
 
 
@@ -241,3 +249,192 @@ def test_phase_cell_dash_prefix_when_no_active_phase() -> None:
 def test_build_repo_rows_none_state_is_empty() -> None:
     """A ``None`` workspace state yields no rows (the field plumbing is intact)."""
     assert build_repo_rows(None) == []
+
+
+# --------------------------------------------------------------------------
+# Reskin helpers (P30-I08-W02): leading sigil + green bar + warn chip
+# --------------------------------------------------------------------------
+
+
+def _flag_row(
+    *, phase_id: str | None = "P01", blocker: bool = False, stale: bool = False
+) -> RepoRow:
+    """Build a minimal :class:`RepoRow` carrying the reskin lifecycle flags."""
+    return RepoRow(
+        code="ABC",
+        path="/abs/path/abc",
+        phase_id=phase_id,
+        phase_done=0,
+        phase_total=0,
+        eu_consumed=0.0,
+        eu_total=0.0,
+        age="—",
+        blocker=blocker,
+        stale=stale,
+    )
+
+
+def _green() -> str:
+    """Return the concrete green status hex the reskin tints sigils + bars with."""
+    return DEFAULT_BAND_PALETTE["ok"]
+
+
+# repo_row_sigil -- lifecycle -> sigil mapping
+
+
+def test_repo_row_sigil_active_phase_is_running() -> None:
+    """A repo with an active phase leads with the RUNNING diamond."""
+    assert repo_row_sigil(_flag_row(phase_id="P01")) is Sigil.RUNNING
+
+
+def test_repo_row_sigil_stale_no_phase_is_abandoned() -> None:
+    """A stale repo with no active phase leads with the ABANDONED circled-slash."""
+    assert repo_row_sigil(_flag_row(phase_id=None, stale=True)) is Sigil.ABANDONED
+
+
+def test_repo_row_sigil_calm_no_phase_is_closed() -> None:
+    """A calm repo with no active phase leads with the CLOSED filled circle."""
+    assert repo_row_sigil(_flag_row(phase_id=None)) is Sigil.CLOSED
+
+
+def test_repo_row_sigil_active_wins_over_stale() -> None:
+    """An active-phase-and-stale repo reads in-flight (RUNNING wins over stale)."""
+    assert repo_row_sigil(_flag_row(phase_id="P01", stale=True)) is Sigil.RUNNING
+
+
+# totals_row_sigil -- aggregate lifecycle -> sigil mapping
+
+
+def _totals(*, done: int, total: int) -> PortfolioTotals:
+    """Build a :class:`PortfolioTotals` carrying only the wave counts."""
+    return PortfolioTotals(
+        repo_count=1,
+        wave_done=done,
+        wave_total=total,
+        eu_consumed=0.0,
+        eu_total=0.0,
+        open_prs=0,
+    )
+
+
+def test_totals_row_sigil_open_work_is_running() -> None:
+    """The totals row reads RUNNING while any tracked wave is still open."""
+    assert totals_row_sigil(_totals(done=8, total=16)) is Sigil.RUNNING
+
+
+def test_totals_row_sigil_all_closed_is_closed() -> None:
+    """The totals row reads CLOSED once every tracked wave has landed."""
+    assert totals_row_sigil(_totals(done=16, total=16)) is Sigil.CLOSED
+
+
+def test_totals_row_sigil_empty_portfolio_is_closed() -> None:
+    """An empty (zero-wave) portfolio reads CLOSED, never a fabricated in-flight."""
+    assert totals_row_sigil(_totals(done=0, total=0)) is Sigil.CLOSED
+
+
+# warn_chip_markup -- the attention chip renders as the warn triangle
+
+
+def test_warn_chip_markup_calm_is_none() -> None:
+    """A repo tripping neither threshold renders no chip."""
+    assert warn_chip_markup(_flag_row(), mode=DEFAULT_RENDER_MODE) is None
+
+
+def test_warn_chip_markup_blocker_renders_warn_triangle() -> None:
+    """A blocker repo renders the warn triangle trailing the ``blocked`` word."""
+    chip = warn_chip_markup(_flag_row(blocker=True), mode=DEFAULT_RENDER_MODE)
+    triangle = chrome("attention", mode=DEFAULT_RENDER_MODE)
+    assert chip == f"[{BAND_HEX['warn']}]{triangle} blocked[/]"
+
+
+def test_warn_chip_markup_stale_renders_warn_triangle() -> None:
+    """A stale repo renders the warn triangle trailing the ``stale`` word."""
+    chip = warn_chip_markup(_flag_row(stale=True), mode=DEFAULT_RENDER_MODE)
+    triangle = chrome("attention", mode=DEFAULT_RENDER_MODE)
+    assert chip == f"[{BAND_HEX['warn']}]{triangle} stale[/]"
+
+
+def test_warn_chip_markup_both_trails_blocker_first() -> None:
+    """A repo tripping both trails both words after one shared triangle, blocker first."""
+    chip = warn_chip_markup(_flag_row(blocker=True, stale=True), mode=DEFAULT_RENDER_MODE)
+    triangle = chrome("attention", mode=DEFAULT_RENDER_MODE)
+    assert chip == f"[{BAND_HEX['warn']}]{triangle} blocked stale[/]"
+
+
+def test_warn_chip_markup_is_not_a_bare_word() -> None:
+    """The chip is the triangle marker, never the legacy bare ``(blocked)`` word."""
+    chip = warn_chip_markup(_flag_row(blocker=True), mode=DEFAULT_RENDER_MODE)
+    assert chip is not None
+    assert "(blocked)" not in chip
+    assert chrome("attention", mode=DEFAULT_RENDER_MODE) in chip
+
+
+# _phase_cell / _totals_phase_cell -- green status-tinted bar
+
+
+def test_phase_cell_bar_is_green_tinted() -> None:
+    """The per-repo phase cell wraps its completion bar in the green status span."""
+    cell = _phase_cell(_repo_row("P27", 3, 6), mode="unicode")
+    assert cell.startswith("P27 ")
+    assert f"[{_green()}]" in cell
+    assert "3/6" in cell
+
+
+def test_phase_cell_empty_state_is_not_tinted() -> None:
+    """A no-progress phase cell leaves the empty-state sentinel untinted."""
+    cell = _phase_cell(_repo_row(None, 0, 0), mode="unicode")
+    assert EMPTY_STATE in cell
+    assert f"[{_green()}]" not in cell
+
+
+def test_totals_phase_cell_bar_is_green_tinted() -> None:
+    """The totals phase cell wraps its summed completion bar in the green span."""
+    cell = _totals_phase_cell(_totals(done=8, total=16), mode="unicode")
+    assert cell.startswith("1 repos ")
+    assert f"[{_green()}]" in cell
+    assert "8/16" in cell
+
+
+# _repo_cell_markup -- leading sigil + code + warn chip
+
+
+def _leading_sigil_span(sigil: Sigil) -> str:
+    """Return the leading tinted-sigil span a cell for *sigil* opens with.
+
+    The CLOSED hue is theme-resolved off the band palette's ``ok`` green; the
+    other lifecycle hues come from the COLOUR layer. Built off the canonical
+    :func:`glyph` / :func:`tint` helpers so the test hard-codes no glyph / hex.
+    """
+    mark = glyph(sigil, mode=DEFAULT_RENDER_MODE)
+    if sigil is Sigil.CLOSED:
+        return f"[{_green()}]{mark}[/]"
+    hue = tint(sigil)
+    return f"[{hue}]{mark}[/]" if hue is not None else f"[{BAND_HEX['warn']}]{mark}[/]"
+
+
+def test_repo_cell_markup_leads_with_lifecycle_sigil() -> None:
+    """A calm repo cell leads with its tinted lifecycle sigil then the code."""
+    cell = _repo_cell_markup(
+        _flag_row(phase_id="P01"), mode=DEFAULT_RENDER_MODE, palette=DEFAULT_BAND_PALETTE
+    )
+    assert cell.startswith(_leading_sigil_span(Sigil.RUNNING))
+    assert cell.endswith(" ABC")
+
+
+def test_repo_cell_markup_calm_has_no_chip() -> None:
+    """A calm repo cell renders just ``<sigil> <code>`` with no warn marker."""
+    cell = _repo_cell_markup(
+        _flag_row(phase_id="P01"), mode=DEFAULT_RENDER_MODE, palette=DEFAULT_BAND_PALETTE
+    )
+    assert chrome("attention", mode=DEFAULT_RENDER_MODE) not in cell
+
+
+def test_repo_cell_markup_attention_appends_warn_chip() -> None:
+    """An attention repo cell carries the warn-marker chip after the code."""
+    row = _flag_row(phase_id="P01", blocker=True)
+    cell = _repo_cell_markup(row, mode=DEFAULT_RENDER_MODE, palette=DEFAULT_BAND_PALETTE)
+    chip = warn_chip_markup(row, mode=DEFAULT_RENDER_MODE)
+    assert chip is not None
+    assert cell.startswith(_leading_sigil_span(Sigil.RUNNING))
+    assert "ABC" in cell
+    assert chip in cell

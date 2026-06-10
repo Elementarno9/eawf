@@ -1,11 +1,15 @@
 """Golden snapshot for the workspace table's cross-repo attention chips.
 
 The workspace table renders an attention chip in each repo's cell when
-that repo trips its blocker or stale-band threshold: a ``[blocked]`` chip
-for a repo with a wave needing the operator now, a ``[stale]`` chip for a
-repo whose state has gone stale, and both for a repo that trips both. A
-calm repo renders just its code. This suite drives a populated table to a
-golden ASCII frame so the chip layout is pinned byte-for-byte.
+that repo trips its blocker or stale-band threshold. Since the P30-I08-W02
+cosmic-terminal reskin the chip renders as the warn marker -- the
+``attention`` triangle, tinted the warn band -- trailing the alarm word
+(``triangle blocked`` for a repo with a wave needing the operator now,
+``triangle stale`` for a repo gone stale, ``triangle blocked stale`` for a
+repo tripping both) rather than a bare parenthesised word. Every row (and
+the totals row) also LEADS with its tinted lifecycle sigil. A calm repo
+renders just its leading sigil + code. This suite drives a populated table
+to a golden ASCII frame so the sigil + chip layout is pinned byte-for-byte.
 
 The table is mounted under a bare themed host (mirroring the bar-swap
 suite) with its ``rows_data`` stubbed to fixture rows, so the chip render

@@ -24,6 +24,26 @@ Two render concerns are split:
 carrying the repo code; the host :class:`~eawf.surfaces.tui.scopes.workspace.WorkspaceScreen`
 zooms that repo into a 2x2 quadrant. The downstream user-portfolio table
 (W07) reuses this widget family.
+
+The grid paints in the Eae cosmic-terminal language: every per-repo row
+AND the totals row LEAD with a lifecycle sigil drawn from the shared I02
+sigils source (:func:`repo_row_sigil` / :func:`totals_row_sigil` +
+:mod:`eawf.surfaces.tui.widgets.sigils`) -- the RUNNING diamond for a repo
+with an active phase, the ABANDONED circled-slash for a stale one, the
+CLOSED circle otherwise -- and the phase-completion bar is tinted the green
+status hue (:func:`_green_hex`) so a calm row reads green. The blocker /
+stale attention chip renders as the warn marker (the
+:func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``attention`` triangle,
+tinted the warn band) rather than a bare ``(blocked)`` / ``(stale)`` word,
+so a repo needing the operator reads ATTENTION-shaped at a glance.
+
+Every sigil + bar + chip span is baked to a concrete ``#rrggbb`` hex at
+row-build time: a :class:`textual.widgets.DataTable` ``str`` cell is
+Rich-parsed and cannot resolve the Textual ``$accent`` / ``$warn`` palette
+vars (they raise ``MarkupError``), so the tint must be a literal hex (see
+:func:`_band_palette` for the same constraint on the EU bar). The plain
+:func:`format_totals_line` formatter stays untinted so the headless offline
+render keeps its colourless frame.
 """
 
 from __future__ import annotations
@@ -51,6 +71,8 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
 )
 from eawf.surfaces.tui.widgets.git_pane import gather_git_fields
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
+from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -387,6 +409,175 @@ def _repo_cell(row: RepoRow) -> str:
     return f"{row.code} {chip}" if chip is not None else row.code
 
 
+def repo_row_sigil(row: RepoRow) -> Sigil:
+    """Map a repo row's lifecycle onto its leading :class:`Sigil`.
+
+    Each per-repo row leads with a lifecycle sigil drawn from the I02 sigils
+    source so the grid reads in the Eae cosmic-terminal language rather than
+    as a flat code/bar table. A repo's lifecycle maps onto the shared
+    lifecycle alphabet from its phase + staleness state, mirroring the
+    registry strip's active / stale / closed mapping:
+
+    * a repo with an active phase wears the RUNNING diamond (it is in flight);
+    * a stale repo with no active phase wears the ABANDONED circled-slash (it
+      has receded), shape-distinct from a not-yet-run ring;
+    * every other repo wears the CLOSED filled circle (registered + calm).
+
+    The active-phase signal wins over staleness when both hold, since a repo
+    with a live phase reads as in-flight even when its on-disk state mtime has
+    drifted stale. The attention chip carries the blocker / stale alarm
+    separately (see :func:`warn_chip_markup`), so the leading sigil need not
+    double as the alarm shape.
+
+    Args:
+        row: The repo row to inspect.
+
+    Returns:
+        The lifecycle :class:`Sigil` the row leads with.
+    """
+    if row.phase_id is not None:
+        return Sigil.RUNNING
+    if row.stale:
+        return Sigil.ABANDONED
+    return Sigil.CLOSED
+
+
+def totals_row_sigil(totals: PortfolioTotals) -> Sigil:
+    """Map the portfolio totals onto the summary row's leading :class:`Sigil`.
+
+    The totals row leads with a lifecycle sigil too, so the summary lines up
+    under the per-repo sigil column rather than reading as a bare ``Sigma``
+    label. The portfolio reads as RUNNING (in flight) while any repo still has
+    open work (``wave_done < wave_total``) and as CLOSED once every tracked
+    wave has landed -- the aggregate twin of the per-repo lifecycle.
+
+    Args:
+        totals: The folded :class:`PortfolioTotals`.
+
+    Returns:
+        The lifecycle :class:`Sigil` the totals row leads with.
+    """
+    if totals.wave_total > 0 and totals.wave_done < totals.wave_total:
+        return Sigil.RUNNING
+    return Sigil.CLOSED
+
+
+def _sigil_hex(sigil: Sigil, *, mode: RenderMode, palette: Mapping[str, str]) -> str:
+    """Render *sigil*'s glyph tinted by its lifecycle status, as Rich markup.
+
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and the
+    COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) from the shared
+    sigils helper so a row leads with a tinted lifecycle mark. The colour is
+    baked to a concrete ``#rrggbb`` -- a :class:`textual.widgets.DataTable`
+    ``str`` cell is Rich-parsed and cannot resolve the Textual ``$`` palette
+    vars -- and the CLOSED hue is theme-resolved via *palette* so the calm
+    green tracks the active theme. A sigil whose mapped status carries no tint
+    falls back to the muted band so the mark still renders.
+
+    Args:
+        sigil: The lifecycle mark to render.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+        palette: The status-tint band map (see :func:`_band_palette`); the
+            CLOSED green is read from it so the tint tracks the theme.
+
+    Returns:
+        A Rich-markup span: the tinted (or muted) lifecycle glyph.
+    """
+    mark = glyph(sigil, mode=mode)
+    if sigil is Sigil.CLOSED:
+        return f"[{_green_hex(palette)}]{mark}[/]"
+    hue = tint(sigil)
+    if hue is None:
+        return f"[{BAND_HEX['warn']}]{mark}[/]"
+    return f"[{hue}]{mark}[/]"
+
+
+def _green_hex(palette: Mapping[str, str]) -> str:
+    """Return the concrete green status hex for the calm sigil + bar tint.
+
+    The reskin's calm-green hue, theme-resolved off the EU-burn band map's
+    ``ok`` key (the Wong green ``#009e73`` on the dark baseline) so the green
+    tint tracks the active theme rather than hard-coding a hex. A
+    :class:`textual.widgets.DataTable` ``str`` cell is Rich-parsed, so a
+    concrete hex -- not the ``$ok`` / ``$accent`` palette var -- is required.
+
+    Args:
+        palette: The status-tint band map (see :func:`_band_palette`).
+
+    Returns:
+        The concrete green ``#rrggbb`` hex.
+    """
+    return palette.get("ok", BAND_HEX["ok"])
+
+
+#: The chip text the warn marker trails when a repo trips the blocker
+#: threshold. Carried after the triangle so a screen reader / plain scrape
+#: still resolves which alarm fired; the substring ``blocked`` keeps the
+#: attention-chip contract the host + tests assert on.
+WARN_BLOCKER_TEXT: str = "blocked"
+
+#: The chip text the warn marker trails when a repo trips the stale-band
+#: threshold. Mirrors :data:`WARN_BLOCKER_TEXT`; the substring ``stale``
+#: keeps the attention-chip contract.
+WARN_STALE_TEXT: str = "stale"
+
+
+def warn_chip_markup(row: RepoRow, *, mode: RenderMode) -> str | None:
+    """Render *row*'s attention chip as the warn marker, or ``None`` when calm.
+
+    The reskin twin of :func:`attention_chip`: a repo tripping the blocker or
+    stale-band threshold renders the warn marker -- the
+    :func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``attention`` triangle,
+    tinted the warn band -- followed by the alarm word, rather than a bare
+    ``(blocked)`` / ``(stale)`` parenthesised word. A repo tripping both
+    trails both words after one shared triangle (``<triangle> blocked stale``,
+    blocker first since it is the more acute signal). A calm repo returns
+    ``None`` so the cell renders just the code. The triangle + word are baked
+    to a concrete warn ``#rrggbb`` hex because the cell is Rich-parsed.
+
+    Args:
+        row: The repo row to inspect.
+        mode: The App's resolved render-mode label -- selects the triangle's
+            ASCII / unicode column.
+
+    Returns:
+        The warn-marker chip markup, or ``None`` when the row is calm.
+    """
+    words: list[str] = []
+    if row.blocker:
+        words.append(WARN_BLOCKER_TEXT)
+    if row.stale:
+        words.append(WARN_STALE_TEXT)
+    if not words:
+        return None
+    triangle = chrome("attention", mode=mode)
+    return f"[{BAND_HEX['warn']}]{triangle} {' '.join(words)}[/]"
+
+
+def _repo_cell_markup(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str]) -> str:
+    """Render *row*'s repo-column cell with a leading sigil + warn-marker chip.
+
+    The reskin twin of :func:`_repo_cell`: the cell leads with the row's tinted
+    lifecycle sigil (:func:`repo_row_sigil` + :func:`_sigil_hex`), then the
+    repo code, then the warn-marker attention chip (:func:`warn_chip_markup`)
+    when the row trips a threshold. A calm repo renders ``<sigil> <code>``; an
+    attention repo renders ``<sigil> <code> <warn-triangle> <words>``.
+
+    Args:
+        row: The repo row to render.
+        mode: The App's resolved render-mode label.
+        palette: The status-tint band map (see :func:`_band_palette`).
+
+    Returns:
+        The repo cell's Rich-markup string.
+    """
+    sigil = _sigil_hex(repo_row_sigil(row), mode=mode, palette=palette)
+    chip = warn_chip_markup(row, mode=mode)
+    body = f"{row.code} {chip}" if chip is not None else row.code
+    return f"{sigil} {body}"
+
+
 #: Row key for the portfolio totals summary row appended under the repo
 #: rows. The leading sentinel avoids colliding with any repo code (a repo
 #: code matches the project-code symbol pattern and never starts with this
@@ -591,10 +782,48 @@ def _repo_age(repo_path: Path) -> str:
     return f"{int(elapsed // 86400)}d"
 
 
-def _phase_cell(row: RepoRow, *, mode: RenderMode) -> str:
-    """Render *row*'s active-phase id + completion bar cell (status-tinted)."""
+def _green_bar_markup(bar: str, *, palette: Mapping[str, str]) -> str:
+    """Wrap a plain completion-bar string in the green status-tint span.
+
+    The reskin tints the phase-completion bar the green status hue
+    (:func:`_green_hex`) so a per-repo / totals row carries a green
+    status-tinted bar. The empty-state sentinel is left untinted -- there is
+    no progress to colour green, and tinting the "no data" text would imply a
+    fill that is not there. The hue is a concrete ``#rrggbb`` because a
+    :class:`textual.widgets.DataTable` ``str`` cell is Rich-parsed.
+
+    Args:
+        bar: The plain completion-bar string (or the empty-state sentinel).
+        palette: The status-tint band map (see :func:`_band_palette`).
+
+    Returns:
+        The bar wrapped in the green hex span, or the untinted sentinel.
+    """
+    if bar == EMPTY_STATE:
+        return bar
+    return f"[{_green_hex(palette)}]{bar}[/]"
+
+
+def _phase_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | None = None) -> str:
+    """Render *row*'s active-phase id + green status-tinted completion bar cell.
+
+    The phase id leads the cell; the completion bar is tinted the green status
+    hue (see :func:`_green_bar_markup`) so a per-repo row carries a green
+    status-tinted bar in the Eae cosmic-terminal language. The tint is baked
+    to a concrete hex because the cell is Rich-parsed.
+
+    Args:
+        row: The repo row to render.
+        mode: The active bar render mode.
+        palette: The status-tint band map (see :func:`_band_palette`);
+            defaults to the built-in palette when omitted.
+
+    Returns:
+        The phase cell markup (``<phase_id> <green-bar>``).
+    """
     bar = render_completion_bar(row.phase_done, row.phase_total, width=6, mode=mode)
-    return f"{row.phase_id or '—'} {bar}"
+    colours = palette if palette is not None else DEFAULT_BAND_PALETTE
+    return f"{row.phase_id or '—'} {_green_bar_markup(bar, palette=colours)}"
 
 
 def _pr_cell(open_prs: int) -> str:
@@ -659,23 +888,28 @@ def _eu_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | Non
     return render_bar_rich(row.eu_consumed, row.eu_total, mode=mode, palette=palette)
 
 
-def _totals_phase_cell(totals: PortfolioTotals, *, mode: RenderMode) -> str:
-    """Render the totals row's phase cell: the summed completion bar.
+def _totals_phase_cell(
+    totals: PortfolioTotals, *, mode: RenderMode, palette: Mapping[str, str] | None = None
+) -> str:
+    """Render the totals row's phase cell: the summed green status-tinted bar.
 
-    Mirrors :func:`_phase_cell` shape (a leading label + a completion bar)
-    so the summary row lines up under the per-repo phase column. The label
-    is the repo count rather than a phase id, since the totals span every
-    repo's active phase.
+    Mirrors :func:`_phase_cell` shape (a leading label + a green status-tinted
+    completion bar) so the summary row lines up under the per-repo phase
+    column. The label is the repo count rather than a phase id, since the
+    totals span every repo's active phase.
 
     Args:
         totals: The folded :class:`PortfolioTotals`.
         mode: The active bar render mode.
+        palette: The status-tint band map (see :func:`_band_palette`);
+            defaults to the built-in palette when omitted.
 
     Returns:
-        The totals phase cell (``<repo_count> repos <bar> done/total``).
+        The totals phase cell (``<repo_count> repos <green-bar> done/total``).
     """
     bar = render_completion_bar(totals.wave_done, totals.wave_total, width=6, mode=mode)
-    return f"{totals.repo_count} repos {bar}"
+    colours = palette if palette is not None else DEFAULT_BAND_PALETTE
+    return f"{totals.repo_count} repos {_green_bar_markup(bar, palette=colours)}"
 
 
 def _totals_eu_cell(
@@ -886,8 +1120,8 @@ class WorkspaceTable(DataTable[str]):
             for row in rows:
                 git_cell = self._git_cells.get(row.code, GIT_PENDING_CELL)
                 self.add_row(
-                    _repo_cell(row),
-                    _phase_cell(row, mode=self.render_mode),
+                    _repo_cell_markup(row, mode=self.render_mode, palette=palette),
+                    _phase_cell(row, mode=self.render_mode, palette=palette),
                     _eu_cell(row, mode=self.render_mode, palette=palette),
                     git_cell,
                     _pr_cell(row.open_prs),
@@ -902,11 +1136,13 @@ class WorkspaceTable(DataTable[str]):
         """Append the portfolio-totals summary row under the repo rows.
 
         Folds *rows* via :func:`portfolio_totals` and renders one summary
-        row whose phase + EU cells carry the portfolio-wide completion + EU
-        bars and whose PR cell carries the summed open-PR count. The git +
-        age columns are blank on the summary row (no live probe spans the
-        portfolio); the repo column carries the :data:`TOTALS_ROW_LABEL`
-        sigma so the row reads as a roll-up rather than a repo.
+        row whose phase + EU cells carry the portfolio-wide green status-tinted
+        completion + EU bars and whose PR cell carries the summed open-PR
+        count. The git + age columns are blank on the summary row (no live
+        probe spans the portfolio); the repo column LEADS with the totals'
+        tinted lifecycle sigil (:func:`totals_row_sigil`) then the
+        :data:`TOTALS_ROW_LABEL` sigma, so the row reads as a roll-up that
+        lines up under the per-repo sigil column rather than as a repo.
 
         An empty repo set adds no totals row -- there is nothing to sum, so
         the table stays at zero rows rather than rendering a ``Σ 0 repos``
@@ -914,14 +1150,16 @@ class WorkspaceTable(DataTable[str]):
 
         Args:
             rows: The repo rows already added above the totals row.
-            palette: Band-colour map for the EU bar (see :func:`_band_palette`).
+            palette: Band-colour map for the bars + sigil (see
+                :func:`_band_palette`).
         """
         if not rows:
             return
         totals = portfolio_totals(rows)
+        sigil = _sigil_hex(totals_row_sigil(totals), mode=self.render_mode, palette=palette)
         self.add_row(
-            TOTALS_ROW_LABEL,
-            _totals_phase_cell(totals, mode=self.render_mode),
+            f"{sigil} {TOTALS_ROW_LABEL}",
+            _totals_phase_cell(totals, mode=self.render_mode, palette=palette),
             _totals_eu_cell(totals, mode=self.render_mode, palette=palette),
             "",
             _pr_cell(totals.open_prs),
@@ -975,6 +1213,8 @@ __all__ = [
     "STALE_CHIP",
     "TOTALS_ROW_KEY",
     "TOTALS_ROW_LABEL",
+    "WARN_BLOCKER_TEXT",
+    "WARN_STALE_TEXT",
     "PortfolioTotals",
     "RepoRow",
     "WorkspaceTable",
@@ -988,4 +1228,7 @@ __all__ = [
     "repo_has_blocker",
     "repo_is_stale",
     "repo_row_from_path",
+    "repo_row_sigil",
+    "totals_row_sigil",
+    "warn_chip_markup",
 ]

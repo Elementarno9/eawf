@@ -32,7 +32,19 @@ from eawf.surfaces.tui.screens.overlays.init_wizard import InitWizardModal
 from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 from eawf.surfaces.tui.widgets.header import BRAND, DEFAULT_PROJECT_CODE, Header
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
+
+
+def _abandoned_sigil_span(mode: str) -> str:
+    """Return the leading tinted ABANDONED-sigil span a stale repo cell opens with.
+
+    Built off the canonical :func:`glyph` / :func:`tint` helpers so the test
+    hard-codes no glyph / hex; the ABANDONED sigil carries the muted tint, so
+    the span is ``[<muted-hex>]<glyph>[/]``.
+    """
+    return f"[{tint(Sigil.ABANDONED)}]{glyph(Sigil.ABANDONED, mode=mode)}[/]"
+
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
@@ -158,9 +170,15 @@ def test_user_portfolio_table_columns_match_workspace_family() -> None:
             await app.workers.wait_for_complete()
             table = app.screen.query_one(PortfolioTable)
             assert len(table.columns) == 6
-            # The fixture repo path is absent, so the repo trips the stale
-            # band and the cell carries the code plus the (stale) chip.
-            assert table.get_cell("QR", "repo") == "QR (stale)"
+            # The fixture repo path is absent, so the repo has no active phase
+            # and trips the stale band: since the P30-I08-W02 reskin its cell
+            # leads with the ABANDONED lifecycle sigil and trails the warn
+            # marker (attention triangle, tinted warn) + the ``stale`` word.
+            mode = app.render_mode
+            cell = str(table.get_cell("QR", "repo"))
+            assert cell.startswith(_abandoned_sigil_span(mode))
+            assert "QR" in cell
+            assert f"{chrome('attention', mode=mode)} stale" in cell
             assert table.get_cell("QR", "git") == "clean"
 
     asyncio.run(body())
@@ -246,8 +264,17 @@ def test_user_portfolio_large_n_scrolls() -> None:
             # columns or clipping the last repo's code. The synthetic repo
             # paths are absent, so each repo trips the stale band.
             assert len(table.columns) == 6
-            assert table.get_cell("R00", "repo") == "R00 (stale)"
-            assert table.get_cell("R29", "repo") == "R29 (stale)"
+            # Each stale registry-only repo (no on-disk state -> no active
+            # phase) leads with the ABANDONED sigil + the warn-marker stale
+            # chip since the P30-I08-W02 reskin.
+            mode = app.render_mode
+            sigil_span = _abandoned_sigil_span(mode)
+            triangle = chrome("attention", mode=mode)
+            for code in ("R00", "R29"):
+                cell = str(table.get_cell(code, "repo"))
+                assert cell.startswith(sigil_span)
+                assert code in cell
+                assert f"{triangle} stale" in cell
 
     asyncio.run(body())
 

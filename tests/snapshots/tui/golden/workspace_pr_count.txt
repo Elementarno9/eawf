@@ -1,5 +1,5 @@
- repo  phase                    eu           git   pr  age
- ABC   P01 ███▒▒▒      3/6      ██▄    50%   git?  2   1h
- DEF   P02 ██▒▒▒▒      1/4      ▅      13%   git?  —   2h
- GHI   P03 ██████      2/2      █████  100%  git?  5   3h
- Σ     3 repos ███▒▒▒     6/12  █▄     31%         7
+ repo   phase                    eu           git   pr  age
+ ◆ ABC  P01 ███▒▒▒      3/6      ██▄    50%   git?  2   1h
+ ◆ DEF  P02 ██▒▒▒▒      1/4      ▅      13%   git?  —   2h
+ ◆ GHI  P03 ██████      2/2      █████  100%  git?  5   3h
+ ◆ Σ    3 repos ███▒▒▒     6/12  █▄     31%         7
