@@ -29,6 +29,14 @@ running daemon required):
   ``status`` above, which still issues the W01 ``daemon.status`` RPC
   against the running socket.
 
+W04 (P30-I14) adds the one-shot reclaim verb (no running daemon
+required; reads the local runtime dir + the resolved ``.ea/`` dir):
+
+- ``reclaim`` — sweep the WAL once via the W01 GC helper (drops
+  ``.fsynced.json`` records past the retention window) and trim
+  ``state.json.bak.*`` backups beyond a kept-count so a long-lived
+  repo cannot accumulate unbounded migration backups.
+
 The CLI is dispatch only (rule 1); all socket framing + JSON-RPC
 machinery lives under :mod:`eawf.runtime.daemon`.
 """
@@ -57,10 +65,14 @@ logger = logging.getLogger(__name__)
 
 daemon_app = typer.Typer(
     name="daemon",
-    help="Manage the eawfd background daemon (run, ping, status, stop, logs).",
+    help="Manage the eawfd background daemon (run, ping, status, stop, logs, reclaim).",
     no_args_is_help=True,
     add_completion=False,
 )
+
+#: Default number of ``state.json.bak.*`` backups ``reclaim`` keeps. Mirrors
+#: the keep-window convention of :meth:`eawf.platform.backup.store.SnapshotStore.prune`.
+_DEFAULT_BACKUP_KEEP: int = 3
 
 
 async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -371,6 +383,108 @@ def _replay_wal_gc(wal_dir: Path, max_age_seconds: int, flags: GlobalFlags) -> N
         "wal_dir": str(wal_dir),
     }
     emit_json_or_text(payload, text, flags=flags)
+
+
+@daemon_app.command("reclaim")
+def reclaim_cmd(
+    ctx: typer.Context,
+    keep: Annotated[
+        int,
+        typer.Option(
+            "--keep",
+            help="Number of newest state.json.bak.* backups to retain (default 3).",
+        ),
+    ] = _DEFAULT_BACKUP_KEEP,
+    max_age_seconds: Annotated[
+        int | None,
+        typer.Option(
+            "--max-age-seconds",
+            help="WAL .fsynced.json retention window in seconds (default: resolved).",
+        ),
+    ] = None,
+) -> None:
+    """Reclaim disk: sweep the WAL once and trim aged state.json backups.
+
+    A one-shot janitor for a long-lived repo. It (1) runs a single WAL-GC
+    sweep via the W01 helper (drops ``.fsynced.json`` records past the
+    retention window) and (2) deletes ``state.json.bak.*`` backups beyond
+    the ``--keep`` newest. Neither step needs a running daemon -- both read
+    the local filesystem directly so the verb works post-crash.
+
+    Args:
+        ctx: Typer context (global flags carried on ``ctx.obj``).
+        keep: Number of most-recent ``state.json.bak.*`` backups to retain.
+            Must be ``>= 0``; a negative value surfaces as an exit-code-2
+            usage error.
+        max_age_seconds: WAL retention window for the sweep. ``None`` falls
+            back to the resolved daemon retention window. A negative or
+            absurdly large value surfaces as an exit-code-2 usage error.
+    """
+    from eawf.runtime.daemon.wal import gc_done_records, resolve_wal_retention_seconds
+
+    flags: GlobalFlags = ctx.obj
+    if keep < 0:
+        typer.echo("--keep must be >= 0", err=True)
+        raise typer.Exit(code=2)
+    retention = max_age_seconds if max_age_seconds is not None else resolve_wal_retention_seconds()
+    if retention < 0 or retention > 30 * 24 * 3600:
+        typer.echo("--max-age-seconds must be between 0 and 2592000", err=True)
+        raise typer.Exit(code=2)
+
+    wal_dir = _wal_dir()
+    swept = gc_done_records(wal_dir, max_age_seconds=retention)
+    trimmed = _trim_state_backups(flags.workspace, keep)
+
+    payload = {
+        "wal_swept_count": len(swept),
+        "wal_swept_paths": [str(p) for p in swept],
+        "backups_trimmed_count": len(trimmed),
+        "backups_trimmed_paths": [str(p) for p in trimmed],
+        "keep": keep,
+        "max_age_seconds": retention,
+        "wal_dir": str(wal_dir),
+    }
+    text = (
+        f"reclaim swept {len(swept)} WAL record(s) "
+        f"and trimmed {len(trimmed)} state backup(s) keep={keep}"
+    )
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _trim_state_backups(workspace: Path | None, keep: int) -> list[Path]:
+    """Delete ``state.json.bak.*`` files beyond the *keep* newest by mtime.
+
+    Resolves the active ``.ea/state.json`` path, globs its sibling
+    ``state.json.bak.*`` backups, sorts them newest-first by mtime, and
+    unlinks everything past the keep window. The backup suffixes vary
+    (migration ``.bak.v<from>.v<to>`` vs config-migration
+    ``.bak.<marker>.<epoch>``), so mtime is the recency key rather than the
+    lexical name.
+
+    Args:
+        workspace: Optional workspace root from the global ``-w/--workspace``
+            flag, forwarded to the state-path resolver.
+        keep: Number of newest backups to retain (``>= 0``).
+
+    Returns:
+        Paths unlinked, newest-trimmed first. Empty when the resolver finds
+        no state directory or the backup count is within the keep window.
+    """
+    from eawf.surfaces.cli.scope import resolve_state_path
+
+    try:
+        state_path = resolve_state_path(workspace)
+    except FileNotFoundError:
+        return []
+    backups = list(state_path.parent.glob(f"{state_path.name}.bak.*"))
+    backups.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    doomed = backups[keep:]
+    removed: list[Path] = []
+    for path in doomed:
+        path.unlink(missing_ok=True)
+        removed.append(path)
+    logger.info(f"_trim_state_backups keep={keep} removed={len(removed)}")
+    return removed
 
 
 @daemon_app.command("logs")
