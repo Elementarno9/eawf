@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +35,8 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import (
     CurrentPointers,
     Project,
+    RuntimeBaseline,
+    RuntimeLatest,
     State,
 )
 from eawf.kernel.state.mutations import Mutation, MutationKind
@@ -236,6 +238,19 @@ def test_daemon_mutate_wave_close_pins_readiness_warnings_count(
 
     state = _empty_state()
     _seed_claimed_wave(state, criteria=["legacy x", "legacy y"])
+    # The close gate refuses a 0-EU close without captured runtime; pin a
+    # baseline/latest pair on the claimed wave so the close lands.
+    _t0 = datetime.now(UTC)
+    state.waves[WAVE_ID].runtime_baseline = RuntimeBaseline(
+        api_duration_ms=5000,
+        total_duration_ms=7000,
+        captured_at=_t0,
+    )
+    state.waves[WAVE_ID].runtime_latest = RuntimeLatest(
+        api_duration_ms=17000,
+        total_duration_ms=23000,
+        captured_at=_t0 + timedelta(minutes=5),
+    )
     state_path, event_path, wal_dir = _daemon_state_layout(tmp_path, state)
     ctx = MethodContext(
         started_at="2026-05-26T00:00:00+00:00",
