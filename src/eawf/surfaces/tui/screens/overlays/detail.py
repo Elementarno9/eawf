@@ -54,7 +54,12 @@ from textual.markup import escape
 from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
-from eawf.kernel.spec.common import GRANDFATHERED_KIND, CriterionSpec, tier_label
+from eawf.kernel.spec.common import (
+    GRANDFATHERED_KIND,
+    CriterionSpec,
+    GateSpec,
+    tier_label,
+)
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import linkify_text
@@ -224,11 +229,13 @@ class DetailCard:
     text row per criterion plus, for an authored (non-grandfathered)
     criterion, its oracle tier label, ``evidence_kind``, and
     ``measurable_signal``; a grandfathered legacy criterion shows the text
-    plus a grandfathered marker and no tier badge. The ``gates`` /
-    ``evidence`` / ``runtime`` groups are the chassis seams: ``evidence``
-    carries the wave's attempt rollup + dispatch history, ``runtime``
-    carries the size + honest-empty EU / token rows, and ``gates`` stays
-    empty (so a wave with no gates shows no gates tab).
+    plus a grandfathered marker and no tier badge. The ``gates`` group
+    carries the wave's typed gate rows grouped under their owning criterion
+    id, each naming the gate's check kind; a wave with no gates leaves the
+    group empty so the modal builds no gates tab. The ``evidence`` /
+    ``runtime`` groups are the remaining chassis seams: ``evidence`` carries
+    the wave's attempt rollup + dispatch history and ``runtime`` carries the
+    size + honest-empty EU / token rows.
 
     Attributes:
         title: The card heading (e.g. ``wave P26-I01-W19`` /
@@ -238,8 +245,10 @@ class DetailCard:
             (text row plus tier label / evidence_kind / measurable_signal
             for an authored criterion; text + grandfathered marker and no
             tier badge for a legacy criterion).
-        gates: The ``gates`` group — gate-pack rows (I06 fills; empty now
-            so a wave with no gates renders no gates tab).
+        gates: The ``gates`` group — the wave's typed gate rows grouped
+            under a ``criterion`` header per distinct criterion id, each
+            ``gate`` row naming the gate's check kind. Empty for a wave with
+            no gates, so the modal renders no gates tab (absent, not empty).
         evidence: The ``evidence`` group — the wave's attempt rollup +
             dispatch-history rows (I06 folds in the report rollup).
         runtime: The ``runtime`` group — size + honest-empty EU / token
@@ -436,6 +445,40 @@ def _criteria_rows(criteria: Iterable[CriterionSpec]) -> tuple[tuple[str, str], 
     return tuple(rows)
 
 
+def _gate_rows(gates: Iterable[GateSpec]) -> tuple[tuple[str, str], ...]:
+    """Project a wave's typed gates into gates-tab ``(label, value)`` rows.
+
+    The gates are grouped under their owning criterion: each distinct
+    :attr:`~eawf.kernel.spec.common.GateSpec.criterion_id` emits one
+    ``criterion`` header row carrying the criterion id, followed by a
+    ``gate`` row per gate naming that gate's
+    :attr:`~eawf.kernel.spec.common.GateSpec.kind`. The groups follow the
+    criterion's first-seen order and gates keep their authored order within
+    each group, so every gate sharing a criterion id renders under one
+    header even when the input interleaves criteria.
+
+    An empty *gates* yields ``()`` so the caller leaves
+    :attr:`DetailCard.gates` empty and the modal builds no gates tab (a
+    wave with no gates shows no gates section, never an empty one).
+
+    Args:
+        gates: The wave's typed gate rows.
+
+    Returns:
+        Ordered ``(label, value)`` rows for the gates tab, grouped under a
+        ``criterion`` header per distinct criterion id; ``()`` when *gates*
+        is empty.
+    """
+    grouped: dict[str, list[str]] = {}
+    for gate in gates:
+        grouped.setdefault(gate.criterion_id, []).append(gate.kind)
+    rows: list[tuple[str, str]] = []
+    for criterion_id, kinds in grouped.items():
+        rows.append(("criterion", criterion_id))
+        rows.extend(("gate", kind) for kind in kinds)
+    return tuple(rows)
+
+
 def _wave_card(
     state: State,
     wave_id: str,
@@ -484,6 +527,12 @@ def _wave_card(
     # tier badge -- it has no authored tier to surface.
     criteria: list[tuple[str, str]] = list(_criteria_rows(wave.success_criteria))
 
+    # The gates tab projects the wave's typed gate rows, grouped under
+    # their owning criterion id and naming each gate's kind. A wave with no
+    # gates leaves the group empty so the modal builds no gates tab (the
+    # section header is absent, not an empty section).
+    gates: list[tuple[str, str]] = list(_gate_rows(wave.gates))
+
     # The evidence tab folds in the attempt rollup plus the dispatch
     # history (I06 layers the typed report rollup on top of this seam).
     attempt_rollup = per_wave_attempt_rollup(
@@ -500,6 +549,7 @@ def _wave_card(
         title=f"wave {wave.id}",
         rows=tuple(rows),
         criteria=tuple(criteria),
+        gates=tuple(gates),
         evidence=tuple(evidence),
         runtime=_wave_runtime(wave),
         detail_markdown=_wave_narrative_preview(state, wave, reports=reports),

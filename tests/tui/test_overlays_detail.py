@@ -17,6 +17,7 @@ from textual.widgets import Markdown, Static, TabbedContent, TabPane
 
 from eawf.kernel.spec.common import (
     CriterionSpec,
+    GateSpec,
     OracleTier,
     QualityDimension,
     grandfather_criterion,
@@ -380,6 +381,151 @@ def test_detail_modal_grandfathered_criterion_paints_marker_no_tier() -> None:
     asyncio.run(body())
 
 
+# --------------------------------------------------------------------------
+# Gates tab — typed GateSpec rows grouped under their criterion_id (P30-I07-W02)
+# --------------------------------------------------------------------------
+
+
+def _gate(gate_id: str, *, criterion_id: str, kind: str) -> GateSpec:
+    """Build a non-argv :class:`GateSpec` for the gates-tab tests.
+
+    Uses a non-argv-bearing ``kind`` (``regex_in_file`` / ``schema_validate``)
+    so the L0 argv-policy validator stays out of the way -- only
+    ``command_exit_zero`` carries an ``argv`` vector, so these rows construct
+    cleanly without an ``args['argv']`` payload.
+    """
+    return GateSpec(
+        id=gate_id,
+        criterion_id=criterion_id,
+        kind=kind,
+        policy="block",
+        cadence="every-wave",
+    )
+
+
+def _state_with_gates(gates: list[GateSpec]) -> tuple[State, str]:
+    """Return a state whose single wave carries *gates*, plus its id.
+
+    The committed fixture leaves ``gates`` empty; the frozen model is rebuilt
+    via ``model_copy`` so the resolver renders the typed gate rows.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    with_gates = state.waves[wave_id].model_copy(update={"gates": gates})
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = with_gates
+    return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def test_resolve_detail_two_gates_render_both_kinds_under_criterion() -> None:
+    """Two gates under one criterion: both kinds render under one header."""
+    gates = [
+        _gate("G-01", criterion_id="CR-01", kind="regex_in_file"),
+        _gate("G-02", criterion_id="CR-01", kind="schema_validate"),
+    ]
+    state, wave_id = _state_with_gates(gates)
+    card = resolve_detail(state, wave_id)
+    # One ``criterion`` header carrying CR-01, then a ``gate`` row per kind.
+    assert card.gates == (
+        ("criterion", "CR-01"),
+        ("gate", "regex_in_file"),
+        ("gate", "schema_validate"),
+    )
+    kinds = [value for label, value in card.gates if label == "gate"]
+    assert kinds == ["regex_in_file", "schema_validate"]
+
+
+def test_resolve_detail_gates_grouped_per_distinct_criterion_id() -> None:
+    """Gates under two criterion ids each render under their own header.
+
+    Boundary: an interleaved input (CR-01, CR-02, CR-01) still groups every
+    gate sharing a criterion id under one header, in first-seen order.
+    """
+    gates = [
+        _gate("G-01", criterion_id="CR-01", kind="regex_in_file"),
+        _gate("G-02", criterion_id="CR-02", kind="schema_validate"),
+        _gate("G-03", criterion_id="CR-01", kind="file_exists"),
+    ]
+    state, wave_id = _state_with_gates(gates)
+    card = resolve_detail(state, wave_id)
+    assert card.gates == (
+        ("criterion", "CR-01"),
+        ("gate", "regex_in_file"),
+        ("gate", "file_exists"),
+        ("criterion", "CR-02"),
+        ("gate", "schema_validate"),
+    )
+    # Each distinct criterion id emits exactly one header row.
+    headers = [value for label, value in card.gates if label == "criterion"]
+    assert headers == ["CR-01", "CR-02"]
+
+
+def test_resolve_detail_empty_gates_leaves_group_empty() -> None:
+    """A wave with ``gates == []`` carries an empty gates group (no header)."""
+    state, wave_id = _state_with_gates([])
+    card = resolve_detail(state, wave_id)
+    assert card.gates == ()
+    # No criterion header is fabricated for a gate-less wave.
+    assert "criterion" not in {label for label, _ in card.gates}
+
+
+def test_detail_modal_two_gates_paint_both_kinds_under_criterion() -> None:
+    """The gates tab paints both gate kinds under their criterion id (Pilot)."""
+
+    async def body() -> None:
+        gates = [
+            _gate("G-01", criterion_id="CR-01", kind="regex_in_file"),
+            _gate("G-02", criterion_id="CR-01", kind="schema_validate"),
+        ]
+        state, wave_id = _state_with_gates(gates)
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-gates"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            assert "CR-01" in rendered
+            assert "regex_in_file" in rendered
+            assert "schema_validate" in rendered
+
+    asyncio.run(body())
+
+
+def test_detail_modal_no_gates_renders_no_gates_tab() -> None:
+    """A wave with ``gates == []`` builds no gates tab and ``g`` is a no-op."""
+
+    async def body() -> None:
+        state, wave_id = _state_with_gates([])
+        card = resolve_detail(state, wave_id)
+        assert card.gates == ()
+        assert "gates" not in DetailModal._present_tabs(card)
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            # No gates pane is built and ``g`` jumps nowhere.
+            assert "detail-tab-gates" not in {pane.id for pane in tabs.query(TabPane)}
+            before = tabs.active
+            await pilot.press("g")
+            await pilot.pause()
+            assert tabs.active == before
+
+    asyncio.run(body())
+
+
 def test_resolve_detail_wave_detail_includes_attempt_timeline() -> None:
     state, wave_id = _state_with_attempted_wave()
     card = resolve_detail(state, wave_id)
@@ -616,7 +762,7 @@ def test_present_tabs_wave_includes_runtime_and_criteria() -> None:
 
 
 def test_present_tabs_skips_empty_gates() -> None:
-    # No wave carries gate rows yet (I06 fills them), so no gates tab.
+    # The fixture wave carries no gate rows, so the modal builds no gates tab.
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
