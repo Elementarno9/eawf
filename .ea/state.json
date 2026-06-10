@@ -4535,6 +4535,18 @@
       "scope_id": "P30-I03-W09",
       "status": "done",
       "updated_at": "2026-06-10T00:10:39.273908Z"
+    },
+    "P30-I04-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W01",
+      "scope_id": "P30-I04-W01",
+      "status": "done",
+      "updated_at": "2026-06-10T01:13:44.953186Z"
     }
   },
   "agent_sessions": {
@@ -14978,6 +14990,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I03-W09",
       "updated_at": "2026-06-10T00:10:36.194062Z"
+    },
+    "P30-I04-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W01-bucket-20260610T011321Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I04-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I04-W01",
+      "updated_at": "2026-06-10T01:13:21.101366Z"
     }
   },
   "goals": {
@@ -17861,7 +17886,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T00:14:00.407169Z",
+  "updated_at": "2026-06-10T01:13:52.043891Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -69260,10 +69285,10 @@
         "P30-I04-W04",
         "P30-I04-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-p30-i04",
+      "claimed_at": "2026-06-10T00:14:52.921104Z",
+      "closed_at": "2026-06-10T01:13:44.953186Z",
+      "commit": "4675e3eab6f9f7afc415bdbb97db8e146253177c",
       "deps": [],
       "description": "Add a LifecycleError raise in plan_wave when intent is None, mirroring the effort_bucket guard, and surface it through the add_wave op so the daemon maps it to a rejected mutation. Closes the None-tolerant authoring path so every authored wave carries an IntentBrief.",
       "dispatch_history": [],
@@ -69272,42 +69297,60 @@
         "src/eawf/workflow/lifecycle/wave.py",
         "src/eawf/runtime/daemon/methods/state.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_wave_dag.py",
+              "tests/unit/test_intent_brief.py",
+              "tests/workflow/lifecycle/",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I04-W01",
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.759735Z",
-      "outcome": null,
+      "outcome": "plan_wave raises LifecycleError on intent=None and the add_wave daemon op rejects missing/None intent at the apply boundary; 158 test call sites swept onto a shared make_intent factory",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W01-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_plan_wave_requires_intent_fires asserts LifecycleError substring \"intent\"; positive control asserts wave.intent is not None",
-          "oracle_tier": null,
+          "measurable_signal": "test_wave_dag.py asserts the None-intent raise message and the populated-intent landing; test_intent_brief.py asserts the add_wave op rejects missing and explicit-None intent params and passes a populated intent dict through; pytest exit zero",
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
-          "text": "plan_wave raises LifecycleError with an intent-naming message when called with intent=None, and a populated IntentBrief lands a wave with wave.intent not None.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I04-W01-C2",
-          "kind": "behavioral",
-          "measurable_signal": "test_add_wave_op_rejects_missing_intent and test_add_wave_op_rejects_none_intent assert the op returns the rejected-mutation error code",
-          "oracle_tier": null,
-          "quality_dimension": "reliability",
-          "required": true,
-          "response": null,
-          "text": "The add_wave daemon op rejects a mutation with a missing or explicit-None intent param with the rejected-mutation error code rather than passing None through to plan_wave.",
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the plan_wave guard + daemon add_wave op suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "plan_wave raises LifecycleError with an intent-naming message when called with intent=None, and a populated IntentBrief lands a wave with wave.intent not None; the add_wave daemon op rejects a mutation with a missing or explicit-None intent param at the apply boundary (LifecycleError before plan_wave is reached) rather than passing None through.",
           "waiver_reason": null
         }
       ],
