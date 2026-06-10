@@ -17342,7 +17342,8 @@
         "P30-I05-W11",
         "P30-I05-W12",
         "P30-I05-W13",
-        "P30-I05-W14"
+        "P30-I05-W14",
+        "P30-I05-W15"
       ]
     },
     "P30-I06": {
@@ -18523,7 +18524,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T15:41:39.199418Z",
+  "updated_at": "2026-06-10T15:49:49.783398Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74381,6 +74382,83 @@
         }
       ],
       "title": "Wire claim-time baseline capture to read the real runtime sidecar",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I05-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Polish sweep flagged _tokens_to_eu's keyword-only tokens_per_eu param plus its <=0.0 guard as YAGNI: the sole caller (_runtime_basis_eu) never overrides it, and the eu_basis choice already happens at the call site. Divide by the module constant directly.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/observability/telemetry/join.py"
+      ],
+      "gates": [],
+      "id": "P30-I05-W15",
+      "intent": {
+        "desired_outcome": "The helper divides by the module constant directly; no dead speculative parameter or unreachable guard remains.",
+        "evidence_refs": [
+          "src/eawf/observability/telemetry/join.py:132",
+          "src/eawf/workflow/lifecycle/wave.py:183"
+        ],
+        "planned_steps": [
+          "Remove the tokens_per_eu keyword param and the <=0.0 ValueError guard from _tokens_to_eu",
+          "Divide tokens by DEFAULT_TOKENS_PER_EU directly",
+          "Run the close-actuals + telemetry-join tests"
+        ],
+        "priority_rationale": "P30-I05's thesis is no idle/speculative code; a dead keyword param is a micro-idle-contract and the polish sweep flagged it, so it is trimmed before the iter closes.",
+        "problem": "_tokens_to_eu carried a tokens_per_eu param and a <=0.0 guard that no real call path ever exercised (sole caller uses the default), a YAGNI violation in the EUCAP iter.",
+        "risks": [
+          "None material: no test or call site overrides the param; the default constant is unchanged."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I05",
+      "opened_at": "2026-06-10T15:49:49.783229Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_tokens_to_eu drops the tokens_per_eu param and its guard",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_tokens_to_eu drops the tokens_per_eu param and its guard",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "dividing by DEFAULT_TOKENS_PER_EU directly; the tokens eu_basis path still yields the same EU; no test referenced the removed param",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "dividing by DEFAULT_TOKENS_PER_EU directly; the tokens eu_basis path still yields the same EU; no test referenced the removed param",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Drop dead tokens_per_eu param from _tokens_to_eu",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
