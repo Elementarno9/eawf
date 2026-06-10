@@ -4883,6 +4883,18 @@
       "scope_id": "P30-I06-W02",
       "status": "done",
       "updated_at": "2026-06-10T18:34:24.727434Z"
+    },
+    "P30-I06-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W03",
+      "scope_id": "P30-I06-W03",
+      "status": "done",
+      "updated_at": "2026-06-10T18:39:19.680022Z"
     }
   },
   "agent_sessions": {
@@ -15745,6 +15757,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I06-W02",
       "updated_at": "2026-06-10T18:30:12.323908Z"
+    },
+    "P30-I06-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W03-bucket-20260610T183459Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I06-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I06-W03",
+      "updated_at": "2026-06-10T18:34:59.276660Z"
     }
   },
   "goals": {
@@ -18657,7 +18682,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T18:34:24.727621Z",
+  "updated_at": "2026-06-10T18:39:19.680218Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74864,10 +74889,10 @@
     "P30-I06-W03": {
       "agent_role": "auditor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i06-w03",
+      "claimed_at": "2026-06-10T18:34:59.276651Z",
+      "closed_at": "2026-06-10T18:39:19.680022Z",
+      "commit": "c37ed444f8bd6d4af7e5cdb6564118c1fe143ba3",
       "deps": [
         "P30-I06-W01"
       ],
@@ -74878,19 +74903,20 @@
         "src/eawf/runtime/daemon/methods/agent.py",
         "src/eawf/runtime/daemon/dispatch_runner.py",
         "src/eawf/observability/telemetry/pricing.py",
-        "src/eawf/runtime/runtimes/metering.py"
+        "src/eawf/runtime/runtimes/metering.py",
+        "tests/daemon/test_spawn_cost_binding.py"
       ],
       "gates": [],
       "id": "P30-I06-W03",
       "intent": null,
       "iter_id": "P30-I06",
       "opened_at": "2026-06-09T12:29:17.776012Z",
-      "outcome": null,
+      "outcome": "Binding-proof tests: dated opus-4-8 + bare opus alias both yield real non-zero priced dispatch_cost; bare alias never silent $0 (negative gate present since P29-I01-W20). 6 tests, no prod change; 107 green, mypy/ruff clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
