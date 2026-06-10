@@ -4763,6 +4763,18 @@
       "scope_id": "P30-I05-W08",
       "status": "done",
       "updated_at": "2026-06-10T11:25:30.888156Z"
+    },
+    "P30-I05-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W09",
+      "scope_id": "P30-I05-W09",
+      "status": "done",
+      "updated_at": "2026-06-10T11:46:22.335465Z"
     }
   },
   "agent_sessions": {
@@ -7804,9 +7816,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I05-W09"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15479,7 +15489,7 @@
     },
     "P30-I05-W09": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I05-W09-bucket-20260610T113226Z",
+      "current_store_record_id": "EST-P30-I05-W09-bucket-20260610T114604Z",
       "display": "1.0 EU · exp ~30m · pess ~108m",
       "expected_eu": 1.0,
       "expected_minutes": 30.0,
@@ -15488,7 +15498,7 @@
       "pessimistic_minutes": 108.0,
       "reference_class": "bucket:M",
       "scope_id": "P30-I05-W09",
-      "updated_at": "2026-06-10T11:32:26.598498Z"
+      "updated_at": "2026-06-10T11:46:04.131671Z"
     }
   },
   "goals": {
@@ -18384,7 +18394,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T11:43:36.821413Z",
+  "updated_at": "2026-06-10T11:46:22.335632Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73724,8 +73734,8 @@
       "blocks": [],
       "claim_session_id": "codex-p30-i05-w09",
       "claimed_at": "2026-06-10T11:32:26.598485Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T11:46:22.335465Z",
+      "commit": "40c94a30b1ad70ff9662790277b4cfd3e5c08206",
       "deps": [
         "P30-I05-W08"
       ],
@@ -73739,43 +73749,125 @@
         "tests/unit/test_cli_wave_close_commit.py",
         "tests/daemon/test_state_methods.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_state_methods.py::test_close_with_no_runtime_waiver_succeeds",
+              "tests/daemon/test_state_methods.py::test_close_no_runtime_without_flag_still_refuses",
+              "tests/unit/test_cli_wave_close_commit.py::test_wave_close_daemon_proxy_forwards_no_runtime_waiver",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_cli_wave_close_commit.py::test_no_runtime_waiver_records_human_producer",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I05-W09",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "Wave close supports --no-runtime, records a human waived EvidenceRecord, and threads a close-scoped no_runtime_waiver to the daemon.",
+        "evidence_refs": [
+          "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+          "src/eawf/surfaces/cli/commands/lifecycle.py",
+          "src/eawf/runtime/daemon/methods/state.py",
+          "tests/daemon/test_state_methods.py",
+          "tests/unit/test_cli_wave_close_commit.py"
+        ],
+        "planned_steps": [
+          "Add --no-runtime to wave close",
+          "Append a human waived EvidenceRecord through evidence.append",
+          "Thread no_runtime_waiver through state.mutate",
+          "Bypass zero-runtime refusal only when the close-scoped flag is present"
+        ],
+        "priority_rationale": "The W08 default refusal needs an auditable escape hatch for recovery shells and missing runtime sidecars.",
+        "problem": "Operators need an explicit, attributable bypass for known missing runtime capture so zero-runtime closes are no longer silent.",
+        "risks": [
+          "The waiver must stay human-attributed and must not disable the default no-runtime refusal path"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.820075Z",
-      "outcome": null,
+      "outcome": "Added --no-runtime close waiver with human EvidenceRecord and daemon no_runtime_waiver bypass; parent commit 40c94a30.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W09-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
           "measurable_signal": "test_close_with_no_runtime_waiver_succeeds reaches CLOSED with a waived row; test_close_no_runtime_without_flag_still_refuses raises",
-          "oracle_tier": null,
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the no-runtime daemon close pytest gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "Closing a zero-runtime wave with --no-runtime reaches CLOSED and writes a waived EvidenceRecord carrying produced_by=human; closing the same wave without the flag still refuses (the waiver is opt-in).",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "P30-I05-W09-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "structural",
           "measurable_signal": "test_no_runtime_waiver_records_human_producer asserts the EvidenceRecord produced_by field equals human",
-          "oracle_tier": null,
+          "oracle_tier": 2,
           "quality_dimension": "security",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the no-runtime waiver evidence pytest gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "The waiver EvidenceRecord is operator-attributable: produced_by is human, not an agent, so the bypass is traceable to the operator.",
           "waiver_reason": null
         }
@@ -73783,7 +73875,7 @@
       "title": "EUCAP-9 Add --no-runtime waiver flag + EvidenceRecord",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": "WT-P30-I05-W09-1781091223"
+      "worktree_id": null
     },
     "P30-I05-W10": {
       "agent_role": "researcher",
