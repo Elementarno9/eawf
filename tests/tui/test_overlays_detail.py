@@ -891,6 +891,145 @@ def test_detail_modal_unclaimed_wave_paints_em_dash_sentinel() -> None:
 
 
 # --------------------------------------------------------------------------
+# Runtime tab — budget-vs-consumed token bar + session runtime-EU (P30-I07-W05)
+# --------------------------------------------------------------------------
+
+
+def _state_with_budgeted_session_wave(
+    *,
+    token_budget: int = 1000,
+    tokens_consumed: int = 250,
+) -> tuple[State, str]:
+    """Return a state whose wave carries a token budget + one ended session.
+
+    Builds on :func:`_state_with_attempted_wave` (two ended
+    :class:`SessionAttempt` rows, a 5-minute then a 4-minute span) and stamps
+    a non-``None`` ``token_budget`` plus a non-zero ``tokens_consumed`` so the
+    runtime tab can paint a real consumed-vs-budget token bar and a non-zero
+    session-derived runtime-EU value.
+    """
+    state, wave_id = _state_with_attempted_wave()
+    budgeted = state.waves[wave_id].model_copy(
+        update={"token_budget": token_budget, "tokens_consumed": tokens_consumed}
+    )
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = budgeted
+    return state.model_copy(update={"waves": new_waves}), wave_id
+
+
+def test_resolve_detail_wave_runtime_budget_and_session_render_non_empty() -> None:
+    """A budgeted wave with an ended session paints a token bar + runtime-EU.
+
+    Success criterion (P30-I07-W05): a wave with ``token_budget``, a non-zero
+    ``tokens_consumed``, and at least one :class:`SessionAttempt` renders a
+    non-zero token bar AND a non-zero runtime-EU value -- neither row is the
+    honest-absence sentinel.
+    """
+    state, wave_id = _state_with_budgeted_session_wave(token_budget=1000, tokens_consumed=250)
+    card = resolve_detail(state, wave_id)
+    runtime = dict(card.runtime)
+    # The token row is a real consumed-vs-budget bar, not the empty sentinel,
+    # and it carries a non-zero percentage (250/1000 = 25%).
+    assert runtime["tokens"] != EMPTY_STATE
+    assert "25%" in runtime["tokens"]
+    assert "0%" not in runtime["tokens"]
+    # The EU row is a real non-zero value derived from the two session spans
+    # (5min + 4min = 9min -> 9/30 = 0.30 EU at the default 30-min-per-EU rate).
+    assert runtime["eu"] != EMPTY_STATE
+    assert runtime["eu"] == "0.30 EU"
+
+
+def test_resolve_detail_wave_runtime_empty_state_distinct_from_measured_zero() -> None:
+    """A no-budget, no-session wave shows the sentinel, not a measured zero.
+
+    Boundary: ``token_budget is None`` + empty ``sessions`` must render the
+    honest-absence sentinel for BOTH the token and EU rows, and that sentinel
+    must be distinguishable from a measured zero (a wave that consumed zero
+    tokens against a real budget, or ran a zero-length session).
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    # The fixture wave carries no token budget and no sessions.
+    assert state.waves[wave_id].token_budget is None
+    assert state.waves[wave_id].sessions == {}
+    empty_card = resolve_detail(state, wave_id)
+    empty_runtime = dict(empty_card.runtime)
+    assert empty_runtime["tokens"] == EMPTY_STATE
+    assert empty_runtime["eu"] == EMPTY_STATE
+
+    # A measured zero (a real budget the wave consumed 0 tokens against) is a
+    # 0% bar -- a populated value, NOT the empty sentinel. The two states stay
+    # distinguishable: the empty wave reads "no data", the measured-zero wave
+    # reads a real 0% bar.
+    measured = state.waves[wave_id].model_copy(update={"token_budget": 1000, "tokens_consumed": 0})
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = measured
+    measured_card = resolve_detail(state.model_copy(update={"waves": new_waves}), wave_id)
+    measured_runtime = dict(measured_card.runtime)
+    assert measured_runtime["tokens"] != EMPTY_STATE
+    assert "0%" in measured_runtime["tokens"]
+    assert measured_runtime["tokens"] != empty_runtime["tokens"]
+
+
+def test_resolve_detail_wave_runtime_eu_empty_while_session_running() -> None:
+    """A wave whose only session has not ended yields the EU sentinel.
+
+    Error/boundary path: a :class:`SessionAttempt` with ``ended_at is None``
+    has no completed runtime span, so it must not be counted as a zero -- the
+    EU row stays the honest-absence sentinel until a session ends.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    now = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
+    running = state.waves[wave_id].model_copy(
+        update={
+            "sessions": {
+                1: SessionAttempt(
+                    attempt=1,
+                    runtime="codex",
+                    session_id="sess-running",
+                    session_log_handle="urn:eawf:v1:session-log:codex:sess-running",
+                    started_at=now,
+                    ended_at=None,
+                ),
+            },
+        }
+    )
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = running
+    card = resolve_detail(state.model_copy(update={"waves": new_waves}), wave_id)
+    runtime = dict(card.runtime)
+    assert runtime["eu"] == EMPTY_STATE
+
+
+def test_detail_modal_runtime_paints_token_bar_and_runtime_eu() -> None:
+    """The runtime tab paints a non-empty token bar + runtime-EU value (Pilot)."""
+
+    async def body() -> None:
+        state, wave_id = _state_with_budgeted_session_wave(token_budget=1000, tokens_consumed=250)
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = resolve_detail(state, wave_id)
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-runtime"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            # The token bar's non-zero percent and the runtime-EU value paint;
+            # neither is the honest-absence sentinel.
+            assert "25%" in rendered
+            assert "0.30 EU" in rendered
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
 # render_file_tree — wave file_scopes render as a collapsed tree (review fix)
 # --------------------------------------------------------------------------
 

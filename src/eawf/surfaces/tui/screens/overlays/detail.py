@@ -21,11 +21,14 @@ tab-switching). The ``overview`` tab is ALWAYS present (it carries the
 entity identity); the rest are built only when their section has data for
 the resolved entity, so a wave with no gates shows no ``gates`` tab rather
 than an empty one and a hotkey for an absent tab no-ops. The ``runtime``
-tab is honest-empty: a wave with no runtime telemetry shows the shared
-:data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel rather than
-a fabricated ``0.00/0.00`` bar. This wave (P30-I02-W24) lands the chassis;
-later iters (I06 data, I04 runtime) fill the criteria / gates / evidence /
-runtime panes with their typed projections.
+tab is honest about absence: a wave with no token budget and no ended
+sessions shows the shared
+:data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel for its
+token + EU rows rather than a fabricated ``0%`` bar or a measured zero, so
+the empty state stays distinguishable from a real measured value. A wave
+with a token budget paints a consumed-vs-budget token bar, and a wave with
+ended :class:`~eawf.kernel.state.models.SessionAttempt` rows paints a
+session-derived runtime-EU value.
 
 Entity resolution is a pure function (:func:`resolve_detail`) that takes
 the reactive :class:`~eawf.kernel.state.models.State` and the selection id and
@@ -62,6 +65,7 @@ from eawf.kernel.spec.common import (
 )
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import StoreKind
+from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES, _duration_ms_to_eu
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import linkify_text
 from eawf.surfaces.render.narrative import (
@@ -76,6 +80,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     EMPTY_STATE,
     RenderMode,
     render_completion_bar,
+    render_eu_bar_plain,
 )
 from eawf.surfaces.tui.widgets.sigils import Sigil
 from eawf.workflow.agent_report.rollup import (
@@ -87,7 +92,7 @@ from eawf.workflow.agent_report.rollup import (
 )
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State, Wave
+    from eawf.kernel.state.models import SessionAttempt, State, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +241,7 @@ class DetailCard:
     group empty so the modal builds no gates tab. The ``evidence`` /
     ``runtime`` groups are the remaining chassis seams: ``evidence`` carries
     the wave's attempt rollup + dispatch history and ``runtime`` carries the
-    size + honest-empty EU / token rows.
+    size + budget-vs-consumed token bar + runtime-EU rows.
 
     Attributes:
         title: The card heading (e.g. ``wave P26-I01-W19`` /
@@ -254,11 +259,13 @@ class DetailCard:
             attempt rollup, and the provenance / dispatch-history rows (the
             ``claimed`` work-start row plus one row per dispatch annotation,
             each appending any runtime-switch reason).
-        runtime: The ``runtime`` group — size + honest-empty EU / token
-            rows (I04 fills real runtime telemetry). A no-runtime wave's
-            EU / token rows are the shared
-            :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel,
-            never a fabricated ``0.00/0.00`` bar.
+        runtime: The ``runtime`` group — size + a budget-vs-consumed token
+            bar + a session-derived runtime-EU value. A wave with no token
+            budget (``token_budget is None``) renders the shared
+            :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel for
+            the token row, and a wave with no ended sessions renders it for
+            the EU row, so the empty state stays distinguishable from a
+            measured zero — never a fabricated ``0%`` bar.
         detail_markdown: Optional Markdown body for the ``overview`` tab.
             When ``None``, the ``overview`` tab renders ``rows`` as aligned
             field rows.
@@ -369,19 +376,79 @@ def _emit_tree(node: dict[str, Any], *, depth: int, lines: list[str]) -> None:
             _emit_tree(child, depth=depth + 1, lines=lines)
 
 
-def _wave_runtime(wave: Wave) -> tuple[tuple[str, str], ...]:
-    """Build the ``runtime`` tab rows for a wave (honest-empty until I04).
+def _session_duration_ms(session: SessionAttempt) -> int | None:
+    """Return one :class:`SessionAttempt`'s wall-clock duration in milliseconds.
 
-    A wave's only populated progress signal is its effort bucket (shown as
-    the plain bucket label, e.g. ``M``). The EU and token rows are the
-    shared :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel
-    rather than a fabricated ``0.00/0.00`` bar, because estimates /
-    actuals / token telemetry are unpopulated scaffolding I04 fills. The
-    runtime tab therefore stays honest: a no-runtime wave reads "no data",
-    never a manufactured zero.
+    The attempt's elapsed runtime is the span between its ``started_at`` and
+    ``ended_at`` stamps. A session still running (``ended_at is None``) has no
+    completed span, so it contributes nothing -- the caller folds the honest
+    absence into the EU sentinel rather than counting it as a zero.
+
+    Args:
+        session: The runtime subprocess attempt.
+
+    Returns:
+        The whole-millisecond span, or ``None`` when the attempt has not
+        ended (no completed runtime to measure).
+    """
+    if session.ended_at is None:
+        return None
+    return int((session.ended_at - session.started_at).total_seconds() * 1000.0)
+
+
+def _wave_runtime_eu(wave: Wave) -> float | None:
+    """Derive the wave's runtime effort-unit total from its session attempts.
+
+    Sums each ended :class:`SessionAttempt`'s wall-clock span and routes the
+    millisecond total through the canonical
+    :func:`~eawf.observability.telemetry.join._duration_ms_to_eu` math (one EU
+    per :data:`~eawf.observability.telemetry.join.DEFAULT_EU_MINUTES` minutes),
+    so the runtime tab quotes the same EU unit the close-time telemetry
+    rollup does. A wave with no ended sessions yields ``None`` so the caller
+    surfaces the honest-absence sentinel rather than a measured zero.
 
     Args:
         wave: The resolved wave.
+
+    Returns:
+        The summed runtime effort units, or ``None`` when no session attempt
+        has ended (no measured runtime to convert).
+    """
+    durations = [
+        ms
+        for ms in (_session_duration_ms(session) for session in wave.sessions.values())
+        if ms is not None
+    ]
+    if not durations:
+        return None
+    return _duration_ms_to_eu(sum(durations), eu_minutes=DEFAULT_EU_MINUTES)
+
+
+def _wave_runtime(
+    wave: Wave, *, mode: RenderMode = DEFAULT_RENDER_MODE
+) -> tuple[tuple[str, str], ...]:
+    """Build the ``runtime`` tab rows for a wave: budget-vs-consumed signals.
+
+    Surfaces three honest progress signals. ``size`` is the plain effort
+    bucket label (e.g. ``M``) when set. ``tokens`` is a budget-vs-consumed
+    bar (:attr:`~eawf.kernel.state.models.Wave.tokens_consumed` against
+    :attr:`~eawf.kernel.state.models.Wave.token_budget`), and ``eu`` is the
+    runtime effort-unit value derived from the wave's
+    :class:`~eawf.kernel.state.models.SessionAttempt` spans.
+
+    Both data rows stay honest about absence: a wave with no token budget
+    (``token_budget is None``) surfaces the shared
+    :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel for the
+    token row rather than a fabricated ``0%`` bar, and a wave with no ended
+    sessions surfaces the sentinel for the EU row. That keeps the empty state
+    (no budget, no sessions) distinguishable from a measured zero -- a real
+    bar / value paints only when a budget or a completed session attempt
+    exists.
+
+    Args:
+        wave: The resolved wave.
+        mode: The active render mode (``"unicode"`` / ``"ascii"``) the token
+            bar glyph run honours.
 
     Returns:
         Ordered runtime ``(label, value)`` rows.
@@ -389,8 +456,14 @@ def _wave_runtime(wave: Wave) -> tuple[tuple[str, str], ...]:
     rows: list[tuple[str, str]] = []
     if wave.effort_bucket is not None:
         rows.append(("size", wave.effort_bucket.value))
-    rows.append(("eu", EMPTY_STATE))
-    rows.append(("tokens", EMPTY_STATE))
+    runtime_eu = _wave_runtime_eu(wave)
+    rows.append(("eu", EMPTY_STATE if runtime_eu is None else f"{runtime_eu:.2f} EU"))
+    # ``token_budget`` is ``None`` (no budget set) -> the helper's non-positive
+    # total guard surfaces the honest-absence sentinel; a real budget paints a
+    # consumed-vs-budget bar that the colour band marks over-budget.
+    token_total = float(wave.token_budget) if wave.token_budget is not None else 0.0
+    token_bar = render_eu_bar_plain(float(wave.tokens_consumed), token_total, mode=mode)
+    rows.append(("tokens", token_bar))
     return tuple(rows)
 
 
