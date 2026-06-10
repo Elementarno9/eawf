@@ -61,9 +61,14 @@ from eawf.surfaces.render.narrative import (
     build_narrative,
     render_narrative_bundle,
 )
+from eawf.surfaces.tui.screens.overlays.detail_attempts import attempt_rollup_rows
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     wave_cost_rollup_for_wave,
     wave_cost_rows,
+)
+from eawf.surfaces.tui.screens.overlays.detail_incident import (
+    incident_timeline_rows,
+    load_incident_timeline,
 )
 from eawf.surfaces.tui.screens.overlays.reference import tooltip_for_text
 from eawf.surfaces.tui.widgets import sigils
@@ -77,7 +82,6 @@ from eawf.surfaces.tui.widgets.eu_bar import (
 from eawf.surfaces.tui.widgets.sigils import Sigil
 from eawf.workflow.agent_report.rollup import (
     AgentReportRow,
-    PerWaveAttemptRollup,
     error_kind_by_attempt_from_store,
     iter_agent_reports,
     per_wave_attempt_rollup,
@@ -739,7 +743,7 @@ def _wave_card(
         error_kind_by_attempt=error_kind_by_attempt,
     )
     evidence: list[tuple[str, str]] = list(_auditor_verdict_rows(report_rows))
-    evidence.extend(_attempt_rollup_rows(attempt_rollup))
+    evidence.extend(attempt_rollup_rows(attempt_rollup))
     # Provenance + dispatch history: the claimed-at work-start fact (em-dash
     # sentinel when unclaimed, never a fabricated start time) plus one row
     # per dispatch annotation, appending any runtime-switch reason so the
@@ -763,77 +767,6 @@ def _wave_card(
         cost=cost,
         detail_markdown=_wave_narrative_preview(state, wave, reports=report_rows),
     )
-
-
-def _attempt_rollup_rows(rollup: PerWaveAttemptRollup) -> tuple[tuple[str, str], ...]:
-    """Build detail-tab rows for a wave's per-attempt timeline.
-
-    Args:
-        rollup: The per-wave attempt rollup.
-
-    Returns:
-        Rows appended to the wave ``d`` tab.
-    """
-    return (
-        ("attempts", _attempt_summary(rollup)),
-        ("error kinds", _error_kind_breakdown(rollup)),
-        ("attempt timeline", _attempt_timeline_table(rollup)),
-    )
-
-
-def _attempt_summary(rollup: PerWaveAttemptRollup) -> str:
-    """Return compact attempt/retry/blocked/token summary text."""
-    return (
-        f"{_count_label(rollup.attempt_count, 'attempt')}, "
-        f"{_count_label(rollup.retry_count, 'retry', plural='retries')}, "
-        f"{rollup.blocked_count} blocked, "
-        f"{_count_label(rollup.token_total, 'token')}"
-    )
-
-
-def _count_label(count: int, singular: str, *, plural: str | None = None) -> str:
-    """Return a count plus singular/plural noun."""
-    noun = singular if count == 1 else (plural or f"{singular}s")
-    return f"{count} {noun}"
-
-
-def _error_kind_breakdown(rollup: PerWaveAttemptRollup) -> str:
-    """Return error-kind breakdown text for the rollup."""
-    if not rollup.error_kind_breakdown:
-        return "none"
-    return ", ".join(f"{kind}={count}" for kind, count in rollup.error_kind_breakdown.items())
-
-
-def _attempt_timeline_table(rollup: PerWaveAttemptRollup) -> str:
-    """Render the 8-column per-attempt timeline table."""
-    if not rollup.attempts:
-        return "no attempts recorded"
-    columns = ("att", "runtime", "started", "ended", "exit", "retry", "blocked", "tokens")
-    raw_rows = [
-        (
-            str(row.attempt),
-            row.runtime,
-            row.started,
-            row.ended,
-            row.exit_status,
-            row.retry,
-            row.blocked,
-            row.tokens,
-        )
-        for row in rollup.attempts
-    ]
-    widths = [len(value) for value in columns]
-    for raw_row in raw_rows:
-        widths = [max(width, len(value)) for width, value in zip(widths, raw_row, strict=True)]
-    rendered = [_format_attempt_table_row(columns, widths)]
-    rendered.extend(_format_attempt_table_row(row, widths) for row in raw_rows)
-    return "\n" + "\n".join(f"  {line}" for line in rendered)
-
-
-def _format_attempt_table_row(row: tuple[str, ...], widths: list[int]) -> str:
-    """Format one attempt-table row with padded columns."""
-    cells = [value.ljust(width) for value, width in zip(row, widths, strict=True)]
-    return "  ".join(cells)
 
 
 def _wave_narrative_preview(
@@ -1002,6 +935,61 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     return DetailCard(title=f"backlog {item.id}", rows=tuple(rows))
 
 
+def _incident_card(
+    state: State,
+    incident_id: str,
+    *,
+    state_path: Path | None = None,
+) -> DetailCard | None:
+    """Build a :class:`DetailCard` for the incident *incident_id*, or ``None``.
+
+    The overview group carries the incident metadata (severity / status /
+    cause + the lifecycle open + close stamps). The chronological timeline of
+    recorded events lives in the ``incident.jsonl`` store rather than on the
+    state record, so the ``evidence`` group is populated from the store-loaded
+    timeline when a ``state_path`` is given. An incident whose store has no
+    recorded event renders the honest-empty line, never a fabricated entry.
+
+    Args:
+        state: The bound state to resolve the incident from.
+        incident_id: The selected incident id.
+        state_path: When set, the chronological timeline is loaded from the
+            local ``incident.jsonl`` store; ``None`` leaves the timeline group
+            empty so the modal builds no evidence tab.
+
+    Returns:
+        The card, or ``None`` when the id is not a known incident.
+    """
+    if state.incidents is None:
+        return None
+    incident = state.incidents.get(incident_id)
+    if incident is None:
+        return None
+    rows: list[tuple[str, str]] = [
+        ("id", incident.id),
+        ("scope", incident.scope_id),
+        ("title", incident.title),
+        ("status", incident.status.value),
+        ("severity", incident.severity.value),
+        ("cause", incident.cause.value),
+    ]
+    if incident.root_cause is not None:
+        rows.append(("root cause", incident.root_cause))
+    rows.append(("opened", _fmt_dt(incident.opened_at)))
+    rows.append(("closed", _fmt_dt(incident.closed_at)))
+    # The chronological event timeline lives in the JSONL store, not the state
+    # record; load it and fold it into the evidence group. With no
+    # ``state_path`` the group stays empty (the modal builds no evidence tab).
+    evidence: tuple[tuple[str, str], ...] = ()
+    if state_path is not None:
+        evidence = incident_timeline_rows(load_incident_timeline(state_path, incident_id))
+    return DetailCard(
+        title=f"incident {incident.id}",
+        rows=tuple(rows),
+        evidence=evidence,
+    )
+
+
 def resolve_detail(
     state: State | None,
     selection_id: str,
@@ -1013,7 +1001,7 @@ def resolve_detail(
 ) -> DetailCard:
     """Resolve *selection_id* to a :class:`DetailCard` from *state*.
 
-    Tries the wave table, then iters, then phases, then the backlog. An
+    Tries the wave table, then iters, phases, the backlog, then incidents. An
     unresolvable id (or a ``None`` state) yields a fallback card naming the
     id so the operator sees *something* rather than a crash — the drill-in
     seam must stay total even when the state and the widget row briefly
@@ -1029,7 +1017,9 @@ def resolve_detail(
         cost_rollup: Pre-joined per-attempt cost rollup; ignored for a wave
             id when a ``state_path`` is given (the store join wins).
         state_path: When set and the id is a wave, the store-backed report /
-            error / cost rows are loaded from the local telemetry DB.
+            error / cost rows are loaded from the local telemetry DB; when the
+            id is an incident, its chronological timeline is loaded from the
+            local ``incident.jsonl`` store.
 
     Returns:
         The resolved detail card, or a fallback card for an unknown id.
@@ -1054,6 +1044,7 @@ def resolve_detail(
             or _iter_card(state, selection_id)
             or _phase_card(state, selection_id)
             or _backlog_card(state, selection_id)
+            or _incident_card(state, selection_id, state_path=state_path)
         )
         if card is not None:
             return card
@@ -1211,9 +1202,19 @@ class DetailModal(ModalScreen[None]):
         """
         return self._entity_id
 
+    #: Title prefixes whose cards re-resolve store-backed rows on mount: a
+    #: wave reloads its report / error / cost rows, an incident its timeline.
+    _ENRICH_PREFIXES: ClassVar[tuple[str, ...]] = ("wave ", "incident ")
+
     def _enrich_from_app(self) -> None:
-        """Refresh wave cards with store-backed report/error rows when mounted."""
-        if self._state is None or not self._card.title.startswith("wave "):
+        """Refresh store-backed wave / incident cards when the modal mounts."""
+        if self._state is None:
+            return
+        prefix = next(
+            (p for p in self._ENRICH_PREFIXES if self._card.title.startswith(p)),
+            None,
+        )
+        if prefix is None:
             return
         try:
             state_path = getattr(self.app, "_state_path", None)
@@ -1221,10 +1222,10 @@ class DetailModal(ModalScreen[None]):
             return
         if not isinstance(state_path, Path):
             return
-        wave_id = self._card.title.removeprefix("wave ").strip()
-        if not wave_id:
+        entity_id = self._card.title.removeprefix(prefix).strip()
+        if not entity_id:
             return
-        self._card = resolve_detail(self._state, wave_id, state_path=state_path)
+        self._card = resolve_detail(self._state, entity_id, state_path=state_path)
         self._tab_ids = self._present_tabs(self._card)
 
     @staticmethod

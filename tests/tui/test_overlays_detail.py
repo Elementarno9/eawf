@@ -30,8 +30,12 @@ from eawf.kernel.state.enums import (
     Confidence,
     DispatchNote,
     EffortBucket,
+    IncidentCause,
+    IncidentSeverity,
+    IncidentStatus,
+    StoreKind,
 )
-from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State
+from eawf.kernel.state.models import DispatchAnnotation, Incident, SessionAttempt, State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportHeader,
@@ -40,6 +44,7 @@ from eawf.kernel.store.kinds.agent_report import (
     ExecutorReportBody,
     store_kind_for_role,
 )
+from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
     _TAB_LABEL_TEXT,
@@ -229,6 +234,133 @@ def test_resolve_detail_wave_includes_success_criteria_rows() -> None:
     criterion_rows = [value for label, value in card.criteria if label == "criterion"]
     assert criterion_rows == [c.text for c in wave.success_criteria]
     assert "criterion" not in {label for label, _ in card.rows}
+
+
+# --------------------------------------------------------------------------
+# resolve_detail — incident card + chronological timeline (P30-I07-W16)
+# --------------------------------------------------------------------------
+
+_INC_NOW = datetime(2026, 5, 8, 12, 0, tzinfo=UTC)
+
+
+def _incident_state(*, status: IncidentStatus = IncidentStatus.OPEN) -> State:
+    """Return a minimal state carrying a single incident ``INC-001``."""
+    base = _load(_PHASE_ITER_WAVE)
+    incident = Incident(
+        id="INC-001",
+        scope_id="QR",
+        severity=IncidentSeverity.HIGH,
+        title="Validate command exits 0 on invariant violations",
+        status=status,
+        opened_at=_INC_NOW,
+        closed_at=None,
+        root_cause=None,
+        cause=IncidentCause.UNKNOWN,
+        corrective_action_ids=[],
+        report_artifact_id=None,
+    )
+    return base.model_copy(update={"incidents": {"INC-001": incident}})
+
+
+def _write_incident_timeline(
+    state_path: Path,
+    *,
+    record_id: str,
+    timeline: list[tuple[datetime, str]],
+) -> None:
+    """Append one INCIDENT store record carrying *timeline* entries."""
+    envelope = Envelope(
+        id=record_id,
+        kind=StoreKind.INCIDENT,
+        scope_id="QR",
+        created_at=_INC_NOW,
+        updated_at=None,
+        summary=f"incident record {record_id}",
+        payload={
+            "severity": "high",
+            "timeline": [{"at": at.isoformat(), "entry": entry} for at, entry in timeline],
+            "cause": "unknown",
+            "corrective_action_ids": [],
+        },
+    )
+    path = store_path(state_path, StoreKind.INCIDENT)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(envelope.model_dump_json() + "\n")
+
+
+def test_resolve_detail_incident_overview_rows() -> None:
+    state = _incident_state()
+    card = resolve_detail(state, "INC-001")
+    assert card.title == "incident INC-001"
+    by_label = dict(card.rows)
+    assert by_label["id"] == "INC-001"
+    assert by_label["status"] == "open"
+    assert by_label["severity"] == "high"
+    assert by_label["cause"] == "unknown"
+
+
+def test_resolve_detail_incident_unknown_id_is_fallback() -> None:
+    state = _incident_state()
+    card = resolve_detail(state, "INC-DOES-NOT-EXIST")
+    assert card.title == "detail INC-DOES-NOT-EXIST"
+
+
+def test_resolve_detail_incident_timeline_is_chronological(tmp_path: Path) -> None:
+    state = _incident_state(status=IncidentStatus.RESOLVED)
+    state_path = tmp_path / "state.json"
+    closed = datetime(2026, 5, 9, 9, 0, tzinfo=UTC)
+    # Write close BEFORE open so the resolve must sort by timestamp.
+    _write_incident_timeline(
+        state_path,
+        record_id="INC-001-CLOSE",
+        timeline=[(closed, "closed: fixed the guard")],
+    )
+    _write_incident_timeline(
+        state_path,
+        record_id="INC-001",
+        timeline=[(_INC_NOW, "opened: validate exits 0")],
+    )
+    card = resolve_detail(state, "INC-001", state_path=state_path)
+    event_values = [value for label, value in card.evidence if label == "event"]
+    assert len(event_values) == 2
+    assert "opened: validate exits 0" in event_values[0]
+    assert "closed: fixed the guard" in event_values[1]
+
+
+def test_resolve_detail_incident_no_events_is_honest_empty(tmp_path: Path) -> None:
+    state = _incident_state()
+    state_path = tmp_path / "state.json"
+    # No incident store written at all: honest-empty line, not a fabricated
+    # entry, and never a crash.
+    card = resolve_detail(state, "INC-001", state_path=state_path)
+    assert card.evidence == (("timeline", "no timeline events recorded"),)
+    assert not any(label == "event" for label, _ in card.evidence)
+
+
+def test_resolve_detail_incident_no_state_path_leaves_evidence_empty() -> None:
+    state = _incident_state()
+    # Without a state_path the timeline cannot load; the evidence group stays
+    # empty so the modal builds no evidence tab.
+    card = resolve_detail(state, "INC-001")
+    assert card.evidence == ()
+
+
+def test_detail_modal_incident_renders_timeline() -> None:
+    async def body() -> None:
+        state = _incident_state(status=IncidentStatus.RESOLVED)
+        card = resolve_detail(state, "INC-001")
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_screen(DetailModal(card, state=state, entity_id="INC-001"))
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, DetailModal)
+            rendered = capture_screen_text(app)
+            assert "incident INC-001" in rendered
+
+    asyncio.run(body())
 
 
 # --------------------------------------------------------------------------
