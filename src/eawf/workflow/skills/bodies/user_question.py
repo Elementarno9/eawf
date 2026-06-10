@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from eawf.kernel.state.enums import Urgency
+
 
 class UserQuestionOption(BaseModel):
     """One option in a 2-4-option :class:`UserQuestion` payload.
@@ -44,12 +46,24 @@ class UserQuestion(BaseModel):
         options: 2-4 :class:`UserQuestionOption` entries the user can
             choose between. Validation rejects fewer than 2 or more
             than 4 options.
+        urgency: Where the question sits on the shared closed
+            :class:`~eawf.kernel.state.enums.Urgency` ladder -- how soon the
+            operator needs to act on it. The balanced-autonomy interrupt
+            surfaces only a genuine fork above the routine prompts, so a
+            :attr:`~eawf.kernel.state.enums.Urgency.URGENT` (blocking) question
+            ranks above a :attr:`~eawf.kernel.state.enums.Urgency.NORMAL`
+            (routine) one in the attention feed. Defaults to
+            :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` so an
+            ordinarily-surfaced prompt -- and every legacy question that
+            predates the field -- ranks as routine unless the author escalates
+            it.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     question: str = Field(min_length=1)
     options: list[UserQuestionOption]
+    urgency: Urgency = Urgency.NORMAL
 
     @field_validator("options")
     @classmethod

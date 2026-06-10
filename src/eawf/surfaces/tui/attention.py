@@ -258,6 +258,34 @@ def _urgency_rank(urgency: Urgency) -> int:
     return -list(Urgency).index(urgency)
 
 
+def _pause_urgency(pause: OpenPause) -> Urgency:
+    """Return the urgency a pause row ranks on, honoring an escalated fork.
+
+    A needs_user pause carries urgency on two levels: the store-side
+    pause-row urgency (:attr:`~eawf.workflow.skills.needs_user.OpenPause.urgency`,
+    set when the pause was recorded) and the question's own
+    :attr:`~eawf.workflow.skills.bodies.user_question.UserQuestion.urgency` that
+    the skill stamped when it raised the fork. The balanced-autonomy interrupt
+    surfaces a genuine fork above the routine prompts, so a question the skill
+    *escalated above the routine* :attr:`~eawf.kernel.state.enums.Urgency.NORMAL`
+    default lifts the row to that escalated rung -- a blocking
+    (:attr:`~eawf.kernel.state.enums.Urgency.URGENT`) question ranks above the
+    routine ones. A question left at the routine default never lowers a pause
+    that was deliberately recorded at a different store-row urgency, so the
+    pause-row urgency is the floor.
+
+    Args:
+        pause: The open pause to rank.
+
+    Returns:
+        The pause-row urgency, lifted to the question's urgency when the skill
+        escalated the question above the routine ``NORMAL`` default.
+    """
+    if _urgency_rank(pause.question.urgency) < _urgency_rank(Urgency.NORMAL):
+        return max(pause.urgency, pause.question.urgency, key=lambda u: -_urgency_rank(u))
+    return pause.urgency
+
+
 def _pause_items(pauses: Iterable[OpenPause]) -> list[AttentionItem]:
     """Build needs_user attention rows from open pauses.
 
@@ -267,14 +295,16 @@ def _pause_items(pauses: Iterable[OpenPause]) -> list[AttentionItem]:
     Returns:
         One actionable :class:`AttentionItem` per pause, carrying the
         ``pause_urn`` + question so the band can re-open the modal, plus the
-        pause-raise ``occurred_at`` for the row's time-ago.
+        pause-raise ``occurred_at`` for the row's time-ago. The row ranks on
+        the more immediate of the pause-row and question urgency
+        (:func:`_pause_urgency`).
     """
     items: list[AttentionItem] = []
     for pause in pauses:
         label = pause.session.rsplit(":", 1)[-1] if pause.session else pause.scope_id
         items.append(
             AttentionItem(
-                urgency=pause.urgency,
+                urgency=_pause_urgency(pause),
                 kind=AttentionKind.NEEDS_USER,
                 title=pause.question.question,
                 detail=label,

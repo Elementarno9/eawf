@@ -412,7 +412,9 @@ def test_user_question_round_trip_2_options() -> None:
         ],
     }
     q = UserQuestion.model_validate(payload)
-    assert q.model_dump(exclude_none=True) == payload
+    # The additive `urgency` field defaults to NORMAL (routine), so a payload
+    # that omits it round-trips with that default present in the dump.
+    assert q.model_dump(exclude_none=True) == {**payload, "urgency": "normal"}
 
 
 # --- UserQuestionOption.preview (P29-I02-W13) ------------------------------
