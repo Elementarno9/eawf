@@ -69,6 +69,7 @@ from eawf.surfaces.tui.snapshot import (
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from tests.conftest import make_intent
 
 _SIZE = (120, 40)
 _NOW = datetime(2026, 6, 9, 12, 0, tzinfo=UTC)
@@ -156,6 +157,7 @@ def _state_with_wave(
         title=title,
         file_scopes=["x"],
         effort_bucket=effort_bucket,
+        intent=make_intent(),
     )
     wave = state.waves[wave_id]
     wave.status = WaveStatus.CLOSED

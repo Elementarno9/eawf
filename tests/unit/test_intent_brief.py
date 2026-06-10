@@ -47,6 +47,7 @@ from eawf.surfaces.tui.screens.overlays.detail import resolve_detail
 from eawf.workflow.lifecycle.iter_ import edit_iter_plan, open_iter, plan_iter
 from eawf.workflow.lifecycle.phase import open_phase, plan_phase
 from eawf.workflow.lifecycle.wave import edit_wave_plan, plan_wave
+from tests.conftest import make_intent
 
 
 def _minimal_brief(**overrides: object) -> IntentBrief:
@@ -417,8 +418,10 @@ def test_edit_wave_plan_accepts_intent() -> None:
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
+        intent=_minimal_brief(problem="planned problem"),
     )
-    assert state.waves["P01-I01-W01"].intent is None
+    assert state.waves["P01-I01-W01"].intent is not None
+    assert state.waves["P01-I01-W01"].intent.problem == "planned problem"
     brief = _minimal_brief(problem="patched problem")
     wave = edit_wave_plan(state, wave_id="P01-I01-W01", intent=brief)
     assert wave.intent is not None
@@ -515,6 +518,7 @@ def test_apply_roadmap_revise_retitle_with_intent() -> None:
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
+        intent=make_intent(),
     )
     mutation = Mutation(
         kind=MutationKind.ROADMAP_REVISE,
@@ -554,6 +558,85 @@ def test_apply_roadmap_revise_rejects_bogus_intent() -> None:
     )
     with pytest.raises(ValidationError):
         _apply_roadmap_revise(state, mutation)
+
+
+def _add_wave_params(intent: object | None) -> dict[str, object]:
+    """Build ``add_wave`` params, optionally including an ``intent`` key.
+
+    When *intent* is the sentinel :data:`_OMIT`, the ``intent`` key is left
+    out entirely (the missing-param case); any other value is set verbatim
+    (including an explicit ``None``).
+    """
+    params: dict[str, object] = {
+        "op": "add_wave",
+        "wave_id": "P01-I01-W01",
+        "iter_id": "P01-I01",
+        "title": "w",
+        "file_scopes": ["src/a.py"],
+        "effort_bucket": "S",
+    }
+    if intent is not _OMIT:
+        params["intent"] = intent
+    return params
+
+
+_OMIT = object()
+
+
+def test_apply_roadmap_revise_add_wave_missing_intent_rejected() -> None:
+    from eawf.kernel.state.mutations import Mutation, MutationKind
+    from eawf.runtime.daemon.methods.state import _apply_roadmap_revise
+    from eawf.workflow.lifecycle.transitions import LifecycleError
+
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P01",
+        mutation_id="m-4",
+        params=_add_wave_params(_OMIT),
+    )
+    with pytest.raises(LifecycleError, match="requires an intent param"):
+        _apply_roadmap_revise(state, mutation)
+    assert "P01-I01-W01" not in state.waves
+
+
+def test_apply_roadmap_revise_add_wave_explicit_none_intent_rejected() -> None:
+    from eawf.kernel.state.mutations import Mutation, MutationKind
+    from eawf.runtime.daemon.methods.state import _apply_roadmap_revise
+    from eawf.workflow.lifecycle.transitions import LifecycleError
+
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P01",
+        mutation_id="m-5",
+        params=_add_wave_params(None),
+    )
+    with pytest.raises(LifecycleError, match="requires an intent param"):
+        _apply_roadmap_revise(state, mutation)
+    assert "P01-I01-W01" not in state.waves
+
+
+def test_apply_roadmap_revise_add_wave_populated_intent_passes() -> None:
+    from eawf.kernel.state.mutations import Mutation, MutationKind
+    from eawf.runtime.daemon.methods.state import _apply_roadmap_revise
+
+    state = _empty_state()
+    open_phase(state, phase_id="P01", title="x")
+    plan_iter(state, iter_id="P01-I01", phase_id="P01", title="y")
+    mutation = Mutation(
+        kind=MutationKind.ROADMAP_REVISE,
+        scope_id="P01",
+        mutation_id="m-6",
+        params=_add_wave_params(dict(_DAEMON_INTENT_PAYLOAD)),
+    )
+    _apply_roadmap_revise(state, mutation)
+    assert state.waves["P01-I01-W01"].intent is not None
+    assert state.waves["P01-I01-W01"].intent.problem == "daemon-side problem"
 
 
 def test_apply_phase_open_with_intent() -> None:
@@ -649,7 +732,12 @@ def test_detail_overlay_wave_card_omits_intent_when_absent() -> None:
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
+        intent=make_intent(),
     )
+    # A legacy on-disk wave can still carry ``intent=None`` (the model keeps
+    # the field optional for replay safety); clear it to drive the renderer's
+    # absent-intent branch even though the authoring path now requires one.
+    state.waves["P01-I01-W01"].intent = None
     card = resolve_detail(state, "P01-I01-W01")
     labels = [label for label, _ in card.rows]
     assert "problem" not in labels
@@ -874,6 +962,7 @@ def test_edit_wave_plan_logs_intent_problem(
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
+        intent=make_intent(),
     )
     brief = _minimal_brief(problem="structured intent missing")
     with caplog.at_level("INFO", logger="eawf.workflow.lifecycle.wave"):
@@ -897,6 +986,7 @@ def test_edit_wave_plan_logs_intent_problem_none_without_intent(
         title="w",
         file_scopes=["src/a.py"],
         effort_bucket=EffortBucket.S,
+        intent=make_intent(),
     )
     with caplog.at_level("INFO", logger="eawf.workflow.lifecycle.wave"):
         edit_wave_plan(state, wave_id="P01-I01-W01", title="renamed")

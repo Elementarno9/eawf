@@ -319,6 +319,7 @@ def wave_plan_cmd(
 ) -> None:
     """Plan a new pending wave under an open iter."""
     from eawf.kernel.spec.common import grandfather_criterion
+    from eawf.kernel.spec.intent import IntentBrief
     from eawf.workflow.lifecycle.transitions import plan_wave
 
     flags: GlobalFlags = ctx.obj
@@ -345,6 +346,14 @@ def wave_plan_cmd(
     file_list = [f.strip() for f in files.split(",") if f.strip()]
     deps_list = [d.strip() for d in (deps or "").split(",") if d.strip()]
     criteria_list = [c.strip() for c in (success_criteria or "").split(",") if c.strip()]
+    # An authored wave carries an IntentBrief. This low-level ``wave plan``
+    # command takes no ``--intent-*`` flags (the operator authoring surface
+    # is ``roadmap revise --add-wave``), so it synthesises a minimal brief
+    # from the wave title so the authoring guard is satisfied.
+    wave_intent = IntentBrief(
+        problem=f"plan wave {wave_id}",
+        desired_outcome=title,
+    )
     _run_mutation(
         ctx,
         command="wave plan",
@@ -387,6 +396,7 @@ def wave_plan_cmd(
                 agent_role=agent_role,
                 effort_bucket=effort_bucket,
                 description=description,
+                intent=wave_intent,
             )
         ),
         mutation_kind=MutationKind.ROADMAP_REVISE,
@@ -401,6 +411,7 @@ def wave_plan_cmd(
             "agent_role": agent_role.value if agent_role else None,
             "effort_bucket": effort_bucket.value if effort_bucket else None,
             "description": description,
+            "intent": wave_intent.model_dump(mode="json"),
         },
     )
 

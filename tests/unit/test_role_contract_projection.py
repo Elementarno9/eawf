@@ -30,6 +30,7 @@ from eawf.workflow.dispatch import (
     render_wave_prompt,
 )
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -75,6 +76,7 @@ def _seed_wave_with_role(state: State, *, role: AgentSessionRole) -> str:
         file_scopes=["src/foo/"],
         agent_role=role,
         effort_bucket=EffortBucket.M,
+        intent=make_intent(),
     )
     return "P01-I01-W01"
 
@@ -222,6 +224,7 @@ def test_build_subagent_spec_role_contract_none_when_no_role() -> None:
         title="Roleless wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     spec = build_subagent_spec(state, "P01-I01-W01")
     assert spec.role_contract is None
@@ -307,6 +310,7 @@ def test_render_wave_prompt_no_role_omits_role_contract_section() -> None:
         title="Roleless wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     prompt = render_wave_prompt(state, "P01-I01-W01")
     assert "## Role contract" not in prompt

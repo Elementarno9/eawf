@@ -24,6 +24,7 @@ from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.iter_ import open_iter
 from eawf.workflow.lifecycle.phase import open_phase
 from eawf.workflow.lifecycle.wave import claim_wave, plan_wave
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -78,6 +79,7 @@ def test_claim_wave_rejects_when_effort_bucket_none() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket=EffortBucket.M,
+        intent=make_intent(),
     )
     state.waves["P01-I01-W01"].effort_bucket = None
     with pytest.raises(LifecycleError, match="effort_bucket"):
@@ -101,6 +103,7 @@ def test_claim_wave_succeeds_when_effort_bucket_set() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket=EffortBucket.XS,
+        intent=make_intent(),
     )
     w = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     assert w.status == WaveStatus.CLAIMED
@@ -124,6 +127,7 @@ def test_claim_wave_stamps_claimed_at_on_first_claim() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket=EffortBucket.M,
+        intent=make_intent(),
     )
     assert state.waves["P01-I01-W01"].claimed_at is None
     before = datetime.now(UTC)
@@ -143,6 +147,7 @@ def test_claim_wave_preserves_claimed_at_on_idempotent_reclaim() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket=EffortBucket.M,
+        intent=make_intent(),
     )
     first = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     original = first.claimed_at

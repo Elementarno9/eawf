@@ -179,12 +179,18 @@ iters:
             quality_dimension: functional_suitability
             measurable_signal: grandfathered legacy criterion
         effort_bucket: S
+        intent:
+          problem: second wave needs staging
+          desired_outcome: second wave is planned
       - id: P22-I01-W01
         title: "First wave"
         file_scopes:
           - src/a
         agent_role: executor
         effort_bucket: XS
+        intent:
+          problem: first wave needs staging
+          desired_outcome: first wave is planned
 """.lstrip(),
         encoding="utf-8",
     )
@@ -274,6 +280,10 @@ def test_roadmap_revise_add_wave(workspace: Path) -> None:
             "executor",
             "--effort-bucket",
             "S",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -302,6 +312,10 @@ def test_roadmap_revise_set_deps(workspace: Path) -> None:
                 "src/",
                 "--effort-bucket",
                 "M",
+                "--intent-problem",
+                "auto intent problem",
+                "--intent-desired-outcome",
+                "auto intent outcome",
             ],
         )
     res = runner.invoke(
@@ -329,6 +343,10 @@ def test_roadmap_revise_remove_wave(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["roadmap", "revise", "P21", "--remove-wave", "W01"])
@@ -384,6 +402,10 @@ def _propose_with_wave(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
 
@@ -499,6 +521,10 @@ def test_roadmap_revise_active_phase_add_wave_allowed(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -559,6 +585,10 @@ def test_roadmap_apply_requires_wave(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["roadmap", "apply", "P21"])
@@ -582,6 +612,10 @@ def test_roadmap_apply_renders_wave_dag_and_gates_with_needs_user(workspace: Pat
             "src/a",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     runner.invoke(
@@ -600,6 +634,10 @@ def test_roadmap_apply_renders_wave_dag_and_gates_with_needs_user(workspace: Pat
             "W01",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["--json", "roadmap", "apply", "P21"])
@@ -901,6 +939,10 @@ def test_roadmap_drop_cascades_pending_waves_to_abandoned(workspace: Path) -> No
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["roadmap", "drop", "P21"])
@@ -962,6 +1004,10 @@ def test_roadmap_show_rich_renders_phases_iters_waves(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["roadmap", "show"])
@@ -994,6 +1040,10 @@ def test_roadmap_show_plain_fallback(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["--plain", "roadmap", "show"])
@@ -1036,6 +1086,10 @@ def test_roadmap_show_active_phase_not_stale(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     # Backdate + flip to ACTIVE so the freshness check would trip if it
@@ -1070,6 +1124,10 @@ def test_roadmap_show_dormant_iter_marked(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     state_path = workspace / ".ea" / "state.json"
@@ -1154,6 +1212,10 @@ def test_phase_activate_planned_phase(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["phase", "activate", "P21"])
@@ -1189,6 +1251,10 @@ def test_phase_activate_dirty_worktree_rejected(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     # Leave an untracked file in the worktree so the porcelain check trips.
@@ -1223,6 +1289,10 @@ def test_phase_activate_behind_upstream_rejected(workspace: Path, tmp_path: Path
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     # Commit roadmap mutations so the dirty gate does not mask the currency gate.
@@ -1257,6 +1327,10 @@ def test_phase_activate_allow_stale_bypasses_currency_gate(workspace: Path, tmp_
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     _commit_state_changes(workspace, msg="seed roadmap")
@@ -1285,6 +1359,10 @@ def test_phase_activate_local_only_branch_skips_currency_check(workspace: Path) 
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     _commit_state_changes(workspace, msg="seed roadmap")
@@ -1332,6 +1410,10 @@ def test_roadmap_revise_emits_event(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     events = _read_events(workspace)
@@ -1363,6 +1445,10 @@ def test_wave_show_commit_returns_sha_when_present(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(app, ["wave", "show", "P21-I01-W01", "--commit"])
@@ -1391,6 +1477,10 @@ def test_wave_show_dispatch_prompt_returns_prompt(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
 
@@ -1420,6 +1510,10 @@ def test_wave_claim_out_of_order_flag_overrides_monotonic_gate(workspace: Path) 
                 "src/",
                 "--effort-bucket",
                 "M",
+                "--intent-problem",
+                "auto intent problem",
+                "--intent-desired-outcome",
+                "auto intent outcome",
             ],
         )
     # Default claim of W02 is rejected because W01 is still PENDING + ready.
@@ -1450,6 +1544,10 @@ def test_iter_activate_planned_iter(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     runner.invoke(app, ["phase", "activate", "P21"])
@@ -1546,6 +1644,10 @@ def test_roadmap_revise_add_wave_persists_description(workspace: Path) -> None:
             "wave-level narrative for the add",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -1570,6 +1672,10 @@ def test_roadmap_revise_retitle_wave_with_description(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     res = runner.invoke(
@@ -1723,6 +1829,10 @@ def test_roadmap_revise_add_wave_description_over_cap_rejected(workspace: Path) 
             "z" * 501,
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code != 0
@@ -1759,6 +1869,10 @@ def test_roadmap_revise_add_wave_iter_targets_named_iter(workspace: Path) -> Non
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -1788,6 +1902,10 @@ def test_roadmap_revise_add_wave_bare_iter_suffix_accepted(workspace: Path) -> N
             "src/",
             "--effort-bucket",
             "S",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -1812,6 +1930,10 @@ def test_roadmap_revise_omitted_iter_keeps_i01_default(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code == 0, res.output
@@ -1839,6 +1961,10 @@ def test_roadmap_revise_unknown_iter_rejected(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code != 0
@@ -1867,6 +1993,10 @@ def test_roadmap_revise_iter_under_other_phase_rejected(workspace: Path) -> None
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code != 0
@@ -1893,6 +2023,10 @@ def test_roadmap_revise_invalid_iter_id_rejected(workspace: Path) -> None:
             "src/",
             "--effort-bucket",
             "M",
+            "--intent-problem",
+            "auto intent problem",
+            "--intent-desired-outcome",
+            "auto intent outcome",
         ],
     )
     assert res.exit_code != 0

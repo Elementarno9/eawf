@@ -52,6 +52,7 @@ from eawf.surfaces.cli.exit_codes import STATE_CONFLICT
 from eawf.workflow.dispatch import render_wave_prompt
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests._criteria_helpers import legacy_criteria
+from tests.conftest import make_intent
 
 runner = CliRunner()
 
@@ -336,6 +337,7 @@ def _build_dispatch_state() -> State:
             success_criteria=legacy_criteria(*crit),
             agent_role=role,
             effort_bucket=bucket,
+            intent=make_intent(),
         )
     return state
 

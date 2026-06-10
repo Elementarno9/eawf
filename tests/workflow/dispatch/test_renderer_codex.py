@@ -19,6 +19,7 @@ from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.workflow.dispatch import render_dispatch_envelope, render_wave_prompt
 from eawf.workflow.dispatch.renderer import DISPATCH_RUNTIMES, DispatchEnvelope
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -63,6 +64,7 @@ def _seed_single_wave(state: State, wave_id: str = "P01-I01-W01") -> None:
         title="Solo wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
 
 

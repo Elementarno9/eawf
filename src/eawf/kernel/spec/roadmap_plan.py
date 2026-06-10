@@ -9,6 +9,7 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from eawf.kernel.spec.common import CriterionSpec
+from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_wave_id
 
@@ -30,6 +31,7 @@ class RoadmapPlanWave(_StrictModel):
     success_criteria: list[CriterionSpec] = Field(default_factory=list)
     agent_role: AgentSessionRole | None = None
     effort_bucket: EffortBucket
+    intent: IntentBrief | None = None
 
     @field_validator("id")
     @classmethod

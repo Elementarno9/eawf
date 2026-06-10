@@ -46,6 +46,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from tests.conftest import make_intent
 
 _T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -94,6 +95,7 @@ def _seed_chain(state: State) -> None:
         title="First wave",
         file_scopes=["src/foo/", "tests/unit/test_foo.py"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -103,6 +105,7 @@ def _seed_chain(state: State) -> None:
         file_scopes=["src/bar/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
 
 
@@ -224,6 +227,7 @@ def test_render_minimal_wave_prompt() -> None:
         title="Solo wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     out = render_wave_prompt(state, "P01-I01-W01")
     # Required section headers.

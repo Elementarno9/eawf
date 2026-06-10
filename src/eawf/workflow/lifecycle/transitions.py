@@ -130,6 +130,7 @@ def plan_roadmap(state: State, *, plan: RoadmapPlan) -> PlannedRoadmap:
             agent_role=wave_plan.agent_role,
             effort_bucket=wave_plan.effort_bucket,
             description=wave_plan.description,
+            intent=wave_plan.intent,
         )
         wave_ids.append(wave_plan.id)
     return PlannedRoadmap(phase_id=phase.id, iter_ids=iter_ids, wave_ids=wave_ids)

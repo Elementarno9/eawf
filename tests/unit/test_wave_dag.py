@@ -22,6 +22,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -74,6 +75,7 @@ def test_plan_wave_appends_to_blocks_index() -> None:
         title="Second wave",
         file_scopes=["src/foo/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -83,6 +85,7 @@ def test_plan_wave_appends_to_blocks_index() -> None:
         file_scopes=["src/bar/"],
         deps=["P01-I01-W02"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     assert state.waves["P01-I01-W02"].blocks == ["P01-I01-W01"]
     assert state.waves["P01-I01-W01"].deps == ["P01-I01-W02"]
@@ -100,6 +103,7 @@ def test_plan_wave_blocks_index_multi_dependents() -> None:
         title="First wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -109,6 +113,7 @@ def test_plan_wave_blocks_index_multi_dependents() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -118,6 +123,7 @@ def test_plan_wave_blocks_index_multi_dependents() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W02", "P01-I01-W03"]
 
@@ -137,6 +143,7 @@ def test_plan_wave_idempotent_blocks() -> None:
         title="Second wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -146,6 +153,7 @@ def test_plan_wave_idempotent_blocks() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W02"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     # Re-plan with the same id must error.
     with pytest.raises(LifecycleError, match="already exists"):
@@ -157,6 +165,7 @@ def test_plan_wave_idempotent_blocks() -> None:
             file_scopes=["src/"],
             deps=["P01-I01-W02"],
             effort_bucket="M",
+            intent=make_intent(),
         )
     assert state.waves["P01-I01-W02"].blocks == ["P01-I01-W01"]
 
@@ -176,6 +185,7 @@ def test_plan_wave_self_dep_refused() -> None:
             file_scopes=["src/"],
             deps=["P01-I01-W01"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -209,6 +219,7 @@ def test_plan_wave_cycle_refused() -> None:
         title="First wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -218,6 +229,7 @@ def test_plan_wave_cycle_refused() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     # Forge a back-edge: pretend W01 already depends on a (yet-to-be-planned) W03.
     # plan_wave then tries to insert W03 with deps=[W02]; that closes the loop
@@ -232,6 +244,7 @@ def test_plan_wave_cycle_refused() -> None:
             file_scopes=["src/"],
             deps=["P01-I01-W02"],
             effort_bucket="M",
+            intent=make_intent(),
         )
     # The forged back-edge should leave state.waves[W03] absent (rollback).
     assert "P01-I01-W03" not in state.waves
@@ -249,6 +262,7 @@ def test_plan_wave_unknown_dep_already_refused() -> None:
             file_scopes=["src/"],
             deps=["P01-I01-W99"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -265,6 +279,7 @@ def test_plan_wave_chain_persists_blocks_and_deps() -> None:
         title="A",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -274,6 +289,7 @@ def test_plan_wave_chain_persists_blocks_and_deps() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -283,6 +299,7 @@ def test_plan_wave_chain_persists_blocks_and_deps() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W02"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     assert state.waves["P01-I01-W01"].deps == []
     assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W02"]
@@ -302,6 +319,7 @@ def test_plan_wave_close_round_trip_keeps_blocks_intact() -> None:
         title="A",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -311,7 +329,44 @@ def test_plan_wave_close_round_trip_keeps_blocks_intact() -> None:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
     assert state.waves["P01-I01-W01"].blocks == ["P01-I01-W02"]
+
+
+# ---- intent authoring guard -------------------------------------------------
+
+
+def test_plan_wave_intent_none_raises() -> None:
+    """plan_wave rejects an omitted intent so every authored wave carries one."""
+    state = _seed_iter()
+    with pytest.raises(LifecycleError, match="has no intent"):
+        plan_wave(
+            state,
+            wave_id="P01-I01-W01",
+            iter_id="P01-I01",
+            title="First wave",
+            file_scopes=["src/"],
+            effort_bucket="M",
+            intent=None,
+        )
+    assert "P01-I01-W01" not in state.waves
+
+
+def test_plan_wave_populated_intent_lands() -> None:
+    """A populated IntentBrief lands a wave whose ``intent`` is set."""
+    state = _seed_iter()
+    wave = plan_wave(
+        state,
+        wave_id="P01-I01-W01",
+        iter_id="P01-I01",
+        title="First wave",
+        file_scopes=["src/"],
+        effort_bucket="M",
+        intent=make_intent(problem="authored wave problem"),
+    )
+    assert wave.intent is not None
+    assert wave.intent.problem == "authored wave problem"
+    assert state.waves["P01-I01-W01"].intent is not None

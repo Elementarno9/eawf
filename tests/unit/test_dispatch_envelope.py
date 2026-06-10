@@ -33,6 +33,7 @@ from eawf.runtime.sandbox.policy import SandboxPolicy
 from eawf.workflow.dispatch import render_dispatch_envelope, render_wave_prompt
 from eawf.workflow.dispatch.renderer import DispatchEnvelope
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from tests.conftest import make_intent
 
 # ---- Builders ---------------------------------------------------------------
 
@@ -79,6 +80,7 @@ def _seed_single_wave(state: State, wave_id: str = "P01-I01-W01") -> None:
         title="Solo wave",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
 
 
@@ -473,6 +475,7 @@ def _seed_wave_with_role(state: State, *, role: str) -> None:
         file_scopes=["src/"],
         agent_role=AgentSessionRole(role),
         effort_bucket=EffortBucket.M,
+        intent=make_intent(),
     )
 
 

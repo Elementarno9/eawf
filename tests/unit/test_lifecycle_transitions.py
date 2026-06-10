@@ -68,6 +68,7 @@ from eawf.workflow.lifecycle.transitions import (
     start_wave,
     switch_subproject,
 )
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -203,7 +204,13 @@ def _seed_closed_wave(state: State, phase_id: str, iter_id: str | None = None) -
     wave_id = f"{phase_id}-I01-W01"
     open_iter(state, iter_id=iter_id, phase_id=phase_id, title="i")
     plan_wave(
-        state, wave_id=wave_id, iter_id=iter_id, title="w", file_scopes=["x"], effort_bucket="M"
+        state,
+        wave_id=wave_id,
+        iter_id=iter_id,
+        title="w",
+        file_scopes=["x"],
+        effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id=wave_id, session_id=f"SES-seed-{phase_id}")
     close_wave(state, wave_id=wave_id, outcome="ok")
@@ -346,6 +353,7 @@ def test_close_iter_with_open_wave_raises() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="open waves"):
         close_iter(state, iter_id="P01-I01", audit_id="AUD-1")
@@ -649,6 +657,7 @@ def test_plan_wave_unknown_iter_raises() -> None:
             title="w",
             file_scopes=["src/"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -663,6 +672,7 @@ def test_plan_wave_closed_iter_raises() -> None:
             title="w",
             file_scopes=["src/"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -675,6 +685,7 @@ def test_plan_wave_duplicate_raises() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="already exists"):
         plan_wave(
@@ -684,6 +695,7 @@ def test_plan_wave_duplicate_raises() -> None:
             title="x",
             file_scopes=["src/"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -698,6 +710,7 @@ def test_plan_wave_unknown_dep_raises() -> None:
             file_scopes=["src/"],
             deps=["P01-I01-W99"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -710,6 +723,7 @@ def test_plan_wave_happy_appends_to_iter() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     assert w.status == WaveStatus.PENDING
     assert state.iters["P01-I01"].wave_ids == ["P01-I01-W01"]
@@ -730,6 +744,7 @@ def test_claim_wave_happy_inserts_active() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     w = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     assert w.status == WaveStatus.CLAIMED
@@ -746,6 +761,7 @@ def test_claim_wave_idempotent_same_session() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     # Second call with same session: no-op, no error.
@@ -762,6 +778,7 @@ def test_claim_wave_other_session_rejected() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     with pytest.raises(LifecycleError, match="cannot be claimed"):
@@ -777,6 +794,7 @@ def test_close_wave_pending_rejected() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="not claimed"):
         close_wave(state, wave_id="P01-I01-W01", outcome="ok")
@@ -791,6 +809,7 @@ def test_close_wave_happy_clears_active() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     w = close_wave(state, wave_id="P01-I01-W01", outcome="ok")
@@ -808,6 +827,7 @@ def test_fail_wave_terminal_rejects() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
@@ -824,6 +844,7 @@ def test_fail_wave_happy() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     w = fail_wave(state, wave_id="P01-I01-W01", reason="tests broke")
@@ -846,6 +867,7 @@ def test_start_wave_pending_rejected() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="not claimed"):
         start_wave(state, wave_id="P01-I01-W01")
@@ -860,6 +882,7 @@ def test_start_wave_terminal_rejected() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
@@ -876,6 +899,7 @@ def test_start_wave_happy_claimed_to_in_progress() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     w = start_wave(state, wave_id="P01-I01-W01")
@@ -894,6 +918,7 @@ def test_start_wave_idempotent_when_already_in_progress() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     start_wave(state, wave_id="P01-I01-W01")
@@ -911,6 +936,7 @@ def test_start_wave_then_close_succeeds() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     start_wave(state, wave_id="P01-I01-W01")
@@ -990,6 +1016,7 @@ def test_activate_phase_blocks_on_unclosed_dep() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_phase(state, phase_id="P02", title="b", depends_on=["P01"])
     plan_iter(state, iter_id="P02-I01", phase_id="P02", title="i")
@@ -1000,6 +1027,7 @@ def test_activate_phase_blocks_on_unclosed_dep() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="blocked on un-closed dep phases"):
         activate_phase(state, phase_id="P02")
@@ -1016,6 +1044,7 @@ def test_activate_phase_happy_sets_current() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     phase = activate_phase(state, phase_id="P01")
     assert phase.status == PhaseStatus.ACTIVE
@@ -1075,6 +1104,7 @@ def test_archive_phase_cascades_pending_waves_to_abandoned() -> None:
         title="w1",
         file_scopes=["a"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1083,6 +1113,7 @@ def test_archive_phase_cascades_pending_waves_to_abandoned() -> None:
         title="w2",
         file_scopes=["b"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     archive_phase(state, phase_id="P01")
     assert state.waves["P01-I01-W01"].status == WaveStatus.ABANDONED
@@ -1103,6 +1134,7 @@ def test_archive_phase_cascades_planned_iter_to_abandoned() -> None:
         title="w",
         file_scopes=["a"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     archive_phase(state, phase_id="P01")
     assert state.iters["P01-I01"].status == IterStatus.ABANDONED
@@ -1123,6 +1155,7 @@ def test_archive_phase_leaves_no_pending_waves_validates() -> None:
         title="w",
         file_scopes=["a"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     archive_phase(state, phase_id="P01")
     report = validate_state(state.model_dump(mode="json"))
@@ -1156,6 +1189,7 @@ def test_plan_iter_under_closed_phase_rejected() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
@@ -1187,6 +1221,7 @@ def test_activate_iter_sets_current() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     it = activate_iter(state, iter_id="P01-I01")
@@ -1213,6 +1248,7 @@ def test_edit_wave_plan_mutates_pending() -> None:
         title="orig",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     criterion = grandfather_criterion("legacy criterion text", index=1)
     w = edit_wave_plan(
@@ -1238,6 +1274,7 @@ def test_edit_wave_plan_non_pending_rejected() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
@@ -1289,6 +1326,7 @@ def test_plan_wave_rejects_unmeasurable_criterion() -> None:
             file_scopes=["x"],
             effort_bucket="M",
             success_criteria=[_unmeasurable_criterion()],
+            intent=make_intent(),
         )
     # The wave is rejected before insertion, leaving state untouched.
     assert "P01-I01-W01" not in state.waves
@@ -1306,6 +1344,7 @@ def test_plan_wave_inserts_measurable_criterion() -> None:
         file_scopes=["x"],
         effort_bucket="M",
         success_criteria=[_measurable_criterion()],
+        intent=make_intent(),
     )
     assert w.success_criteria[0].id == "CR-01"
 
@@ -1323,6 +1362,7 @@ def test_plan_wave_inserts_grandfathered_legacy_criterion() -> None:
         file_scopes=["x"],
         effort_bucket="M",
         success_criteria=[legacy],
+        intent=make_intent(),
     )
     assert w.success_criteria[0].kind == "legacy"
 
@@ -1338,6 +1378,7 @@ def test_edit_wave_plan_rejects_unmeasurable_criterion() -> None:
         title="orig",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="unmeasurable success criteria"):
         edit_wave_plan(
@@ -1360,6 +1401,7 @@ def test_edit_wave_plan_accepts_grandfathered_legacy_criterion() -> None:
         title="orig",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     legacy = grandfather_criterion("ship the thing", index=1)
     w = edit_wave_plan(state, wave_id="P01-I01-W01", success_criteria=[legacy])
@@ -1377,6 +1419,7 @@ def test_remove_wave_plan_deletes_pending() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     remove_wave_plan(state, wave_id="P01-I01-W01")
     assert "P01-I01-W01" not in state.waves
@@ -1394,6 +1437,7 @@ def test_remove_wave_plan_blocked_by_blocks_list_raises() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1403,6 +1447,7 @@ def test_remove_wave_plan_blocked_by_blocks_list_raises() -> None:
         file_scopes=["x"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="blocks other waves"):
         remove_wave_plan(state, wave_id="P01-I01-W01")
@@ -1419,6 +1464,7 @@ def test_set_wave_deps_updates_blocks_index() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1427,6 +1473,7 @@ def test_set_wave_deps_updates_blocks_index() -> None:
         title="w2",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1435,6 +1482,7 @@ def test_set_wave_deps_updates_blocks_index() -> None:
         title="w3",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     set_wave_deps(state, wave_id="P01-I01-W03", deps=["P01-I01-W01", "P01-I01-W02"])
     assert state.waves["P01-I01-W03"].deps == ["P01-I01-W01", "P01-I01-W02"]
@@ -1455,6 +1503,7 @@ def test_set_wave_deps_cycle_rolled_back() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1464,6 +1513,7 @@ def test_set_wave_deps_cycle_rolled_back() -> None:
         file_scopes=["x"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="cycle"):
         set_wave_deps(state, wave_id="P01-I01-W01", deps=["P01-I01-W02"])
@@ -1482,6 +1532,7 @@ def test_claim_wave_rejects_unmet_deps() -> None:
         title="a",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1491,6 +1542,7 @@ def test_claim_wave_rejects_unmet_deps() -> None:
         file_scopes=["x"],
         deps=["P20-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="un-closed dep waves"):
         claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2")
@@ -1508,6 +1560,7 @@ def test_claim_wave_rejects_skipping_lower_w_sibling() -> None:
         title="a",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1516,6 +1569,7 @@ def test_claim_wave_rejects_skipping_lower_w_sibling() -> None:
         title="b",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="lower-numbered ready siblings"):
         claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2")
@@ -1533,6 +1587,7 @@ def test_claim_wave_out_of_order_overrides_monotonic_gate() -> None:
         title="a",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1541,6 +1596,7 @@ def test_claim_wave_out_of_order_overrides_monotonic_gate() -> None:
         title="b",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     w = claim_wave(state, wave_id="P20-I01-W02", session_id="SES-2", out_of_order=True)
     assert w.status == WaveStatus.CLAIMED
@@ -1556,6 +1612,7 @@ def test_claim_wave_rejected_when_dispatch_paused() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     state.dispatch_paused = True
     with pytest.raises(LifecycleError, match="dispatch paused: resume before claiming"):
@@ -1575,6 +1632,7 @@ def test_claim_wave_succeeds_when_not_dispatch_paused() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     assert state.dispatch_paused is False
     w = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
@@ -1596,6 +1654,7 @@ def test_claim_wave_pause_gate_blocks_even_out_of_order() -> None:
         title="w",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     state.dispatch_paused = True
     with pytest.raises(LifecycleError, match="dispatch paused: resume before claiming"):
@@ -1615,6 +1674,7 @@ def test_claim_wave_monotonic_gate_allows_after_w01_claimed() -> None:
         title="a",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1623,6 +1683,7 @@ def test_claim_wave_monotonic_gate_allows_after_w01_claimed() -> None:
         title="b",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P20-I01-W01", session_id="SES-1")
     # W01 is CLAIMED so it is no longer PENDING; W02 may now claim
@@ -1643,6 +1704,7 @@ def test_close_phase_rejects_when_no_closed_wave() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     # iter and wave are still open — fail on open-children first
     with pytest.raises(LifecycleError, match="open iters"):
@@ -1667,6 +1729,7 @@ def test_close_phase_accepts_when_one_wave_closed() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P11-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P11-I01-W01", outcome="ok")
@@ -1699,6 +1762,7 @@ def test_close_phase_rejects_missing_close_audit_evidence() -> None:
             title="w",
             file_scopes=["x"],
             effort_bucket="M",
+            intent=make_intent(),
         )
         claim_wave(state, wave_id=wave_id, session_id=f"SES-{n}")
         close_wave(state, wave_id=wave_id, outcome="ok")
@@ -1723,6 +1787,7 @@ def test_close_phase_rejects_closed_iter_missing_audit() -> None:
             title="w",
             file_scopes=["x"],
             effort_bucket="M",
+            intent=make_intent(),
         )
         claim_wave(state, wave_id=wave_id, session_id=f"SES-{n}")
         close_wave(state, wave_id=wave_id, outcome="ok")
@@ -1745,6 +1810,7 @@ def test_close_phase_rejects_single_wave_without_decision() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P13-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P13-I01-W01", outcome="ok")
@@ -1768,6 +1834,7 @@ def test_close_phase_allows_single_wave_with_scope_collapse_decision() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P14-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P14-I01-W01", outcome="ok")
@@ -1798,6 +1865,7 @@ def test_close_phase_rejects_single_wave_when_decision_superseded() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P15-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P15-I01-W01", outcome="ok")
@@ -1829,6 +1897,7 @@ def test_set_wave_deps_non_pending_rejected() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1837,6 +1906,7 @@ def test_set_wave_deps_non_pending_rejected() -> None:
         title="w2",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
@@ -1862,6 +1932,7 @@ def test_edit_wave_plan_under_active_phase_ok_when_pending() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
@@ -1881,6 +1952,7 @@ def test_remove_wave_plan_under_active_phase_ok_when_pending() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1889,6 +1961,7 @@ def test_remove_wave_plan_under_active_phase_ok_when_pending() -> None:
         title="w2",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
@@ -1908,6 +1981,7 @@ def test_set_wave_deps_under_active_phase_ok_when_pending() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1916,6 +1990,7 @@ def test_set_wave_deps_under_active_phase_ok_when_pending() -> None:
         title="w2",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
@@ -1937,6 +2012,7 @@ def test_edit_wave_plan_under_active_phase_rejects_closed_wave() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -1945,6 +2021,7 @@ def test_edit_wave_plan_under_active_phase_rejects_closed_wave() -> None:
         title="w2",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")
@@ -1975,6 +2052,7 @@ def test_claim_wave_activates_planned_iter() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     assert state.phases["P01"].status == PhaseStatus.ACTIVE
@@ -2004,6 +2082,7 @@ def test_claim_wave_active_iter_unchanged() -> None:
         title="w1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -2012,6 +2091,7 @@ def test_claim_wave_active_iter_unchanged() -> None:
         title="w2",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     claim_wave(state, wave_id="P01-I01-W02", session_id="SES-2")
@@ -2036,6 +2116,7 @@ def test_claim_wave_rejected_claim_does_not_activate_iter() -> None:
         title="a",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -2044,6 +2125,7 @@ def test_claim_wave_rejected_claim_does_not_activate_iter() -> None:
         title="b",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P20")
     assert state.iters["P20-I01"].status == IterStatus.PLANNED
@@ -2061,6 +2143,7 @@ def test_claim_wave_rejected_claim_does_not_activate_iter() -> None:
         file_scopes=["x"],
         deps=["P20-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(LifecycleError, match="un-closed dep waves"):
         claim_wave(state, wave_id="P20-I01-W03", session_id="SES-3", out_of_order=True)
@@ -2085,6 +2168,7 @@ def test_claim_wave_under_terminal_iter_rejected_and_not_activated() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
@@ -2185,6 +2269,7 @@ def test_plan_wave_persists_description() -> None:
         file_scopes=["src/"],
         description="wave goal narrative",
         effort_bucket="M",
+        intent=make_intent(),
     )
     assert w.description == "wave goal narrative"
     assert state.waves["P01-I01-W01"].description == "wave goal narrative"
@@ -2203,6 +2288,7 @@ def test_plan_wave_description_over_cap_raises() -> None:
             file_scopes=["src/"],
             description="z" * 501,
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -2255,6 +2341,7 @@ def test_edit_wave_plan_persists_description() -> None:
         title="orig",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     w = edit_wave_plan(
         state,
@@ -2278,6 +2365,7 @@ def test_edit_wave_plan_description_over_cap_raises() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     with pytest.raises(ValidationError):
         edit_wave_plan(state, wave_id="P01-I01-W01", description="z" * 501)
@@ -2295,6 +2383,7 @@ def test_edit_wave_plan_description_non_pending_rejected() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     activate_phase(state, phase_id="P01")
     activate_iter(state, iter_id="P01-I01")

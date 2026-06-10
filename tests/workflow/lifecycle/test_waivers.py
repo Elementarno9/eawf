@@ -59,6 +59,7 @@ from eawf.workflow.lifecycle.waivers import (
     apply_waiver,
     resolve_waiver_mode,
 )
+from tests.conftest import make_intent
 
 WAVE_ID = "P01-I01-W01"
 OPERATOR_SESSION_ID = "SES-operator-1"
@@ -111,6 +112,7 @@ def _seed_wave_with_operator(state: State) -> None:
         file_scopes=["src/"],
         success_criteria=[],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")
 
@@ -138,6 +140,7 @@ def _seed_wave_with_executor(state: State) -> None:
         file_scopes=["src/"],
         success_criteria=[],
         effort_bucket="M",
+        intent=make_intent(),
     )
     claim_wave(state, wave_id=WAVE_ID, session_id="SES-1")
 

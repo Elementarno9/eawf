@@ -37,6 +37,7 @@ from eawf.workflow.agent_report.rollup import (
     render_phase_retro_markdown,
 )
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from tests.conftest import make_intent
 
 NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
 
@@ -83,6 +84,7 @@ def _phase_with_wave(*, wave_status: WaveStatus = WaveStatus.CLOSED) -> State:
         title="first wave",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     wave = state.waves["P03-I01-W01"]
     wave.status = wave_status

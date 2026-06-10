@@ -31,6 +31,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -75,6 +76,7 @@ def _seed_chain() -> State:
         title="A",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -84,6 +86,7 @@ def _seed_chain() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -93,6 +96,7 @@ def _seed_chain() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W02"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     return state
 
@@ -109,6 +113,7 @@ def _seed_diamond() -> State:
         title="A",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -118,6 +123,7 @@ def _seed_diamond() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -127,6 +133,7 @@ def _seed_diamond() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W01"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -136,6 +143,7 @@ def _seed_diamond() -> State:
         file_scopes=["src/"],
         deps=["P01-I01-W02", "P01-I01-W03"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     return state
 
@@ -390,6 +398,7 @@ def test_edges_for_iter_filters_by_iter_id() -> None:
         title="X",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     result = wave_graph.edges_for_iter("P01-I01", state)
     assert "P01-I02-W01" not in result

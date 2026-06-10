@@ -25,6 +25,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -110,6 +111,7 @@ def test_wave_many_blockers_hint() -> None:
         title="dep1",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -118,6 +120,7 @@ def test_wave_many_blockers_hint() -> None:
         title="dep2",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -126,6 +129,7 @@ def test_wave_many_blockers_hint() -> None:
         title="dep3",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -134,6 +138,7 @@ def test_wave_many_blockers_hint() -> None:
         title="dep4",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     plan_wave(
         state,
@@ -143,6 +148,7 @@ def test_wave_many_blockers_hint() -> None:
         file_scopes=["y"],
         deps=["P03-I01-W01", "P03-I01-W02", "P03-I01-W03", "P03-I01-W04"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     hints = _compute_iter_bump_hints(state, phase_id="P03")
     assert "wave_with_many_blockers" in hints
@@ -160,6 +166,7 @@ def test_phase_scope_expansion_hint() -> None:
             title=f"w{n}",
             file_scopes=["x"],
             effort_bucket="M",
+            intent=make_intent(),
         )
     _add_audit(state, audit_id="A77-P03", verdict=AuditVerdict.PASS)
     # Close iter requires no open waves; force-mark via direct mutation.

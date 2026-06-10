@@ -31,6 +31,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -125,6 +126,7 @@ def test_prepare_close_flags_open_wave() -> None:
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     out = _phase_prepare_close_checklist(state, phase_id="P03")
     assert out["ok"] is False
@@ -161,6 +163,7 @@ def test_prepare_close_flags_closed_wave_missing_commit(
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
@@ -187,6 +190,7 @@ def test_prepare_close_flags_single_wave_without_decision(
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED
@@ -223,6 +227,7 @@ def test_prepare_close_allows_single_wave_with_scope_collapse_decision(
         title="w",
         file_scopes=["x"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     w = state.waves["P03-I01-W01"]
     w.status = WaveStatus.CLOSED

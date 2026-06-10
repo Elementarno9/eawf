@@ -1304,6 +1304,7 @@ def test_mutate_roadmap_revise_add_wave_inserts_pending_wave(tmp_path: Path) -> 
             "file_scopes": ["src/eawf/x.py"],
             "success_criteria": ["does x"],
             "effort_bucket": "S",
+            "intent": {"problem": "x is unhandled", "desired_outcome": "x is handled"},
         },
     )
 
@@ -1919,6 +1920,7 @@ def test_mutate_roadmap_revise_add_wave_carries_description(tmp_path: Path) -> N
             "file_scopes": ["src/eawf/x.py"],
             "description": "long-form rationale for what this wave does",
             "effort_bucket": "S",
+            "intent": {"problem": "x is unhandled", "desired_outcome": "x is handled"},
         },
     )
 
@@ -2001,6 +2003,7 @@ def test_mutate_roadmap_revise_description_over_cap_rejected(tmp_path: Path) -> 
             "file_scopes": ["src/x.py"],
             "description": "z" * 501,
             "effort_bucket": "S",
+            "intent": {"problem": "x is unhandled", "desired_outcome": "x is handled"},
         },
     )
 

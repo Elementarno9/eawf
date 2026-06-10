@@ -58,12 +58,20 @@ def test_plan_roadmap_stages_waves_in_dependency_order() -> None:
                             "file_scopes": ["src/b"],
                             "deps": ["P31-I01-W01"],
                             "effort_bucket": "S",
+                            "intent": {
+                                "problem": "second wave needs staging",
+                                "desired_outcome": "second wave is planned",
+                            },
                         },
                         {
                             "id": "P31-I01-W01",
                             "title": "First wave",
                             "file_scopes": ["src/a"],
                             "effort_bucket": "XS",
+                            "intent": {
+                                "problem": "first wave needs staging",
+                                "desired_outcome": "first wave is planned",
+                            },
                         },
                     ],
                 }

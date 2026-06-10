@@ -1518,8 +1518,10 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
     rule — on-disk state without an ``intent`` field re-validates.
 
     Raises:
-        LifecycleError: when ``op`` is missing or unknown, or the
-            underlying wave transition rejects the edit.
+        LifecycleError: when ``op`` is missing or unknown, the ``add_wave``
+            op carries no ``intent`` param (authored waves must attach an
+            IntentBrief), or the underlying wave transition rejects the
+            edit.
         pydantic.ValidationError: when the ``intent`` param payload
             fails the :class:`IntentBrief` typed contract.
     """
@@ -1530,6 +1532,11 @@ def _apply_roadmap_revise(state: State, mutation: Mutation) -> None:
     intent_raw = params.get("intent")
     intent = IntentBrief.model_validate(intent_raw) if intent_raw is not None else None
     if op == "add_wave":
+        if intent is None:
+            raise LifecycleError(
+                f"add_wave for {params.get('wave_id')!r} requires an intent param; "
+                "authored waves carry an IntentBrief"
+            )
         role = AgentSessionRole(params["agent_role"]) if params.get("agent_role") else None
         bucket = EffortBucket(params["effort_bucket"]) if params.get("effort_bucket") else None
         plan_wave(

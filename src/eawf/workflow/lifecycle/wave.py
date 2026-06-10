@@ -71,18 +71,19 @@ def plan_wave(
         effort_bucket: Required XS/S/M/L/XL estimate bucket.
         description: Optional bounded ≤500-char long-form description;
             persisted on :attr:`Wave.description` for downstream renderers.
-        intent: Optional typed :class:`IntentBrief` attaching the goal /
+        intent: Required typed :class:`IntentBrief` attaching the goal /
             motivation / success-signal + evidence + source-brief refs
-            that motivated the wave. ``None`` (default) leaves the
-            wave's intent unset; the field is additive + replay-safe so
-            on-disk state without it re-validates.
+            that motivated the wave. The signature default stays ``None``
+            so a caller that omits it hits the authoring guard below; the
+            persisted field is additive + replay-safe so on-disk state
+            written before the field existed re-validates.
 
     Raises:
         LifecycleError: if iter is missing/closed, wave id duplicates, any
             declared dep references a missing wave id, the dep set names
-            the wave itself, ``effort_bucket`` is missing, the resulting
-            graph would contain a cycle, or any non-legacy success
-            criterion is unmeasurable (EAWF021).
+            the wave itself, ``effort_bucket`` is missing, ``intent`` is
+            missing, the resulting graph would contain a cycle, or any
+            non-legacy success criterion is unmeasurable (EAWF021).
 
     Side-effects on the reverse-index: for every ``dep`` in *deps*, the
     dep wave's ``blocks`` list is mutated in-place to include *wave_id*
@@ -101,6 +102,10 @@ def plan_wave(
     if effort_bucket is None:
         raise LifecycleError(
             f"wave {wave_id!r} has no effort_bucket; set --effort-bucket before planning"
+        )
+    if intent is None:
+        raise LifecycleError(
+            f"wave {wave_id!r} has no intent; attach an IntentBrief before planning"
         )
     for dep in deps_list:
         if dep not in state.waves:

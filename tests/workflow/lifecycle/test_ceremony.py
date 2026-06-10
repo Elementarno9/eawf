@@ -16,6 +16,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.models import AgentSession, CurrentPointers, Project, State
 from eawf.workflow.lifecycle.ceremony import compute_ceremony
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
+from tests.conftest import make_intent
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 _OPERATOR_SESSION_ID = "SES-operator"
@@ -63,6 +64,7 @@ def _seed_phase(state: State) -> None:
             title=f"Wave {idx}",
             file_scopes=["src/"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 

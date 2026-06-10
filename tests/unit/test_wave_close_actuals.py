@@ -41,6 +41,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -89,6 +90,7 @@ def _seed_wave(
         title="w",
         file_scopes=["src/"],
         effort_bucket=effort_bucket or EffortBucket.M,
+        intent=make_intent(),
     )
     if effort_bucket is None:
         state.waves[wave_id].effort_bucket = None

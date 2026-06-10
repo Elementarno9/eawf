@@ -269,6 +269,7 @@ def _plan_follow_up(
     """
     from pydantic import ValidationError as PydValidationError
 
+    from eawf.kernel.spec.intent import IntentBrief
     from eawf.kernel.state.enums import EffortBucket
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.lifecycle.allocator import allocate_wave_id
@@ -290,6 +291,14 @@ def _plan_follow_up(
                 )
             iter_id = parent_wave.iter_id
             target_id = new_wave_id or allocate_wave_id(state, iter_id)
+            # The fix-ci follow-up is an authored wave, so it carries an
+            # IntentBrief like any other. The repair context is implicit
+            # (a CI failure on the parent), so the brief is synthesised from
+            # the parent id rather than operator-supplied flags.
+            follow_up_intent = IntentBrief(
+                problem=f"CI failed on parent wave {parent_wave_id}",
+                desired_outcome="the follow-up wave repairs the parent CI failure",
+            )
             try:
                 plan_wave(
                     state,
@@ -299,6 +308,7 @@ def _plan_follow_up(
                     file_scopes=file_scope,
                     deps=[parent_wave_id],
                     effort_bucket=EffortBucket.M,
+                    intent=follow_up_intent,
                 )
             except LifecycleError as exc:
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc

@@ -41,6 +41,7 @@ from eawf.workflow.lifecycle.transitions import (
     open_phase,
     plan_wave,
 )
+from tests.conftest import make_intent
 
 _NOW = datetime.now(UTC)
 
@@ -230,6 +231,7 @@ def test_plan_wave_rejects_conventional_commit_prefix_title() -> None:
             title="feat: add the lint",
             file_scopes=["src/"],
             effort_bucket="M",
+            intent=make_intent(),
         )
     # Rejected at the boundary: nothing persisted.
     assert "P01-I01-W01" not in state.waves
@@ -245,6 +247,7 @@ def test_plan_wave_rejects_bare_id_title() -> None:
             title="W01",
             file_scopes=["src/"],
             effort_bucket="M",
+            intent=make_intent(),
         )
 
 
@@ -257,6 +260,7 @@ def test_plan_wave_accepts_clear_title() -> None:
         title="Add the title-clarity gate",
         file_scopes=["src/"],
         effort_bucket="M",
+        intent=make_intent(),
     )
     assert wave.title == "Add the title-clarity gate"
 
@@ -274,4 +278,5 @@ def test_plan_wave_structural_guard_precedes_title_check() -> None:
             file_scopes=["src/"],
             deps=["P01-I01-W01"],
             effort_bucket="M",
+            intent=make_intent(),
         )

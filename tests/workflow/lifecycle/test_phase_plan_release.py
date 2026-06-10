@@ -29,6 +29,7 @@ from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.iter_ import open_iter
 from eawf.workflow.lifecycle.phase import edit_phase_plan, open_phase
 from eawf.workflow.lifecycle.wave import claim_wave, plan_wave, release_wave
+from tests.conftest import make_intent
 
 
 def _empty_state() -> State:
@@ -82,6 +83,7 @@ def _seed_claimed_wave() -> State:
         title="w",
         file_scopes=["src/"],
         effort_bucket=EffortBucket.M,
+        intent=make_intent(),
     )
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     return state
