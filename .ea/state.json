@@ -4655,6 +4655,18 @@
       "scope_id": "P30-I04-W10",
       "status": "done",
       "updated_at": "2026-06-10T04:39:32.538413Z"
+    },
+    "P30-I04-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W11",
+      "scope_id": "P30-I04-W11",
+      "status": "done",
+      "updated_at": "2026-06-10T05:00:56.696860Z"
     }
   },
   "agent_sessions": {
@@ -15228,6 +15240,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I04-W10",
       "updated_at": "2026-06-10T04:39:23.158363Z"
+    },
+    "P30-I04-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W11-bucket-20260610T045433Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I04-W11",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I04-W11",
+      "updated_at": "2026-06-10T04:54:33.965251Z"
     }
   },
   "goals": {
@@ -16915,7 +16940,8 @@
         "P30-I04-W06",
         "P30-I04-W09",
         "P30-I04-W08",
-        "P30-I04-W10"
+        "P30-I04-W10",
+        "P30-I04-W11"
       ]
     },
     "P30-I05": {
@@ -18111,7 +18137,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T04:39:32.538808Z",
+  "updated_at": "2026-06-10T05:00:56.697205Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -70152,7 +70178,21 @@
         }
       ],
       "id": "P30-I04-W08",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "AUTH-8 bind mockup_golden_diff close gate (independent diff) keeps auditable criteria with IntentBrief metadata",
+        "evidence_refs": [],
+        "planned_steps": [
+          "pytest tests/unit/daemon/test_close_gate_mockup_golden_diff.py::test_close_gate_passes_and_mints_t5_mockup_evidence exits zero and proves a matching mockup_golden_diff gate closes with deterministic T5 evidence carrying the gate id.",
+          "pytest tests/unit/daemon/test_close_gate_mockup_golden_diff.py::test_close_gate_blocks_mockup_golden_divergence_with_region_diff exits zero and proves a diverging mockup_golden_diff gate blocks close with the changed region in the LifecycleError detail.",
+          "affordance_parity validates the HOME mode advertised keys so the UI-scope wave has a structural gate before jury fallback."
+        ],
+        "priority_rationale": "metadata repair for a closed wave whose spec.sync accepted intent=None",
+        "problem": "wave P30-I04-W08 was synced without typed intent",
+        "risks": [
+          "metadata-only repair must not change the closed wave outcome"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.819599Z",
       "outcome": "Bound mockup_golden_diff close gate to T5 golden evidence",
@@ -70301,7 +70341,9 @@
     },
     "P30-I04-W10": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I04-W11"
+      ],
       "claim_session_id": "codex-p30-i04-w10",
       "claimed_at": "2026-06-10T04:28:56.589494Z",
       "closed_at": "2026-06-10T04:39:32.538413Z",
@@ -70358,7 +70400,20 @@
         }
       ],
       "id": "P30-I04-W10",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "AUTH-10 idle-contract meta-gate proof — each I03 contract fires keeps auditable criteria with IntentBrief metadata",
+        "evidence_refs": [],
+        "planned_steps": [
+          "pytest tests/unit/test_idle_contract_gate.py::test_cli_returns_zero_on_pass exits zero and proves the idle-contract gate main path passes with the I03 required-intent, UI affordance-parity, and mockup_golden_diff probes wired.",
+          "pytest tests/unit/test_idle_contract_gate.py::test_main_returns_nonzero_when_required_intent_guard_idle exits zero and proves monkeypatching the required-intent guard to a no-op makes the gate fail while naming the idled contract."
+        ],
+        "priority_rationale": "metadata repair for a closed wave whose spec.sync accepted intent=None",
+        "problem": "wave P30-I04-W10 was synced without typed intent",
+        "risks": [
+          "metadata-only repair must not change the closed wave outcome"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.825066Z",
       "outcome": "Proved I03 idle contracts fire through the idle-contract gate",
@@ -70416,6 +70471,188 @@
         }
       ],
       "title": "AUTH-10 idle-contract meta-gate proof — each I03 contract fires",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I04-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "codex-p30-i04-w11",
+      "claimed_at": "2026-06-10T04:54:33.965243Z",
+      "closed_at": "2026-06-10T05:00:56.696860Z",
+      "commit": "3ba8dabe59fc44cc48c4b4a8a5e605c5478fea7a",
+      "deps": [
+        "P30-I04-W10"
+      ],
+      "description": "Add a guarded backfill for closed waves that already have synced typed criteria and gates but lack IntentBrief because a stale daemon accepted spec.sync. Apply it to W08 and W10, then keep the current spec.sync rejection covered.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/kernel/state/migration.py",
+        "src/eawf/surfaces/cli/commands/backfill.py",
+        "tests/unit/state/test_wave_intent_backfill.py",
+        "tests/integration/test_cli_backfill_wave_intents.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/state/test_wave_intent_backfill.py",
+              "tests/integration/test_cli_backfill_wave_intents.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_spec_sync.py::test_sync_rejects_wave_with_no_intent",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_cli_backfill_wave_intents.py::test_wave_intents_check_exits_zero_after_apply",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P30-I04-W11",
+      "intent": {
+        "desired_outcome": "audit sees synced closed waves with IntentBriefs and current sync guard intact",
+        "evidence_refs": [],
+        "planned_steps": [
+          "add guarded wave-intent backfill",
+          "cover dry-run and apply paths",
+          "apply repair to W08 and W10",
+          "rerun audit gate tests"
+        ],
+        "priority_rationale": "P30-I04 audit failed on W08/W10 impossible successful spec.sync rows",
+        "problem": "closed synced waves can retain null intent after stale daemon sync",
+        "risks": [
+          "over-broad closed-wave mutation",
+          "synthetic intent wording drift"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I04",
+      "opened_at": "2026-06-10T04:52:00.121434Z",
+      "outcome": "Repaired synced-wave intent drift for W08/W10 and added guarded backfill",
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "the backfill test pair asserts dry-run rows, apply mutation, explicit wave targeting, and no broad closed-wave mutation",
+          "oracle_tier": 2,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the wave-intent backfill unit and CLI integration tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/unit/state/test_wave_intent_backfill.py tests/integration/test_cli_backfill_wave_intents.py exits zero and proves the guarded wave-intent backfill dry-run and apply paths.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "test_sync_rejects_wave_with_no_intent asserts EAWF022 no intent and no state write",
+          "oracle_tier": 2,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the missing-intent spec.sync regression",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/integration/test_spec_sync.py::test_sync_rejects_wave_with_no_intent exits zero and proves the current spec.sync missing-intent regression still rejects.",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "test_wave_intents_check_exits_zero_after_apply asserts --check exits zero after --apply fills the target wave intent",
+          "oracle_tier": 2,
+          "quality_dimension": "operability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the wave-intent backfill check regression",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "pytest tests/integration/test_cli_backfill_wave_intents.py::test_wave_intents_check_exits_zero_after_apply exits zero and proves the wave-intent check passes after repair is applied.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Repair synced-wave intent drift",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
