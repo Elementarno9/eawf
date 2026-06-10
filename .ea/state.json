@@ -18219,7 +18219,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:46:23.734962Z",
+  "updated_at": "2026-06-10T05:49:53.956137Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -71889,11 +71889,34 @@
       "file_scopes": [
         "src/eawf/runtime/hooks/runner.py",
         "src/eawf/runtime/runtimes/claude/hook_map.py",
-        "src/eawf/surfaces/cli/commands/hook.py"
+        "src/eawf/surfaces/cli/commands/hook.py",
+        "tests/unit/test_hook_runner.py",
+        "tests/unit/test_hook_router_claude.py",
+        "tests/unit/test_cli_hook_run.py",
+        "tests/unit/test_cli_hook_dispatch.py",
+        "tests/unit/test_runtime_capture_hook.py"
       ],
       "gates": [],
       "id": "P30-I05-W03",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "SESSION_END dispatch captures parsed counters when present and degrades non-blocking on misses or daemon errors.",
+        "evidence_refs": [
+          "src/eawf/runtime/hooks/runner.py",
+          "src/eawf/runtime/runtimes/claude/hook_map.py",
+          "src/eawf/surfaces/cli/commands/hook.py"
+        ],
+        "planned_steps": [
+          "Register a SESSION_END capture hook in the hook dispatch path",
+          "Parse cost blocks with RuntimeCounters and call runtime.capture when counters exist",
+          "Return non-blocking HookResult for missing cost blocks or daemon failures"
+        ],
+        "priority_rationale": "Hook capture is the runtime ingestion path that feeds later active-wave persistence and close-time EU deltas.",
+        "problem": "Claude SESSION_END payloads can carry cost counters but no hook forwards them to runtime.capture.",
+        "risks": [
+          "W04 owns the daemon runtime.capture implementation so W03 tests should mock the RPC boundary"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.774382Z",
       "outcome": null,
@@ -71954,11 +71977,32 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/runtime/daemon/methods/state.py",
-        "src/eawf/kernel/state/models.py"
+        "src/eawf/kernel/state/models.py",
+        "tests/daemon/test_state_methods.py",
+        "tests/unit/daemon/test_runtime_capture.py",
+        "tests/unit/test_state_models.py",
+        "tests/unit/test_wave_close_actuals.py"
       ],
       "gates": [],
       "id": "P30-I05-W04",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "runtime.capture stores latest counters on active waves and rejects empty active-wave captures with strict params.",
+        "evidence_refs": [
+          "src/eawf/runtime/daemon/methods/state.py",
+          "src/eawf/kernel/state/models.py"
+        ],
+        "planned_steps": [
+          "Add strict runtime.capture daemon params and Wave runtime_latest storage",
+          "Update one or multiple active waves with captured RuntimeCounters",
+          "Reject empty active_wave_ids instead of silently dropping captures"
+        ],
+        "priority_rationale": "This is the canonical mutator for runtime_latest and downstream actual EU accounting.",
+        "problem": "Parsed runtime counters need daemon-owned persistence on active waves before close can compute deltas.",
+        "risks": [
+          "Multiple active waves need explicit ambiguity logging without losing the capture"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.774796Z",
       "outcome": null,
@@ -72016,11 +72060,34 @@
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/runtime/statusline_cache.py",
-        "src/eawf/runtime/runtimes/claude/statusline.py"
+        "src/eawf/runtime/runtimes/claude/statusline.py",
+        "src/eawf/runtime/runtime_counter_sidecar.py",
+        "src/eawf/runtime/runtimes/claude/runtime_counters.py",
+        "tests/unit/test_runtime_counter_sidecar.py",
+        "tests/unit/test_statusline_cache_path.py",
+        "tests/unit/test_statusline_render.py",
+        "tests/unit/test_statusline_context_tokens.py"
       ],
       "gates": [],
       "id": "P30-I05-W05",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "Runtime counter sidecar round-trips counters and treats missing or corrupt files as misses without crashing statusline.",
+        "evidence_refs": [
+          "src/eawf/runtime/statusline_cache.py",
+          "src/eawf/runtime/runtimes/claude/statusline.py"
+        ],
+        "planned_steps": [
+          "Persist and read RuntimeCounters from a statusline sidecar",
+          "Return None for missing or corrupt sidecar files",
+          "Wire statusline behavior to degrade instead of crashing on sidecar misses"
+        ],
+        "priority_rationale": "The sidecar gives W01/W03/W04 a stable latest-counter source before close-time deltas are enforced.",
+        "problem": "Runtime counter capture needs a local fresh backstop when daemon capture is unavailable or delayed.",
+        "risks": [
+          "Sidecar writes must avoid leaking host-specific paths into committed fixtures"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.775199Z",
       "outcome": null,
