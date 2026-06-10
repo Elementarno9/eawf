@@ -94,8 +94,12 @@ def test_doctor_surfaces_git_state_drift_check(
     # — reproduces the ``pinned_but_missing`` drift kind.
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
     monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",
+        lambda repo_root=None: {},
+    )
+    monkeypatch.setattr(
         "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None: None,
+        lambda wid, repo_root=None, index=None: None,
     )
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()

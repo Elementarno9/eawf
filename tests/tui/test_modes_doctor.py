@@ -616,8 +616,12 @@ def test_gather_doctor_health_surfaces_live_drift(
     """
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
     monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",
+        lambda repo_root=None: {},
+    )
+    monkeypatch.setattr(
         "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
-        lambda wid, repo_root=None: None,
+        lambda wid, repo_root=None, index=None: None,
     )
     state_path = _state_with_closed_waves(
         tmp_path, [_closed_wave_payload("P29-I02-W01", commit=_SHA_A)]

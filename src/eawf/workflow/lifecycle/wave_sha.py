@@ -15,6 +15,7 @@ wave has not yet been committed. Callers (renderers, validators) treat
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -22,12 +23,44 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT_SECONDS: float = 5.0
 _WAVE_TRAILER_NAME = "Eawf-Wave"
+
+# Field/record separators for the one-pass ``git log`` in
+# :func:`build_wave_sha_index`. A commit message can carry newlines but never a
+# NUL byte, so NUL is a safe record boundary even when the trailer placeholder
+# emits its own newline; the unit separator delimits fields within a record.
+# These are the literal output bytes the parser splits on; the ``--format``
+# string itself uses git's ``%x00`` / ``%x1f`` placeholders (ASCII in argv)
+# because subprocess rejects a literal NUL byte inside a command argument.
+_REC_SEP = "\x00"
+_FIELD_SEP = "\x1f"
+_REC_SEP_PLACEHOLDER = "%x00"
+_FIELD_SEP_PLACEHOLDER = "%x1f"
+
+# A bracketed commit-subject prefix, e.g. ``[P30-I07-W08]`` or ``[P28-W02]``.
+_BRACKET_PREFIX_RE = re.compile(r"^\[(P\d{2,}(?:-I\d{2,})?-W\d{2,})\]")
+
+# Transient per-wave refs whose commit must lose to an integration ref under a
+# twin. ``worktree-agent-*`` is the Claude harness's detached worktree branch
+# name; ``refs/worktrees/`` is git's own per-worktree pseudo-ref namespace; the
+# ``-pNN-wMM`` suffix is the project's per-wave worktree branch convention
+# (``feature/<symbol>-v<X.Y>-pNN-wMM``). Anything else (HEAD, the long-running
+# feature branch, ``main``, ``origin/*``) counts as an integration ref.
+_TRANSIENT_REF_RE = re.compile(
+    r"(?:^|/)worktree-agent-|/worktrees/|-p\d{2,}-w\d{2,}$",
+    re.IGNORECASE,
+)
+
+# Integration commits win over transient ones; within a tier, most-recent wins.
+_TIER_INTEGRATION = 0
+_TIER_TRANSIENT = 1
 
 
 DriftKind = Literal["pinned_but_missing", "pinned_mismatch", "closed_no_pin", "closed_unfindable"]
@@ -140,6 +173,129 @@ def _candidate_grep_terms(wave_id: str) -> list[str]:
     return terms
 
 
+def _candidate_index_keys(wave_id: str) -> list[str]:
+    """Return the index-lookup keys for *wave_id*, in priority order.
+
+    Mirrors :func:`_candidate_grep_terms` but yields the bare keys the
+    index is built on: the bracketed prefix forms (canonical first, then
+    its long/short alternate) followed by the bare wave id (the
+    ``Eawf-Wave`` trailer value). The canonical-then-alt prefix order
+    preserves the same most-recent-wins semantics the per-wave
+    ``git log --grep`` path used.
+    """
+    keys = _candidate_prefixes(wave_id)
+    if _phase_and_wave(wave_id) is not None:
+        keys.append(wave_id)
+    return keys
+
+
+def build_wave_sha_index(repo_root: Path | None = None) -> Mapping[str, str]:
+    """Build the wave-key -> commit-SHA map in ONE ``git log`` pass.
+
+    Replaces the O(closed-waves) per-wave ``git log --grep`` shell-outs in
+    the bulk reconcilers with a single ``git log --all --source`` walk that
+    indexes every commit's bracketed subject prefix AND its ``Eawf-Wave``
+    trailer value. Consumers (:func:`derive_wave_sha`,
+    :func:`detect_git_state_drift`, :func:`scan_commit_pins`) look a wave's
+    candidate keys up in the returned map instead of shelling out per wave.
+
+    Keys are the bracketed prefix (e.g. ``[P30-I07-W08]``, ``[P28-W02]``)
+    and the bare wave id (the trailer value, e.g. ``P28-I03-W02``). Values
+    are the full 40-hex SHA.
+
+    Deterministic twin resolution: ``--source`` annotates each commit with
+    the ref it was reached through. When the same key appears on both an
+    integration ref (HEAD, the long-running feature branch, ``main``,
+    ``origin/*``) and a transient per-wave ref (``worktree-agent-*``,
+    ``refs/worktrees/*``, a ``-pNN-wMM`` worktree branch), the integration
+    SHA wins. Within one tier the most-recent commit wins (``git log`` emits
+    newest-first, so the first sighting per tier is kept).
+
+    Args:
+        repo_root: Repository working directory; defaults to the process
+            cwd.
+
+    Returns:
+        A mapping of wave key to 40-hex SHA. Empty when git is unavailable,
+        the log call fails or times out, or history carries no wave keys.
+    """
+    if shutil.which("git") is None:
+        logger.debug("build_wave_sha_index git=not-on-path")
+        return {}
+    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(
+        ("%H", "%S", "%s", f"%(trailers:key={_WAVE_TRAILER_NAME},valueonly)")
+    )
+    cmd = ["git", "log", "--all", "--source", f"--format={fmt}"]
+    try:
+        out = subprocess.run(
+            cmd,
+            cwd=str(repo_root) if repo_root else None,
+            capture_output=True,
+            text=True,
+            timeout=_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        logger.debug("build_wave_sha_index status=timeout")
+        return {}
+    except (FileNotFoundError, OSError) as exc:
+        logger.debug(f"build_wave_sha_index status=os-error err={exc!s}")
+        return {}
+    if out.returncode != 0:
+        logger.debug(
+            f"build_wave_sha_index status=non-zero rc={out.returncode} "
+            f"stderr={out.stderr.strip()!r}"
+        )
+        return {}
+    return _parse_index(out.stdout)
+
+
+def _parse_index(raw: str) -> dict[str, str]:
+    """Parse ``git log --source`` output into the wave-key -> SHA map.
+
+    Tier per key tracks whether the winning SHA came from an integration
+    ref so a later transient sighting cannot overwrite it; within a tier the
+    first (newest) sighting is kept.
+    """
+    index: dict[str, str] = {}
+    tier_seen: dict[str, int] = {}
+    for record in raw.split(_REC_SEP):
+        if not record:
+            continue
+        fields = record.split(_FIELD_SEP)
+        if len(fields) < 4:
+            continue
+        sha, source_ref, subject, trailer = fields[0], fields[1], fields[2], fields[3]
+        sha = sha.strip()
+        if not sha:
+            continue
+        tier = _TIER_TRANSIENT if _TRANSIENT_REF_RE.search(source_ref) else _TIER_INTEGRATION
+        keys: list[str] = []
+        match = _BRACKET_PREFIX_RE.match(subject)
+        if match is not None:
+            keys.append(f"[{match.group(1)}]")
+        trailer_wave = trailer.strip().splitlines()
+        if trailer_wave:
+            keys.append(trailer_wave[0].strip())
+        for key in keys:
+            if not key:
+                continue
+            prior = tier_seen.get(key)
+            if prior is None or tier < prior:
+                index[key] = sha
+                tier_seen[key] = tier
+    return index
+
+
+def _sha_from_index(wave_id: str, index: Mapping[str, str]) -> str | None:
+    """Resolve *wave_id* against a prebuilt *index*, candidate-key priority order."""
+    for key in _candidate_index_keys(wave_id):
+        sha = index.get(key)
+        if sha is not None:
+            return sha
+    return None
+
+
 def _git_merge_base_head_main(
     *, repo_root: Path | None = None, fallback: str = "origin/main"
 ) -> str:
@@ -220,14 +376,27 @@ def derive_diff_base(
     return _git_merge_base_head_main(repo_root=repo_root, fallback=fallback)
 
 
-def derive_wave_sha(wave_id: str, *, repo_root: Path | None = None) -> str | None:
+def derive_wave_sha(
+    wave_id: str,
+    *,
+    repo_root: Path | None = None,
+    index: Mapping[str, str] | None = None,
+) -> str | None:
     """Return the most recent commit SHA whose subject carries the wave's prefix.
 
-    Walks ``git log --all --grep=<prefix> --format=%H -n 1`` so the lookup
-    survives cherry-picks and is branch-agnostic. Tries both the
-    canonical commit-prefix form and its alternate (long ↔ short) so
-    a wave's SHA stays discoverable regardless of which form the
-    executor that committed it used.
+    Two resolution paths share the canonical-then-alt prefix form plus the
+    ``Eawf-Wave`` trailer fallback:
+
+    - When *index* is supplied (the bulk-reconciler fast path), the SHA is
+      looked up from the prebuilt :func:`build_wave_sha_index` map. The
+      index already encodes integration-wins twin resolution and
+      most-recent-wins ordering, so this path is a pure dict lookup with no
+      shell-out -- the whole-state walk costs one ``git log`` instead of one
+      per closed wave.
+    - When *index* is ``None`` (single-lookup callers such as
+      ``wave show --commit`` and the renderers), the lookup walks
+      ``git log --all --grep=<prefix> --format=%H -n 1`` per candidate so
+      the call stays branch-agnostic and survives cherry-picks.
 
     Returns ``None`` when:
 
@@ -235,9 +404,11 @@ def derive_wave_sha(wave_id: str, *, repo_root: Path | None = None) -> str | Non
     - the prefix cannot be derived from *wave_id*,
     - no commit matches any candidate prefix.
 
-    Logs a debug line on failure rather than raising — renderers should
+    Logs a debug line on failure rather than raising -- renderers should
     degrade to an empty SHA, not crash.
     """
+    if index is not None:
+        return _sha_from_index(wave_id, index)
     candidates = _candidate_grep_terms(wave_id)
     if not candidates:
         return None
@@ -319,13 +490,16 @@ def detect_git_state_drift(state: State, *, repo_root: Path | None = None) -> li
     from eawf.kernel.state.enums import WaveStatus
 
     git_available = shutil.which("git") is not None
+    index = build_wave_sha_index(repo_root) if git_available else {}
 
     drifts: list[Drift] = []
     for wave_id in sorted(state.waves):
         wave = state.waves[wave_id]
         if wave.status != WaveStatus.CLOSED:
             continue
-        derived = derive_wave_sha(wave_id, repo_root=repo_root) if git_available else None
+        derived = (
+            derive_wave_sha(wave_id, repo_root=repo_root, index=index) if git_available else None
+        )
         pinned = wave.commit
         if pinned is not None:
             if derived is None:
@@ -461,13 +635,16 @@ def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[Com
     from eawf.kernel.state.enums import WaveStatus
 
     git_available = shutil.which("git") is not None
+    index = build_wave_sha_index(repo_root) if git_available else {}
 
     issues: list[CommitPinIssue] = []
     for wave_id in sorted(state.waves):
         wave = state.waves[wave_id]
         if wave.status != WaveStatus.CLOSED:
             continue
-        derived = derive_wave_sha(wave_id, repo_root=repo_root) if git_available else None
+        derived = (
+            derive_wave_sha(wave_id, repo_root=repo_root, index=index) if git_available else None
+        )
         pinned = wave.commit
         if pinned is not None:
             if derived is None:
