@@ -17290,7 +17290,8 @@
         "P30-I05-W10",
         "P30-I05-W09",
         "P30-I05-W11",
-        "P30-I05-W12"
+        "P30-I05-W12",
+        "P30-I05-W13"
       ]
     },
     "P30-I06": {
@@ -18471,7 +18472,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T13:59:48.178848Z",
+  "updated_at": "2026-06-10T14:44:20.403328Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74172,6 +74173,98 @@
         }
       ],
       "title": "Defer registry import in help_panels cold path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I05-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "W08's zero-runtime close gate broke three sibling daemon gate tests (verdict, spec-jury, cross-vendor-jury) whose _state_payload fixtures lacked runtime data. Add runtime_baseline/runtime_latest so the close path resolves non-zero EU and the gate routes as designed.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/daemon/test_wave_verdict_gate.py",
+        "tests/daemon/test_wave_spec_jury_gate.py",
+        "tests/daemon/test_wave_cross_vendor_jury_gate.py"
+      ],
+      "gates": [],
+      "id": "P30-I05-W13",
+      "intent": {
+        "desired_outcome": "All three sibling gate test files carry runtime_baseline/runtime_latest fixtures so the close path resolves non-zero EU and the full daemon suite is green.",
+        "evidence_refs": [
+          "tests/daemon/test_wave_verdict_gate.py",
+          "src/eawf/runtime/daemon/methods/state.py"
+        ],
+        "planned_steps": [
+          "Add runtime_baseline/runtime_latest to _state_payload in each of the three gate test files",
+          "Confirm the full tests/daemon suite passes"
+        ],
+        "priority_rationale": "Blocks I05 close: the full daemon suite is red without this fixture fix, and a green suite is a precondition for audit/polish/close.",
+        "problem": "W08 added a zero-runtime close gate but only fixed its own test file; three sibling daemon gate tests broke because their fixtures lack runtime data.",
+        "risks": [
+          "Fixture drift if the runtime field schema changes again"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I05",
+      "opened_at": "2026-06-10T14:44:20.403099Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "tests/daemon/test_wave_verdict_gate.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/daemon/test_wave_verdict_gate.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "test_wave_spec_jury_gate.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_wave_spec_jury_gate.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "test_wave_cross_vendor_jury_gate.py all pass under the W08 zero-runtime close gate",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_wave_cross_vendor_jury_gate.py all pass under the W08 zero-runtime close gate",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-pin sibling daemon gate fixtures to EUCAP runtime close path",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
