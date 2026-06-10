@@ -4596,6 +4596,18 @@
       "status": "done",
       "updated_at": "2026-06-10T03:39:58.938856Z"
     },
+    "P30-I04-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W06",
+      "scope_id": "P30-I04-W06",
+      "status": "done",
+      "updated_at": "2026-06-10T04:01:52.364092Z"
+    },
     "P30-I04-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -4607,6 +4619,18 @@
       "scope_id": "P30-I04-W07",
       "status": "done",
       "updated_at": "2026-06-10T03:25:10.198652Z"
+    },
+    "P30-I04-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I04-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I04-W09",
+      "scope_id": "P30-I04-W09",
+      "status": "done",
+      "updated_at": "2026-06-10T04:01:58.177279Z"
     }
   },
   "agent_sessions": {
@@ -15116,6 +15140,19 @@
       "scope_id": "P30-I04-W05",
       "updated_at": "2026-06-10T03:29:00.094199Z"
     },
+    "P30-I04-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W06-bucket-20260610T034151Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I04-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I04-W06",
+      "updated_at": "2026-06-10T03:41:51.594622Z"
+    },
     "P30-I04-W07": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I04-W07-bucket-20260610T032445Z",
@@ -15128,6 +15165,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I04-W07",
       "updated_at": "2026-06-10T03:24:45.451131Z"
+    },
+    "P30-I04-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I04-W09-bucket-20260610T034152Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I04-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I04-W09",
+      "updated_at": "2026-06-10T03:41:52.172644Z"
     }
   },
   "goals": {
@@ -18011,7 +18061,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T03:39:58.939955Z",
+  "updated_at": "2026-06-10T04:01:58.177648Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -69744,10 +69794,10 @@
         "P30-I04-W08",
         "P30-I04-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "codex-p30-i04-w06",
+      "claimed_at": "2026-06-10T03:41:51.594613Z",
+      "closed_at": "2026-06-10T04:01:52.364092Z",
+      "commit": "3a4046ab1cb6a6c08b47da6370c408714021fa32",
       "deps": [
         "P30-I04-W04",
         "P30-I04-W05"
@@ -69765,10 +69815,10 @@
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.813197Z",
-      "outcome": null,
+      "outcome": "Proved required UI close gates fire and mint evidence",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -70046,10 +70096,10 @@
     "P30-I04-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "codex-p30-i04-w09",
+      "claimed_at": "2026-06-10T03:41:52.172635Z",
+      "closed_at": "2026-06-10T04:01:58.177279Z",
+      "commit": "4e22dc8a88cde161b1eeb0fdd5994c4144191586",
       "deps": [
         "P30-I04-W05"
       ],
@@ -70065,10 +70115,10 @@
       "intent": null,
       "iter_id": "P30-I04",
       "opened_at": "2026-06-09T12:29:17.813664Z",
-      "outcome": null,
+      "outcome": "Implemented transition coverage state-completeness check",
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
