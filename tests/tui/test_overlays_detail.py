@@ -1074,14 +1074,15 @@ def test_dispatch_tab_label_is_removed() -> None:
     assert "dp" not in _TAB_LABEL_TEXT
 
 
-def test_tab_label_text_is_the_five_chassis_ids() -> None:
-    """The chassis carries exactly the five cosmic-terminal tab ids."""
+def test_tab_label_text_is_the_six_chassis_ids() -> None:
+    """The chassis carries exactly the six cosmic-terminal tab ids."""
     assert list(_TAB_LABEL_TEXT) == [
         "overview",
         "criteria",
         "gates",
         "evidence",
         "runtime",
+        "cost",
     ]
 
 
@@ -1098,12 +1099,17 @@ def test_tab_label_carries_chrome_glyph_prefix() -> None:
     assert tab_label("runtime", mode="unicode") == f"{runtime_u} runtime"
     assert tab_label("evidence", mode="unicode") == f"{evidence_u} evidence"
     assert tab_label("criteria", mode="unicode").endswith(" criteria")
+    # The cost tab carries the generic currency sign in unicode (the runtime
+    # chrome role already owns the dollar) and falls back to a plain dollar
+    # in ascii where the block currency glyph may not render.
+    assert tab_label("cost", mode="unicode") == "¤ cost"
     # ASCII column flips to the deconflicted fallbacks.
     assert tab_label("overview", mode="ascii") == "= overview"
     assert tab_label("gates", mode="ascii") == "[] gates"
     assert tab_label("evidence", mode="ascii") == "@ evidence"
     assert tab_label("criteria", mode="ascii") == "> criteria"
     assert tab_label("runtime", mode="ascii") == "$ runtime"
+    assert tab_label("cost", mode="ascii") == "$ cost"
 
 
 # --------------------------------------------------------------------------

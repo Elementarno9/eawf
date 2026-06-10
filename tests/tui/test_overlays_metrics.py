@@ -9,7 +9,8 @@ verb + the modal-stack cap.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import orjson
@@ -26,6 +27,8 @@ from eawf.observability.telemetry.metrics_projection import (
     VarianceBucketProjection,
     VarianceWaveProjection,
 )
+from eawf.observability.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.store import SqliteMetricsStore
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.palette.verbs import split_verb_args
 from eawf.surfaces.tui.screens.overlays.metrics import (
@@ -62,13 +65,13 @@ def _load_state() -> State:
 
 
 # --------------------------------------------------------------------------
-# TILE_SPECS — 3x2 grid inventory (D9)
+# TILE_SPECS — 4x2 grid inventory (D9 + P30-I07-W13 Cost tile)
 # --------------------------------------------------------------------------
 
 
-def test_tile_specs_count_is_six() -> None:
-    # 3x2 grid — exactly six tiles per D9.
-    assert len(TILE_SPECS) == 6
+def test_tile_specs_count_is_seven() -> None:
+    # 4x2 grid — six original tiles plus the W13 Cost tile.
+    assert len(TILE_SPECS) == 7
 
 
 def test_tile_specs_ids_are_unique() -> None:
@@ -78,8 +81,15 @@ def test_tile_specs_ids_are_unique() -> None:
 
 def test_tile_specs_cover_the_v7_metric_surface() -> None:
     titles = " ".join(spec.title.lower() for spec in TILE_SPECS)
-    for needle in ("variance", "burn", "elapsed", "cache", "switchover", "role"):
+    for needle in ("variance", "burn", "elapsed", "cost", "cache", "switchover", "role"):
         assert needle in titles
+
+
+def test_tile_specs_carry_the_cost_tile() -> None:
+    """The W13 Cost tile lands in the grid inventory with a stable id."""
+    cost = next((spec for spec in TILE_SPECS if spec.tile_id == "tile-cost"), None)
+    assert cost is not None
+    assert cost.title == "Cost"
 
 
 # --------------------------------------------------------------------------
@@ -288,7 +298,7 @@ def test_render_variance_drilldown_lists_buckets_and_waves() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_metrics_modal_mounts_six_tiles() -> None:
+def test_metrics_modal_mounts_seven_tiles() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
@@ -297,10 +307,83 @@ def test_metrics_modal_mounts_six_tiles() -> None:
             await pilot.pause()
             assert isinstance(app.screen, MetricsModal)
             tiles = [app.screen.query_one(f"#{spec.tile_id}", Static) for spec in TILE_SPECS]
-            assert len(tiles) == 6
+            assert len(tiles) == 7
             assert tiles[0].border_title == TILE_SPECS[0].title
             assert tiles[-1].border_title == "Role calibration"
             assert "median 0.0m" in _text(app.screen.query_one("#tile-elapsed", Static))
+            # The Cost tile mounts and, with no telemetry DB, reads the honest
+            # absence line rather than a fabricated dollar figure.
+            assert "no metered sessions yet" in _text(app.screen.query_one("#tile-cost", Static))
+
+    asyncio.run(body())
+
+
+_NOW = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
+
+
+def _telemetry_session(session_id: str, *, cost: Decimal) -> TelemetrySession:
+    """Return one priced telemetry session row for the Cost-tile seed."""
+    return TelemetrySession(
+        session_id=session_id,
+        project_id="urn:eawf:v1:state:QR",
+        runtime="claude",
+        wave_id="P01-I01-W01",
+        attempt_id="a1",
+        session_log_path=f"claude/{session_id}.jsonl",
+        started_at=_NOW,
+        ended_at=_NOW + timedelta(minutes=9),
+        duration_ms=540000,
+        model_primary="claude-model",
+        total_input_tokens=100,
+        total_output_tokens=50,
+        total_cache_read=80,
+        total_cache_write=20,
+        total_cost_usd=cost,
+        end_marker="clean_stop",
+    )
+
+
+def _seed_state_with_metrics_db(tmp_path: Path, sessions: list[TelemetrySession]) -> Path:
+    """Copy the fixture state to *tmp_path* + seed a sibling telemetry DB."""
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_bytes(_PHASE_ITER_WAVE.read_bytes())
+    store = SqliteMetricsStore(state_path.parent / "telemetry.db")
+    store.init_schema()
+    for session in sessions:
+        store.upsert("telemetry_sessions", session)
+    store.commit()
+    store.close()
+    return state_path
+
+
+def test_metrics_cost_tile_matches_dollar_tab_aggregate(tmp_path: Path) -> None:
+    """The Cost tile sums the same priced cost the wave-detail $ tab quotes."""
+    from eawf.surfaces.tui.screens.overlays.detail_cost import (
+        aggregate_session_cost,
+        render_cost_tile,
+    )
+
+    sessions = [
+        _telemetry_session("s1", cost=Decimal("0.02")),
+        _telemetry_session("s2", cost=Decimal("0.03")),
+    ]
+    state_path = _seed_state_with_metrics_db(tmp_path, sessions)
+    # The expected tile body is the shared aggregation the $ tab also reads.
+    total, count = aggregate_session_cost(sessions)
+    expected = render_cost_tile(total, sample_count=count)
+    assert "total $0.0500" in expected
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(MetricsModal())
+            await pilot.pause()
+            cost_tile = _text(app.screen.query_one("#tile-cost", Static))
+            assert cost_tile == expected
+            assert "total $0.0500" in cost_tile
+            assert "sessions 2" in cost_tile
 
     asyncio.run(body())
 

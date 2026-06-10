@@ -1,22 +1,24 @@
-"""``MetricsModal`` — the V7 ``/metrics`` 3x2 dashboard overlay.
+"""``MetricsModal`` — the V7 ``/metrics`` 4x2 dashboard overlay.
 
-The ``/metrics`` palette verb opens a 3x2 grid of metric tiles backed by
-the daemon's telemetry projection. The six tiles, in grid order, are:
+The ``/metrics`` palette verb opens a 4x2 grid of metric tiles backed by
+the daemon's telemetry projection. The seven tiles, in grid order, are:
 
-1. **Variance** (top-left) — estimate-vs-actual EU per effort bucket.
-2. **Weekly burn** (top-middle) — actual EU vs the project's weekly target.
-3. **Wave elapsed** (top-right) — median + p90 wall-clock per closed wave.
-4. **Cache health** (bottom-left) — cache-create vs cache-read token ratio.
-5. **Switchover frequency** (bottom-middle) — ``runtime_switched`` counts
+1. **Variance** (top row) — estimate-vs-actual EU per effort bucket.
+2. **Weekly burn** (top row) — actual EU vs the project's weekly target.
+3. **Wave elapsed** (top row) — median + p90 wall-clock per closed wave.
+4. **Cost** (top row) — summed priced session cost over the window; the
+   dashboard mirror of the wave-detail ``$`` tab's aggregate.
+5. **Cache health** (bottom row) — cache-create vs cache-read token ratio.
+6. **Switchover frequency** (bottom row) — ``runtime_switched`` counts
    per cause over the rolling window.
-6. **Role calibration** (bottom-right) — per-agent-role bucket fit grid.
+7. **Role calibration** (bottom row) — per-agent-role bucket fit grid.
 
 The modal computes the projection from the current read-only state snapshot
 and, when present, the local telemetry DB. State-backed tiles still render
-when the telemetry DB is absent; telemetry-backed tiles show a no-data
-sentinel until the projector has written rows. The refresh cadence stays
-``set_interval(5.0, ...)`` so the same surface can switch to daemon-push
-later without changing the visible contract.
+when the telemetry DB is absent; telemetry-backed tiles (including Cost)
+show an honest no-data sentinel until the projector has written rows. The
+refresh cadence stays ``set_interval(5.0, ...)`` so the same surface can
+switch to daemon-push later without changing the visible contract.
 
 The tile inventory + grid order are a pure module-level table
 (:data:`TILE_SPECS`) so the composition is unit-testable without mounting
@@ -46,8 +48,13 @@ from eawf.observability.telemetry.metrics_projection import (
     RoleCalibrationProjection,
     compute_metrics_projection,
 )
+from eawf.observability.telemetry.models import TelemetrySession
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.surfaces.tui.screens.overlays.detail_cost import (
+    aggregate_session_cost,
+    render_cost_tile,
+)
 from eawf.surfaces.tui.widgets.calibration_table import (
     render_role_calibration_drilldown,
     render_role_calibration_tile,
@@ -102,13 +109,16 @@ class TileSpec:
     drill: str | None = None
 
 
-#: The 3x2 tile inventory in grid order (row-major: top-left → bottom-
-#: right). The grid is ``grid-size: 3 2`` so the first three specs fill
-#: the top row and the last three the bottom row.
+#: The 4x2 tile inventory in grid order (row-major: top-left → bottom-
+#: right). The grid is ``grid-size: 4 2`` so the first four specs fill the
+#: top row and the next three the bottom row (the eighth cell is empty).
+#: The Cost tile (``tile-cost``) carries the wave-detail ``$`` tab's
+#: aggregate so the dashboard and the per-wave cost view agree.
 TILE_SPECS: tuple[TileSpec, ...] = (
     TileSpec("tile-variance", "Variance / bucket", drill="variance"),
     TileSpec("tile-burn", "Weekly burn"),
     TileSpec("tile-elapsed", "Wave elapsed"),
+    TileSpec("tile-cost", "Cost"),
     TileSpec("tile-cache", "Cache health"),
     TileSpec("tile-switchover", "Switchover freq"),
     TileSpec("tile-role-calibration", "Role calibration", drill="role-calibration"),
@@ -331,13 +341,14 @@ def parse_metrics_args(args: str) -> MetricsArgs:
 
 
 class MetricsModal(ModalScreen[None]):
-    """3x2 grid of metric tiles (Esc to close); dashboard overlay.
+    """4x2 grid of metric tiles (Esc to close); dashboard overlay.
 
-    Composes the six :data:`TILE_SPECS` tiles in a ``grid-size: 3 2``
-    grid, renders each tile's placeholder until the telemetry-projection
-    RPC is wired, and arms the :data:`METRICS_REFRESH_S` refresh seam.
-    Built with a pre-parsed :class:`MetricsArgs` so the window / scope
-    filter come from the verb args, not from reaching into App state.
+    Composes the seven :data:`TILE_SPECS` tiles in a ``grid-size: 4 2``
+    grid, renders each tile from the current telemetry projection (the Cost
+    tile reads its aggregate from the priced sessions), and arms the
+    :data:`METRICS_REFRESH_S` refresh seam. Built with a pre-parsed
+    :class:`MetricsArgs` so the window / scope filter come from the verb
+    args, not from reaching into App state.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -358,7 +369,7 @@ class MetricsModal(ModalScreen[None]):
     }
     MetricsModal #metrics-grid {
         layout: grid;
-        grid-size: 3 2;
+        grid-size: 4 2;
         grid-gutter: 1;
         height: 1fr;
     }
@@ -386,12 +397,12 @@ class MetricsModal(ModalScreen[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("left", "move(-1)", "left", show=False),
         Binding("right", "move(1)", "right", show=False),
-        Binding("up", "move(-3)", "up", show=False),
-        Binding("down", "move(3)", "down", show=False),
+        Binding("up", "move(-4)", "up", show=False),
+        Binding("down", "move(4)", "down", show=False),
         Binding("h", "move(-1)", "left", show=False),
         Binding("l", "move(1)", "right", show=False),
-        Binding("k", "move(-3)", "up", show=False),
-        Binding("j", "move(3)", "down", show=False),
+        Binding("k", "move(-4)", "up", show=False),
+        Binding("j", "move(4)", "down", show=False),
         Binding("enter", "drill", "drill", show=False),
         Binding("escape", "close", "close", show=False),
     ]
@@ -415,7 +426,7 @@ class MetricsModal(ModalScreen[None]):
         )
 
     def compose(self) -> ComposeResult:
-        """Yield the titled card, the 3x2 tile grid, and the close hint."""
+        """Yield the titled card, the 4x2 tile grid, and the close hint."""
         scope_suffix = f" · {self._args.scope_filter}" if self._args.scope_filter else ""
         mode = self._render_mode()
         overview = chrome("overview", mode=mode)
@@ -460,15 +471,60 @@ class MetricsModal(ModalScreen[None]):
     def _tile_body(self, spec: TileSpec, projection: MetricsProjection | None) -> str:
         """Render *spec*'s tile body from *projection*.
 
+        The Cost tile reads its aggregate from the priced telemetry sessions
+        (the same ``cost_usd`` source the wave-detail ``$`` tab quotes) rather
+        than the projection, since the six-field projection carries no cost
+        figure; every other tile renders from the projection.
+
         Args:
             spec: The tile spec to render the body for.
-            projection: The current six-tile metrics projection, or ``None``
-                before a state snapshot is available.
+            projection: The current metrics projection, or ``None`` before a
+                state snapshot is available.
 
         Returns:
             The tile's content-markup body string.
         """
+        if spec.tile_id == "tile-cost":
+            return self._cost_tile_body()
         return render_projection_tile(projection, spec.tile_id)
+
+    def _cost_tile_body(self) -> str:
+        """Render the Cost tile body from the metered telemetry sessions.
+
+        Sums the priced
+        :attr:`~eawf.observability.telemetry.models.TelemetrySession.total_cost_usd`
+        across the stored metered sessions and routes the aggregate through
+        the shared :func:`~eawf.surfaces.tui.screens.overlays.detail_cost.render_cost_tile`
+        renderer -- so the tile and the wave-detail ``$`` tab agree on the
+        cost figure (DRY: one aggregation home). A missing telemetry DB (or a
+        read failure) yields the honest "no metered sessions yet" absence
+        line rather than a fabricated ``$0``.
+
+        Returns:
+            The Cost tile's body string.
+        """
+        total, count = aggregate_session_cost(self._cost_sessions())
+        return render_cost_tile(total, sample_count=count)
+
+    def _cost_sessions(self) -> list[TelemetrySession]:
+        """Load the metered telemetry session rows from the local store.
+
+        Returns:
+            The stored metered sessions, or an empty list when no telemetry
+            DB is reachable or the read failed (the honest absence the Cost
+            tile folds onto its no-data line).
+        """
+        store = self._metrics_store()
+        if store is None:
+            return []
+        try:
+            rows = store.fetch_all("telemetry_sessions", TelemetrySession)
+        except Exception as exc:
+            logger.debug(f"_cost_sessions fallback cause={exc!r}")
+            return []
+        finally:
+            store.close()
+        return [row for row in rows if isinstance(row, TelemetrySession)]
 
     def on_mount(self) -> None:
         """Arm the refresh seam (live once the telemetry RPC is wired).
@@ -510,7 +566,7 @@ class MetricsModal(ModalScreen[None]):
         return state if isinstance(state, State) else None
 
     def _current_projection(self) -> MetricsProjection | None:
-        """Return the current six-tile projection, or ``None`` before state loads."""
+        """Return the current metrics projection, or ``None`` before state loads."""
         state = self._current_state()
         if state is None:
             return None
@@ -554,7 +610,7 @@ class MetricsModal(ModalScreen[None]):
             return None
 
     def action_move(self, delta: int) -> None:
-        """Move tile focus by *delta*, clamped to the six-tile grid."""
+        """Move tile focus by *delta*, clamped to the seven-tile grid."""
         self.selected = max(0, min(self.selected + delta, len(TILE_SPECS) - 1))
 
     def action_drill(self) -> None:

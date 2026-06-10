@@ -1,45 +1,29 @@
-"""``DetailModal`` — tabbed detail card for a selected entity.
+"""``DetailModal`` -- tabbed detail card for a selected entity.
 
-The drill-in overlay opened when the operator presses ``Enter`` on a row:
-the widgets emit a selection message
-(:class:`~eawf.surfaces.tui.widgets.backlog_table.BacklogTable.RowActivated`
-carrying a backlog-item id,
-:class:`~eawf.surfaces.tui.widgets.roadmap_tree.RoadmapTree.WaveSelected`
-carrying a wave id), the shared
-:class:`~eawf.surfaces.tui.scopes.ScopeScreen` routes the message here, and this
-modal renders the resolved entity's detail in a tabbed, scrollable card.
+The drill-in overlay opened when the operator presses ``Enter`` on a row: a
+widget emits a selection message (a backlog-item or wave id), the shared
+:class:`~eawf.surfaces.tui.scopes.ScopeScreen` routes it here, and this modal
+renders the resolved entity in a tabbed, scrollable card.
 
-The card body is split across up to five cosmic-terminal tabs —
-``overview`` / ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` —
-each carrying a chrome-glyph mnemonic from the reskin sigil vocabulary
-(``glyph`` / ``chrome`` in
-:mod:`~eawf.surfaces.tui.widgets.sigils`). ``Tab`` / ``Shift+Tab`` cycle
-the tabs, the single-letter keys ``o`` / ``c`` / ``g`` / ``v`` / ``r``
-jump straight to a tab, and the arrow keys keep their native scroll
-behaviour inside the focused pane (they are *not* rebound to
-tab-switching). The ``overview`` tab is ALWAYS present (it carries the
-entity identity); the rest are built only when their section has data for
-the resolved entity, so a wave with no gates shows no ``gates`` tab rather
-than an empty one and a hotkey for an absent tab no-ops. The ``runtime``
-tab is honest about absence: a wave with no token budget and no ended
-sessions shows the shared
-:data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel for its
-token + EU rows rather than a fabricated ``0%`` bar or a measured zero, so
-the empty state stays distinguishable from a real measured value. A wave
-with a token budget paints a consumed-vs-budget token bar, and a wave with
-ended :class:`~eawf.kernel.state.models.SessionAttempt` rows paints a
-session-derived runtime-EU value.
+The body is split across up to six cosmic-terminal tabs --
+``overview`` / ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` /
+``cost`` -- each with a chrome-glyph mnemonic from the reskin sigil
+vocabulary. ``Tab`` / ``Shift+Tab`` cycle the tabs; the single-letter keys
+``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` jump to one, and the arrow keys
+keep their native scroll. ``overview`` is always present; the rest build only
+when their section has data, so an absent tab renders nothing and its hotkey
+no-ops. Honest absence is first-class: the ``runtime`` tab shows the
+:data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel rather than a
+fabricated zero (a real budget still paints a consumed-vs-budget bar +
+session-derived runtime-EU), and the ``cost`` tab renders "no metered
+sessions yet" (with an em-dash + inert marker for an unbillable attempt).
 
-Entity resolution is a pure function (:func:`resolve_detail`) that takes
-the reactive :class:`~eawf.kernel.state.models.State` and the selection id and
-returns a typed :class:`DetailCard` (title + per-tab section rows). It
-resolves waves, iters, phases, and backlog items; an unknown id yields a
-total fallback card so the drill-in seam never crashes when the state and
-a widget row briefly disagree (e.g. mid daemon-push). Keeping the
-formatting pure means the rendered detail is unit-testable without
-mounting Textual, and the modal stays a thin view over it. Construct the
-modal with a pre-built :class:`DetailCard` (the host screen builds it from
-``app.state``) so the overlay never reaches back into App state itself.
+Entity resolution is a pure function (:func:`resolve_detail`) over the
+reactive :class:`~eawf.kernel.state.models.State` returning a typed
+:class:`DetailCard`; an unknown id yields a total fallback card so the seam
+never crashes mid daemon-push. Purity keeps the rendered detail unit-testable
+without mounting Textual; the modal is a thin view built from a pre-resolved
+card and never reaches back into App state itself.
 """
 
 from __future__ import annotations
@@ -65,13 +49,21 @@ from eawf.kernel.spec.common import (
 )
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import StoreKind
-from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES, _duration_ms_to_eu
+from eawf.observability.telemetry.join import (
+    DEFAULT_EU_MINUTES,
+    WaveSessionRollup,
+    _duration_ms_to_eu,
+)
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import linkify_text
 from eawf.surfaces.render.narrative import (
     NarrativeNotFoundError,
     build_narrative,
     render_narrative_bundle,
+)
+from eawf.surfaces.tui.screens.overlays.detail_cost import (
+    wave_cost_rollup_for_wave,
+    wave_cost_rows,
 )
 from eawf.surfaces.tui.screens.overlays.reference import tooltip_for_text
 from eawf.surfaces.tui.widgets import sigils
@@ -117,6 +109,7 @@ _TAB_LABEL_TEXT: dict[str, str] = {
     "gates": "gates",
     "evidence": "evidence",
     "runtime": "runtime",
+    "cost": "cost",
 }
 
 #: The unicode / ascii right-pointing marker prefixed to the ``criteria``
@@ -125,6 +118,14 @@ _TAB_LABEL_TEXT: dict[str, str] = {
 #: stays ASCII-clean (matching the sigils-module convention); the rendered
 #: mark is a black right-pointing small triangle.
 _CRITERIA_MARKER: tuple[str, str] = ("\u25b8", ">")
+
+#: The unicode / ascii marker prefixed to the ``cost`` tab label. The
+#: runtime chrome role already owns the ``$`` glyph, so the cost tab carries
+#: the generic currency sign (U+00A4) in the unicode column and a plain
+#: ``$`` in the ascii column -- the dollar reads as money where the
+#: block-glyph currency sign may not render. Written ``\uXXXX`` so the
+#: source stays ASCII-clean per the sigils-module convention.
+_COST_MARKER: tuple[str, str] = ("\u00a4", "$")
 
 
 def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
@@ -138,19 +139,22 @@ def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
     the local :data:`_CRITERIA_MARKER` (no chrome role exists for it).
 
     Args:
-        tab_id: One of the five chassis tab ids.
+        tab_id: One of the six chassis tab ids.
         mode: The App's resolved render mode (``"unicode"`` / ``"ascii"``).
 
     Returns:
         The single-cell glyph string for *tab_id* in the resolved column.
 
     Raises:
-        KeyError: If *tab_id* is not one of the five chassis tab ids.
+        KeyError: If *tab_id* is not one of the six chassis tab ids.
     """
     if tab_id == "evidence":
         return sigils.glyph(Sigil.CLOSED, mode=mode)
     if tab_id == "criteria":
         unicode_marker, ascii_marker = _CRITERIA_MARKER
+        return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
+    if tab_id == "cost":
+        unicode_marker, ascii_marker = _COST_MARKER
         return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
     chrome_role = {"overview": "overview", "gates": "gate", "runtime": "runtime"}[tab_id]
     return sigils.chrome(chrome_role, mode=mode)
@@ -160,7 +164,7 @@ def tab_label(tab_id: str, *, mode: RenderMode) -> str:
     """Return the full pane label (glyph + word) for *tab_id* in *mode*.
 
     Args:
-        tab_id: One of the five chassis tab ids.
+        tab_id: One of the six chassis tab ids.
         mode: The App's resolved render mode (``"unicode"`` / ``"ascii"``).
 
     Returns:
@@ -168,7 +172,7 @@ def tab_label(tab_id: str, *, mode: RenderMode) -> str:
         followed by ``"overview"``.
 
     Raises:
-        KeyError: If *tab_id* is not one of the five chassis tab ids.
+        KeyError: If *tab_id* is not one of the six chassis tab ids.
     """
     return f"{_tab_glyph(tab_id, mode=mode)} {_TAB_LABEL_TEXT[tab_id]}"
 
@@ -221,7 +225,7 @@ def _status_with_sigil(status_value: str, *, mode: RenderMode) -> str:
 
 @dataclass(frozen=True)
 class DetailCard:
-    """A resolved detail card: a title plus the five chassis section groups.
+    """A resolved detail card: a title plus the six chassis section groups.
 
     The card carries one row group per cosmic-terminal tab. ``rows`` is the
     canonical ``overview`` field group — always populated (every card
@@ -266,6 +270,14 @@ class DetailCard:
             the token row, and a wave with no ended sessions renders it for
             the EU row, so the empty state stays distinguishable from a
             measured zero — never a fabricated ``0%`` bar.
+        cost: The ``cost`` group — the per-attempt cost columns (attempt,
+            model, in/out tokens, cache create/read tokens, priced cost, EU)
+            plus an aggregate cost bar, joined from the wave's metered
+            telemetry sessions. A wave whose attempts joined no metered
+            session carries a single honest "no metered sessions yet" row,
+            and an attempt the pricing snapshot could not bill renders an
+            em-dash plus an inert un-billed marker. Empty for a wave with no
+            session attempts, so the modal renders no cost tab.
         detail_markdown: Optional Markdown body for the ``overview`` tab.
             When ``None``, the ``overview`` tab renders ``rows`` as aligned
             field rows.
@@ -277,6 +289,7 @@ class DetailCard:
     gates: tuple[tuple[str, str], ...] = ()
     evidence: tuple[tuple[str, str], ...] = ()
     runtime: tuple[tuple[str, str], ...] = ()
+    cost: tuple[tuple[str, str], ...] = ()
     detail_markdown: str | None = None
 
 
@@ -658,12 +671,19 @@ def _wave_card(
     *,
     reports: Iterable[AgentReportRow] = (),
     error_kind_by_attempt: Mapping[int, Iterable[str]] | None = None,
+    cost_rollup: WaveSessionRollup | None = None,
 ) -> DetailCard | None:
     """Build a :class:`DetailCard` for the wave *wave_id*, or ``None``.
 
     Args:
         state: The bound state to resolve the wave from.
         wave_id: The selected wave id.
+        reports: The wave's loaded agent-report rows (every role's store).
+        error_kind_by_attempt: Per-attempt telemetry error kinds.
+        cost_rollup: The wave's joined per-attempt cost rollup, or ``None``
+            when no telemetry DB is reachable. ``None`` against a wave that
+            still carries session attempts surfaces the honest "no metered
+            sessions yet" cost line (the attempts exist but none priced).
 
     Returns:
         The card, or ``None`` when the id is not a known wave.
@@ -726,6 +746,13 @@ def _wave_card(
     # operator sees why a runtime swap happened.
     evidence.extend(_dispatch_history_rows(wave))
 
+    # The cost tab joins each session attempt back to its priced telemetry
+    # session and renders the per-attempt cost columns + an aggregate cost
+    # bar. The group is built only when the wave carries session attempts;
+    # a wave with attempts but no joined telemetry surfaces the honest "no
+    # metered sessions yet" line rather than an empty cost tab.
+    cost: tuple[tuple[str, str], ...] = wave_cost_rows(wave, cost_rollup)
+
     return DetailCard(
         title=f"wave {wave.id}",
         rows=tuple(rows),
@@ -733,6 +760,7 @@ def _wave_card(
         gates=tuple(gates),
         evidence=tuple(evidence),
         runtime=_wave_runtime(wave),
+        cost=cost,
         detail_markdown=_wave_narrative_preview(state, wave, reports=report_rows),
     )
 
@@ -980,6 +1008,7 @@ def resolve_detail(
     *,
     reports: Iterable[AgentReportRow] = (),
     error_kind_by_attempt: Mapping[int, Iterable[str]] | None = None,
+    cost_rollup: WaveSessionRollup | None = None,
     state_path: Path | None = None,
 ) -> DetailCard:
     """Resolve *selection_id* to a :class:`DetailCard` from *state*.
@@ -993,6 +1022,14 @@ def resolve_detail(
     Args:
         state: The bound state, or ``None`` when no state is loaded.
         selection_id: The id carried by the selection message.
+        reports: Pre-loaded agent-report rows; ignored for a wave id when a
+            ``state_path`` is given (the store load wins).
+        error_kind_by_attempt: Pre-loaded per-attempt error kinds; ignored
+            for a wave id when a ``state_path`` is given.
+        cost_rollup: Pre-joined per-attempt cost rollup; ignored for a wave
+            id when a ``state_path`` is given (the store join wins).
+        state_path: When set and the id is a wave, the store-backed report /
+            error / cost rows are loaded from the local telemetry DB.
 
     Returns:
         The resolved detail card, or a fallback card for an unknown id.
@@ -1005,12 +1042,14 @@ def resolve_detail(
                 selection_id,
                 state_path,
             )
+            cost_rollup = wave_cost_rollup_for_wave(state, selection_id, state_path)
         card = (
             _wave_card(
                 state,
                 selection_id,
                 reports=reports,
                 error_kind_by_attempt=error_kind_by_attempt,
+                cost_rollup=cost_rollup,
             )
             or _iter_card(state, selection_id)
             or _phase_card(state, selection_id)
@@ -1070,10 +1109,10 @@ class DetailModal(ModalScreen[None]):
     resolves the card from ``app.state`` via :func:`resolve_detail` when
     it routes the selection message. The modal owns only the presentation,
     the ``Tab`` / ``Shift+Tab`` tab cycle, the single-letter tab hotkeys
-    (``o`` / ``c`` / ``g`` / ``v`` / ``r`` for overview / criteria / gates
-    / evidence / runtime), and the ``Esc`` close binding. The arrow keys
-    keep their native per-pane scroll behaviour — they are deliberately not
-    bound here.
+    (``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` for overview / criteria /
+    gates / evidence / runtime / cost), and the ``Esc`` close binding. The
+    arrow keys keep their native per-pane scroll behaviour — they are
+    deliberately not bound here.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -1108,9 +1147,10 @@ class DetailModal(ModalScreen[None]):
     """
 
     #: ``Esc`` closes; ``Tab`` / ``Shift+Tab`` cycle the body tabs; the
-    #: single-letter keys jump straight to one of the five chassis tabs.
-    #: The arrow keys are intentionally absent so they keep scrolling the
-    #: focused pane rather than switching tabs.
+    #: single-letter keys jump straight to one of the six chassis tabs (the
+    #: ``$`` key jumps to the cost tab). The arrow keys are intentionally
+    #: absent so they keep scrolling the focused pane rather than switching
+    #: tabs.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "close", "close", show=False),
         Binding("tab", "next_tab", "next tab", show=False),
@@ -1120,6 +1160,7 @@ class DetailModal(ModalScreen[None]):
         Binding("g", "show_tab('gates')", "gates", show=False),
         Binding("v", "show_tab('evidence')", "evidence", show=False),
         Binding("r", "show_tab('runtime')", "runtime", show=False),
+        Binding("dollar_sign", "show_tab('cost')", "cost", show=False),
     ]
 
     def __init__(
@@ -1192,8 +1233,9 @@ class DetailModal(ModalScreen[None]):
 
         The ``overview`` tab is ALWAYS present (every card carries an
         identity); the ``criteria`` / ``gates`` / ``evidence`` / ``runtime``
-        tabs appear only when their section is non-empty, so a wave with no
-        gates renders no gates tab. Order follows the chassis sequence.
+        / ``cost`` tabs appear only when their section is non-empty, so a
+        wave with no gates renders no gates tab and a wave with no session
+        attempts renders no cost tab. Order follows the chassis sequence.
 
         Args:
             card: The resolved card.
@@ -1210,6 +1252,8 @@ class DetailModal(ModalScreen[None]):
             present.append("evidence")
         if card.runtime:
             present.append("runtime")
+        if card.cost:
+            present.append("cost")
         return tuple(present)
 
     def _section_rows(self, tab_id: str) -> tuple[tuple[str, str], ...]:
@@ -1217,7 +1261,7 @@ class DetailModal(ModalScreen[None]):
 
         Args:
             tab_id: One of the chassis tab ids (``overview`` / ``criteria``
-                / ``gates`` / ``evidence`` / ``runtime``).
+                / ``gates`` / ``evidence`` / ``runtime`` / ``cost``).
 
         Returns:
             The matching section's rows.
@@ -1230,6 +1274,8 @@ class DetailModal(ModalScreen[None]):
             return self._card.evidence
         if tab_id == "runtime":
             return self._card.runtime
+        if tab_id == "cost":
+            return self._card.cost
         return self._card.rows
 
     def _render_mode(self) -> RenderMode:
@@ -1319,10 +1365,10 @@ class DetailModal(ModalScreen[None]):
         """Jump straight to the *tab_id* pane, or no-op when it is absent.
 
         Bound to the single-letter tab hotkeys (``o`` / ``c`` / ``g`` /
-        ``v`` / ``r`` for overview / criteria / gates / evidence /
-        runtime). A key for a tab the card does not carry (e.g. ``g`` on a
-        gate-less wave) is silently ignored so the binding stays harmless on
-        every card shape.
+        ``v`` / ``r`` / ``$`` for overview / criteria / gates / evidence /
+        runtime / cost). A key for a tab the card does not carry (e.g. ``g``
+        on a gate-less wave, or ``$`` on a wave with no session attempts) is
+        silently ignored so the binding stays harmless on every card shape.
 
         Args:
             tab_id: The target tab id (one of :attr:`_tab_ids`).

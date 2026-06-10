@@ -11,13 +11,13 @@
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
-      │  ┌─ Variance / bucket ───────────┐ ┌─ Weekly burn ─────────────────┐ ┌─ Wave elapsed ─────────────────┐  │
-      │  │ no data                       │ │ consumed 0.0 EU               │ │ median 0.0m                    │  │
-      │  └───────────────────────────────┘ └───────────────────────────────┘ └────────────────────────────────┘  │
+      │  ┌─ Variance / bucket ──┐ ┌─ Weekly burn ─────────┐ ┌─ Wave elapsed ────────┐ ┌─ Cost ────────────────┐  │
+      │  │ no data              │ │ consumed 0.0 EU       │ │ median 0.0m           │ │ no metered sessions   │  │
+      │  └──────────────────────┘ └───────────────────────┘ └───────────────────────┘ └───────────────────────┘  │
       │                                                                                                          │
-      │  ┌─ Cache health ────────────────┐ ┌─ Switchover freq ─────────────┐ ┌─ Role calibration ─────────────┐  │
-      │  │ no data                       │ │ no data                       │ │ no per-role calibration data   │  │
-      │  └───────────────────────────────┘ └───────────────────────────────┘ └────────────────────────────────┘  │
+      │  ┌─ Cache health ───────┐ ┌─ Switchover freq ─────┐ ┌─ Role calibration ────┐                            │
+      │  │ no data              │ │ no data               │ │ no per-role           │                            │
+      │  └──────────────────────┘ └───────────────────────┘ └───────────────────────┘                            │
       │                                                                                                          │
       │  honest-negative · lights up after EU capture                                                            │
       │                                                                                                          │
