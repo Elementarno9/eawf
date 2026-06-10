@@ -4811,6 +4811,18 @@
       "scope_id": "P30-I05-W12",
       "status": "done",
       "updated_at": "2026-06-10T13:59:48.178640Z"
+    },
+    "P30-I05-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W13",
+      "scope_id": "P30-I05-W13",
+      "status": "done",
+      "updated_at": "2026-06-10T14:46:24.744686Z"
     }
   },
   "agent_sessions": {
@@ -15574,6 +15586,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I05-W12",
       "updated_at": "2026-06-10T13:35:14.701561Z"
+    },
+    "P30-I05-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W13-bucket-20260610T144542Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I05-W13",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I05-W13",
+      "updated_at": "2026-06-10T14:45:42.721970Z"
     }
   },
   "goals": {
@@ -18472,7 +18497,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T14:44:20.403328Z",
+  "updated_at": "2026-06-10T14:46:24.744951Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74180,10 +74205,10 @@
     "P30-I05-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i05-w13",
+      "claimed_at": "2026-06-10T14:45:42.721958Z",
+      "closed_at": "2026-06-10T14:46:24.744686Z",
+      "commit": "524b27500a02750e9e32dd9fd7b9657b618b988d",
       "deps": [],
       "description": "W08's zero-runtime close gate broke three sibling daemon gate tests (verdict, spec-jury, cross-vendor-jury) whose _state_payload fixtures lacked runtime data. Add runtime_baseline/runtime_latest so the close path resolves non-zero EU and the gate routes as designed.",
       "dispatch_history": [],
@@ -74214,12 +74239,12 @@
       },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-10T14:44:20.403099Z",
-      "outcome": null,
+      "outcome": "Re-pinned the three sibling daemon gate fixtures (verdict, spec-jury, cross-vendor-jury) to carry runtime_baseline/runtime_latest; full tests/daemon suite green (436 passed, 26 skipped).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
