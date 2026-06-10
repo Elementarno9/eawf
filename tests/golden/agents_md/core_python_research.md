@@ -439,7 +439,7 @@ Before writing a memory entry, ask whether a query already answers it. If ``eawf
 - Before adding a runtime dependency, verify it's not already pulled in transitively.
 
 <!-- END EAWF:managed id=python-style -->
-<!-- BEGIN EAWF:managed id=test-discipline version=1.0 hash=b808cbf9778a5d8a -->
+<!-- BEGIN EAWF:managed id=test-discipline version=1.1 hash=b55d3bc3c022fe1b -->
 ## Test discipline (python profile)
 
 - ``pytest.approx`` for any float comparison.
@@ -447,6 +447,7 @@ Before writing a memory entry, ask whether a query already answers it. If ``eawf
 - Public functions MUST have boundary-case AND error-path tests. Boundary: empty, single, off-by-one, max-length. Error: invalid type (``TypeError``), out-of-range (``ValueError``), missing key (``KeyError``), schema mismatch (``ValidationError``).
 - Test names: ``test_<func>_<scenario>`` — no ``test_compute_iv_solver_1``.
 - ``pytest.raises`` for error paths; assert message substring when the message is part of the API contract.
+- Full-suite runs go through ``just test`` (parallel, mirrors CI); targeted runs use ``uv run pytest <path>::<test>`` (single-process, fastest for one test).
 
 <!-- END EAWF:managed id=test-discipline -->
 <!-- BEGIN EAWF:managed id=research-workflow version=1.0 hash=ad116df8903a8f74 -->
