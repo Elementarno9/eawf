@@ -18,13 +18,18 @@ board topic tree) re-validate the row by reading the envelope back and running
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.spec.research_campaign import ResearchProfileBlock, StagedCampaign
+from eawf.kernel.spec.research_campaign import (
+    ResearchProfileBlock,
+    StagedCampaign,
+    stage_campaign,
+)
 from eawf.kernel.state.enums import CampaignStatus, StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -148,6 +153,98 @@ async def create_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     return CreateCampaignResult(id=appended_id, appended_at=appended_at).model_dump(mode="json")
 
 
+class StageCampaignParams(BaseModel):
+    """Params for :func:`stage_campaign_method`.
+
+    Attributes:
+        topic: The campaign topic to fan out across the block's domains. Must
+            be a non-empty, non-whitespace string -- an empty topic is rejected
+            by :func:`~eawf.kernel.spec.research_campaign.stage_campaign`, which
+            the server maps to ``-32602 invalid params``.
+        config: The typed ``research:`` block the campaign is staged from; its
+            per-domain map decides how many dispatches the staged plan carries.
+        campaign_id: Optional caller-allocated stable id for the staged
+            campaign. ``None`` allocates a fresh ``campaign-<hex>`` id so the
+            common caller (the Research board) need not mint one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    topic: str
+    config: ResearchProfileBlock
+    campaign_id: str | None = Field(default=None, min_length=1)
+
+
+class StageCampaignResult(BaseModel):
+    """Result of :func:`stage_campaign_method`.
+
+    Attributes:
+        id: Envelope id of the campaign row just appended (equal to the
+            campaign id, caller-supplied or freshly allocated).
+        campaign_id: The id of the staged campaign (mirrors :attr:`id`).
+        topic: The staged campaign's topic.
+        domain_count: Number of staged dispatches (one per configured domain).
+        appended_at: ISO-8601 timestamp the daemon wrote the row.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    campaign_id: str
+    topic: str
+    domain_count: int
+    appended_at: str
+
+
+@register("research.stage_campaign")
+async def stage_campaign_method(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Stage a campaign from a topic + block and append one row to the store.
+
+    Wraps the plan-only Level-1 runner
+    :func:`~eawf.kernel.spec.research_campaign.stage_campaign`: it validates the
+    input through :class:`StageCampaignParams`, stages the topic across the
+    block's domains (sorted domain order, no spawn), wraps the staged plan in a
+    typed :class:`ResearchCampaignPayload`, and persists it via the shared
+    :func:`persist_campaign` writer. The staged ``campaign.dispatches`` carry
+    one entry per configured domain in sorted domain-name order.
+
+    Args:
+        ctx: Server context -- must carry ``state_path`` so the daemon can
+            resolve ``<state_dir>/store/research_campaign.jsonl``.
+        params: JSON-RPC params per :class:`StageCampaignParams`.
+
+    Returns:
+        Dict matching :class:`StageCampaignResult`.
+
+    Raises:
+        ValueError: When *params* does not validate against
+            :class:`StageCampaignParams`, the topic is empty or whitespace, or
+            the staged plan exceeds the dispatch bound. The server maps this to
+            ``-32602 invalid params``.
+        RuntimeError: When ``ctx.state_path`` is unset (unit tests running the
+            daemon without an on-disk store).
+    """
+    args = StageCampaignParams.model_validate(params)
+    if ctx.state_path is None:
+        raise RuntimeError("state_path not configured on daemon context")
+    campaign = stage_campaign(args.topic, args.config)
+    campaign_id = (
+        args.campaign_id if args.campaign_id is not None else f"campaign-{uuid.uuid4().hex}"
+    )
+    payload = ResearchCampaignPayload(
+        campaign_id=campaign_id,
+        config=args.config,
+        campaign=campaign,
+    )
+    appended_id = persist_campaign(Path(ctx.state_path), payload)
+    appended_at = datetime.now(UTC).isoformat()
+    return StageCampaignResult(
+        id=appended_id,
+        campaign_id=campaign_id,
+        topic=campaign.topic,
+        domain_count=campaign.domain_count,
+        appended_at=appended_at,
+    ).model_dump(mode="json")
+
+
 class CancelCampaignParams(BaseModel):
     """Params for :func:`cancel_campaign`.
 
@@ -265,8 +362,11 @@ __all__ = [
     "CancelCampaignResult",
     "CreateCampaignParams",
     "CreateCampaignResult",
+    "StageCampaignParams",
+    "StageCampaignResult",
     "cancel_campaign",
     "create_campaign",
     "persist_campaign",
     "read_latest_campaign",
+    "stage_campaign_method",
 ]

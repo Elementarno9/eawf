@@ -36,6 +36,7 @@ from eawf.runtime.daemon.methods.research import (
     create_campaign,
     persist_campaign,
     read_latest_campaign,
+    stage_campaign_method,
 )
 
 pytestmark = pytest.mark.unit
@@ -186,6 +187,109 @@ def test_create_campaign_no_store_write_when_state_path_missing(tmp_path: Path) 
 
     _run(body)
     assert not store_path(state_path, StoreKind.RESEARCH_CAMPAIGN).exists()
+
+
+# --------------------------------------------------------------------------
+# stage_campaign -- stage from topic + block, then append one row
+# --------------------------------------------------------------------------
+
+
+def test_stage_campaign_appends_one_row_sorted_dispatches(tmp_path: Path) -> None:
+    """A topic + two-domain block stages one row with two sorted dispatches."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+    params = {
+        "topic": "Survey the options-pricing landscape",
+        "config": _block().model_dump(mode="json"),
+        "campaign_id": "campaign-staged",
+    }
+
+    async def body() -> None:
+        result: dict[str, Any] = await stage_campaign_method(ctx, params)
+        assert result["id"] == "campaign-staged"
+        assert result["campaign_id"] == "campaign-staged"
+        assert result["topic"] == "Survey the options-pricing landscape"
+        assert result["domain_count"] == 2
+        assert isinstance(result["appended_at"], str)
+        rows = _read_campaign_rows(state_path)
+        assert len(rows) == 1
+        domains = [dispatch.domain for dispatch in rows[0].campaign.dispatches]
+        assert domains == ["market-structure", "pricing-models"]
+        assert rows[0].campaign.spawned is False
+
+    _run(body)
+
+
+def test_stage_campaign_allocates_id_when_absent(tmp_path: Path) -> None:
+    """A missing campaign_id allocates a fresh ``campaign-<hex>`` id."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+    params = {
+        "topic": "liquidity regimes",
+        "config": _block().model_dump(mode="json"),
+    }
+
+    async def body() -> None:
+        result: dict[str, Any] = await stage_campaign_method(ctx, params)
+        assert result["campaign_id"].startswith("campaign-")
+        rows = _read_campaign_rows(state_path)
+        assert len(rows) == 1
+        assert rows[0].campaign_id == result["campaign_id"]
+
+    _run(body)
+
+
+def test_stage_campaign_rejects_empty_topic(tmp_path: Path) -> None:
+    """An empty topic is rejected (the -32602 invalid-params ValueError path)."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+    params = {"topic": "", "config": _block().model_dump(mode="json")}
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="campaign topic must be non-empty"):
+            await stage_campaign_method(ctx, params)
+
+    _run(body)
+    assert not store_path(state_path, StoreKind.RESEARCH_CAMPAIGN).exists()
+
+
+def test_stage_campaign_rejects_whitespace_topic(tmp_path: Path) -> None:
+    """A whitespace-only topic maps to the -32602 invalid-params ValueError path."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+    params = {"topic": "   ", "config": _block().model_dump(mode="json")}
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="campaign topic must be non-empty"):
+            await stage_campaign_method(ctx, params)
+
+    _run(body)
+    assert not store_path(state_path, StoreKind.RESEARCH_CAMPAIGN).exists()
+
+
+def test_stage_campaign_rejects_extra_param(tmp_path: Path) -> None:
+    """An unknown param is rejected by extra='forbid' on the params model."""
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path=state_path)
+    params = {"topic": "topic", "config": _block().model_dump(mode="json"), "rogue": True}
+
+    async def body() -> None:
+        with pytest.raises(ValidationError):
+            await stage_campaign_method(ctx, params)
+
+    _run(body)
+
+
+def test_stage_campaign_raises_without_state_path() -> None:
+    """The handler raises when the daemon context has no state path."""
+    ctx = _build_ctx(state_path=None)
+    params = {"topic": "topic", "config": _block().model_dump(mode="json")}
+
+    async def body() -> None:
+        with pytest.raises(RuntimeError, match="state_path not configured"):
+            await stage_campaign_method(ctx, params)
+
+    _run(body)
 
 
 # --------------------------------------------------------------------------
