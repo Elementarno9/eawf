@@ -71,6 +71,7 @@ class HookResult(BaseModel):
 # coerced into :class:`HookResult` by the runner so simple hooks do not
 # need to import the model.
 HookCallable = Callable[[HookEvent], "HookResult | tuple[bool, str]"]
+DaemonClientFactory = Callable[[], Any]
 
 
 class HookRunner:
@@ -165,6 +166,88 @@ class HookRunner:
             duration_ms = (time.perf_counter() - started) * 1000.0
             results.append(_coerce_result(name, raw, duration_ms))
         return results
+
+
+def _default_daemon_client_factory() -> Any:
+    """Return a daemon client context manager for runtime.capture."""
+    from eawf.surfaces.cli._daemon_client import DaemonClient
+
+    return DaemonClient()
+
+
+def _session_end_payload(event: HookEvent) -> dict[str, Any]:
+    """Return the payload shape that may carry Claude runtime counters."""
+    for key in ("claude_code", event.event_type.value):
+        payload = event.payloads.get(key)
+        if isinstance(payload, dict):
+            return payload
+    return {}
+
+
+def capture_runtime_on_session_end(
+    event: HookEvent,
+    *,
+    daemon_client_factory: DaemonClientFactory | None = None,
+    repo_root: Path | None = None,
+) -> HookResult:
+    """Forward parsed SESSION_END runtime counters to ``runtime.capture``.
+
+    The hook never blocks the source runtime. Missing cost data is a clean
+    no-op; daemon failures are surfaced in a non-blocking result so Claude's
+    Stop hook degrades like the statusline path.
+    """
+    from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
+
+    payload = _session_end_payload(event)
+    counters = parse_runtime_counters(payload)
+    if counters is None:
+        return HookResult(
+            name="runtime.capture",
+            block=False,
+            output="runtime.capture skipped: no cost block",
+        )
+
+    params = counters.model_dump(mode="json")
+    session_id = payload.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        params["session_id"] = session_id
+    params["captured_at"] = event.occurred_at.isoformat()
+    if repo_root is not None:
+        params["repo_root"] = str(repo_root)
+
+    factory = daemon_client_factory or _default_daemon_client_factory
+    try:
+        with factory() as client:
+            client.call("runtime.capture", params)
+    except Exception as exc:
+        return HookResult(
+            name="runtime.capture",
+            block=False,
+            output=repr(exc),
+        )
+    return HookResult(
+        name="runtime.capture",
+        block=False,
+        output="runtime.capture ok",
+    )
+
+
+def register_runtime_capture_hooks(
+    runner: HookRunner,
+    *,
+    daemon_client_factory: DaemonClientFactory | None = None,
+    repo_root: Path | None = None,
+) -> None:
+    """Register built-in runtime capture hooks on *runner*."""
+
+    def _hook(event: HookEvent) -> HookResult:
+        return capture_runtime_on_session_end(
+            event,
+            daemon_client_factory=daemon_client_factory,
+            repo_root=repo_root,
+        )
+
+    runner.register(HookEventType.SESSION_END, _hook, name="runtime.capture")
 
 
 def _coerce_result(name: str, raw: Any, duration_ms: float) -> HookResult:
@@ -297,8 +380,11 @@ def append_event_idempotent(path: Path, event: HookEvent, *, timeout: float = 5.
 
 
 __all__ = [
+    "DaemonClientFactory",
     "HookCallable",
     "HookResult",
     "HookRunner",
     "append_event_idempotent",
+    "capture_runtime_on_session_end",
+    "register_runtime_capture_hooks",
 ]

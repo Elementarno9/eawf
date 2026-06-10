@@ -13,16 +13,16 @@ Surface contract:
   :func:`eawf.workflow.dispatch.seed.seed_interim_verdict` so the self-eval +
   jury surfaces read a primed cohort before the live verdict producer lands.
   Only ``agent_end`` is accepted; other event types exit ``3``.
-- Exit ``0`` when no registered hook returns ``block=True``.
+- Exit ``0`` when no registered hook returns ``block=True``. ``session_end``
+  registers the built-in runtime capture hook; other events without hooks keep
+  the empty-result no-op path.
 - Exit ``9`` (``HOOK_BLOCKED``) when at least one hook reports a block.
 - Exit ``3`` (``INVALID_INPUT``) when the stdin payload is not valid JSON
   or is not a mapping.
 
-The runner mounted by this command starts empty: registration is the
-runtime adapter's job (W05 wires up the Claude-installed hook
-callables; the v1 surface here is the CLI dispatch primitive). When no
-hook is registered the result list is empty and the exit code is
-``0``.
+The runner mounted by this command starts with built-in Eä hooks only. Runtime
+adapters may register additional hooks later; when no hook matches, the result
+list is empty and the exit code is ``0``.
 """
 
 from __future__ import annotations
@@ -677,7 +677,7 @@ def run(
 ) -> None:
     """Dispatch a hook event read from stdin and emit the result envelope."""
     from eawf.runtime.hooks.event import HookEventType
-    from eawf.runtime.hooks.runner import HookRunner
+    from eawf.runtime.hooks.runner import HookRunner, register_runtime_capture_hooks
 
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
@@ -723,9 +723,8 @@ def run(
         return
 
     runner = HookRunner()
-    # The v1 CLI surface dispatches with no registered hooks — runtime
-    # adapters (W05) will register hooks via a sidecar config. The
-    # empty-bucket path is the documented success case (no-op exit 0).
+    repo_root = (flags.workspace or Path.cwd()).resolve()
+    register_runtime_capture_hooks(runner, repo_root=repo_root)
     results = runner.run_event(event)
 
     finished_at = datetime.now(UTC)
