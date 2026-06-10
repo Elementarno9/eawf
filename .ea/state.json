@@ -18309,7 +18309,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T09:44:20.455080Z",
+  "updated_at": "2026-06-10T10:04:35.295430Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73257,7 +73257,9 @@
       "file_scopes": [
         "src/eawf/runtime/daemon/methods/state.py",
         "src/eawf/workflow/lifecycle/wave.py",
-        "src/eawf/kernel/state/models.py"
+        "src/eawf/kernel/state/models.py",
+        "tests/daemon/test_state_methods.py",
+        "tests/unit/test_wave_close_actuals.py"
       ],
       "gates": [],
       "id": "P30-I05-W06",
