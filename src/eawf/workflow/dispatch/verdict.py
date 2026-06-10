@@ -553,6 +553,25 @@ def _find_active_auditor(state: State, *, scope_id: str, runtime: str) -> AgentS
     return None
 
 
+def _find_active_at_slot(state: State, *, scope_id: str, runtime: str) -> AgentSession | None:
+    """Return the ACTIVE session occupying the (scope, runtime) slot, role-agnostic.
+
+    Mirrors the exact ``(scope_id, runtime)`` ACTIVE-uniqueness key the session
+    store keys :class:`~eawf.runtime.session.store.SessionConflict` on, without
+    narrowing to a role. Used to diagnose which session caused a conflict so a
+    non-auditor occupant (an executor) is rejected as a self-report rather than
+    re-raised as an opaque conflict.
+    """
+    for session in state.agent_sessions.values():
+        if (
+            session.scope_id == scope_id
+            and session.runtime == runtime
+            and session.status is AgentSessionStatus.ACTIVE
+        ):
+            return session
+    return None
+
+
 def _resolve_auditor_session(
     *,
     state: State,
@@ -607,6 +626,17 @@ def _resolve_auditor_session(
     except SessionConflict:
         existing = _find_active_auditor(state, scope_id=scope_id, runtime=runtime)
         if existing is None:
+            # The slot is occupied by a non-auditor session (the executor's
+            # lane). Re-using it would make the executor the verdict author,
+            # so refuse the self-report fail-fast rather than re-raise the
+            # opaque conflict -- a non-independent verdict never reaches the
+            # store.
+            occupant = _find_active_at_slot(state, scope_id=scope_id, runtime=runtime)
+            if occupant is not None:
+                raise ExecutorSelfReportError(
+                    f"verdict author must be a fresh auditor session, got role "
+                    f"{occupant.role.value!r} for wave: {wave.id!r}"
+                ) from None
             raise
         logger.info(f"_resolve_auditor_session reuse wave={wave.id} session={existing.id!r}")
         session = existing
