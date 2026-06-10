@@ -8,8 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.runtime.sandbox.policy import (
+    TOOL_UNIVERSE,
     SandboxPolicy,
     allocate_policy_id,
+    invert_deny_to_allow,
     resolve_denied_tools,
 )
 
@@ -164,3 +166,34 @@ def test_resolve_denied_tools_unions_wave_and_global() -> None:
         "mcp__alpha__*",
         "mcp__beta__*",
     }
+
+
+# ---- invert_deny_to_allow ---------------------------------------------------
+
+
+def test_invert_deny_to_allow_empty_deny_yields_full_universe() -> None:
+    """An empty deny-list inverts to the whole tool universe (sorted)."""
+    assert invert_deny_to_allow(set()) == sorted(TOOL_UNIVERSE)
+
+
+def test_invert_deny_to_allow_drops_denied_from_allow() -> None:
+    """A denied tool is absent from the inverted allow set; the rest stay."""
+    allow = invert_deny_to_allow({"Edit", "Bash"})
+    assert "Edit" not in allow
+    assert "Bash" not in allow
+    assert "Read" in allow
+    # The allow set is exactly the universe minus the denied pair.
+    assert set(allow) == TOOL_UNIVERSE - {"Edit", "Bash"}
+
+
+def test_invert_deny_to_allow_is_sorted_for_determinism() -> None:
+    """The inverted allow set is sorted so the resulting argv is deterministic."""
+    allow = invert_deny_to_allow({"Read"})
+    assert allow == sorted(allow)
+
+
+def test_invert_deny_to_allow_unknown_name_does_not_widen_allow() -> None:
+    """A denied name outside the universe cannot widen the allow set."""
+    allow = invert_deny_to_allow({"NotARealTool"})
+    assert set(allow) == TOOL_UNIVERSE
+    assert "NotARealTool" not in allow

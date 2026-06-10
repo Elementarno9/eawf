@@ -463,29 +463,98 @@ def test_spawn_session_reasoning_effort_passes_via_config_flag(
     assert _REASONING_EFFORT_CONFIG_KEY == "model_reasoning_effort"
 
 
-def test_spawn_session_denied_tools_adds_no_flag_but_logs(
+def _codex_tool_grants(argv: list[str]) -> dict[str, bool]:
+    """Extract the ``-c tools.<name>=<bool>`` grant map from a codex argv.
+
+    Walks the argv for ``-c`` flags whose value targets the ``tools.``
+    config namespace and decodes the TOML-ish boolean tail into a
+    ``{tool_name: granted}`` map. The tool name is the lowercased segment
+    after ``tools.`` (codex's per-tool config convention). A test asserts
+    membership / grant value against this map so the inverted allowlist is
+    checked structurally rather than by argv string matching.
+
+    Args:
+        argv: The captured codex spawn argv.
+
+    Returns:
+        The ``{tool: True|False}`` grant map parsed from the ``tools.*``
+        overrides.
+    """
+    grants: dict[str, bool] = {}
+    for index, token in enumerate(argv):
+        if token != "-c" or index + 1 >= len(argv):
+            continue
+        key_value = argv[index + 1]
+        if not key_value.startswith("tools."):
+            continue
+        key, _, value = key_value.partition("=")
+        grants[key.removeprefix("tools.")] = value.strip().lower() == "true"
+    return grants
+
+
+def test_spawn_session_denied_tools_emits_inverted_allowlist(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """denied_tools maps to NO codex flag (no per-call deny) but is logged."""
+    """A non-empty deny-list emits the inverted allowlist on the codex argv.
+
+    Wave criterion 1: the allow flag (codex ``-c tools.<name>=true``) is
+    present AND the denied tool is absent from the allow set while the other
+    universe tools are granted.
+    """
     proc = _FakeProcess(stdout=_events_bytes(), stderr=b"", returncode=0)
-    calls_with = _patch_factory(monkeypatch, proc)
+    calls = _patch_factory(monkeypatch, proc)
 
     import asyncio
-    import logging
+
+    from eawf.runtime.sandbox.policy import invert_deny_to_allow
 
     adapter = CodexAdapter()
-    with caplog.at_level(logging.WARNING, logger=codex_adapter.logger.name):
-        asyncio.run(adapter.spawn_session("x", model="gpt-5.5", denied_tools=["Edit", "Bash"]))
-    argv_denied = list(calls_with[0])
+    denied = ["Edit", "Bash"]
+    asyncio.run(adapter.spawn_session("x", model="gpt-5.5", denied_tools=denied))
+    argv = calls[0]
 
-    # No deny flag is fabricated; the argv has no codex tool flag.
-    assert "--disallowedTools" not in argv_denied
-    assert "--allowed-tool" not in argv_denied
-    # The gap is logged so it is observable (mapped=none).
-    assert any(
-        "denied_tools=2" in rec.message and "mapped=none" in rec.message for rec in caplog.records
-    )
+    # The codex per-tool grant surface (``-c tools.<name>=...``) is present.
+    assert "-c" in argv
+    grants = _codex_tool_grants(argv)
+    assert grants, "expected -c tools.* grant overrides on the argv"
+
+    # The inverted allowlist (universe minus denied) is granted ``true``.
+    expected_allow = {tool.lower() for tool in invert_deny_to_allow(denied)}
+    granted_true = {tool for tool, granted in grants.items() if granted}
+    assert granted_true == expected_allow
+
+    # The denied tools are NOT in the allow (``true``) set, and other universe
+    # tools (e.g. Read) ARE granted.
+    assert "edit" not in granted_true
+    assert "bash" not in granted_true
+    assert "read" in granted_true
+
+
+def test_spawn_session_denied_tool_absent_from_effective_grant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A denied tool is absent from the codex child's effective tool grant.
+
+    Wave criterion 2: a deny must not silently pass through. The denied tool
+    is both absent from the ``true`` grant set AND pinned ``false`` so it can
+    never reach the child's effective grant even under a default-allow codex.
+    """
+    proc = _FakeProcess(stdout=_events_bytes(), stderr=b"", returncode=0)
+    calls = _patch_factory(monkeypatch, proc)
+
+    import asyncio
+
+    adapter = CodexAdapter()
+    asyncio.run(adapter.spawn_session("x", model="gpt-5.5", denied_tools=["Edit"]))
+    grants = _codex_tool_grants(calls[0])
+
+    # The denied tool appears in the grant map pinned ``false`` -- explicitly
+    # disabled, never granted -- so the deny cannot pass through.
+    assert grants.get("edit") is False
+    # No tool is both granted and denied (the deny is unambiguous).
+    assert grants["edit"] is False
+    # The legacy claude/no-op deny surfaces never appear on the codex argv.
+    assert "--disallowedTools" not in calls[0]
 
 
 def test_spawn_session_denied_tools_empty_is_byte_equivalent(

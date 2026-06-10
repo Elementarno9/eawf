@@ -46,6 +46,7 @@ from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.env_scrub import build_child_env
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
+from eawf.runtime.sandbox.policy import invert_deny_to_allow
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
@@ -163,6 +164,63 @@ _API_RE = re.compile(rb"\b4\d\d\b")
 #: 0.134.0). Passed via ``-c`` so the value lands as a TOML override on the
 #: per-call config rather than mutating the user's ``config.toml``.
 _REASONING_EFFORT_CONFIG_KEY = "model_reasoning_effort"
+
+#: Dotted codex config namespace for the per-tool grant table, confirmed live
+#: against ``codex exec`` help (codex 0.138.0 exposes ``tools.<name>`` toggles,
+#: e.g. ``tools.web_search``). ``codex exec`` has NO single tool-allowlist or
+#: tool-deny flag; the per-tool boolean config is the only per-call grant
+#: surface, so a deny-list is mapped to ``-c tools.<name>=<bool>`` overrides:
+#: the inverted allowlist (universe minus denied) is granted ``true`` and the
+#: denied names are pinned ``false`` so a denied tool can never reach the
+#: child's effective grant even under a default-allow codex.
+_TOOLS_CONFIG_NAMESPACE = "tools"
+
+
+def _codex_tool_config_key(tool: str) -> str:
+    """Return the dotted codex config key for a tool's grant boolean.
+
+    Maps an eawf tool name (e.g. ``"WebSearch"``) to the codex ``tools.<name>``
+    dotted config path, lowercasing the camel/Pascal name to codex's
+    snake-ish convention (``tools.websearch``). Codex's ``-c`` override parses
+    the value as TOML, so the boolean is emitted bare (``true`` / ``false``).
+
+    Args:
+        tool: The eawf tool name to map.
+
+    Returns:
+        The dotted config key (e.g. ``"tools.websearch"``).
+    """
+    return f"{_TOOLS_CONFIG_NAMESPACE}.{tool.lower()}"
+
+
+def _codex_tool_grant_overrides(denied_tools: Sequence[str]) -> list[str]:
+    """Build the ``-c tools.<name>=<bool>`` overrides for a deny-list.
+
+    Codex grants tools by config, not by a deny flag, so the deny-list is
+    expressed as its inverted allowlist:
+    :func:`~eawf.runtime.sandbox.policy.invert_deny_to_allow` yields the
+    universe-minus-denied allow set, each granted ``true``; the denied names
+    are additionally pinned ``false``. The denied set is therefore absent from
+    the ``true`` grant AND explicitly disabled, so a deny cannot silently pass
+    through to the child's effective tool grant.
+
+    The overrides are interleaved as ``["-c", "<key>=<bool>", ...]`` in a
+    deterministic order (the allow set is sorted by the inversion helper; the
+    denied set is sorted here) so the argv is reproducible.
+
+    Args:
+        denied_tools: The per-wave deny-list (already known non-empty by the
+            caller; an empty list yields no overrides).
+
+    Returns:
+        The flat ``-c`` override token list to splice into the codex argv.
+    """
+    overrides: list[str] = []
+    for allowed in invert_deny_to_allow(list(denied_tools)):
+        overrides.extend(("-c", f"{_codex_tool_config_key(allowed)}=true"))
+    for denied in sorted(set(denied_tools)):
+        overrides.extend(("-c", f"{_codex_tool_config_key(denied)}=false"))
+    return overrides
 
 
 def _usage_int(usage: dict[str, object], key: str) -> int:
@@ -489,14 +547,22 @@ class CodexAdapter:
         as :data:`_REASONING_EFFORT_CONFIG_KEY`. *extra_args* are appended
         verbatim at the argv tail so that escape hatch stays last.
 
-        **denied_tools is a per-runtime gap on codex.** ``codex exec``
-        exposes a tool *allowlist* (``--allowed-tool`` / config ``[tools]``)
-        but no per-call tool-DENY flag, so this adapter does NOT fabricate
-        one: it logs the denied set and the (absent) mapping, and the child
-        is still confined by the OS filesystem jail above. CLI-level
-        tool-deny on codex is deferred to a later wave that wires the
-        allowlist inversion; the *denied_tools* parameter stays on the
-        signature for Protocol conformance.
+        **denied_tools maps to an INVERTED allowlist on codex.** ``codex
+        exec`` (0.138.0) has no single tool-allowlist flag and no per-call
+        tool-DENY flag -- its only per-call tool-grant surface is the
+        ``-c tools.<name>=<bool>`` config override (e.g. ``tools.web_search``).
+        Codex grants by allowlist, so a deny-list is expressed as its
+        complement: when *denied_tools* is non-empty the argv gains
+        ``-c tools.<allowed>=true`` for every tool in the universe minus the
+        denied set (the inverted allowlist via
+        :func:`~eawf.runtime.sandbox.policy.invert_deny_to_allow`) PLUS
+        ``-c tools.<denied>=false`` for each denied name. The denied tool is
+        therefore absent from the ``true`` grant AND explicitly disabled, so a
+        deny can never reach the child's effective grant -- even under a
+        default-allow codex. The overrides are spliced ahead of *extra_args*
+        so the verbatim escape hatch stays at the argv tail, and the FS jail
+        still confines the child on top. An empty deny-list adds no override
+        (byte-equivalent to a deny-free spawn).
 
         This wave builds the spawn mechanism + the parse only. Metering,
         cancellation, and the schema-forced re-ask loop are separate waves
@@ -515,9 +581,11 @@ class CodexAdapter:
             extra_args: Extra CLI args appended verbatim (the routing /
                 reasoning-effort / structured-output escape hatch).
             denied_tools: Per-wave sandbox deny-list (tool names). Codex has
-                no per-call deny flag, so this set is logged but not mapped
-                to a flag; the FS jail still confines the child. Empty (the
-                default) is the common case.
+                no per-call deny flag, so a non-empty set is mapped to its
+                inverted allowlist as ``-c tools.<name>=<bool>`` overrides
+                (allowed granted ``true``, denied pinned ``false``); the FS
+                jail still confines the child on top. Empty (the default) adds
+                no override.
             timeout: Wall-clock ceiling in seconds; ``None`` waits
                 indefinitely. On expiry the child is killed and a typed
                 error is raised.
@@ -532,14 +600,19 @@ class CodexAdapter:
                 returned an unparseable / error event stream.
         """
 
-        # Codex exposes a tool allowlist but no per-call deny flag, so the
-        # deny-list cannot map to a codex CLI flag this wave. Log the set so
-        # the gap is observable; the OS filesystem jail still confines the
-        # child regardless.
+        # Codex grants tools by allowlist config, not a deny flag, so a
+        # deny-list is mapped to its inverted allowlist: every tool in the
+        # universe minus the denied set is granted ``-c tools.<name>=true`` and
+        # each denied name is pinned ``-c tools.<name>=false``, so a denied
+        # tool is absent from the grant by construction. The overrides precede
+        # the verbatim *extra_args* escape hatch. An empty deny-list emits no
+        # override (byte-equivalent to a deny-free spawn).
+        tool_overrides: list[str] = []
         if denied_tools:
-            logger.warning(
-                f"spawn_session runtime={self.id!r} denied_tools={len(denied_tools)} mapped=none "
-                "reason=codex-exec-has-no-per-call-deny-flag"
+            tool_overrides = _codex_tool_grant_overrides(denied_tools)
+            logger.info(
+                f"spawn_session runtime={self.id!r} denied_tools={len(denied_tools)} "
+                f"mapped=inverted-allowlist allowed={len(invert_deny_to_allow(list(denied_tools)))}"
             )
         argv = [
             self.cli_binary,
@@ -548,6 +621,7 @@ class CodexAdapter:
             "--skip-git-repo-check",
             "-m",
             model,
+            *tool_overrides,
             *extra_args,
             prompt,
         ]
