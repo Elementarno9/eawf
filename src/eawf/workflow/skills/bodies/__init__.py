@@ -52,7 +52,11 @@ from eawf.workflow.skills.bodies.differentiate import DifferentiateBody
 from eawf.workflow.skills.bodies.flow import FlowBody
 from eawf.workflow.skills.bodies.init import InitBody
 from eawf.workflow.skills.bodies.memory import MemoryBody
-from eawf.workflow.skills.bodies.mockup import MockupBody, MockupVariant
+from eawf.workflow.skills.bodies.mockup import (
+    MockupBody,
+    MockupVariant,
+    resolve_mockup_pick,
+)
 from eawf.workflow.skills.bodies.polish import PolishBody
 from eawf.workflow.skills.bodies.prep import PrepBody
 from eawf.workflow.skills.bodies.research import ResearchBody
@@ -134,4 +138,5 @@ __all__ = [
     "UserQuestionOption",
     "WaveSpecBody",
     "body_model_for",
+    "resolve_mockup_pick",
 ]

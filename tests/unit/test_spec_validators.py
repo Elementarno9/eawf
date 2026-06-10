@@ -163,13 +163,37 @@ def test_requires_mockup_reference_treats_whitespace_waiver_as_missing() -> None
     )
 
 
+def test_requires_mockup_reference_skips_when_golden_path_set() -> None:
+    # A captured plan-time mockup golden satisfies the require like a mockup.
+    assert not requires_mockup_reference(
+        file_scopes=["src/eawf/surfaces/tui/app.py"],
+        mockup_present=False,
+        mockup_waiver_reason=None,
+        mockup_golden_path="tests/snapshots/tui/golden/mockup_P30-I04-W07.txt",
+    )
+
+
+def test_requires_mockup_reference_treats_whitespace_golden_path_as_missing() -> None:
+    # Empty / whitespace-only golden path does not satisfy the require.
+    assert requires_mockup_reference(
+        file_scopes=["src/eawf/surfaces/tui/app.py"],
+        mockup_present=False,
+        mockup_waiver_reason=None,
+        mockup_golden_path="   ",
+    )
+
+
 # ---- WaveSpec model_validator _mockup_required ------------------------------
 
 
 def test_wave_spec_ui_scope_without_mockup_or_waiver_rejected() -> None:
     with pytest.raises(ValidationError) as excinfo:
         _wave_spec_factory(file_scopes=["src/eawf/surfaces/tui/app.py"])
-    assert "ui-scope wave requires mockup reference" in str(excinfo.value)
+    message = str(excinfo.value)
+    assert "ui-scope wave requires mockup reference" in message
+    # The error names every escape hatch so the author knows the options.
+    assert "mockup_golden_path" in message
+    assert "mockup_waiver_reason" in message
 
 
 def test_wave_spec_ui_scope_with_mockup_accepted() -> None:
@@ -187,6 +211,17 @@ def test_wave_spec_ui_scope_with_waiver_accepted() -> None:
     )
     assert spec.mockup is None
     assert spec.mockup_waiver_reason is not None
+
+
+def test_wave_spec_ui_scope_with_golden_path_accepted() -> None:
+    # A captured plan-time mockup golden satisfies the UI-scope require.
+    spec = _wave_spec_factory(
+        file_scopes=["src/eawf/surfaces/tui/app.py"],
+        mockup_golden_path="tests/snapshots/tui/golden/mockup_P25-I01-W05.txt",
+    )
+    assert spec.mockup is None
+    assert spec.mockup_waiver_reason is None
+    assert spec.mockup_golden_path is not None
 
 
 def test_wave_spec_non_ui_scope_without_mockup_accepted() -> None:

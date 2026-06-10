@@ -113,6 +113,7 @@ class WaveSpec(_StrictModel):
     tests: list[TestRef] = Field(default_factory=list)
     mockup: WaveMockup | None = None
     mockup_waiver_reason: str | None = None
+    mockup_golden_path: str | None = None
 
     @model_validator(mode="after")
     def _consistent_ids(self) -> WaveSpec:
@@ -135,20 +136,22 @@ class WaveSpec(_StrictModel):
 
     @model_validator(mode="after")
     def _mockup_required(self) -> WaveSpec:
-        """Enforce WSV-07: UI-scope waves cite a mockup or a waiver.
+        """Enforce WSV-07: UI-scope waves cite a mockup, golden, or waiver.
 
         Fires only when at least one ``file_scopes`` entry lives under
         ``src/eawf/surfaces/tui/`` or ``src/eawf/surfaces/render/`` (per the D11
-        heuristic). When the heuristic fires the wave MUST carry either
-        a non-None ``mockup`` block OR a non-empty
+        heuristic). When the heuristic fires the wave MUST carry one of
+        three escape hatches: a non-None ``mockup`` block, a non-empty
+        ``mockup_golden_path`` (the approved ASCII golden captured from the
+        operator's plan-time ``/mockup`` pick), OR a non-empty
         ``mockup_waiver_reason`` string. The check delegates to
         :func:`eawf.kernel.spec.heuristics.requires_mockup_reference` so unit
         tests can exercise the heuristic without building a full
         WaveSpec.
 
         Raises:
-            ValueError: when the heuristic fires and neither ``mockup``
-                nor ``mockup_waiver_reason`` is set.
+            ValueError: when the heuristic fires and none of ``mockup``,
+                ``mockup_golden_path``, or ``mockup_waiver_reason`` is set.
         """
         # Local import avoids a circular dependency: ``heuristics`` does
         # NOT import any spec model, but importing it at module top would
@@ -160,10 +163,11 @@ class WaveSpec(_StrictModel):
             file_scopes=self.file_scopes,
             mockup_present=self.mockup is not None,
             mockup_waiver_reason=self.mockup_waiver_reason,
+            mockup_golden_path=self.mockup_golden_path,
         ):
             raise ValueError(
                 "ui-scope wave requires mockup reference: "
                 f"id={self.id!r} file_scopes={self.file_scopes!r} "
-                "(set 'mockup' or 'mockup_waiver_reason')"
+                "(set 'mockup', 'mockup_golden_path', or 'mockup_waiver_reason')"
             )
         return self

@@ -63,6 +63,7 @@ def requires_mockup_reference(
     file_scopes: Iterable[str],
     mockup_present: bool,
     mockup_waiver_reason: str | None,
+    mockup_golden_path: str | None = None,
 ) -> bool:
     """Return True when the wave needs a mockup citation but lacks one.
 
@@ -72,19 +73,28 @@ def requires_mockup_reference(
             block (WaveMockup with ASCII + optional Mermaid).
         mockup_waiver_reason: When set + non-empty, the wave has opted
             out of the heuristic with a documented rationale per D11.
+        mockup_golden_path: When set + non-empty, the wave cites the
+            approved ASCII golden captured from the operator's plan-time
+            ``/mockup`` pick. A captured golden satisfies the require the
+            same way an inline mockup block does -- it is the pick-time
+            oracle the close gate diffs the built screen against.
 
     Returns:
         True when (a) at least one file scope is UI per
         :func:`is_ui_scope`, AND (b) ``mockup_present`` is False, AND
-        (c) ``mockup_waiver_reason`` is None or empty/whitespace.
+        (c) ``mockup_golden_path`` is None or empty/whitespace, AND
+        (d) ``mockup_waiver_reason`` is None or empty/whitespace.
     """
     if not is_ui_scope(file_scopes):
         return False
     if mockup_present:
         return False
-    # Heuristic fires when neither mockup nor a non-empty waiver is set.
-    # Whitespace-only waivers are treated as missing so empty strings
-    # cannot accidentally satisfy the rule.
+    if mockup_golden_path and mockup_golden_path.strip():
+        return False
+    # Heuristic fires when neither mockup, a captured golden, nor a
+    # non-empty waiver is set. Whitespace-only escape-hatch strings are
+    # treated as missing so empty strings cannot accidentally satisfy the
+    # rule.
     return not (mockup_waiver_reason and mockup_waiver_reason.strip())
 
 

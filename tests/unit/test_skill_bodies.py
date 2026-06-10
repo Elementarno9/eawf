@@ -568,6 +568,19 @@ def test_wave_spec_body_round_trip_and_verb_literal() -> None:
         WaveSpecBody.model_validate({"verb": "init", "wave_id": "X", "unexpected": 1})
 
 
+def test_wave_spec_body_carries_mockup_golden_path() -> None:
+    """The mockup_golden_path field round-trips and defaults to None."""
+    bare = WaveSpecBody(verb="init", wave_id="P30-I04-W07")
+    assert bare.mockup_golden_path is None
+    stamped = WaveSpecBody(
+        verb="init",
+        wave_id="P30-I04-W07",
+        mockup_golden_path="tests/snapshots/tui/golden/mockup_P30-I04-W07.txt",
+    )
+    _round_trip(stamped)
+    assert stamped.mockup_golden_path == ("tests/snapshots/tui/golden/mockup_P30-I04-W07.txt")
+
+
 def test_security_review_body_round_trip_and_extra_rejected() -> None:
     body = SecurityReviewBody.model_validate(
         {

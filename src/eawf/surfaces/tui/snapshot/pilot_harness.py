@@ -30,8 +30,9 @@ from __future__ import annotations
 import difflib
 import itertools
 import os
-import re
 from typing import TYPE_CHECKING
+
+from eawf.surfaces.render.snapshot_normalize import normalize_snapshot
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -45,27 +46,6 @@ if TYPE_CHECKING:
 #: the build; a developer regenerates with
 #: ``EAWF_SNAPSHOT_REGEN=1 uv run pytest tests/snapshots/tui/``.
 SNAPSHOT_REGEN_ENV: str = "EAWF_SNAPSHOT_REGEN"
-
-#: Matches the header wall-clock cell (``16:04 UTC``) so it can be
-#: neutralised to a fixed placeholder — the one non-deterministic element
-#: of the rendered chrome (everything else derives from fixture state).
-_CLOCK_RE = re.compile(r"\d{2}:\d{2} UTC")
-
-#: Stable replacement for the wall-clock cell.
-_CLOCK_PLACEHOLDER: str = "HH:MM UTC"
-
-#: Matches the daemon-degraded banner the app top-docks when the daemon
-#: socket is unavailable (``daemon socket unavailable; polling state.json |
-#: socket=<path> EAWF_RUNTIME_DIR=<...>``). Its PRESENCE is environment-
-#: dependent (a CI runner with no live daemon renders it; a dev box with the
-#: daemon up does not), so it would drift a golden across machines; it also
-#: embeds the runtime socket PATH, which must never land in a committed
-#: golden. The banner line(s) are dropped from the normalised capture so
-#: snapshots assert their own content, not the ambient daemon state.
-_DAEMON_BANNER_MARKERS: tuple[str, ...] = (
-    "daemon socket unavailable",
-    "EAWF_RUNTIME_DIR=",
-)
 
 #: Upper bound on the settle-pump cycles. The read-only state binder
 #: populates ``app.state`` and the widgets seed from it within a couple of
@@ -143,44 +123,6 @@ def capture_screen_text(app: App[object]) -> str:
     while rows and not rows[-1]:
         rows.pop()
     return "\n".join(rows)
-
-
-def normalize_snapshot(text: str) -> str:
-    """Neutralise the non-deterministic cells of a captured frame.
-
-    Two volatile elements are neutralised:
-
-    * the header wall-clock (``HH:MM UTC``), rewritten to a fixed
-      placeholder so goldens stay byte-stable across the time of day; and
-    * the daemon-degraded banner the app top-docks when the daemon socket
-      is unavailable -- its presence is environment-dependent (rendered on
-      a CI runner with no live daemon, absent on a dev box with one up) and
-      it embeds the runtime socket path, so its line(s) are dropped.
-
-    Everything else in the frame is a deterministic function of the bound
-    fixture state.
-
-    Args:
-        text: A captured screen text block.
-
-    Returns:
-        The text with volatile cells replaced by stable placeholders and
-        the env-dependent daemon banner removed.
-    """
-    clocked = _CLOCK_RE.sub(_CLOCK_PLACEHOLDER, text)
-    if not any(marker in clocked for marker in _DAEMON_BANNER_MARKERS):
-        # Banner-free: return unchanged so the byte-shape (incl. any trailing
-        # newline) is identical to the pre-banner-strip behaviour.
-        return clocked
-    kept = [
-        line
-        for line in clocked.splitlines()
-        if not any(marker in line for marker in _DAEMON_BANNER_MARKERS)
-    ]
-    result = "\n".join(kept)
-    if clocked.endswith("\n"):
-        result += "\n"
-    return result
 
 
 def assert_screen_snapshot(app: App[object], golden_path: Path) -> None:
