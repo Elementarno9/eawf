@@ -4967,6 +4967,18 @@
       "scope_id": "P30-I06-W09",
       "status": "done",
       "updated_at": "2026-06-10T19:39:05.684004Z"
+    },
+    "P30-I06-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W10",
+      "scope_id": "P30-I06-W10",
+      "status": "done",
+      "updated_at": "2026-06-10T20:26:25.575934Z"
     }
   },
   "agent_sessions": {
@@ -8029,9 +8041,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I06-W10"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I06",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -18849,7 +18859,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T20:25:41.239255Z",
+  "updated_at": "2026-06-10T20:26:25.576084Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -75521,8 +75531,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i06-w10",
       "claimed_at": "2026-06-10T20:25:41.238896Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T20:26:25.575934Z",
+      "commit": "ec967d90cd66eb70f2474992b1272ff766c93327",
       "deps": [],
       "description": "W02 added the 'eawf dispatch wave' verb, drifting the committed docs/reference/autogen/cli.md from a fresh introspection. Regenerate the autogen tree so the docs-autogen drift gate is green.",
       "dispatch_history": [],
@@ -75552,12 +75562,12 @@
       },
       "iter_id": "P30-I06",
       "opened_at": "2026-06-10T20:25:40.772216Z",
-      "outcome": null,
+      "outcome": "Regenerated docs/reference/autogen/cli.md for the new 'eawf dispatch wave' verb; docs-autogen drift gate green (13 passed).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
