@@ -4871,6 +4871,18 @@
       "scope_id": "P30-I06-W01",
       "status": "done",
       "updated_at": "2026-06-10T18:29:29.458771Z"
+    },
+    "P30-I06-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W02",
+      "scope_id": "P30-I06-W02",
+      "status": "done",
+      "updated_at": "2026-06-10T18:34:24.727434Z"
     }
   },
   "agent_sessions": {
@@ -15720,6 +15732,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I06-W01",
       "updated_at": "2026-06-10T18:05:05.990130Z"
+    },
+    "P30-I06-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W02-bucket-20260610T183012Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I06-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I06-W02",
+      "updated_at": "2026-06-10T18:30:12.323908Z"
     }
   },
   "goals": {
@@ -18632,7 +18657,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T18:29:29.458978Z",
+  "updated_at": "2026-06-10T18:34:24.727621Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74775,10 +74800,10 @@
         "P30-I06-W07",
         "P30-I10-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i06-w02",
+      "claimed_at": "2026-06-10T18:30:12.323899Z",
+      "closed_at": "2026-06-10T18:34:24.727434Z",
+      "commit": "a3bbd838e43a7fec4394a529bfc1be1402d9a65d",
       "deps": [
         "P30-I06-W01"
       ],
@@ -74787,19 +74812,20 @@
       "effort_bucket": "M",
       "file_scopes": [
         "src/eawf/surfaces/cli/commands/dispatch.py",
-        "src/eawf/runtime/daemon/methods/agent.py"
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "tests/unit/test_cli_dispatch_wave.py"
       ],
       "gates": [],
       "id": "P30-I06-W02",
       "intent": null,
       "iter_id": "P30-I06",
       "opened_at": "2026-06-09T12:29:17.775607Z",
-      "outcome": null,
+      "outcome": "Added 'eawf dispatch wave' headless spawn verb (daemon-only, typed errors, pid+runtime report); agent.dispatch contract reused unchanged. 51 focused tests green, mypy/ruff clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
