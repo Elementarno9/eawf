@@ -17368,7 +17368,8 @@
         "P30-I05-W12",
         "P30-I05-W13",
         "P30-I05-W14",
-        "P30-I05-W15"
+        "P30-I05-W15",
+        "P30-I05-W16"
       ]
     },
     "P30-I06": {
@@ -18549,7 +18550,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T15:50:38.253737Z",
+  "updated_at": "2026-06-10T15:56:34.328010Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74484,6 +74485,131 @@
         }
       ],
       "title": "Drop dead tokens_per_eu param from _tokens_to_eu",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I05-W16": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "The full-tree gauntlet caught nine close-gate tests in tests/unit/daemon and tests/workflow/verify still failing under W08's zero-runtime close gate; their CLAIMED-wave fixtures lack runtime data. W08/W13 fixed only tests/daemon. Add runtime_baseline/runtime_latest to each so the close path resolves non-zero EU and exercises the gate under test.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/daemon/test_close_gate_oracle.py",
+        "tests/unit/daemon/test_verdict_enforced.py",
+        "tests/unit/daemon/test_close_gate_affordance_parity.py",
+        "tests/unit/daemon/test_close_gate_evidence.py",
+        "tests/unit/daemon/test_close_gate_mockup_golden_diff.py",
+        "tests/workflow/verify/test_seams.py"
+      ],
+      "gates": [],
+      "id": "P30-I05-W16",
+      "intent": {
+        "desired_outcome": "Every close-gate test fixture carries runtime_baseline/runtime_latest so the close resolves non-zero EU and the full just test gauntlet is green modulo the known shared-daemon contention flakes.",
+        "evidence_refs": [
+          "tests/unit/daemon/test_close_gate_oracle.py:162",
+          "src/eawf/runtime/daemon/methods/state.py:2637"
+        ],
+        "planned_steps": [
+          "Add runtime_baseline/runtime_latest to the CLAIMED-wave fixture in each of the six files",
+          "Ensure timedelta is imported where needed",
+          "Re-run the nine tests then the full just test gauntlet"
+        ],
+        "priority_rationale": "Iter-close is gated on a green full-tree gauntlet; these reds are real (fail isolated), not contention flakes, and block the P30-I05 close.",
+        "problem": "W08's zero-runtime close gate broke nine close-gate tests across tests/unit/daemon and tests/workflow/verify whose fixtures lack runtime data; the scoped W08/W13 fixes covered only tests/daemon.",
+        "risks": [
+          "byte-unchanged oracle test must stay equal: both close paths get identical runtime fixtures",
+          "so the ActualSummary delta is symmetric."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I05",
+      "opened_at": "2026-06-10T15:56:34.327741Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "tests/unit/daemon/test_close_gate_oracle.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/unit/daemon/test_close_gate_oracle.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "test_verdict_enforced.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_verdict_enforced.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "test_close_gate_affordance_parity.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_close_gate_affordance_parity.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "test_close_gate_evidence.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_close_gate_evidence.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "test_close_gate_mockup_golden_diff.py and tests/workflow/verify/test_seams.py all pass; full just test gauntlet shows no real (non-flaky) failures",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_close_gate_mockup_golden_diff.py and tests/workflow/verify/test_seams.py all pass; full just test gauntlet shows no real (non-flaky) failures",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-pin close-gate fixtures repo-wide to the runtime close path",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
