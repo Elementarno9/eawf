@@ -18198,7 +18198,7 @@
   "schema_version": "1.8",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:19:15.337293Z",
+  "updated_at": "2026-06-10T05:21:41.949597Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -70736,7 +70736,9 @@
         "src/eawf/kernel/state/models.py",
         "src/eawf/workflow/lifecycle/wave.py",
         "tests/workflow/test_lifecycle_wave.py",
-        "tests/unit/state/test_runtime_baseline.py"
+        "tests/unit/state/test_runtime_baseline.py",
+        "tests/unit/test_wave_close_actuals.py",
+        "tests/unit/test_state_models.py"
       ],
       "gates": [],
       "id": "P30-I05-W01",
@@ -70802,7 +70804,9 @@
         "src/eawf/runtime/runtimes/claude/hooks_router.py",
         "src/eawf/runtime/runtimes/claude/runtime_counters.py",
         "tests/unit/runtime/test_runtime_counters.py",
-        "tests/unit/runtime/test_statusline_context_tokens.py"
+        "tests/unit/runtime/test_statusline_context_tokens.py",
+        "tests/unit/test_statusline_context_tokens.py",
+        "tests/unit/test_runtime_counters.py"
       ],
       "gates": [],
       "id": "P30-I05-W02",
