@@ -219,14 +219,14 @@ Companion-doc references in rendered docs / commit messages / PR bodies / docstr
 Forward-fix only — once a leak lands in a published commit, history rewrite is the *last* resort because the blast radius (force-push, SHA churn, broken PR refs) is much larger than the prevention cost. Scrub locally before ``git add``; let ``pre-commit`` (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.1 hash=106d6b6719cf30aa -->
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.1 hash=5de45ce174de2661 -->
 ### Artifact chassis and citations
 
 Durable research, plan, audit, decision, hypothesis, and incident markdown uses renderer-owned chassis sections: ``Summary``, ``References``, ``Provenance``, and ``Scrub``. Local drafts under ``.ea/local/`` carry an ``eawf-template`` sentinel; promoted artifacts under ``.ea/artifacts/`` do not.
 
 Citations use dense ``[N]`` markers backed by typed ``Citation`` rows. References stay repo-relative, external URL, or Eawf URN. Absolute local paths, host-local URLs, and PII must fail validation before promotion or PR text ships.
 
-**IntentBrief + NarrativeBundle (v0.4).** ``/research`` outputs a typed :class:`~eawf.kernel.spec.research.IntentBrief` whose claims carry ``evidence_refs``; a brief is promotable iff every claim has at least one resolving + entailing reference (the ``evidence_refs`` invariant). The promoted artifact wraps the brief in a :class:`~eawf.kernel.spec.research.NarrativeBundle` that fixes provenance to the originating session and the ``IntentBrief`` URN — researcher prose and the typed claim graph stay in lockstep through promotion.
+**IntentBrief + NarrativeBundle.** ``/research`` outputs a typed :class:`~eawf.kernel.spec.intent.IntentBrief` whose claims carry ``evidence_refs``; a brief is promotable iff every claim has at least one resolving + entailing reference (the ``evidence_refs`` invariant). The promoted artifact wraps the brief in a :class:`~eawf.surfaces.render.narrative.NarrativeBundle` that fixes provenance to the originating session and the ``IntentBrief`` URN — researcher prose and the typed claim graph stay in lockstep through promotion.
 
 <!-- END EAWF:managed id=artifact-chassis -->
 <!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.0 hash=8fb2c9a5821ede72 -->

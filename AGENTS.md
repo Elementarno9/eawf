@@ -174,14 +174,14 @@ Companion-doc references in rendered docs / commit messages / PR bodies / docstr
 Forward-fix only — once a leak lands in a published commit, history rewrite is the *last* resort because the blast radius (force-push, SHA churn, broken PR refs) is much larger than the prevention cost. Scrub locally before ``git add``; let ``pre-commit`` (``detect-secrets`` + custom path checks) catch the rest.
 
 <!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.1 hash=106d6b6719cf30aa -->
+<!-- BEGIN EAWF:managed id=artifact-chassis version=1.1 hash=5de45ce174de2661 -->
 ### Artifact chassis and citations
 
 Durable research, plan, audit, decision, hypothesis, and incident markdown uses renderer-owned chassis sections: ``Summary``, ``References``, ``Provenance``, and ``Scrub``. Local drafts under ``.ea/local/`` carry an ``eawf-template`` sentinel; promoted artifacts under ``.ea/artifacts/`` do not.
 
 Citations use dense ``[N]`` markers backed by typed ``Citation`` rows. References stay repo-relative, external URL, or Eawf URN. Absolute local paths, host-local URLs, and PII must fail validation before promotion or PR text ships.
 
-**IntentBrief + NarrativeBundle (v0.4).** ``/research`` outputs a typed :class:`~eawf.kernel.spec.research.IntentBrief` whose claims carry ``evidence_refs``; a brief is promotable iff every claim has at least one resolving + entailing reference (the ``evidence_refs`` invariant). The promoted artifact wraps the brief in a :class:`~eawf.kernel.spec.research.NarrativeBundle` that fixes provenance to the originating session and the ``IntentBrief`` URN — researcher prose and the typed claim graph stay in lockstep through promotion.
+**IntentBrief + NarrativeBundle.** ``/research`` outputs a typed :class:`~eawf.kernel.spec.intent.IntentBrief` whose claims carry ``evidence_refs``; a brief is promotable iff every claim has at least one resolving + entailing reference (the ``evidence_refs`` invariant). The promoted artifact wraps the brief in a :class:`~eawf.surfaces.render.narrative.NarrativeBundle` that fixes provenance to the originating session and the ``IntentBrief`` URN — researcher prose and the typed claim graph stay in lockstep through promotion.
 
 <!-- END EAWF:managed id=artifact-chassis -->
 <!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.0 hash=81fb85258e76a45b -->
@@ -449,3 +449,121 @@ The rule: a fact is worth remembering only when it stays true across sessions. S
 Before writing a memory entry, ask whether a query already answers it. If ``eawf status`` or ``eawf memory digest`` surfaces the fact, do not duplicate it into memory — link to the query instead.
 
 <!-- END EAWF:managed id=memory-hygiene -->
+<!-- BEGIN EAWF:managed id=zone-tier0 version=1.0 hash=e0ad14f457862be5 -->
+<!-- Zone 1: always-on (tier0) -->
+<!-- END EAWF:managed id=zone-tier0 -->
+<!-- BEGIN EAWF:managed id=zone-reference version=1.0 hash=06f4f2b046f45f0f -->
+<!-- Zone 2: reference (lazy) -->
+<!-- END EAWF:managed id=zone-reference -->
+<!-- BEGIN EAWF:managed id=agent-driven-phase-equals-release version=1.0 hash=11c981fa6b99b7bd -->
+### Rationale
+
+In a single-operator, agent-driven repo a phase is the unit of shipped value, not an internal checkpoint — agent throughput collapses many human-weeks of work into one reviewable delivery. Treating each phase as at least a minor release keeps the published version honest about what landed and gives every phase a tag to bisect releases against. Drip- releasing per wave would churn tags faster than the value is observable.
+
+
+### Mechanism
+
+Every closed phase ships as at least a minor release. The phase-close commit bumps the package version (e.g. ``0.3.0`` -> ``0.3.1``, or ``-> 0.4.0`` / ``-> 1.0.0`` when the phase warrants it) and the phase PR merge tags that release. The version bump and tag ride the same ``[P<NN>] state: close iter + phase`` commit that ends the phase, so the release marker and the closed state land together. Do not close a phase without bumping the version.
+
+
+### Verification
+
+Read the phase-close commit: it touches the package version field (``pyproject.toml`` ``project.version``) and the merge creates a release tag matching the new version. ``git tag --points-at <phase-close-sha>`` lists the release tag; a phase that closed without a version bump or a tag is reworked before the PR merges.
+
+<!-- END EAWF:managed id=agent-driven-phase-equals-release -->
+<!-- BEGIN EAWF:managed id=agent-driven-large-phase-pr version=1.0 hash=75acdab274a770a9 -->
+### Rationale
+
+The small-CL / trunk-based default exists to bound human-reviewer attention per change. Agent-driven throughput dwarfs that concern: the bottleneck is operator review of *coherent deliveries*, not line count, and a phase reviewed as one unit reads as one story. The granularity the small-CL rule buys is already present *inside* the PR — per-wave bisectable commits give per-change history without fragmenting the review surface into dozens of context-free PRs.
+
+
+### Mechanism
+
+Ship one PR per phase. A phase PR carrying roughly +10k lines across many files is expected and acceptable, not a smell to split. Do not break a phase into many small PRs to chase a line-count target. The compensating controls are real per-wave review and a behavioural smoke gate in CI; keep per-wave commits individually bisectable (one wave per ``[P<NN>-W<NN>]`` commit) so ``git bisect`` stays sharp inside the large PR. Merge with rebase, never squash, so the per-wave history survives on the trunk.
+
+
+### Verification
+
+Confirm the phase produced exactly one PR (``gh pr list --search 'P<NN>'``) and that its commits are per-wave, each prefixed ``[P<NN>-W<NN>]`` and individually buildable. A reviewer who proposes splitting the phase into multiple PRs is overruled by this rule; a reviewer who finds a non-bisectable wave commit (two waves squashed into one) flags it for rework. The merge strategy is rebase, verified by a linear, non-squashed commit history on the target branch.
+
+<!-- END EAWF:managed id=agent-driven-large-phase-pr -->
+<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.0 hash=4121d2e40aeba41d -->
+### Rationale
+
+These two divergences contradict the industry small-CL / trunk-based consensus on purpose, so a reader who hits the large-PR rule needs the evidence chain that ratified it — otherwise the rule reads as an oversight and gets "fixed" back to small-CL. Naming the decisions keeps the divergence auditable and reversible from ``state.json`` alone.
+
+
+### Mechanism
+
+The phase=release + large-phase-PR cadence is ratified by Decision D10 (keep one-PR-per-phase cadence) and the rebase-merge strategy by Decision D07 (rebase-and-merge; never squash). The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or roadmap discussion questions the cadence; reverse the divergence only by superseding D10 with a new Decision row.
+
+
+### Verification
+
+The decisions exist in ``state.json`` and surface in the rendered ``## Decisions`` section: ``eawf decisions show`` (or grep the rendered AGENTS.md) lists D07 and D10. ``docs/architecture/workflow.md`` resolves as a repo-relative path. A claim that small-CL should replace this rule is checked against D10's status — only a superseding Decision discharges the divergence.
+
+<!-- END EAWF:managed id=agent-driven-cadence-adr-pointer -->
+<!-- BEGIN EAWF:managed id=code-craft-dry version=1.0 hash=87e8b06d23a7c9f9 -->
+### Rationale
+
+Repeated logic drifts: a fix lands in one copy and the others rot. DRY (don't repeat yourself) keeps one canonical home per behaviour so a change has one place to land. The balance is KISS — three similar lines are cheaper to read than a half-fitted helper, so do not abstract until a third caller actually appears.
+
+
+### Mechanism
+
+When a third use site of the same logic appears, extract it into one named function or constant and route every caller through it. Until then, tolerate the duplication. Never introduce a parameterised helper for two call sites or for a use site that does not yet exist (YAGNI).
+
+
+### Verification
+
+grep for the literal or near-literal logic across the changed module; a reviewer confirms either a single shared definition or fewer than three copies. A new helper with only one caller is a YAGNI violation and the reviewer rejects it.
+
+<!-- END EAWF:managed id=code-craft-dry -->
+<!-- BEGIN EAWF:managed id=code-craft-fail-fast version=1.0 hash=16f43597d049598a -->
+### Rationale
+
+An error raised deep in a call stack surfaces far from its cause, so the stack trace points at the symptom rather than the bad input. Fail-fast raises at the boundary where invalid data enters, keeping the trace short and the blame obvious.
+
+
+### Mechanism
+
+Validate inputs at the boundary (loader, CLI parse, public function entry) and raise immediately on bad data. Downstream functions accept already-validated typed objects and never re-check. Error messages start lowercase, carry no trailing period, and interpolate user input with ``!r`` so the offending value is quoted.
+
+
+### Verification
+
+Read the function's first statements: argument validation precedes any side effect. Each public function has an error-path test asserting the exception type (``TypeError`` / ``ValueError`` / ``KeyError`` / ``ValidationError``) and, when the message is part of the contract, the message substring via ``pytest.raises``.
+
+<!-- END EAWF:managed id=code-craft-fail-fast -->
+<!-- BEGIN EAWF:managed id=code-craft-single-responsibility version=1.0 hash=24badd7e8553401a -->
+### Rationale
+
+A unit with one reason to change is testable in isolation and safe to edit. When parsing, validation, computation, and rendering share a function, a change to one concern risks the others and tests need elaborate setup.
+
+
+### Mechanism
+
+Give each function and class exactly one reason to change. Keep parsing separate from validation separate from execution. When one class accretes distinct concerns and outgrows roughly 300 lines or seven public methods, apply the ``refactor-god-class`` playbook: extract the lowest-coupling seam first, one concern per commit.
+
+
+### Verification
+
+Name each public method's single concern; methods that span two concerns flag the unit for extraction. The cognitive-complexity gate (EAWF011 + ruff C901) backstops this — a function over the threshold fails ``uv run pre-commit run --all-files`` before review.
+
+<!-- END EAWF:managed id=code-craft-single-responsibility -->
+<!-- BEGIN EAWF:managed id=code-craft-explicit-over-implicit version=1.0 hash=bf99576fd38d0dc6 -->
+### Rationale
+
+Implicit behaviour surprises the next reader: positional arguments at high arity transpose silently, and ``None``-as-success hides the real outcome. Explicit code matches the principle of least surprise — the behaviour reads off the call site without chasing the definition.
+
+
+### Mechanism
+
+Use named arguments over positional when a function takes three or more parameters. Return explicit values rather than ``None``-as-success. Prefer pure functions with no hidden state. Keep behaviour matching the name so a reader trusts the signature.
+
+
+### Verification
+
+Read each call site of a function with arity of three or more: arguments are passed by keyword. A function whose name implies a value but returns ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs the explicit-return contract via full type hints.
+
+<!-- END EAWF:managed id=code-craft-explicit-over-implicit -->

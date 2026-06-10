@@ -23,78 +23,38 @@ render_blocks:
     target: AGENTS.md
     version: "1.0"
     rationale: |
-      Repeated logic drifts: a fix lands in one copy and the others rot.
-      DRY (don't repeat yourself) keeps one canonical home per behaviour so a
-      change has one place to land. The balance is KISS — three similar lines
-      are cheaper to read than a half-fitted helper, so do not abstract until a
-      third caller actually appears.
+      Repeated logic drifts: a fix lands in one copy and the others rot. DRY (don't repeat yourself) keeps one canonical home per behaviour so a change has one place to land. The balance is KISS — three similar lines are cheaper to read than a half-fitted helper, so do not abstract until a third caller actually appears.
     mechanism: |
-      When a third use site of the same logic appears, extract it into one
-      named function or constant and route every caller through it. Until then,
-      tolerate the duplication. Never introduce a parameterised helper for two
-      call sites or for a use site that does not yet exist (YAGNI).
+      When a third use site of the same logic appears, extract it into one named function or constant and route every caller through it. Until then, tolerate the duplication. Never introduce a parameterised helper for two call sites or for a use site that does not yet exist (YAGNI).
     verification: |
-      grep for the literal or near-literal logic across the changed module; a
-      reviewer confirms either a single shared definition or fewer than three
-      copies. A new helper with only one caller is a YAGNI violation and the
-      reviewer rejects it.
+      grep for the literal or near-literal logic across the changed module; a reviewer confirms either a single shared definition or fewer than three copies. A new helper with only one caller is a YAGNI violation and the reviewer rejects it.
   - id: code-craft-fail-fast
     target: AGENTS.md
     version: "1.0"
     rationale: |
-      An error raised deep in a call stack surfaces far from its cause, so the
-      stack trace points at the symptom rather than the bad input. Fail-fast
-      raises at the boundary where invalid data enters, keeping the trace short
-      and the blame obvious.
+      An error raised deep in a call stack surfaces far from its cause, so the stack trace points at the symptom rather than the bad input. Fail-fast raises at the boundary where invalid data enters, keeping the trace short and the blame obvious.
     mechanism: |
-      Validate inputs at the boundary (loader, CLI parse, public function
-      entry) and raise immediately on bad data. Downstream functions accept
-      already-validated typed objects and never re-check. Error messages start
-      lowercase, carry no trailing period, and interpolate user input with
-      ``!r`` so the offending value is quoted.
+      Validate inputs at the boundary (loader, CLI parse, public function entry) and raise immediately on bad data. Downstream functions accept already-validated typed objects and never re-check. Error messages start lowercase, carry no trailing period, and interpolate user input with ``!r`` so the offending value is quoted.
     verification: |
-      Read the function's first statements: argument validation precedes any
-      side effect. Each public function has an error-path test asserting the
-      exception type (``TypeError`` / ``ValueError`` / ``KeyError`` /
-      ``ValidationError``) and, when the message is part of the contract, the
-      message substring via ``pytest.raises``.
+      Read the function's first statements: argument validation precedes any side effect. Each public function has an error-path test asserting the exception type (``TypeError`` / ``ValueError`` / ``KeyError`` / ``ValidationError``) and, when the message is part of the contract, the message substring via ``pytest.raises``.
   - id: code-craft-single-responsibility
     target: AGENTS.md
     version: "1.0"
     rationale: |
-      A unit with one reason to change is testable in isolation and safe to
-      edit. When parsing, validation, computation, and rendering share a
-      function, a change to one concern risks the others and tests need
-      elaborate setup.
+      A unit with one reason to change is testable in isolation and safe to edit. When parsing, validation, computation, and rendering share a function, a change to one concern risks the others and tests need elaborate setup.
     mechanism: |
-      Give each function and class exactly one reason to change. Keep parsing
-      separate from validation separate from execution. When one class accretes
-      distinct concerns and outgrows roughly 300 lines or seven public methods,
-      apply the ``refactor-god-class`` playbook: extract the lowest-coupling
-      seam first, one concern per commit.
+      Give each function and class exactly one reason to change. Keep parsing separate from validation separate from execution. When one class accretes distinct concerns and outgrows roughly 300 lines or seven public methods, apply the ``refactor-god-class`` playbook: extract the lowest-coupling seam first, one concern per commit.
     verification: |
-      Name each public method's single concern; methods that span two concerns
-      flag the unit for extraction. The cognitive-complexity gate (EAWF011 +
-      ruff C901) backstops this — a function over the threshold fails
-      ``uv run pre-commit run --all-files`` before review.
+      Name each public method's single concern; methods that span two concerns flag the unit for extraction. The cognitive-complexity gate (EAWF011 + ruff C901) backstops this — a function over the threshold fails ``uv run pre-commit run --all-files`` before review.
   - id: code-craft-explicit-over-implicit
     target: AGENTS.md
     version: "1.0"
     rationale: |
-      Implicit behaviour surprises the next reader: positional arguments at
-      high arity transpose silently, and ``None``-as-success hides the real
-      outcome. Explicit code matches the principle of least surprise — the
-      behaviour reads off the call site without chasing the definition.
+      Implicit behaviour surprises the next reader: positional arguments at high arity transpose silently, and ``None``-as-success hides the real outcome. Explicit code matches the principle of least surprise — the behaviour reads off the call site without chasing the definition.
     mechanism: |
-      Use named arguments over positional when a function takes three or more
-      parameters. Return explicit values rather than ``None``-as-success.
-      Prefer pure functions with no hidden state. Keep behaviour matching the
-      name so a reader trusts the signature.
+      Use named arguments over positional when a function takes three or more parameters. Return explicit values rather than ``None``-as-success. Prefer pure functions with no hidden state. Keep behaviour matching the name so a reader trusts the signature.
     verification: |
-      Read each call site of a function with arity of three or more: arguments
-      are passed by keyword. A function whose name implies a value but returns
-      ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs
-      the explicit-return contract via full type hints.
+      Read each call site of a function with arity of three or more: arguments are passed by keyword. A function whose name implies a value but returns ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs the explicit-return contract via full type hints.
 
 # Band-scoped verify enforcement. ``enforce`` + ``cross_vendor_jury`` declare
 # the QC intent at the fleet level, but the wave-aware resolver

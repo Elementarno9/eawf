@@ -33,78 +33,29 @@ render_blocks:
     target: AGENTS.md
     version: "1.0"
     rationale: |
-      In a single-operator, agent-driven repo a phase is the unit of shipped
-      value, not an internal checkpoint — agent throughput collapses many
-      human-weeks of work into one reviewable delivery. Treating each phase as
-      at least a minor release keeps the published version honest about what
-      landed and gives every phase a tag to bisect releases against. Drip-
-      releasing per wave would churn tags faster than the value is observable.
+      In a single-operator, agent-driven repo a phase is the unit of shipped value, not an internal checkpoint — agent throughput collapses many human-weeks of work into one reviewable delivery. Treating each phase as at least a minor release keeps the published version honest about what landed and gives every phase a tag to bisect releases against. Drip- releasing per wave would churn tags faster than the value is observable.
     mechanism: |
-      Every closed phase ships as at least a minor release. The phase-close
-      commit bumps the package version (e.g. ``0.3.0`` -> ``0.3.1``, or
-      ``-> 0.4.0`` / ``-> 1.0.0`` when the phase warrants it) and the phase PR
-      merge tags that release. The version bump and tag ride the same
-      ``[P<NN>] state: close iter + phase`` commit that ends the phase, so the
-      release marker and the closed state land together. Do not close a phase
-      without bumping the version.
+      Every closed phase ships as at least a minor release. The phase-close commit bumps the package version (e.g. ``0.3.0`` -> ``0.3.1``, or ``-> 0.4.0`` / ``-> 1.0.0`` when the phase warrants it) and the phase PR merge tags that release. The version bump and tag ride the same ``[P<NN>] state: close iter + phase`` commit that ends the phase, so the release marker and the closed state land together. Do not close a phase without bumping the version.
     verification: |
-      Read the phase-close commit: it touches the package version field
-      (``pyproject.toml`` ``project.version``) and the merge creates a release
-      tag matching the new version. ``git tag --points-at <phase-close-sha>``
-      lists the release tag; a phase that closed without a version bump or a
-      tag is reworked before the PR merges.
+      Read the phase-close commit: it touches the package version field (``pyproject.toml`` ``project.version``) and the merge creates a release tag matching the new version. ``git tag --points-at <phase-close-sha>`` lists the release tag; a phase that closed without a version bump or a tag is reworked before the PR merges.
   - id: agent-driven-large-phase-pr
     target: AGENTS.md
     version: "1.0"
     rationale: |
-      The small-CL / trunk-based default exists to bound human-reviewer
-      attention per change. Agent-driven throughput dwarfs that concern: the
-      bottleneck is operator review of *coherent deliveries*, not line count,
-      and a phase reviewed as one unit reads as one story. The granularity the
-      small-CL rule buys is already present *inside* the PR — per-wave
-      bisectable commits give per-change history without fragmenting the
-      review surface into dozens of context-free PRs.
+      The small-CL / trunk-based default exists to bound human-reviewer attention per change. Agent-driven throughput dwarfs that concern: the bottleneck is operator review of *coherent deliveries*, not line count, and a phase reviewed as one unit reads as one story. The granularity the small-CL rule buys is already present *inside* the PR — per-wave bisectable commits give per-change history without fragmenting the review surface into dozens of context-free PRs.
     mechanism: |
-      Ship one PR per phase. A phase PR carrying roughly +10k lines across many
-      files is expected and acceptable, not a smell to split. Do not break a
-      phase into many small PRs to chase a line-count target. The compensating
-      controls are real per-wave review and a behavioural smoke gate in CI;
-      keep per-wave commits individually bisectable (one wave per
-      ``[P<NN>-W<NN>]`` commit) so ``git bisect`` stays sharp inside the large
-      PR. Merge with rebase, never squash, so the per-wave history survives on
-      the trunk.
+      Ship one PR per phase. A phase PR carrying roughly +10k lines across many files is expected and acceptable, not a smell to split. Do not break a phase into many small PRs to chase a line-count target. The compensating controls are real per-wave review and a behavioural smoke gate in CI; keep per-wave commits individually bisectable (one wave per ``[P<NN>-W<NN>]`` commit) so ``git bisect`` stays sharp inside the large PR. Merge with rebase, never squash, so the per-wave history survives on the trunk.
     verification: |
-      Confirm the phase produced exactly one PR (``gh pr list --search
-      'P<NN>'``) and that its commits are per-wave, each prefixed
-      ``[P<NN>-W<NN>]`` and individually buildable. A reviewer who proposes
-      splitting the phase into multiple PRs is overruled by this rule; a
-      reviewer who finds a non-bisectable wave commit (two waves squashed into
-      one) flags it for rework. The merge strategy is rebase, verified by a
-      linear, non-squashed commit history on the target branch.
+      Confirm the phase produced exactly one PR (``gh pr list --search 'P<NN>'``) and that its commits are per-wave, each prefixed ``[P<NN>-W<NN>]`` and individually buildable. A reviewer who proposes splitting the phase into multiple PRs is overruled by this rule; a reviewer who finds a non-bisectable wave commit (two waves squashed into one) flags it for rework. The merge strategy is rebase, verified by a linear, non-squashed commit history on the target branch.
   - id: agent-driven-cadence-adr-pointer
     target: AGENTS.md
     version: "1.0"
     rationale: |
-      These two divergences contradict the industry small-CL / trunk-based
-      consensus on purpose, so a reader who hits the large-PR rule needs the
-      evidence chain that ratified it — otherwise the rule reads as an
-      oversight and gets "fixed" back to small-CL. Naming the decisions keeps
-      the divergence auditable and reversible from ``state.json`` alone.
+      These two divergences contradict the industry small-CL / trunk-based consensus on purpose, so a reader who hits the large-PR rule needs the evidence chain that ratified it — otherwise the rule reads as an oversight and gets "fixed" back to small-CL. Naming the decisions keeps the divergence auditable and reversible from ``state.json`` alone.
     mechanism: |
-      The phase=release + large-phase-PR cadence is ratified by Decision D10
-      (keep one-PR-per-phase cadence) and the rebase-merge strategy by
-      Decision D07 (rebase-and-merge; never squash). The canonical workflow
-      reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and
-      merge policy). Cite the Decision id, not this rule's prose, when a review
-      or roadmap discussion questions the cadence; reverse the divergence only
-      by superseding D10 with a new Decision row.
+      The phase=release + large-phase-PR cadence is ratified by Decision D10 (keep one-PR-per-phase cadence) and the rebase-merge strategy by Decision D07 (rebase-and-merge; never squash). The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or roadmap discussion questions the cadence; reverse the divergence only by superseding D10 with a new Decision row.
     verification: |
-      The decisions exist in ``state.json`` and surface in the rendered
-      ``## Decisions`` section: ``eawf decisions show`` (or grep the rendered
-      AGENTS.md) lists D07 and D10. ``docs/architecture/workflow.md`` resolves
-      as a repo-relative path. A claim that small-CL should replace this rule
-      is checked against D10's status — only a superseding Decision discharges
-      the divergence.
+      The decisions exist in ``state.json`` and surface in the rendered ``## Decisions`` section: ``eawf decisions show`` (or grep the rendered AGENTS.md) lists D07 and D10. ``docs/architecture/workflow.md`` resolves as a repo-relative path. A claim that small-CL should replace this rule is checked against D10's status — only a superseding Decision discharges the divergence.
 
 # Risk-weighted close-verdict enforcement. ``enforce: true`` turns the
 # close-time verdict gate ON, but the daemon close path
