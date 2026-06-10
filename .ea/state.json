@@ -4823,6 +4823,18 @@
       "scope_id": "P30-I05-W13",
       "status": "done",
       "updated_at": "2026-06-10T14:46:24.744686Z"
+    },
+    "P30-I05-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W14",
+      "scope_id": "P30-I05-W14",
+      "status": "done",
+      "updated_at": "2026-06-10T15:41:39.199213Z"
     }
   },
   "agent_sessions": {
@@ -15599,6 +15611,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I05-W13",
       "updated_at": "2026-06-10T14:45:42.721970Z"
+    },
+    "P30-I05-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W14-bucket-20260610T153947Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I05-W14",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I05-W14",
+      "updated_at": "2026-06-10T15:39:47.282033Z"
     }
   },
   "goals": {
@@ -18498,7 +18523,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T15:39:34.133414Z",
+  "updated_at": "2026-06-10T15:41:39.199418Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -74298,10 +74323,10 @@
     "P30-I05-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i05-w14",
+      "claimed_at": "2026-06-10T15:39:47.282026Z",
+      "closed_at": "2026-06-10T15:41:39.199213Z",
+      "commit": "8546eeffb95fec337776c54bcb0e7a1e548cc320",
       "deps": [],
       "description": "_capture_runtime_baseline was a return-None stub, so no production path ever stamped Wave.runtime_baseline and the EUCAP delta could never fire on a live close. Give it the claim session_id, read the session-keyed statusline runtime-counter sidecar, and stamp a real baseline; return None only on a genuine sidecar miss.",
       "dispatch_history": [],
@@ -74333,12 +74358,12 @@
       },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-10T15:39:34.133209Z",
-      "outcome": null,
+      "outcome": "Wired _capture_runtime_baseline(session_id) to read the session-keyed statusline runtime-counter sidecar and stamp a real RuntimeBaseline; None only on genuine miss. Replaced monkeypatch-only test with real-sidecar read + missing-sidecar tests. 100 runtime/close tests green, mypy clean. Closes the W01(a) idle-contract gap.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
