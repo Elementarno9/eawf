@@ -4727,6 +4727,18 @@
       "scope_id": "P30-I05-W05",
       "status": "done",
       "updated_at": "2026-06-10T09:42:32.339628Z"
+    },
+    "P30-I05-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I05-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I05-W06",
+      "scope_id": "P30-I05-W06",
+      "status": "done",
+      "updated_at": "2026-06-10T10:10:33.434377Z"
     }
   },
   "agent_sessions": {
@@ -7768,9 +7780,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I05-W06"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15404,7 +15414,7 @@
     },
     "P30-I05-W06": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I05-W06-bucket-20260610T094419Z",
+      "current_store_record_id": "EST-P30-I05-W06-bucket-20260610T101028Z",
       "display": "2.0 EU · exp ~60m · pess ~216m",
       "expected_eu": 2.0,
       "expected_minutes": 60.0,
@@ -15413,7 +15423,7 @@
       "pessimistic_minutes": 216.0,
       "reference_class": "bucket:L",
       "scope_id": "P30-I05-W06",
-      "updated_at": "2026-06-10T09:44:19.541898Z"
+      "updated_at": "2026-06-10T10:10:28.284241Z"
     }
   },
   "goals": {
@@ -18309,7 +18319,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T10:06:20.522584Z",
+  "updated_at": "2026-06-10T10:10:33.434751Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -73245,8 +73255,8 @@
       ],
       "claim_session_id": "codex-p30-i05-w06",
       "claimed_at": "2026-06-10T09:44:19.541860Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T10:10:33.434377Z",
+      "commit": "f5608f6c7c5b7f7ab0ff115ceb6eb246b73b5e88",
       "deps": [
         "P30-I05-W01",
         "P30-I05-W04"
@@ -73261,43 +73271,121 @@
         "tests/daemon/test_state_methods.py",
         "tests/unit/test_wave_close_actuals.py"
       ],
-      "gates": [],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/daemon/test_state_methods.py::test_mutate_wave_close_uses_runtime_delta_when_captured",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_wave_close_actuals.py::test_compute_runtime_delta_absent_baseline_returns_none",
+              "tests/unit/test_wave_close_actuals.py::test_compute_runtime_delta_latest_below_baseline_raises",
+              "tests/unit/test_wave_close_actuals.py::test_compute_runtime_delta_equal_counters_yields_zero_eu",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
       "id": "P30-I05-W06",
-      "intent": null,
+      "intent": {
+        "desired_outcome": "Wave close persists elapsed EU, agent runtime EU, tokens, and cost from runtime baseline/latest deltas.",
+        "evidence_refs": [
+          "src/eawf/workflow/lifecycle/wave.py",
+          "src/eawf/runtime/daemon/methods/state.py"
+        ],
+        "planned_steps": [
+          "Compute runtime delta from baseline and latest counters on wave close",
+          "Persist elapsed_eu agent_runtime_eu actual_tokens and actual_cost_usd from captured deltas",
+          "Reject latest counters below baseline and treat absent baseline as no runtime delta"
+        ],
+        "priority_rationale": "Runtime deltas are the canonical source for actual summaries once W01/W04/W05 capture counters.",
+        "problem": "Wave close actuals still ignore captured runtime counters and leave cost hard-coded.",
+        "risks": [
+          "Delta math must never create phantom EU when capture data is missing"
+        ],
+        "source_brief_ids": []
+      },
       "iter_id": "P30-I05",
       "opened_at": "2026-06-09T12:29:17.802109Z",
-      "outcome": null,
+      "outcome": "Persisted runtime deltas into close-time actuals; parent commit f5608f6c.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W06-C1",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "test_wave_close_persists_runtime_delta asserts elapsed_eu via pytest.approx and non-zero actual_tokens/actual_cost_usd on the CLOSED wave record",
-          "oracle_tier": null,
+          "measurable_signal": "test_mutate_wave_close_uses_runtime_delta_when_captured asserts the daemon close path writes elapsed_eu, agent_runtime_eu, actual_tokens, and actual_cost_usd from runtime baseline/latest deltas",
+          "oracle_tier": 2,
           "quality_dimension": "functional_suitability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the runtime-delta daemon close pytest case",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "Closing a wave whose baseline is 5000 ms and latest is 17000 ms persists ActualSummary.elapsed_eu == approx(12000 / (30*60000)) with agent_runtime_eu, actual_tokens, and actual_cost_usd set to the captured deltas.",
           "waiver_reason": null
         },
         {
           "acceptance_style": "binary",
           "evidence_kind": "deterministic",
-          "gate_ids": [],
-          "id": "P30-I05-W06-C2",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
           "kind": "behavioral",
-          "measurable_signal": "test_compute_runtime_delta_no_baseline_returns_none, _negative_clamped_or_raises, and test_wave_close_zero_delta_keeps_zero all pass",
-          "oracle_tier": null,
+          "measurable_signal": "test_compute_runtime_delta_absent_baseline_returns_none, test_compute_runtime_delta_latest_below_baseline_raises, and test_compute_runtime_delta_equal_counters_yields_zero_eu assert the boundary and regression cases",
+          "oracle_tier": 2,
           "quality_dimension": "reliability",
           "required": true,
-          "response": null,
+          "response": {
+            "expected": null,
+            "gate_ref": null,
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the runtime-delta helper boundary pytest cases",
+            "observe": "exits",
+            "quantifier": "single"
+          },
           "text": "An absent baseline yields a None delta (no phantom EU), a latest below the baseline raises per the non-negative guard, and an equal baseline/latest yields elapsed_eu == 0.0 (the exact input the W08 gate then catches).",
           "waiver_reason": null
         }
@@ -73305,7 +73393,7 @@
       "title": "EUCAP-6 Compute claim->close delta + persist actual record",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": "WT-P30-I05-W06-1781084660"
+      "worktree_id": null
     },
     "P30-I05-W07": {
       "agent_role": "executor",
