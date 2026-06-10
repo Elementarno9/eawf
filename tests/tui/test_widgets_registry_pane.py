@@ -32,15 +32,22 @@ import pytest
 from eawf.platform.registry import Registry, RegistryRepoEntry
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import WorkspaceScreen
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.git_pane import GitFields
+from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.registry_pane import (
+    CHIP_ACCENT,
     REGISTRY_EMPTY_CELL,
     REGISTRY_HINT_LINE,
     REGISTRY_UNAVAILABLE_CELL,
     RegistryPane,
     format_registry_lines,
+    format_registry_markup_lines,
+    load_registry_markup_rows,
     load_registry_rows,
+    registry_line_sigil,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"
@@ -205,6 +212,146 @@ def test_load_registry_rows_marks_stale_entry_by_missing_state(tmp_path: Path) -
 
 
 # --------------------------------------------------------------------------
+# registry_line_sigil -- lifecycle -> sigil mapping (P30-I08-W01 reskin)
+# --------------------------------------------------------------------------
+
+
+def test_registry_line_sigil_active_is_running() -> None:
+    """The active repo's line leads with the RUNNING diamond."""
+    assert registry_line_sigil(is_active=True, is_stale=False) is Sigil.RUNNING
+
+
+def test_registry_line_sigil_stale_is_abandoned() -> None:
+    """A stale (non-active) entry leads with the ABANDONED circled-slash."""
+    assert registry_line_sigil(is_active=False, is_stale=True) is Sigil.ABANDONED
+
+
+def test_registry_line_sigil_plain_is_closed() -> None:
+    """A registered-and-fresh entry leads with the CLOSED filled circle."""
+    assert registry_line_sigil(is_active=False, is_stale=False) is Sigil.CLOSED
+
+
+def test_registry_line_sigil_active_wins_over_stale() -> None:
+    """The active flag wins over stale: an active-and-stale repo reads in-flight."""
+    assert registry_line_sigil(is_active=True, is_stale=True) is Sigil.RUNNING
+
+
+# --------------------------------------------------------------------------
+# format_registry_markup_lines -- leading sigil + green chips
+# --------------------------------------------------------------------------
+
+
+def _leading_sigil_span(sigil: Sigil) -> str:
+    """Return the leading tinted-sigil span a line for *sigil* opens with.
+
+    Mirrors the pane's composition: the lifecycle glyph (from the shared
+    sigils source) wrapped in its lifecycle-tint span. Built off the canonical
+    :func:`glyph` / :func:`tint` helpers so the test never hard-codes a glyph
+    or a hex of its own.
+    """
+    hue = tint(sigil)
+    mark = glyph(sigil, mode=DEFAULT_RENDER_MODE)
+    return f"[{hue}]{mark}[/]" if hue is not None else f"[$muted]{mark}[/]"
+
+
+def _markup_by_code(lines: list[str]) -> dict[str, str]:
+    """Index *lines* by repo code (the token after the leading ``[/] `` span)."""
+    return {line.split("[/] ", 1)[1].split("  ", 1)[0]: line for line in lines}
+
+
+def test_format_registry_markup_lines_leads_with_lifecycle_sigil() -> None:
+    """Each repo line leads with the I02 lifecycle sigil span for its state.
+
+    The active repo wears the RUNNING glyph, the stale entry the ABANDONED
+    glyph, and a plain entry the CLOSED glyph -- each drawn from the shared
+    sigils source (not a glyph invented in this pane).
+    """
+    registry = _registry(["ABC", "DEF", "GHI"], active_code="ABC")
+    lines = format_registry_markup_lines(
+        registry,
+        is_stale_at={"DEF": True},
+        mode=DEFAULT_RENDER_MODE,
+    )
+    by_code = _markup_by_code(lines)
+    assert by_code["ABC"].startswith(_leading_sigil_span(Sigil.RUNNING))
+    assert by_code["DEF"].startswith(_leading_sigil_span(Sigil.ABANDONED))
+    assert by_code["GHI"].startswith(_leading_sigil_span(Sigil.CLOSED))
+
+
+def test_format_registry_markup_lines_tints_sigil_with_lifecycle_hue() -> None:
+    """The leading sigil is wrapped in its lifecycle tint span from the COLOUR layer."""
+    registry = _registry(["ABC"])
+    (line,) = format_registry_markup_lines(registry, is_stale_at={}, mode=DEFAULT_RENDER_MODE)
+    hue = tint(Sigil.CLOSED)
+    assert hue is not None
+    assert line.startswith(f"[{hue}]")
+
+
+def test_format_registry_markup_lines_active_chip_is_green_accent() -> None:
+    """The ``(active)`` chip renders in the green accent palette span."""
+    registry = _registry(["ABC", "DEF"], active_code="DEF")
+    lines = format_registry_markup_lines(registry, is_stale_at={}, mode=DEFAULT_RENDER_MODE)
+    by_code = _markup_by_code(lines)
+    assert f"[{CHIP_ACCENT}](active)[/]" in by_code["DEF"]
+    assert "(active)" not in by_code["ABC"]
+
+
+def test_format_registry_markup_lines_stale_chip_is_green_accent() -> None:
+    """The ``(stale)`` chip renders in the green accent palette span."""
+    registry = _registry(["ABC", "DEF"])
+    lines = format_registry_markup_lines(
+        registry, is_stale_at={"ABC": True, "DEF": False}, mode=DEFAULT_RENDER_MODE
+    )
+    by_code = _markup_by_code(lines)
+    assert f"[{CHIP_ACCENT}](stale)[/]" in by_code["ABC"]
+    assert "(stale)" not in by_code["DEF"]
+
+
+def test_format_registry_markup_lines_escapes_path_brackets() -> None:
+    """A path with a ``[`` is backslash-escaped, never parsed as a style tag."""
+    registry = Registry(
+        version="1",
+        repos={"ABC": RegistryRepoEntry(code="ABC", path="/abs/[x]/abc", title="ABC repo")},
+    )
+    (line,) = format_registry_markup_lines(registry, is_stale_at={}, mode=DEFAULT_RENDER_MODE)
+    assert "/abs/\\[x]/abc" in line
+
+
+def test_format_registry_markup_lines_honest_empty_is_byte_identical() -> None:
+    """The honest-empty markup lines are byte-identical to the escaped plain lines."""
+    registry = Registry(version="1", repos={})
+    plain = format_registry_lines(registry, is_stale_at={})
+    markup = format_registry_markup_lines(registry, is_stale_at={}, mode=DEFAULT_RENDER_MODE)
+    assert markup == [escape_markup(line) for line in plain]
+    assert markup == [REGISTRY_EMPTY_CELL, REGISTRY_HINT_LINE]
+
+
+def test_format_registry_markup_lines_unavailable_is_byte_identical() -> None:
+    """The unavailable markup line is byte-identical to the escaped plain line."""
+    plain = format_registry_lines(None, is_stale_at={})
+    markup = format_registry_markup_lines(None, is_stale_at={}, mode=DEFAULT_RENDER_MODE)
+    assert markup == [escape_markup(line) for line in plain]
+    assert markup == [REGISTRY_UNAVAILABLE_CELL]
+
+
+def test_load_registry_markup_rows_reads_explicit_registry(tmp_path: Path) -> None:
+    """The markup loader leads each on-disk entry with its lifecycle sigil + green chip."""
+    _write_registry(
+        tmp_path,
+        {"ABC": {"code": "ABC", "path": "/abs/path/abc", "title": "ABC repo"}},
+        active_code="ABC",
+    )
+    (line,) = load_registry_markup_rows(home=tmp_path)
+    assert line.startswith(f"[{tint(Sigil.RUNNING)}]")
+    assert f"[{CHIP_ACCENT}](active)[/]" in line
+
+
+def test_load_registry_markup_rows_unavailable_is_escaped_plain(tmp_path: Path) -> None:
+    """No registry under *home* yields the escaped unavailable placeholder, unchanged."""
+    assert load_registry_markup_rows(home=tmp_path) == [escape_markup(REGISTRY_UNAVAILABLE_CELL)]
+
+
+# --------------------------------------------------------------------------
 # NO-SCAN invariant -- the pane reads only the registry, never the filesystem
 # --------------------------------------------------------------------------
 
@@ -273,6 +420,45 @@ def test_workspace_dashboard_renders_registry_entries(
             assert "ABC" in rendered
             assert "DEF" in rendered
             assert "(active)" in rendered
+
+    asyncio.run(body())
+
+
+def test_workspace_dashboard_registry_pane_paints_sigils_and_chips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The mounted pane paints the lifecycle sigil glyphs + the chip text.
+
+    Asserts the painted content (the markup tags consumed by the renderer)
+    carries the active repo's RUNNING glyph and a stale repo's ABANDONED
+    glyph, plus the ``(active)`` / ``(stale)`` chip text -- the
+    cosmic-terminal reskin landing on the live surface, not just in the pure
+    formatter. The fixture's home has no per-repo ``.ea/state.json`` for
+    either path, so both entries flag stale; ABC is also active.
+    """
+    _write_registry(
+        tmp_path,
+        {
+            "ABC": {"code": "ABC", "path": str(tmp_path / "abc"), "title": "ABC repo"},
+            "DEF": {"code": "DEF", "path": str(tmp_path / "def"), "title": "DEF repo"},
+        },
+        active_code="ABC",
+    )
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            pane = app.screen.query_one(RegistryPane)
+            mode = pane._render_mode()
+            painted = str(pane.render())
+            # ABC is active -> RUNNING glyph; DEF is stale-only -> ABANDONED glyph.
+            assert glyph(Sigil.RUNNING, mode=mode) in painted
+            assert glyph(Sigil.ABANDONED, mode=mode) in painted
+            assert "(active)" in painted
+            assert "(stale)" in painted
 
     asyncio.run(body())
 
