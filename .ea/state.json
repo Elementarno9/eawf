@@ -5076,6 +5076,18 @@
       "status": "done",
       "updated_at": "2026-06-10T21:48:24.016081Z"
     },
+    "P30-I07-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W09",
+      "scope_id": "P30-I07-W09",
+      "status": "done",
+      "updated_at": "2026-06-10T22:11:23.216119Z"
+    },
     "P30-I07-W10": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5099,6 +5111,18 @@
       "scope_id": "P30-I07-W11",
       "status": "done",
       "updated_at": "2026-06-10T21:26:50.242094Z"
+    },
+    "P30-I07-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W13",
+      "scope_id": "P30-I07-W13",
+      "status": "done",
+      "updated_at": "2026-06-10T22:18:43.103793Z"
     },
     "P30-I14-W01": {
       "actual_cost_usd": 0.0,
@@ -8231,12 +8255,12 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I07-W13",
       "P30-I07-W15",
-      "P30-I07-W09",
       "P30-I08-W01",
       "P30-I14-W03",
-      "P30-I14-W04"
+      "P30-I14-W04",
+      "P30-I07-W17",
+      "P30-I07-W14"
     ],
     "iter_id": "P30-I08",
     "phase_id": "P30",
@@ -8834,7 +8858,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -16298,6 +16322,19 @@
       "scope_id": "P30-I07-W13",
       "updated_at": "2026-06-10T21:27:25.761362Z"
     },
+    "P30-I07-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W14-bucket-20260610T221208Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I07-W14",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I07-W14",
+      "updated_at": "2026-06-10T22:12:08.092208Z"
+    },
     "P30-I07-W15": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I07-W15-bucket-20260610T212726Z",
@@ -16310,6 +16347,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I07-W15",
       "updated_at": "2026-06-10T21:27:26.263155Z"
+    },
+    "P30-I07-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I07-W17-bucket-20260610T221207Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I07-W17",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I07-W17",
+      "updated_at": "2026-06-10T22:12:07.541612Z"
     },
     "P30-I08-W01": {
       "confidence": "low",
@@ -19326,7 +19376,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T22:08:59.089781Z",
+  "updated_at": "2026-06-10T22:18:43.103984Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -20446,7 +20496,7 @@
       "claim_session_id": "SES-20260510T214731Z-operator-claude",
       "claimed_at": null,
       "closed_at": "2026-05-11T21:27:58.133113Z",
-      "commit": "7741491a767c9c5db7064f63533101087c62b671",
+      "commit": "96affde39b02a0af16b65026e087ad7ec7a58db8",
       "deps": [],
       "description": "Hygiene preamble: state-writer EOL + version-coupling lint + phase prepare-close mutator + iter-bump hint",
       "dispatch_history": [],
@@ -26774,7 +26824,7 @@
       "claim_session_id": "p22-w01-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:01:58.119217Z",
-      "commit": "384a1abbab92ecb00d7d1a7d865b92532a4ddc4f",
+      "commit": "2f0d791cdd61c09902aa28b94a7833bab3766e9e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -26892,7 +26942,7 @@
       "claim_session_id": "p22-w02-inline",
       "claimed_at": null,
       "closed_at": "2026-05-18T19:04:17.649123Z",
-      "commit": "843fde0fc76d096e614ef5c697e280a1c7590905",
+      "commit": "1462b39c352a445a7c4e17863c7b6165c7c24b55",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -32421,7 +32471,7 @@
       "claim_session_id": "op-p26-w31",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:09:30.075224Z",
-      "commit": "c2eef2b1107afda3879a80f86fbfe06ac08e57dd",
+      "commit": "38f81da27e806a16d0b97bb2b28c779f85245877",
       "deps": [],
       "description": "fix: TUI pane display (scroll/ellipsis, msgbox align, roadmap pre-scroll, events ts, glyph color)",
       "dispatch_history": [],
@@ -32544,7 +32594,7 @@
       "claim_session_id": "op-p26-w32",
       "claimed_at": null,
       "closed_at": "2026-05-21T01:07:22.638835Z",
-      "commit": "1f8080ee806fd337574ed15b14292c26c9c43e7e",
+      "commit": "b549adc214b8772699653a403c83b9543ab7b686",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -39818,7 +39868,7 @@
       "claim_session_id": "exec-P27-I03-W14",
       "claimed_at": null,
       "closed_at": "2026-05-23T17:41:26.840590Z",
-      "commit": "4a83c969a70b686fe23dc9892fe69e92a7d8698d",
+      "commit": "72bbb787c94dd1083c4275f89827c64f0f725be4",
       "deps": [
         "P27-I03-W12"
       ],
@@ -53664,7 +53714,7 @@
       "claim_session_id": "flow-p29-i01",
       "claimed_at": "2026-06-01T01:22:49.293728Z",
       "closed_at": "2026-06-01T02:53:29.209391Z",
-      "commit": "b844262044b61c143d60ac64701084cf4057a86e",
+      "commit": "55b8e58b5eb6bb63b64da995585f8d705ed3ce5c",
       "deps": [],
       "description": "[MET-1 | scope T2/dec4 | SF] reactive-metric correction; owns the Iter.trigger field reused by TRUST-1. Prior 54% was a definitional artifact, annotate in release notes.",
       "dispatch_history": [],
@@ -74667,7 +74717,7 @@
       "claim_session_id": "codex-p30-i05-w09",
       "claimed_at": "2026-06-10T11:32:26.598485Z",
       "closed_at": "2026-06-10T11:46:22.335465Z",
-      "commit": "40c94a30b1ad70ff9662790277b4cfd3e5c08206",
+      "commit": "841af1b28774c17571235d2cc7e71d42d0b1459f",
       "deps": [
         "P30-I05-W08"
       ],
@@ -76469,8 +76519,8 @@
       ],
       "claim_session_id": "flow-p30-i07-w09",
       "claimed_at": "2026-06-10T21:48:47.289415Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:11:23.216119Z",
+      "commit": "d40124ce568360e3024b41deacc0e4727a374b3f",
       "deps": [
         "P30-I07-W08"
       ],
@@ -76486,12 +76536,12 @@
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.802996Z",
-      "outcome": null,
+      "outcome": "Fleet verdict-rollup pane: each wave's latest auditor verdict outcome-tinted (pass green / fail red); zero rows -> honest-empty line, no fabricated pass. Pure fleet_verdict_rollup helper in reputation.py. 97+124 green, 2 goldens regen. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76668,8 +76718,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i07-w13",
       "claimed_at": "2026-06-10T21:27:25.761237Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:18:43.103793Z",
+      "commit": "49c49afece2adac2f126f2f8b17d464b77629140",
       "deps": [
         "P30-I07-W05"
       ],
@@ -76678,19 +76728,24 @@
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/surfaces/tui/screens/overlays/detail.py",
-        "src/eawf/surfaces/tui/modes/metrics.py"
+        "src/eawf/surfaces/tui/screens/overlays/detail_cost.py",
+        "src/eawf/surfaces/tui/screens/overlays/metrics.py",
+        "tests/tui/test_overlays_detail.py",
+        "tests/tui/test_overlays_metrics.py",
+        "tests/tui/test_overlays_detail_cost.py",
+        "tests/snapshots/tui/golden/metrics_overlay.txt"
       ],
       "gates": [],
       "id": "P30-I07-W13",
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.803435Z",
-      "outcome": null,
+      "outcome": "Per-session cost view: detail $ tab (metered SessionAttempt columns + aggregate bar) + matching /metrics Cost tile; honest absence (em-dash/inert for unbillable, 'no metered sessions yet' line). detail_cost.py extracted, detail.py trimmed to 1399 under cap. 155+167 green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76715,8 +76770,8 @@
     "P30-I07-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w14",
+      "claimed_at": "2026-06-10T22:12:08.092120Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -76739,7 +76794,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76862,8 +76917,8 @@
     "P30-I07-W17": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30-i07-w17",
+      "claimed_at": "2026-06-10T22:12:07.541499Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -76885,7 +76940,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80948,7 +81003,7 @@
       "claim_session_id": "flow-p30-i14-w10",
       "claimed_at": "2026-06-10T21:53:45.396246Z",
       "closed_at": "2026-06-10T22:08:59.089579Z",
-      "commit": "457e6fad3f594cd19a390f80846e4e0110e52509",
+      "commit": "757a3cc3eee9cc51976d855c403b65caf76bf7f9",
       "deps": [],
       "description": null,
       "dispatch_history": [],
