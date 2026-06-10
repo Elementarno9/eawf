@@ -5220,6 +5220,18 @@
       "status": "done",
       "updated_at": "2026-06-10T22:06:58.751927Z"
     },
+    "P30-I14-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W09",
+      "scope_id": "P30-I14-W09",
+      "status": "done",
+      "updated_at": "2026-06-10T22:29:56.397397Z"
+    },
     "P30-I14-W10": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8318,8 +8330,7 @@
       "P30-I07-W14",
       "P30-I07-W16",
       "P30-I08-W02",
-      "P30-I14-W07",
-      "P30-I14-W09"
+      "P30-I14-W07"
     ],
     "iter_id": "P30-I08",
     "phase_id": "P30",
@@ -19487,7 +19498,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T22:22:39.053945Z",
+  "updated_at": "2026-06-10T22:29:56.397626Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -81050,8 +81061,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i14-w09",
       "claimed_at": "2026-06-10T22:20:33.115231Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:29:56.397397Z",
+      "commit": "36926a1f33665139d0298389503e64636ee280a7",
       "deps": [
         "P30-I14-W08"
       ],
@@ -81059,7 +81070,8 @@
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/surfaces/cli/commands/lifecycle.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_iter.py",
+        "src/eawf/workflow/lifecycle/spec_archive.py",
         "tests/cli/test_iter_close_archive_specs.py"
       ],
       "gates": [],
@@ -81067,12 +81079,12 @@
       "intent": null,
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T12:29:17.787019Z",
-      "outcome": null,
+      "outcome": "iter close --archive-specs cascade: every wave spec git-removed + cache ARCHIVED + recoverable via spec show --from-git; no-op without flag; archive_phase_specs back-fills a phase in one call. Reuses W08 force path (new spec_archive.py). Scope fixed to lifecycle_iter.py. 9 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
