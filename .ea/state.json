@@ -5124,6 +5124,30 @@
       "status": "done",
       "updated_at": "2026-06-10T22:18:43.103793Z"
     },
+    "P30-I07-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I07-W15",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I07-W15",
+      "scope_id": "P30-I07-W15",
+      "status": "done",
+      "updated_at": "2026-06-10T22:19:32.758468Z"
+    },
+    "P30-I08-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I08-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I08-W01",
+      "scope_id": "P30-I08-W01",
+      "status": "done",
+      "updated_at": "2026-06-10T22:19:31.976397Z"
+    },
     "P30-I14-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5135,6 +5159,30 @@
       "scope_id": "P30-I14-W01",
       "status": "done",
       "updated_at": "2026-06-10T22:06:59.589077Z"
+    },
+    "P30-I14-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W03",
+      "scope_id": "P30-I14-W03",
+      "status": "done",
+      "updated_at": "2026-06-10T22:19:33.562187Z"
+    },
+    "P30-I14-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I14-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I14-W04",
+      "scope_id": "P30-I14-W04",
+      "status": "done",
+      "updated_at": "2026-06-10T22:19:34.338628Z"
     },
     "P30-I14-W05": {
       "actual_cost_usd": 0.0,
@@ -8255,10 +8303,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I07-W15",
-      "P30-I08-W01",
-      "P30-I14-W03",
-      "P30-I14-W04",
       "P30-I07-W17",
       "P30-I07-W14"
     ],
@@ -8858,7 +8902,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -19376,7 +19420,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T22:18:43.103984Z",
+  "updated_at": "2026-06-10T22:19:34.338794Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -76823,8 +76867,8 @@
       ],
       "claim_session_id": "flow-p30-i07-w15",
       "claimed_at": "2026-06-10T21:27:26.262751Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:19:32.758468Z",
+      "commit": "8504b0814705a5c9abf5e8166ebb2ffa33fda080",
       "deps": [
         "P30-I07-W11"
       ],
@@ -76839,12 +76883,12 @@
       "intent": null,
       "iter_id": "P30-I07",
       "opened_at": "2026-06-09T12:29:17.803898Z",
-      "outcome": null,
+      "outcome": "Research control plane: round->questions->claims tree over OpenQuestion with open/answered/dropped sigils + o/t operator channel (free keys, honest 'not yet wired' until RPCs land); empty board keeps 'no word spoken yet' hero. 161+1776 green, 5 goldens regen. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -76969,8 +77013,8 @@
       ],
       "claim_session_id": "flow-p30-i08-w01",
       "claimed_at": "2026-06-10T21:56:23.874171Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:19:31.976397Z",
+      "commit": "bcf25e9de8cbbcd1e9e862961968c43154622059",
       "deps": [],
       "description": "Move RegistryPane from the word-list listing to the brand language: each registry line leads with the repo's lifecycle sigil (active vs idle vs stale) and the (active)/(stale) chips render in the green accent palette. Pure render change over the existing read-only, explicit-registry-only load path — no scan, no growth.",
       "dispatch_history": [],
@@ -76983,12 +77027,12 @@
       "intent": null,
       "iter_id": "P30-I08",
       "opened_at": "2026-06-09T12:29:17.763242Z",
-      "outcome": null,
+      "outcome": "Registry pane reskinned: lifecycle sigil per line + green-accent (active)/(stale) chips; honest-empty/unavailable byte-identical. 31+87 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80631,8 +80675,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i14-w03",
       "claimed_at": "2026-06-10T22:08:29.761787Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:19:33.562187Z",
+      "commit": "d1cc8330922a189e0b49571cca91c5db883fb04a",
       "deps": [],
       "description": "eawfd.log uses a plain FileHandler (main.py) and grows unbounded (~128MB observed). Swap it for a RotatingFileHandler with maxBytes / backupCount resolved from env (default 16MiB x 5).",
       "dispatch_history": [],
@@ -80646,12 +80690,12 @@
       "intent": null,
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T12:29:17.766824Z",
-      "outcome": null,
+      "outcome": "Daemon eawfd.log now RotatingFileHandler capped by EAWF_DAEMON_LOG_MAX_BYTES(16MiB)/BACKUP_COUNT(5), env-guarded. 29 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80678,8 +80722,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30-i14-w04",
       "claimed_at": "2026-06-10T22:08:30.320312Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-10T22:19:34.338628Z",
+      "commit": "e8437920b411c4bde975919654b22d0ac89664a1",
       "deps": [
         "P30-I14-W01"
       ],
@@ -80695,12 +80739,12 @@
       "intent": null,
       "iter_id": "P30-I14",
       "opened_at": "2026-06-09T12:29:17.785568Z",
-      "outcome": null,
+      "outcome": "eawf daemon reclaim: one-shot WAL sweep (W01 helper) + state.json.bak trim beyond kept-count (mtime-ranked). 33 green. Cherry-picked.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
