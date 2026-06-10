@@ -7732,7 +7732,11 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I05-W03",
+      "P30-I05-W04",
+      "P30-I05-W05"
+    ],
     "iter_id": "P30-I05",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -15324,6 +15328,45 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I05-W02",
       "updated_at": "2026-06-10T05:41:03.866833Z"
+    },
+    "P30-I05-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W03-bucket-20260610T055102Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I05-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I05-W03",
+      "updated_at": "2026-06-10T05:51:02.959519Z"
+    },
+    "P30-I05-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W04-bucket-20260610T055103Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I05-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I05-W04",
+      "updated_at": "2026-06-10T05:51:03.441006Z"
+    },
+    "P30-I05-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I05-W05-bucket-20260610T055103Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I05-W05",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I05-W05",
+      "updated_at": "2026-06-10T05:51:03.923098Z"
     }
   },
   "goals": {
@@ -18219,7 +18262,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T05:49:53.956137Z",
+  "updated_at": "2026-06-10T05:51:06.627750Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -71876,8 +71919,8 @@
     "P30-I05-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w03",
+      "claimed_at": "2026-06-10T05:51:02.959494Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -71923,7 +71966,7 @@
       "runtime_baseline": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -71957,15 +72000,15 @@
       "title": "EUCAP-3 Register SESSION_END capture hook -> daemon RPC",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I05-W03-1781070664"
     },
     "P30-I05-W04": {
       "agent_role": "executor",
       "blocks": [
         "P30-I05-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w04",
+      "claimed_at": "2026-06-10T05:51:03.440999Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -72009,7 +72052,7 @@
       "runtime_baseline": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -72043,13 +72086,13 @@
       "title": "EUCAP-4 Add runtime.capture daemon RPC keyed to active wave",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I05-W04-1781070665"
     },
     "P30-I05-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "codex-p30-i05-w05",
+      "claimed_at": "2026-06-10T05:51:03.923092Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -72094,7 +72137,7 @@
       "runtime_baseline": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -72114,7 +72157,7 @@
       "title": "EUCAP-5 Statusline cost-counter sidecar as fresh backstop",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I05-W05-1781070666"
     },
     "P30-I05-W06": {
       "agent_role": "executor",
@@ -81445,6 +81488,39 @@
       "path": ".ea/worktrees/p30-i05-w02",
       "status": "merged",
       "wave_id": "P30-I05-W02"
+    },
+    "WT-P30-I05-W03-1781070664": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i05-w03",
+      "created_at": "2026-06-10T05:51:04.817014Z",
+      "id": "WT-P30-I05-W03-1781070664",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i05-w03",
+      "path": ".ea/worktrees/p30-i05-w03",
+      "status": "active",
+      "wave_id": "P30-I05-W03"
+    },
+    "WT-P30-I05-W04-1781070665": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i05-w04",
+      "created_at": "2026-06-10T05:51:05.707580Z",
+      "id": "WT-P30-I05-W04-1781070665",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i05-w04",
+      "path": ".ea/worktrees/p30-i05-w04",
+      "status": "active",
+      "wave_id": "P30-I05-W04"
+    },
+    "WT-P30-I05-W05-1781070666": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i05-w05",
+      "created_at": "2026-06-10T05:51:06.627750Z",
+      "id": "WT-P30-I05-W05-1781070666",
+      "merged_commit": null,
+      "owner_session_id": "codex-p30-i05-w05",
+      "path": ".ea/worktrees/p30-i05-w05",
+      "status": "active",
+      "wave_id": "P30-I05-W05"
     }
   }
 }
