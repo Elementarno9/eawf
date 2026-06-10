@@ -48,7 +48,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from eawf.kernel.spec.audit import AuditCadence
 from eawf.kernel.spec.research_campaign import ResearchProfileBlock
 from eawf.platform.profiles.clarity import DEFAULT_OUTPUT_STYLE, OutputStyle
-from eawf.platform.render_block import DEFAULT_RENDER_BLOCK_TIER, RenderBlockTier
+from eawf.platform.render_block import (
+    DEFAULT_RENDER_BLOCK_TIER,
+    DISPATCH_SYSTEM_PROMPT_TARGET,
+    RenderBlockTier,
+)
 
 
 class StateExtensions(BaseModel):
@@ -349,6 +353,15 @@ class RenderBlock(BaseModel):
     that fills neither shape, both shapes, or only part of the triad is a
     :class:`ValidationError`. An empty ``body_template`` (the ``""`` default)
     means "not the prose shape"; non-empty means prose.
+
+    ``agent_role`` (FLEET-5 / P30-I06-W05) binds a block to one subagent role
+    for the per-role dispatch tier. When ``target`` is
+    :data:`~eawf.platform.render_block.DISPATCH_SYSTEM_PROMPT_TARGET` the block
+    is a "Zone 3" role rule: its body is injected into the dispatched system
+    prompt for waves whose ``agent_role`` matches. ``agent_role`` is required
+    for that target and forbidden for every other target (a managed-file block
+    such as ``AGENTS.md`` carries no role binding). ``None`` for the legacy
+    managed-file blocks.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -361,11 +374,40 @@ class RenderBlock(BaseModel):
     verification: str | None = None
     tier: RenderBlockTier = DEFAULT_RENDER_BLOCK_TIER
     version: str = "1.0"
+    agent_role: str | None = None
 
     @property
     def is_structured(self) -> bool:
         """``True`` when this block carries the structured triad (not prose)."""
         return self.rationale is not None
+
+    @property
+    def is_role_tier(self) -> bool:
+        """``True`` when this block binds to a role for the dispatch tier.
+
+        A role-tier block targets
+        :data:`~eawf.platform.render_block.DISPATCH_SYSTEM_PROMPT_TARGET` and
+        carries a non-``None`` :attr:`agent_role`; its body is injected into
+        the dispatched system prompt for matching waves rather than rendered
+        into a managed file.
+        """
+        return self.target == DISPATCH_SYSTEM_PROMPT_TARGET
+
+    @property
+    def body_text(self) -> str:
+        """Return the block's raw body text (prose or structured triad).
+
+        Prose blocks return :attr:`body_template` verbatim; structured blocks
+        join the ``rationale`` / ``mechanism`` / ``verification`` triad with a
+        blank line. The XOR validator guarantees exactly one shape is set, so
+        the result is always non-empty for a valid block. This is the text a
+        per-tier token budget weighs and the role-tier dispatch injection
+        splices into the system prompt.
+        """
+        if self.body_template:
+            return self.body_template
+        parts = [self.rationale, self.mechanism, self.verification]
+        return "\n\n".join(part for part in parts if part is not None)
 
     @model_validator(mode="after")
     def _exactly_one_body_shape(self) -> RenderBlock:
@@ -401,6 +443,32 @@ class RenderBlock(BaseModel):
             raise ValueError(
                 f"render_block id={self.id!r} sets neither body_template nor the "
                 f"rationale/mechanism/verification triad: provide exactly one"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _role_binding_matches_target(self) -> RenderBlock:
+        """Enforce ``agent_role`` is set iff the block targets the dispatch tier.
+
+        A role-tier block (``target ==``
+        :data:`~eawf.platform.render_block.DISPATCH_SYSTEM_PROMPT_TARGET`)
+        MUST name the role it binds to; a managed-file block (any other
+        target) MUST NOT carry a role binding.
+
+        Raises:
+            ValueError: when a dispatch-tier block omits ``agent_role``, or a
+                non-dispatch block supplies one.
+        """
+        if self.target == DISPATCH_SYSTEM_PROMPT_TARGET:
+            if self.agent_role is None:
+                raise ValueError(
+                    f"render_block id={self.id!r} targets the dispatch tier "
+                    f"but sets no agent_role: a role-tier block must name its role"
+                )
+        elif self.agent_role is not None:
+            raise ValueError(
+                f"render_block id={self.id!r} sets agent_role={self.agent_role!r} "
+                f"but targets {self.target!r}: agent_role is reserved for the dispatch tier"
             )
         return self
 
@@ -532,3 +600,30 @@ class ComposedProfile(BaseModel):
             else:
                 reference.append(block)
         return tier0, reference
+
+    def role_tier_blocks(self) -> dict[str, str]:
+        """Return the role-tier dispatch blocks as an ``agent_role -> body`` map.
+
+        Walks :attr:`render_blocks` in source order, keeping only role-tier
+        blocks (those targeting
+        :data:`~eawf.platform.render_block.DISPATCH_SYSTEM_PROMPT_TARGET`), and
+        maps each block's :attr:`RenderBlock.agent_role` to its
+        :attr:`RenderBlock.body_text`. The dispatch renderer injects the
+        matching role's body into the system prompt for waves of that role; a
+        role absent from the map is a true no-op (the static
+        ``RoleSpec.system_prompt`` renders unchanged).
+
+        When two role-tier blocks bind the same role, the later one wins (the
+        same last-declared-wins rule composition already applied per
+        ``RenderBlock.id``).
+
+        Returns:
+            A mapping from ``agent_role`` value to the block body to inject.
+            Empty when the composed profile declares no role-tier block.
+        """
+        out: dict[str, str] = {}
+        for block in self.render_blocks:
+            if not block.is_role_tier or block.agent_role is None:
+                continue
+            out[block.agent_role] = block.body_text
+        return out

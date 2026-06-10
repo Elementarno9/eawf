@@ -56,6 +56,7 @@ state object and memory store are never mutated by dispatch rendering.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -174,6 +175,7 @@ def render_dispatch_envelope(
     runtime: str,
     *,
     repo_root: Path | None = None,
+    role_blocks: Mapping[str, str] | None = None,
 ) -> DispatchEnvelope:
     """Return a typed :class:`DispatchEnvelope` for *wave_id* and *runtime*.
 
@@ -192,6 +194,14 @@ def render_dispatch_envelope(
             matches :func:`eawf.runtime.mcp.installer._validate_runtime`.
         repo_root: Optional repo root used for spike-brief discovery and
             memory-body lookup under ``.ea/store/memory.jsonl``.
+        role_blocks: Optional ``agent_role -> body`` map of per-role
+            dispatch render blocks (the "Zone 3" role tier, FLEET-5). When
+            the dispatched wave's ``agent_role`` has an entry, the body is
+            injected into the role's ``system_prompt``; a role absent from
+            the map (or ``None`` / empty) is a true no-op and the static
+            ``RoleSpec.system_prompt`` renders byte-for-byte. Callers
+            populate this from
+            :meth:`~eawf.platform.profiles.models.ComposedProfile.role_tier_blocks`.
 
     Returns:
         :class:`DispatchEnvelope` with ``runtime``, ``wave_id``,
@@ -212,7 +222,7 @@ def render_dispatch_envelope(
     # render-then-re-walk pattern where the renderer projected the role
     # registry inside `render_wave_prompt` and the envelope would have to
     # re-project it. The shared spec keeps the two surfaces aligned.
-    spec = build_subagent_spec(state, wave_id, repo_root=repo_root)
+    spec = build_subagent_spec(state, wave_id, repo_root=repo_root, role_blocks=role_blocks)
     prompt = _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
     if runtime in {_CLI_RUNTIME_CLAUDE_CODE, _CLI_RUNTIME_CODEX, _CLI_RUNTIME_OPENCODE}:
         # codex + opencode share the claude-code envelope shape: ``prompt``
@@ -292,11 +302,40 @@ def _project_allowed_tools(state: State, *, wave_id: str) -> list[str]:
     return sorted(allowed)
 
 
+def _inject_role_block(system_prompt: str, role_block_body: str | None) -> str:
+    """Return *system_prompt* with the role-tier *role_block_body* appended.
+
+    The injection is additive and byte-stable for the absent case: when
+    *role_block_body* is ``None`` or blank the static *system_prompt* is
+    returned unchanged (no separator, no trailing-newline drift), so a role
+    with no configured block renders byte-for-byte as before. When a body is
+    present it is appended after a single blank-line separator with its own
+    trailing whitespace stripped, so the merged prompt has one canonical
+    shape regardless of how the block body was authored.
+
+    Args:
+        system_prompt: The static :attr:`RoleSpec.system_prompt`.
+        role_block_body: The matching role-tier block body, or ``None`` when
+            the role has no configured block.
+
+    Returns:
+        The static prompt unchanged when no block applies, else the prompt
+        with the block body spliced on.
+    """
+    if role_block_body is None:
+        return system_prompt
+    body = role_block_body.strip()
+    if not body:
+        return system_prompt
+    return f"{system_prompt.rstrip()}\n\n{body}"
+
+
 def build_role_contract(
     role: RoleSpec,
     *,
     state: State | None = None,
     wave_id: str | None = None,
+    role_block_body: str | None = None,
 ) -> RoleContract:
     """Project a :class:`RoleSpec` into a typed :class:`RoleContract`.
 
@@ -315,6 +354,12 @@ def build_role_contract(
     :func:`_project_allowed_tools` — a role's tool grant cannot leak
     past the per-wave sandbox.
 
+    Role-tier injection (FLEET-5): when ``role_block_body`` is supplied and
+    non-blank, it is appended to the contract's ``system_prompt`` (the
+    profile's per-role "Zone 3" dispatch rule). ``None`` or a blank body is
+    a true no-op — the static ``RoleSpec.system_prompt`` is copied
+    byte-for-byte, so a role with no configured block renders unchanged.
+
     Args:
         role: The source :class:`RoleSpec` (typically resolved from
             :data:`~eawf.workflow.agents.specs.roles.ROLE_REGISTRY` via
@@ -323,6 +368,9 @@ def build_role_contract(
             ``wave_id`` is supplied so the sandbox deny-list resolves.
         wave_id: Optional wave id. When supplied, the wave's sandbox
             deny-list is intersected into the contract.
+        role_block_body: Optional per-role dispatch block body to inject
+            into ``system_prompt``. ``None`` (the default) leaves the
+            static prompt unchanged.
 
     Returns:
         A :class:`RoleContract` carrying the projected role-level
@@ -345,7 +393,7 @@ def build_role_contract(
     return RoleContract(
         role=role.role.value,
         summary=role.summary,
-        system_prompt=role.system_prompt,
+        system_prompt=_inject_role_block(role.system_prompt, role_block_body),
         allowed_tools=sorted(allowed),
         denied_tools=sorted(denied),
         model=role.model,
@@ -360,6 +408,7 @@ def build_subagent_spec(
     wave_id: str,
     *,
     repo_root: Path | None = None,
+    role_blocks: Mapping[str, str] | None = None,
 ) -> SubagentSpec:
     """Project *state* + *wave_id* into a typed :class:`SubagentSpec`.
 
@@ -376,6 +425,11 @@ def build_subagent_spec(
         repo_root: Optional repo root. When supplied, spike briefs whose
             filename mentions the wave / iter / phase id are surfaced in
             :attr:`SubagentSpec.references`; ``None`` skips the scan.
+        role_blocks: Optional ``agent_role -> body`` map of per-role
+            dispatch render blocks. When the wave's ``agent_role`` has an
+            entry, that body is injected into the projected
+            :class:`RoleContract.system_prompt`; an absent role is a true
+            no-op (the static prompt is copied byte-for-byte).
 
     Returns:
         A fully-populated :class:`SubagentSpec`.
@@ -407,7 +461,7 @@ def build_subagent_spec(
         references=_find_spike_briefs(wave, repo_root=repo_root) if repo_root is not None else [],
         worktree=_build_worktree(state, wave),
         estimate=_build_estimate(state, wave),
-        role_contract=_build_role_contract_for_wave(state, wave),
+        role_contract=_build_role_contract_for_wave(state, wave, role_blocks=role_blocks),
     )
     logger.debug(
         f"build_subagent_spec wave={wave.id!r} scope={scope_id!r} "
@@ -442,7 +496,12 @@ def _parallel_siblings(state: State, wave: Wave) -> list[str]:
     return sorted(siblings, key=natural_key)
 
 
-def _build_role_contract_for_wave(state: State, wave: Wave) -> RoleContract | None:
+def _build_role_contract_for_wave(
+    state: State,
+    wave: Wave,
+    *,
+    role_blocks: Mapping[str, str] | None = None,
+) -> RoleContract | None:
     """Return the wave's :class:`RoleContract`, or ``None`` when no role set.
 
     Looks up the wave's :attr:`Wave.agent_role` in the global
@@ -451,14 +510,22 @@ def _build_role_contract_for_wave(state: State, wave: Wave) -> RoleContract | No
     threading the wave's sandbox deny-list through. A wave without an
     ``agent_role`` returns ``None`` so the dispatch prompt stays
     byte-equivalent to the pre-W12 renderer.
+
+    When *role_blocks* carries an entry for the wave's ``agent_role``, the
+    matching body is injected into the contract's ``system_prompt`` (the
+    role-tier dispatch block, FLEET-5); an absent role is a no-op.
     """
     if wave.agent_role is None:
         return None
+    role_value = _as_agent_session_role(wave.agent_role).value
     try:
         role_spec = get_role_spec(_as_agent_session_role(wave.agent_role))
     except KeyError:
         return None
-    return build_role_contract(role_spec, state=state, wave_id=wave.id)
+    role_block_body = role_blocks.get(role_value) if role_blocks is not None else None
+    return build_role_contract(
+        role_spec, state=state, wave_id=wave.id, role_block_body=role_block_body
+    )
 
 
 def _as_agent_session_role(value: AgentSessionRole | str) -> AgentSessionRole:
