@@ -4944,6 +4944,18 @@
       "status": "done",
       "updated_at": "2026-06-10T20:10:11.228246Z"
     },
+    "P30-I06-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I06-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I06-W08",
+      "scope_id": "P30-I06-W08",
+      "status": "done",
+      "updated_at": "2026-06-10T20:17:58.910914Z"
+    },
     "P30-I06-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -15883,6 +15895,19 @@
       "scope_id": "P30-I06-W07",
       "updated_at": "2026-06-10T20:00:15.334689Z"
     },
+    "P30-I06-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I06-W08-bucket-20260610T201028Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I06-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I06-W08",
+      "updated_at": "2026-06-10T20:10:28.398266Z"
+    },
     "P30-I06-W09": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I06-W09-bucket-20260610T190437Z",
@@ -18808,7 +18833,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T20:10:11.228462Z",
+  "updated_at": "2026-06-10T20:17:58.911113Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -75349,10 +75374,10 @@
       "blocks": [
         "P30-I12-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30-i06-w08",
+      "claimed_at": "2026-06-10T20:10:28.398111Z",
+      "closed_at": "2026-06-10T20:17:58.910914Z",
+      "commit": "ea57bb1ee5d751d660c782afb0920c33ba24bb5d",
       "deps": [
         "P30-I06-W01"
       ],
@@ -75361,19 +75386,21 @@
       "effort_bucket": "S",
       "file_scopes": [
         "src/eawf/runtime/runtimes/codex/adapter.py",
-        "src/eawf/runtime/sandbox/policy.py"
+        "src/eawf/runtime/sandbox/policy.py",
+        "tests/runtimes/codex/test_spawn_session.py",
+        "tests/unit/test_state_sandbox_policy_model.py"
       ],
       "gates": [],
       "id": "P30-I06-W08",
       "intent": null,
       "iter_id": "P30-I06",
       "opened_at": "2026-06-09T12:29:17.777280Z",
-      "outcome": null,
+      "outcome": "Codex denied_tools now inverts to an allowlist on argv (-c tools.<name>=true|false; codex has no native deny flag), denied tools pinned false so a deny cannot silently pass through. TOOL_UNIVERSE + invert_deny_to_allow added. 47+449 green, mypy/ruff clean.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
