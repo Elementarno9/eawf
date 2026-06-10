@@ -9,9 +9,8 @@ spawn the selected ready wave.
 Reusing the frontier compute (not a second predicate)
 -----------------------------------------------------
 The pane never re-derives the claimability rule. It projects the bound
-read-only :class:`~eawf.kernel.state.models.State` into the slim injected
-view (:class:`~eawf.kernel.spec.auq_bridge.WaveFrontierItem` rows -- id, iter,
-status, deps) and calls the shared
+read-only :class:`~eawf.kernel.state.models.State` into the slim
+:class:`~eawf.kernel.spec.auq_bridge.WaveFrontierItem` view and calls the shared
 :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier`, which encodes the
 exact claim-time gate (:func:`eawf.workflow.lifecycle.wave.claim_wave`) purely
 off the view. So the frontier the operator sees is the same set the claim gate
@@ -22,80 +21,67 @@ in claim order, which the pane lists one per row.
 
 Dispatch controls (the daemon-client seam)
 ------------------------------------------
-The dispatch action (the ``d`` key) asks the daemon to live-spawn the selected
-ready wave by calling the ``agent.dispatch`` JSON-RPC method with ``spawn=True``
-(the W01 live-spawn path) through the same
-:class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of the TUI
-mutates through. The daemon owns claim + session registration + the spawn behind
-the safety floor (jailed argv + scrubbed env); the TUI only issues the request
-and surfaces the typed result honestly. When the daemon socket is unavailable,
-or the spawn path rejects / errors, the action surfaces that honestly rather
-than faking a dispatch -- a live spawn that did not happen is never reported as
-one.
+The dispatch action (``d``) asks the daemon to live-spawn the selected ready
+wave by calling ``agent.dispatch`` with ``spawn=True`` (the W01 live-spawn path)
+through the same :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the
+rest of the TUI mutates through. The daemon owns claim + session registration +
+the spawn behind the safety floor; the TUI only issues the request and surfaces
+the typed result honestly. An unavailable socket or a rejecting / erroring spawn
+is surfaced honestly rather than faked -- a spawn that did not happen is never
+reported as one.
+
+Multi-select fleet dispatch (the batch claim)
+---------------------------------------------
+``m`` opens an inline
+:class:`~eawf.surfaces.tui.screens.overlays.multichoice_checklist.MultichoiceChecklist`
+whose choices are EXACTLY the ready frontier ids; ``Space`` toggles ``[X]``
+membership and ``Enter`` commits. On commit the staged ids dispatch as a fleet:
+:meth:`AutopilotModeScreen._dispatch_claim_batch` calls ``agent.dispatch``
+(``spawn=True``) ONCE per staged wave on a Textual worker (off the UI thread).
+An unreachable daemon issues ZERO RPCs and surfaces the honest
+:data:`BATCH_NO_DAEMON` line; a wave the daemon rejects (e.g. ``-32602``) reads
+``rejected`` while the rest still dispatch -- one rejection never aborts the
+fleet.
 
 Intervention controls (the cockpit keys)
 ----------------------------------------
-Beyond dispatch the pane offers the ratified autopilot-cockpit intervention
-keys, all routed through the same daemon-client seam so the TUI never mutates
-out of band:
+Beyond dispatch the pane offers the ratified cockpit intervention keys, all
+routed through the same daemon-client seam so the TUI never mutates out of band
+(per-method docstrings carry the detail):
 
-* ``K`` (kill) and ``H`` (halt) ask the daemon to stop the selected wave's
-  spawned child through the real ``agent.kill`` RPC -- ``K`` with a
-  SIGKILL-class signal (``"kill"``), ``H`` with a graceful SIGTERM signal
-  (``"term"``), the daemon owning the SIGTERM-grace-SIGKILL ladder. Both are
-  destructive, so each is gated behind a
-  :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` (always
-  confirm -- no ``ui.confirm_destructive`` knob exists yet). ``agent.kill`` is
-  still a daemon-side placeholder returning ``killed=false`` until the real
-  signalling ladder lands, so the surfaced result reports that honest verdict
-  rather than faking a kill; the keys go fully live for free once the kill wave
-  lands (the idle-contract pattern).
-* ``space`` (pause / resume) is **live**: it reads the current
-  :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag off the bound
-  state and routes through the daemon-client seam to the real ``agent.resume``
-  RPC when already paused, else ``agent.pause`` -- a deliberate operator stop
-  the daemon persists and :func:`eawf.workflow.lifecycle.wave.claim_wave` reads
-  to block the next claim. It surfaces the real paused / resumed verdict on
-  success and the honest unavailable line when the daemon is unreachable.
-* ``S`` (skip) is a **real local frontier operation**: it advances the
-  selection past the current ready wave to the next one in claim order, so the
-  operator steps over a wave they do not want to dispatch next. There is no
-  lightweight "skip this ready wave" daemon transition (the only terminal wave
-  state, ABANDONED, is far too heavy for stepping the cursor), so skip does a
-  true, cheap, local thing rather than firing a doomed RPC: it moves the
-  selection and reports where it landed, and reports honestly when there is no
-  next wave to step to.
-* ``a`` (arm / launch-flow) has **no cheap real semantics yet** -- arming a
-  flow is a daemon capability that does not exist. So rather than firing a
-  doomed RPC and dressing the method-not-found up, arm surfaces a static,
-  honest ``arm: deferred`` line. The key stays bound + footer-advertised for
-  discoverability; its result truthfully says the capability is deferred.
+* ``K`` (kill) / ``H`` (halt) stop the selected wave's spawned child through the
+  real ``agent.kill`` RPC -- a SIGKILL-class signal vs a graceful SIGTERM, the
+  daemon owning the ladder -- each gated behind a destructive-confirm
+  :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`.
+  ``agent.kill`` is a placeholder returning ``killed=false``, reported honestly.
+* ``space`` (pause / resume) is **live**: it reads
+  :attr:`~eawf.kernel.state.models.State.dispatch_paused` and routes to
+  ``agent.resume`` when paused, else ``agent.pause`` -- a deliberate stop the
+  daemon persists and :func:`eawf.workflow.lifecycle.wave.claim_wave` reads.
+* ``S`` (skip) advances the selection past the current ready wave -- a cheap
+  local step rather than a doomed "skip this ready wave" daemon round-trip.
+* ``a`` (arm / launch-flow) has **no cheap real semantics yet**, so it surfaces
+  a static, honest ``arm: deferred`` line rather than firing a doomed RPC.
 
 Ready vs blocked split (the cosmetic-terminal reskin)
 -----------------------------------------------------
 The list renders the frontier as two bands. The **ready** band lists the
 claim-ready waves, each leading with the multi-select checkbox affordance
 (:func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``check_on`` / ``check_off``)
-and the dispatch chrome arrow (``chrome("dispatch")``) -- the affordance LOOK
-only; the actual multi-select wiring is deferred to a later wave. The
-**blocked** band lists the PENDING waves held off the frontier, each naming the
-dep blocking it (e.g. ``<- P29-I04-W06``), so the operator reads what must close
-or dispatch before a held wave becomes claimable. The dispatch result line
-pairs its literal instruction with the cockpit's "speak it into being" flavour
-hover text -- flavour on the affordance, not a relabel of the dispatch verb.
-Both glyph columns (unicode / ASCII) honour the App's resolved
-:attr:`~eawf.surfaces.tui.app.EaApp.render_mode`.
+and the dispatch chrome arrow. The **blocked** band lists the PENDING waves
+held off the frontier, each naming the dep blocking it (e.g. ``<- P29-I04-W06``)
+so the operator reads what must close or dispatch first. Both glyph columns
+honour the App's resolved :attr:`~eawf.surfaces.tui.app.EaApp.render_mode`.
 
 Honest-empty is the COMMON path: a scope whose wave graph has no claim-ready
-wave (every wave CLOSED, or the next waves still blocked on open deps) renders
-the muted :data:`EMPTY_NOTICE` banner instead of an empty table that reads as a
-quiet "ready to go", exactly like the evidence / trust / research modes'
-honest-empty surfaces; any blocked waves still render below it so the held
-frontier stays visible.
+wave renders the muted :data:`EMPTY_NOTICE` banner instead of an empty table
+that reads as a quiet "ready to go", like the evidence / trust / research modes'
+honest-empty surfaces; any blocked waves still render below it.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
@@ -135,52 +121,47 @@ FRONTIER_HEADER_ID: str = "autopilot-header"
 #: Id of the scrollable ready-wave list container.
 FRONTIER_LIST_ID: str = "autopilot-list"
 
-#: Id of the ready-section sub-header (the "ready" band caption above the
-#: claim-ready rows in the ready/blocked split).
+#: Id of the ready-section sub-header (the "ready" band caption).
 READY_SECTION_ID: str = "autopilot-ready-section"
 
-#: Id of the blocked-section sub-header (the "blocked" band caption above the
-#: blocked rows, each of which names the dep holding it off the frontier).
+#: Id of the blocked-section sub-header (the "blocked" band caption).
 BLOCKED_SECTION_ID: str = "autopilot-blocked-section"
 
 #: Id of the honest-empty notice shown when no wave is claim-ready.
 FRONTIER_EMPTY_ID: str = "autopilot-empty"
 
 #: Id of the dispatch-result line (below the list); honest about whether the
-#: dispatch request was issued, accepted, or could not reach the daemon.
+#: request was issued, accepted, or could not reach the daemon.
 DISPATCH_RESULT_ID: str = "autopilot-result"
 
 #: CSS class on each rendered ready-wave row.
 FRONTIER_ROW_CLASS: str = "autopilot-row"
 
 #: CSS class on each rendered blocked-wave row (the not-yet-claimable band).
-#: A blocked row is read-only: it names the dep holding the wave off the
-#: frontier and is never a dispatch target, so it carries no selection look.
+#: A blocked row is read-only -- never a dispatch target, so no selection look.
 BLOCKED_ROW_CLASS: str = "autopilot-blocked-row"
 
 #: CSS class flagging the selected ready-wave row (the dispatch target).
 SELECTED_ROW_CLASS: str = "-selected"
 
-#: Notice when the wave graph has no claim-ready wave. Phrased so the empty
-#: surface is unmistakable rather than reading as a quiet "ready to go".
+#: Notice when the wave graph has no claim-ready wave -- phrased so the empty
+#: surface is unmistakable, not a quiet "ready to go".
 EMPTY_NOTICE: str = "no ready waves"
 
-#: Caption above the ready band of the ready/blocked split -- the claim-ready
-#: rows that the dispatch affordance can act on.
+#: Caption above the ready band -- the claim-ready rows the dispatch affordance
+#: can act on.
 READY_CAPTION: str = "ready"
 
-#: Caption above the blocked band of the ready/blocked split -- the PENDING
-#: rows held off the frontier, each naming the dep blocking it.
+#: Caption above the blocked band -- the PENDING rows held off the frontier,
+#: each naming the dep blocking it.
 BLOCKED_CAPTION: str = "blocked"
 
-#: Marker prefixing a blocked row's blocking dep so the operator reads which
-#: wave holds it off the frontier at a glance (e.g. ``<- EUCAP-6``). The arrow
-#: is ASCII so it renders identically in both glyph columns.
+#: Marker prefixing a blocked row's blocking dep (e.g. ``<- EUCAP-6``); ASCII
+#: so it renders identically in both glyph columns.
 BLOCKED_BY_MARKER: str = "<-"
 
 #: Hover / flavour text on the dispatch affordance -- the cockpit's "speak it
-#: into being" framing for asking the daemon to spawn the selected wave. This
-#: is flavour on the affordance, NOT a literal relabel of the dispatch verb.
+#: into being" framing, flavour on the affordance, NOT a relabel of the verb.
 DISPATCH_FLAVOUR: str = "speak it into being"
 
 #: Result line before any dispatch has been issued (the idle dispatch surface).
@@ -192,16 +173,14 @@ DISPATCH_NO_DAEMON: str = "dispatch: daemon unavailable -- request not issued"
 #: Result line when there is no ready wave to dispatch.
 DISPATCH_NO_TARGET: str = "dispatch: no ready wave to dispatch"
 
-#: Daemon JSON-RPC method the kill / halt keys route through. ``agent.kill``
-#: is the real (placeholder) kill seam; the daemon owns the
-#: SIGTERM-grace-SIGKILL ladder and the signal param selects the entry point.
+#: Daemon JSON-RPC method the kill / halt keys route through (a placeholder
+#: seam); the signal param selects the SIGTERM-grace-SIGKILL ladder entry point.
 _KILL_METHOD: str = "agent.kill"
 
 #: SIGKILL-class signal the ``K`` (kill) key sends -- the hard stop.
 _SIGNAL_KILL: str = "kill"
 
-#: Graceful SIGTERM signal the ``H`` (halt) key sends -- the soft entry to the
-#: same daemon-owned ladder.
+#: Graceful SIGTERM signal the ``H`` (halt) key sends -- the soft ladder entry.
 _SIGNAL_TERM: str = "term"
 
 #: Result line when a destructive intervention has nothing to act on.
@@ -213,53 +192,60 @@ KILL_NO_DAEMON: str = "kill: daemon unavailable -- request not issued"
 HALT_NO_DAEMON: str = "halt: daemon unavailable -- request not issued"
 
 #: Daemon JSON-RPC methods the ``space`` (pause / resume) key routes through.
-#: ``agent.pause`` persists ``state.dispatch_paused = True`` (a deliberate stop
-#: that blocks the next claim); ``agent.resume`` clears it. The key reads the
-#: current flag off the bound state to pick which method to issue.
+#: ``agent.pause`` persists ``dispatch_paused = True`` (a deliberate stop that
+#: blocks the next claim); ``agent.resume`` clears it. The flag picks which.
 _PAUSE_RPC: str = "agent.pause"
 _RESUME_RPC: str = "agent.resume"
 
 #: Result line when a pause request could not reach the daemon.
 PAUSE_NO_DAEMON: str = "pause: daemon unavailable -- request not issued"
 
-#: Result line when ``S`` (skip) advances the selection past the last ready
-#: wave -- there is nothing further to step to, so the cursor stays put and the
-#: line says so honestly rather than implying a wave was skipped.
+#: Result line when ``S`` (skip) advances past the last ready wave -- nothing
+#: further to step to, so the cursor stays put and the line says so honestly.
 SKIP_NO_NEXT: str = "skip: no further ready wave to skip to"
 
-#: Result line when ``S`` (skip) has no ready wave selected to step from (the
-#: frontier is empty), so there is nothing to skip.
+#: Result line when ``S`` (skip) has no ready wave selected to step from.
 SKIP_NO_TARGET: str = "skip: no ready wave to skip"
 
 #: Result line when ``a`` (arm) is pressed. Arm has no cheap real daemon
-#: semantics yet, so the control honestly reports the capability is deferred
-#: rather than firing a doomed RPC and dressing up the method-not-found.
+#: semantics yet, so the control honestly reports the capability is deferred.
 ARM_DEFERRED: str = "arm: deferred (launch-flow not yet available)"
 
 #: Id of the inline multi-select checklist (``m``) hosting the reused
 #: ``MultichoiceChecklist`` whose choices are EXACTLY the ready frontier ids.
 MULTI_SELECT_ID: str = "autopilot-multiselect"
 
-#: The checklist header prefix the shell passes -- a plain caption (no
-#: config-modal ``[type]`` cell) so it reads as a wave-claim batch.
+#: The checklist header prefix -- a plain caption reading as a wave-claim batch.
 MULTI_SELECT_PREFIX: str = "claim batch "
 
 #: Result line when ``m`` opens on an empty frontier -- nothing to select.
 MULTI_SELECT_NO_TARGET: str = "select: no ready wave to select"
 
-#: Result lines after a committed batch (``Enter``): the staged wave ids trail
-#: the first; the second covers a commit with no wave checked.
+#: Result lines after a committed batch (``Enter``): the staged line precedes a
+#: dispatch; the second covers a commit with no wave checked.
 MULTI_SELECT_COMMITTED: str = "select: staged"
 MULTI_SELECT_EMPTY_COMMIT: str = "select: nothing staged (no wave checked)"
 
+#: Worker group the committed claim batch dispatches under -- one in-flight
+#: batch at a time, so a re-commit coalesces rather than stacking workers.
+_BATCH_DISPATCH_GROUP: str = "autopilot-claim-batch"
+
+#: Result line when a committed claim batch is dispatched with no reachable
+#: daemon: the fleet issues ZERO RPCs and says so honestly (the exact phrasing
+#: the cockpit contract pins).
+BATCH_NO_DAEMON: str = "claim batch: daemon unavailable -- not issued"
+
+#: Per-wave outcome verbs in the batch result line: ``spawned`` on accept,
+#: ``rejected`` on a daemon rejection (the rest of the fleet still proceeds).
+_BATCH_SPAWNED: str = "spawned"
+_BATCH_REJECTED: str = "rejected"
+
 #: Footer hints for the Autopilot pane (full key names, arrows primary). The
-#: intervention keys ride after dispatch so they are discoverable; the
-#: destructive ones (H / K) are flagged so the operator reads them as gated.
-#: The mode-switch digits are no longer advertised here -- the always-visible
-#: footer mode row (row 2) lists every mode with its digit, so the redundant
-#: ``1-9 mode`` hint was dropped. Every label is produced through
-#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key
-#: tokens stay pinned to the canonical vocabulary.
+#: intervention keys ride after dispatch for discoverability; the mode-switch
+#: digits are not advertised here (the footer mode row already lists them).
+#: Every label is produced through
+#: :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the key tokens
+#: stay pinned to the canonical vocabulary.
 _AUTOPILOT_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
     render_hint_label("d", "dispatch"),
@@ -281,9 +267,8 @@ class ReadyWaveRow:
 
     A display projection of a ready
     :class:`~eawf.kernel.spec.auq_bridge.WaveFrontierItem` enriched with the
-    wave's title (read off the bound state) so the row is scannable without a
-    second lookup. Produced only from the computed frontier, so every row is a
-    genuinely claim-ready wave in claim order.
+    wave's title so the row is scannable. Produced only from the computed
+    frontier, so every row is a genuinely claim-ready wave in claim order.
 
     Attributes:
         wave_id: The ready wave id (e.g. ``P29-I04-W12``).
@@ -304,11 +289,10 @@ class BlockedWaveRow:
     A display projection of a PENDING
     :class:`~eawf.kernel.spec.auq_bridge.WaveFrontierItem` that did NOT make
     the ready frontier, enriched with the wave's title and the id of the dep
-    that holds it off the frontier so the blocked band reads as "this wave is
-    waiting on that one" without a second lookup. The blocking dep is the
-    wave's first not-yet-CLOSED dependency in claim order; when every dep is
-    CLOSED but a lower-numbered ready sibling holds the wave, the blocker is
-    that sibling instead (the monotonic claim-order gate).
+    holding it off the frontier. The blocking dep is the wave's first
+    not-yet-CLOSED dependency; when every dep is CLOSED but a lower-numbered
+    ready sibling holds the wave, the blocker is that sibling (the monotonic
+    claim-order gate).
 
     Attributes:
         wave_id: The blocked wave id (e.g. ``P29-I04-W12``).
@@ -328,15 +312,13 @@ class BlockedWaveRow:
 def build_frontier_items(state: State | None) -> tuple[WaveFrontierItem, ...]:
     """Project the bound state's waves into the frontier-compute view.
 
-    Maps each :class:`~eawf.kernel.state.models.Wave` in *state* onto the slim
+    Maps each :class:`~eawf.kernel.state.models.Wave` onto the slim
     :class:`~eawf.kernel.spec.auq_bridge.WaveFrontierItem` the shared
-    :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier` reduces -- the
-    four fields the claimability predicate needs (id, iter, status, deps). The
-    full wave set is projected (not just PENDING ones) because the compute
-    needs the CLOSED deps + the sibling rows to decide readiness. Returns an
-    empty tuple -- the honest-empty path -- when *state* is unbound or carries
-    no wave, so the pane renders honest-empty rather than crashing on a scope
-    with no roadmap.
+    :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier` reduces (id,
+    iter, status, deps). The full wave set is projected because the compute
+    needs the CLOSED deps + sibling rows to decide readiness. An unbound or
+    wave-less *state* yields an empty tuple (the honest-empty path) so the pane
+    never crashes on a scope with no roadmap.
 
     Args:
         state: The bound read-only state, or ``None`` (fresh / user scope).
@@ -365,9 +347,8 @@ def ready_rows(frontier: DrainableFrontier, state: State | None) -> tuple[ReadyW
 
     Walks :attr:`DrainableFrontier.ready` (already in claim order) and pairs
     each ready :class:`~eawf.kernel.spec.auq_bridge.WaveFrontierItem` with its
-    wave title from *state* so the list row is scannable. A wave that is on the
-    frontier but missing from *state* (it cannot be, since the frontier was
-    computed from *state*) defaults to an empty title rather than raising.
+    wave title from *state* so the list row is scannable; a wave missing from
+    *state* defaults to an empty title rather than raising.
 
     Args:
         frontier: The computed ready frontier from
@@ -379,7 +360,7 @@ def ready_rows(frontier: DrainableFrontier, state: State | None) -> tuple[ReadyW
         carries no ready wave.
     """
     waves = state.waves if state is not None else {}
-    rows = tuple(
+    return tuple(
         ReadyWaveRow(
             wave_id=item.wave_id,
             iter_id=item.iter_id,
@@ -387,21 +368,17 @@ def ready_rows(frontier: DrainableFrontier, state: State | None) -> tuple[ReadyW
         )
         for item in frontier.ready
     )
-    return rows
 
 
 def blocked_rows(frontier: DrainableFrontier, state: State | None) -> tuple[BlockedWaveRow, ...]:
     """Project the PENDING waves held off the ready frontier into blocked rows.
 
-    Walks :attr:`DrainableFrontier.by_id` for every PENDING wave that is NOT
-    on :attr:`DrainableFrontier.ready` and names the wave holding it off the
-    frontier (:func:`_blocker_of`) -- an open (not-yet-CLOSED) dep, or, when
-    every dep is CLOSED, the lower-numbered ready sibling the monotonic
-    claim-order gate prefers. Rows are returned in claim order (natural id
-    order) so the blocked band reads top-to-bottom like the ready band. A
-    PENDING wave with no resolvable blocker (it cannot be, since a PENDING
-    wave off the ready frontier always has one) is skipped rather than shown
-    with an empty marker.
+    Walks :attr:`DrainableFrontier.by_id` for every PENDING wave NOT on
+    :attr:`DrainableFrontier.ready` and names the wave holding it off the
+    frontier (:func:`_blocker_of`) -- an open dep, or the lower-numbered ready
+    sibling the monotonic claim-order gate prefers. Rows are returned in claim
+    order so the blocked band reads top-to-bottom like the ready band; a wave
+    with no resolvable blocker is skipped rather than shown empty.
 
     Args:
         frontier: The computed ready frontier from
@@ -440,13 +417,11 @@ def _blocker_of(
 ) -> str | None:
     """Return the id of the wave holding *item* off the ready frontier.
 
-    The blocker is the wave's first not-yet-CLOSED dependency in declared
-    order (the dep gate); when every dep is CLOSED the wave is held by the
-    monotonic claim-order gate, so the blocker is the nearest lower-numbered
-    sibling under the same iter (preferring a ready sibling, since that is the
-    one the operator dispatches to unblock this row). Returns ``None`` only
-    when no blocker resolves -- a PENDING wave off the frontier always has
-    one, so the ``None`` path is defensive.
+    The blocker is the wave's first not-yet-CLOSED dependency (the dep gate);
+    when every dep is CLOSED the wave is held by the monotonic claim-order gate,
+    so the blocker is the nearest lower-numbered sibling under the same iter
+    (preferring a ready sibling). Returns ``None`` only when none resolves (a
+    defensive path -- a PENDING wave off the frontier always has a blocker).
 
     Args:
         item: The blocked PENDING wave.
@@ -491,18 +466,15 @@ def render_frontier_header(
 ) -> str:
     """Render the frontier header line above the ready/blocked split.
 
-    Leads with the dispatch chrome arrow (:func:`sigils.chrome` ``"dispatch"``)
-    so the cockpit's dispatch identity reads at a glance. When the frontier has
-    ready waves the header reports the ready count (and the blocked count, when
-    any wave is held) so the operator reads both bands' sizes at a glance; when
-    nothing is ready it leads with the honest-empty banner rather than implying
-    a primed dispatch queue.
+    Leads with the dispatch chrome arrow (:func:`sigils.chrome` ``"dispatch"``).
+    When the frontier has ready waves the header reports the ready count (and
+    the blocked count, when any wave is held); when nothing is ready it leads
+    with the honest-empty banner rather than implying a primed dispatch queue.
 
     Args:
         rows: The ready-wave display rows (empty when nothing is ready).
         blocked: The blocked-wave display rows (empty when nothing is held).
-        mode: The App's resolved render-mode label -- selects the dispatch
-            chrome glyph's ASCII / unicode column.
+        mode: The App's resolved render-mode label -- selects the glyph column.
 
     Returns:
         A content-markup header string.
@@ -539,18 +511,16 @@ def render_ready_row(
 ) -> str:
     """Render one ready-wave list row with its multi-select affordance look.
 
-    Each ready row leads with a multi-select checkbox affordance
-    (:func:`sigils.chrome` ``"check_on"`` when selected, ``"check_off"``
-    otherwise) so the band reads as a selectable set even though the actual
-    multi-select wiring is deferred -- this renders the look, not the
-    behaviour. The dispatch chrome arrow marks the row as a dispatch target.
+    Each ready row leads with a checkbox affordance (:func:`sigils.chrome`
+    ``"check_on"`` when selected, ``"check_off"`` otherwise) so the band reads
+    as a selectable set; the dispatch chrome arrow marks the row as a dispatch
+    target. The ``m`` checklist drives the actual batch dispatch.
 
     Args:
         row: The ready-wave display row.
         selected: Whether this row is the current dispatch target (drives the
             checkbox affordance's filled / hollow look).
-        mode: The App's resolved render-mode label -- selects the affordance
-            glyphs' ASCII / unicode column.
+        mode: The App's resolved render-mode label -- selects the glyph column.
 
     Returns:
         A content-markup row string naming the wave id, its iter, and title.
@@ -577,8 +547,7 @@ def render_blocked_row(row: BlockedWaveRow) -> str:
         row: The blocked-wave display row.
 
     Returns:
-        A content-markup row string naming the wave id, its iter, the title,
-        and the blocking dep.
+        A content-markup row string naming the wave id, iter, title, and dep.
     """
     title_suffix = f" [$muted]{escape_markup(row.title)}[/]" if row.title else ""
     blocker = f" [$warn]{BLOCKED_BY_MARKER} {escape_markup(row.blocked_by)}[/]"
@@ -593,13 +562,44 @@ def _dispatch_idle_line() -> str:
 
     The result line before any dispatch has been issued; it pairs the literal
     dispatch instruction with the "speak it into being" flavour
-    (:data:`DISPATCH_FLAVOUR`) as muted hover text on the affordance -- flavour,
-    not a relabel of the dispatch verb.
+    (:data:`DISPATCH_FLAVOUR`) as muted hover text -- flavour, not a relabel.
 
     Returns:
         A content-markup idle result line.
     """
     return f"[$muted]{DISPATCH_IDLE}[/] [$muted]({DISPATCH_FLAVOUR})[/]"
+
+
+def _dispatch_one_wave(wave_id: str) -> str:
+    """Issue one ``agent.dispatch`` (``spawn=True``) RPC and return its verb.
+
+    The synchronous per-wave call the batch worker offloads onto a thread:
+    opens a :class:`~eawf.surfaces.cli._daemon_client.DaemonClient`, calls
+    ``agent.dispatch`` with the wave id + ``spawn=True``, and returns
+    :data:`_BATCH_SPAWNED` on success. A daemon that rejects this wave (e.g.
+    ``-32602 invalid_params``) or that is unreachable / times out mid-batch
+    returns :data:`_BATCH_REJECTED` -- the caller renders that and moves on, so
+    one wave's rejection never aborts the rest of the fleet.
+
+    Args:
+        wave_id: The claim-ready wave id to dispatch.
+
+    Returns:
+        :data:`_BATCH_SPAWNED` when the daemon accepted the spawn, else
+        :data:`_BATCH_REJECTED`.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    try:
+        with DaemonClient(call_timeout_seconds=30.0) as client:
+            client.call("agent.dispatch", {"wave_id": wave_id, "spawn": True})
+    except DaemonRpcError as exc:
+        logger.debug(f"_dispatch_one_wave rejected wave={wave_id} message={exc.message!r}")
+        return _BATCH_REJECTED
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        logger.debug(f"_dispatch_one_wave fallback wave={wave_id} cause={exc!r}")
+        return _BATCH_REJECTED
+    return _BATCH_SPAWNED
 
 
 class AutopilotModeScreen(ScopeScreen):
@@ -613,25 +613,19 @@ class AutopilotModeScreen(ScopeScreen):
     client seam and surfaces the typed result honestly. When no wave is
     claim-ready the pane renders the honest-empty :data:`EMPTY_NOTICE` banner.
 
-    The intervention keys add the ratified cockpit controls over that frontier:
-    ``K`` (kill) / ``H`` (halt) route through the real ``agent.kill`` RPC -- a
-    SIGKILL-class signal vs a graceful SIGTERM -- each gated behind a
-    :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`;
-    ``space`` (pause / resume) routes through the real ``agent.pause`` /
-    ``agent.resume`` RPCs -- reading the current ``dispatch_paused`` flag to
-    pick which to issue -- and surfaces the persisted paused / resumed verdict;
-    ``S`` (skip) does a real, cheap local thing -- it advances the selection
-    past the current ready wave to the next one in claim order (no daemon
-    round-trip, no fake); and ``a`` (arm) has no cheap real semantics yet, so
-    it surfaces a static, honest ``arm: deferred`` line rather than firing a
-    doomed RPC. Every intervention surfaces its typed outcome honestly and
-    never fakes an action that did not happen.
+    ``m`` opens a multi-select checklist over the frontier; committing the batch
+    dispatches each staged wave through ``agent.dispatch`` (``spawn=True``) once
+    per wave on a worker, with an unreachable daemon issuing ZERO RPCs and a
+    mid-batch rejected wave reading ``rejected`` while the rest proceed. The
+    cockpit intervention keys (``K``/``H`` kill / halt, ``space`` pause / resume,
+    ``S`` skip, ``a`` arm) route through the same daemon-client seam (or do a
+    cheap local thing for ``S``), each surfacing its typed outcome honestly and
+    never faking an action that did not happen -- see the module docstring.
 
     The screen self-binds to the host
     :class:`~eawf.surfaces.tui.app.EaApp` reactive ``state``: it seeds from
-    ``app.state`` on mount and rebuilds when a daemon-pushed revision lands, so
-    a wave closed (unblocking its dependents) after launch surfaces on the
-    frontier without a relaunch.
+    ``app.state`` on mount and rebuilds when a daemon-pushed revision lands, so a
+    wave closed after launch surfaces on the frontier without a relaunch.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -671,15 +665,13 @@ class AutopilotModeScreen(ScopeScreen):
     }
     """
 
-    #: ``up`` / ``down`` move the selection through the ready frontier; ``d``
-    #: issues the dispatch. The intervention keys -- ``H`` halt, ``S`` skip,
-    #: ``K`` kill, ``space`` pause/resume, ``a`` arm -- ride on top: the
-    #: uppercase letters are the brief's canonical intervention keys (distinct
-    #: from the lowercase app-wide vim cursor aliases, so no collision), and
-    #: ``space`` / ``a`` are free at the app level. The chrome bindings
-    #: (palette / help / quit / scope / mode digits) come from the shared
-    #: chassis + app-wide bindings. Arrows stay primary for selection, so the
-    #: pane offers no j/k vim aliases here.
+    #: ``up`` / ``down`` move the selection; ``d`` dispatches; ``m`` opens the
+    #: multi-select batch. The intervention keys (``H`` halt, ``S`` skip, ``K``
+    #: kill, ``space`` pause/resume, ``a`` arm) ride on top: the uppercase
+    #: letters are the brief's canonical intervention keys (distinct from the
+    #: app-wide lowercase vim cursor aliases, so no collision). The chrome
+    #: bindings come from the shared chassis + app-wide bindings; arrows stay
+    #: primary, so the pane offers no j/k aliases here.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "select_prev", "up", show=False),
         Binding("down", "select_next", "down", show=False),
@@ -714,12 +706,10 @@ class AutopilotModeScreen(ScopeScreen):
     def compose_body(self) -> ComposeResult:
         """Yield the frontier header, the (empty) ready/blocked list, and the result.
 
-        The header leads with the dispatch chrome arrow and reports the ready
-        count (or the honest-empty banner); the list container starts empty and
-        :meth:`on_mount` populates it (the ready/blocked split, or the
-        honest-empty notice) so the row mount path is single-sourced through
-        :meth:`_render_rows`; the result line carries the dispatch surface (idle
-        until ``d`` is pressed) with the cockpit's "speak it into being" flavour.
+        The header leads with the dispatch chrome arrow; the list container
+        starts empty and :meth:`on_mount` populates it through
+        :meth:`_render_rows` (single-sourced); the result line carries the idle
+        dispatch surface until ``d`` is pressed.
         """
         self._rows = self._current_rows()
         self._blocked = self._current_blocked()
@@ -776,11 +766,10 @@ class AutopilotModeScreen(ScopeScreen):
     def action_dispatch_selected(self) -> None:
         """Ask the daemon to live-spawn the selected ready wave.
 
-        Issues the ``agent.dispatch`` request (``spawn=True``) for the selected
-        ready wave through the daemon-client seam and updates the result line
-        with the typed outcome. With no ready wave there is nothing to
-        dispatch; when the daemon is unreachable the result says so rather than
-        implying a spawn happened.
+        Issues ``agent.dispatch`` (``spawn=True``) for the selected ready wave
+        through the daemon-client seam and updates the result line. With no
+        ready wave there is nothing to dispatch; an unreachable daemon says so
+        rather than implying a spawn happened.
         """
         target = self._selected_row()
         if target is None:
@@ -793,13 +782,10 @@ class AutopilotModeScreen(ScopeScreen):
     def _issue_dispatch(self, target: ReadyWaveRow) -> str:
         """Issue the ``agent.dispatch`` RPC for *target* and return a result line.
 
-        Calls the daemon ``agent.dispatch`` method with ``spawn=True`` through
-        the same :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam
-        the rest of the TUI mutates through, when a daemon socket is available.
-        The returned line reports the daemon's captured pid + serving runtime;
-        a daemon that is unreachable, rejecting, or timing out yields the
-        honest "daemon unavailable" / "rejected" line rather than a faked
-        dispatch.
+        Calls ``agent.dispatch`` (``spawn=True``) through the
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam when a
+        daemon socket is available; the line reports the captured pid + runtime,
+        or the honest unavailable / rejected line rather than a faked dispatch.
 
         Args:
             target: The selected ready wave to dispatch.
@@ -836,12 +822,12 @@ class AutopilotModeScreen(ScopeScreen):
     def action_kill_selected(self) -> None:
         """Kill the selected wave's spawned child (destructive -- confirm-gated).
 
-        Pushes a :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
-        naming the SIGKILL-class stop; on confirm it issues the real
-        ``agent.kill`` RPC with a SIGKILL-class signal for the selected wave +
-        its attempt and surfaces the typed (today: placeholder ``killed=false``)
-        outcome. With no selected wave there is nothing running to kill, so the
-        action surfaces that honestly without opening the modal.
+        Confirms via a
+        :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`, then
+        issues the real ``agent.kill`` RPC with a SIGKILL-class signal for the
+        selected wave + attempt and surfaces the typed (today: placeholder
+        ``killed=false``) outcome. With no selected wave there is nothing to
+        kill, surfaced honestly without opening the modal.
         """
         target = self._selected_row()
         if target is None:
@@ -858,12 +844,11 @@ class AutopilotModeScreen(ScopeScreen):
     def action_halt_selected(self) -> None:
         """Halt the selected wave gracefully (destructive -- confirm-gated).
 
-        Pushes a :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
-        naming the graceful stop; on confirm it issues the real ``agent.kill``
-        RPC with a graceful SIGTERM signal -- halt is the soft entry to the same
-        daemon-owned SIGTERM-grace-SIGKILL ladder -- and surfaces the typed
-        (today: placeholder ``killed=false``) outcome. With no selected wave
-        there is nothing to halt, surfaced honestly without opening the modal.
+        Confirms, then issues the real ``agent.kill`` RPC with a graceful
+        SIGTERM signal (the soft entry to the same daemon-owned
+        SIGTERM-grace-SIGKILL ladder) and surfaces the typed (today: placeholder
+        ``killed=false``) outcome. With no selected wave there is nothing to
+        halt, surfaced honestly without opening the modal.
         """
         target = self._selected_row()
         if target is None:
@@ -881,15 +866,12 @@ class AutopilotModeScreen(ScopeScreen):
         """Skip the selected ready wave by advancing the selection (local).
 
         A real, cheap, local frontier operation: it steps the selection past
-        the currently-selected ready wave to the next one in claim order, so
-        the operator moves over a wave they do not want to dispatch next. There
-        is no lightweight daemon "skip this ready wave" transition (the only
-        terminal wave state, ABANDONED, is far too heavy for stepping the
-        cursor), so skip does a true local thing rather than firing a doomed
-        RPC. With no ready wave there is nothing to skip; when the selection is
-        already on the last ready wave there is nothing further to step to, and
-        each case is surfaced honestly without moving the cursor or implying a
-        skip that did not happen.
+        the currently-selected ready wave to the next one in claim order rather
+        than firing a doomed daemon round-trip (no lightweight "skip this ready
+        wave" transition exists). With no ready wave there is nothing to skip,
+        and when the selection is already on the last ready wave there is
+        nothing further to step to -- each surfaced honestly without moving the
+        cursor.
         """
         if self._selected_row() is None:
             self._set_result(f"[$warn]{SKIP_NO_TARGET}[/]")
@@ -907,14 +889,12 @@ class AutopilotModeScreen(ScopeScreen):
         """Pause / resume dispatch through the real daemon RPC.
 
         Reads the current
-        :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag off the
-        bound state and issues ``agent.resume`` when already paused, else
-        ``agent.pause`` -- a deliberate operator stop the daemon persists and
+        :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag and issues
+        ``agent.resume`` when already paused, else ``agent.pause`` -- a
+        deliberate operator stop the daemon persists and
         :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block the next
-        claim. Pause is non-destructive (no confirm). The result line carries
-        the persisted paused / resumed verdict on success, or the honest
-        unavailable line when the daemon is unreachable -- it never fakes a
-        toggle that did not persist.
+        claim. Pause is non-destructive. The line carries the persisted verdict,
+        or the honest unavailable line when the daemon is unreachable.
         """
         result_line = self._issue_pause()
         self._set_result(result_line)
@@ -923,9 +903,9 @@ class AutopilotModeScreen(ScopeScreen):
     def _currently_paused(self) -> bool:
         """Return the bound state's ``dispatch_paused`` flag (``False`` if unbound).
 
-        The pause toggle reads the current flag to pick which RPC to issue;
-        an unbound state (fresh / user scope) reads as not-paused so the first
-        ``space`` press issues ``agent.pause``.
+        The pause toggle reads the current flag to pick which RPC to issue; an
+        unbound state reads as not-paused so the first ``space`` issues
+        ``agent.pause``.
         """
         state = self._current_state()
         return bool(state.dispatch_paused) if state is not None else False
@@ -933,13 +913,10 @@ class AutopilotModeScreen(ScopeScreen):
     def _issue_pause(self) -> str:
         """Toggle dispatch pause via the real RPC and return a result line.
 
-        Reads the current ``dispatch_paused`` flag, then calls ``agent.resume``
-        (when paused) or ``agent.pause`` (when not) through the same
-        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
-        the TUI mutates through, when a daemon socket is available. The returned
-        line reports the persisted verdict (``paused`` / ``resumed``); a daemon
-        that is unreachable, rejecting, or timing out yields the honest
-        unavailable line rather than a faked toggle.
+        Calls ``agent.resume`` (when paused) or ``agent.pause`` (when not)
+        through the :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam
+        when available; the line reports the persisted verdict (``paused`` /
+        ``resumed``), or the honest unavailable line rather than a faked toggle.
 
         Returns:
             A content-markup result line describing the pause / resume outcome.
@@ -971,10 +948,9 @@ class AutopilotModeScreen(ScopeScreen):
         """Arm / launch the flow (honestly deferred -- no faked RPC).
 
         Arming a flow has no cheap real daemon semantics yet, so rather than
-        firing a doomed RPC and dressing the method-not-found up, the action
-        surfaces a static, honest ``arm: deferred`` line. The key stays bound +
-        footer-advertised for discoverability; its result truthfully reports
-        the capability is deferred and never implies the flow armed.
+        firing a doomed RPC, the action surfaces a static, honest
+        ``arm: deferred`` line. The key stays bound for discoverability; its
+        result truthfully reports the capability is deferred.
         """
         self._set_result(f"[$warn]{ARM_DEFERRED}[/]")
         logger.info("action_arm_flow deferred")
@@ -984,15 +960,12 @@ class AutopilotModeScreen(ScopeScreen):
 
         Mounts the reused
         :class:`~eawf.surfaces.tui.screens.overlays.multichoice_checklist.MultichoiceChecklist`
-        whose choices are EXACTLY the ready frontier wave ids -- single-sourced
-        from :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier` via
-        :attr:`_rows`, so a non-ready (deps-not-CLOSED) wave is never a
-        selectable choice. Inside the checklist ``Space`` toggles a wave's
-        ``[X]`` membership and ``Enter`` commits the batch; the checklist owns
-        the keyboard while open so the pane's ``space`` (pause) binding does not
-        fire under it. With no ready wave there is nothing to select, surfaced
-        honestly without mounting an empty checklist; a no-op when one is
-        already open.
+        whose choices are EXACTLY the ready frontier wave ids (single-sourced
+        from :attr:`_rows`), so a non-ready wave is never a selectable choice.
+        Inside the checklist ``Space`` toggles ``[X]`` membership and ``Enter``
+        commits the batch. With no ready wave there is nothing to select,
+        surfaced honestly without mounting an empty checklist; a no-op when one
+        is already open.
         """
         if self.query(f"#{MULTI_SELECT_ID}"):
             return
@@ -1015,23 +988,67 @@ class AutopilotModeScreen(ScopeScreen):
         logger.info(f"action_open_multi_select choices={len(choices)}")
 
     def on_multichoice_checklist_committed(self, message: MultichoiceChecklist.Committed) -> None:
-        """Stage the committed wave-claim batch (``Enter`` in the checklist).
+        """Stage the committed wave-claim batch and dispatch it (``Enter``).
 
-        Records the selected wave ids as the staged claim batch and tears the
-        checklist down. The selected list is single-sourced from the ready
-        frontier choices, so every staged id is a genuinely claim-ready wave.
-        Wiring the batch to the daemon claim RPC is a later wave; this shell
-        records the batch and surfaces it honestly.
+        Records the selected wave ids as the staged claim batch, tears the
+        checklist down, and -- when at least one wave is staged -- kicks the
+        fleet dispatch off the UI thread (:meth:`_dispatch_claim_batch`). The
+        selected list is single-sourced from the ready frontier choices. A
+        commit with nothing checked surfaces the honest empty-commit line and
+        issues no dispatch.
         """
         message.stop()
         self._claim_batch = tuple(message.selected)
         self._teardown_multi_select()
-        if self._claim_batch:
-            staged = " ".join(escape_markup(wave_id) for wave_id in self._claim_batch)
-            self._set_result(f"[$ok]{MULTI_SELECT_COMMITTED}[/] [$muted]{staged}[/]")
-        else:
-            self._set_result(f"[$warn]{MULTI_SELECT_EMPTY_COMMIT}[/]")
         logger.info(f"multi_select_committed count={len(self._claim_batch)}")
+        if not self._claim_batch:
+            self._set_result(f"[$warn]{MULTI_SELECT_EMPTY_COMMIT}[/]")
+            return
+        self._dispatch_claim_batch(self._claim_batch)
+
+    def _dispatch_claim_batch(self, wave_ids: tuple[str, ...]) -> None:
+        """Dispatch each staged wave through ``agent.dispatch`` off the UI thread.
+
+        Checks daemon reachability ONCE up front: an unreachable daemon issues
+        ZERO RPCs and surfaces the honest :data:`BATCH_NO_DAEMON` line rather
+        than faking a fleet spawn. With a reachable daemon it kicks the batch
+        onto a Textual worker (:meth:`_batch_dispatch_worker`) so the per-wave
+        calls never block the event loop; ``exclusive`` within
+        :data:`_BATCH_DISPATCH_GROUP` coalesces a re-commit rather than stacking.
+
+        Args:
+            wave_ids: The staged claim-ready wave ids to dispatch, in order.
+        """
+        if not self._daemon_available():
+            self._set_result(f"[$warn]{BATCH_NO_DAEMON}[/]")
+            logger.info(f"_dispatch_claim_batch no_daemon waves={len(wave_ids)} issued=0")
+            return
+        self.run_worker(
+            self._batch_dispatch_worker(wave_ids),
+            group=_BATCH_DISPATCH_GROUP,
+            exclusive=True,
+        )
+
+    async def _batch_dispatch_worker(self, wave_ids: tuple[str, ...]) -> None:
+        """Worker body: dispatch each staged wave, then repaint the batch result.
+
+        Issues ``agent.dispatch`` (``spawn=True``) once per wave in *wave_ids*,
+        each call wrapped in :func:`asyncio.to_thread` so the synchronous RPC
+        never blocks the event loop. A wave the daemon rejects (e.g.
+        ``-32602 invalid_params``) reads ``rejected`` while the remaining waves
+        still dispatch -- one rejection never aborts the fleet. The aggregated
+        per-wave verdicts repaint the result line after the awaits (loop-safe).
+
+        Args:
+            wave_ids: The staged claim-ready wave ids to dispatch, in order.
+        """
+        outcomes: list[str] = []
+        for wave_id in wave_ids:
+            verb = await asyncio.to_thread(_dispatch_one_wave, wave_id)
+            colour = "$ok" if verb == _BATCH_SPAWNED else "$warn"
+            outcomes.append(f"[{colour}]{escape_markup(wave_id)} {verb}[/]")
+        self._set_result(f"[$accent]claim batch[/] {' '.join(outcomes)}")
+        logger.info(f"_batch_dispatch_worker issued={len(wave_ids)}")
 
     def on_multichoice_checklist_cancelled(self, message: MultichoiceChecklist.Cancelled) -> None:
         """Abort the multi-select shell without staging (``Esc`` in the checklist)."""
@@ -1058,18 +1075,15 @@ class AutopilotModeScreen(ScopeScreen):
         Pushes a :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
         carrying *prompt*; the callback issues the real ``agent.kill`` RPC for
         *target* with *signal* only when the operator confirms (``True``), so a
-        dismissed / cancelled modal issues no RPC. No ``ui.confirm_destructive``
-        knob exists yet, so the confirm is always shown for the destructive
-        keys. Routes the push through the App's cap-aware ``push_modal`` when
-        available, falling back to a plain ``push_screen`` under a bare harness.
+        dismissed / cancelled modal issues no RPC. The confirm is always shown
+        for the destructive keys (no ``ui.confirm_destructive`` knob exists yet).
 
         Args:
             target: The selected ready wave to act on.
             prompt: The confirm prompt naming the destructive action.
-            signal: The ``agent.kill`` signal -- SIGKILL-class for kill, a
-                graceful SIGTERM for halt.
-            verb: The action verb (``"kill"`` / ``"halt"``) for the result
-                line + logs.
+            signal: The ``agent.kill`` signal (SIGKILL-class for kill, SIGTERM
+                for halt).
+            verb: The action verb (``"kill"`` / ``"halt"``) for the result line.
             no_daemon: The honest line shown when the daemon is unreachable.
         """
         from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
@@ -1090,9 +1104,8 @@ class AutopilotModeScreen(ScopeScreen):
     def _push_confirm(self, modal: ConfirmModal, callback: Callable[[bool | None], None]) -> None:
         """Push a confirm *modal* with *callback*, cap-aware when possible.
 
-        Routes through the App's ``push_modal`` (the single modal-stack gate,
-        depth-capped) when the App exposes it, falling back to a plain
-        ``push_screen`` under a bare harness that lacks the helper so the
+        Routes through the App's depth-capped ``push_modal`` when exposed,
+        falling back to a plain ``push_screen`` under a bare harness so the
         confirm path never raises.
 
         Args:
@@ -1109,16 +1122,13 @@ class AutopilotModeScreen(ScopeScreen):
     def _issue_kill(self, target: ReadyWaveRow, *, signal: str, verb: str, no_daemon: str) -> str:
         """Issue the ``agent.kill`` RPC for *target* and return a result line.
 
-        Calls the daemon ``agent.kill`` method with *target*'s wave + resolved
-        attempt + *signal* through the same
-        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
-        the TUI mutates through, when a daemon socket is available. The returned
-        line reports the daemon's typed ``killed`` verdict + delivered signal; a
-        daemon that is unreachable, rejecting, or timing out yields the honest
-        unavailable / rejected line rather than a faked kill. ``agent.kill`` is
-        still a daemon-side placeholder returning ``killed=false``, so the
-        not-killed verdict is reported honestly (it goes live for free once the
-        kill wave lands -- the idle-contract pattern).
+        Calls ``agent.kill`` with *target*'s wave + resolved attempt + *signal*
+        through the :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam
+        when a daemon socket is available; the line reports the typed ``killed``
+        verdict + delivered signal. An unreachable, rejecting, or timing-out
+        daemon yields the honest unavailable / rejected line. ``agent.kill`` is
+        still a placeholder returning ``killed=false``, so the not-killed verdict
+        is reported honestly (it goes live once the kill wave lands).
 
         Args:
             target: The selected ready wave to act on.
@@ -1151,7 +1161,7 @@ class AutopilotModeScreen(ScopeScreen):
         if killed:
             return f"[$ok]{verb}: killed[/] [$muted]signal={escape_markup(delivered)}[/]"
         # ``agent.kill`` is still a placeholder returning killed=false; report
-        # the request was issued + the daemon's verdict honestly.
+        # the daemon's verdict honestly.
         return (
             f"[$warn]{verb}: not killed[/] [$muted]signal={escape_markup(delivered)} "
             "(daemon kill not yet live)[/]"
@@ -1161,10 +1171,9 @@ class AutopilotModeScreen(ScopeScreen):
         """Return the highest recorded attempt for *wave_id*, defaulting to ``1``.
 
         The kill / halt path needs a wave attempt number for the ``agent.kill``
-        params. A ready (claim-ready, PENDING) wave has no session table yet, so
-        this defaults to attempt ``1`` so the request is well-formed; a wave
-        that has already been dispatched (re-surfacing on the frontier) resolves
-        its highest recorded attempt.
+        params. A ready (PENDING) wave has no session table yet, so this
+        defaults to ``1``; an already-dispatched wave resolves its highest
+        recorded attempt.
 
         Args:
             wave_id: The wave whose attempt number is resolved.
@@ -1181,14 +1190,11 @@ class AutopilotModeScreen(ScopeScreen):
     def _rebuild(self) -> None:
         """Recompute the ready/blocked split from state and repaint the list.
 
-        Recomputes the ready rows via
-        :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier` over the
-        projected view plus the blocked rows (the PENDING waves held off the
-        frontier, each naming its blocking dep), clamps the selection into the
-        new ready list, and remounts the split under the list container. A
-        frontier that became empty (every ready wave dispatched / closed)
-        repaints the honest-empty notice; blocked rows still render below it so
-        the operator reads what is waiting.
+        Recomputes the ready + blocked rows via
+        :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier`, clamps the
+        selection into the new ready list, and remounts the split. An emptied
+        frontier repaints the honest-empty notice; blocked rows still render
+        below it so the operator reads what is waiting.
         """
         self._rows = self._current_rows()
         self._blocked = self._current_blocked()
@@ -1207,11 +1213,10 @@ class AutopilotModeScreen(ScopeScreen):
     def _render_rows(self) -> None:
         """Mount the ready/blocked split (or the honest-empty notice).
 
-        Clears the list container, then mounts the ready band (its caption plus
-        one selectable row per claim-ready wave, or the honest-empty notice when
-        none is ready) followed by the blocked band (its caption plus one row
-        per held wave naming the dep blocking it). Shared by the on-mount seed
-        and every rebuild so the render path is single-sourced.
+        Clears the list container, then mounts the ready band (caption + one
+        selectable row per claim-ready wave, or the honest-empty notice) and the
+        blocked band (caption + one row per held wave naming its blocking dep).
+        Shared by the on-mount seed and every rebuild (single-sourced).
         """
         listing = self.query(f"#{FRONTIER_LIST_ID}")
         if not listing:
@@ -1251,10 +1256,9 @@ class AutopilotModeScreen(ScopeScreen):
     def _repaint_selection(self) -> None:
         """Repaint the ready rows so the selection tint + checkbox look move.
 
-        The multi-select affordance (the filled / hollow checkbox glyph) lives
-        in the row markup, so a selection change must re-render the ready rows
-        (not merely retint the background); it walks the ready rows in claim
-        order and rewrites each with its current selected flag, then toggles the
+        The checkbox affordance glyph lives in the row markup, so a selection
+        change must re-render the ready rows (not merely retint): it rewrites
+        each ready row with its current selected flag and toggles the
         ``-selected`` tint class to match.
         """
         mode = self._render_mode()
@@ -1291,9 +1295,7 @@ class AutopilotModeScreen(ScopeScreen):
         """Compute the ready-wave display rows for the active scope.
 
         Projects the bound state into the frontier view, computes the ready
-        frontier, and enriches each ready row with its wave title. When the
-        view has a duplicate wave id (it cannot, since state keys waves by id)
-        the compute would raise; that is left to fail loudly rather than masked.
+        frontier, and enriches each ready row with its wave title.
 
         Returns:
             The ready-wave display rows in claim order; empty when no wave is
@@ -1306,10 +1308,9 @@ class AutopilotModeScreen(ScopeScreen):
     def _current_blocked(self) -> tuple[BlockedWaveRow, ...]:
         """Compute the blocked-wave display rows for the active scope.
 
-        Projects the bound state into the frontier view, computes the ready
-        frontier, and derives the PENDING waves held off it -- each naming the
-        dep blocking it (:func:`blocked_rows`). Single-sourced off the same
-        frontier compute the ready rows use, so the split is consistent.
+        Derives the PENDING waves held off the same frontier compute the ready
+        rows use -- each naming the dep blocking it (:func:`blocked_rows`) -- so
+        the ready/blocked split stays consistent.
 
         Returns:
             The blocked-wave display rows in claim order; empty when no PENDING
@@ -1323,8 +1324,7 @@ class AutopilotModeScreen(ScopeScreen):
         """Return the App's active render mode, defaulting when unavailable.
 
         A bare harness without the reactive degrades to
-        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` so the
-        reskin's glyph resolution never raises.
+        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE`.
         """
         return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
@@ -1343,8 +1343,7 @@ class AutopilotModeScreen(ScopeScreen):
 
         Delegates to the App's own daemon-socket probe so the dispatch path
         uses the same reachability verdict the rest of the TUI mutates through;
-        a bare harness without the probe degrades to "unavailable" so the
-        dispatch action never raises.
+        a bare harness without the probe degrades to "unavailable".
         """
         probe = getattr(self.app, "_daemon_socket_available", None)
         if not callable(probe):
@@ -1358,6 +1357,7 @@ class AutopilotModeScreen(ScopeScreen):
 
 __all__ = [
     "ARM_DEFERRED",
+    "BATCH_NO_DAEMON",
     "BLOCKED_BY_MARKER",
     "BLOCKED_CAPTION",
     "BLOCKED_ROW_CLASS",

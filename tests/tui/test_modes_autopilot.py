@@ -32,8 +32,10 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
+from textual.pilot import Pilot
 
 from eawf.kernel.spec.auq_bridge import compute_ready_frontier
 from eawf.kernel.state.enums import (
@@ -50,6 +52,7 @@ from eawf.kernel.state.models import (
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.autopilot import (
     ARM_DEFERRED,
+    BATCH_NO_DAEMON,
     DISPATCH_IDLE,
     DISPATCH_NO_DAEMON,
     DISPATCH_RESULT_ID,
@@ -59,7 +62,6 @@ from eawf.surfaces.tui.modes.autopilot import (
     HALT_NO_TARGET,
     KILL_NO_DAEMON,
     KILL_NO_TARGET,
-    MULTI_SELECT_COMMITTED,
     MULTI_SELECT_ID,
     MULTI_SELECT_NO_TARGET,
     PAUSE_NO_DAEMON,
@@ -1282,8 +1284,11 @@ def test_autopilot_multi_select_commit_stages_batch_and_tears_down(tmp_path: Pat
     """Committing the checklist (``Enter``) stages the batch and tears it down.
 
     After checking two waves and pressing ``Enter``, the shell records the
-    staged claim batch, removes the checklist, and surfaces the staged ids on
-    the result line (single-sourced from the ready frontier choices).
+    staged claim batch (single-sourced from the ready frontier choices) and
+    removes the checklist. The bare test harness has no reachable daemon, so the
+    commit surfaces the honest :data:`BATCH_NO_DAEMON` line (the W07 dispatch
+    wiring); the positive-dispatch path is covered by the fake-client tests
+    below.
     """
     state = _three_ready_state()
     state_path = _write_state(tmp_path, state)
@@ -1307,14 +1312,12 @@ def test_autopilot_multi_select_commit_stages_batch_and_tears_down(tmp_path: Pat
             await pilot.press("enter")  # commit the batch
             await settle_screen(pilot)
             await app.workers.wait_for_complete()
-            # The checklist tore down on commit.
+            # The checklist tore down on commit + the batch was staged.
             assert not pane.query(f"#{MULTI_SELECT_ID}")
             assert pane._claim_batch == ("P01-I01-W02", "P01-I03-W04")
             result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
             rendered = str(result.render())  # type: ignore[attr-defined]
-            assert MULTI_SELECT_COMMITTED in rendered
-            assert "P01-I01-W02" in rendered
-            assert "P01-I03-W04" in rendered
+            assert BATCH_NO_DAEMON in rendered
 
     asyncio.run(body())
 
@@ -1374,3 +1377,184 @@ def test_autopilot_multi_select_cancel_tears_down_without_staging(tmp_path: Path
             assert pane._claim_batch == ()
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W07 -- multi-select batch dispatch to agent.dispatch (spawn=True) on a worker
+# --------------------------------------------------------------------------
+
+
+async def _commit_two_wave_batch(app: EaApp, pilot: Pilot[None]) -> AutopilotModeScreen:
+    """Open the shell, check W02 + W04, commit the batch, and return the pane.
+
+    Drives the ``m`` -> Space (W02) -> down,down -> Space (W04) -> Enter path
+    over a :func:`_three_ready_state` frontier so the staged claim batch is
+    ``(P01-I01-W02, P01-I03-W04)`` -- the shared setup the W07 dispatch tests
+    reuse before draining the worker and asserting the RPC calls.
+    """
+    settle = cast("Pilot[object]", pilot)
+    await settle_screen(settle)
+    await pilot.press(_AUTOPILOT_DIGIT)
+    await settle_screen(settle)
+    await pilot.press("m")
+    await settle_screen(settle)
+    await app.workers.wait_for_complete()
+    pane = app.screen
+    assert isinstance(pane, AutopilotModeScreen)
+    checklist = pane.query_one(f"#{MULTI_SELECT_ID}", MultichoiceChecklist)
+    checklist.focus()
+    await pilot.press("space")  # W02
+    await pilot.press("down", "down")  # cursor -> W04
+    await pilot.press("space")  # W04
+    await pilot.press("enter")  # commit the batch
+    await settle_screen(settle)
+    assert pane._claim_batch == ("P01-I01-W02", "P01-I03-W04")
+    return pane
+
+
+def test_autopilot_batch_dispatch_calls_agent_dispatch_once_per_wave(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Committing a 2-wave batch issues ``agent.dispatch`` (spawn) once per wave.
+
+    The load-bearing W07 success criterion: with a reachable daemon stubbed by a
+    fake client, committing two checked waves reaches the daemon with exactly two
+    ``agent.dispatch`` calls (one per selected wave), each carrying that wave's
+    id + ``spawn=True``, and the calls run on a Textual worker (so the test
+    drains ``app.workers`` before asserting).
+    """
+    state_path = _write_state(tmp_path, _three_ready_state())
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {"runtime": "claude-code", "pid": 1234, "session_id": "S", "attempt": 1}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            pane = await _commit_two_wave_batch(app, pilot)
+            # The dispatch RPCs run on a worker -- drain before asserting.
+            await app.workers.wait_for_complete()
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            assert "P01-I01-W02" in rendered
+            assert "P01-I03-W04" in rendered
+
+    asyncio.run(body())
+    # Exactly one agent.dispatch (spawn) call per selected wave, in claim order.
+    assert [method for method, _ in calls] == ["agent.dispatch", "agent.dispatch"]
+    assert [params["wave_id"] for _, params in calls] == ["P01-I01-W02", "P01-I03-W04"]
+    assert all(params["spawn"] is True for _, params in calls)
+
+
+def test_autopilot_batch_dispatch_no_daemon_issues_zero_rpcs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A committed batch with no reachable daemon issues ZERO RPCs, honestly.
+
+    With the daemon probe forced unavailable the fleet must NOT open a client or
+    call ``agent.dispatch`` at all (reachability is checked once up front); the
+    result line surfaces the exact :data:`BATCH_NO_DAEMON` "not issued" phrasing.
+    """
+    state_path = _write_state(tmp_path, _three_ready_state())
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _ExplodingClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            raise AssertionError("DaemonClient must not be constructed when daemon is unavailable")
+
+        def __enter__(self) -> _ExplodingClient:  # pragma: no cover - never reached
+            return self
+
+        def __exit__(self, *_args: object) -> None:  # pragma: no cover - never reached
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))  # pragma: no cover - never reached
+            return {}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        monkeypatch.setattr(dc, "DaemonClient", _ExplodingClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            pane = await _commit_two_wave_batch(app, pilot)
+            await app.workers.wait_for_complete()
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert BATCH_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+    # Zero RPCs were issued (no client was even constructed).
+    assert calls == []
+
+
+def test_autopilot_batch_dispatch_one_rejected_others_proceed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mid-batch rejected wave reads ``rejected`` while the others dispatch.
+
+    The daemon rejects the first staged wave (``-32602 invalid_params``) and
+    accepts the second. The fleet must NOT abort on the rejection: both waves are
+    issued an ``agent.dispatch`` call, the rejected wave's outcome reads
+    ``rejected`` on the result line, and the accepted wave reads ``spawned``.
+    """
+    state_path = _write_state(tmp_path, _three_ready_state())
+    calls: list[dict[str, object]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        class _RejectingClient:
+            def __init__(self, *_a: object, **_k: object) -> None:
+                return None
+
+            def __enter__(self) -> _RejectingClient:
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def call(self, _method: str, params: dict[str, object]) -> dict[str, object]:
+                calls.append(params)
+                if params["wave_id"] == "P01-I01-W02":
+                    raise dc.DaemonRpcError(-32602, "invalid_params")
+                return {"runtime": "claude-code", "pid": 9, "session_id": "S", "attempt": 1}
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _RejectingClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            pane = await _commit_two_wave_batch(app, pilot)
+            await app.workers.wait_for_complete()
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            rendered = str(result.render())  # type: ignore[attr-defined]
+            # The rejected wave reads rejected; the accepted wave reads spawned.
+            assert "P01-I01-W02 rejected" in rendered
+            assert "P01-I03-W04 spawned" in rendered
+
+    asyncio.run(body())
+    # Both waves were still dispatched -- one rejection never aborts the fleet.
+    assert [params["wave_id"] for params in calls] == ["P01-I01-W02", "P01-I03-W04"]
