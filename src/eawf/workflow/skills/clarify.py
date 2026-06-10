@@ -10,12 +10,23 @@ skills terminating with ``status=needs_user``, so a campaign's clarify
 proposal never flowed into the same inbox the operator answers out of band.
 That gap is the clarify->needs_user disconnect.
 
-:func:`bridge_clarify_to_pause` closes it: it takes a
+:func:`bridge_clarify_to_pause` closes the single-proposal half: it takes a
 :class:`ClarifyProposal` and records a ``needs_user`` pause **carrying the
 proposal's urgency**, so a blocking clarify and an ordinary skill pause sort
 against each other on one comparable ladder. The bridge owns no new store
 shape — it wraps the daemon-owned :func:`eawf.workflow.skills.needs_user.record_pause`
 append path, threading ``urgency`` through to the persisted pause row.
+
+A whole **clarify run** emits more than one question at once: the gap a
+campaign cannot close usually fans out into several disambiguations. Before
+:func:`bridge_clarify_run_to_ledger` that run's questions had nowhere to go
+but the floor — they were produced and discarded, leaving the two live halves
+of the research loop (the clarify producer and the needs_user / OpenQuestion
+ledger the operator answers out of) disconnected. The run bridge closes that:
+it seeds the ledger with one resolvable pause row per proposed question, so a
+clarify run produces answerable questions instead of dropping them. It reuses
+the same single-proposal append, so every seeded row resolves through the
+ordinary :func:`eawf.workflow.skills.needs_user.resolve_pause` path.
 """
 
 from __future__ import annotations
@@ -108,7 +119,55 @@ def bridge_clarify_to_pause(
     return pause_urn
 
 
+def bridge_clarify_run_to_ledger(
+    state_path: Path,
+    proposals: list[ClarifyProposal],
+    *,
+    scope_id: str,
+    session: str,
+    publish: Callable[[Envelope], None] | None = None,
+) -> list[str]:
+    """Seed the needs_user ledger with one resolvable row per clarify question.
+
+    Closes the clarify-run -> needs_user disconnect: a clarify run emits a
+    whole batch of proposed questions, and before this bridge that batch was
+    discarded. This seeds the durable ledger with one ``needs_user`` pause per
+    proposal — each carrying its own urgency and each resolvable through the
+    ordinary :func:`~eawf.workflow.skills.needs_user.resolve_pause` path — so the
+    clarify producer and the operator's answer inbox stay connected. The empty
+    run is a no-op: zero proposals seed zero rows.
+
+    Args:
+        state_path: Absolute path to ``state.json`` (the pause store lives at
+            its sibling ``store/event.jsonl``).
+        proposals: The clarify run's proposed questions, in emit order. Each
+            seeds one ledger row; the returned urns share that order.
+        scope_id: Campaign / scope the seeded pauses belong to.
+        session: Originating session URN.
+        publish: Optional daemon bus publisher forwarded to each
+            :func:`~eawf.workflow.skills.needs_user.record_pause`; invoked once per
+            seeded row after its durable append succeeds.
+
+    Returns:
+        The seeded ``pause-urn`` list, one per proposal in emit order — empty
+        when *proposals* is empty.
+    """
+    pause_urns = [
+        bridge_clarify_to_pause(
+            state_path,
+            proposal,
+            scope_id=scope_id,
+            session=session,
+            publish=publish,
+        )
+        for proposal in proposals
+    ]
+    logger.info(f"bridge_clarify_run_to_ledger scope={scope_id!r} seeded={len(pause_urns)}")
+    return pause_urns
+
+
 __all__ = [
     "ClarifyProposal",
+    "bridge_clarify_run_to_ledger",
     "bridge_clarify_to_pause",
 ]
