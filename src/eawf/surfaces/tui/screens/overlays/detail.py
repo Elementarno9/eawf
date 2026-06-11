@@ -306,6 +306,18 @@ class DetailCard:
     #: tabs now, fill later" reskin directive -- while every other kind keeps
     #: only the groups it populates.
     kind: str = "entity"
+    #: The overview glance: a compact ``(label, value)`` quad summarising a wave
+    #: -- criteria bound, gate count, evidence records, runtime EU -- rendered
+    #: above the narrative so the overview opens as a scannable glance (the
+    #: reskin's overview intent) rather than a prose dump. Empty on non-wave cards.
+    glance: tuple[tuple[str, str], ...] = ()
+    #: The dependency-path segments (the wave's deps, then the wave itself, then
+    #: the waves it blocks) for the overview mini-DAG card. Empty when the wave
+    #: has no deps and nothing depends on it.
+    dep_segments: tuple[str, ...] = ()
+    #: The wave status word rendered as the overview status pill; empty on a
+    #: non-wave card (which carries no pill).
+    status_pill: str = ""
 
 
 #: Honest-empty notice per always-present wave tab, rendered when the tab's
@@ -782,17 +794,75 @@ def _wave_card(
     # metered sessions yet" line rather than an empty cost tab.
     cost: tuple[tuple[str, str], ...] = wave_cost_rows(wave, cost_rollup)
 
+    runtime_rows = _wave_runtime(wave)
+    glance, dep_segments = _wave_glance(
+        state, wave, report_rows=report_rows, runtime_rows=runtime_rows
+    )
     return DetailCard(
         title=f"wave {wave.id}",
         rows=tuple(rows),
         criteria=tuple(criteria),
         gates=tuple(gates),
         evidence=tuple(evidence),
-        runtime=_wave_runtime(wave),
+        runtime=runtime_rows,
         cost=cost,
         detail_markdown=_wave_narrative_preview(state, wave, reports=report_rows),
         kind="wave",
+        glance=glance,
+        dep_segments=dep_segments,
+        status_pill=wave.status.value,
     )
+
+
+def _short_wave_id(wave_id: str) -> str:
+    """Return the short tail of a wave id (``P30-I04-W06`` -> ``W06``)."""
+    return wave_id.rsplit("-", 1)[-1]
+
+
+def _wave_glance(
+    state: State,
+    wave: Wave,
+    *,
+    report_rows: tuple[AgentReportRow, ...],
+    runtime_rows: tuple[tuple[str, str], ...],
+) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+    """Compute the overview glance quad + dependency-path segments for a wave.
+
+    The glance is the scannable summary the reskin overview leads with: criteria
+    bound-vs-total, gate count, evidence record count, and the runtime EU value
+    (the honest ``EMPTY_STATE`` sentinel when no runtime landed). A criterion
+    counts as *bound* when it carries a gate or an oracle tier. The dependency
+    path is the wave's deps, then the wave itself, then the waves whose deps name
+    it (its blocks) -- empty when the wave is unconnected.
+
+    Args:
+        state: The bound state, scanned for the reverse-dep blocks.
+        wave: The wave being resolved.
+        report_rows: The wave's agent-report rows (the evidence count).
+        runtime_rows: The already-resolved runtime rows (the EU value source).
+
+    Returns:
+        A ``(glance, dep_segments)`` pair; ``dep_segments`` is empty when the
+        wave has no deps and nothing depends on it.
+    """
+    total = len(wave.success_criteria)
+    bound = sum(1 for c in wave.success_criteria if c.gate_ids or c.oracle_tier is not None)
+    eu_value = next((value for label, value in runtime_rows if label == "eu"), EMPTY_STATE)
+    glance: tuple[tuple[str, str], ...] = (
+        ("criteria", f"{bound}/{total} bound" if total else "none"),
+        ("gates", str(len(wave.gates)) if wave.gates else "none"),
+        ("evidence", f"{len(report_rows)} records" if report_rows else "none"),
+        ("runtime", eu_value),
+    )
+    blocks = tuple(other.id for other in state.waves.values() if wave.id in other.deps)
+    if not wave.deps and not blocks:
+        return glance, ()
+    segments = (
+        *(_short_wave_id(dep) for dep in wave.deps),
+        _short_wave_id(wave.id),
+        *(_short_wave_id(block) for block in blocks),
+    )
+    return glance, segments
 
 
 def _wave_narrative_preview(
@@ -1153,6 +1223,23 @@ class DetailModal(ModalScreen[None]):
     DetailModal .detail-row {
         height: auto;
     }
+    DetailModal .detail-pill {
+        width: auto;
+        height: 1;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    DetailModal .detail-dep-card {
+        border: round $accent;
+        padding: 0 1;
+        height: auto;
+        margin-bottom: 1;
+    }
+    DetailModal .detail-glance {
+        height: auto;
+        color: $muted;
+        margin-bottom: 1;
+    }
     DetailModal .detail-hint {
         color: $text-muted;
         height: 1;
@@ -1359,6 +1446,37 @@ class DetailModal(ModalScreen[None]):
                 classes="detail-hint",
             )
 
+    def _compose_glance(self, *, mode: RenderMode) -> ComposeResult:
+        """Yield the wave overview glance: status pill + dep-path card + quad.
+
+        The reskin overview opens with a scannable glance above the narrative: a
+        status pill, a dependency-path mini-DAG card (deps to this to blocks,
+        the wave itself bold), and a counts quad (criteria bound / gates /
+        evidence records / runtime EU).
+        """
+        card = self._card
+        if card.status_pill:
+            yield Static(
+                f"[reverse $accent] {escape(card.status_pill)} [/]",
+                classes="detail-pill",
+            )
+        if card.dep_segments:
+            sep = f" {sigils.chrome('dispatch', mode=mode)} "
+            this_id = _short_wave_id(card.title.split(" ", 1)[-1])
+            path = sep.join(
+                f"[b]{escape(seg)}[/b]" if seg == this_id else escape(seg)
+                for seg in card.dep_segments
+            )
+            yield Static(
+                f"[$accent]DEPENDENCY PATH[/]  [$muted]deps{sep}this{sep}blocks[/]\n{path}",
+                classes="detail-dep-card",
+            )
+        if card.glance:
+            line = "    ".join(
+                f"[$muted]{escape(label)}[/] {escape(value)}" for label, value in card.glance
+            )
+            yield Static(line, classes="detail-glance")
+
     def _compose_pane(self, tab_id: str, *, mode: RenderMode) -> ComposeResult:
         """Yield the body widgets for one tab pane.
 
@@ -1373,6 +1491,8 @@ class DetailModal(ModalScreen[None]):
             tab when the card supplies one.
         """
         if tab_id == "overview" and self._card.detail_markdown is not None:
+            if self._card.kind == "wave":
+                yield from self._compose_glance(mode=mode)
             yield Markdown(self._card.detail_markdown)
             return
         rows = self._section_rows(tab_id)
