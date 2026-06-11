@@ -20611,7 +20611,11 @@
         "P30-I15-W09",
         "P30-I15-W10",
         "P30-I15-W11",
-        "P30-I15-W12"
+        "P30-I15-W12",
+        "P30-I15-W13",
+        "P30-I15-W14",
+        "P30-I15-W15",
+        "P30-I15-W16"
       ]
     }
   },
@@ -21552,7 +21556,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T06:31:53.948958Z",
+  "updated_at": "2026-06-11T10:56:33.846512Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -84511,6 +84515,236 @@
         }
       ],
       "title": "Full-suite integration fixes before ship",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W13": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py",
+        "src/eawf/surfaces/tui/widgets/header.py",
+        "src/eawf/surfaces/tui/widgets/sigils.py",
+        "src/eawf/surfaces/render/brand.py"
+      ],
+      "gates": [],
+      "id": "P30-I15-W13",
+      "intent": {
+        "desired_outcome": "Footer keeps the priority tail visible by fitting hints to width; header leads with a brand glyph (fisheye unicode ascii star fallback).",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Reskin audit against the live TUI found the footer clips global affordances at every tested width and the header omits the leading brand glyph; both are operator-facing parity gaps on the shipping v0.6 surface.",
+        "problem": "Footer hint strip clips the global affordances config/palette/help/quit at width 80 and 120; header lacks the leading brand glyph from the reskin mockup.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T10:56:32.328908Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "footer hint strip keeps the global tail config/palette/help/quit visible at width 80;header leads with a brand glyph (fisheye unicode ascii star fallback)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "footer hint strip keeps the global tail config/palette/help/quit visible at width 80;header leads with a brand glyph (fisheye unicode ascii star fallback)",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fit footer hints to width and add header brand glyph",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W14": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/empty_state.py",
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/modes/feed.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/modes/sandbox_events.py"
+      ],
+      "gates": [],
+      "id": "P30-I15-W14",
+      "intent": {
+        "desired_outcome": "A shared render_empty_state centers every empty notice under a muted brand sigil; research drops the border and shows action chips.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The reskin mockup shows a centered hero empty-state with a brand sigil; the live TUI renders a top-left boxed notice, the single most visible divergence the operator flagged.",
+        "problem": "Honest-empty states render top-left; the research empty has an orange warn border and lacks the centered brand sigil and n/d action chips from the mockup.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T10:56:32.837176Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "honest-empty notices render centered via a shared render_empty_state with a muted brand sigil;research empty drops the warn border and shows n/d action chips",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "honest-empty notices render centered via a shared render_empty_state with a muted brand sigil;research empty drops the warn border and shows n/d action chips",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Center honest-empty states with brand sigil and chips",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W15": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail.py"
+      ],
+      "gates": [],
+      "id": "P30-I15-W15",
+      "intent": {
+        "desired_outcome": "All five wave-detail tabs render unconditionally with honest-empty bodies; overview shows a counts quad and a deps-this-blocks mini-DAG.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The reskin directive is render-the-tabs-now-fill-later; the live detail hides deferred tabs entirely, contradicting the chassis intent and hiding the spec surface from the operator.",
+        "problem": "Wave-detail builds criteria/gates/runtime tabs only when non-empty so an empty wave hides them; overview lacks the counts quad and mini-DAG glance.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T10:56:33.345578Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "wave-detail builds all five tabs overview/criteria/gates/evidence/runtime unconditionally with honest-empty bodies;overview renders a counts quad and a deps-this-blocks mini-DAG",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "wave-detail builds all five tabs overview/criteria/gates/evidence/runtime unconditionally with honest-empty bodies;overview renders a counts quad and a deps-this-blocks mini-DAG",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make wave-detail five tabs always-present with overview glance",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W16": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XL",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/feed.py",
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/modes/trust.py",
+        "src/eawf/surfaces/tui/modes/sandbox_events.py",
+        "src/eawf/surfaces/tui/palette/command_palette.py",
+        "src/eawf/surfaces/tui/screens/overlays/plan_preview.py",
+        "src/eawf/surfaces/tui/widgets/roadmap_tree.py",
+        "src/eawf/surfaces/tui/widgets/attention_feed.py"
+      ],
+      "gates": [],
+      "id": "P30-I15-W16",
+      "intent": {
+        "desired_outcome": "Each surface matches the reskin: feed kind sigils, hanging-indent tree, per-verb palette sigils, plan-preview rollup, eight-cell bar, session-grouped sandbox golden.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The surface-by-surface audit found a tail of low-severity render gaps; closing them brings the v0.6 TUI to full parity with the ratified cosmic-terminal mockup before ship.",
+        "problem": "Surfaces drift from the mockup: feed sigil gaps, research tree wrap, flat palette sigils, missing plan-preview rollup, ten-cell roadmap bar, ungrouped sandbox.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T10:56:33.846280Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "feed maps dispatch/audit/veto kinds to chrome glyphs;research tree hangs wrapped continuations and marks blocking open-Q with attention sigil;palette wears per-verb stage sigils;plan-preview shows an effort rollup;roadmap completion bar is eight cells;sandbox groups by session with a golden",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "feed maps dispatch/audit/veto kinds to chrome glyphs;research tree hangs wrapped continuations and marks blocking open-Q with attention sigil;palette wears per-verb stage sigils;plan-preview shows an effort rollup;roadmap completion bar is eight cells;sandbox groups by session with a golden",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Polish per-surface render parity to the reskin mockup",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
