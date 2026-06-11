@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -171,12 +172,16 @@ def wave_in_uiux_band(wave: Wave, *, bands: list[str] | tuple[str, ...] | None) 
       ``src/eawf/surfaces/tui/`` or ``src/eawf/surfaces/render/``). A wave
       that touches the UI tree is UI/UX-risky regardless of its title, so
       this arm bands UI waves with no per-profile config.
-    * **Token** -- any token in *bands* appears (case-insensitively) as a
-      substring of the wave id or title. The band list is the active
-      profile's :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`;
-      an empty or ``None`` list disables this arm. The list is a parameter
-      (not read from config here) so the predicate stays pure + overridable:
-      an integration test forces a band wave by passing an explicit token.
+    * **Token** -- any token in *bands* matches (case-insensitively) on a
+      WORD BOUNDARY of the wave id or title. The match is whole-word, not a
+      bare substring: a token like ``"ui"`` arms only when ``ui`` stands as
+      its own word (``"ui polish"``), never when it is embedded in a larger
+      word (``"build pipeline"`` / ``"quiz"`` do NOT arm). The band list is
+      the active profile's
+      :attr:`~eawf.platform.profiles.models.VerifyBlock.uiux_bands`; an empty
+      or ``None`` list disables this arm. The list is a parameter (not read
+      from config here) so the predicate stays pure + overridable: an
+      integration test forces a band wave by passing an explicit token.
 
     Args:
         wave: The wave being closed. Read-only.
@@ -186,14 +191,21 @@ def wave_in_uiux_band(wave: Wave, *, bands: list[str] | tuple[str, ...] | None) 
 
     Returns:
         ``True`` when the wave's file_scopes are UI surface OR a band token
-        matches the wave id or title.
+        matches a whole word of the wave id or title.
     """
     if is_ui_scope(wave.file_scopes):
         return True
     if not bands:
         return False
     corpus = f"{wave.id}\n{wave.title}".lower()
-    return any(token.lower() in corpus for token in bands if token)
+    for token in bands:
+        if not token:
+            continue
+        # Word-boundary match so a token cannot arm on a substring embedded
+        # in a larger word (``"ui"`` must not match ``"build"`` / ``"quiz"``).
+        if re.search(rf"\b{re.escape(token.lower())}\b", corpus):
+            return True
+    return False
 
 
 def _per_item_criteria(result: PerItemJuryResult) -> list[CriterionVerdict]:

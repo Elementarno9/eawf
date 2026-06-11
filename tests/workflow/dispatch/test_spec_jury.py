@@ -210,6 +210,38 @@ def test_wave_in_uiux_band_matches_id_or_title_case_insensitive() -> None:
     assert wave_in_uiux_band(by_id, bands=["p29-i05"]) is True
 
 
+def test_wave_in_uiux_band_token_substring_does_not_arm() -> None:
+    """P30-I16-W18: a band token embedded in a LARGER word does NOT arm the token
+    arm -- the match is whole-word, not a bare substring.
+
+    Pre-fix the substring ``token in corpus`` test wrongly armed ``"ui"`` against
+    ``"build pipeline"`` / ``"quiz harness"`` (both contain the letters ``ui``).
+    """
+    build = _make_wave(wave_id="P30-I01-W01", title="build pipeline")
+    assert wave_in_uiux_band(build, bands=["ui"]) is False
+    quiz = _make_wave(wave_id="P30-I01-W02", title="quiz harness")
+    assert wave_in_uiux_band(quiz, bands=["ui"]) is False
+    # ``tui`` embedded in ``intuition`` must not arm a ``tui`` token either.
+    intuition = _make_wave(wave_id="P30-I01-W03", title="intuition tuning")
+    assert wave_in_uiux_band(intuition, bands=["tui"]) is False
+
+
+def test_wave_in_uiux_band_token_whole_word_arms() -> None:
+    """P30-I16-W18: the SAME token arms when it stands as its own whole word.
+
+    The complement of the substring case: ``"ui"`` as a standalone word (split by
+    spaces / hyphens) DOES band the wave.
+    """
+    ui_word = _make_wave(wave_id="P30-I01-W04", title="ui polish pass")
+    assert wave_in_uiux_band(ui_word, bands=["ui"]) is True
+    # Hyphen-delimited word boundary also arms.
+    hyphenated = _make_wave(wave_id="P30-I01-W05", title="render-ui chrome")
+    assert wave_in_uiux_band(hyphenated, bands=["ui"]) is True
+    # Trailing-of-string word boundary arms.
+    trailing = _make_wave(wave_id="P30-I01-W06", title="polish the ui")
+    assert wave_in_uiux_band(trailing, bands=["ui"]) is True
+
+
 def _wave_with_scopes(file_scopes: list[str]) -> Wave:
     """Build a Wave whose title / id carry no band token, only file_scopes vary."""
     return Wave.model_validate(

@@ -332,8 +332,19 @@ def test_merge_verify_blocks_unions_jury_vendors() -> None:
 # ---- resolve_wave_verify_block: band-conditional enforcement ----------------
 
 
-def _wave(*, wave_id: str, title: str, file_scopes: list[str]) -> Wave:
-    """Build a minimal claimed :class:`Wave` for band-resolution tests."""
+def _wave(
+    *,
+    wave_id: str,
+    title: str,
+    file_scopes: list[str],
+    gates: list[dict[str, object]] | None = None,
+) -> Wave:
+    """Build a minimal claimed :class:`Wave` for band-resolution tests.
+
+    *gates* defaults to an empty list (a low-risk MECH wave); pass a jury /
+    cross-vendor gate payload to make the wave classify high-risk for the
+    fleet-high-risk-keeps-enforce path.
+    """
     return Wave.model_validate(
         {
             "id": wave_id,
@@ -341,6 +352,7 @@ def _wave(*, wave_id: str, title: str, file_scopes: list[str]) -> Wave:
             "title": title,
             "status": "claimed",
             "file_scopes": file_scopes,
+            "gates": gates or [],
             "success_criteria": [
                 {
                     "id": "CR-01",
@@ -356,6 +368,18 @@ def _wave(*, wave_id: str, title: str, file_scopes: list[str]) -> Wave:
             "claimed_at": "2026-06-03T00:00:00Z",
         }
     )
+
+
+def _jury_gate(gate_id: str = "G1", kind: str = "jury_verdict") -> dict[str, object]:
+    """A minimal high-risk GateSpec payload (jury / cross-vendor)."""
+    return {
+        "id": gate_id,
+        "criterion_id": "CR-01",
+        "kind": kind,
+        "args": {},
+        "policy": "block",
+        "cadence": "every-wave",
+    }
 
 
 def _band_scoped_block() -> VerifyBlock:
@@ -454,6 +478,59 @@ def test_resolve_wave_verify_block_advisory_block_untouched() -> None:
     resolved = resolve_wave_verify_block(block, wave)
     assert resolved is block
     assert resolved.enforce is False
+
+
+def test_resolve_wave_verify_block_high_risk_fleet_wave_keeps_enforce() -> None:
+    """P30-I16-W18: a non-band wave whose OWN gate set is high-risk (a jury gate
+    -> RiskTier.HIGH) KEEPS enforce after the band merge -- the resolver no
+    longer narrows a high-risk fleet wave to advisory-only.
+
+    The wave is band-MISSED (a backend file_scope, no token in the title), so
+    pre-fix it would have narrowed to ``enforce=False``; the high-risk gate set
+    now overrides the narrowing so its jury still gates the close.
+    """
+    wave = _wave(
+        wave_id="P29-I08-W06",
+        title="backend jury-gated rollup",
+        file_scopes=["src/eawf/kernel/spec/wave.py"],
+        gates=[_jury_gate(kind="jury_verdict")],
+    )
+    resolved = resolve_wave_verify_block(_band_scoped_block(), wave)
+    assert resolved is not None
+    # High-risk fleet wave keeps the authored enforcement bits -- NOT narrowed.
+    assert resolved.enforce is True
+    assert resolved.cross_vendor_jury is True
+
+
+def test_resolve_wave_verify_block_cross_vendor_high_risk_keeps_enforce() -> None:
+    """A non-band wave gated by a ``cross_vendor_jury`` gate (also RiskTier.HIGH)
+    likewise keeps enforce after the band merge.
+    """
+    wave = _wave(
+        wave_id="P29-I08-W07",
+        title="backend rollup",
+        file_scopes=["src/eawf/kernel/spec/wave.py"],
+        gates=[_jury_gate(kind="cross_vendor_jury")],
+    )
+    resolved = resolve_wave_verify_block(_band_scoped_block(), wave)
+    assert resolved is not None
+    assert resolved.enforce is True
+
+
+def test_resolve_wave_verify_block_low_risk_non_band_still_narrows() -> None:
+    """Control: a NON-band, LOW-risk wave (deterministic-only gates -> MECH)
+    still narrows to advisory -- the fix is scoped to high-risk waves only.
+    """
+    wave = _wave(
+        wave_id="P29-I08-W08",
+        title="backend rollup",
+        file_scopes=["src/eawf/kernel/spec/wave.py"],
+        gates=[_jury_gate(gate_id="G1", kind="file_exists")],
+    )
+    resolved = resolve_wave_verify_block(_band_scoped_block(), wave)
+    assert resolved is not None
+    assert resolved.enforce is False
+    assert resolved.cross_vendor_jury is False
 
 
 # ---- 14-profile reconcile sweep --------------------------------------------

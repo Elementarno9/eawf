@@ -672,8 +672,18 @@ def resolve_wave_verify_block(
       keeps the merged block's enforcement bits as authored -- so a
       band-scoped profile resolves to ``enforce=True`` +
       ``cross_vendor_jury=True`` and the close routes through the gate;
-    * a **non-band** wave resolves to ``enforce=False`` (and, consequently,
-      no jury) -- it closes exactly as it does today, advisory-only.
+    * a **fleet high-risk** wave (its own gate set classifies
+      :attr:`~eawf.kernel.state.enums.RiskTier.HIGH` or
+      :attr:`~eawf.kernel.state.enums.RiskTier.UI` per
+      :func:`eawf.workflow.verify.oracle.classify_risk_tier` -- it carries a
+      jury / cross-vendor / visual-band gate) ALSO keeps enforcement on even
+      when it is NOT in a UI band: a jury-gated wave's ground truth needs the
+      jury, so narrowing its ``enforce`` to advisory-only would let a
+      high-risk close slip the gate. The band narrowing is for low-risk
+      non-band waves, never for a wave whose own gate set demands a jury;
+    * a **non-band, non-high-risk** wave resolves to ``enforce=False`` (and,
+      consequently, no jury) -- it closes exactly as it does today,
+      advisory-only.
 
     A block that does NOT declare ``uiux_bands`` is a whole-fleet enforce
     profile (the pre-W06 shape) and is returned untouched: its operator
@@ -695,7 +705,9 @@ def resolve_wave_verify_block(
         The band-conditional :class:`VerifyBlock` for *wave*, or ``None``
         when the input was ``None``.
     """
+    from eawf.kernel.state.enums import RiskTier
     from eawf.workflow.dispatch.spec_jury import wave_in_uiux_band
+    from eawf.workflow.verify.oracle import classify_risk_tier
 
     if verify_block is None or not verify_block.enforce:
         return verify_block
@@ -704,9 +716,22 @@ def resolve_wave_verify_block(
         return verify_block
     if wave_in_uiux_band(wave, bands=verify_block.uiux_bands):
         return verify_block
+    # Band check failed -- but a wave whose OWN gate set is high-risk
+    # (a jury / cross-vendor / visual-band gate -> RiskTier.HIGH | UI) must
+    # keep enforcement even outside a UI band: its ground truth needs the
+    # jury, so narrowing it to advisory would let a high-risk close slip the
+    # gate. Only low-risk non-band waves (MECH / MED) narrow to advisory.
+    risk_tier = classify_risk_tier(list(wave.gates))
+    if risk_tier in {RiskTier.HIGH, RiskTier.UI}:
+        logger.debug(
+            f"resolve_wave_verify_block wave={wave.id!r} band=False "
+            f"risk_tier={risk_tier.value} enforce=True high_risk_keeps_enforce=True"
+        )
+        return verify_block
     narrowed = verify_block.model_copy(update={"enforce": False, "cross_vendor_jury": False})
     logger.debug(
         f"resolve_wave_verify_block wave={wave.id!r} band=False "
+        f"risk_tier={risk_tier.value} "
         f"enforce={narrowed.enforce} cross_vendor_jury={narrowed.cross_vendor_jury}"
     )
     return narrowed
