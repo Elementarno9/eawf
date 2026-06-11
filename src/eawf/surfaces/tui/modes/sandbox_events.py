@@ -56,6 +56,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.empty_state import render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
@@ -323,7 +324,9 @@ class SandboxEventsModeScreen(ScopeScreen):
     }
     SandboxEventsModeScreen .sandbox-events-empty {
         color: $text-muted;
-        height: 1;
+        height: auto;
+        width: 1fr;
+        text-align: center;
     }
     SandboxEventsModeScreen .sandbox-events-row {
         height: auto;
@@ -367,7 +370,7 @@ class SandboxEventsModeScreen(ScopeScreen):
         first row lands.
         """
         with Vertical(id="sandbox-events-body"), VerticalScroll(id=TIMELINE_LIST_ID):
-            yield Static(EMPTY_NOTICE, id=TIMELINE_EMPTY_ID, classes="sandbox-events-empty")
+            yield Static(self._empty_hero(), id=TIMELINE_EMPTY_ID, classes="sandbox-events-empty")
 
     def on_mount(self) -> None:
         """Seed the timeline from the on-disk event store, newest-first.
@@ -413,7 +416,7 @@ class SandboxEventsModeScreen(ScopeScreen):
             # compose's notice (which DOES carry the id) was just removed, but
             # Textual defers that removal, so re-using the id here would race a
             # DuplicateIds. The class is enough for styling + the test probe.
-            listing.mount(Static(EMPTY_NOTICE, classes="sandbox-events-empty"))
+            listing.mount(Static(self._empty_hero(), classes="sandbox-events-empty"))
             return
         mode = self._render_mode()
         widgets = [self._build_row(row, mode=mode) for row in rows]
@@ -464,6 +467,17 @@ class SandboxEventsModeScreen(ScopeScreen):
             The render-mode label (``"ascii"`` or ``"unicode"``).
         """
         return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
+    def _empty_hero(self) -> str:
+        """Return the centered honest-empty hero body for the timeline.
+
+        Routes the :data:`EMPTY_NOTICE` "nothing was denied" copy through the
+        shared :func:`~eawf.surfaces.tui.widgets.empty_state.render_empty_state`
+        hero so the safety pane reads as a calm, centered good-state (a muted
+        brand sigil over a ``$muted`` headline -- *not* a ``$warn`` alert, since
+        no denial is the desired state) rather than a top-left one-liner.
+        """
+        return render_empty_state(EMPTY_NOTICE, mode=self._render_mode(), headline_tint="$muted")
 
     def _event_path(self) -> Path | None:
         """Resolve the host App's read-only ``event.jsonl`` path, if configured.

@@ -325,7 +325,10 @@ def test_honest_empty_renders_when_floor_denied_nothing() -> None:
             assert app.current_mode == "sandbox_events"
             empties = app.screen.query(".sandbox-events-empty")
             assert len(empties) == 1
-            assert str(empties.first(Static).render()) == EMPTY_NOTICE
+            # The honest-empty copy renders inside the shared brand-sigil hero
+            # (a muted sigil over the calm good-state line), so the pinned
+            # literal is a substring of the rendered body, not the whole render.
+            assert EMPTY_NOTICE in str(empties.first(Static).render())
 
     asyncio.run(body())
 
