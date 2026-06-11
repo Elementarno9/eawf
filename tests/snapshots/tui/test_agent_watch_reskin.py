@@ -311,10 +311,11 @@ def test_agent_watch_cancel_key_fires_and_moves_the_result(tmp_path: Path) -> No
     """Pressing the cancel key FIRES the action and moves the result off idle.
 
     The ``affordance_parity`` firing half: a real ``k`` keypress (the genuine
-    key->Binding path, not a direct action call) drives ``action_cancel_session``
-    and the result line moves off its idle cancel-look copy to the honest
-    "daemon unavailable" line (the bare host exposes no daemon socket, so the
-    cancel surfaces the honest result rather than a faked kill).
+    key->Binding path, not a direct action call) opens the FA4 confirm gate;
+    confirming ``Yes`` drives ``action_cancel_session`` and the result line
+    moves off its idle cancel-look copy to the honest "daemon unavailable"
+    line (the bare host exposes no daemon socket, so the cancel surfaces the
+    honest result rather than a faked kill).
     """
     state = _state(sessions={"S-1": _session("S-1")})
     state_path = _write_state(tmp_path, state)
@@ -326,6 +327,10 @@ def test_agent_watch_cancel_key_fires_and_moves_the_result(tmp_path: Path) -> No
             screen = app.screen
             assert isinstance(screen, AgentWatchModeScreen)
             await pilot.press(_CANCEL_KEY)  # the real key->Binding path
+            await settle_screen(pilot)
+            # FA4: k opens a confirm gate; confirm Yes to fire the cancel.
+            await pilot.press("right")  # highlight Yes
+            await pilot.press("enter")  # confirm
             await settle_screen(pilot)
             return str(screen.query_one(f"#{WATCH_RESULT_ID}", Static).render())
 
