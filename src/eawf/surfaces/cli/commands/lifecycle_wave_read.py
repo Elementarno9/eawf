@@ -688,6 +688,115 @@ def _verify_commits_repair_text(repaired: list[Any], skipped: list[Any]) -> str:
     return "\n".join(lines)
 
 
+# ---- Wave drift acknowledgement (P30-I16-W22) -----------------------------
+
+
+@wave_app.command("ack-drift")
+def wave_ack_drift_cmd(
+    ctx: typer.Context,
+    wave_ids: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help=("Wave id(s) whose git/state commit drift to acknowledge. Omit when using --all."),
+        ),
+    ] = None,
+    ack_all: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help=(
+                "Acknowledge EVERY currently-drifting closed wave "
+                "(retro-pin the whole historical backlog in one shot)."
+            ),
+        ),
+    ] = False,
+) -> None:
+    """Acknowledge historical git/state commit drift so ``doctor`` stops warning.
+
+    A closed wave drifts when its recorded ``Wave.commit`` no longer
+    reconciles with git history -- the usual causes are a squashed /
+    lost commit (``pinned_but_missing`` / ``closed_no_pin``) or a
+    cherry-pick twin where state pinned the worktree SHA and git derives
+    the integration SHA (``pinned_mismatch``). Those are real, accepted
+    history facts, not live defects, so the operator acknowledges them
+    once and ``eawf doctor`` filters the acked rows out of its
+    ``git_state_drift`` warning.
+
+    The acknowledgement is recorded to the committed file
+    ``<repo>/.eawf/drift-acks.json`` (deliberately OUTSIDE ``.ea/`` -- this
+    is a reviewer-visible record, NOT a lifecycle state mutation, so the
+    daemon's state-authority rule is untouched). Pass explicit wave ids to
+    ack a subset, or ``--all`` to retro-pin the entire current drift
+    backlog. The verb is additive + idempotent: re-acking the same waves
+    is a byte-stable no-op.
+    """
+    from eawf.workflow.lifecycle.wave_sha import (
+        detect_git_state_drift,
+        load_drift_acks,
+        save_drift_acks,
+    )
+
+    flags: GlobalFlags = ctx.obj
+    ids = wave_ids or []
+    if ack_all and ids:
+        cli_errors.emit_error(
+            cli_errors.UserError("pass wave ids OR --all, not both", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    if not ack_all and not ids:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "no wave ids given; pass wave id(s) or --all", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+        return
+
+    bad = [w for w in ids if not is_wave_id(w)]
+    if bad:
+        cli_errors.emit_error(
+            cli_errors.UserError(f"invalid wave id(s): {', '.join(bad)!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
+    loaded = _load_state_readonly(ctx)
+    if loaded is None:
+        return
+    state, flags = loaded
+
+    if ack_all:
+        # Ack only what is actually drifting today (minus what is already
+        # acked) so ``--all`` never bloats the file with non-drifting waves.
+        already = load_drift_acks(repo_root)
+        drifts = detect_git_state_drift(state, repo_root=repo_root, acked_wave_ids=already)
+        ids = [d.wave_id for d in drifts]
+
+    existing = load_drift_acks(repo_root)
+    new = sorted(set(ids) - existing)
+    merged = existing | set(ids)
+    path = save_drift_acks(merged, repo_root)
+
+    payload: dict[str, Any] = {
+        "acked": sorted(ids),
+        "newly_acked": new,
+        "total_acked": len(merged),
+        "path": str(path),
+    }
+    if new:
+        text = (
+            f"wave ack-drift: acknowledged {len(new)} new drift(s) "
+            f"({len(merged)} total) -> {path}\n  " + "\n  ".join(new)
+        )
+    else:
+        text = (
+            f"wave ack-drift: no new drifts to acknowledge ({len(merged)} already acked) -> {path}"
+        )
+    emit_json_or_text(payload, text, flags=flags)
+
+
 # ---- Wave budget handlers --------------------------------------------------
 
 

@@ -210,3 +210,171 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "state_scale_ceiling",
         "render_output_roundtrip",
     }
+
+
+# ---- P30-I16-W22: anchor resolution (pwd-upward) ---------------------------
+
+
+def test_resolve_anchor_returns_explicit_workspace(tmp_path: Path) -> None:
+    """An explicit ``-w`` workspace is returned verbatim (no upward walk)."""
+    assert checks._resolve_anchor(tmp_path) == tmp_path
+
+
+def test_resolve_anchor_walks_pwd_upward_to_dot_ea(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``workspace=None`` walks UP from pwd to the nearest ``.ea/`` ancestor."""
+    (tmp_path / ".ea").mkdir()
+    nested = tmp_path / "src" / "deep"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+    assert checks._resolve_anchor(None) == tmp_path.resolve()
+
+
+def test_resolve_anchor_none_when_no_dot_ea_ancestor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tree with no ``.ea/`` ancestor resolves to ``None``."""
+    monkeypatch.chdir(tmp_path)
+    assert checks._resolve_anchor(None) is None
+
+
+def test_check_manifest_in_sync_pwd_upward_when_workspace_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Plain doctor (``workspace=None``) resolves the manifest pwd-upward."""
+    (tmp_path / ".ea").mkdir()
+    monkeypatch.chdir(tmp_path)
+    # No manifest file yet -> resolves the anchor and reports ``ok`` (nothing
+    # to verify), NOT the old "no workspace anchor" warn.
+    result = checks.check_manifest_in_sync(workspace=None)
+    assert result.status == "ok"
+    assert "nothing to verify" in (result.detail or "")
+
+
+def test_check_manifest_in_sync_warns_only_without_any_anchor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``warn`` (no anchor) survives only when even the upward walk finds none."""
+    monkeypatch.chdir(tmp_path)
+    result = checks.check_manifest_in_sync(workspace=None)
+    assert result.status == "warn"
+    assert "no workspace anchor" in (result.detail or "")
+
+
+# ---- P30-I16-W22: manifest install-mode awareness --------------------------
+
+
+def test_is_plugin_owned_discriminates_on_prefix_and_generator() -> None:
+    """Only ``plugin.`` region id + ``eawf-plugin-`` generator counts as plugin."""
+    from eawf.surfaces.render.manifest import ManifestEntry
+
+    plugin = ManifestEntry(
+        target=".claude/agents/auditor.md",
+        region_id="plugin.claude.agent.auditor",
+        version="1.0",
+        hash="0" * 16,
+        generator="eawf-plugin-claude",
+        generated_at="2026-05-27T00:00:00+00:00",
+    )
+    region = ManifestEntry(
+        target="AGENTS.md",
+        region_id="non-negotiable-rules",
+        version="1.0",
+        hash="0" * 16,
+        generator="eawf-sync",
+        generated_at="2026-05-27T00:00:00+00:00",
+    )
+    assert checks._is_plugin_owned(plugin) is True
+    assert checks._is_plugin_owned(region) is False
+
+
+def test_check_manifest_in_sync_skips_plugin_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Whole-file plugin renders are satisfied by cache, not the region detector.
+
+    A manifest with only ``plugin.*`` entries pointing at files that carry NO
+    region markers must NOT report ``missing`` -- they are satisfied by the
+    plugin cache. The check stays ``ok`` and notes the cache-served count.
+    """
+    from eawf.surfaces.render.manifest import Manifest, ManifestEntry
+    from eawf.surfaces.render.manifest import save_atomic as save_manifest_atomic
+
+    manifest = Manifest(
+        version=1,
+        generated={
+            ".claude/agents/auditor.md::plugin.claude.agent.auditor": ManifestEntry(
+                target=".claude/agents/auditor.md",
+                region_id="plugin.claude.agent.auditor",
+                version="1.0",
+                hash="0" * 16,
+                generator="eawf-plugin-claude",
+                generated_at="2026-05-27T00:00:00+00:00",
+            ),
+        },
+    )
+    manifest_path = tmp_path / ".ea" / "indexes" / "generated.json"
+    save_manifest_atomic(manifest_path, manifest)
+    # The .claude file does NOT exist -- under the old region detector it would
+    # report ``missing``; install-mode awareness keeps it ``ok``.
+    result = checks.check_manifest_in_sync(workspace=tmp_path)
+    assert result.status == "ok"
+    assert "plugin region(s) from cache" in (result.detail or "")
+
+
+# ---- P30-I16-W22: probe-cache stray-write hygiene --------------------------
+
+
+def test_resolve_probe_cache_path_is_per_user_not_anchor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The probe cache lives in ``~/.eawf/cache`` -- never under the anchor's .ea/."""
+    monkeypatch.delenv("EA_INSTRUMENT_PROBE", raising=False)
+    fake_home = tmp_path / "home"
+    monkeypatch.setattr("eawf.observability.doctor.checks.Path.home", lambda: fake_home)
+    path = checks._resolve_probe_cache_path(tmp_path)
+    assert path == fake_home / ".eawf" / "cache" / "instrument-probe.json"
+    assert ".ea" not in path.parts
+
+
+def test_resolve_probe_cache_path_honours_env_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    override = tmp_path / "scratch" / "probe.json"
+    monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(override))
+    assert checks._resolve_probe_cache_path(tmp_path) == override
+
+
+def test_run_all_does_not_write_probe_into_anchor_dot_ea(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A doctor run never litters ``instrument-probe.json`` into the anchor's .ea/.
+
+    Exercises the REAL probe (not the ``_stub_probe_ok`` fake) so the actual
+    cache write lands -- then asserts it landed in the per-user home, NOT the
+    anchor's ``.ea/``.
+    """
+    from eawf.platform.install import instrument_probe as _ip
+
+    monkeypatch.delenv("EA_INSTRUMENT_PROBE", raising=False)
+    # Every tool resolves so the real probe writes a green cache without a
+    # version shell-out reaching the host. Force the cheap ``which`` probe so
+    # no ``--version`` subprocess runs.
+    monkeypatch.setattr(
+        "eawf.platform.install.instrument_probe.shutil.which",
+        lambda name: f"/usr/bin/{name}",
+    )
+    monkeypatch.setattr(
+        _ip,
+        "INSTRUMENT_REQUIREMENTS",
+        {"core": [_ip.InstrumentSpec(name="git", kind="hard", probe="which")]},
+    )
+    fake_home = tmp_path / "home"
+    monkeypatch.setattr("eawf.observability.doctor.checks.Path.home", lambda: fake_home)
+    (tmp_path / ".ea").mkdir()
+    monkeypatch.chdir(tmp_path)
+    checks.run_all(workspace=None)
+    assert not (tmp_path / ".ea" / "instrument-probe.json").exists()
+    # The cache landed in the per-user home instead.
+    assert (fake_home / ".eawf" / "cache" / "instrument-probe.json").exists()

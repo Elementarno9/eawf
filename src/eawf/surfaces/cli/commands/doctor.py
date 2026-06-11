@@ -324,6 +324,7 @@ def _run_git_state_drift_check(workspace: Path | None) -> _DriftReconcilerCheck:
 
     from eawf.kernel.state.models import State
     from eawf.kernel.state.resolve import resolve_with_reason
+    from eawf.workflow.lifecycle.wave_sha import load_drift_acks
 
     name = "git_state_drift"
     try:
@@ -341,13 +342,15 @@ def _run_git_state_drift_check(workspace: Path | None) -> _DriftReconcilerCheck:
         )
 
     repo_root = state_path.parent.parent
-    drifts = detect_git_state_drift(state, repo_root=repo_root)
+    acked = load_drift_acks(repo_root)
+    drifts = detect_git_state_drift(state, repo_root=repo_root, acked_wave_ids=acked)
     if not drifts:
         closed = sum(1 for w in state.waves.values() if w.status.value == "closed")
+        ack_note = f"; {len(acked)} acked" if acked else ""
         return _DriftReconcilerCheck(
             name=name,
             status="ok",
-            detail=f"{closed} closed wave(s) reconcile with git",
+            detail=f"{closed} closed wave(s) reconcile with git{ack_note}",
             drifts=[],
         )
     # Cap surfaced rows in the detail line so the doctor table stays
@@ -578,10 +581,20 @@ doctor_app = typer.Typer(
 
 
 def _maybe_clear_cache(workspace: Path | None) -> None:
-    """Delete the probe cache if it exists, honouring ``EA_INSTRUMENT_PROBE``."""
-    anchor = workspace if workspace is not None else Path.cwd()
-    candidate = anchor / ".ea" / "instrument-probe.json"
-    target = resolve_cache_path(candidate)
+    """Delete the probe cache if it exists, honouring ``EA_INSTRUMENT_PROBE``.
+
+    Targets the per-USER cache home (``~/.eawf/cache/instrument-probe.json``)
+    -- the same location :func:`eawf.observability.doctor.checks.run_all`
+    probes into -- so ``--reprobe`` clears the cache the next probe will read,
+    not a stray copy in an anchor's ``.ea/``.
+    """
+    from eawf.observability.doctor.checks import (
+        _resolve_probe_cache_path as _probe_cache,
+    )
+    from eawf.observability.doctor.checks import resolve_anchor as _resolve_anchor
+
+    anchor = _resolve_anchor(workspace)
+    target = resolve_cache_path(_probe_cache(anchor))
     if target.exists():
         try:
             target.unlink()
@@ -728,6 +741,11 @@ def doctor(
     except UserError as exc:
         emit_error(exc, flags=effective_flags)
 
+    # Resolve the ``.ea/`` anchor pwd-upward so a plain ``eawf doctor`` (no
+    # ``-w``) verifies THIS repo: the appended drift / cross-scope / project
+    # checks key off this anchor instead of the raw ``None`` flag.
+    anchor = doctor_checks.resolve_anchor(effective_flags.workspace)
+
     payload = to_payload(results)
     text = to_text(results, plain=effective_flags.plain_output)
 
@@ -735,10 +753,10 @@ def doctor(
         payload, text = _append_user_scope_check(payload, text)
 
     # P28-I02-W12: init should materialise repo Project; flag legacy state.
-    payload, text = _append_project_record_check(payload, text, workspace=effective_flags.workspace)
+    payload, text = _append_project_record_check(payload, text, workspace=anchor)
 
     # P28-I02-W01: drift reconciler — git/state + plugin cross-scope dup.
-    payload, text = _append_drift_checks(payload, text, workspace=effective_flags.workspace)
+    payload, text = _append_drift_checks(payload, text, workspace=anchor)
 
     emit_json_or_text(payload, text, flags=effective_flags)
     if overall_status(results) == "fail":

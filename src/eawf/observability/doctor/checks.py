@@ -28,6 +28,7 @@ drive its exit code.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -90,9 +91,86 @@ class CheckResult(BaseModel):
     detail: str | None = None
 
 
+def _resolve_anchor(workspace: Path | None) -> Path | None:
+    """Resolve the workspace anchor (the ``.ea/`` parent directory).
+
+    When *workspace* is provided (``-w/--workspace``) it is returned verbatim.
+    When it is ``None`` -- the default for a plain ``eawf doctor`` -- the
+    resolver walks UPWARD from the process cwd looking for the nearest
+    ancestor that contains a ``.ea/`` directory, mirroring the pwd-upward
+    behaviour of :func:`eawf.kernel.state.resolve.resolve_with_reason`.
+
+    Returns the anchor directory, or ``None`` when no ``.ea/`` ancestor
+    exists (a truly un-initialised tree).
+    """
+    if workspace is not None:
+        return Path(workspace)
+    cur = Path.cwd().resolve()
+    for directory in [cur, *cur.parents]:
+        if (directory / ".ea").is_dir():
+            return directory
+    return None
+
+
 def _default_probe_cache(workspace: Path) -> Path:
     """Return the canonical cache file path under ``<workspace>/.ea/``."""
     return workspace / ".ea" / "instrument-probe.json"
+
+
+def _resolve_probe_cache_path(anchor: Path | None) -> Path:
+    """Return a per-USER probe-cache path that never litters an anchor dir.
+
+    The instrument probe persists a small ``instrument-probe.json`` so a
+    repeat ``eawf doctor`` / ``eawf init`` can skip the ``shutil.which``
+    round-trip. The historical default wrote that file into
+    ``<anchor>/.ea/instrument-probe.json`` -- which meant a plain
+    ``eawf doctor`` (or ``-w`` probe) dropped a stray, gitignored-or-not
+    artifact into whatever directory it happened to resolve. The probe is a
+    machine-local cache, not project state, so it belongs in a per-user home,
+    not the repo.
+
+    Resolution order:
+
+    1. ``EA_INSTRUMENT_PROBE`` env override (honoured by
+       :func:`eawf.platform.install.instrument_probe.resolve_cache_path` too)
+       so CI can pin a scratch path.
+    2. ``~/.eawf/cache/instrument-probe.json`` -- the per-user cache home that
+       mirrors the ``~/.eawf/registry.json`` convention. A single shared cache
+       is fine: the probe answers a host-wide "are these tools on PATH?"
+       question, not a per-repo one.
+
+    The *anchor* argument is accepted for symmetry with the other anchor-aware
+    helpers but is deliberately unused -- the whole point is that the cache
+    does NOT live under the anchor.
+    """
+    override = os.environ.get("EA_INSTRUMENT_PROBE")
+    if override:
+        return Path(override)
+    return Path.home() / ".eawf" / "cache" / "instrument-probe.json"
+
+
+def _is_plugin_owned(entry: object) -> bool:
+    """Return ``True`` when *entry* is a whole-file plugin render, not a region.
+
+    Plugin installers (``eawf-plugin-claude`` / ``-codex`` / ``-opencode``)
+    emit whole-file artifacts under ``.claude/`` / ``.codex/`` / ``.opencode/``
+    and record them in the manifest with a ``plugin.<runtime>.<...>`` region
+    id. Those files carry NO ``EAWF:BEGIN`` markers — they ARE the file — so
+    the region-marker drift detector would always report them ``missing``.
+
+    They are satisfied by the plugin cache, not by a local re-render, so the
+    manifest check must exclude them. When eawf runs from an installed plugin
+    the local ``.claude`` render may not exist at all; requiring it would red
+    a perfectly healthy install. Region-marked managed blocks (the
+    ``eawf-sync`` AGENTS.md regions) keep going through the drift detector.
+
+    The discriminator is the ``plugin.`` region-id prefix backed by an
+    ``eawf-plugin-`` generator — both must agree so a hand-crafted region id
+    cannot accidentally skip the check.
+    """
+    region_id = getattr(entry, "region_id", "")
+    generator = getattr(entry, "generator", "")
+    return region_id.startswith("plugin.") and generator.startswith("eawf-plugin-")
 
 
 def check_tools_available(
@@ -206,7 +284,9 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
 
     Behaviour:
 
-    - ``workspace`` is ``None`` (or unresolvable) → ``warn`` (no anchor).
+    - ``workspace`` is ``None`` → resolve the anchor by walking upward from
+      pwd to the nearest ``.ea/`` ancestor; ``warn`` only when even that
+      walk finds no anchor.
     - Manifest absent → ``ok`` (uninitialised; the renderer has not run yet —
       :func:`check_state_present` already covers the "is this thing initialised?"
       angle).
@@ -215,17 +295,26 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
     - Manifest present, any region missing or hand-edited → ``warn`` with a
       compact summary of the offending ``target::id`` entries.
 
+    Install-mode awareness: whole-file plugin renders (``plugin.<runtime>.*``
+    region ids emitted by an ``eawf-plugin-*`` generator) are excluded from
+    the region-marker drift detector — they are satisfied by the plugin
+    cache, not by a local re-render, and carry no ``EAWF:BEGIN`` markers, so
+    the detector would otherwise report every one ``missing``. Only
+    region-marked managed blocks (the ``eawf-sync`` AGENTS.md regions) are
+    hash-checked. See :func:`_is_plugin_owned`.
+
     The walk is per-target — for each unique ``target`` field in the manifest,
     :func:`eawf.surfaces.render.drift.detect_drift` reads the file once and emits one
     :class:`~eawf.surfaces.render.drift.DriftReport` per region.
     """
-    if workspace is None:
+    anchor = _resolve_anchor(workspace)
+    if anchor is None:
         return CheckResult(
             name="manifest_in_sync",
             status="warn",
             detail="no workspace anchor; cannot resolve manifest path",
         )
-    manifest_path = Path(workspace) / ".ea" / "indexes" / "generated.json"
+    manifest_path = anchor / ".ea" / "indexes" / "generated.json"
     if not manifest_path.exists():
         return CheckResult(
             name="manifest_in_sync",
@@ -241,18 +330,20 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
             detail=f"manifest at {manifest_path} is malformed: {exc}",
         )
 
-    # Group entries by target so we read each file at most once.
-    targets: dict[str, list[str]] = {}
-    for entry in manifest.generated.values():
-        targets.setdefault(entry.target, []).append(entry.region_id)
+    # Region-marked managed blocks only — whole-file plugin renders are
+    # satisfied by the plugin cache (see _is_plugin_owned) and never carry
+    # markers, so they must not flow into the marker-drift detector.
+    region_entries = [e for e in manifest.generated.values() if not _is_plugin_owned(e)]
+    plugin_count = len(manifest.generated) - len(region_entries)
+    region_targets = {e.target for e in region_entries}
 
     drift_summaries: list[str] = []
-    for target_str in sorted(targets):
-        # Manifest stores POSIX-form paths; resolve relative to the workspace
+    for target_str in sorted(region_targets):
+        # Manifest stores POSIX-form paths; resolve relative to the anchor
         # so a manifest written with ``"AGENTS.md"`` resolves correctly.
         target_path = Path(target_str)
         if not target_path.is_absolute():
-            target_path = Path(workspace) / target_path
+            target_path = anchor / target_path
         reports = detect_drift(target_path, manifest)
         for report in reports:
             if report.kind == "ok":
@@ -270,11 +361,12 @@ def check_manifest_in_sync(*, workspace: Path | None) -> CheckResult:
             detail=f"drift: {joined}{suffix}",
         )
 
-    n_entries = len(manifest.generated)
+    n_region = len(region_entries)
+    plugin_note = f"; {plugin_count} plugin region(s) from cache" if plugin_count else ""
     return CheckResult(
         name="manifest_in_sync",
         status="ok",
-        detail=f"{n_entries} region(s) hash-stable",
+        detail=f"{n_region} region(s) hash-stable{plugin_note}",
     )
 
 
@@ -549,6 +641,11 @@ def tools_available(
     )
 
 
+def resolve_anchor(workspace: Path | None) -> Path | None:
+    """Public alias for :func:`_resolve_anchor` (pwd-upward ``.ea/`` resolver)."""
+    return _resolve_anchor(workspace)
+
+
 def manifest_in_sync(*, workspace: Path | None) -> CheckResult:
     """Public alias for :func:`check_manifest_in_sync`."""
     return check_manifest_in_sync(workspace=workspace)
@@ -585,20 +682,30 @@ def run_all(
     :class:`CheckResult`. W08 adds the manifest-in-sync and
     render-output-roundtrip checks at the end of the list so the canonical
     envelope shape mirrors the order operators see in the doctor table.
+
+    Anchor resolution: a plain ``eawf doctor`` (no ``-w``) passes
+    ``workspace=None``. The anchor-dependent checks (manifest / mcp drift /
+    scale ceiling) resolve the ``.ea/`` parent by walking upward from pwd via
+    :func:`_resolve_anchor` so they verify THIS repo instead of degrading to a
+    "no workspace anchor" note. The probe cache is pinned to a per-user
+    location (:func:`_resolve_probe_cache_path`) so probing never litters an
+    ``instrument-probe.json`` into an arbitrary anchor directory.
     """
-    workspace_for_probe = workspace if workspace is not None else Path.cwd()
+    anchor = _resolve_anchor(workspace)
+    probe_cache = cache_path if cache_path is not None else _resolve_probe_cache_path(anchor)
+    workspace_for_probe = anchor if anchor is not None else Path.cwd()
     results = [
         check_tools_available(
             workspace=workspace_for_probe,
             profile_ids=profile_ids,
             reprobe=reprobe,
-            cache_path=cache_path,
+            cache_path=probe_cache,
         ),
         check_state_present(workspace=workspace),
         check_config_resolves(workspace=workspace),
-        check_manifest_in_sync(workspace=workspace),
-        check_mcp_drift(workspace=workspace),
-        check_state_scale_ceiling(workspace=workspace),
+        check_manifest_in_sync(workspace=anchor),
+        check_mcp_drift(workspace=anchor),
+        check_state_scale_ceiling(workspace=anchor),
         check_render_output_roundtrip(),
     ]
     return results

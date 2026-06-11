@@ -14,7 +14,9 @@ wave has not yet been committed. Callers (renderers, validators) treat
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -28,6 +30,16 @@ if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
+
+# Committed home for the operator-acknowledged git/state drift list. Lives at
+# ``<repo_root>/.eawf/drift-acks.json`` -- deliberately OUTSIDE ``.ea/`` so the
+# daemon's state-authority rule (AGENTS rule 4) is untouched: this file is
+# never a lifecycle mutation, it is a reviewer-visible record of "yes, these
+# historical closed-wave commit drifts are known and accepted". ``eawf doctor``
+# reads it to suppress the acknowledged rows; ``eawf wave ack-drift`` appends to
+# it. The path is relative to the repo root so it travels with the checkout.
+DRIFT_ACKS_DIRNAME: str = ".eawf"
+DRIFT_ACKS_FILENAME: str = "drift-acks.json"
 
 _TIMEOUT_SECONDS: float = 5.0
 _WAVE_TRAILER_NAME = "Eawf-Wave"
@@ -99,6 +111,85 @@ class Drift:
     kind: DriftKind
     state_commit: str | None = None
     git_commit: str | None = None
+
+
+def drift_acks_path(repo_root: Path | None = None) -> Path:
+    """Return the ``<repo_root>/.eawf/drift-acks.json`` ack-file path.
+
+    Args:
+        repo_root: Repository working directory; defaults to the process cwd.
+
+    Returns:
+        The absolute path to the committed drift-ack file (which may not yet
+        exist on disk).
+    """
+    root = Path(repo_root) if repo_root is not None else Path.cwd()
+    return root / DRIFT_ACKS_DIRNAME / DRIFT_ACKS_FILENAME
+
+
+def load_drift_acks(repo_root: Path | None = None) -> set[str]:
+    """Load the set of acknowledged drift ``wave_id`` values.
+
+    Reads ``<repo_root>/.eawf/drift-acks.json``. The on-disk shape is::
+
+        {"acked_wave_ids": ["P22-I01-W05", "P27-I05-W06", ...]}
+
+    A missing file, unreadable bytes, or a malformed payload all degrade to
+    an empty set so a corrupt ack file never crashes ``eawf doctor`` -- the
+    worst case is the acknowledged rows re-surface as warnings.
+
+    Args:
+        repo_root: Repository working directory; defaults to the process cwd.
+
+    Returns:
+        The set of acknowledged wave ids (possibly empty).
+    """
+    path = drift_acks_path(repo_root)
+    if not path.exists():
+        return set()
+    try:
+        body = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning(f"load_drift_acks path={path} status=unreadable err={exc!s}")
+        return set()
+    raw = body.get("acked_wave_ids") if isinstance(body, dict) else None
+    if not isinstance(raw, list):
+        logger.warning(f"load_drift_acks path={path} status=malformed")
+        return set()
+    return {str(w) for w in raw if isinstance(w, str)}
+
+
+def save_drift_acks(acked_wave_ids: set[str], repo_root: Path | None = None) -> Path:
+    """Persist *acked_wave_ids* to ``<repo_root>/.eawf/drift-acks.json``.
+
+    Writes a deterministic, sorted payload (so re-saving the same set is a
+    byte-stable no-op and the committed file stays diff-clean). The write is
+    atomic: a sibling tempfile is ``os.replace``\\d onto the target.
+
+    Args:
+        acked_wave_ids: The full ack set to persist (the caller unions any
+            new acks into the existing set first).
+        repo_root: Repository working directory; defaults to the process cwd.
+
+    Returns:
+        The path the ack file was written to.
+    """
+    path = drift_acks_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(
+        {"acked_wave_ids": sorted(acked_wave_ids)},
+        indent=2,
+        sort_keys=True,
+    )
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+    try:
+        tmp.write_text(payload + "\n", encoding="utf-8")
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    logger.info(f"save_drift_acks path={path} count={len(acked_wave_ids)}")
+    return path
 
 
 def _phase_and_wave(wave_id: str) -> tuple[str, str] | None:
@@ -455,7 +546,12 @@ def derive_wave_sha(
     return None
 
 
-def detect_git_state_drift(state: State, *, repo_root: Path | None = None) -> list[Drift]:
+def detect_git_state_drift(
+    state: State,
+    *,
+    repo_root: Path | None = None,
+    acked_wave_ids: set[str] | None = None,
+) -> list[Drift]:
     """Compare every CLOSED wave's recorded commit against git history.
 
     For each ``WaveStatus.CLOSED`` row, four mismatch shapes get
@@ -476,19 +572,29 @@ def detect_git_state_drift(state: State, *, repo_root: Path | None = None) -> li
     Waves whose status is not CLOSED are ignored: only closed waves
     have a stable expectation about which commit anchors them.
 
+    Acknowledged historical drifts (squashed / cherry-pick-twin / lost
+    commits that the operator has reviewed and accepted via
+    ``eawf wave ack-drift``) are filtered out: any wave id present in
+    *acked_wave_ids* is skipped so ``eawf doctor`` stops warning on a
+    known, accepted backlog.
+
     Args:
         state: The validated :class:`State` to walk.
         repo_root: Repository working directory; defaults to the
             process cwd via the subprocess machinery in
             :func:`derive_wave_sha`.
+        acked_wave_ids: Wave ids whose drift the operator has already
+            acknowledged; ``None`` means "no acks" (every drift is
+            surfaced).
 
     Returns:
         List of :class:`Drift` rows, ordered by ``wave_id`` so render
         output stays stable across runs. Empty list when every closed
-        wave reconciles cleanly.
+        wave reconciles cleanly (or every drift is acknowledged).
     """
     from eawf.kernel.state.enums import WaveStatus
 
+    acked = acked_wave_ids or set()
     git_available = shutil.which("git") is not None
     index = build_wave_sha_index(repo_root) if git_available else {}
 
@@ -496,6 +602,8 @@ def detect_git_state_drift(state: State, *, repo_root: Path | None = None) -> li
     for wave_id in sorted(state.waves):
         wave = state.waves[wave_id]
         if wave.status != WaveStatus.CLOSED:
+            continue
+        if wave_id in acked:
             continue
         derived = (
             derive_wave_sha(wave_id, repo_root=repo_root, index=index) if git_available else None
@@ -533,7 +641,7 @@ def detect_git_state_drift(state: State, *, repo_root: Path | None = None) -> li
             )
     logger.info(
         f"detect_git_state_drift waves={len(state.waves)} drifts={len(drifts)} "
-        f"git_available={git_available}"
+        f"acked={len(acked)} git_available={git_available}"
     )
     return drifts
 

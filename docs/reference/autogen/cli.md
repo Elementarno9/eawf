@@ -592,6 +592,7 @@ Wave lifecycle (plan, claim, close, fail, graph, next-ready).
 
 | Verb | Summary |
 |---|---|
+| `ack-drift` | Acknowledge historical git/state commit drift so ``doctor`` stops warning. |
 | `autoland` | Cherry-pick closed waves' worktree commits home in dependency order. |
 | `blocks-rebuild` | Rebuild ``Wave.blocks`` reverse-index from sister waves' ``deps``. |
 | `claim` | Claim a pending wave for *session*. Exactly-once across concurrent calls. |

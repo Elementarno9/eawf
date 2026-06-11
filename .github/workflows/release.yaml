@@ -120,9 +120,61 @@ jobs:
             sleep 30
           done
 
+  install-smoke:
+    name: Install-smoke (uv tool install from wheel)
+    needs: build-wheel
+    # End-to-end install gate: unlike the in-build `Fresh-install smoke` step
+    # (which `uv run --with`s the wheel into an ephemeral venv), this job does a
+    # real `uv tool install` from the built wheel into an isolated tool env,
+    # then exercises the operator's first-run path — `eawf --help` plus a full
+    # `eawf init` in a scratch dir. It catches console-script / entry-point /
+    # data-bundle breakage that only surfaces under a true install, before
+    # `publish-pypi` (which `needs:` this job) can ship the artifact. Runs on
+    # both tag-push and `workflow_dispatch` dry-runs so a broken install reds
+    # the pipeline early.
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: uv tool install from the built wheel
+        run: |
+          set -euo pipefail
+          wheel="$(ls "${GITHUB_WORKSPACE}"/dist/*.whl)"
+          echo "installing ${wheel}"
+          uv tool install --python 3.14 "${wheel}"
+          # Put the installed `eawf` console script on PATH for later steps.
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      - name: eawf --help (console script resolves)
+        run: |
+          set -euo pipefail
+          eawf --help >/dev/null
+          eawf --version
+          echo "eawf --help OK"
+
+      - name: eawf init in a scratch dir (first-run path)
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          cd "${tmp}"
+          git init -q .
+          eawf --no-input init --project-code DEMO --target "${tmp}"
+          test -f "${tmp}/.ea/state.json"
+          echo "eawf init produced .ea/state.json OK in ${tmp}"
+
   publish-pypi:
     name: Publish to PyPI
-    needs: [build-wheel, require-green-ci]
+    needs: [build-wheel, require-green-ci, install-smoke]
     # Live publish, gated behind an explicit condition: only a real
     # ``v0.*`` tag push publishes. ``workflow_dispatch`` dry-runs build +
     # validate but never reach this job. Requires the ``pypi-publish``
