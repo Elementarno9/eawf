@@ -22,6 +22,7 @@ from eawf.surfaces.render.bars import BLOCK_EIGHTHS
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
 from eawf.surfaces.tui.widgets.eu_bar import (
+    CANONICAL_BAR_CELLS,
     COMPLETION_FULL,
     COMPLETION_REMAINDER,
     EMPTY_STATE,
@@ -1728,12 +1729,12 @@ def _state_closed_iter_full() -> State:
 
 
 def test_closed_iter_renders_full_block_bar_with_ratio(tmp_path: Path) -> None:
-    """A 55/55 closed iter paints ten full block cells plus the n/m ratio.
+    """A 55/55 closed iter paints a full block bar plus the n/m ratio.
 
     Regression for the close-gate bar: under the operator-default unicode
     render mode the completion bar's block fill must light every one of its
-    ten cells (no remainder shade) and the row must carry the ``55/55``
-    ratio flush-right — never a fabricated short bar.
+    :data:`COMPLETION_BAR_CELLS` cells (no remainder shade) and the row must
+    carry the ``55/55`` ratio flush-right — never a fabricated short bar.
     """
     state_path = _write_state(_state_closed_iter_full(), tmp_path)
 
@@ -1746,10 +1747,11 @@ def test_closed_iter_renders_full_block_bar_with_ratio(tmp_path: Path) -> None:
             tree = app.screen.query_one(RoadmapTree)
             iter_label = str(_node_by_data(tree, "P01-I01").label)  # type: ignore[attr-defined]
             assert iter_label.rstrip().endswith("55/55")  # full ratio flush-right
-            # Ten full block cells, no remainder shade (a full ratio paints
-            # COMPLETION_BAR_CELLS == 10 full cells).
+            # Every completion-bar cell lit, no remainder shade (a full ratio
+            # paints COMPLETION_BAR_CELLS full cells -- the canonical bar width
+            # the completion bar and the EU bar now share).
             assert COMPLETION_FULL * COMPLETION_BAR_CELLS in iter_label
-            assert COMPLETION_BAR_CELLS == 10  # the close-gate "ten full cells"
+            assert COMPLETION_BAR_CELLS == CANONICAL_BAR_CELLS  # one shared width
             assert COMPLETION_REMAINDER not in iter_label  # no unfilled tail
             # The phase tallies the same 55/55 across its single iter.
             phase_label = str(_node_by_data(tree, "P01").label)  # type: ignore[attr-defined]

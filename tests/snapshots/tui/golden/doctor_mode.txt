@@ -1,6 +1,6 @@
  ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Doctor    runtime: 1 running    HH:MM UTC
 
-  Health: degraded  6 checks, 2 warn
+  Health: degraded  6 checks · 2 warn
 
   ╭─ INSTALL ─────────────────────────────────────────────╮ ╭─ STATE ───────────────────────────────────────────────╮
   │   ● tools_available             3 probes ok           │ │   ● state_present               state.json found      │

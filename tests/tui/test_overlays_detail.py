@@ -410,7 +410,7 @@ def test_incident_card_no_state_path_builds_no_history_tab() -> None:
 
 
 def test_history_tab_label_carries_marker() -> None:
-    """The history tab label glues the local marker to the word ``history``."""
+    """The history tab label glues the chrome-role marker to the word ``history``."""
     assert _TAB_LABEL_TEXT["history"] == "history"
     unicode_label = tab_label("history", mode="unicode")
     ascii_label = tab_label("history", mode=sigils.ASCII_MODE)
@@ -1323,7 +1323,13 @@ def test_tab_label_text_is_the_chassis_ids() -> None:
 
 
 def test_tab_label_carries_chrome_glyph_prefix() -> None:
-    """Each pane label is the chrome / sigil glyph then the word, per mode."""
+    """Each pane label is the chrome / sigil glyph then the word, per mode.
+
+    Every tab marker -- including the ``criteria`` / ``cost`` / ``history``
+    markers folded out of this overlay into the single-home sigil chrome
+    vocabulary -- resolves THROUGH a chrome role; only ``evidence`` reuses the
+    closed lifecycle glyph.
+    """
     # Unicode column: overview triple-bar, gate lozenge, runtime dollar,
     # evidence closed-circle, criteria right-pointing marker.
     overview_u = sigils.chrome("overview", mode="unicode")
@@ -1334,10 +1340,18 @@ def test_tab_label_carries_chrome_glyph_prefix() -> None:
     assert tab_label("gates", mode="unicode") == f"{gate_u} gates"
     assert tab_label("runtime", mode="unicode") == f"{runtime_u} runtime"
     assert tab_label("evidence", mode="unicode") == f"{evidence_u} evidence"
+    # The criteria / cost / history markers resolve through chrome roles (no
+    # local marker remains in this overlay).
+    criteria_u = sigils.chrome("criteria", mode="unicode")
+    history_u = sigils.chrome("history", mode="unicode")
+    cost_u = sigils.chrome("cost", mode="unicode")
+    assert tab_label("criteria", mode="unicode") == f"{criteria_u} criteria"
+    assert tab_label("history", mode="unicode") == f"{history_u} history"
     assert tab_label("criteria", mode="unicode").endswith(" criteria")
     # The cost tab carries the generic currency sign in unicode (the runtime
     # chrome role already owns the dollar) and falls back to a plain dollar
     # in ascii where the block currency glyph may not render.
+    assert tab_label("cost", mode="unicode") == f"{cost_u} cost"
     assert tab_label("cost", mode="unicode") == "¤ cost"
     # ASCII column flips to the deconflicted fallbacks.
     assert tab_label("overview", mode="ascii") == "= overview"

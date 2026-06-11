@@ -21,6 +21,7 @@ from eawf.surfaces.tui.app import EaApp, probe_braille_coverage, resolve_render_
 from eawf.surfaces.tui.widgets.eu_bar import (
     _BUCKET_FIELD_WIDTH,
     BAR_CELLS,
+    CANONICAL_BAR_CELLS,
     COMPLETION_FULL,
     COMPLETION_REMAINDER,
     DEFAULT_BAND_PALETTE,
@@ -79,10 +80,12 @@ def test_render_bar_markup_half() -> None:
 
 
 def test_render_bar_markup_lights_first_cell_at_half_cell_boundary() -> None:
-    # 5-cell bar: each cell = 20%; round-half-up lights cell 1 at >= 10%.
-    just_below = render_bar_markup(0.45, 5.0)  # 9% -> 0 cells
+    # Each cell covers 1/CANONICAL_BAR_CELLS of the range; round-half-up lights
+    # cell 1 at >= half a cell (0.5 / CANONICAL_BAR_CELLS of the range).
+    half_cell = 0.5 / CANONICAL_BAR_CELLS
+    just_below = render_bar_markup(half_cell - 0.01, 1.0)  # below half a cell -> 0
     assert just_below.count(GLYPH_FULL) == 0
-    at_boundary = render_bar_markup(0.5, 5.0)  # 10% -> 1 cell
+    at_boundary = render_bar_markup(half_cell, 1.0)  # exactly half a cell -> 1
     assert at_boundary.count(GLYPH_FULL) == 1
 
 
@@ -160,23 +163,23 @@ def test_eu_bar_set_eu_updates_reactives() -> None:
 
 def test_render_completion_bar_zero_done_all_empty() -> None:
     bar = render_completion_bar(0, 6)
-    assert bar == f"{GLYPH_EMPTY * 10}      0/6"
+    assert bar == f"{GLYPH_EMPTY * CANONICAL_BAR_CELLS}      0/6"
 
 
 def test_render_completion_bar_full_when_done_equals_total() -> None:
     bar = render_completion_bar(6, 6)
-    assert bar == f"{GLYPH_FULL * 10}      6/6"
+    assert bar == f"{GLYPH_FULL * CANONICAL_BAR_CELLS}      6/6"
 
 
 def test_render_completion_bar_clamps_done_over_total() -> None:
     # done > total clamps both the fill and the count suffix to total.
     bar = render_completion_bar(9, 6)
-    assert bar == f"{GLYPH_FULL * 10}      6/6"
+    assert bar == f"{GLYPH_FULL * CANONICAL_BAR_CELLS}      6/6"
 
 
 def test_render_completion_bar_clamps_negative_done_to_zero() -> None:
     bar = render_completion_bar(-3, 6)
-    assert bar == f"{GLYPH_EMPTY * 10}      0/6"
+    assert bar == f"{GLYPH_EMPTY * CANONICAL_BAR_CELLS}      0/6"
 
 
 def test_render_completion_bar_zero_total_empty_state() -> None:
@@ -188,9 +191,10 @@ def test_render_completion_bar_negative_total_empty_state() -> None:
 
 
 def test_render_completion_bar_half_ratio_fills_half() -> None:
+    half = CANONICAL_BAR_CELLS // 2
     bar = render_completion_bar(3, 6)
-    assert bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}      3/6"
-    # 3/6 == 0.5 over a 10-cell bar -> exactly 5 filled cells.
+    assert bar == f"{GLYPH_FULL * half}{GLYPH_EMPTY * half}      3/6"
+    # 3/6 == 0.5 over the canonical-width bar -> exactly half the cells filled.
     fraction = 3 / 6
     assert fraction == pytest.approx(0.5)
 
@@ -204,9 +208,9 @@ def test_render_completion_bar_counter_right_aligned_fixed_field() -> None:
     # The whole ``done/total`` counter is right-aligned into a fixed 7-cell
     # field (``###/###``), so a 3-char counter carries four leading pads.
     bar = render_completion_bar(6, 6)
-    assert bar == f"{GLYPH_FULL * 10}      6/6"
+    assert bar == f"{GLYPH_FULL * CANONICAL_BAR_CELLS}      6/6"
     assert bar.endswith("      6/6")
-    counter = bar.removeprefix(GLYPH_FULL * 10).lstrip(" ")
+    counter = bar.removeprefix(GLYPH_FULL * CANONICAL_BAR_CELLS).lstrip(" ")
     assert bar.endswith(counter.rjust(7))
 
 
@@ -296,8 +300,8 @@ def test_render_eu_bar_plain_nonzero_total_renders_bar() -> None:
     bar = render_eu_bar_plain(2.0, 4.0)
     assert "50%" in bar
     assert EMPTY_STATE not in bar
-    # 2/4 == 0.5 of the 5-cell EU bar -> 3 filled (round-half-up).
-    assert bar.count(GLYPH_FULL) == 3
+    # 2/4 == 0.5 over the canonical-width EU bar -> half the cells filled.
+    assert bar.count(GLYPH_FULL) == CANONICAL_BAR_CELLS // 2
     assert pytest.approx(0.5) == (2.0 / 4.0)
 
 
@@ -362,15 +366,19 @@ def test_render_bar_markup_unicode_tint_tracks_band() -> None:
 
 def test_ascii_fallback_when_no_unicode() -> None:
     # render_mode=ascii renders the #/- glyph set, never the block-eighths run.
+    # 50% over the canonical-width bar -> exactly half the cells filled.
+    half = CANONICAL_BAR_CELLS // 2
     markup = render_bar_markup(2.5, 5.0, mode="ascii")
-    assert f"{GLYPH_FULL * 3}{GLYPH_EMPTY * 2}" in markup
+    assert f"{GLYPH_FULL * half}{GLYPH_EMPTY * half}" in markup
     assert all(ord(c) < 0x2580 or ord(c) > 0x259F for c in markup)
 
 
 def test_ascii_mode_matches_legacy_default() -> None:
-    # The ASCII fill is byte-for-byte the pre-braille #/- rendering
-    # (50% -> $ok band, 3 filled + 2 empty cells, content-markup span).
-    assert render_bar_markup(2.5, 5.0, mode="ascii") == "[$ok]###--[/]  50%"
+    # The ASCII fill is the #/- rendering at the canonical width (50% -> $ok
+    # band, half filled + half empty cells, content-markup span).
+    half = CANONICAL_BAR_CELLS // 2
+    expected = f"[$ok]{GLYPH_FULL * half}{GLYPH_EMPTY * half}[/]  50%"
+    assert render_bar_markup(2.5, 5.0, mode="ascii") == expected
 
 
 # --------------------------------------------------------------------------
@@ -381,8 +389,9 @@ def test_ascii_mode_matches_legacy_default() -> None:
 def test_render_bar_rich_emits_hex_not_palette_var() -> None:
     # The Rich-context variant bakes the band to a concrete hex (no $var),
     # so a Rich-parsed DataTable cell renders it without MarkupError.
+    half = CANONICAL_BAR_CELLS // 2
     bar = render_bar_rich(2.5, 5.0, mode="ascii")
-    assert bar == f"[{DEFAULT_BAND_PALETTE['ok']}]###--[/]  50%"
+    assert bar == f"[{DEFAULT_BAND_PALETTE['ok']}]{GLYPH_FULL * half}{GLYPH_EMPTY * half}[/]  50%"
     assert "$" not in bar
 
 
@@ -394,19 +403,21 @@ def test_render_bar_rich_is_rich_parseable_across_bands() -> None:
 
 
 def test_render_bar_rich_honours_custom_palette() -> None:
+    full = GLYPH_FULL * CANONICAL_BAR_CELLS
     bar = render_bar_rich(6.0, 5.0, mode="ascii", palette={"err": "#123456"})
-    assert bar == "[#123456]#####[/]  120%"
+    assert bar == f"[#123456]{full}[/]  120%"
 
 
 def test_render_bar_rich_falls_back_on_missing_band_key() -> None:
     # A palette missing the active band key falls back to the default hex.
+    full = GLYPH_FULL * CANONICAL_BAR_CELLS
     bar = render_bar_rich(6.0, 5.0, mode="ascii", palette={"ok": "#000000"})
-    assert bar == f"[{DEFAULT_BAND_PALETTE['err']}]#####[/]  120%"
+    assert bar == f"[{DEFAULT_BAND_PALETTE['err']}]{full}[/]  120%"
 
 
 def test_render_bar_plain_honours_mode() -> None:
     assert BLOCK_FULL in render_bar_plain(5.0, 5.0, mode="unicode")
-    assert render_bar_plain(5.0, 5.0, mode="ascii") == f"{GLYPH_FULL * 5}  100%"
+    assert render_bar_plain(5.0, 5.0, mode="ascii") == f"{GLYPH_FULL * CANONICAL_BAR_CELLS}  100%"
 
 
 def test_render_eu_bar_plain_honours_mode() -> None:
@@ -417,11 +428,12 @@ def test_render_eu_bar_plain_honours_mode() -> None:
 
 
 def test_render_completion_bar_honours_mode() -> None:
+    half = CANONICAL_BAR_CELLS // 2
     block = render_completion_bar(3, 6, mode="unicode")
     assert block.endswith("      3/6")
     assert BLOCK_FULL in block
     ascii_bar = render_completion_bar(3, 6, mode="ascii")
-    assert ascii_bar == f"{GLYPH_FULL * 5}{GLYPH_EMPTY * 5}      3/6"
+    assert ascii_bar == f"{GLYPH_FULL * half}{GLYPH_EMPTY * half}      3/6"
 
 
 def test_render_completion_bar_unicode_full_block_cells_with_ratio() -> None:

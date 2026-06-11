@@ -1,6 +1,6 @@
- repo                   phase                    eu           git   pr  age
- ◆ ABC                  P01 ███▒▒▒      3/6      ██▄    50%   git?  —   1h
- ◆ DEF △ blocked        P02 ██▒▒▒▒      1/4      ▅      13%   git?  —   2h
- ◆ GHI △ stale          P03 ▒▒▒▒▒▒      0/2             0%    git?  —   20d
- ◆ JKL △ blocked stale  P04 ██████      4/4      █████  100%  git?  —   21d
- ◆ Σ                    4 repos ███▒▒▒     8/16  █▇     38%         —
+ repo                   phase                    eu              git   pr  age
+ ◆ ABC                  P01 ███▒▒▒      3/6      ████      50%   git?  —   1h
+ ◆ DEF △ blocked        P02 ██▒▒▒▒      1/4      █         13%   git?  —   2h
+ ◆ GHI △ stale          P03 ▒▒▒▒▒▒      0/2                0%    git?  —   20d
+ ◆ JKL △ blocked stale  P04 ██████      4/4      ████████  100%  git?  —   21d
+ ◆ Σ                    4 repos ███▒▒▒     8/16  ███       38%         —

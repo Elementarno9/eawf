@@ -411,11 +411,12 @@ def test_render_health_lines_groups_install_state_drift_sections() -> None:
 
 
 def test_render_health_lines_header_reads_n_checks_m_warn() -> None:
-    """The rollup title carries an ``N checks, M warn`` summary.
+    """The rollup title carries an ``N checks · M warn`` summary.
 
     The count is every rendered signal row; the warn count is the rows whose
     status is ``warn`` (the attention-triangle rows), so the operator reads
-    the degraded-check tally at a glance from the header.
+    the degraded-check tally at a glance from the header. The two counts are
+    joined by the reskin's pinned middle-dot separator, not a comma.
     """
     health = DoctorHealth(
         rows=[
@@ -427,17 +428,17 @@ def test_render_health_lines_header_reads_n_checks_m_warn() -> None:
         overall="warn",
     )
     header = render_health_lines(health, mode="unicode")[0]
-    assert "4 checks, 2 warn" in header
+    assert "4 checks · 2 warn" in header
 
 
 def test_render_health_lines_header_zero_warn_clean_case() -> None:
-    """An all-ok health reads ``N checks, 0 warn`` in the header."""
+    """An all-ok health reads ``N checks · 0 warn`` in the header."""
     health = DoctorHealth(
         rows=[HealthRow("tools_available", "ok", "ok"), HealthRow("state_present", "ok", "found")],
         overall="ok",
     )
     header = render_health_lines(health, mode="unicode")[0]
-    assert "2 checks, 0 warn" in header
+    assert "2 checks · 0 warn" in header
 
 
 def test_render_health_lines_ascii_mode_uses_ascii_sigil_column() -> None:
@@ -808,7 +809,7 @@ def test_doctor_mode_grouped_snapshot() -> None:
     after mount. The fixture pins the install / state / drift section
     grouping, the per-status sigil (ok=closed circle, warn=attention
     triangle distinct from the pending ring, fail=failed cross), and the
-    ``N checks, M warn`` header summary, so a layout / glyph regression on
+    ``N checks · M warn`` header summary, so a layout / glyph regression on
     any of those is caught against a golden this wave owns in isolation.
     """
     health = DoctorHealth(
@@ -853,6 +854,6 @@ def test_doctor_mode_grouped_snapshot() -> None:
             assert chrome("attention", mode="unicode") in frame  # warn sigil
             assert glyph(Sigil.FAILED, mode="unicode") in frame  # fail sigil
             assert glyph(Sigil.PENDING, mode="unicode") not in frame  # warn != pending
-            assert "9 checks, 3 warn" in frame
+            assert "9 checks · 3 warn" in frame
 
     asyncio.run(body())

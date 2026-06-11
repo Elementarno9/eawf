@@ -134,6 +134,23 @@ def test_chrome_covers_exactly_eight_roles() -> None:
     assert len(_CHROME_ASCII) == 8
 
 
+def test_chrome_resolves_the_detail_tab_marker_roles() -> None:
+    """The criteria / cost / history tab markers resolve through chrome roles.
+
+    These three markers were folded out of the detail overlay into the single
+    chrome home, so the detail tab chassis resolves every tab glyph through one
+    vocabulary (criterion: tab markers resolve through sigils.py chrome roles).
+    """
+    assert chrome("criteria", mode="unicode") == "▸"
+    assert chrome("criteria", mode="ascii") == ">"
+    # The runtime role already owns the ``$`` mark, so the cost tab carries the
+    # generic currency sign in unicode and a plain dollar in ascii.
+    assert chrome("cost", mode="unicode") == "¤"
+    assert chrome("cost", mode="ascii") == "$"
+    assert chrome("history", mode="unicode") == "↺"
+    assert chrome("history", mode="ascii") == "<"
+
+
 def test_chrome_unknown_role_raises_key_error() -> None:
     with pytest.raises(KeyError):
         chrome("no-such-role", mode="unicode")

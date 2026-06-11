@@ -3,7 +3,7 @@ project:   QR
 phase:     P01
 iter:      P01-I01
 ◆ waves:     1 active · 0 pending
-progress:  ▒▒▒▒▒▒▒▒▒▒      0/1
+progress:  ▒▒▒▒▒▒▒▒      0/1
 ◆ audits:    0 running · 0 total
 ◆ worktrees: 0 active
 

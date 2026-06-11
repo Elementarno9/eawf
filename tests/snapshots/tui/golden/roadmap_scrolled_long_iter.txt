@@ -6,12 +6,12 @@
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ ROADMAP                                                  ││ STATUS                                                   │
-│ ▼ ◆ P01  Bootstrap                 ▒▒▒▒▒▒▒▒▒▒     0/39   ││ LIFECYCLE                                                │
-│ └ ▼ ◆ P01-I01  First iteration w…  ▒▒▒▒▒▒▒▒▒▒     0/39   ││ project:   QR                                            │
+│ ▼ ◆ P01  Bootstrap                   ▒▒▒▒▒▒▒▒     0/39   ││ LIFECYCLE                                                │
+│ └ ▼ ◆ P01-I01  First iteration wit…  ▒▒▒▒▒▒▒▒     0/39   ││ project:   QR                                            │
 │   ├ ◌ P01-I01-W01  wave 1 title            — no data     ││ phase:     P01                                           │
 │   ├ ◌ P01-I01-W02  wave 2 title            — no data     ││ iter:      P01-I01                                       │
 │   ├ ◌ P01-I01-W03  wave 3 title            — no data  ▇▇ ││ ◆ waves:     0 active · 39 pending                       │
-│   ├ ◌ P01-I01-W04  wave 4 title            — no data     ││ progress:  ▒▒▒▒▒▒▒▒▒▒     0/39                           │
+│   ├ ◌ P01-I01-W04  wave 4 title            — no data     ││ progress:  ▒▒▒▒▒▒▒▒     0/39                             │
 │   ├ ◌ P01-I01-W05  wave 5 title            — no data     ││ ◆ audits:    0 running · 0 total                         │
 │   ├ ◌ P01-I01-W06  wave 6 title            — no data     ││ ◆ worktrees: 0 active                                    │
 │   ├ ◌ P01-I01-W07  wave 7 title            — no data     ││                                                          │
@@ -37,4 +37,4 @@
 │                                                          ││                                                          │
 ╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
  ↑↓ select  ·  ←→ collapse  ·  Enter open  ·  …  ·  / palette  ·  ? help  ·  q quit             weekly burn: — no data•
-△ state schema 1.0 trails live daemon schema 1.10; showing a migrated read-only view -- run eawf migrate to update the
+△ state schema 1.0 trails live daemon schema 1.12; showing a migrated read-only view -- run eawf migrate to update the

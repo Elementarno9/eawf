@@ -2,7 +2,8 @@
 
 The Watch mode's FA3 lane grid generalizes the I07-W08 watch grid into a
 one-row-per-lane fleet lens: each row reads
-``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <detail>`` with a distinct
+``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <sandbox> <detail>`` (the
+``<sandbox>`` column is the U5 cross-vendor parity lens) with a distinct
 lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` per running / closed /
 failed / fork state. Arrows move the selection; Enter posts a
 :class:`~eawf.surfaces.tui.modes.agent_watch.LaneGrid.Zoom` message naming the
@@ -16,8 +17,8 @@ These tests pin both halves:
 * the pure builder + renderer --
   :func:`~eawf.surfaces.tui.modes.agent_watch.lane_grid_rows` (lane projection +
   state classification + honest-empty),
-  :func:`~eawf.surfaces.tui.modes.agent_watch.render_lane_row` (the seven-column
-  row), and
+  :func:`~eawf.surfaces.tui.modes.agent_watch.render_lane_row` (the
+  eight-column row including the U5 sandbox-parity column), and
   :func:`~eawf.surfaces.tui.modes.agent_watch.lane_state_sigil_markup` (the
   per-state lifecycle sigil) -- tested against directly-built rows so the logic
   is verified without mounting Textual; and
@@ -63,6 +64,7 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
+from eawf.runtime.sandbox.policy import SandboxPolicy
 from eawf.surfaces.tui.modes.agent_watch import (
     LANE_GRID_EMPTY,
     LANE_GRID_EMPTY_ID,
@@ -80,6 +82,7 @@ from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+from eawf.surfaces.tui.widgets.status_tint import SELECTION_TINT
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
@@ -178,11 +181,29 @@ def _fork(wave_id: str, *, tier: RiskTier = RiskTier.HIGH) -> FleetFork:
     )
 
 
+def _policy(
+    policy_id: str,
+    *,
+    scope_kind: str,
+    scope_id: str,
+    denied_tools: list[str],
+) -> SandboxPolicy:
+    """Build a sandbox policy denying *denied_tools* for *scope_id*."""
+    return SandboxPolicy(
+        id=policy_id,
+        scope_kind=scope_kind,  # type: ignore[arg-type]
+        scope_id=scope_id,
+        denied_tools=denied_tools,
+        granted_at=_T0,
+    )
+
+
 def _state(
     *,
     run: FleetRun | None,
     waves: dict[str, Wave] | None = None,
     sessions: dict[str, AgentSession] | None = None,
+    sandbox_policies: dict[str, SandboxPolicy] | None = None,
 ) -> State:
     """Build a minimal repo state carrying *run* + its waves + sessions."""
     return State.model_validate(
@@ -209,6 +230,11 @@ def _state(
             "agent_sessions": {
                 sid: s.model_dump(mode="json") for sid, s in (sessions or {}).items()
             },
+            "sandbox_policies": (
+                {pid: p.model_dump(mode="json") for pid, p in sandbox_policies.items()}
+                if sandbox_policies is not None
+                else None
+            ),
             "plugins": {},
             "indexes": {},
             "fleet_run": run.model_dump(mode="json") if run is not None else None,
@@ -332,6 +358,58 @@ def test_lane_grid_lane_without_counters_reads_unknown_spend() -> None:
     assert rows["P01-I01-W03"].spend_label == "--"
 
 
+def test_lane_grid_sandbox_column_reads_open_when_no_policy() -> None:
+    """A lane with no sandbox policy reads the honest ``open`` U5 parity column."""
+    rows = {row.wave_id: row for row in lane_grid_rows(_four_lane_state(), now=_NOW)}
+    assert rows["P01-I01-W01"].sandbox_label == "open"
+
+
+def test_lane_grid_sandbox_column_counts_wave_scoped_denials() -> None:
+    """A wave-scoped sandbox policy surfaces its deny count in the U5 parity column."""
+    run = FleetRun(
+        run_state="draining",  # type: ignore[arg-type]
+        concurrency=1,
+        lanes={"P01-I01-W01": _lane("P01-I01-W01")},
+        forks=[],
+        armed_at=_T0,
+    )
+    waves = {"P01-I01-W01": _wave("P01-I01-W01", status=WaveStatus.IN_PROGRESS)}
+    policies = {
+        "POL-1": _policy(
+            "POL-1",
+            scope_kind="wave",
+            scope_id="P01-I01-W01",
+            denied_tools=["Bash", "WebFetch"],
+        )
+    }
+    state = _state(run=run, waves=waves, sandbox_policies=policies)
+    rows = {row.wave_id: row for row in lane_grid_rows(state, now=_NOW)}
+    assert rows["P01-I01-W01"].sandbox_label == "2 denied"
+
+
+def test_lane_grid_sandbox_column_folds_global_denials() -> None:
+    """A global sandbox policy covers every lane's U5 parity column."""
+    run = FleetRun(
+        run_state="draining",  # type: ignore[arg-type]
+        concurrency=1,
+        lanes={"P01-I01-W01": _lane("P01-I01-W01")},
+        forks=[],
+        armed_at=_T0,
+    )
+    waves = {"P01-I01-W01": _wave("P01-I01-W01", status=WaveStatus.IN_PROGRESS)}
+    policies = {
+        "POL-G": _policy(
+            "POL-G",
+            scope_kind="global",
+            scope_id="global",
+            denied_tools=["Bash"],
+        )
+    }
+    state = _state(run=run, waves=waves, sandbox_policies=policies)
+    rows = {row.wave_id: row for row in lane_grid_rows(state, now=_NOW)}
+    assert rows["P01-I01-W01"].sandbox_label == "1 denied"
+
+
 def test_lane_grid_fork_row_reads_recorded_risk_tier() -> None:
     """A forked lane's tier badge reads the band recorded on the fork (UI)."""
     rows = {row.wave_id: row for row in lane_grid_rows(_four_lane_state(), now=_NOW)}
@@ -378,14 +456,15 @@ def test_lane_state_sigil_maps_each_state_to_its_lifecycle_shape() -> None:
     )
 
 
-def test_render_lane_row_carries_all_seven_columns() -> None:
-    """A rendered row names the wave, vendor, elapsed, tok/$, tier, and detail."""
+def test_render_lane_row_carries_all_columns() -> None:
+    """A rendered row names wave, vendor, elapsed, tok/$, tier, sandbox, detail."""
     row = LaneGridRow(
         wave_id="P01-I01-W01",
         vendor="claude",
         elapsed_label="42m",
         spend_label="4000 tok $1.25",
         tier_badge="HIGH",
+        sandbox_label="2 denied",
         state=LaneState.RUNNING,
     )
     rendered = render_lane_row(row, selected=False, mode="unicode")
@@ -395,7 +474,21 @@ def test_render_lane_row_carries_all_seven_columns() -> None:
     assert "42m" in rendered  # the elapsed
     assert "4000 tok $1.25" in rendered  # the tok/$
     assert "HIGH" in rendered  # the tier badge
+    assert "2 denied" in rendered  # the U5 sandbox-parity column
     assert "draining" in rendered  # the state detail
+
+
+def test_lane_grid_selected_row_wears_the_brand_selection_tint() -> None:
+    """The selected lane row's CSS carries the brand accent-dim selection tint.
+
+    The focused-row highlight is the brand-book accent-dim
+    (:data:`~eawf.surfaces.tui.widgets.status_tint.SELECTION_TINT`), not the
+    leftover teal ``$accent 20%`` default -- so the Enter-zoom target reads in
+    the green accent family.
+    """
+    css = LaneGrid.DEFAULT_CSS
+    assert SELECTION_TINT in css
+    assert ".watch-lane-row.-selected" in css
 
 
 def test_render_lane_row_fork_detail_names_the_fork() -> None:
@@ -406,6 +499,7 @@ def test_render_lane_row_fork_detail_names_the_fork() -> None:
         elapsed_label="10m",
         spend_label="--",
         tier_badge="UI",
+        sandbox_label="open",
         state=LaneState.FORK,
     )
     rendered = render_lane_row(row, selected=False, mode="unicode")

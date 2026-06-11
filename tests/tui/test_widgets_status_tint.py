@@ -15,6 +15,7 @@ from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.surfaces.tui.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.status_tint import (
     BAND_HEX,
+    SELECTION_TINT,
     STATUS_COLOURS,
     status_colour,
 )
@@ -75,6 +76,16 @@ def test_status_colours_aliases_track_named_tints() -> None:
     assert STATUS_COLOURS["active"] == STATUS_COLOURS["in_progress"]
     assert STATUS_COLOURS["abandoned"] == STATUS_COLOURS["pending"]
     assert STATUS_COLOURS["archived"] == STATUS_COLOURS["pending"]
+
+
+def test_selection_tint_is_the_brand_accent_dim_hex() -> None:
+    # The selected / focused row's highlight rectangle is the brand-book
+    # accent-dim ("selection, fills, focus rings"), pinned as a concrete hex so
+    # every selectable pane resolves one canonical green-family selection tint.
+    assert SELECTION_TINT == "#0c5a44"
+    assert SELECTION_TINT.startswith("#")
+    assert len(SELECTION_TINT) == 7  # #rrggbb
+    assert all(ch in _HEX_RE for ch in SELECTION_TINT)
 
 
 def test_band_hex_sourced_from_wong_palette() -> None:

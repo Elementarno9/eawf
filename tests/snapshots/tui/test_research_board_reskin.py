@@ -272,9 +272,13 @@ def _write_seeded_scope(
 
 
 def test_empty_state_literals_pinned_from_mock() -> None:
-    """The empty-state copy is pinned verbatim from the cosmic-terminal mock."""
+    """The empty-state copy is pinned verbatim from the cosmic-terminal mock.
+
+    The strict-spec pinned-literals strip joins the framing copy and the
+    ``press n`` compose prompt with the reskin's middle-dot separator.
+    """
     assert EMPTY_NOTICE == "no word spoken yet"
-    assert EMPTY_SUBLINE == "a research campaign begins with a question"
+    assert EMPTY_SUBLINE == "a research campaign begins with a question · press n"
 
 
 # --------------------------------------------------------------------------
