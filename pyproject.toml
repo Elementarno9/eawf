@@ -639,4 +639,9 @@ service_templates = [
 # suite, the math doc-type, the plugin skill bodies, and the 1.5 schema —
 # all pure src code (verified: no .vale / golden / plugin-tree bundling) —
 # pushing the wheel to ~2.06 MiB; recalibrate to 2.5 MiB (~21 % headroom).
-wheel_max_bytes = 2621440
+# P30 (the binding pass, 67 waves: fleet drive-loop, Track substrate, trust
+# validation, TUI cockpit) grew the pure-src wheel to ~2.6 MiB (verified: still
+# no .ea / golden / tests / plugin-tree bundling, only eawf/** modules);
+# recalibrate to 3 MiB (~10 % headroom) — the gate still catches accidental
+# data-bundling bloat without reding on legitimate source growth.
+wheel_max_bytes = 3145728
