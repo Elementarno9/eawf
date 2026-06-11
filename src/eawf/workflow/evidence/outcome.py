@@ -335,9 +335,7 @@ def sync_track_outcomes(state: State, *, track_id: str) -> list[str]:
         status = _VERDICT_STATUS[verdict]
         if status is outcome.status:
             continue
-        outcomes[outcome_id] = outcome.model_copy(
-            update={"status": status, "updated_at": now}
-        )
+        outcomes[outcome_id] = outcome.model_copy(update={"status": status, "updated_at": now})
         changed.append(outcome_id)
 
     if changed:

@@ -450,9 +450,7 @@ def test_overrun_timeout_raises_and_kills_child(
 
     with pytest.raises(RuntimeSpawnError, match="timed out"):
         asyncio.run(
-            adapter_factory().spawn_session(
-                "x", model="m", timeout=0.01, session=_SESSION_ID
-            )
+            adapter_factory().spawn_session("x", model="m", timeout=0.01, session=_SESSION_ID)
         )
     assert proc.killed is True
     assert proc.waited is True
@@ -503,9 +501,7 @@ def test_on_pgid_fires_with_child_group_for_budget_halt(
     seen: list[int] = []
 
     asyncio.run(
-        adapter_factory().spawn_session(
-            "x", model="m", session=_SESSION_ID, on_pgid=seen.append
-        )
+        adapter_factory().spawn_session("x", model="m", session=_SESSION_ID, on_pgid=seen.append)
     )
     # The resolved group (faked pid+1000 for pid 4321) reached the callback.
     assert seen == [5321]

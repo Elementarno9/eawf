@@ -48,9 +48,7 @@ def test_claude_settings_manifest_carries_target_version(tmp_path: Path) -> None
     """The Claude ``__eawf_managed`` block version equals the bumped version."""
     expected = _assert_version_bumped()
     claude_install_plugin(tmp_path, persist_manifest=False)
-    settings = json.loads(
-        (tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8")
-    )
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert settings["__eawf_managed"]["version"] == expected
 
 
@@ -58,9 +56,7 @@ def test_codex_manifest_carries_target_version(tmp_path: Path) -> None:
     """The Codex ``plugin.json`` version equals the bumped version."""
     expected = _assert_version_bumped()
     codex_install_plugin(tmp_path)
-    manifest_path = (
-        tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / "plugin.json"
-    )
+    manifest_path = tmp_path / ".codex" / "plugins" / "eawf" / ".codex-plugin" / "plugin.json"
     body = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert body["version"] == expected
 
@@ -98,14 +94,12 @@ def test_all_three_runtime_manifests_agree_on_version(tmp_path: Path) -> None:
         (claude_dir / ".claude" / "settings.json").read_text(encoding="utf-8")
     )["__eawf_managed"]["version"]
     codex_version = json.loads(
-        (
-            codex_dir / ".codex" / "plugins" / "eawf" / ".codex-plugin" / "plugin.json"
-        ).read_text(encoding="utf-8")
-    )["version"]
-    opencode_version = json.loads(
-        (opencode_dir / ".opencode" / "plugins" / ".eawf-managed.json").read_text(
+        (codex_dir / ".codex" / "plugins" / "eawf" / ".codex-plugin" / "plugin.json").read_text(
             encoding="utf-8"
         )
+    )["version"]
+    opencode_version = json.loads(
+        (opencode_dir / ".opencode" / "plugins" / ".eawf-managed.json").read_text(encoding="utf-8")
     )["version"]
 
     assert claude_version == codex_version == opencode_version == expected

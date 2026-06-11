@@ -2322,9 +2322,7 @@ def test_run_chain_v1_9_to_v1_10_round_trips_subproject_to_track(tmp_path: Path)
     the live ``State`` model.
     """
     state_path = tmp_path / "state.json"
-    state_path.write_text(
-        json.dumps(_state_v1_9_with_subproject(), indent=2), encoding="utf-8"
-    )
+    state_path.write_text(json.dumps(_state_v1_9_with_subproject(), indent=2), encoding="utf-8")
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.9", to_version="1.10")
     run_chain(state_path, chain=chain, from_version="1.9", to_version="1.10")

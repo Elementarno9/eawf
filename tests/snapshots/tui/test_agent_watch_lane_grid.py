@@ -275,8 +275,7 @@ def test_agent_watch_lane_grid_four_states_snapshot(
             screen = app.screen
             assert isinstance(screen, AgentWatchModeScreen)
             rows = [
-                str(r.render())
-                for r in screen.query(f".{LANE_GRID_ROW_CLASS}").results(Static)
+                str(r.render()) for r in screen.query(f".{LANE_GRID_ROW_CLASS}").results(Static)
             ]
             assert len(rows) == 4
             blob = "\n".join(rows)

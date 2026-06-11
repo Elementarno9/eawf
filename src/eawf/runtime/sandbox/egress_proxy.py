@@ -153,6 +153,7 @@ def emit_enforcement(
     if sink is not None:
         sink(event)
 
+
 #: The request verb the child sends. Anything else is a malformed request
 #: and is refused without opening outbound.
 _CONNECT_VERB: str = "CONNECT"

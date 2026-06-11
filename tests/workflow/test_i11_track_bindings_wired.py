@@ -87,9 +87,7 @@ def test_track_rpc_reds_when_add_registration_dropped(gate: Any) -> None:
     TRACK_RPC_IDLE.
     """
     idle_text = (
-        '@register("track.switch")\n'
-        "async def track_switch_rpc(ctx, params):\n"
-        "    return {}\n"
+        '@register("track.switch")\nasync def track_switch_rpc(ctx, params):\n    return {}\n'
     )
     result = gate.check_track_rpc_wired(module_text=idle_text)
     assert not result.passed
@@ -104,11 +102,7 @@ def test_track_rpc_reds_when_switch_registration_dropped(gate: Any) -> None:
     daemon binding, so the Track switch seam is orphaned -- the gate must still
     red.
     """
-    idle_text = (
-        '@register("track.add")\n'
-        "async def track_add_rpc(ctx, params):\n"
-        "    return {}\n"
-    )
+    idle_text = '@register("track.add")\nasync def track_add_rpc(ctx, params):\n    return {}\n'
     result = gate.check_track_rpc_wired(module_text=idle_text)
     assert not result.passed
     assert result.failure is gate.GateFailure.TRACK_RPC_IDLE
@@ -122,8 +116,7 @@ def test_track_rpc_reds_on_docstring_only_reference(gate: Any) -> None:
     still red on it.
     """
     prose_only = (
-        "    # the CLI track add shim routes to track.add and track.switch\n"
-        "    return None\n"
+        "    # the CLI track add shim routes to track.add and track.switch\n    return None\n"
     )
     result = gate.check_track_rpc_wired(module_text=prose_only)
     assert not result.passed
@@ -132,10 +125,7 @@ def test_track_rpc_reds_on_docstring_only_reference(gate: Any) -> None:
 
 def test_track_rpc_passes_for_minimal_wired_text(gate: Any) -> None:
     """A boundary text carrying both register decorators satisfies the gate."""
-    wired_text = (
-        '@register("track.add")\n'
-        '@register("track.switch")\n'
-    )
+    wired_text = '@register("track.add")\n@register("track.switch")\n'
     result = gate.check_track_rpc_wired(module_text=wired_text)
     assert result.passed
     assert result.failure is None

@@ -118,6 +118,7 @@ logger = logging.getLogger(__name__)
 #: to a blocking fork for operator input (DL-6) rather than failing outright.
 LaneOutcome = str
 
+
 class LaneDispatch(BaseModel):
     """Outcome of dispatching one claimed wave into a lane.
 
@@ -237,9 +238,7 @@ def _default_lane_spend(ctx: MethodContext, wave_id: str) -> LaneSpend:
 ForkEvidenceReader = Callable[["MethodContext", str, FleetForkReason], "str | None"]
 
 
-def _default_fork_evidence(
-    ctx: MethodContext, wave_id: str, reason: FleetForkReason
-) -> str | None:
+def _default_fork_evidence(ctx: MethodContext, wave_id: str, reason: FleetForkReason) -> str | None:
     """Derive the evidence ref backing a lane's blocking fork -- the live default.
 
     The daemon-wired default: synthesize a stable Eawf-style fork URN from the
@@ -823,9 +822,7 @@ async def repair_lane_or_fork(
             **repair_kwargs,
         )
     except RepairExhaustedError as exc:
-        fork = repair_exhausted_fork(
-            exc, wave_id=wave_id, attempt=attempt, risk_tier=risk_tier
-        )
+        fork = repair_exhausted_fork(exc, wave_id=wave_id, attempt=attempt, risk_tier=risk_tier)
         _enqueue_fork(ctx, fork)
         logger.warning(
             f"repair_lane_or_fork wave={wave_id} attempt={attempt} "
@@ -867,9 +864,7 @@ _HARD_FAILURE_FORK_REASON: dict[SpawnFailureClass, FleetForkReason] = {
 # Totality guard: every HARD spawn-failure class maps to exactly one fork
 # reason. Kept as an import-time assertion so a new HARD class without a fork row
 # fails fast rather than silently falling through to the retry ladder.
-assert set(_HARD_FAILURE_FORK_REASON) == (
-    set(SpawnFailureClass) - {SpawnFailureClass.RECOVERABLE}
-)
+assert set(_HARD_FAILURE_FORK_REASON) == (set(SpawnFailureClass) - {SpawnFailureClass.RECOVERABLE})
 
 
 #: Max chars a spawn fork's evidence ref carries from the terminal failure
@@ -1360,9 +1355,7 @@ class _Loop:
         risk_tier = self.risk_tiers.pop(wave_id, RiskTier.MECH)
         outcome = gate_lane_outcome(watched, risk_tier, block_authority=self.block_authority)
         del self.run.lanes[wave_id]
-        fork_reason = classify_fork_reason(
-            watched, risk_tier, block_authority=self.block_authority
-        )
+        fork_reason = classify_fork_reason(watched, risk_tier, block_authority=self.block_authority)
         if fork_reason is not None:
             # A BLOCKING fork: pause ONLY this lane to the fork queue (the lane
             # is already deregistered above) and leave the sibling lanes
@@ -1927,9 +1920,7 @@ def _deregister_lane(ctx: MethodContext, *, wave_id: str, attempt: int) -> None:
     logger.info(f"_deregister_lane wave={wave_id} attempt={attempt}")
 
 
-def resolve_fork_in_queue(
-    run: FleetRun | None, *, wave_id: str, attempt: int
-) -> FleetFork | None:
+def resolve_fork_in_queue(run: FleetRun | None, *, wave_id: str, attempt: int) -> FleetFork | None:
     """Resolve the queued :class:`FleetFork` for ``(wave_id, attempt)`` -- pure, DL-6.
 
     The named lookup :func:`resolve_fork` shares with its tests: the
@@ -1980,8 +1971,7 @@ def _reset_wave_pending(state: State, wave_id: str) -> None:
         wave.status,
         WaveStatus.PENDING,
         illegal_message=(
-            f"wave {wave_id!r} is terminal (status={wave.status.value!r}); "
-            f"cannot reset to pending"
+            f"wave {wave_id!r} is terminal (status={wave.status.value!r}); cannot reset to pending"
         ),
     )
     wave.status = WaveStatus.PENDING

@@ -124,36 +124,24 @@ def test_high_never_auto_closes_under_advisory() -> None:
     """C2 (LOAD-BEARING): a HIGH wave NEVER auto-closes while the jury authority
     is advisory (unearned) -- it always forks.
     """
-    assert (
-        risk_tier_auto_closes(RiskTier.HIGH, block_authority=BlockAuthority.ADVISORY)
-        is False
-    )
+    assert risk_tier_auto_closes(RiskTier.HIGH, block_authority=BlockAuthority.ADVISORY) is False
 
 
 def test_ui_never_auto_closes_under_advisory() -> None:
     """C2 (LOAD-BEARING): a UI wave NEVER auto-closes under advisory authority."""
-    assert (
-        risk_tier_auto_closes(RiskTier.UI, block_authority=BlockAuthority.ADVISORY)
-        is False
-    )
+    assert risk_tier_auto_closes(RiskTier.UI, block_authority=BlockAuthority.ADVISORY) is False
 
 
 def test_high_auto_closes_once_blocking_granted() -> None:
     """C2: once blocking authority is earned, a HIGH wave auto-closes via the
     jury path.
     """
-    assert (
-        risk_tier_auto_closes(RiskTier.HIGH, block_authority=BlockAuthority.BLOCKING)
-        is True
-    )
+    assert risk_tier_auto_closes(RiskTier.HIGH, block_authority=BlockAuthority.BLOCKING) is True
 
 
 def test_ui_auto_closes_once_blocking_granted() -> None:
     """C2: a UI wave auto-closes once blocking authority is earned."""
-    assert (
-        risk_tier_auto_closes(RiskTier.UI, block_authority=BlockAuthority.BLOCKING)
-        is True
-    )
+    assert risk_tier_auto_closes(RiskTier.UI, block_authority=BlockAuthority.BLOCKING) is True
 
 
 def test_mech_and_med_always_auto_close() -> None:

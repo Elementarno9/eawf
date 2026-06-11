@@ -543,9 +543,7 @@ def _scored_calibration_inputs() -> tuple[Any, dict[str, Any]]:
             held=good,
             outcome_source="clean" if good else "reactive",
         )
-        return LabeledVerdict(
-            outcome=outcome, ground_truth=good, label_source=LabelSource.SILVER
-        )
+        return LabeledVerdict(outcome=outcome, ground_truth=good, label_source=LabelSource.SILVER)
 
     def _ballots(verdict: AgentReportVerdict) -> tuple[JurorBallot, ...]:
         return tuple(

@@ -363,8 +363,7 @@ def persist_enforcement_event(
     event_path = _event_path(ctx)
     now = datetime.now(UTC)
     summary = (
-        f"sandbox_enforcement kind={event.kind} target={event.target!r} "
-        f"severity={event.severity}"
+        f"sandbox_enforcement kind={event.kind} target={event.target!r} severity={event.severity}"
     )
     payload = EventPayload(
         timestamp=event.ts,

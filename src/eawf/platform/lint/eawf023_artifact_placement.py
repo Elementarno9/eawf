@@ -156,8 +156,7 @@ def check_artifact_path(
         return ArtifactPlacementViolation(
             path=norm,
             reason=(
-                f"artifact must live under a kind sub-directory, "
-                f"not directly in {ARTIFACTS_ROOT}"
+                f"artifact must live under a kind sub-directory, not directly in {ARTIFACTS_ROOT}"
             ),
         )
     if head not in ARTIFACT_KIND_SUBDIRS:

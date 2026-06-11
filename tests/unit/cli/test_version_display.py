@@ -297,9 +297,7 @@ def test_git_output_returns_none_on_nonzero_exit(
         stdout = "garbage"
 
     monkeypatch.setattr(_version_display, "_package_import_root", lambda: tmp_path)
-    monkeypatch.setattr(
-        _version_display.subprocess, "run", lambda *a, **k: _Result()
-    )
+    monkeypatch.setattr(_version_display.subprocess, "run", lambda *a, **k: _Result())
 
     assert _version_display._git_output(["rev-parse", "--short=12", "HEAD"]) is None
 
@@ -328,8 +326,6 @@ def test_git_output_strips_stdout_on_success(
         stdout = "  0123456789ab\n"
 
     monkeypatch.setattr(_version_display, "_package_import_root", lambda: tmp_path)
-    monkeypatch.setattr(
-        _version_display.subprocess, "run", lambda *a, **k: _Result()
-    )
+    monkeypatch.setattr(_version_display.subprocess, "run", lambda *a, **k: _Result())
 
     assert _version_display._git_output(["rev-parse", "--short=12", "HEAD"]) == "0123456789ab"

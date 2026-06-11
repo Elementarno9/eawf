@@ -100,9 +100,7 @@ def test_ballot_fn_returns_callable_for_banded_wave(
     assert callable(fn)
 
 
-def test_ballot_fn_idle_when_too_few_lanes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_ballot_fn_idle_when_too_few_lanes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A sub-quorum host keeps the producer idle: the binder returns None.
 
     A box that cannot cast independent cross-vendor ballots (too few vendor

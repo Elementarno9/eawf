@@ -219,9 +219,7 @@ class _RecordingSpawn:
         self._error = error
         self._limit = limit
 
-    async def __call__(
-        self, _ctx: MethodContext, _wave_id: str, runtime: str
-    ) -> LaneDispatch:
+    async def __call__(self, _ctx: MethodContext, _wave_id: str, runtime: str) -> LaneDispatch:
         if len(self.runtimes) >= self._limit:
             raise AssertionError(
                 f"lane spawn called {len(self.runtimes) + 1} times but only "
@@ -270,10 +268,7 @@ def _oom_error() -> RuntimeSpawnError:
 
 def test_classify_spawn_failure_enoent_launch_is_runtime_spawn_error() -> None:
     """A chained FileNotFoundError (ENOENT launch) classifies RUNTIME_SPAWN_ERROR."""
-    assert (
-        classify_spawn_failure(_enoent_error())
-        is SpawnFailureClass.RUNTIME_SPAWN_ERROR
-    )
+    assert classify_spawn_failure(_enoent_error()) is SpawnFailureClass.RUNTIME_SPAWN_ERROR
 
 
 def test_classify_spawn_failure_permission_launch_is_runtime_spawn_error() -> None:

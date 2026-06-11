@@ -102,9 +102,7 @@ def _closable_phase(*, closed_iter_audit_id: str = "AUD-ITER") -> State:
             title="w",
             file_scopes=[f"f{idx}"],
             effort_bucket="M",
-            success_criteria=legacy_criteria(
-                *(f"criterion {i}" for i in range(1, delivered + 1))
-            ),
+            success_criteria=legacy_criteria(*(f"criterion {i}" for i in range(1, delivered + 1))),
             intent=_intent(planned_steps=planned),
         )
         wave = state.waves[wave_id]
@@ -232,9 +230,7 @@ def test_close_phase_accepts_minor_verdict_ship_gate_audit() -> None:
             title="w",
             file_scopes=[f"f{idx}"],
             effort_bucket="M",
-            success_criteria=legacy_criteria(
-                *(f"criterion {i}" for i in range(1, delivered + 1))
-            ),
+            success_criteria=legacy_criteria(*(f"criterion {i}" for i in range(1, delivered + 1))),
             intent=_intent(planned_steps=planned),
         )
         wave = state.waves[wave_id]

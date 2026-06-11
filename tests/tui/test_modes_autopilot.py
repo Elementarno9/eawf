@@ -148,9 +148,7 @@ def _ready_row(wave_id: str = "P01-I01-W02", *, iter_id: str = "P01-I01") -> Rea
     return ReadyWaveRow(wave_id=wave_id, iter_id=iter_id, title=f"Wave {wave_id}")
 
 
-def _state(
-    *, waves: dict[str, Wave] | None = None, fleet_run: FleetRun | None = None
-) -> State:
+def _state(*, waves: dict[str, Wave] | None = None, fleet_run: FleetRun | None = None) -> State:
     """Build a minimal repo state, optionally with a wave graph + a fleet run."""
     return State.model_validate(
         {

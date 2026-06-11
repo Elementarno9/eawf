@@ -1249,9 +1249,9 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         f"kill wave={args.wave_id!r} attempt={args.attempt} signal={args.signal!r} "
         f"hard={hard} killed={result.killed} reason={result.reason!r}"
     )
-    return KillResult(
-        killed=result.killed, signal=args.signal, reason=result.reason
-    ).model_dump(mode="json")
+    return KillResult(killed=result.killed, signal=args.signal, reason=result.reason).model_dump(
+        mode="json"
+    )
 
 
 def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:

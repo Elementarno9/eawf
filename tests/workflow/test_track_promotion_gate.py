@@ -162,9 +162,7 @@ def test_promote_refused_when_outcomes_not_held_over_period() -> None:
 def test_promote_refused_when_outcome_missed() -> None:
     """A Track with a MISSED outcome is REFUSED even when the period has elapsed."""
     aged = _now() - MIN_PROMOTION_PERIOD - timedelta(days=1)
-    state = _state_with_outcomes(
-        [_outcome(status=OutcomeStatus.MISSED, updated_at=aged)]
-    )
+    state = _state_with_outcomes([_outcome(status=OutcomeStatus.MISSED, updated_at=aged)])
     gate = evaluate_track_promotion(state, track_id="QR-X", now=_now())
     assert gate.promotable is False
     assert gate.outcomes_met is False
@@ -253,9 +251,9 @@ def test_wave_outside_declared_scope_is_flagged() -> None:
     in-scope file and one out-of-scope file, so only the out-of-scope file is
     returned -- containment is CHECKED, not assumed.
     """
-    track = _state_with_outcomes(
-        [_outcome()], scope_globs=["src/strategies/collar/**"]
-    ).tracks["QR-X"]
+    track = _state_with_outcomes([_outcome()], scope_globs=["src/strategies/collar/**"]).tracks[
+        "QR-X"
+    ]
     wave = _wave(
         file_scopes=[
             "src/strategies/collar/signal.py",
@@ -271,9 +269,7 @@ def test_wave_fully_inside_declared_scope_has_no_violations() -> None:
     track = _state_with_outcomes(
         [_outcome()], scope_globs=["src/strategies/collar/**", "tests/collar/**"]
     ).tracks["QR-X"]
-    wave = _wave(
-        file_scopes=["src/strategies/collar/signal.py", "tests/collar/test_signal.py"]
-    )
+    wave = _wave(file_scopes=["src/strategies/collar/signal.py", "tests/collar/test_signal.py"])
     assert wave_scope_violations(track, wave) == []
 
 

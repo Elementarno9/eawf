@@ -580,9 +580,7 @@ def test_phase_release_workflow_version_source_regex_reads_060() -> None:
     workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
         encoding="utf-8"
     )
-    version_match = re.search(
-        r"match = re\.search\(\s*r'(\^__version__[^']+)'", workflow
-    )
+    version_match = re.search(r"match = re\.search\(\s*r'(\^__version__[^']+)'", workflow)
     assert version_match is not None, "version-source regex literal not found in phase-release.yaml"
     version_re = re.compile(version_match.group(1), flags=re.MULTILINE)
     captured = version_re.search('__version__ = "0.6.0"\n')

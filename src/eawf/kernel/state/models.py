@@ -369,9 +369,7 @@ class Outcome(_StrictModel):
         """
         measured = self.sample is not None and self.status is not OutcomeStatus.PENDING
         if measured and not self.evidence_refs:
-            raise ValueError(
-                f"measured outcome {self.id!r} has no resolving evidence ref"
-            )
+            raise ValueError(f"measured outcome {self.id!r} has no resolving evidence ref")
         return self
 
 

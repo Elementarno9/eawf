@@ -710,9 +710,7 @@ def test_kill_already_dead_group_degrades_to_killed_true(tmp_path: Path) -> None
         raise ProcessLookupError(f"no such process group: {pgid}")
 
     async def body() -> None:
-        with mock.patch.object(
-            _fleet, "cancel_process_group", _make_cancel(_already_dead)
-        ):
+        with mock.patch.object(_fleet, "cancel_process_group", _make_cancel(_already_dead)):
             result: dict[str, Any] = await kill(
                 ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
             )

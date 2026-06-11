@@ -211,18 +211,14 @@ def test_sync_noop_when_status_already_current() -> None:
 
 def test_sync_skips_unmeasured_pending_outcome() -> None:
     """A PENDING (no-sample) outcome is left untouched -- the reducer invents nothing."""
-    state = _state_with_track(
-        _outcome(sample=None, best_value=None, status=OutcomeStatus.PENDING)
-    )
+    state = _state_with_track(_outcome(sample=None, best_value=None, status=OutcomeStatus.PENDING))
     assert sync_track_outcomes(state, track_id="QR-X") == []
     assert state.outcomes["OUT-1"].status is OutcomeStatus.PENDING
 
 
 def test_sync_skips_non_comparable_direction() -> None:
     """An EQUAL-direction outcome is skipped rather than crashing the comparator."""
-    state = _state_with_track(
-        _outcome(direction=OutcomeDirection.EQUAL, status=OutcomeStatus.MET)
-    )
+    state = _state_with_track(_outcome(direction=OutcomeDirection.EQUAL, status=OutcomeStatus.MET))
     assert sync_track_outcomes(state, track_id="QR-X") == []
     assert state.outcomes["OUT-1"].status is OutcomeStatus.MET
 

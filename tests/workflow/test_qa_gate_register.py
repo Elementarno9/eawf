@@ -33,9 +33,7 @@ from eawf.workflow.audit_dsl.register_lint import (
 #: The four domains the register MUST populate per QUAL-7.
 _REQUIRED_DOMAINS = ("Fleet", "Trust", "Cadence", "TUI")
 
-_REGISTER_PATH = (
-    Path(__file__).resolve().parents[2] / "docs" / "reference" / "qa-gate-register.md"
-)
+_REGISTER_PATH = Path(__file__).resolve().parents[2] / "docs" / "reference" / "qa-gate-register.md"
 
 
 def _register_text() -> str:
@@ -90,20 +88,14 @@ def test_phantom_kind_reds_the_lint() -> None:
 
 
 def test_phantom_carries_line_number() -> None:
-    phantom = (
-        "| Scenario | Gate kind | Notes |\n"
-        "|---|---|---|\n"
-        "| Bad | `phantom_gate` | x |\n"
-    )
+    phantom = "| Scenario | Gate kind | Notes |\n|---|---|---|\n| Bad | `phantom_gate` | x |\n"
     result = lint_register(phantom)
     assert result.unresolved[0].line_no == 3
 
 
 def test_parser_skips_header_and_separator_rows() -> None:
     body = (
-        "| Scenario | Gate kind | Notes |\n"
-        "|---|---|---|\n"
-        "| Only data row | `regex_in_file` | x |\n"
+        "| Scenario | Gate kind | Notes |\n|---|---|---|\n| Only data row | `regex_in_file` | x |\n"
     )
     citations = parse_register_citations(body)
     assert len(citations) == 1

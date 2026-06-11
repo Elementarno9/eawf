@@ -497,9 +497,7 @@ def test_persist_enforcement_event_without_event_path_raises(tmp_path: Path) -> 
 def test_concurrent_spawn_cap_fails_fast_at_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
     """A spawn past the concurrent cap raises before any subprocess is forked."""
     # Saturate the in-flight counter at the cap so the next acquire fails.
-    monkeypatch.setattr(
-        claude_adapter, "_spawn_inflight", claude_adapter._CONCURRENT_SPAWN_CAP
-    )
+    monkeypatch.setattr(claude_adapter, "_spawn_inflight", claude_adapter._CONCURRENT_SPAWN_CAP)
 
     async def _spawn() -> Any:
         return await ClaudeAdapter().spawn_session(
@@ -562,9 +560,7 @@ def test_enforcement_event_rejects_unknown_kind() -> None:
 
     with pytest.raises(ValidationError):
         SandboxEnforcementEvent(
-            ts=make_enforcement_event(
-                session="s", kind="argv-deny", target="x"
-            ).ts,
+            ts=make_enforcement_event(session="s", kind="argv-deny", target="x").ts,
             session="s",
             kind="not-a-real-kind",  # type: ignore[arg-type]
             target="x",

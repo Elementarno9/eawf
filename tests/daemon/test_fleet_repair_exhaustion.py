@@ -289,9 +289,7 @@ def test_repair_exhausted_fork_builds_typed_fork_carrying_last_check() -> None:
         failures=[],
         notice=_dummy_notice(),
     )
-    fork = repair_exhausted_fork(
-        exc, wave_id=_WAVE_ID, attempt=1, risk_tier=RiskTier.HIGH
-    )
+    fork = repair_exhausted_fork(exc, wave_id=_WAVE_ID, attempt=1, risk_tier=RiskTier.HIGH)
     assert fork.wave_id == _WAVE_ID
     assert fork.attempt == 1
     assert fork.risk_tier is RiskTier.HIGH
@@ -309,9 +307,7 @@ def test_repair_exhausted_fork_normalises_multiline_detail() -> None:
         failures=[],
         notice=_dummy_notice(),
     )
-    fork = repair_exhausted_fork(
-        exc, wave_id=_WAVE_ID, attempt=1, risk_tier=RiskTier.MECH
-    )
+    fork = repair_exhausted_fork(exc, wave_id=_WAVE_ID, attempt=1, risk_tier=RiskTier.MECH)
     assert fork.evidence_ref == "line one line two line three"
     assert "\n" not in (fork.evidence_ref or "")
 

@@ -450,9 +450,7 @@ def test_fleet_flow_run_kinds_resolve_to_a_run() -> None:
 
 
 @pytest.mark.parametrize("spec_args", FLEET_FLOW_SPECS, ids=_flow_ids())
-def test_fleet_journey_reaches_terminal_state(
-    spec_args: dict[str, object], tmp_path: Path
-) -> None:
+def test_fleet_journey_reaches_terminal_state(spec_args: dict[str, object], tmp_path: Path) -> None:
     # The C1 + C3 core: each G8-G17 journey drives its key sequence through the
     # real key->Binding path and lands its declared terminal cockpit state. G16
     # (daemon-unreachable) and G17 (campaign converged) are in the same set, so

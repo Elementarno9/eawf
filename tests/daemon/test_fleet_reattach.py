@@ -246,9 +246,7 @@ def test_reattach_does_not_reclaim_a_wave_closed_during_the_blip(tmp_path: Path)
     A dead lane whose wave already reached CLOSED resolves as a fork rather
     than re-dispatching -- the recovered run must not re-claim a closed wave.
     """
-    state_path = _write_state(
-        tmp_path, {"P30-I12-W01": "closed", "P30-I12-W02": "in_progress"}
-    )
+    state_path = _write_state(tmp_path, {"P30-I12-W01": "closed", "P30-I12-W02": "in_progress"})
     ctx = _ctx(state_path)
     pre = FleetRun(
         run_state=FleetRunState.DRAINING,
@@ -474,9 +472,7 @@ def test_reattach_resumes_draining_remaining_frontier_after_rebind(tmp_path: Pat
     the live lane re-binds and the queued frontier wave is then claimed +
     dispatched as the recovered loop drains to empty.
     """
-    state_path = _write_state(
-        tmp_path, {"P30-I12-W01": "in_progress", "P30-I12-W02": "pending"}
-    )
+    state_path = _write_state(tmp_path, {"P30-I12-W01": "in_progress", "P30-I12-W02": "pending"})
     ctx = _ctx(state_path)
     pre = FleetRun(
         run_state=FleetRunState.DRAINING,

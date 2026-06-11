@@ -89,9 +89,7 @@ def _audit_payload(payload: dict[str, Any], *, verdict: str | None) -> dict[str,
     return payload
 
 
-def _fleet_payload(
-    payload: dict[str, Any], *, failed: int = 0, closed: int = 0
-) -> dict[str, Any]:
+def _fleet_payload(payload: dict[str, Any], *, failed: int = 0, closed: int = 0) -> dict[str, Any]:
     """Attach a fleet run whose counters carry *failed* / *closed* tallies.
 
     Bumps the on-disk schema version so the additive ``fleet_run`` field

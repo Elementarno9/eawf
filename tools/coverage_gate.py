@@ -190,9 +190,7 @@ def evaluate_package_gates(
         if not line_ok:
             failures.append(f"{name}: line {rate.line_pct:.2f}% < gate {spec.get('line')}%")
         if not branch_ok:
-            failures.append(
-                f"{name}: branch {rate.branch_pct:.2f}% < gate {spec.get('branch')}%"
-            )
+            failures.append(f"{name}: branch {rate.branch_pct:.2f}% < gate {spec.get('branch')}%")
     return report, failures
 
 
@@ -276,9 +274,7 @@ def run_gate(coverage_xml: Path, pyproject_path: Path, repo_root: Path) -> GateO
     classes = ET.parse(coverage_xml).getroot().findall(".//class")
     pkg_report, pkg_failures = evaluate_package_gates(gates, classes)
     print("per-package coverage gates (C09 5.2)")
-    print(
-        f"{'package':16s} {'line%':>8s} {'gate':>6s}  {'branch%':>8s} {'gate':>6s}  status"
-    )
+    print(f"{'package':16s} {'line%':>8s} {'gate':>6s}  {'branch%':>8s} {'gate':>6s}  status")
     for row in pkg_report:
         print(row)
     behavioural = load_tui_behavioural(pyproject_path)

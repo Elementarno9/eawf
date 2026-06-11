@@ -201,9 +201,7 @@ def test_paired_golden_mutation_passes_the_gate(
     assert rc == 0
 
 
-def test_pure_golden_addition_is_exempt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_pure_golden_addition_is_exempt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A brand-new golden (status A) under a `feat:` subject is exempt: a new
     # surface ships its fixtures with the wave that introduces it.
     repo = _init_repo(tmp_path / "addition")

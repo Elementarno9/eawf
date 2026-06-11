@@ -637,9 +637,7 @@ def validate_jury(
     fleiss_kappa = _fleiss_kappa(rating_matrix)
     brier, _reliability, _resolution = _murphy_decomposition(forecasts, outcomes)
     ece = expected_calibration_error(forecasts, outcomes, bins=cfg.ece_bins)
-    unanimous_rate = (
-        unanimous_pass_on_known_bad / known_bad_n if known_bad_n > 0 else None
-    )
+    unanimous_rate = unanimous_pass_on_known_bad / known_bad_n if known_bad_n > 0 else None
 
     logger.debug(
         f"validate_jury n={n} status=scored fleiss={fleiss_kappa:.4f} brier={brier:.4f} "
@@ -745,9 +743,7 @@ class VerbosityBiasConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     min_validation_n: int = Field(default=_DEFAULT_MIN_VALIDATION_N, ge=2)
-    verbosity_bias_ceiling: float = Field(
-        default=_DEFAULT_VERBOSITY_BIAS_CEILING, ge=-1.0, le=1.0
-    )
+    verbosity_bias_ceiling: float = Field(default=_DEFAULT_VERBOSITY_BIAS_CEILING, ge=-1.0, le=1.0)
 
 
 class JurorVerbosityBias(BaseModel):
@@ -913,9 +909,7 @@ def measure_verbosity_bias(
     cfg = config if config is not None else VerbosityBiasConfig()
     n = len(observations)
     if n < cfg.min_validation_n:
-        logger.debug(
-            f"measure_verbosity_bias n={n} min={cfg.min_validation_n} status=insufficient"
-        )
+        logger.debug(f"measure_verbosity_bias n={n} min={cfg.min_validation_n} status=insufficient")
         return VerbosityBiasReport(n=n, status=ProbeStatus.INSUFFICIENT)
 
     by_juror: dict[str, list[JurorLengthObservation]] = {}
@@ -1141,9 +1135,7 @@ def measure_faithfulness(
     backend: EntailmentScorer = scorer if scorer is not None else LexicalEntailmentScorer()
     n = len(cited_refs)
     if n < cfg.min_validation_n:
-        logger.debug(
-            f"measure_faithfulness n={n} min={cfg.min_validation_n} status=insufficient"
-        )
+        logger.debug(f"measure_faithfulness n={n} min={cfg.min_validation_n} status=insufficient")
         return FaithfulnessReport(n=n, status=ProbeStatus.INSUFFICIENT)
 
     refs: list[EvidenceRefFaithfulness] = []
@@ -1180,8 +1172,7 @@ def measure_faithfulness(
 
     unfaithful_rate = unfaithful_n / scored_n if scored_n > 0 else None
     logger.debug(
-        f"measure_faithfulness n={n} status=scored scored={scored_n} "
-        f"unfaithful={unfaithful_n}"
+        f"measure_faithfulness n={n} status=scored scored={scored_n} unfaithful={unfaithful_n}"
     )
     return FaithfulnessReport(
         n=n,
@@ -1288,9 +1279,7 @@ class JuryAuthorityConfig(BaseModel):
     known_bad_catch_lb_floor: float = Field(
         default=_DEFAULT_KNOWN_BAD_CATCH_LB_FLOOR, ge=0.0, le=1.0
     )
-    unanimous_pass_ceiling: float = Field(
-        default=_DEFAULT_UNANIMOUS_PASS_CEILING, ge=0.0, le=1.0
-    )
+    unanimous_pass_ceiling: float = Field(default=_DEFAULT_UNANIMOUS_PASS_CEILING, ge=0.0, le=1.0)
 
 
 def jury_block_authority(

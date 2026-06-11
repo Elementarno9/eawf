@@ -87,9 +87,7 @@ def _sync_track(*, track_id: str | None, flags: GlobalFlags) -> dict[str, Any]:
             raise cli_errors.ValidationError(exc.message) from exc
         raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
     except (OSError, RuntimeError, TimeoutError) as exc:
-        raise cli_errors.DaemonUnreachable(
-            f"daemon unavailable for {_SYNC_RPC}: {exc}"
-        ) from exc
+        raise cli_errors.DaemonUnreachable(f"daemon unavailable for {_SYNC_RPC}: {exc}") from exc
     changed = int(result.get("changed", 0))
     logger.info(f"_sync_track track={track_id!r} changed={changed}")
     return result

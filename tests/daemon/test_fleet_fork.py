@@ -450,10 +450,7 @@ def test_classify_fork_reason_no_pause_on_clean_or_genuine_fork() -> None:
     )
     # A genuine watcher fork is a terminal failure, never an operator pause.
     for tier in RiskTier:
-        assert (
-            classify_fork_reason("forked", tier, block_authority=BlockAuthority.ADVISORY)
-            is None
-        )
+        assert classify_fork_reason("forked", tier, block_authority=BlockAuthority.ADVISORY) is None
 
 
 def test_resolve_fork_in_queue_matches_wave_attempt() -> None:

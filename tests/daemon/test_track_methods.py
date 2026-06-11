@@ -205,9 +205,7 @@ def test_track_switch_moves_current_track_id(tmp_path: Path) -> None:
         mid = orjson.loads(state_path.read_bytes())
         assert mid["current"]["track_id"] == "ABC-Y"
 
-        result: dict[str, Any] = await track_switch_rpc(
-            ctx, {"track_id": "ABC-X"}
-        )
+        result: dict[str, Any] = await track_switch_rpc(ctx, {"track_id": "ABC-X"})
         assert result["track_id"] == "ABC-X"
         assert result["current_track_id"] == "ABC-X"
         assert result["added"] is False

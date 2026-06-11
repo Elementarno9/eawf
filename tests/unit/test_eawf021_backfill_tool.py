@@ -86,9 +86,7 @@ def test_run_backfill_empty_criteria_exits_one(tmp_path: Path) -> None:
 
 def test_run_backfill_empty_file_scopes_exits_one(tmp_path: Path) -> None:
     tool = _load_tool()
-    sample = _write_sample(
-        tmp_path, {"file_scopes": [], "criteria": ["validates the schema"]}
-    )
+    sample = _write_sample(tmp_path, {"file_scopes": [], "criteria": ["validates the schema"]})
     assert tool.run_backfill(sample) == 1
 
 

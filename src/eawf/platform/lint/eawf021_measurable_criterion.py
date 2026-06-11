@@ -233,9 +233,7 @@ def extract_observation(text: str) -> tuple[str | None, str | None]:
     """
     verb_match = _VERB_RE.search(text)
     locus_match = _LOCUS_RE.search(text)
-    verb = (
-        _VERB_SURFACE_TO_VALUE[verb_match.group(0).lower()] if verb_match is not None else None
-    )
+    verb = _VERB_SURFACE_TO_VALUE[verb_match.group(0).lower()] if verb_match is not None else None
     locus = (
         _LOCUS_SURFACE_TO_VALUE[locus_match.group(0).lower()] if locus_match is not None else None
     )

@@ -139,9 +139,7 @@ def evaluate_track_promotion(
     if track is None:
         raise LifecycleError(f"unknown track {track_id!r}")
     if force_reason is not None and not force_reason.strip():
-        raise LifecycleError(
-            f"track {track_id!r} force-promotion needs an attested reason"
-        )
+        raise LifecycleError(f"track {track_id!r} force-promotion needs an attested reason")
 
     reference = now if now is not None else datetime.now(UTC)
     outcomes = _track_outcomes(state, track)
@@ -220,21 +218,17 @@ def promote_track(
         LifecycleError: When *track_id* is unknown, *force_reason* is blank, or
             the merits gate refuses and no attested force was supplied.
     """
-    gate = evaluate_track_promotion(
-        state, track_id=track_id, force_reason=force_reason, now=now
-    )
+    gate = evaluate_track_promotion(state, track_id=track_id, force_reason=force_reason, now=now)
     if not gate.promotable:
         blockers = ", ".join(gate.blocking_outcome_ids) or "no outcomes defined"
         raise LifecycleError(
-            f"track {track_id!r} not promotable: outcomes not met over period "
-            f"({blockers})"
+            f"track {track_id!r} not promotable: outcomes not met over period ({blockers})"
         )
 
     track = (state.tracks or {})[track_id]
     track.status = new_status
     logger.info(
-        f"promote_track track={track_id!r} status={new_status.value!r} "
-        f"forced={gate.forced}"
+        f"promote_track track={track_id!r} status={new_status.value!r} forced={gate.forced}"
     )
     return gate
 

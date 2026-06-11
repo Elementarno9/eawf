@@ -256,9 +256,7 @@ def test_gate_lane_outcome_passes_forked_through() -> None:
     """
     for tier in RiskTier:
         for authority in (BlockAuthority.ADVISORY, BlockAuthority.BLOCKING):
-            assert (
-                gate_lane_outcome("forked", tier, block_authority=authority) == "forked"
-            )
+            assert gate_lane_outcome("forked", tier, block_authority=authority) == "forked"
 
 
 def test_gate_lane_outcome_downgrades_high_ui_under_advisory() -> None:
@@ -267,12 +265,10 @@ def test_gate_lane_outcome_downgrades_high_ui_under_advisory() -> None:
     """
     for tier in (RiskTier.HIGH, RiskTier.UI):
         assert (
-            gate_lane_outcome("closed", tier, block_authority=BlockAuthority.ADVISORY)
-            == "forked"
+            gate_lane_outcome("closed", tier, block_authority=BlockAuthority.ADVISORY) == "forked"
         )
         assert (
-            gate_lane_outcome("closed", tier, block_authority=BlockAuthority.BLOCKING)
-            == "closed"
+            gate_lane_outcome("closed", tier, block_authority=BlockAuthority.BLOCKING) == "closed"
         )
 
 
@@ -280,6 +276,4 @@ def test_gate_lane_outcome_preserves_mech_med_close() -> None:
     """C2: a clean close of a mech / med lane passes through under any authority."""
     for tier in (RiskTier.MECH, RiskTier.MED):
         for authority in (BlockAuthority.ADVISORY, BlockAuthority.BLOCKING):
-            assert (
-                gate_lane_outcome("closed", tier, block_authority=authority) == "closed"
-            )
+            assert gate_lane_outcome("closed", tier, block_authority=authority) == "closed"

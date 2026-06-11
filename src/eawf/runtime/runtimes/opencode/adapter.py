@@ -142,6 +142,7 @@ def _record_env_scrub(
         ),
     )
 
+
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate[_ -]?limit)\b", re.IGNORECASE)
 _AUTH_RE = re.compile(
     rb"\b(?:401|403|invalid_api_key|oauth_expired|unauthor[iz][sez]+ed)\b",

@@ -592,9 +592,7 @@ class ClaudeAdapter:
                 except ProcessLookupError:
                     logger.warning(f"spawn_session pgid-unresolved pid={pid}")
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
-                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             except TimeoutError:
                 proc.kill()
                 await proc.wait()

@@ -645,9 +645,7 @@ def expected_calibration_error(
     if not forecasts:
         raise ValueError("cannot compute ece over an empty forecast set")
     if len(forecasts) != len(outcomes):
-        raise ValueError(
-            f"forecast/outcome length mismatch: {len(forecasts)} vs {len(outcomes)}"
-        )
+        raise ValueError(f"forecast/outcome length mismatch: {len(forecasts)} vs {len(outcomes)}")
     if bins < 1:
         raise ValueError(f"ece needs at least 1 bin: {bins!r}")
 

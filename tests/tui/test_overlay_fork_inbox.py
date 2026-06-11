@@ -254,9 +254,7 @@ def test_render_options_row_lists_all_four_option_keys() -> None:
 
 def test_issue_resolve_no_daemon_issues_no_rpc() -> None:
     """An unreachable daemon issues no RPC and reads the honest unavailable line."""
-    line = issue_resolve(
-        _fork(), FleetForkResolution.APPROVE_CLOSE, daemon_available=False
-    )
+    line = issue_resolve(_fork(), FleetForkResolution.APPROVE_CLOSE, daemon_available=False)
     assert RESOLVE_NO_DAEMON in line
 
 

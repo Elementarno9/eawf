@@ -213,9 +213,7 @@ def test_maybe_gc_fallback_wal_swallows_sweep_oserror(
     write.
     """
     wal_dir = tmp_path / "wal"
-    _write_fsynced(
-        wal_dir, "rec-aged", mtime=datetime(2026, 6, 11, 11, 0, 0, tzinfo=UTC)
-    )
+    _write_fsynced(wal_dir, "rec-aged", mtime=datetime(2026, 6, 11, 11, 0, 0, tzinfo=UTC))
 
     def _boom(*_args: object, **_kwargs: object) -> list[Path]:
         raise OSError("disk gone")

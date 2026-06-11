@@ -250,9 +250,7 @@ def test_outcome_lines_omits_zero_outcome_classes() -> None:
 
 def test_outcome_lines_no_outcomes_reads_honest_empty() -> None:
     """A run with no finished lane yields the honest-empty outcome marker."""
-    lines = outcome_lines(
-        _done_run(closed=0, failed=0, blocked=0, forks_resolved=0)
-    )
+    lines = outcome_lines(_done_run(closed=0, failed=0, blocked=0, forks_resolved=0))
     assert lines == (f"[$muted]{OUTCOMES_EMPTY}[/]",)
 
 

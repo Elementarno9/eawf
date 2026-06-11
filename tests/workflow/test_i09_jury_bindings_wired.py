@@ -282,8 +282,7 @@ def test_validate_jury_cli_reds_on_docstring_only_reference(gate: Any) -> None:
     ``(`` is not a live call, so the gate must still red on it.
     """
     prose_only = (
-        "    # the report comes from validate_jury per the module docstring\n"
-        "    return None\n"
+        "    # the report comes from validate_jury per the module docstring\n    return None\n"
     )
     result = gate.check_validate_jury_cli_wired(module_text=prose_only)
     assert not result.passed
