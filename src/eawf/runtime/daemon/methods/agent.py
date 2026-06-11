@@ -37,10 +37,13 @@ hand-fed-outcome paths byte-unchanged.
 ``agent.session`` is a read-only inspection helper that returns the
 typed session table from ``state.json`` for a wave.
 
-``agent.kill`` is a placeholder that returns ``killed=false`` +
-``signal="term"``; a later wave wires the real subprocess-signalling
-ladder (SIGTERM grace window then SIGKILL on POSIX, ``TerminateProcess``
-on Windows).
+``agent.kill`` resolves the live fleet lane for ``(wave_id, attempt)``
+off the :class:`~eawf.kernel.state.models.FleetRun` registry and signals
+its process group: ``signal="kill"`` delivers SIGKILL (a hard stop),
+``signal="halt"`` (or the legacy ``"term"`` alias) delivers SIGTERM (a
+graceful stop). A signalled lane transitions to a killed terminal that
+deregisters from the registry; a wave with no live lane returns a typed
+not-found (``killed=false`` + ``reason``) rather than faking a kill.
 """
 
 from __future__ import annotations
@@ -70,6 +73,7 @@ from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.runtime.daemon.dispatch_runner import DispatchResult, DispatchTokens, run_dispatch
 from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.runtime.daemon.methods.fleet import kill_lane
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.adapter import ErrorClass, RuntimeSpawnError, SpawnResult
 from eawf.runtime.runtimes.dispatch import resolve_adapter
@@ -118,10 +122,16 @@ _RUNTIME_TRIPLE: dict[RuntimeId, RuntimeTriple] = {
 #: (since no prior attempts exist for the wave).
 SessionPolicy = Literal["fresh", "continue", "hybrid"]
 
-#: Signals accepted by :func:`kill`. Default ``"term"`` maps to
-#: SIGTERM; ``"kill"`` maps to SIGKILL (POSIX) /
-#: ``TerminateProcess`` (Windows).
-KillSignal = Literal["term", "kill"]
+#: Signals accepted by :func:`kill`. ``"halt"`` (default) and the legacy
+#: ``"term"`` alias both map to a graceful SIGTERM; ``"kill"`` maps to a hard
+#: SIGKILL. The two SIGTERM spellings coexist so the autopilot TUI's existing
+#: ``"term"`` halt signal keeps validating while the criterion-canonical
+#: ``"halt"`` spelling is the default.
+KillSignal = Literal["halt", "term", "kill"]
+
+#: ``KillSignal`` values that select SIGKILL (the hard stop); every other
+#: accepted value selects SIGTERM (the graceful stop).
+_HARD_KILL_SIGNALS: frozenset[str] = frozenset({"kill"})
 
 
 class DispatchOutcome(BaseModel):
@@ -292,15 +302,28 @@ class KillParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
     wave_id: str = Field(min_length=1)
     attempt: int = Field(ge=1)
-    signal: KillSignal = "term"
+    signal: KillSignal = "halt"
 
 
 class KillResult(BaseModel):
-    """Result of :func:`kill` (placeholder until a later wave wires real signalling)."""
+    """Result of :func:`kill` -- whether the lane's process group was signalled.
+
+    Attributes:
+        killed: ``True`` when a live fleet lane resolved for the
+            ``(wave_id, attempt)`` pair and its process group was signalled
+            (including the already-dead race, which still counts as reaped);
+            ``False`` when no live lane resolved so nothing was signalled.
+        signal: The :data:`KillSignal` the caller requested, echoed back so the
+            response records which rung of the ladder was attempted.
+        reason: A short not-found cause when *killed* is ``False`` (e.g.
+            ``no-fleet-run`` / ``no-lane`` / ``unkillable-lane``); ``None`` on a
+            successful kill.
+    """
 
     model_config = ConfigDict(extra="forbid")
     killed: bool
     signal: KillSignal
+    reason: str | None = None
 
 
 class PauseParams(BaseModel):
@@ -1192,28 +1215,43 @@ async def session(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
 @register("agent.kill")
 async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Placeholder kill — W09 wires real subprocess signalling.
+    """Resolve the wave's live fleet lane then signal its process group.
 
-    The handler validates params (so callers can shake out the shape
-    today) and returns ``killed=false`` + the requested signal so the
-    response is forensically obvious. W09 replaces the placeholder with
-    the SIGTERM→SIGKILL ladder on POSIX and ``TerminateProcess`` on
-    Windows.
+    Resolves the in-flight lane for the ``(wave_id, attempt)`` pair off the
+    :class:`~eawf.kernel.state.models.FleetRun` registry via
+    :func:`eawf.runtime.daemon.methods.fleet.kill_lane`, then -- when a live
+    killable lane resolves -- signals its ``pgid``: ``signal="kill"`` delivers
+    SIGKILL (a hard stop), while ``signal="halt"`` (or the legacy ``"term"``
+    alias) delivers SIGTERM (a graceful stop). The signalled lane transitions
+    to a killed terminal that deregisters from the registry, and the handler
+    returns ``killed=true``. A group already dead at signal time still counts
+    as reaped (the kill primitive reports it rather than raising).
+
+    A wave with no live lane -- no fleet run armed, no lane for the pair, or a
+    lane carrying no addressable ``pgid`` -- returns ``killed=false`` + a typed
+    ``reason`` and signals nothing, so the response never fakes a kill on an
+    unaddressable lane.
 
     Args:
-        ctx: Server context (unused in W07; W09 reads
-            ``ctx.dispatcher`` for the live subprocess map).
+        ctx: Server context; ``ctx.state_path`` carries the lane registry +
+            the deregister write target. A stateless context resolves no run,
+            so every kill returns the ``no-fleet-run`` not-found.
         params: JSON-RPC params per :class:`KillParams`.
 
     Returns:
-        Dict matching :class:`KillResult` with ``killed=false``.
+        Dict matching :class:`KillResult` -- ``killed=true`` on a signalled
+        lane, or ``killed=false`` + ``reason`` on the not-found path.
     """
     args = KillParams.model_validate(params)
+    hard = args.signal in _HARD_KILL_SIGNALS
+    result = kill_lane(ctx, wave_id=args.wave_id, attempt=args.attempt, hard=hard)
     logger.info(
-        f"kill wave={args.wave_id!r} attempt={args.attempt} signal={args.signal!r} placeholder=true"
+        f"kill wave={args.wave_id!r} attempt={args.attempt} signal={args.signal!r} "
+        f"hard={hard} killed={result.killed} reason={result.reason!r}"
     )
-    result = KillResult(killed=False, signal=args.signal)
-    return result.model_dump(mode="json")
+    return KillResult(
+        killed=result.killed, signal=args.signal, reason=result.reason
+    ).model_dump(mode="json")
 
 
 def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:

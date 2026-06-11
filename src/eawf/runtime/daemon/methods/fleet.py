@@ -63,6 +63,7 @@ from eawf.kernel.state.models import (
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.runtime.daemon.methods import register
 from eawf.runtime.lock import portalock
+from eawf.runtime.runtimes.cancel import CancelResult, cancel_process_group
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.wave import claim_wave
@@ -662,6 +663,165 @@ def _require_run(ctx: MethodContext) -> FleetRun:
     if run is None:
         raise LifecycleError("no fleet run armed")
     return run
+
+
+def resolve_lane(run: FleetRun | None, *, wave_id: str, attempt: int) -> FleetLane | None:
+    """Resolve the live in-flight lane for ``(wave_id, attempt)`` from the registry.
+
+    The named lookup the kill (DL-3) / reattach (DL-8) paths share: the
+    ``(wave_id, attempt)`` pair is the lane registry key, so a re-dispatch
+    of the same wave registers a distinct lane and only the matching attempt
+    resolves. A lane is returned only when its ``attempt`` also matches, so a
+    stale attempt number never resolves a fresher lane.
+
+    Args:
+        run: The armed :class:`FleetRun` (or ``None`` when no run is armed).
+        wave_id: ``W<NN>`` wave whose lane to resolve.
+        attempt: 1-based dispatch attempt -- the second half of the registry
+            key.
+
+    Returns:
+        The matching :class:`FleetLane`, or ``None`` when no run is armed or
+        no lane matches the ``(wave_id, attempt)`` pair.
+    """
+    if run is None:
+        return None
+    lane = run.lanes.get(wave_id)
+    if lane is None or lane.attempt != attempt:
+        return None
+    return lane
+
+
+@dataclass(frozen=True)
+class LaneKillResult:
+    """Outcome of :func:`kill_lane` -- whether a lane was signalled + reaped.
+
+    Attributes:
+        killed: ``True`` when a live killable lane resolved and its group was
+            signalled (including the already-dead race, which still counts as
+            reaped since the group is gone); ``False`` when no live lane
+            resolved (the typed not-found path) so nothing was signalled.
+        reason: A short not-found cause when *killed* is ``False`` (e.g.
+            ``no-fleet-run`` / ``no-lane`` / ``unkillable-lane``); ``None``
+            on a successful kill.
+        cancel: The raw :class:`~eawf.runtime.runtimes.cancel.CancelResult`
+            from the one-shot group signal when *killed* is ``True``; ``None``
+            on the not-found path.
+    """
+
+    killed: bool
+    reason: str | None
+    cancel: CancelResult | None
+
+
+def kill_lane(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    attempt: int,
+    hard: bool,
+    cancel: Callable[..., CancelResult] | None = None,
+) -> LaneKillResult:
+    """Resolve the ``(wave_id, attempt)`` lane, signal its pgid, then deregister.
+
+    The DL-3 real-kill path: read the W02 lane registry off ``State.fleet_run``
+    via :func:`resolve_lane`, and -- when a live **killable** lane resolves --
+    signal its ``pgid`` (SIGKILL when *hard*, SIGTERM otherwise) through the
+    one-shot group primitive
+    :func:`eawf.runtime.runtimes.cancel.cancel_process_group`, then transition
+    the lane to a killed terminal that **deregisters** it (drop its
+    ``(wave_id, attempt) -> pgid`` row from ``FleetRun.lanes`` + bump the fork
+    counter) through the daemon canonical state writer. A group that is already
+    dead (``ProcessLookupError``) still counts as reaped (the primitive reports
+    ``delivered=False`` rather than raising), so the lane is deregistered and
+    the kill is reported successful.
+
+    When no live killable lane resolves -- no fleet run armed, no lane for the
+    pair, or a lane carrying no addressable ``pgid`` (``killable=False``) --
+    the function returns a typed not-found (``killed=False`` + ``reason``) and
+    signals nothing: it never fakes a kill on an unaddressable lane.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` (the registry +
+            the deregister write target).
+        wave_id: ``W<NN>`` wave whose lane to kill.
+        attempt: 1-based dispatch attempt -- the second half of the registry
+            key.
+        hard: When ``True`` send SIGKILL (the ``kill`` signal); otherwise send
+            SIGTERM (the graceful ``halt`` signal).
+        cancel: Injectable one-shot group-signal seam. ``None`` (the default)
+            resolves the module-level
+            :func:`eawf.runtime.runtimes.cancel.cancel_process_group` at call
+            time so a test can patch the module symbol; tests may also pass a
+            fake directly so no real signal is delivered.
+
+    Returns:
+        A :class:`LaneKillResult` -- ``killed=True`` + the cancel result on a
+        signalled lane, or ``killed=False`` + a not-found reason otherwise.
+    """
+    signal_group = cancel if cancel is not None else cancel_process_group
+    run = load_state(Path(ctx.state_path)).fleet_run if ctx.state_path is not None else None
+    if run is None:
+        logger.info(f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=no-fleet-run")
+        return LaneKillResult(killed=False, reason="no-fleet-run", cancel=None)
+    lane = resolve_lane(run, wave_id=wave_id, attempt=attempt)
+    if lane is None:
+        logger.info(f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=no-lane")
+        return LaneKillResult(killed=False, reason="no-lane", cancel=None)
+    if not lane.killable or lane.pgid is None:
+        logger.info(
+            f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=unkillable-lane"
+        )
+        return LaneKillResult(killed=False, reason="unkillable-lane", cancel=None)
+    # Signal the group first (outside the state lock so the kill ladder never
+    # signals while holding the state portalock), then deregister the lane.
+    result = signal_group(lane.pgid, hard=hard)
+    _deregister_lane(ctx, wave_id=wave_id, attempt=attempt)
+    logger.info(
+        f"kill_lane wave={wave_id} attempt={attempt} pgid={lane.pgid} "
+        f"hard={hard} delivered={result.delivered} killed=true"
+    )
+    return LaneKillResult(killed=True, reason=None, cancel=result)
+
+
+def _deregister_lane(ctx: MethodContext, *, wave_id: str, attempt: int) -> None:
+    """Drop the killed lane from ``FleetRun.lanes`` through the canonical writer.
+
+    Transitions a signalled lane to its killed terminal: removes its
+    ``(wave_id, attempt) -> pgid`` row from the registry (so the registry holds
+    exactly the still-in-flight lanes -- a killed lane's pgid is no longer a
+    live target) and bumps the fork counter, mirroring how
+    :meth:`_Loop._drain_lanes` deregisters a forked lane. The mutation routes
+    through the daemon canonical state writer (``portalock(state.json)`` +
+    locked atomic write). A stateless context is a no-op.
+
+    A concurrent advance may have already dropped the lane between the kill
+    signal and this write; the deregister tolerates a missing lane (it is the
+    desired terminal either way) and only re-counts a fork when the lane was
+    still present.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path``.
+        wave_id: ``W<NN>`` wave whose lane to deregister.
+        attempt: 1-based dispatch attempt -- the registry key's second half.
+    """
+    if ctx.state_path is None:
+        return
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        run = state.fleet_run
+        if run is None:
+            return
+        lane = resolve_lane(run, wave_id=wave_id, attempt=attempt)
+        if lane is None:
+            return
+        del run.lanes[wave_id]
+        run.counters.forked += 1
+        state.fleet_run = run
+        state.updated_at = datetime.now(UTC)
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    logger.info(f"_deregister_lane wave={wave_id} attempt={attempt}")
 
 
 @register("fleet.drive")

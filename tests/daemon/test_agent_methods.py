@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import orjson
 import pytest
@@ -458,42 +460,274 @@ def test_session_raises_runtime_error_without_state_path() -> None:
     _run(body)
 
 
-def test_kill_returns_placeholder_false() -> None:
-    ctx = _build_ctx()
+def _write_state_with_lane(
+    path: Path,
+    *,
+    wave_id: str,
+    attempt: int,
+    pgid: int | None,
+) -> None:
+    """Write a State carrying a DRAINING FleetRun with one in-flight lane.
+
+    The lane registers ``(wave_id, attempt) -> pgid`` so :func:`agent.kill` can
+    resolve it; a ``None`` pgid records an unkillable lane (no addressable
+    process group).
+    """
+    payload = _build_state_payload(wave_id=wave_id)
+    payload["fleet_run"] = {
+        "run_state": "draining",
+        "concurrency": 1,
+        "frontier": [],
+        "lanes": {
+            wave_id: {
+                "wave_id": wave_id,
+                "attempt": attempt,
+                "session_id": "sess-1",
+                "pgid": pgid,
+                "dispatched_at": _now().isoformat(),
+            }
+        },
+        "counters": {
+            "claimed": 1,
+            "dispatched": 1,
+            "closed": 0,
+            "forked": 0,
+            "rounds": 0,
+            "clean_rounds": 0,
+        },
+        "convergence": "drain",
+        "kclean_k": 2,
+        "terminal_reason": None,
+        "armed_at": _now().isoformat(),
+    }
+    _write_state(path, payload)
+
+
+def _lane_present(state_path: Path, *, wave_id: str) -> bool:
+    """Return whether *wave_id* still has a registered lane in the FleetRun."""
+    from eawf.workflow.evidence._io import load_state
+
+    run = load_state(state_path).fleet_run
+    return run is not None and wave_id in run.lanes
+
+
+def _make_cancel(killpg: Callable[[int, int], None]) -> Callable[..., Any]:
+    """Build a ``cancel_process_group`` stand-in over an injectable ``killpg``.
+
+    Mirrors the real one-shot primitive's signal selection (SIGKILL on
+    ``hard=True``, else SIGTERM) and its ``ProcessLookupError -> delivered=False``
+    already-dead handling, but routes the syscall to *killpg* so the test
+    records the call without delivering a real signal. Returns the typed
+    :class:`~eawf.runtime.runtimes.cancel.CancelResult` the kill path reads.
+    """
+    from eawf.runtime.runtimes.cancel import CancelResult
+
+    def _cancel(pgid: int, *, hard: bool = False) -> CancelResult:
+        sig = signal.SIGKILL if hard else signal.SIGTERM
+        try:
+            killpg(pgid, sig)
+        except ProcessLookupError:
+            return CancelResult(pgid=pgid, signal_sent=sig, delivered=False)
+        return CancelResult(pgid=pgid, signal_sent=sig, delivered=True)
+
+    return _cancel
+
+
+def test_kill_resolves_lane_and_sends_sigkill_for_signal_kill(tmp_path: Path) -> None:
+    """C1: ``signal=kill`` resolves the lane + delivers SIGKILL via the registry."""
+    import signal as _signal
+
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state_with_lane(state_path, wave_id="P24-I01-W07", attempt=1, pgid=4242)
+    ctx = _build_ctx(state_path=state_path)
+    sent: list[tuple[int, int]] = []
+
+    def _fake_killpg(pgid: int, sig: int) -> None:
+        sent.append((pgid, sig))
 
     async def body() -> None:
-        result: dict[str, Any] = await kill(
-            ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "term"}
-        )
-        assert result == {"killed": False, "signal": "term"}
+        with mock.patch.object(_fleet, "cancel_process_group", _make_cancel(_fake_killpg)):
+            result: dict[str, Any] = await kill(
+                ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
+            )
+        assert result == {"killed": True, "signal": "kill", "reason": None}
+        assert sent == [(4242, _signal.SIGKILL)]
+        # The killed lane deregisters from the registry.
+        assert not _lane_present(state_path, wave_id="P24-I01-W07")
 
     _run(body)
 
 
-def test_kill_defaults_signal_to_term() -> None:
-    ctx = _build_ctx()
+def test_kill_resolves_lane_and_sends_sigterm_for_signal_halt(tmp_path: Path) -> None:
+    """C1: ``signal=halt`` resolves the lane + delivers a graceful SIGTERM."""
+    import signal as _signal
+
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state_with_lane(state_path, wave_id="P24-I01-W07", attempt=1, pgid=4242)
+    ctx = _build_ctx(state_path=state_path)
+    sent: list[tuple[int, int]] = []
 
     async def body() -> None:
-        result: dict[str, Any] = await kill(ctx, {"wave_id": "P24-I01-W07", "attempt": 1})
-        assert result == {"killed": False, "signal": "term"}
+        with mock.patch.object(
+            _fleet, "cancel_process_group", _make_cancel(lambda p, s: sent.append((p, s)))
+        ):
+            result: dict[str, Any] = await kill(
+                ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "halt"}
+            )
+        assert result == {"killed": True, "signal": "halt", "reason": None}
+        assert sent == [(4242, _signal.SIGTERM)]
+        assert not _lane_present(state_path, wave_id="P24-I01-W07")
 
     _run(body)
 
 
-def test_kill_accepts_signal_kill_value() -> None:
-    ctx = _build_ctx()
+def test_kill_defaults_signal_to_halt(tmp_path: Path) -> None:
+    """C1: the default signal is the graceful ``halt`` (SIGTERM)."""
+    import signal as _signal
+
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state_with_lane(state_path, wave_id="P24-I01-W07", attempt=1, pgid=99)
+    ctx = _build_ctx(state_path=state_path)
+    sent: list[tuple[int, int]] = []
 
     async def body() -> None:
-        result: dict[str, Any] = await kill(
-            ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
-        )
-        assert result["signal"] == "kill"
+        with mock.patch.object(
+            _fleet, "cancel_process_group", _make_cancel(lambda p, s: sent.append((p, s)))
+        ):
+            result: dict[str, Any] = await kill(ctx, {"wave_id": "P24-I01-W07", "attempt": 1})
+        assert result["killed"] is True
+        assert result["signal"] == "halt"
+        assert sent == [(99, _signal.SIGTERM)]
 
     _run(body)
 
 
-def test_kill_rejects_unknown_signal() -> None:
-    ctx = _build_ctx()
+def test_kill_legacy_term_alias_sends_sigterm(tmp_path: Path) -> None:
+    """C1: the legacy ``term`` alias (autopilot's halt signal) still sends SIGTERM."""
+    import signal as _signal
+
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state_with_lane(state_path, wave_id="P24-I01-W07", attempt=1, pgid=7)
+    ctx = _build_ctx(state_path=state_path)
+    sent: list[tuple[int, int]] = []
+
+    async def body() -> None:
+        with mock.patch.object(
+            _fleet, "cancel_process_group", _make_cancel(lambda p, s: sent.append((p, s)))
+        ):
+            result: dict[str, Any] = await kill(
+                ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "term"}
+            )
+        assert result["killed"] is True
+        assert sent == [(7, _signal.SIGTERM)]
+
+    _run(body)
+
+
+def test_kill_no_fleet_run_returns_not_found(tmp_path: Path) -> None:
+    """C2: no fleet run armed -> typed not-found, never a faked kill."""
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    ctx = _build_ctx(state_path=state_path)
+    sent: list[tuple[int, int]] = []
+
+    async def body() -> None:
+        with mock.patch.object(
+            _fleet, "cancel_process_group", _make_cancel(lambda p, s: sent.append((p, s)))
+        ):
+            result: dict[str, Any] = await kill(
+                ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
+            )
+        assert result == {"killed": False, "signal": "kill", "reason": "no-fleet-run"}
+        assert sent == []  # no signal on the not-found path
+
+    _run(body)
+
+
+def test_kill_attempt_mismatch_returns_not_found(tmp_path: Path) -> None:
+    """C2: a stale attempt number resolves no lane -> typed not-found."""
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state_with_lane(state_path, wave_id="P24-I01-W07", attempt=2, pgid=5)
+    ctx = _build_ctx(state_path=state_path)
+    sent: list[tuple[int, int]] = []
+
+    async def body() -> None:
+        with mock.patch.object(
+            _fleet, "cancel_process_group", _make_cancel(lambda p, s: sent.append((p, s)))
+        ):
+            result: dict[str, Any] = await kill(
+                ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
+            )
+        assert result == {"killed": False, "signal": "kill", "reason": "no-lane"}
+        assert sent == []
+
+    _run(body)
+
+
+def test_kill_unkillable_lane_returns_not_found(tmp_path: Path) -> None:
+    """C2: a lane with no addressable pgid returns not-found, never a fake kill."""
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state_with_lane(state_path, wave_id="P24-I01-W07", attempt=1, pgid=None)
+    ctx = _build_ctx(state_path=state_path)
+    sent: list[tuple[int, int]] = []
+
+    async def body() -> None:
+        with mock.patch.object(
+            _fleet, "cancel_process_group", _make_cancel(lambda p, s: sent.append((p, s)))
+        ):
+            result: dict[str, Any] = await kill(
+                ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
+            )
+        assert result == {"killed": False, "signal": "kill", "reason": "unkillable-lane"}
+        assert sent == []  # an unkillable lane is never signalled
+
+    _run(body)
+
+
+def test_kill_already_dead_group_degrades_to_killed_true(tmp_path: Path) -> None:
+    """C2: a ProcessLookupError on the pgid degrades to killed=true already-dead."""
+    from eawf.runtime.daemon.methods import fleet as _fleet
+
+    state_path = tmp_path / "state.json"
+    _write_state_with_lane(state_path, wave_id="P24-I01-W07", attempt=1, pgid=4242)
+    ctx = _build_ctx(state_path=state_path)
+
+    def _already_dead(pgid: int, sig: int) -> None:
+        raise ProcessLookupError(f"no such process group: {pgid}")
+
+    async def body() -> None:
+        with mock.patch.object(
+            _fleet, "cancel_process_group", _make_cancel(_already_dead)
+        ):
+            result: dict[str, Any] = await kill(
+                ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
+            )
+        # Already-dead is not a crash: the group is gone, so the kill succeeds
+        # and the lane deregisters.
+        assert result == {"killed": True, "signal": "kill", "reason": None}
+        assert not _lane_present(state_path, wave_id="P24-I01-W07")
+
+    _run(body)
+
+
+def test_kill_rejects_unknown_signal(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    ctx = _build_ctx(state_path=state_path)
 
     async def body() -> None:
         with pytest.raises(ValidationError):
