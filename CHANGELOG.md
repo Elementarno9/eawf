@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.6.0]
+
+### Added
+- **The binding pass: every built-but-idle contract is now turned on, captured, or surfaced.** P30's theme was "never ship an idle contract again", and the phase delivers the three corresponding strands. The fleet drive-loop wires the autonomous `/flow` driver so a phase's iters dispatch their wave DAG hands-off through the close gate. The `Track` substrate lands the durable strategy/feature vehicle (the renamed former `Subproject` entity) as a real state record that phases tag via `current.track_id`. Trust-validation un-idles the deterministic close-gate evidence path so each scored criterion mints a real `EvidenceRecord` rather than an empty stub. And the TUI cockpit reskins and binds the operator surfaces — fleet drive view, Track standings, evidence/trust drills, and the cross-repo workspace grid — to the live state the rest of the phase now captures.
+
+### Migration
+- **`state.json` `schema_version` advanced 1.8 -> 1.9.** Additive: it introduces the optional `Wave.runtime_baseline` field (the claim-time snapshot of cumulative runtime counters), defaulting to `None` on the model, and the `v1_8_to_v1_9` migration materialises the explicit nullable key on every wave row. Run `eawf migrate` to advance an existing repo; the step is idempotent and replay-safe, and no field is removed or renamed.
+- **`state.json` `schema_version` advanced 1.9 -> 1.10 (the `Subproject` -> `Track` rename).** This edge is a rename, not an additive field: the `Subproject` entity becomes `Track`, the top-level `subprojects` key becomes `tracks`, the cursor field `current.subproject_id` becomes `current.track_id`, and each phase's `subproject_id` link becomes `Phase.track_id`. Because the live model forbids unknown keys (`extra="forbid"`), an un-migrated state carrying the old key names rejects on read; the `v1_9_to_v1_10` migration rewrites every name so a pre-existing state re-validates after migration. Run `eawf migrate` to advance an existing repo — the transform is auto-applied and no data is lost, only renamed.
+
 ## [0.5.4]
 
 ### Fixed
