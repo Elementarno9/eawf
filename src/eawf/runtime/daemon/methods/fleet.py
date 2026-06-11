@@ -48,7 +48,7 @@ import asyncio
 import logging
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -73,10 +73,21 @@ from eawf.kernel.state.models import (
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES
+from eawf.runtime.daemon.dispatch_runner import (
+    SpawnFailureClass,
+    classify_spawn_failure,
+)
 from eawf.runtime.daemon.methods import register
 from eawf.runtime.lock import portalock
+from eawf.runtime.runtimes.adapter import RuntimeSpawnError
 from eawf.runtime.runtimes.cancel import CancelResult, cancel_process_group
+from eawf.runtime.runtimes.fallback import (
+    FallbackAction,
+    fallback_action,
+    next_runtime_on_error,
+)
 from eawf.workflow.dispatch.retry import (
+    ErrorClassifier,
     RepairExhaustedError,
     RepairSpawnFn,
     RepairVerifier,
@@ -821,6 +832,357 @@ async def repair_lane_or_fork(
             f"criterion={criterion.id!r} status=escalated-to-fork"
         )
         raise
+
+
+#: Default total-attempt ceiling for :func:`spawn_lane_or_fork` -- DL-11. One
+#: initial spawn plus up to ``DEFAULT_MAX_TOTAL_ATTEMPTS - 1`` bounded
+#: RETRY_SAME / SWITCH respawns. Bounded so a lane whose agent-cli keeps failing
+#: HALTS to a ``retry_exhausted`` fork rather than respawning forever.
+DEFAULT_MAX_TOTAL_ATTEMPTS: int = 3
+
+
+#: A callable that performs one live agent-cli spawn for *wave_id* against a
+#: given runtime id, returning the lane dispatch outcome. Injected into
+#: :func:`spawn_lane_or_fork` so the bounded retry driver drives a live adapter
+#: in production and a recording fake under test. The runtime id is the loop's
+#: switch lever: a ``SWITCH_RUNTIME`` action calls this again with the next
+#: runtime in the preference ladder. A clean spawn returns the
+#: :class:`LaneDispatch`; a failed spawn raises
+#: :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` so the driver can
+#: classify + bound it (never an infinite respawn).
+LaneSpawnFn = Callable[["MethodContext", str, str], "Awaitable[LaneDispatch]"]
+
+
+#: A HARD spawn-failure class -> the :class:`FleetForkReason` it terminates the
+#: lane to (DL-11). Total over the two HARD members of
+#: :class:`~eawf.runtime.daemon.dispatch_runner.SpawnFailureClass`
+#: (``RECOVERABLE`` is NOT here -- it is handled by the bounded retry ladder, not
+#: a clean termination). A new HARD class without a fork row fails fast at import
+#: via the totality guard below.
+_HARD_FAILURE_FORK_REASON: dict[SpawnFailureClass, FleetForkReason] = {
+    SpawnFailureClass.RUNTIME_SPAWN_ERROR: FleetForkReason.RUNTIME_SPAWN_ERROR,
+    SpawnFailureClass.SUBPROCESS_OOM: FleetForkReason.SUBPROCESS_OOM,
+}
+
+# Totality guard: every HARD spawn-failure class maps to exactly one fork
+# reason. Kept as an import-time assertion so a new HARD class without a fork row
+# fails fast rather than silently falling through to the retry ladder.
+assert set(_HARD_FAILURE_FORK_REASON) == (
+    set(SpawnFailureClass) - {SpawnFailureClass.RECOVERABLE}
+)
+
+
+#: Max chars a spawn fork's evidence ref carries from the terminal failure
+#: detail, bounded so a long stderr dump cannot blow the
+#: :attr:`~eawf.kernel.state.models.FleetFork.evidence_ref` field.
+_SPAWN_FORK_DETAIL_CAP = 1000
+
+
+class LaneRetryExhaustedError(RuntimeError):
+    """Raised when a lane's bounded spawn-retry budget is spent without a clean spawn -- DL-11.
+
+    Surfaces a TYPED terminal when the bounded ladder (RETRY_SAME then SWITCH)
+    spent its whole ``max_total_attempts`` budget -- an auth HALT, a switch
+    ladder run out of runtimes, or the attempt ceiling reached -- so the lane
+    HALTS to a ``RETRY_EXHAUSTED`` fork rather than respawning forever. Raised by
+    :func:`spawn_lane_or_fork` AFTER the fork is enqueued, so a caller that
+    catches it knows the lane has already terminated as a queued fork.
+
+    Attributes:
+        wave_id: ``W<NN>`` wave whose spawn budget exhausted.
+        attempt: 1-based dispatch attempt the exhausted lane was driving.
+        error_class: Canonical runtime error class of the terminal failed spawn.
+        attempts_used: Number of spawns the bounded ladder burned.
+    """
+
+    def __init__(
+        self,
+        *,
+        wave_id: str,
+        attempt: int,
+        error_class: str,
+        attempts_used: int,
+    ) -> None:
+        self.wave_id = wave_id
+        self.attempt = attempt
+        self.error_class = error_class
+        self.attempts_used = attempts_used
+        super().__init__(
+            f"lane spawn retry exhausted for wave {wave_id!r} "
+            f"after {attempts_used} attempt(s) (error_class={error_class})"
+        )
+
+
+def spawn_failure_fork(
+    failure_class: SpawnFailureClass,
+    detail: str,
+    *,
+    wave_id: str,
+    attempt: int,
+    risk_tier: RiskTier,
+) -> FleetFork:
+    """Build the HARD-spawn-failure termination fork for a lane -- DL-11, pure.
+
+    A spawn that raised a HARD
+    :class:`~eawf.runtime.daemon.dispatch_runner.SpawnFailureClass` -- a
+    ``RUNTIME_SPAWN_ERROR`` (ENOENT / permission: the agent CLI cannot be
+    launched at all) or a ``SUBPROCESS_OOM`` (the kernel OOM-killer reaped the
+    child) -- can NEVER be recovered by a retry or a runtime switch. Rather than
+    respawning a binary that is not there or a process that will re-OOM, the loop
+    TERMINATES the lane cleanly to an operator-resolved :class:`FleetFork` whose
+    reason names the failure class. The fork carries the terminal failure detail
+    (normalised to a single bounded line) as its evidence ref so the operator
+    reads the concrete launch / OOM failure.
+
+    Args:
+        failure_class: The HARD :class:`SpawnFailureClass` the spawn raised --
+            must be ``RUNTIME_SPAWN_ERROR`` or ``SUBPROCESS_OOM`` (the totality
+            guard rejects ``RECOVERABLE``, which the retry ladder handles).
+        detail: The terminal failure detail (the spawn error message) that
+            grounds the fork's evidence ref.
+        wave_id: ``W<NN>`` wave whose lane terminated.
+        attempt: 1-based dispatch attempt -- the second half of the
+            ``(wave_id, attempt)`` fork key.
+        risk_tier: The lane's resolved :class:`RiskTier` at termination, so the
+            cockpit renders the band badge on the queued fork.
+
+    Returns:
+        The :class:`FleetFork` to enqueue -- reason mapped from *failure_class*,
+        evidence ref carrying the terminal failure detail.
+
+    Raises:
+        KeyError: When *failure_class* is ``RECOVERABLE`` (a programming error --
+            a recoverable failure is never terminated to a fork; it goes through
+            the bounded retry ladder).
+    """
+    reason = _HARD_FAILURE_FORK_REASON[failure_class]
+    normalised = " ".join(detail.split())[:_SPAWN_FORK_DETAIL_CAP]
+    evidence_ref = normalised or f"urn:eawf:v1:fork:{wave_id}:{reason.value}"
+    fork = FleetFork(
+        wave_id=wave_id,
+        attempt=attempt,
+        risk_tier=risk_tier,
+        reason=reason,
+        evidence_ref=evidence_ref,
+        forked_at=datetime.now(UTC),
+    )
+    logger.info(
+        f"spawn_failure_fork wave={wave_id} attempt={attempt} "
+        f"failure_class={failure_class.value} risk_tier={risk_tier.value} "
+        f"reason={reason.value}"
+    )
+    return fork
+
+
+def spawn_exhausted_fork(
+    error_class: str,
+    detail: str,
+    *,
+    wave_id: str,
+    attempt: int,
+    risk_tier: RiskTier,
+) -> FleetFork:
+    """Build the ``RETRY_EXHAUSTED`` HALT fork for a spent spawn-retry budget -- DL-11, pure.
+
+    The bounded spawn-retry ladder (RETRY_SAME then SWITCH) spends its whole
+    ``max_total_attempts`` budget without a clean spawn -- a rate-limit that
+    never clears, or a switch ladder run out of runtimes. Rather than respawning
+    the lane forever, the loop HALTS it to an operator-resolved
+    :class:`FleetFork` tagged
+    :attr:`~eawf.kernel.state.models.FleetForkReason.RETRY_EXHAUSTED`, carrying
+    the terminal runtime error class + the last failure detail so the operator
+    reads what the final attempt failed on -- never a content-free "it kept
+    failing".
+
+    Args:
+        error_class: The canonical runtime error class of the terminal failed
+            spawn (e.g. ``RUNTIME_RATE_LIMIT`` / ``RUNTIME_API_ERROR``).
+        detail: The terminal failure detail (the last spawn error message) that
+            grounds the fork's evidence ref.
+        wave_id: ``W<NN>`` wave whose spawn budget exhausted.
+        attempt: 1-based dispatch attempt -- the second half of the
+            ``(wave_id, attempt)`` fork key.
+        risk_tier: The lane's resolved :class:`RiskTier` at exhaustion, so the
+            cockpit renders the band badge on the queued fork.
+
+    Returns:
+        The :class:`FleetFork` to enqueue -- reason ``RETRY_EXHAUSTED``, evidence
+        ref carrying the terminal error class + last failure detail.
+    """
+    normalised = " ".join(detail.split())[:_SPAWN_FORK_DETAIL_CAP]
+    evidence_ref = f"{error_class}: {normalised}" if normalised else error_class
+    evidence_ref = evidence_ref[:_SPAWN_FORK_DETAIL_CAP]
+    fork = FleetFork(
+        wave_id=wave_id,
+        attempt=attempt,
+        risk_tier=risk_tier,
+        reason=FleetForkReason.RETRY_EXHAUSTED,
+        evidence_ref=evidence_ref,
+        forked_at=datetime.now(UTC),
+    )
+    logger.info(
+        f"spawn_exhausted_fork wave={wave_id} attempt={attempt} "
+        f"error_class={error_class!r} risk_tier={risk_tier.value} "
+        f"reason={FleetForkReason.RETRY_EXHAUSTED.value}"
+    )
+    return fork
+
+
+async def spawn_lane_or_fork(
+    ctx: MethodContext,
+    *,
+    runtime: str,
+    preference: list[str],
+    spawn: LaneSpawnFn,
+    classify: ErrorClassifier,
+    wave_id: str,
+    attempt: int = 1,
+    risk_tier: RiskTier = RiskTier.MECH,
+    max_total_attempts: int = DEFAULT_MAX_TOTAL_ATTEMPTS,
+) -> LaneDispatch:
+    """Spawn a lane's agent-cli, bounding failures to a clean fork termination -- DL-11.
+
+    The auto-drain loop spawns agents UNATTENDED, so a lane whose spawn keeps
+    failing must terminate cleanly rather than respawn forever. This drives the
+    bounded agent-cli failure taxonomy:
+
+    - A clean spawn returns the :class:`LaneDispatch` immediately (no retry).
+    - A spawn that raises
+      :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` is classified
+      via :func:`~eawf.runtime.daemon.dispatch_runner.classify_spawn_failure`:
+
+      - A HARD failure (``RUNTIME_SPAWN_ERROR`` ENOENT / permission, or
+        ``SUBPROCESS_OOM``) TERMINATES the lane on the FIRST such failure -- no
+        retry or switch can launch a missing binary or un-OOM a reaped process,
+        so the loop enqueues a typed termination fork (:func:`spawn_failure_fork`)
+        and re-raises rather than looping.
+      - A RECOVERABLE failure runs the V5 ladder action: ``RETRY_SAME`` (rate
+        limit) respawns the SAME runtime; ``SWITCH_RUNTIME`` resolves the next
+        runtime in *preference* and respawns on it; ``HALT`` (auth) stops at
+        once. The ladder is BOUNDED by *max_total_attempts* total spawns.
+
+    - When the bounded ladder spends its whole budget without a clean spawn (an
+      auth HALT, a switch ladder run out of runtimes, or the attempt ceiling
+      reached), the loop HALTS the lane to a ``RETRY_EXHAUSTED`` fork
+      (:func:`spawn_exhausted_fork`) and raises -- never an infinite respawn.
+
+    Every terminal path enqueues a typed fork carrying a failure-class + a
+    concrete evidence ref through the daemon canonical state writer, so a lane is
+    NEVER silently dropped and NEVER respawned forever (success criteria C1 +
+    C2).
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` (the fork-queue
+            write target).
+        runtime: Runtime id of the first spawn (the highest-preference runtime
+            the caller resolved).
+        preference: Ordered ``Wave.runtime_preference`` runtime ladder the V5
+            switch walks past the failed runtime. Empty means no switch target.
+        spawn: Injected async lane-spawn callable performing one spawn per
+            ``(ctx, wave_id, runtime)``; raises ``RuntimeSpawnError`` on a failed
+            spawn. The production caller binds the live claim + ``agent.dispatch``
+            spawn; a test binds a recording fake (no real subprocess).
+        classify: Injected callable mapping a ``RuntimeSpawnError`` (+ the runtime
+            it failed on) to a canonical
+            :class:`~eawf.runtime.runtimes.adapter.ErrorClass` for the V5 ladder.
+        wave_id: ``W<NN>`` wave whose lane this spawns.
+        attempt: 1-based dispatch attempt -- the second half of the fork key.
+        risk_tier: The lane's resolved :class:`RiskTier`, recorded on any
+            termination fork.
+        max_total_attempts: Total spawn ceiling (one initial + bounded retries /
+            switches). Must be at least 1.
+
+    Returns:
+        The :class:`LaneDispatch` of the first spawn that succeeded.
+
+    Raises:
+        ValueError: When *max_total_attempts* is less than 1.
+        RuntimeSpawnError: When a HARD spawn failure (ENOENT / permission / OOM)
+            terminated the lane -- re-raised AFTER the typed termination fork is
+            enqueued, so the lane terminates as a fork (C2).
+        LaneRetryExhaustedError: When the bounded retry budget is spent without a
+            clean spawn -- raised AFTER the ``RETRY_EXHAUSTED`` fork is enqueued
+            (C1).
+    """
+    if max_total_attempts < 1:
+        raise ValueError(f"max_total_attempts must be >= 1: {max_total_attempts!r}")
+
+    current_runtime = runtime
+    last_error_class = "RUNTIME_API_ERROR"
+    last_detail = "lane spawn failed"
+    for spawn_attempt in range(1, max_total_attempts + 1):
+        try:
+            return await spawn(ctx, wave_id, current_runtime)
+        except RuntimeSpawnError as exc:
+            failure_class = classify_spawn_failure(exc)
+            detail = f"{exc}"[:_SPAWN_FORK_DETAIL_CAP] or "lane spawn failed"
+            if failure_class is not SpawnFailureClass.RECOVERABLE:
+                # HARD failure (ENOENT / permission / OOM): no retry or switch
+                # can recover it. Terminate the lane cleanly to a typed fork on
+                # the FIRST such failure (C2) rather than respawning forever.
+                fork = spawn_failure_fork(
+                    failure_class,
+                    detail,
+                    wave_id=wave_id,
+                    attempt=attempt,
+                    risk_tier=risk_tier,
+                )
+                _enqueue_fork(ctx, fork)
+                logger.warning(
+                    f"spawn_lane_or_fork wave={wave_id} attempt={attempt} "
+                    f"failure_class={failure_class.value} status=terminated-to-fork"
+                )
+                raise
+            error_class = classify(exc, current_runtime)
+            action = fallback_action(error_class)
+            last_error_class = error_class
+            last_detail = detail
+            logger.info(
+                f"spawn_lane_or_fork wave={wave_id} spawn_attempt={spawn_attempt} "
+                f"runtime={current_runtime!r} status=failed error_class={error_class} "
+                f"action={action.value}"
+            )
+            if action is FallbackAction.HALT:
+                # Auth never auto-retries: stop at once and HALT to a fork rather
+                # than burning the remaining attempt budget.
+                break
+            if action is FallbackAction.SWITCH_RUNTIME:
+                next_runtime = next_runtime_on_error(
+                    failed_runtime=current_runtime,
+                    preference=preference,
+                    error_class=error_class,
+                )
+                if next_runtime is None:
+                    # The preference ladder is exhausted -- no runtime left to
+                    # switch to, so the spawn budget is terminal.
+                    break
+                logger.info(
+                    f"spawn_lane_or_fork wave={wave_id} spawn_attempt={spawn_attempt} "
+                    f"status=switching from={current_runtime!r} to={next_runtime!r}"
+                )
+                current_runtime = next_runtime
+            # RETRY_SAME falls through with current_runtime unchanged.
+
+    # The bounded budget is spent without a clean spawn: HALT the lane to a
+    # RETRY_EXHAUSTED fork (C1) -- never respawn forever, never silent-drop.
+    fork = spawn_exhausted_fork(
+        last_error_class,
+        last_detail,
+        wave_id=wave_id,
+        attempt=attempt,
+        risk_tier=risk_tier,
+    )
+    _enqueue_fork(ctx, fork)
+    logger.warning(
+        f"spawn_lane_or_fork wave={wave_id} attempt={attempt} "
+        f"error_class={last_error_class!r} status=retry-exhausted-to-fork"
+    )
+    raise LaneRetryExhaustedError(
+        wave_id=wave_id,
+        attempt=attempt,
+        error_class=last_error_class,
+        attempts_used=max_total_attempts,
+    )
 
 
 @dataclass

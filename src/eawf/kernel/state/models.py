@@ -1200,12 +1200,31 @@ class FleetForkReason(StrEnum):
       ESCALATES the lane to an operator-resolved fork ("repair exhausted -- your
       call") carrying the last failing check rather than silently dropping the
       lane or re-dispatching forever (DL-7).
+    - ``retry_exhausted`` -- the lane's bounded agent-cli spawn-retry loop spent
+      its whole ``max_total_attempts`` budget (RETRY_SAME then SWITCH) without a
+      clean spawn, so the loop HALTS the lane to an operator-resolved fork
+      rather than respawning it forever (DL-11). The fork carries the terminal
+      runtime error class as its failure-class so the operator reads what the
+      last attempt failed on.
+    - ``runtime_spawn_error`` -- the lane's spawn raised a hard
+      :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` the retry ladder
+      cannot recover (an ENOENT / permission failure to launch the agent CLI at
+      all): no runtime switch and no retry can fix a missing or unexecutable
+      binary, so the lane terminates cleanly to an operator-resolved fork on the
+      first such failure rather than looping (DL-11).
+    - ``subprocess_oom`` -- the lane's spawned subprocess was OOM-killed (the
+      kernel reaped it for exceeding memory), so the lane terminates cleanly to
+      an operator-resolved fork carrying the OOM failure-class rather than
+      respawning a process that will be reaped again (DL-11).
     """
 
     HIGH_RISK_CLOSE = "high_risk_close"
     UNCALIBRATED_JURY = "uncalibrated_jury"
     NEEDS_USER_SPLIT = "needs_user_split"
     REPAIR_EXHAUSTED = "repair_exhausted"
+    RETRY_EXHAUSTED = "retry_exhausted"
+    RUNTIME_SPAWN_ERROR = "runtime_spawn_error"
+    SUBPROCESS_OOM = "subprocess_oom"
 
 
 class FleetForkResolution(StrEnum):

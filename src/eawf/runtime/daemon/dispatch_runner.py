@@ -39,12 +39,15 @@ skip it).
 
 from __future__ import annotations
 
+import errno
 import logging
+import signal
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -84,6 +87,7 @@ from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER, Enfo
 from eawf.runtime.budget.service import record_consumption
 from eawf.runtime.daemon.budget_interlock import InterlockOutcome, enforce_token_cap
 from eawf.runtime.lock import portalock
+from eawf.runtime.runtimes.adapter import RuntimeSpawnError
 from eawf.runtime.sandbox.egress_proxy import SandboxEnforcementEvent
 from eawf.workflow.agent_report.store import append_agent_report
 from eawf.workflow.evidence._io import load_state
@@ -169,6 +173,91 @@ class DispatchResult:
     event_ids: tuple[str, ...]
     report_id: str | None = None
     terminated: bool = False
+
+
+class SpawnFailureClass(StrEnum):
+    """Closed taxonomy of how a live agent-cli spawn failed -- DL-11.
+
+    The fleet auto-drain loop spawns agents unattended, so a spawn that fails
+    must classify into exactly one of these closed members rather than leaking a
+    raw :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` that the loop
+    cannot reason about. The classifier (:func:`classify_spawn_failure`) reads
+    the failure's exit status to split a transient, retryable spawn failure from
+    the two HARD failures that the bounded retry ladder must NOT respawn:
+
+    - :attr:`RECOVERABLE` -- a transient spawn failure (a non-zero exit the
+      retry ladder may recover via RETRY_SAME / SWITCH): the loop hands it to
+      the bounded retry driver, which respawns up to ``max_total_attempts``
+      before HALTing to a ``retry_exhausted`` fork.
+    - :attr:`RUNTIME_SPAWN_ERROR` -- a hard launch failure (ENOENT / permission:
+      the agent CLI binary is missing or not executable). The binary never
+      starts, so it surfaces as a chained :class:`FileNotFoundError` /
+      :class:`PermissionError` (an :class:`OSError` with the ENOENT / EACCES /
+      EPERM errno) rather than a subprocess exit. No runtime switch and no retry
+      can launch a binary that is not there, so the lane terminates cleanly to a
+      ``runtime_spawn_error`` fork on the FIRST such failure.
+    - :attr:`SUBPROCESS_OOM` -- the spawned subprocess was OOM-killed (the
+      kernel reaped it via SIGKILL for exceeding memory, surfacing on the
+      subprocess exit status as the negative ``-SIGKILL`` convention or the
+      ``128 + SIGKILL`` shell convention). Respawning would re-OOM, so the lane
+      terminates cleanly to a ``subprocess_oom`` fork rather than looping.
+    """
+
+    RECOVERABLE = "recoverable"
+    RUNTIME_SPAWN_ERROR = "runtime_spawn_error"
+    SUBPROCESS_OOM = "subprocess_oom"
+
+
+#: Exit status of a subprocess reaped by SIGKILL on the POSIX shell convention
+#: (``128 + signal``). The kernel OOM-killer delivers SIGKILL, so a child the
+#: OOM-killer reaped surfaces this exit code when the parent reports the signal
+#: as ``128 + signum`` rather than the negative ``-signum`` convention.
+_SIGKILL_EXIT_STATUS = 128 + int(signal.SIGKILL)
+
+#: OSError errno values that mark a HARD launch failure -- the agent CLI binary
+#: is missing (``ENOENT``) or not executable / not permitted (``EACCES`` /
+#: ``EPERM``). A chained OSError carrying one of these is unrecoverable: no retry
+#: or runtime switch can launch a binary that is not there.
+_LAUNCH_FAILURE_ERRNOS = frozenset({errno.ENOENT, errno.EACCES, errno.EPERM})
+
+
+def classify_spawn_failure(exc: RuntimeSpawnError) -> SpawnFailureClass:
+    """Classify a live-spawn :class:`RuntimeSpawnError` into the DL-11 taxonomy.
+
+    Splits the two HARD spawn failures the bounded retry ladder must NOT respawn
+    from the transient, retryable rest. The two signals are read from DISTINCT
+    places so a subprocess that merely exits non-zero (a recoverable failure) is
+    never confused with a launch errno:
+
+    - A launch failure (the agent CLI binary is missing or not executable)
+      surfaces as a chained :class:`OSError` (``__cause__`` / ``__context__``) --
+      a :class:`FileNotFoundError` / :class:`PermissionError` carrying an
+      ``ENOENT`` / ``EACCES`` / ``EPERM`` errno -- because the process never
+      started to produce an exit status. It classifies
+      :attr:`SpawnFailureClass.RUNTIME_SPAWN_ERROR`.
+    - A SIGKILL-reaped child (the kernel OOM-killer delivers SIGKILL, surfacing
+      on the subprocess :attr:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError.exit_status`
+      as the negative ``-SIGKILL`` convention or the ``128 + SIGKILL`` shell
+      convention) classifies :attr:`SpawnFailureClass.SUBPROCESS_OOM` --
+      respawning would re-OOM.
+    - Every other spawn failure (an ordinary non-zero exit, a timeout, an
+      unparseable envelope, or a missing exit status) classifies
+      :attr:`SpawnFailureClass.RECOVERABLE`, so the loop hands it to the bounded
+      retry driver rather than terminating the lane on the first failure.
+
+    Args:
+        exc: The :class:`RuntimeSpawnError` the live spawn raised.
+
+    Returns:
+        The :class:`SpawnFailureClass` member the failure classifies to.
+    """
+    cause = exc.__cause__ or exc.__context__
+    if isinstance(cause, OSError) and cause.errno in _LAUNCH_FAILURE_ERRNOS:
+        return SpawnFailureClass.RUNTIME_SPAWN_ERROR
+    status = exc.exit_status
+    if status is not None and status in {-int(signal.SIGKILL), _SIGKILL_EXIT_STATUS}:
+        return SpawnFailureClass.SUBPROCESS_OOM
+    return SpawnFailureClass.RECOVERABLE
 
 
 def _event_path(ctx: MethodContext) -> Path:
