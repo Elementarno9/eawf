@@ -43,10 +43,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -926,6 +928,302 @@ def _deregister_lane(ctx: MethodContext, *, wave_id: str, attempt: int) -> None:
         state.updated_at = datetime.now(UTC)
         atomic_write_json_locked(state_path, state.model_dump(mode="json"))
     logger.info(f"_deregister_lane wave={wave_id} attempt={attempt}")
+
+
+#: Probe one lane's process group for liveness (DL-8 reattach). Given a
+#: ``pgid``, returns ``True`` when the OS still owns the group, ``False`` when
+#: it is gone -- the ``os.kill(pgid, 0)`` / ``os.getpgid(pgid)`` style check the
+#: reattach sweep uses to tell a still-running lane from one whose child died
+#: during the TUI / daemon blip. The default probes ``os.getpgid``; tests
+#: inject a deterministic fake so no real process is consulted.
+LivenessProbe = Callable[[int], bool]
+
+
+def _default_liveness(pgid: int) -> bool:
+    """Return whether the OS still owns the process group *pgid* -- the live probe.
+
+    Probes the group **leader** via :func:`os.getpgid` (mirroring the cancel
+    ladder's group-liveness poll): the call resolving means the group is still
+    alive, a :class:`ProcessLookupError` means it is gone. A
+    :class:`PermissionError` (the group exists but is owned by another user) is
+    treated as alive -- the group is present, just not ours to address.
+
+    Args:
+        pgid: Process-group id to probe.
+
+    Returns:
+        ``True`` when the group leader is still resolvable, else ``False``.
+    """
+    try:
+        os.getpgid(pgid)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+class LaneReattachOutcome(StrEnum):
+    """Per-lane resolution of one :func:`reattach` sweep -- the closed outcome set.
+
+    A lane is never left dangling as falsely running: the sweep resolves each
+    in-flight lane to exactly one of these terminal outcomes.
+
+    - ``reattached`` -- the lane's ``pgid`` is still live, so the loop re-binds
+      to it and the run continues driving it (no re-claim).
+    - ``redispatched`` -- the lane's child died during the blip, so the lane was
+      transitioned through the transient ``reattaching`` state and resolved by
+      re-dispatching the wave (a fresh lane registers with a new ``pgid``).
+    - ``failed`` -- the lane's child died during the blip and was resolved as a
+      fork (the fork counter bumps) rather than re-dispatched -- e.g. its wave
+      already reached a terminal status during the blip, so re-dispatch would
+      re-claim a closed wave.
+    """
+
+    REATTACHED = "reattached"
+    REDISPATCHED = "redispatched"
+    FAILED = "failed"
+
+
+class ReattachLaneResult(BaseModel):
+    """Resolution of one lane in a :func:`reattach` sweep.
+
+    Attributes:
+        wave_id: ``W<NN>`` wave the lane was driving.
+        attempt: Dispatch attempt of the pre-blip lane.
+        outcome: The lane's :class:`LaneReattachOutcome`.
+        pgid: The live pgid the lane re-bound to (``reattached``), the fresh
+            pgid of the re-dispatched lane (``redispatched``), or the dead pgid
+            that was reaped (``failed``); ``None`` when the lane carried no pgid.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    wave_id: str
+    attempt: int = Field(ge=1)
+    outcome: LaneReattachOutcome
+    pgid: int | None = None
+
+
+class ReattachResult(BaseModel):
+    """Result of :func:`reattach` -- the recovered run + per-lane resolutions.
+
+    Attributes:
+        run_state: The :class:`FleetRunState` of the recovered run after the
+            sweep re-binds / resolves its lanes.
+        reattached: Lanes whose pgid was still live and were re-bound.
+        redispatched: Lanes whose child died and were re-dispatched.
+        failed: Lanes whose child died and were resolved as a fork.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    run_state: FleetRunState
+    reattached: list[ReattachLaneResult] = Field(default_factory=list)
+    redispatched: list[ReattachLaneResult] = Field(default_factory=list)
+    failed: list[ReattachLaneResult] = Field(default_factory=list)
+
+
+def _wave_terminal_in_state(ctx: MethodContext, wave_id: str) -> bool:
+    """Return whether *wave_id* already reached a terminal status in ``state.json``.
+
+    The reattach sweep consults this so a lane whose wave CLOSED (or
+    failed / abandoned) during the blip is never re-dispatched -- re-claiming a
+    closed wave would regress the run. A stateless context or a vanished wave
+    reports ``True`` (no live wave to re-dispatch).
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path``.
+        wave_id: ``W<NN>`` wave to inspect.
+
+    Returns:
+        ``True`` when the wave is closed / failed / abandoned / vanished, else
+        ``False``.
+    """
+    if ctx.state_path is None:
+        return True
+    wave = load_state(Path(ctx.state_path)).waves.get(wave_id)
+    if wave is None:
+        return True
+    return wave.status in {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}
+
+
+def reattach(
+    ctx: MethodContext,
+    *,
+    is_alive: LivenessProbe | None = None,
+    spawn: LaneSpawner | None = None,
+    watch: LaneWatcher | None = None,
+    block_authority: BlockAuthority = BlockAuthority.ADVISORY,
+    drive_after: bool = True,
+) -> ReattachResult:
+    """Recover the persisted FleetRun + re-bind its lanes after a TUI / daemon bounce.
+
+    The DL-8 session-resume path the S12 scenario depends on. The FleetRun is
+    daemon-owned, so it survives a TUI close and a daemon restart on the
+    optional :attr:`~eawf.kernel.state.models.State.fleet_run` field. On
+    reconnect this reloads the persisted run off ``state.json`` and walks every
+    in-flight lane against the W02 pid registry:
+
+    - A lane whose ``pgid`` is still **live** (per *is_alive*) is re-bound and
+      the run continues driving it WITHOUT re-claiming -- the wave keeps its
+      single dispatch attempt (C1).
+    - A lane whose child **died** during the blip is transitioned through the
+      transient ``reattaching`` state and resolved (never left dangling as
+      falsely running, C2): re-dispatched (a fresh lane registers with a new
+      pgid) when its wave is still in flight, or resolved as a fork (the fork
+      counter bumps) when its wave already reached a terminal status during the
+      blip -- so the sweep never re-claims a closed wave.
+
+    A lane carrying no addressable ``pgid`` (a plan-only / unkillable lane) is
+    re-bound as-is: there is no OS group to probe, so the loop simply continues
+    driving it. After the sweep re-binds / resolves the registry, the recovered
+    run is persisted through the daemon canonical state writer and -- when
+    *drive_after* -- the loop resumes draining the remaining frontier + live
+    lanes from its recovered state.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` (the persisted run
+            + the re-bind write target).
+        is_alive: Injectable liveness probe (``pgid -> bool``). ``None`` (the
+            default) probes :func:`os.getpgid`; tests inject a fake so no real
+            process is consulted.
+        spawn: Optional :class:`LaneSpawner` override used to re-dispatch a dead
+            lane; defaults to the live claim + ``agent.dispatch`` spawner.
+        watch: Optional :class:`LaneWatcher` override for the resumed drive.
+        block_authority: The jury's earned authority for the resumed run.
+        drive_after: When ``True`` (the default) the loop resumes draining after
+            the re-bind sweep; tests pass ``False`` to inspect the re-bound run
+            without driving it to terminal.
+
+    Returns:
+        A :class:`ReattachResult` carrying the recovered run state + the
+        per-lane resolutions (re-bound / re-dispatched / failed).
+
+    Raises:
+        LifecycleError: When ``ctx.state_path`` is unset or no fleet run is
+            armed to reattach to.
+    """
+    probe = is_alive if is_alive is not None else _default_liveness
+    spawner = spawn if spawn is not None else _default_spawner
+    run = _require_run(ctx)
+    reattached: list[ReattachLaneResult] = []
+    redispatched: list[ReattachLaneResult] = []
+    failed: list[ReattachLaneResult] = []
+
+    # Walk every in-flight lane against the pid registry. A live lane re-binds;
+    # a dead lane is dropped from the registry (so it never stays falsely
+    # running) and resolved -- re-dispatched when its wave is still in flight,
+    # else forked.
+    for wave_id in list(run.lanes):
+        lane = run.lanes[wave_id]
+        if lane.pgid is None or probe(lane.pgid):
+            # Live (or plan-only / unaddressable): re-bind and keep driving.
+            reattached.append(
+                ReattachLaneResult(
+                    wave_id=wave_id,
+                    attempt=lane.attempt,
+                    outcome=LaneReattachOutcome.REATTACHED,
+                    pgid=lane.pgid,
+                )
+            )
+            logger.info(
+                f"reattach wave={wave_id} attempt={lane.attempt} pgid={lane.pgid} "
+                f"state=reattaching outcome=reattached"
+            )
+            continue
+        # Dead during the blip: drop the falsely-running lane from the registry.
+        del run.lanes[wave_id]
+        if _wave_terminal_in_state(ctx, wave_id):
+            # The wave already terminated during the blip -- resolve as a fork
+            # rather than re-claiming a closed wave.
+            run.counters.forked += 1
+            failed.append(
+                ReattachLaneResult(
+                    wave_id=wave_id,
+                    attempt=lane.attempt,
+                    outcome=LaneReattachOutcome.FAILED,
+                    pgid=lane.pgid,
+                )
+            )
+            logger.info(
+                f"reattach wave={wave_id} attempt={lane.attempt} pgid={lane.pgid} "
+                f"state=reattaching outcome=failed"
+            )
+            continue
+        # The wave is still in flight: re-dispatch it as a fresh lane.
+        dispatch = _normalise_dispatch(spawner(ctx, wave_id))
+        run.lanes[wave_id] = FleetLane(
+            wave_id=wave_id,
+            attempt=dispatch.attempt,
+            session_id=dispatch.session_id,
+            pgid=dispatch.pgid,
+            dispatched_at=datetime.now(UTC),
+        )
+        run.counters.dispatched += 1
+        redispatched.append(
+            ReattachLaneResult(
+                wave_id=wave_id,
+                attempt=dispatch.attempt,
+                outcome=LaneReattachOutcome.REDISPATCHED,
+                pgid=dispatch.pgid,
+            )
+        )
+        logger.info(
+            f"reattach wave={wave_id} attempt={dispatch.attempt} pgid={dispatch.pgid} "
+            f"state=reattaching outcome=redispatched"
+        )
+
+    run.run_state = FleetRunState.DRAINING
+    _persist_fleet_run(ctx, run)
+    logger.info(
+        f"reattach run_state={run.run_state.value} reattached={len(reattached)} "
+        f"redispatched={len(redispatched)} failed={len(failed)}"
+    )
+    if drive_after:
+        loop = _Loop(
+            ctx=ctx,
+            run=run,
+            spawn=spawner,
+            watch=watch if watch is not None else _default_watcher,
+            block_authority=block_authority,
+        )
+        run = loop.run_to_terminal()
+    return ReattachResult(
+        run_state=run.run_state,
+        reattached=reattached,
+        redispatched=redispatched,
+        failed=failed,
+    )
+
+
+@register("fleet.reattach")
+async def reattach_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Recover + re-bind the persisted FleetRun after a TUI / daemon bounce.
+
+    The ``fleet.reattach`` RPC: reloads the persisted run off ``state.json``,
+    re-binds every still-live lane against the W02 pid registry, resolves the
+    lanes whose child died during the blip (re-dispatched or forked, never left
+    falsely running), then resumes draining. Params are ignored -- the run is
+    recovered entirely from persisted state, so the operator-facing surface
+    needs only the bare RPC.
+
+    Args:
+        ctx: Daemon method context. Needs ``state_path`` to recover + re-bind +
+            persist the run.
+        params: Unused (the run is recovered from persisted state).
+
+    Returns:
+        Dict matching :class:`ReattachResult`.
+
+    Raises:
+        LifecycleError: When no fleet run is armed to reattach to.
+    """
+    result = reattach(ctx)
+    logger.info(
+        f"reattach_rpc run_state={result.run_state.value} "
+        f"reattached={len(result.reattached)} redispatched={len(result.redispatched)} "
+        f"failed={len(result.failed)}"
+    )
+    return result.model_dump(mode="json")
 
 
 @register("fleet.drive")
