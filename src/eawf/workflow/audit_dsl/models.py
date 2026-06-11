@@ -82,11 +82,20 @@ The check kinds frozen for v0.3:
   :class:`MockupGoldenDiffArgs`: ``{golden_path: str, scope: "repo" |
   "workspace" | "user" = "repo", state_path: str | None = None,
   mode: str | None = None, key_sequence: list[str] = [], size: [int, int]
-  = [120, 40]}``. Mounts the Textual TUI through the Pilot harness,
-  captures the settled screen as normalised ASCII, and byte-compares it
-  against the approved pick-time mockup golden. Fails with a unified diff
-  naming the first changed region. This is the text-golden falsifier (T5)
-  for UI mockup fidelity.
+  = [120, 40], mockup_png: str | None = None, tui_png: str | None =
+  None}``. The default ASCII-text mode mounts the Textual TUI through the
+  Pilot harness, captures the settled screen as normalised ASCII, and
+  byte-compares it against the approved pick-time mockup golden, failing
+  with a unified diff naming the first changed region. When ``mockup_png``
+  is set the kind runs the VIS-1 **image** falsifier instead: it
+  rasterises the reference mockup PNG and a screenshot of the live TUI
+  rendered to PNG and scores their divergence weighting layout shape
+  (border-corner round-vs-square, body column count) ABOVE token fidelity,
+  so a square-vs-round or one-vs-two-column divergence fails even when most
+  glyphs match. ASCII goldens normalise box-drawing glyphs and column
+  gutters into the same text, so the image mode catches the P30-I15
+  "faithful but actually square-vs-round / one-vs-two-column" miss the
+  text mode could not. Both modes sit at the golden tier (T5).
 
 See ``docs/architecture/audit-checks.md`` for grammar + the
 sandbox-policy boundary that ``command_exit_zero`` leaves to the
@@ -290,7 +299,15 @@ class CitationResolvesArgs(BaseModel):
 
 
 class MockupGoldenDiffArgs(BaseModel):
-    """Strict args schema for the ``mockup_golden_diff`` check kind."""
+    """Strict args schema for the ``mockup_golden_diff`` check kind.
+
+    The default ASCII-text mode captures the live TUI as a normalised text
+    frame and byte-compares it to ``golden_path``. The optional **image**
+    mode (``mockup_png`` set) is the layout-shape falsifier (VIS-1): it
+    rasterises a committed reference mockup PNG and a screenshot of the live
+    TUI rendered to PNG and scores their divergence weighting layout shape
+    (border-corner round-vs-square, body column count) above token fidelity.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -300,6 +317,17 @@ class MockupGoldenDiffArgs(BaseModel):
     mode: str | None = None
     key_sequence: list[str] = Field(default_factory=list)
     size: list[int] = Field(default_factory=lambda: [120, 40])
+    #: Image-mode (VIS-1): repo-relative path to the committed reference
+    #: mockup PNG. When set, the kind runs the layout-shape image diff
+    #: instead of the ASCII-text golden compare. ``golden_path`` then names
+    #: the reference TUI-render PNG the live screenshot is checked against
+    #: (or, in a pure-fixture run, the second image of the fixture pair).
+    mockup_png: str | None = None
+    #: Image-mode: repo-relative path to a pre-rendered live-TUI PNG to
+    #: compare against ``mockup_png``. When omitted in image mode the kind
+    #: would screenshot the live TUI; the fixture-pair tests pass it directly
+    #: so the gate runs end-to-end without a live render.
+    tui_png: str | None = None
 
     @model_validator(mode="after")
     def _valid_capture_args(self) -> MockupGoldenDiffArgs:
@@ -307,8 +335,8 @@ class MockupGoldenDiffArgs(BaseModel):
 
         Raises:
             ValueError: when the golden path or optional selector is empty,
-                any key sequence item is empty, or ``size`` is not exactly two
-                integer entries.
+                any key sequence item is empty, ``size`` is not exactly two
+                integer entries, or an image-mode path is empty when set.
         """
         if not self.golden_path.strip():
             raise ValueError("golden_path must be a non-empty str")
@@ -316,6 +344,10 @@ class MockupGoldenDiffArgs(BaseModel):
             raise ValueError("state_path must be a non-empty str when set")
         if self.mode is not None and not self.mode.strip():
             raise ValueError("mode must be a non-empty str when set")
+        if self.mockup_png is not None and not self.mockup_png.strip():
+            raise ValueError("mockup_png must be a non-empty str when set")
+        if self.tui_png is not None and not self.tui_png.strip():
+            raise ValueError("tui_png must be a non-empty str when set")
         if any(not key for key in self.key_sequence):
             raise ValueError("key_sequence entries must be non-empty strings")
         if len(self.size) != 2 or any(

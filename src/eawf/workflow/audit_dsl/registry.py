@@ -404,8 +404,85 @@ def _resolve_optional_file(
     return target, None
 
 
+def _check_mockup_image_diff(
+    spec: CheckSpec,
+    cwd: Path,
+    args: MockupGoldenDiffArgs,
+) -> CheckResult:
+    """VIS-1 image mode: layout-shape-weighted diff of mockup PNG vs TUI PNG.
+
+    Decodes the committed reference mockup PNG and the live-TUI render PNG to
+    coarse ink grids and scores their divergence weighting layout shape
+    (border-corner round-vs-square, body column count) above token fidelity.
+    A layout-shape mismatch FAILS the gate; a faithful pair PASSES. Never
+    raises -- a malformed fixture degrades to ``status="fail"``.
+    """
+    from eawf.workflow.audit_dsl.kinds.mockup_image_diff import (
+        compare_mockup_png_to_tui_png,
+        layout_diff_fails,
+    )
+
+    assert args.mockup_png is not None  # narrowed by the caller's branch
+    mockup_path, mockup_err = _resolve_optional_file(
+        args.mockup_png, cwd=cwd, arg_name="mockup_png"
+    )
+    if mockup_err is not None or mockup_path is None:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=mockup_err or "mockup_png not found",
+        )
+    # In image mode ``tui_png`` is the live-render side; the fixture-pair tests
+    # pass it directly, falling back to ``golden_path`` as the reference TUI render.
+    tui_arg = args.tui_png if args.tui_png is not None else args.golden_path
+    tui_path, tui_err = _resolve_optional_file(tui_arg, cwd=cwd, arg_name="tui_png")
+    if tui_err is not None or tui_path is None:
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=tui_err or "tui_png not found",
+        )
+
+    try:
+        diff = compare_mockup_png_to_tui_png(mockup_path.read_bytes(), tui_path.read_bytes())
+    except ValueError as exc:
+        logger.debug(f"_check_mockup_image_diff decode-fail name={spec.name!r} reason={exc!r}")
+        return CheckResult(
+            name=spec.name,
+            kind=spec.kind,
+            passed=False,
+            status="fail",
+            details=f"mockup image diff failed: {exc}",
+        )
+
+    failed = layout_diff_fails(diff)
+    summary = (
+        f"score={diff.score:.3f} border_shape_mismatch={diff.border_shape_mismatch} "
+        f"column_count_mismatch={diff.column_count_mismatch} "
+        f"token_divergence={diff.token_divergence:.4f} "
+        f"mockup={args.mockup_png} tui={tui_arg} :: {'; '.join(diff.reasons)}"
+    )
+    if failed:
+        logger.debug(f"_check_mockup_image_diff fail name={spec.name!r} score={diff.score:.3f}")
+        return CheckResult(
+            name=spec.name, kind=spec.kind, passed=False, status="fail", details=summary
+        )
+    logger.debug(f"_check_mockup_image_diff ok name={spec.name!r} score={diff.score:.3f}")
+    return CheckResult(name=spec.name, kind=spec.kind, passed=True, status="pass", details=summary)
+
+
 def _check_mockup_golden_diff(spec: CheckSpec, cwd: Path) -> CheckResult:
-    """Capture a TUI screen via Pilot and compare it to a mockup golden."""
+    """Capture a TUI screen via Pilot and compare it to a mockup golden.
+
+    Default ASCII-text mode byte-compares the normalised live screen to a text
+    golden. When ``mockup_png`` is set the kind dispatches to the VIS-1 image
+    falsifier (:func:`_check_mockup_image_diff`), which weights layout shape
+    above token fidelity.
+    """
     try:
         args = MockupGoldenDiffArgs.model_validate(spec.args)
     except ValidationError as exc:
@@ -416,6 +493,9 @@ def _check_mockup_golden_diff(spec: CheckSpec, cwd: Path) -> CheckResult:
             status="fail",
             details=f"invalid args: {exc.errors()[0]['msg']}",
         )
+
+    if args.mockup_png is not None:
+        return _check_mockup_image_diff(spec, cwd, args)
 
     golden_path, golden_error = _resolve_optional_file(
         args.golden_path,
