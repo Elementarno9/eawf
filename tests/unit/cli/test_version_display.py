@@ -21,14 +21,21 @@ marker rather than the real repo.
 
 from __future__ import annotations
 
+import re
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from typing import Any
 
 import pytest
+from packaging.version import Version
 
 from eawf.surfaces.cli import _version_display
-from eawf.surfaces.cli._version_display import is_editable_install
+from eawf.surfaces.cli._version_display import (
+    compose_display_version,
+    is_editable_install,
+)
+
+_EDITABLE_DIRTY_RE = re.compile(r"^0\.6\.0\+dev\.g[0-9a-f]{12}\.dirty$")
 
 
 class _StubDistribution:
@@ -184,3 +191,145 @@ def test_is_editable_install_dir_info_not_a_mapping_git_fallback(
     _patch_import_root(monkeypatch, tmp_path)
 
     assert is_editable_install() is False
+
+
+# --- compose_display_version (the dev local-segment composer) ---------------
+
+
+def _patch_editable(monkeypatch: pytest.MonkeyPatch, *, editable: bool) -> None:
+    """Pin :func:`is_editable_install` so the composer takes a known branch."""
+    monkeypatch.setattr(_version_display, "is_editable_install", lambda: editable)
+
+
+def _patch_git(monkeypatch: pytest.MonkeyPatch, responses: dict[str, str | None]) -> None:
+    """Route ``_git_output`` to *responses* keyed by the first git arg.
+
+    The composer issues ``rev-parse`` (for the short SHA) then ``status``
+    (for the dirty probe); the stub returns the body mapped to the leading
+    argument so a test can pin each independently.
+    """
+
+    def _fake_git(args: list[str]) -> str | None:
+        return responses.get(args[0])
+
+    monkeypatch.setattr(_version_display, "_git_output", _fake_git)
+
+
+def test_compose_display_version_editable_dirty_matches_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Editable + dirty tree -> base+dev.g<12hex>.dirty, PEP 440-parseable."""
+    _patch_editable(monkeypatch, editable=True)
+    _patch_git(
+        monkeypatch,
+        {"rev-parse": "0123456789ab", "status": " M src/eawf/foo.py"},
+    )
+
+    composed = compose_display_version(base="0.6.0")
+
+    assert _EDITABLE_DIRTY_RE.match(composed)
+    assert composed == "0.6.0+dev.g0123456789ab.dirty"
+    parsed = Version(composed)
+    assert parsed.base_version == "0.6.0"
+    assert parsed.local == "dev.g0123456789ab.dirty"
+
+
+def test_compose_display_version_editable_clean_omits_dirty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Editable + clean tree -> base+dev.g<sha>, no .dirty suffix."""
+    _patch_editable(monkeypatch, editable=True)
+    _patch_git(monkeypatch, {"rev-parse": "abcdef012345", "status": ""})
+
+    composed = compose_display_version(base="0.6.0")
+
+    assert composed == "0.6.0+dev.gabcdef012345"
+    assert ".dirty" not in composed
+    assert Version(composed).local == "dev.gabcdef012345"
+
+
+def test_compose_display_version_wheel_path_returns_clean_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-editable (wheel) path returns the bare base unchanged."""
+    _patch_editable(monkeypatch, editable=False)
+    # Wheel path must never shell out to git.
+    _patch_git(monkeypatch, {"rev-parse": "deadbeefcafe", "status": " M x"})
+
+    assert compose_display_version(base="0.6.0") == "0.6.0"
+    assert Version(compose_display_version(base="0.6.0")) == Version("0.6.0")
+
+
+def test_compose_display_version_default_base_is_package_version() -> None:
+    """The default base argument is the stored ``__version__`` (0.6.0)."""
+    from eawf import __version__
+
+    assert __version__ == "0.6.0"
+
+
+def test_compose_display_version_missing_sha_falls_back_to_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed rev-parse (None short SHA) degrades to the bare base."""
+    _patch_editable(monkeypatch, editable=True)
+    _patch_git(monkeypatch, {"rev-parse": None, "status": " M x"})
+
+    assert compose_display_version(base="0.6.0") == "0.6.0"
+
+
+def test_compose_display_version_empty_sha_falls_back_to_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty-string short SHA (detached/broken) degrades to the base."""
+    _patch_editable(monkeypatch, editable=True)
+    _patch_git(monkeypatch, {"rev-parse": "", "status": " M x"})
+
+    assert compose_display_version(base="0.6.0") == "0.6.0"
+
+
+def test_git_output_returns_none_on_nonzero_exit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A non-zero git exit is swallowed and reported as None (fail-soft)."""
+
+    class _Result:
+        returncode = 1
+        stdout = "garbage"
+
+    monkeypatch.setattr(_version_display, "_package_import_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        _version_display.subprocess, "run", lambda *a, **k: _Result()
+    )
+
+    assert _version_display._git_output(["rev-parse", "--short=12", "HEAD"]) is None
+
+
+def test_git_output_returns_none_on_oserror(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A missing git executable (OSError) is swallowed -> None."""
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(_version_display, "_package_import_root", lambda: tmp_path)
+    monkeypatch.setattr(_version_display.subprocess, "run", _boom)
+
+    assert _version_display._git_output(["status", "--porcelain"]) is None
+
+
+def test_git_output_strips_stdout_on_success(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A zero-exit git call returns stripped stdout."""
+
+    class _Result:
+        returncode = 0
+        stdout = "  0123456789ab\n"
+
+    monkeypatch.setattr(_version_display, "_package_import_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        _version_display.subprocess, "run", lambda *a, **k: _Result()
+    )
+
+    assert _version_display._git_output(["rev-parse", "--short=12", "HEAD"]) == "0123456789ab"

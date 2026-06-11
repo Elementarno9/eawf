@@ -20,7 +20,7 @@ from typing import Annotated
 import orjson
 import typer
 
-from eawf import __version__
+from eawf.surfaces.cli._version_display import compose_display_version
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.help_panels import RegistryOrderedTyperGroup, panel_for
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -37,7 +37,7 @@ app = typer.Typer(
 
 def _version_callback(value: bool) -> None:
     if value:
-        typer.echo(__version__)
+        typer.echo(compose_display_version())
         raise typer.Exit()
 
 
@@ -166,9 +166,10 @@ def _dispatch_tui(
 def version_cmd(ctx: typer.Context) -> None:
     """Show the eawf version (text or JSON envelope)."""
     flags: GlobalFlags = ctx.obj
+    display = compose_display_version()
     emit_json_or_text(
-        {"version": __version__},
-        f"eawf {__version__}",
+        {"version": display},
+        f"eawf {display}",
         flags=flags,
     )
 

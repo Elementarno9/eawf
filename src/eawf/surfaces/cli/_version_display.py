@@ -12,20 +12,30 @@ running ``eawf`` came from a PEP 660 editable install (``pip install -e``
 / ``uv`` source checkout) or a regular wheel. The signal lets the banner
 annotate a dev checkout (``0.5.4 (editable)``) without changing any
 behaviour.
+
+The version composer (:func:`compose_display_version`) layers a PEP 440
+local segment (``+dev.g<shortsha>`` plus ``.dirty`` for a dirty tree)
+onto the stored base when running from an editable checkout, so the
+banner distinguishes a dev build from the clean wheel version. The wheel
+path returns the bare base unchanged.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import subprocess
 from importlib.metadata import Distribution, PackageNotFoundError
 from pathlib import Path
+
+from eawf import __version__
 
 logger = logging.getLogger(__name__)
 
 _DISTRIBUTION_NAME = "eawf"
 _DIRECT_URL_RESOURCE = "direct_url.json"
 _GIT_MARKER = ".git"
+_GIT_TIMEOUT_S = 5.0
 
 
 def _package_import_root() -> Path:
@@ -98,3 +108,69 @@ def is_editable_install() -> bool:
             return bool(dir_info["editable"])
 
     return _has_git_ancestor(_package_import_root())
+
+
+def _git_output(args: list[str]) -> str | None:
+    """Run a read-only ``git`` command and return its stripped stdout.
+
+    The command runs against the package import root so the probe reads
+    the checkout the running ``eawf`` was imported from, not the operator
+    cwd. Any git failure (non-zero exit, missing executable, timeout) is
+    swallowed and reported as ``None`` so the version banner degrades to
+    the bare base rather than raising.
+
+    Args:
+        args: The ``git`` argument vector excluding the leading ``git``.
+
+    Returns:
+        The stripped stdout on success, or ``None`` on any failure.
+    """
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=_package_import_root(),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_GIT_TIMEOUT_S,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.debug(f"_git_output args={args!r} reason={exc!r}")
+        return None
+    if result.returncode != 0:
+        logger.debug(f"_git_output args={args!r} rc={result.returncode}")
+        return None
+    return result.stdout.strip()
+
+
+def compose_display_version(base: str = __version__) -> str:
+    """Compose the display version, layering a dev local segment when editable.
+
+    On an editable checkout (per :func:`is_editable_install`) the returned
+    string appends a PEP 440 local segment ``+dev.g<shortsha>`` -- the
+    12-char abbreviated ``HEAD`` -- plus a trailing ``.dirty`` when the
+    working tree has uncommitted changes (``git status --porcelain`` is
+    non-empty). On the wheel path (non-editable) the bare *base* is
+    returned unchanged.
+
+    Every git probe is fail-soft: a missing short SHA (detached / broken
+    checkout) returns *base* unchanged, so a degraded git environment
+    never breaks the banner.
+
+    Args:
+        base: The stored base version string (defaults to ``__version__``).
+
+    Returns:
+        The base version, optionally suffixed with the dev local segment.
+    """
+    if not is_editable_install():
+        return base
+
+    short_sha = _git_output(["rev-parse", "--short=12", "HEAD"])
+    if not short_sha:
+        return base
+
+    local = f"dev.g{short_sha}"
+    if _git_output(["status", "--porcelain"]):
+        local = f"{local}.dirty"
+    return f"{base}+{local}"

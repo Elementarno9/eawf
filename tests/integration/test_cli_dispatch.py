@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+from packaging.version import Version
 from typer.testing import CliRunner
 
 import eawf
@@ -22,9 +23,12 @@ def test_version_json_envelope_round_trips() -> None:
     result = runner.invoke(app, ["--json", "version"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    # Assert the surfaced version equals the single source (eawf.__version__),
-    # not a pinned literal, so a release bump does not red this test.
-    assert payload["version"] == eawf.__version__
+    # The surfaced version is composed: an editable checkout (the test
+    # tree) carries a PEP 440 ``+dev.g<sha>`` local segment, a wheel build
+    # carries the bare base. Assert the PEP 440 *base version* matches the
+    # single source (eawf.__version__) so the test stays green on both
+    # paths and across a release bump.
+    assert Version(payload["version"]).base_version == eawf.__version__
 
 
 def test_unknown_command_exits_with_code_2() -> None:
@@ -50,7 +54,10 @@ def test_bare_invocation_prints_banner() -> None:
 def test_version_text_envelope() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert f"eawf {eawf.__version__}" in result.stdout
+    # The text banner carries the composed display version; an editable
+    # checkout appends a ``+dev.g<sha>`` local segment, so assert the base
+    # version prefix rather than an exact bare-base match.
+    assert result.stdout.startswith(f"eawf {eawf.__version__}")
 
 
 def test_version_flag_short_circuits() -> None:
