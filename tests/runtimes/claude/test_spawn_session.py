@@ -128,7 +128,11 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
         return proc
 
     monkeypatch.setattr(claude_adapter.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(claude_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
+    monkeypatch.setattr(
+        claude_adapter,
+        "_maybe_jail_argv",
+        lambda argv, *, runtime, cwd, session=None, sink=None: argv,
+    )
     return calls
 
 
@@ -491,7 +495,14 @@ def test_spawn_session_denied_tools_built_before_jail_wrap(
 
     seen_by_jail: list[list[str]] = []
 
-    def _recording_jail(argv: list[str], *, runtime: str, cwd: str | None) -> list[str]:
+    def _recording_jail(
+        argv: list[str],
+        *,
+        runtime: str,
+        cwd: str | None,
+        session: str | None = None,
+        sink: object | None = None,
+    ) -> list[str]:
         # Record the argv the jail seam receives, then prefix a sentinel so
         # the test can prove the jail actually wrapped this exact argv.
         seen_by_jail.append(list(argv))
