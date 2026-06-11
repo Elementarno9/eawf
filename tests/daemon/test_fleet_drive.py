@@ -44,7 +44,10 @@ from eawf.kernel.state.models import (
 )
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.fleet import (
+    LaneDispatch,
     LaneOutcome,
+    _default_spawner,
+    _normalise_dispatch,
     arm_drive,
     drive,
     halt_all,
@@ -507,3 +510,203 @@ def test_drain_mode_ends_drained_only_when_frontier_empties(tmp_path: Path) -> N
     # drain mode dispatched ALL three waves (no early convergence stop).
     assert spawner.spawned == _WAVE_IDS
     assert run.frontier == []
+
+
+# ---- W02 C1: live per-lane pgid registry -- record on dispatch, free on close
+
+
+class _PgidSpawner:
+    """Spawner fake yielding a real pgid per lane keyed by (wave_id, attempt)."""
+
+    def __init__(self) -> None:
+        self.spawned: list[str] = []
+        self._next_pgid = 90_000
+
+    def __call__(self, ctx: MethodContext, wave_id: str) -> LaneDispatch:
+        self.spawned.append(wave_id)
+        self._next_pgid += 1
+        return LaneDispatch(session_id=f"ses-{wave_id}", pgid=self._next_pgid, attempt=2)
+
+
+def test_dispatch_records_real_pgid_keyed_by_wave_and_attempt(tmp_path: Path) -> None:
+    """C1: a dispatched lane records the spawned child's pgid + (wave, attempt) key.
+
+    A watcher that freezes the in-flight set on the first sweep lets the test
+    read the live registry: each lane carries a real ``pgid``, the dispatch
+    ``attempt``, and is ``killable`` -- the kill / reattach seam resolves to an
+    OS process group rather than a bare label.
+    """
+    state_path = _write_state(tmp_path)
+    ctx = _ctx(state_path)
+    spawner = _PgidSpawner()
+    seen: list[dict[str, object]] = []
+
+    def _watch_record(c: MethodContext, lane: FleetLane) -> LaneOutcome:
+        seen.append(
+            {
+                "wave_id": lane.wave_id,
+                "attempt": lane.attempt,
+                "pgid": lane.pgid,
+                "killable": lane.killable,
+            }
+        )
+        return "closed"
+
+    arm_drive(
+        ctx,
+        frontier=list(_WAVE_IDS),
+        concurrency=2,
+        spawn=spawner,
+        watch=_watch_record,
+    )
+    # Every dispatched lane recorded a real pgid keyed by (wave_id, attempt=2).
+    by_wave = {row["wave_id"]: row for row in seen}
+    assert set(by_wave) == set(_WAVE_IDS)
+    for wid in _WAVE_IDS:
+        row = by_wave[wid]
+        assert row["attempt"] == 2
+        assert isinstance(row["pgid"], int) and row["pgid"] >= 90_000
+        assert row["killable"] is True
+    # Distinct lanes hold distinct pgids -- the registry is per-lane.
+    pgids = [row["pgid"] for row in seen]
+    assert len(set(pgids)) == len(pgids)
+
+
+def test_close_deregisters_lane_so_registry_holds_only_in_flight(tmp_path: Path) -> None:
+    """C1: closing a lane deregisters it -- the registry holds exactly in-flight lanes.
+
+    Concurrency 1 over a 3-wave frontier means at most one lane is registered
+    at a time; reading the persisted registry on each watch shows exactly the
+    single in-flight lane, and the terminal run holds no lanes (all closed +
+    deregistered).
+    """
+    state_path = _write_state(tmp_path)
+    ctx = _ctx(state_path)
+    registry_sizes: list[int] = []
+
+    def _watch_size(c: MethodContext, lane: FleetLane) -> LaneOutcome:
+        run = _persisted_run(state_path)
+        assert run is not None
+        registry_sizes.append(len(run.lanes))
+        return "closed"
+
+    run = arm_drive(
+        ctx,
+        frontier=list(_WAVE_IDS),
+        concurrency=1,
+        spawn=_PgidSpawner(),
+        watch=_watch_size,
+    )
+    # The registry never held more than the single in-flight lane.
+    assert registry_sizes == [1, 1, 1]
+    # Every lane closed + deregistered: the terminal registry is empty.
+    assert run.lanes == {}
+    persisted = _persisted_run(state_path)
+    assert persisted is not None
+    assert persisted.lanes == {}
+
+
+# ---- W02 C2: a no-pid spawn -> pgid None + unkillable (no fabricated pid) ----
+
+
+def test_no_pid_spawn_leaves_pgid_none_and_unkillable(tmp_path: Path) -> None:
+    """C2: a spawn that returned no pid records pgid=None + marks the lane unkillable.
+
+    The registry never holds a pid the OS does not own: a plan-only dispatch
+    (no subprocess) leaves ``lane.pgid`` None and ``lane.killable`` False
+    rather than fabricating a pid.
+    """
+    state_path = _write_state(tmp_path)
+    ctx = _ctx(state_path)
+    seen: list[FleetLane] = []
+
+    def _watch_capture(c: MethodContext, lane: FleetLane) -> LaneOutcome:
+        seen.append(lane)
+        return "closed"
+
+    arm_drive(
+        ctx,
+        frontier=list(_WAVE_IDS[:1]),
+        concurrency=1,
+        # A LaneDispatch with no pgid -- the spawn produced no subprocess.
+        spawn=lambda c, wid: LaneDispatch(session_id=f"ses-{wid}", pgid=None),
+        watch=_watch_capture,
+    )
+    assert len(seen) == 1
+    lane = seen[0]
+    assert lane.pgid is None
+    assert lane.killable is False
+
+
+def test_bare_str_spawner_normalises_to_unkillable_lane(tmp_path: Path) -> None:
+    """C2: a bare-str spawner fake (W01 form) records a session id but no pgid.
+
+    The W01 spawner fakes return ``str | None``; the loop normalises that to a
+    :class:`LaneDispatch` with the string as the session id and ``pgid=None``,
+    so a fake that recorded no real subprocess yields an unkillable lane.
+    """
+    state_path = _write_state(tmp_path)
+    ctx = _ctx(state_path)
+    seen: list[FleetLane] = []
+
+    def _watch_capture(c: MethodContext, lane: FleetLane) -> LaneOutcome:
+        seen.append(lane)
+        return "closed"
+
+    arm_drive(
+        ctx,
+        frontier=list(_WAVE_IDS[:1]),
+        concurrency=1,
+        spawn=lambda c, wid: f"ses-{wid}",
+        watch=_watch_capture,
+    )
+    assert len(seen) == 1
+    assert seen[0].session_id == f"ses-{_WAVE_IDS[0]}"
+    assert seen[0].pgid is None
+    assert seen[0].killable is False
+
+
+def test_normalise_dispatch_wraps_bare_and_passes_through_typed() -> None:
+    """C2: _normalise_dispatch wraps a bare session id + passes a LaneDispatch through."""
+    wrapped = _normalise_dispatch("ses-x")
+    assert wrapped.session_id == "ses-x"
+    assert wrapped.pgid is None
+    assert wrapped.attempt == 1
+    none_wrapped = _normalise_dispatch(None)
+    assert none_wrapped.session_id is None
+    assert none_wrapped.pgid is None
+    typed = LaneDispatch(session_id="ses-y", pgid=4242, attempt=3)
+    assert _normalise_dispatch(typed) is typed
+
+
+def test_default_spawner_derives_pgid_from_plan_pid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """C1/C2: the live spawner records the plan child pid as the lane pgid.
+
+    The spawned child is its own group leader, so its pgid equals the child
+    pid the dispatch plan surfaces. A real pid is recorded; a plan-only
+    dispatch (``pid==0``) records ``pgid=None`` so the lane is unkillable.
+    """
+    import eawf.runtime.daemon.methods.fleet as fleet_mod
+
+    ctx = _ctx(None)
+    # A live spawn surfaces a real child pid -> recorded as the pgid.
+    monkeypatch.setattr(
+        fleet_mod,
+        "_run_dispatch_threaded",
+        lambda c, wid: {"session_id": "ses-live", "pid": 54321, "attempt": 2},
+    )
+    live = _default_spawner(ctx, "P30-I12-W02")
+    assert live.session_id == "ses-live"
+    assert live.pgid == 54321
+    assert live.attempt == 2
+
+    # A plan-only dispatch surfaces pid==0 -> no pgid (unkillable lane).
+    monkeypatch.setattr(
+        fleet_mod,
+        "_run_dispatch_threaded",
+        lambda c, wid: {"session_id": "ses-plan", "pid": 0, "attempt": 1},
+    )
+    plan_only = _default_spawner(ctx, "P30-I12-W02")
+    assert plan_only.session_id == "ses-plan"
+    assert plan_only.pgid is None
+    assert plan_only.attempt == 1

@@ -1016,16 +1016,41 @@ class FleetLane(_StrictModel):
     loop can watch it to completion and free the slot for the next frontier
     wave. The loop holds at most ``concurrency`` lanes at once.
 
+    The ``(wave_id, attempt)`` pair plus ``pgid`` form the live per-lane
+    process registry that the kill (DL-3) and reattach (DL-8) paths read: a
+    lane resolves to a real OS process group rather than a bare label. A lane
+    whose spawn returned no pid carries ``pgid=None`` and is reported
+    ``killable=False`` -- the registry never holds a pid the OS does not own.
+
     Attributes:
         wave_id: ``W<NN>`` wave the lane is driving.
+        attempt: 1-based dispatch attempt the lane is driving -- the second
+            half of the ``(wave_id, attempt)`` registry key so a re-dispatch
+            of the same wave registers a distinct lane.
         session_id: Executor session id the dispatch registered for the
             wave, or ``None`` on a plan-only / stateless dispatch.
+        pgid: Process-group id of the spawned child (its own group leader,
+            so the pgid equals the child pid), or ``None`` when the spawn
+            produced no subprocess -- a ``None`` pgid marks the lane
+            unkillable rather than recording a fabricated pid.
         dispatched_at: When the lane's dispatch was issued.
     """
 
     wave_id: WaveIdStr
+    attempt: Annotated[int, Field(ge=1)] = 1
     session_id: str | None = None
+    pgid: Annotated[int, Field(ge=1)] | None = None
     dispatched_at: UtcDatetime
+
+    @property
+    def killable(self) -> bool:
+        """Return whether this lane resolves to a real OS process group.
+
+        A lane is killable iff its spawn recorded a real ``pgid`` -- a
+        ``None`` pgid (no subprocess) leaves the lane unkillable so the kill
+        path skips it rather than signalling a pid the OS does not own.
+        """
+        return self.pgid is not None
 
 
 class FleetCounters(_StrictModel):

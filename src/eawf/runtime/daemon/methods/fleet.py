@@ -82,16 +82,68 @@ logger = logging.getLogger(__name__)
 #: resets the convergence streak.
 LaneOutcome = str
 
+class LaneDispatch(BaseModel):
+    """Outcome of dispatching one claimed wave into a lane.
+
+    The spawner yields this so the loop can register the live per-lane
+    process: the ``session_id`` correlates the dispatch row, and ``pgid``
+    keys the kill (DL-3) / reattach (DL-8) registry to a real OS process
+    group. A spawn that produced no subprocess yields ``pgid=None``, which
+    marks the lane unkillable rather than recording a fabricated pid -- the
+    registry never holds a pid the OS does not own.
+
+    Attributes:
+        session_id: Registered dispatch session id, or ``None`` on a
+            plan-only / stateless dispatch.
+        pgid: Process-group id of the spawned child (its own group leader,
+            so the pgid equals the child pid), or ``None`` when the spawn
+            produced no subprocess.
+        attempt: 1-based dispatch attempt -- the second half of the
+            ``(wave_id, attempt)`` registry key.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    session_id: str | None = None
+    pgid: int | None = Field(default=None, ge=1)
+    attempt: int = Field(default=1, ge=1)
+
+
 #: Spawn a claimed wave's dispatch. Given the daemon context + wave id, returns
-#: the registered dispatch session id (or ``None`` on a plan-only / stateless
-#: dispatch). The daemon wires the live ``agent.dispatch`` spawn=True path;
-#: tests inject a deterministic fake.
-LaneSpawner = Callable[["MethodContext", str], "str | None"]
+#: a :class:`LaneDispatch` carrying the registered session id, the spawned
+#: child's pgid (``None`` on a plan-only / stateless dispatch -- the lane is
+#: then unkillable), and the dispatch attempt. The daemon wires the live
+#: ``agent.dispatch`` spawn=True path; tests inject a deterministic fake.
+#:
+#: A fake that returns a bare ``str | None`` is still accepted: the loop
+#: normalises it to a :class:`LaneDispatch` (the string becomes the
+#: ``session_id``, pgid stays ``None``), so the W01 spawner fakes keep working.
+LaneSpawner = Callable[["MethodContext", str], "LaneDispatch | str | None"]
 
 #: Watch one in-flight lane to its terminal :data:`LaneOutcome` (blocking).
 #: Given the daemon context + the lane, returns ``"closed"`` or ``"forked"``.
 #: The daemon wires a status-poll watcher; tests inject a deterministic fake.
 LaneWatcher = Callable[["MethodContext", FleetLane], LaneOutcome]
+
+
+def _normalise_dispatch(result: LaneDispatch | str | None) -> LaneDispatch:
+    """Coerce a spawner return into a :class:`LaneDispatch`.
+
+    The live default spawner returns a :class:`LaneDispatch`; the W01 spawner
+    fakes return a bare ``str | None`` session id. A bare value is wrapped so
+    the string becomes the ``session_id`` and the pgid stays ``None`` (the
+    fake recorded no real subprocess, so its lane is unkillable). A
+    :class:`LaneDispatch` passes through unchanged.
+
+    Args:
+        result: The spawner's return -- a :class:`LaneDispatch` or a bare
+            session id (or ``None``).
+
+    Returns:
+        The normalised :class:`LaneDispatch`.
+    """
+    if isinstance(result, LaneDispatch):
+        return result
+    return LaneDispatch(session_id=result)
 
 
 class DriveParams(BaseModel):
@@ -177,8 +229,8 @@ def _dispatch_paused(ctx: MethodContext) -> bool:
     return load_state(Path(ctx.state_path)).dispatch_paused
 
 
-def _default_spawner(ctx: MethodContext, wave_id: str) -> str | None:
-    """Claim then live-dispatch *wave_id*, returning the dispatch session id.
+def _default_spawner(ctx: MethodContext, wave_id: str) -> LaneDispatch:
+    """Claim then live-dispatch *wave_id*, returning the lane dispatch outcome.
 
     The daemon-wired default: claim the wave through the pure-functional
     :func:`eawf.workflow.lifecycle.wave.claim_wave` transition (under the state
@@ -192,13 +244,22 @@ def _default_spawner(ctx: MethodContext, wave_id: str) -> str | None:
     ``asyncio.run`` inside the awaiting RPC handler's running loop. Tests bypass
     this entirely by injecting a :class:`LaneSpawner` fake.
 
+    The spawned child is its own process-group leader (the claude adapter
+    spawns ``start_new_session=True`` and resolves the group via ``os.getpgid``
+    on the ``on_pgid`` seam), so the child pid the dispatch plan surfaces IS
+    the group-leader id -- this records it as the lane ``pgid`` for the kill /
+    reattach registry. A plan-only dispatch surfaces ``pid==0`` (no
+    subprocess), which records ``pgid=None`` so the lane is unkillable rather
+    than carrying a fabricated pid.
+
     Args:
         ctx: Daemon method context.
         wave_id: ``W<NN>`` wave to claim + dispatch.
 
     Returns:
-        The registered dispatch session id, or ``None`` when the dispatch
-        ran plan-only.
+        A :class:`LaneDispatch` carrying the registered session id, the
+        spawned child's pgid (``None`` on a plan-only dispatch), and the
+        dispatch attempt.
     """
     claim_session_id = f"fleet-drive-{wave_id}"
     if ctx.state_path is not None:
@@ -209,7 +270,15 @@ def _default_spawner(ctx: MethodContext, wave_id: str) -> str | None:
             state.updated_at = datetime.now(UTC)
             atomic_write_json_locked(state_path, state.model_dump(mode="json"))
     plan = _run_dispatch_threaded(ctx, wave_id)
-    return plan.get("session_id")
+    # The child is its own group leader, so its pgid equals the surfaced child
+    # pid; a plan-only dispatch surfaces ``pid==0`` (no subprocess) -> no pgid.
+    pid = plan.get("pid")
+    pgid = pid if isinstance(pid, int) and pid > 0 else None
+    return LaneDispatch(
+        session_id=plan.get("session_id"),
+        pgid=pgid,
+        attempt=int(plan.get("attempt", 1)),
+    )
 
 
 def _run_dispatch_threaded(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
@@ -308,20 +377,30 @@ class _Loop:
 
         Pops from the head of the frontier until either the lane count hits
         the concurrency cap or the frontier empties. Each pop claims +
-        dispatches the wave (via the injected spawner) and opens a lane;
-        the claimed / dispatched counters advance per wave.
+        dispatches the wave (via the injected spawner) and **registers** the
+        live lane: the spawned child's ``pgid`` keyed by ``(wave_id, attempt)``
+        lands on :attr:`FleetLane.pgid` so the kill / reattach paths resolve a
+        real OS process group. A spawn that returned no pid records
+        ``pgid=None`` (the lane is unkillable). The claimed / dispatched
+        counters advance per wave.
         """
         while len(self.run.lanes) < self.run.concurrency and self.run.frontier:
             wave_id = self.run.frontier.pop(0)
-            session_id = self.spawn(self.ctx, wave_id)
+            dispatch = _normalise_dispatch(self.spawn(self.ctx, wave_id))
             self.run.lanes[wave_id] = FleetLane(
                 wave_id=wave_id,
-                session_id=session_id,
+                attempt=dispatch.attempt,
+                session_id=dispatch.session_id,
+                pgid=dispatch.pgid,
                 dispatched_at=datetime.now(UTC),
             )
             self.run.counters.claimed += 1
             self.run.counters.dispatched += 1
-            logger.info(f"_fill_lanes wave={wave_id} session={session_id!r}")
+            logger.info(
+                f"_fill_lanes wave={wave_id} attempt={dispatch.attempt} "
+                f"session={dispatch.session_id!r} pgid={dispatch.pgid} "
+                f"killable={dispatch.pgid is not None}"
+            )
 
     def _drain_lanes(self) -> None:
         """Watch every in-flight lane to its terminal outcome, freeing each slot.
@@ -331,6 +410,11 @@ class _Loop:
         the slot, while a ``forked`` outcome increments the fork counter
         (resetting the convergence streak) and frees the slot. Every lane is
         freed by round end, so the next round's fill refills from the frontier.
+
+        Freeing the slot **deregisters** the lane from the per-lane process
+        registry (``del`` drops its ``(wave_id, attempt) -> pgid`` row), so the
+        registry holds exactly the still-in-flight lanes -- a closed lane's
+        pgid is no longer a live kill / reattach target.
         """
         had_fork = False
         for wave_id in list(self.run.lanes):

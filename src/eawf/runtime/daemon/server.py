@@ -37,6 +37,7 @@ import eawf.runtime.daemon.methods.config  # registers config.read / set_layer_v
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.event
 import eawf.runtime.daemon.methods.evidence  # registers evidence.append (P28-I01-W04)
+import eawf.runtime.daemon.methods.fleet  # registers fleet.drive (P30-I12-W01)
 import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,resolve,park}
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.runtime.daemon.methods.research  # registers research.create_campaign (P29-I09-W07)
