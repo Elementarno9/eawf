@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -53,7 +54,12 @@ from eawf.kernel.spec.common import (
     tier_label,
 )
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import (
+    BacklogStatus,
+    IncidentStatus,
+    StoreKind,
+    WaveStatus,
+)
 from eawf.observability.telemetry.join import (
     DEFAULT_EU_MINUTES,
     WaveSessionRollup,
@@ -84,7 +90,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_eu_bar_plain,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil
+from eawf.surfaces.tui.widgets.sigils import Sigil, status_sigil
 from eawf.workflow.agent_report.rollup import (
     AgentReportRow,
     error_kind_by_attempt_from_store,
@@ -186,50 +192,52 @@ def tab_label(tab_id: str, *, mode: RenderMode) -> str:
     return f"{_tab_glyph(tab_id, mode=mode)} {_TAB_LABEL_TEXT[tab_id]}"
 
 
-#: Lifecycle-status string -> the :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
-#: whose glyph prefixes the overview ``status`` row. The entity kinds
-#: (wave / iter / phase / backlog) span more status words than the closed
-#: six-member :class:`Sigil` enum, so the planning / active / open /
-#: archived / deferred / abandoned strings fold onto the nearest lifecycle
-#: shape rather than crashing on an unmapped key.
-_STATUS_SIGIL: dict[str, Sigil] = {
-    "pending": Sigil.PENDING,
-    "planned": Sigil.PENDING,
-    "open": Sigil.PENDING,
-    "claimed": Sigil.CLAIMED,
-    "in_progress": Sigil.RUNNING,
-    "active": Sigil.RUNNING,
-    "running": Sigil.RUNNING,
-    "closed": Sigil.CLOSED,
-    "failed": Sigil.FAILED,
-    "abandoned": Sigil.FAILED,
-    "archived": Sigil.FAILED,
-    "deferred": Sigil.FAILED,
+#: An :class:`~eawf.kernel.state.enums.IncidentStatus` member -> the covered
+#: lifecycle-status member whose ratified
+#: :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` glyph it borrows.
+#: ``IncidentStatus`` is the one detail-card status enum the single-home
+#: :data:`~eawf.surfaces.tui.widgets.sigils._EXTENDED` table does not cover,
+#: so an incident status is first folded onto its nearest covered lifecycle
+#: shape (open -> the OPEN ring, mitigated -> the in-progress diamond,
+#: resolved -> the CLOSED circle, wont-fix -> the DEFERRED withheld slash)
+#: before it is routed through the canonical resolver. Every other detail-card
+#: status (wave / iter / phase / backlog) is covered directly and needs no fold.
+_INCIDENT_STATUS_SIGIL_KEY: dict[IncidentStatus, BacklogStatus | WaveStatus] = {
+    IncidentStatus.OPEN: BacklogStatus.OPEN,
+    IncidentStatus.MITIGATED: WaveStatus.IN_PROGRESS,
+    IncidentStatus.RESOLVED: BacklogStatus.CLOSED,
+    IncidentStatus.WONT_FIX: BacklogStatus.DEFERRED,
 }
 
 
-def _status_with_sigil(status_value: str, *, mode: RenderMode) -> str:
-    """Return the overview ``status`` value prefixed with its sigil glyph.
+def _status_with_sigil(status: object, *, mode: RenderMode) -> str:
+    """Return the ``status`` value prefixed with its ratified sigil glyph.
 
-    Maps *status_value* onto a lifecycle :class:`Sigil` (via
-    :data:`_STATUS_SIGIL`) and prepends that sigil's glyph for the active
-    render *mode*, so the overview reads e.g. the closed filled-circle then
-    ``closed`` rather than a bare ``closed`` word. An unmapped status word
-    (a status enum that drifted past the table) degrades to the bare word
-    so the drill-in seam stays total.
+    Routes *status* (a lifecycle-status enum member off the resolved entity)
+    through the single-home
+    :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolver, so the
+    overview / pill reads e.g. the closed filled-circle then ``closed`` rather
+    than a bare ``closed`` word -- and the glyph is the SAME ratified mark the
+    roadmap tree and status pane render, never an ad-hoc parallel mapping. The
+    one status enum the resolver's table does not cover --
+    :class:`~eawf.kernel.state.enums.IncidentStatus` -- is first folded onto its
+    nearest covered lifecycle member (via :data:`_INCIDENT_STATUS_SIGIL_KEY`) so
+    an incident card routes through the same resolver as every other card kind.
 
     Args:
-        status_value: The lifecycle-status string off the resolved entity.
+        status: The lifecycle-status enum member off the resolved entity.
         mode: The active render mode (``"unicode"`` / ``"ascii"``).
 
     Returns:
-        The ``"<glyph> <status>"`` string, or the bare status word when the
-        status has no mapped sigil.
+        The ``"<glyph> <status>"`` string, with the glyph resolved via
+        :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil`.
     """
-    sigil = _STATUS_SIGIL.get(status_value)
-    if sigil is None:
-        return status_value
-    return f"{sigils.glyph(sigil, mode=mode)} {status_value}"
+    resolved_key = (
+        _INCIDENT_STATUS_SIGIL_KEY.get(status) if isinstance(status, IncidentStatus) else status
+    )
+    glyph = status_sigil(resolved_key).render(mode=mode)
+    word = status.value if isinstance(status, Enum) else str(status)
+    return f"{glyph} {word}"
 
 
 @dataclass(frozen=True)
@@ -318,6 +326,13 @@ class DetailCard:
     #: The wave status word rendered as the overview status pill; empty on a
     #: non-wave card (which carries no pill).
     status_pill: str = ""
+    #: The resolved entity's lifecycle-status ENUM member (not its ``.value``
+    #: word), carried so the overview ``status`` row + the wave status pill
+    #: resolve their glyph through the canonical
+    #: :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolver at render
+    #: time. ``None`` only on the total fallback card (an unknown id), which
+    #: carries no status row to sigil-prefix.
+    status_enum: object | None = None
 
 
 #: Honest-empty notice per always-present wave tab, rendered when the tab's
@@ -811,6 +826,7 @@ def _wave_card(
         glance=glance,
         dep_segments=dep_segments,
         status_pill=wave.status.value,
+        status_enum=wave.status,
     )
 
 
@@ -928,6 +944,7 @@ def _iter_card(state: State, iter_id: str) -> DetailCard | None:
         title=f"iter {it.id}",
         rows=tuple(rows),
         runtime=_completion_runtime(closed, total),
+        status_enum=it.status,
     )
 
 
@@ -970,6 +987,7 @@ def _phase_card(state: State, phase_id: str) -> DetailCard | None:
         title=f"phase {phase.id}",
         rows=tuple(rows),
         runtime=_completion_runtime(closed, total),
+        status_enum=phase.status,
     )
 
 
@@ -1028,7 +1046,7 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     )
     if item.resolution is not None:
         rows.append(("resolution", item.resolution))
-    return DetailCard(title=f"backlog {item.id}", rows=tuple(rows))
+    return DetailCard(title=f"backlog {item.id}", rows=tuple(rows), status_enum=item.status)
 
 
 def _incident_card(
@@ -1083,6 +1101,7 @@ def _incident_card(
         title=f"incident {incident.id}",
         rows=tuple(rows),
         evidence=evidence,
+        status_enum=incident.status,
     )
 
 
@@ -1456,8 +1475,13 @@ class DetailModal(ModalScreen[None]):
         """
         card = self._card
         if card.status_pill:
+            pill = (
+                _status_with_sigil(card.status_enum, mode=mode)
+                if card.status_enum is not None
+                else card.status_pill
+            )
             yield Static(
-                f"[reverse $accent] {escape(card.status_pill)} [/]",
+                f"[reverse $accent] {escape(pill)} [/]",
                 classes="detail-pill",
             )
         if card.dep_segments:
@@ -1506,9 +1530,14 @@ class DetailModal(ModalScreen[None]):
             )
             return
         label_width = max((len(label) for label, _ in rows), default=0)
+        status_enum = self._card.status_enum
         for label, value in rows:
             padded = f"{label}:".ljust(label_width + 1)
-            display = _status_with_sigil(value, mode=mode) if label == "status" else value
+            display = (
+                _status_with_sigil(status_enum, mode=mode)
+                if label == "status" and status_enum is not None
+                else value
+            )
             row = Static(
                 f"[$accent]{escape(padded)}[/] {linkify_text(display)}",
                 classes="detail-row",
