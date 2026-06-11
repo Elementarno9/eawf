@@ -330,6 +330,13 @@ MULTI_SELECT_EMPTY_COMMIT: str = "select: nothing staged (no wave checked)"
 #: batch at a time, so a re-commit coalesces rather than stacking workers.
 _BATCH_DISPATCH_GROUP: str = "autopilot-claim-batch"
 
+#: Worker group every single-wave daemon round-trip (dispatch / pause / kill)
+#: runs under, so the synchronous RPC body never blocks the UI thread (the
+#: project's TUI-worker lesson: offload any sync git / subprocess / RPC call or
+#: the cockpit hangs while the socket round-trips). ``exclusive`` within the
+#: group coalesces a rapid re-press rather than stacking workers.
+_INTERVENTION_GROUP: str = "autopilot-intervention"
+
 #: Result line when a committed claim batch is dispatched with no reachable
 #: daemon: the fleet issues ZERO RPCs and says so honestly (the exact phrasing
 #: the cockpit contract pins).
@@ -1059,18 +1066,39 @@ class AutopilotModeScreen(ScopeScreen):
             self.selected = min(len(self._rows) - 1, self.selected + 1)
 
     def action_dispatch_selected(self) -> None:
-        """Ask the daemon to live-spawn the selected ready wave.
+        """Ask the daemon to live-spawn the selected ready wave (off the UI thread).
 
         Issues ``agent.dispatch`` (``spawn=True``) for the selected ready wave
-        through the daemon-client seam and updates the result line. With no
-        ready wave there is nothing to dispatch; an unreachable daemon says so
-        rather than implying a spawn happened.
+        through the daemon-client seam on a Textual worker so the synchronous RPC
+        never blocks the event loop, then repaints the result line. With no ready
+        wave there is nothing to dispatch; an unreachable daemon (checked up
+        front, before any worker) says so rather than implying a spawn happened.
         """
         target = self._selected_row()
         if target is None:
             self._set_result(f"[$warn]{DISPATCH_NO_TARGET}[/]")
             return
-        result_line = self._issue_dispatch(target)
+        if not self._daemon_available():
+            self._set_result(f"[$warn]{DISPATCH_NO_DAEMON}[/]")
+            logger.info(f"action_dispatch_selected no_daemon wave={target.wave_id}")
+            return
+        self.run_worker(
+            self._dispatch_worker(target),
+            group=_INTERVENTION_GROUP,
+            exclusive=True,
+        )
+
+    async def _dispatch_worker(self, target: ReadyWaveRow) -> None:
+        """Worker body: issue the dispatch RPC off-thread, then repaint the result.
+
+        Runs the synchronous :meth:`_issue_dispatch` through
+        :func:`asyncio.to_thread` so the daemon round-trip never blocks the event
+        loop, then sets the honest result line after the await (loop-safe).
+
+        Args:
+            target: The selected ready wave to dispatch.
+        """
+        result_line = await asyncio.to_thread(self._issue_dispatch, target)
         self._set_result(result_line)
         logger.info(f"action_dispatch_selected wave={target.wave_id} result={result_line!r}")
 
@@ -1078,9 +1106,10 @@ class AutopilotModeScreen(ScopeScreen):
         """Issue the ``agent.dispatch`` RPC for *target* and return a result line.
 
         Calls ``agent.dispatch`` (``spawn=True``) through the
-        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam when a
-        daemon socket is available; the line reports the captured pid + runtime,
-        or the honest unavailable / rejected line rather than a faked dispatch.
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam; the line
+        reports the captured pid + runtime, or the honest unavailable / rejected
+        line rather than a faked dispatch. The blocking call runs on a worker
+        thread (:meth:`_dispatch_worker`), never the UI thread.
 
         Args:
             target: The selected ready wave to dispatch.
@@ -1088,8 +1117,6 @@ class AutopilotModeScreen(ScopeScreen):
         Returns:
             A content-markup result line describing the dispatch outcome.
         """
-        if not self._daemon_available():
-            return f"[$warn]{DISPATCH_NO_DAEMON}[/]"
         from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
         try:
@@ -1181,17 +1208,35 @@ class AutopilotModeScreen(ScopeScreen):
         logger.info(f"action_skip_selected now={skipped_to.wave_id} selected={self.selected}")
 
     def action_toggle_pause(self) -> None:
-        """Pause / resume dispatch through the real daemon RPC.
+        """Pause / resume dispatch through the real daemon RPC (off the UI thread).
 
         Reads the current
         :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag and issues
         ``agent.resume`` when already paused, else ``agent.pause`` -- a
         deliberate operator stop the daemon persists and
         :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block the next
-        claim. Pause is non-destructive. The line carries the persisted verdict,
-        or the honest unavailable line when the daemon is unreachable.
+        claim. Pause is non-destructive. The blocking RPC runs on a Textual
+        worker so the toggle never blocks the event loop; an unreachable daemon
+        (checked up front) surfaces the honest unavailable line instead.
         """
-        result_line = self._issue_pause()
+        if not self._daemon_available():
+            self._set_result(f"[$warn]{PAUSE_NO_DAEMON}[/]")
+            logger.info("action_toggle_pause no_daemon")
+            return
+        self.run_worker(
+            self._pause_worker(),
+            group=_INTERVENTION_GROUP,
+            exclusive=True,
+        )
+
+    async def _pause_worker(self) -> None:
+        """Worker body: toggle dispatch pause off-thread, then repaint the result.
+
+        Runs the synchronous :meth:`_issue_pause` through
+        :func:`asyncio.to_thread` so the daemon round-trip never blocks the event
+        loop, then sets the honest result line after the await (loop-safe).
+        """
+        result_line = await asyncio.to_thread(self._issue_pause)
         self._set_result(result_line)
         logger.info(f"action_toggle_pause result={result_line!r}")
 
@@ -1415,14 +1460,47 @@ class AutopilotModeScreen(ScopeScreen):
             if not confirmed:
                 logger.debug(f"_confirm_then_kill cancelled verb={verb} wave={target.wave_id}")
                 return
-            result_line = self._issue_kill(target, signal=signal, verb=verb, no_daemon=no_daemon)
-            self._set_result(result_line)
-            logger.info(
-                f"_confirm_then_kill verb={verb} wave={target.wave_id} "
-                f"signal={signal!r} result={result_line!r}"
+            if not self._daemon_available():
+                self._set_result(f"[$warn]{no_daemon}[/]")
+                logger.info(f"_confirm_then_kill no_daemon verb={verb} wave={target.wave_id}")
+                return
+            self.run_worker(
+                self._kill_worker(target, signal=signal, verb=verb, no_daemon=no_daemon),
+                group=_INTERVENTION_GROUP,
+                exclusive=True,
             )
 
         self._push_overlay(ConfirmModal(prompt), _on_confirm)
+
+    async def _kill_worker(
+        self,
+        target: ReadyWaveRow,
+        *,
+        signal: str,
+        verb: str,
+        no_daemon: str,
+    ) -> None:
+        """Worker body: issue the kill / halt RPC off-thread, then repaint the result.
+
+        Runs the synchronous :meth:`_issue_kill` through
+        :func:`asyncio.to_thread` so the daemon round-trip never blocks the event
+        loop, then sets the honest result line after the await (loop-safe).
+
+        Args:
+            target: The selected ready wave to act on.
+            signal: The ``agent.kill`` signal (SIGKILL-class for kill, SIGTERM
+                for halt).
+            verb: The action verb (``"kill"`` / ``"halt"``) for the result line.
+            no_daemon: The honest line shown when the daemon is unreachable.
+        """
+        result_line = await asyncio.to_thread(
+            self._issue_kill, target, signal=signal, verb=verb, no_daemon=no_daemon
+        )
+        self._set_result(result_line)
+        logger.info(
+            f"_confirm_then_kill verb={verb} wave={target.wave_id} "
+            f"signal={signal!r} result={result_line!r}"
+        )
 
     def _push_overlay(self, modal: ModalScreen[Any], callback: Callable[[Any], None]) -> None:
         """Push an overlay *modal* with *callback*, cap-aware when possible.
@@ -1649,11 +1727,17 @@ class AutopilotModeScreen(ScopeScreen):
         container = listing.first(VerticalScroll)
         container.remove_children()
         mode = self._render_mode()
+        # The section captions (lanes / ready / blocked) and the honest-empty
+        # notice carry NO fixed id on a (re)mount: Textual defers the
+        # remove_children() above, so re-using a fixed id would race a DuplicateIds
+        # when a rapid second rebuild (a live state push landing before the first
+        # remove flushed) re-mounts a caption whose old copy has not yet been torn
+        # down. The autopilot-section / autopilot-empty class is enough for
+        # styling + the test probes; nothing queries these captions by id.
         if self._lanes:
             container.mount(
                 Static(
                     render_section_caption(LANES_CAPTION, len(self._lanes)),
-                    id=LANES_SECTION_ID,
                     classes="autopilot-section",
                 )
             )
@@ -1662,17 +1746,11 @@ class AutopilotModeScreen(ScopeScreen):
                     Static(render_lane_cell(lane_cell, mode=mode), classes=LANE_CELL_CLASS)
                 )
         if not self._rows:
-            # The honest-empty notice carries no id on a (re)mount: Textual defers
-            # the remove_children() above, so re-using a fixed id here would race a
-            # DuplicateIds when a rapid second rebuild (a live state push landing
-            # before the first remove flushed) re-mounts it. The class is enough
-            # for styling + the test probe.
             container.mount(Static(EMPTY_NOTICE, classes="autopilot-empty"))
         else:
             container.mount(
                 Static(
                     render_section_caption(READY_CAPTION, len(self._rows)),
-                    id=READY_SECTION_ID,
                     classes="autopilot-section",
                 )
             )
@@ -1688,7 +1766,6 @@ class AutopilotModeScreen(ScopeScreen):
             container.mount(
                 Static(
                     render_section_caption(BLOCKED_CAPTION, len(self._blocked)),
-                    id=BLOCKED_SECTION_ID,
                     classes="autopilot-section",
                 )
             )
