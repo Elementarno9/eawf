@@ -95,6 +95,7 @@ CANONICAL_HINT_TOKENS: Final[frozenset[str]] = frozenset(
         "?",
         # Single-key action tokens advertised by the per-mode panes.
         "a",
+        "b",
         "c",
         "d",
         "H",
