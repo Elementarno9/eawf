@@ -325,14 +325,25 @@ max-loc = 1400
 # it past the cap. The pure frontier-render helpers split into a sibling module
 # once the cockpit surface settles; it joins the list as an extract-module
 # follow-up until that seam exists rather than reding the suite mid-surface.
+# jury_validation.py is the cohesive trust-validation reducer built across
+# P30-I09 W01-W05 (cohort + Fleiss-kappa/Brier/ECE reducer + verbosity/
+# faithfulness probes + block-authority gate). The pure metric computers split
+# into a sibling module once the trust surface settles; it joins the list as an
+# extract-module follow-up until that seam exists.
+# agent_watch.py is the cohesive Agent-watch / FA4 session-zoom surface; the
+# P30-I13-W04 zoom rewrite (raw output tail + confirm-gated per-session keys)
+# pushed it past the cap while preserving behavior. The output-tail wiring +
+# zoom render helpers split into a sibling module once the cockpit settles.
 exclude = [
     "src/eawf/kernel/config/registry/leaf_catalog.py",
+    "src/eawf/observability/eval/jury_validation.py",
     "src/eawf/runtime/daemon/methods/state.py",
     "src/eawf/surfaces/cli/commands/hook.py",
     "src/eawf/surfaces/cli/commands/roadmap.py",
     "src/eawf/surfaces/render/plan_view.py",
     "src/eawf/surfaces/render/skills/registry.py",
     "src/eawf/surfaces/tui/app.py",
+    "src/eawf/surfaces/tui/modes/agent_watch.py",
     "src/eawf/surfaces/tui/modes/autopilot.py",
     "src/eawf/surfaces/tui/modes/research_board.py",
 ]
