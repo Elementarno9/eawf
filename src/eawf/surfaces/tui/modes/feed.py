@@ -59,6 +59,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.empty_state import HONEST_EMPTY_CSS, render_empty_state
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
@@ -302,6 +303,16 @@ class FeedModeScreen(ScopeScreen):
 
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _FEED_HINTS
 
+    #: Centers the honest-empty hero in the feed list pane. Overrides the
+    #: top-left single-line ``.feed-empty`` rule in ``theme.tcss`` with the
+    #: shared :data:`~eawf.surfaces.tui.widgets.empty_state.HONEST_EMPTY_CSS`
+    #: snippet (content-align center middle, no border) so the live-waiting /
+    #: degraded surface reads as the calm centered hero -- the same hero the
+    #: research board + sandbox timeline already render.
+    DEFAULT_CSS: ClassVar[str] = f"""
+    FeedModeScreen #{FEED_EMPTY_ID} {{ {HONEST_EMPTY_CSS} }}
+    """
+
     def compose_body(self) -> ComposeResult:
         """Yield the scrollable feed body (honest-empty until events arrive).
 
@@ -311,7 +322,12 @@ class FeedModeScreen(ScopeScreen):
         the first row lands.
         """
         with Vertical(id="body", classes="feed-body"), VerticalScroll(id=FEED_LIST_ID):
-            yield Static(self._empty_notice(), id=FEED_EMPTY_ID, classes="feed-empty")
+            # The honest-empty hero carries NO ``feed-empty`` class: the
+            # ``theme.tcss`` ``.feed-empty`` rule pins a top-left single line,
+            # and an app-tier rule outranks this screen's ``DEFAULT_CSS`` even
+            # at lower specificity, so the class would shadow the centered-hero
+            # ``#feed-empty`` id rule. The id alone styles + identifies it.
+            yield Static(self._empty_hero(), id=FEED_EMPTY_ID)
 
     def on_mount(self) -> None:
         """Register as a live-feed listener and seed from the App buffer.
@@ -423,16 +439,33 @@ class FeedModeScreen(ScopeScreen):
             return
         notice = self.query(f"#{FEED_EMPTY_ID}")
         if notice:
-            notice.first(Static).update(self._empty_notice())
+            notice.first(Static).update(self._empty_hero())
 
     def _empty_notice(self) -> str:
-        """Return the honest-empty notice text for the current daemon state.
+        """Return the honest-empty notice headline for the current daemon state.
 
         Returns:
             :data:`FEED_EMPTY_DEGRADED` when the App reports degraded
             (daemon unreachable), else :data:`FEED_EMPTY_LIVE`.
         """
         return FEED_EMPTY_DEGRADED if getattr(self.app, "degraded", False) else FEED_EMPTY_LIVE
+
+    def _empty_hero(self) -> str:
+        """Return the centered honest-empty hero body for the feed list.
+
+        Routes the current :meth:`_empty_notice` headline (live-waiting or
+        daemon-unreachable) through the shared
+        :func:`~eawf.surfaces.tui.widgets.empty_state.render_empty_state` hero
+        so the pre-event surface reads as the calm centered hero (a muted
+        brand sigil over a ``$muted`` headline) rather than a top-left
+        one-liner. The wording is calm (a passive waiting state, not an
+        alarm), so the headline wears ``$muted``; the feed has no
+        operator-facing action to take while it waits, so the hero carries no
+        action chips.
+        """
+        return render_empty_state(
+            self._empty_notice(), mode=self._render_mode(), headline_tint="$muted"
+        )
 
 
 __all__ = [

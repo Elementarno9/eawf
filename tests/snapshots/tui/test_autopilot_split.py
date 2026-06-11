@@ -44,6 +44,7 @@ from eawf.surfaces.tui.modes.autopilot import (
     DISPATCH_FLAVOUR,
     DISPATCH_IDLE,
     DISPATCH_RESULT_ID,
+    EMPTY_NOTICE,
     FRONTIER_ROW_CLASS,
     READY_CAPTION,
     AutopilotModeScreen,
@@ -129,6 +130,45 @@ def _split_state() -> State:
             deps=["P01-I01-W02"],
             title="Waiting on open dep",
         ),
+    }
+    return State.model_validate(
+        {
+            "schema_version": "1.3",
+            "scope_kind": ScopeKind.REPO.value,
+            "urn": "urn:eawf:v1:state:QR",
+            "updated_at": _T0.isoformat(),
+            "project": Project(
+                code="QR",
+                slug="quant-research",
+                title="Quant Research",
+                domains=["quant"],
+                default_branch="main",
+                status=ProjectStatus.ACTIVE,
+                repo_urn="urn:eawf:v1:repo:QR",
+            ).model_dump(mode="json"),
+            "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
+            "workspace": None,
+            "phases": {},
+            "iters": {},
+            "waves": {wid: w.model_dump(mode="json") for wid, w in waves.items()},
+            "artifacts": {},
+            "agent_sessions": {},
+            "plugins": {},
+            "indexes": {},
+        }
+    )
+
+
+def _dry_frontier_state() -> State:
+    """Build a state whose ready/blocked frontier is empty (all waves CLOSED).
+
+    Every wave is CLOSED, so :func:`compute_ready_frontier` yields no
+    claim-ready wave and no held PENDING wave -- the dry-frontier honest-empty
+    path the Autopilot list renders as the centered honest-empty hero.
+    """
+    waves = {
+        "P01-I01-W01": _wave("P01-I01-W01", status=WaveStatus.CLOSED, title="Closed groundwork"),
+        "P01-I01-W02": _wave("P01-I01-W02", status=WaveStatus.CLOSED, title="Closed follow-up"),
     }
     return State.model_validate(
         {
@@ -319,6 +359,39 @@ def test_autopilot_split_snapshot(tmp_path: Path) -> None:
             assert len(screen.query(f".{FRONTIER_ROW_CLASS}")) == 1
             assert len(screen.query(f".{BLOCKED_ROW_CLASS}")) == 2
             assert_screen_snapshot(app, _GOLDEN / "autopilot_split.txt")
+
+    asyncio.run(body())
+
+
+def test_autopilot_empty_frontier_snapshot(tmp_path: Path) -> None:
+    """A dry frontier renders the centered honest-empty hero in the list.
+
+    Seeds a state whose every wave is CLOSED, so the ready + blocked bands are
+    both empty. The Autopilot list then renders the shared honest-empty hero
+    (a muted brand sigil over the ``EMPTY_NOTICE`` headline + the framing
+    subline + the ``[ a arm fleet ]`` action chip) -- the same centered calm
+    hero the research board + sandbox timeline render, not a top-left
+    one-liner.
+    """
+    state_path = _write_state(tmp_path, _dry_frontier_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)  # -> autopilot
+            await settle_screen(pilot)
+            screen = app.screen
+            assert isinstance(screen, AutopilotModeScreen)
+            frame = normalize_snapshot(capture_screen_text(app))
+            # The honest-empty hero: brand sigil over the EMPTY_NOTICE headline.
+            assert EMPTY_NOTICE in frame
+            assert sigils.chrome("brand", mode="unicode") in frame
+            assert "[ a arm fleet ]" in frame
+            # No ready or blocked rows on a dry frontier.
+            assert len(screen.query(f".{FRONTIER_ROW_CLASS}")) == 0
+            assert len(screen.query(f".{BLOCKED_ROW_CLASS}")) == 0
+            assert_screen_snapshot(app, _GOLDEN / "autopilot_empty_frontier.txt")
 
     asyncio.run(body())
 

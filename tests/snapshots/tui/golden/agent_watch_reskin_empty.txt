@@ -8,12 +8,12 @@
   no dispatched executor session to stream
 
   ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-  │no active dispatched session                                                                                      │
   │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │
+  │                                                        ◉                                                         │
   │                                                                                                                  │
-  │                                                                                                                  │
+  │                                           no active dispatched session                                           │
   │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │

@@ -1,27 +1,27 @@
- ◉ Eä  repo ❯ QR ❯ _default    ≈ idle    HH:MM UTC
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ no verdicts recorded                                                                                                 │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ◉ Eä  repo ❯ QR ❯ Autopilot    ≈ idle    HH:MM UTC
 
+  autopilot idle -- press a to arm the fleet drive
 
-  ◆ watching P01-I01-W01 claude active
+  no ready waves
+  no claim-ready wave on the frontier
 
   ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │
   │                                                        ◉                                                         │
   │                                                                                                                  │
-  │                          watching P01-I01-W01 / claude -- waiting for session events...                          │
+  │                                                  no ready waves                                                  │
+  │                                       no claim-ready wave on the frontier                                        │
   │                                                                                                                  │
-  │                                                                                                                  │
-  │                                                                                                                  │
-  │                                                                                                                  │
-  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-  │ waiting for output…                                                                                              │
+  │                                                 [ a arm fleet ]                                                  │
   │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │
@@ -34,7 +34,7 @@
   │                                                                                                                  │
   ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-  ✕ press k to cancel the watched session
+  press d to dispatch the selected ready wave (speak it into being)
 
- ↑↓ select  ·  Esc back  ·  …  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit   weekly burn: — no data•
+ ↑↓ select  ·  …  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quitweekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox

@@ -42,6 +42,7 @@ from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.ids import natural_key
 from eawf.platform.scrub import scan_text
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.empty_state import HONEST_EMPTY_CSS, render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
@@ -64,23 +65,29 @@ EMPTY_NOTICE: str = "no agent reports yet"
 
 
 def frame_empty_notice(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
-    """Return the no-reports sentinel framed calmly with a muted ring.
+    """Return the no-reports honest-empty hero body, centered + calm.
 
-    Leads the honest :data:`EMPTY_NOTICE` with the muted PENDING sigil (the
-    hollow ring) so the empty surface reads in the reskin's lifecycle
-    vocabulary as a not-yet-populated pane rather than a missing one -- a
-    calm frame that fabricates no rows. The notice text itself is unchanged;
-    the surrounding ``#evidence-empty`` Static keeps its muted-italic CSS.
+    Routes the honest :data:`EMPTY_NOTICE` through the shared
+    :func:`~eawf.surfaces.tui.widgets.empty_state.render_empty_state` hero so
+    the no-reports rollup region reads as the calm centered hero (a muted
+    brand sigil over a ``$muted`` headline) -- the same hero the research
+    board + sandbox timeline render -- rather than a top-left lifecycle-ring
+    one-liner, fabricating no rows. Calm rather than alarmed: agent reports
+    accrue as waves close, so the empty surface is a not-yet state, not a
+    fault, and the headline wears ``$muted``. No action chip: a report is
+    produced by an agent closing a wave, not by an operator key here. The
+    centering is the surrounding ``#evidence-empty`` Static's
+    :data:`~eawf.surfaces.tui.widgets.empty_state.HONEST_EMPTY_CSS` rule.
 
     Args:
-        mode: The App's resolved render-mode label threaded into the sigil
-            helper; defaults to the ASCII column for a bare standalone render.
+        mode: The App's resolved render-mode label threaded into the brand
+            sigil's glyph column; defaults to the ASCII column for a bare
+            standalone render.
 
     Returns:
-        The framed sentinel string (``<ring> no agent reports yet``).
+        The centered honest-empty hero body for the ``#evidence-empty`` Static.
     """
-    ring = glyph(Sigil.PENDING, mode=mode)
-    return f"{ring} {EMPTY_NOTICE}"
+    return render_empty_state(EMPTY_NOTICE, mode=mode, headline_tint="$muted")
 
 
 #: The criterion statuses that count as "ready" toward the close-readiness
@@ -1023,9 +1030,7 @@ class EvidenceModeScreen(ScopeScreen):
         overflow-x: hidden;
     }
     EvidenceModeScreen .evidence-empty {
-        height: 1fr;
-        color: $text-muted;
-        text-style: italic;
+        HONEST_EMPTY_CSS
     }
     EvidenceModeScreen .evidence-followups-title {
         height: 1;
@@ -1052,7 +1057,7 @@ class EvidenceModeScreen(ScopeScreen):
         max-height: 8;
         color: $text;
     }
-    """
+    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS)
 
     #: Bound state, watched so a fresh revision rebuilds the rollup rows.
     state: reactive[State | None] = reactive(None)

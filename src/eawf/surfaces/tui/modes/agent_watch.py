@@ -95,6 +95,7 @@ from eawf.kernel.state.ids import natural_key
 from eawf.observability.eval.reputation import FleetVerdictRow, fleet_verdict_rollup
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
+from eawf.surfaces.tui.widgets.empty_state import HONEST_EMPTY_CSS, render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
@@ -1524,6 +1525,9 @@ class AgentWatchModeScreen(ScopeScreen):
         height: 1fr;
         border: round $accent;
     }
+    AgentWatchModeScreen .watch-empty {
+        HONEST_EMPTY_CSS
+    }
     AgentWatchModeScreen #watch-output {
         height: 1fr;
         margin-top: 1;
@@ -1533,7 +1537,7 @@ class AgentWatchModeScreen(ScopeScreen):
         margin-top: 1;
         color: $muted;
     }
-    """
+    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS)
 
     #: ``up`` / ``down`` scroll the stream; the FA4 session keys ``k`` (kill
     #: this lane, confirm-gated, with ``x`` as a cancel-verb alias), ``space``
@@ -1664,7 +1668,7 @@ class AgentWatchModeScreen(ScopeScreen):
         with Vertical(id="watch-body"):
             yield Static(render_watch_header(self.target, mode=mode), id=WATCH_HEADER_ID)
             with VerticalScroll(id=WATCH_LIST_ID):
-                yield Static(self._empty_notice(), id=WATCH_EMPTY_ID, classes="watch-empty")
+                yield Static(self._empty_hero(), id=WATCH_EMPTY_ID, classes="watch-empty")
             yield OutputTail(id=WATCH_OUTPUT_ID)
             yield Static(self._cancel_idle_line(), id=WATCH_RESULT_ID)
 
@@ -1918,7 +1922,7 @@ class AgentWatchModeScreen(ScopeScreen):
             return
         notice = self.query(f"#{WATCH_EMPTY_ID}")
         if notice:
-            notice.first(Static).update(self._empty_notice())
+            notice.first(Static).update(self._empty_hero())
 
     def action_cancel_session(self) -> None:
         """Confirm-gate, then ask the daemon to kill the watched session (``k``).
@@ -2169,6 +2173,22 @@ class AgentWatchModeScreen(ScopeScreen):
         if getattr(self.app, "degraded", False):
             return WATCH_DEGRADED
         return f"watching {self.target.label} -- waiting for session events..."
+
+    def _empty_hero(self) -> str:
+        """Return the centered honest-empty hero body for the session stream.
+
+        Routes the current :meth:`_empty_notice` headline (nothing watched /
+        daemon-unreachable / live-waiting) through the shared
+        :func:`~eawf.surfaces.tui.widgets.empty_state.render_empty_state` hero
+        so the stream pane reads as the calm centered hero (a muted brand sigil
+        over a ``$muted`` headline) rather than a top-left one-liner. The
+        wording is calm (a waiting / nothing-dispatched state, not an alarm),
+        so the headline wears ``$muted``; nothing is dispatched to act on, so
+        the hero carries no action chips.
+        """
+        return render_empty_state(
+            self._empty_notice(), mode=self._render_mode(), headline_tint="$muted"
+        )
 
     def _cancel_idle_line(self) -> str:
         """Return the idle cancel-result line wearing the failed-look mark.

@@ -66,8 +66,9 @@ from eawf.surfaces.tui.snapshot import (
     normalize_snapshot,
     settle_screen,
 )
+from eawf.surfaces.tui.widgets.empty_state import brand_sigil_markup
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
+from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, status_sigil, tint
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests.conftest import make_intent
 
@@ -314,11 +315,14 @@ def test_verdict_sigil_ascii_mode_uses_ascii_column() -> None:
     assert verdict_sigil("pass", mode="ascii").plain == glyph(Sigil.CLOSED, mode="ascii")
 
 
-def test_frame_empty_notice_keeps_sentinel_and_adds_ring() -> None:
-    """The framed notice keeps EMPTY_NOTICE verbatim, led by the muted ring."""
+def test_frame_empty_notice_keeps_sentinel_and_leads_with_brand_sigil() -> None:
+    """The framed notice keeps EMPTY_NOTICE verbatim, led by the brand sigil hero."""
     framed = frame_empty_notice(mode="unicode")
     assert EMPTY_NOTICE in framed
-    assert framed.startswith(glyph(Sigil.PENDING, mode="unicode"))
+    # The honest-empty hero leads with the muted brand sigil (not the
+    # pre-reskin PENDING lifecycle ring) so the rollup empty reads as the
+    # same centered calm hero the research board + sandbox timeline render.
+    assert framed.startswith(brand_sigil_markup(mode="unicode"))
 
 
 def test_evidence_row_report_label_joins_wave_and_role() -> None:
@@ -425,7 +429,10 @@ def test_evidence_rollup_no_reports_renders_honest_empty_sentinel() -> None:
             assert table.row_count == 0
             frame = normalize_snapshot(capture_screen_text(app))
             assert EMPTY_NOTICE in frame
-            assert glyph(Sigil.PENDING, mode=app.render_mode) in frame
+            # The no-reports rollup now renders the shared centered honest-empty
+            # hero: a muted brand sigil over the headline (not the pre-reskin
+            # top-left PENDING lifecycle ring).
+            assert chrome("brand", mode=app.render_mode) in frame
             assert_screen_snapshot(app, _GOLDEN / "evidence_rollup_empty.txt")
 
     asyncio.run(body())

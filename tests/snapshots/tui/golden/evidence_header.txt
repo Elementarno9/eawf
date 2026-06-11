@@ -6,7 +6,6 @@
   CR-03      blocked  -            waived
   CR-04      fail     -            fail
  no agent reports yet
- ◌ no agent reports yet
 
 
 
@@ -15,8 +14,9 @@
 
 
 
+                                                           ◉
 
-
+                                                  no agent reports yet
 
 
 
