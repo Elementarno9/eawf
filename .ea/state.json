@@ -6120,6 +6120,18 @@
       "status": "done",
       "updated_at": "2026-06-11T06:16:40.591975Z"
     },
+    "P30-I15-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W03",
+      "scope_id": "P30-I15-W03",
+      "status": "done",
+      "updated_at": "2026-06-11T06:25:11.242507Z"
+    },
     "P30-I15-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -6131,6 +6143,18 @@
       "scope_id": "P30-I15-W04",
       "status": "done",
       "updated_at": "2026-06-11T06:16:41.306455Z"
+    },
+    "P30-I15-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W05",
+      "scope_id": "P30-I15-W05",
+      "status": "done",
+      "updated_at": "2026-06-11T06:25:11.943000Z"
     },
     "P30-I15-W06": {
       "actual_cost_usd": 0.0,
@@ -6168,6 +6192,18 @@
       "status": "done",
       "updated_at": "2026-06-11T06:16:42.008847Z"
     },
+    "P30-I15-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W09",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W09",
+      "scope_id": "P30-I15-W09",
+      "status": "done",
+      "updated_at": "2026-06-11T06:25:12.656450Z"
+    },
     "P30-I15-W10": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -6179,6 +6215,18 @@
       "scope_id": "P30-I15-W10",
       "status": "done",
       "updated_at": "2026-06-11T06:06:37.354082Z"
+    },
+    "P30-I15-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W11",
+      "scope_id": "P30-I15-W11",
+      "status": "done",
+      "updated_at": "2026-06-11T06:24:48.915517Z"
     }
   },
   "agent_sessions": {
@@ -18426,6 +18474,19 @@
       "scope_id": "P30-I15-W02",
       "updated_at": "2026-06-11T06:07:22.901959Z"
     },
+    "P30-I15-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W03-bucket-20260611T061649Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I15-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I15-W03",
+      "updated_at": "2026-06-11T06:16:49.373111Z"
+    },
     "P30-I15-W04": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I15-W04-bucket-20260611T060723Z",
@@ -18438,6 +18499,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I15-W04",
       "updated_at": "2026-06-11T06:07:23.396328Z"
+    },
+    "P30-I15-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W05-bucket-20260611T061649Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I15-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I15-W05",
+      "updated_at": "2026-06-11T06:16:49.866306Z"
     },
     "P30-I15-W06": {
       "confidence": "low",
@@ -18478,6 +18552,19 @@
       "scope_id": "P30-I15-W08",
       "updated_at": "2026-06-11T06:07:23.870748Z"
     },
+    "P30-I15-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W09-bucket-20260611T061650Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I15-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I15-W09",
+      "updated_at": "2026-06-11T06:16:50.356743Z"
+    },
     "P30-I15-W10": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I15-W10-bucket-20260611T060635Z",
@@ -18490,6 +18577,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I15-W10",
       "updated_at": "2026-06-11T06:06:35.946552Z"
+    },
+    "P30-I15-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W11-bucket-20260611T062447Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I15-W11",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I15-W11",
+      "updated_at": "2026-06-11T06:24:47.498623Z"
     }
   },
   "fleet_run": null,
@@ -20484,7 +20584,8 @@
         "P30-I15-W07",
         "P30-I15-W08",
         "P30-I15-W09",
-        "P30-I15-W10"
+        "P30-I15-W10",
+        "P30-I15-W11"
       ]
     }
   },
@@ -21425,7 +21526,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T06:16:42.009016Z",
+  "updated_at": "2026-06-11T06:25:12.656616Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -83822,10 +83923,10 @@
     "P30-I15-W03": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T06:16:49.372969Z",
+      "closed_at": "2026-06-11T06:25:11.242507Z",
+      "commit": "5292d5855cc4269523b80e2b857e521829d1781f",
       "deps": [
         "P30-I15-W02"
       ],
@@ -83842,12 +83943,12 @@
       "intent": null,
       "iter_id": "P30-I15",
       "opened_at": "2026-06-09T12:29:17.809617Z",
-      "outcome": null,
+      "outcome": "Clean-base version binding-proof (no +dev in programmatic consumers)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -83936,10 +84037,10 @@
     "P30-I15-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T06:16:49.866212Z",
+      "closed_at": "2026-06-11T06:25:11.943000Z",
+      "commit": "b06c6645784a172f908021f9f6a58e4bd510609c",
       "deps": [
         "P30-I15-W04"
       ],
@@ -83954,12 +84055,12 @@
       "intent": null,
       "iter_id": "P30-I15",
       "opened_at": "2026-06-09T12:29:17.810101Z",
-      "outcome": null,
+      "outcome": "Stub-audit phase-close refusal proven end-to-end (verdict=None + empty-checks rejected)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -84135,10 +84236,10 @@
     "P30-I15-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T06:16:50.356640Z",
+      "closed_at": "2026-06-11T06:25:12.656450Z",
+      "commit": "4aac8fbc030aa53ffd7d5267dfc127ee64aac404",
       "deps": [
         "P30-I15-W07",
         "P30-I15-W08"
@@ -84155,12 +84256,12 @@
       "intent": null,
       "iter_id": "P30-I15",
       "opened_at": "2026-06-09T12:29:17.810562Z",
-      "outcome": null,
+      "outcome": "Release-annotation (release=v0.6.0) accepted by lint + phase-release.yaml regex/version-match",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -84236,6 +84337,64 @@
         }
       ],
       "title": "Raise wheel size ceiling for P30 source growth",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T06:24:47.498500Z",
+      "closed_at": "2026-06-11T06:24:48.915517Z",
+      "commit": "df50615a96fddddbe1875a4f2d09d00d04aac96b",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/golden/plugin_install/claude/settings.json",
+        "tests/golden/plugin_install/opencode/plugins/eawf.js.golden"
+      ],
+      "gates": [],
+      "id": "P30-I15-W11",
+      "intent": {
+        "desired_outcome": "the plugin-install goldens carry 0.6.0 so the golden-tree regression tests pass",
+        "evidence_refs": [],
+        "planned_steps": [
+          "regenerate the claude + opencode plugin-install goldens via the documented recipe",
+          "rerun the golden plugin suite green"
+        ],
+        "priority_rationale": "Red plugin golden tests block the phase-PR CI",
+        "problem": "the I15-W07 version bump 0.5.4 to 0.6.0 left the claude + opencode plugin-install golden trees pinning the old version byte, reddening the golden-tree tests",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T06:24:46.570081Z",
+      "outcome": "Regenerated claude+opencode plugin-install goldens for 0.6.0; golden suite green",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "tests/golden plugin-install golden-tree tests pass after the claude + opencode goldens are regenerated to carry version 0.6.0 from the I15-W07 bump",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/golden plugin-install golden-tree tests pass after the claude + opencode goldens are regenerated to carry version 0.6.0 from the I15-W07 bump",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Regenerate plugin-install goldens for the v0.6.0 version bump",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
