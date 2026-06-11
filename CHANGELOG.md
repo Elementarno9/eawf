@@ -111,6 +111,24 @@ The format is based on Keep a Changelog [1], and this project adheres to Semanti
   hint text stays informative even after callsites switch to the
   new bucket classes.
 
+## [0.3.0] - 2026-05-25
+
+This entry backfills the v0.3.0 release, which shipped without a changelog section. v0.3.0 spans phases P14 through P27 (a phase, written `P<NN>`, is eawf's unit of shipped value — one reviewable delivery), so the notes below summarise that arc rather than enumerating every wave.
+
+### Added
+- **Multi-harness support: Codex and OpenCode join Claude Code (P14).** eawf can now dispatch agent work to three coding-agent runtimes, not just Claude Code. The OpenCode plugin ships as untyped `.js` to avoid a TypeScript build step; Goose / Aider / Cursor / Cline were deferred to v0.4 to keep the phase scoped.
+- **Skills surface: `/research` flags, `/blitz`, and the registry seam (P15).** The research skill gained depth flags, the auto-chained follow-up skill `/blitz` (it recurses into `/research` when more than one unknown remains, guarded by a recursion-depth env var), and the skill registry that later phases render plugin trees from.
+- **Artifact chassis and estimation (P16).** Durable research / plan / audit / decision / incident markdown gained the renderer-owned chassis sections (`Summary` / `References` / `Provenance` / `Scrub`) with dense `[N]` citation markers backed by typed `Citation` rows, plus the effort-unit (EU) estimation surface.
+- **Typed agent reports (P18).** Every agent session that reaches a terminal handoff now emits a typed `agent_end` report body validated against `AgentReportBody`, with a closed verdict vocabulary (`pass` / `pass-with-followups` / `fail` / `blocked`) and role-specific store kinds.
+- **Roadmap-driven planning + commit hygiene (P19).** The `eawf roadmap propose` / `revise` / `apply` flow lands phases one at a time as first-class `PLANNED -> ACTIVE -> CLOSED` state records, and `eawf wave claim` enforces dependency + sibling-ordering gates. Commit-prefix linting enforces the `[P<NN>-W<NN>]` taxonomy.
+- **TUI, metrics, and operator UX (P20).** The terminal UI, the EU velocity / burn metrics, and the operator-facing status surfaces landed.
+- **Profiles, MCP/sandbox, and domain bodies (P21).** Per-domain configuration profiles, the MCP server grant + sandbox-policy models, and the domain-specialist skill bodies were added.
+- **The C-series kernel rebuild (P22–P27).** The bulk of v0.3 is a ground-up rebuild against an internalised design spec (the `C0N` cluster codes name the spec sections): the bootstrap + state + config + URN + id + validate kernel (P23, `C01`), the `eawfd` daemon keystone with JSON-RPC + smart-spawn + `portalock`-backed atomic writes (P24, `C02`), the spec-infrastructure + runtime-dispatch + VCS-convention contracts (P25, `C03`/`C07`/`C08`), the CLI + workflow/skills/agent/runtime surfaces + the operator TUI (P26, `C04`/`C05`/`C06`), and the observability + operations layer — the quality audit DSL, telemetry, and release/migration ops (P27, `C09`/`C10`).
+
+### Changed
+- **The daemon (`eawfd`) became the sole canonical mutator of `state.json`.** Read access stays free, but every mutation now proxies through the daemon over JSON-RPC, falling back to a direct `portalock` write only when the daemon is unavailable (CI / one-shot / recovery shell). This is the structural backbone the later trust + fleet phases build on.
+- **PR cadence ratified as one-PR-per-phase with rebase-merge.** Decisions D07 (rebase-and-merge, never squash) and D10 (keep one-PR-per-phase) were ratified during this arc, so per-wave `[P<NN>-W<NN>]` history survives on the trunk and each phase reviews as one coherent story.
+
 ## [0.2.0] - 2026-05-11
 
 ### Added
