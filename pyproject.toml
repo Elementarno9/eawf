@@ -15,12 +15,23 @@ dependencies = [
     "click>=8.1,<8.4",
     "jinja2>=3.1.0",
     "orjson>=3.11.9",
+    # Graphics-terminal brand mark: the Eä Seal renders as an inline image via
+    # the Kitty graphics protocol (Ghostty / Kitty / iTerm2 / WezTerm) or sixel
+    # when the host terminal supports it, with a unicode-glyph fallback. These
+    # ship in the DEFAULT set (rather than an ``eawf[seal]`` extra) so the
+    # ``textual_image`` import is never an invisible-extra trap — a missing
+    # extra silently fell back to the glyph with no signal, so nobody ever
+    # exercised the image path. The widget still degrades to the brand glyph on
+    # a non-graphics terminal, so a default install carries no behavioural cost
+    # from the deps being present; see ``surfaces/tui/widgets/seal.py``.
+    "pillow>=10",
     "portalocker>=3.2.0",
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
     "questionary>=2.1.1",
     "rich>=15.0.0",
     "textual>=8.0",
+    "textual-image>=0.13",
     # Cap below 0.26: typer 0.26 changed shell-completion handling so the
     # ``complete_zsh`` env value the generated script uses is no longer
     # recognized ("Shell zsh not supported"); pairs with the click<8.4 cap.
@@ -35,15 +46,6 @@ Issues = "https://github.com/Elementarno9/eawf/issues"
 Changelog = "https://github.com/Elementarno9/eawf/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-# Graphics-terminal brand mark: the Eä Seal rendered as an inline image via the
-# Kitty graphics protocol (Ghostty / Kitty / iTerm2 / WezTerm) or sixel, with a
-# unicode-halfcell fallback. Optional because it pulls Pillow + the renderer and
-# only shows on a graphics-capable terminal; without the extra the TUI falls
-# back to the unicode brand glyph. Install via ``pip install eawf[seal]``.
-seal = [
-    "textual-image>=0.13",
-    "pillow>=10",
-]
 # Windows-only: pywin32 backs the named-pipe transport in
 # ``eawf.runtime.daemon.windows_pipe`` + ``windows_security`` and the
 # pywin32 ServiceFramework wiring landing in P24-W04. The package
@@ -104,7 +106,10 @@ pywin32 = [
 DEP001 = ["duckdb"]
 # DEP002 (declared-but-unused): mkdocs + mkdocs-material are the ``[docs]``
 # extra's CLI doc-build tools — invoked as commands, never imported in src/.
-DEP002 = ["mkdocs", "mkdocs-material"]
+# ``pillow`` is a direct runtime requirement of ``textual-image`` (the seal
+# image renderer); eawf pins it directly to control the floor but never imports
+# ``PIL`` itself — ``textual_image`` is the importing consumer.
+DEP002 = ["mkdocs", "mkdocs-material", "pillow"]
 # DEP003 (transitive): ``pydantic_core`` is pydantic's own compiled core,
 # pulled in transitively with pydantic; the direct ``ErrorDetails`` import
 # rides that coupling.

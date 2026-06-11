@@ -264,12 +264,14 @@ dependencies = [
     { name = "click" },
     { name = "jinja2" },
     { name = "orjson" },
+    { name = "pillow" },
     { name = "portalocker" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "questionary" },
     { name = "rich" },
     { name = "textual" },
+    { name = "textual-image" },
     { name = "typer" },
 ]
 
@@ -277,10 +279,6 @@ dependencies = [
 docs = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
-]
-seal = [
-    { name = "pillow" },
-    { name = "textual-image" },
 ]
 windows = [
     { name = "pywin32" },
@@ -309,7 +307,7 @@ requires-dist = [
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
     { name = "orjson", specifier = ">=3.11.9" },
-    { name = "pillow", marker = "extra == 'seal'", specifier = ">=10" },
+    { name = "pillow", specifier = ">=10" },
     { name = "portalocker", specifier = ">=3.2.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pywin32", marker = "extra == 'windows'", specifier = ">=306" },
@@ -317,10 +315,10 @@ requires-dist = [
     { name = "questionary", specifier = ">=2.1.1" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "textual", specifier = ">=8.0" },
-    { name = "textual-image", marker = "extra == 'seal'", specifier = ">=0.13" },
+    { name = "textual-image", specifier = ">=0.13" },
     { name = "typer", specifier = ">=0.25.1,<0.26" },
 ]
-provides-extras = ["docs", "seal", "windows"]
+provides-extras = ["docs", "windows"]
 
 [package.metadata.requires-dev]
 dev = [

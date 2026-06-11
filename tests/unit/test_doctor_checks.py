@@ -191,7 +191,7 @@ def test_state_wave_warn_threshold_derives_from_ceiling_and_fraction() -> None:
 
 
 def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``run_all`` includes the state-scale-ceiling advisory (P29-I01-W04)."""
+    """``run_all`` includes the seal-capability advisory (P30-I16-W12)."""
     from eawf.platform.install.instrument_probe import ProbeResult
 
     _stub_probe_ok(
@@ -200,7 +200,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     )
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 7
+    assert len(results) == 8
     assert {r.name for r in results} == {
         "tools_available",
         "state_present",
@@ -209,7 +209,66 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "mcp_drift",
         "state_scale_ceiling",
         "render_output_roundtrip",
+        "seal_capable",
     }
+
+
+# ---- P30-I16-W12: seal-capability row --------------------------------------
+
+
+def _force_seal(monkeypatch: pytest.MonkeyPatch, *, capable: bool) -> None:
+    """Stub the seal module so ``check_seal_capable`` sees a fixed capability."""
+    from eawf.surfaces.tui.widgets import seal as seal_mod
+
+    seal_mod.seal_capable.cache_clear()
+    monkeypatch.delenv(seal_mod.SEAL_DISABLE_ENV, raising=False)
+    monkeypatch.setattr(seal_mod, "deps_present", lambda: capable)
+    monkeypatch.setattr(seal_mod, "resvg_present", lambda: capable)
+    monkeypatch.setattr(seal_mod, "terminal_supports_images", lambda: capable)
+
+
+def test_check_seal_capable_ok_when_fully_capable(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_seal(monkeypatch, capable=True)
+    result = checks.check_seal_capable()
+    assert result.name == "seal_capable"
+    assert result.status == "ok"
+    assert "image-capable" in (result.detail or "")
+
+
+def test_check_seal_capable_informational_naming_missing_preconditions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A degraded seal is healthy: the row stays ``ok`` (so doctor never reds on
+    # a headless / non-graphics box) but the detail names each absent precond.
+    from eawf.surfaces.tui.widgets import seal as seal_mod
+
+    _force_seal(monkeypatch, capable=True)
+    monkeypatch.setattr(seal_mod, "resvg_present", lambda: False)
+    monkeypatch.setattr(seal_mod, "terminal_supports_images", lambda: False)
+    result = checks.check_seal_capable()
+    assert result.status == "ok"
+    detail = result.detail or ""
+    assert "resvg on PATH" in detail
+    assert "graphics-capable terminal" in detail
+    assert "textual_image/pillow import" not in detail
+
+
+def test_check_seal_capable_names_disable_switch(monkeypatch: pytest.MonkeyPatch) -> None:
+    from eawf.surfaces.tui.widgets import seal as seal_mod
+
+    _force_seal(monkeypatch, capable=True)
+    monkeypatch.setenv(seal_mod.SEAL_DISABLE_ENV, "1")
+    result = checks.check_seal_capable()
+    assert result.status == "ok"
+    assert seal_mod.SEAL_DISABLE_ENV in (result.detail or "")
+    assert "brand glyph" in (result.detail or "")
+
+
+def test_check_seal_capable_never_reds_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Whether capable or degraded, the row is informational and stays ``ok``.
+    _force_seal(monkeypatch, capable=False)
+    result = checks.check_seal_capable()
+    assert result.status == "ok"
 
 
 # ---- P30-I16-W22: anchor resolution (pwd-upward) ---------------------------

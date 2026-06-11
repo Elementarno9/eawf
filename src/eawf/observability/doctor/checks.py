@@ -625,6 +625,70 @@ def check_render_output_roundtrip() -> CheckResult:
     )
 
 
+def check_seal_capable() -> CheckResult:
+    """Report whether the TUI can render the Eä Seal as an inline image.
+
+    The Seal brand mark renders as a raster image only when three preconditions
+    all hold: the ``textual_image`` / Pillow import resolves (ships in the
+    default deps), the ``resvg`` rasteriser is on PATH with the asset on disk,
+    and the host terminal advertises a graphics protocol. When any is missing
+    the TUI degrades to the unicode brand glyph -- a perfectly healthy state.
+
+    This is a purely **informational** capability row: it ALWAYS returns
+    ``ok`` (never ``warn`` / ``fail``) so a default install that simply lacks
+    ``resvg`` or runs on a headless / non-graphics terminal -- including every
+    CI runner -- does not flip ``eawf doctor`` to a degraded verdict. The
+    detail names which precondition is absent so the operator knows what to
+    install / which terminal to use to get the image path. The
+    :data:`~eawf.surfaces.tui.widgets.seal.SEAL_DISABLE_ENV` kill switch is
+    surfaced explicitly when it forces the degraded path.
+
+    Returns:
+        An ``ok`` ``seal_capable`` :class:`CheckResult` whose detail records
+        either the image-capable state or each missing precondition.
+    """
+    from eawf.surfaces.tui.widgets.seal import (
+        SEAL_DISABLE_ENV,
+        deps_present,
+        resvg_present,
+        seal_capable,
+        terminal_supports_images,
+    )
+
+    name = "seal_capable"
+    if seal_capable():
+        return CheckResult(
+            name=name,
+            status="ok",
+            detail="image-capable (deps + resvg + graphics terminal)",
+        )
+
+    if os.environ.get(SEAL_DISABLE_ENV):
+        return CheckResult(
+            name=name,
+            status="ok",
+            detail=f"brand glyph (disabled via {SEAL_DISABLE_ENV})",
+        )
+
+    missing: list[str] = []
+    if not deps_present():
+        missing.append("textual_image/pillow import")
+    if not resvg_present():
+        missing.append("resvg on PATH")
+    if not terminal_supports_images():
+        missing.append("graphics-capable terminal")
+    return CheckResult(
+        name=name,
+        status="ok",
+        detail=f"brand glyph; missing: {', '.join(missing)}",
+    )
+
+
+def seal_capable_check() -> CheckResult:
+    """Public alias for :func:`check_seal_capable`."""
+    return check_seal_capable()
+
+
 def tools_available(
     *,
     workspace: Path,
@@ -707,5 +771,6 @@ def run_all(
         check_mcp_drift(workspace=anchor),
         check_state_scale_ceiling(workspace=anchor),
         check_render_output_roundtrip(),
+        check_seal_capable(),
     ]
     return results
