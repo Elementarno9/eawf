@@ -5,17 +5,20 @@ widget emits a selection message (a backlog-item or wave id), the shared
 :class:`~eawf.surfaces.tui.scopes.ScopeScreen` routes it here, and this modal
 renders the resolved entity in a tabbed, scrollable card.
 
-The body is split across up to six cosmic-terminal tabs --
+The body is split across the cosmic-terminal tabs --
 ``overview`` / ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` /
-``cost`` -- each with a chrome-glyph mnemonic from the reskin sigil
-vocabulary. ``Tab`` / ``Shift+Tab`` cycle the tabs; the single-letter keys
-``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` jump to one, and the arrow keys
-keep their native scroll. A ``wave`` card renders the full five-tab chassis
-always (overview / criteria / gates / evidence / runtime) -- an empty section
-shows an honest-empty notice rather than hiding the tab (the "render the tabs
-now, fill later" directive) -- while the ``cost`` tab stays data-gated and a
-non-wave card (phase / iter / backlog peek) builds only the groups it
-populates. Honest absence is first-class: the ``runtime`` tab shows the
+``cost`` / ``history`` -- each with a chrome-glyph mnemonic from the reskin
+sigil vocabulary. ``Tab`` / ``Shift+Tab`` cycle the tabs; the single-letter
+keys ``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` / ``h`` jump to one, and
+the arrow keys keep their native scroll. A ``wave`` card renders the full
+five-tab chassis always (overview / criteria / gates / evidence / runtime) --
+an empty section shows an honest-empty notice rather than hiding the tab (the
+"render the tabs now, fill later" directive) -- while the ``cost`` tab stays
+data-gated and a non-wave card (phase / iter / backlog / incident peek)
+builds only the groups it populates. An ``incident`` card carries its
+chronological event timeline on its own ``history`` tab (designer ruling
+A3-a), and its ``evidence`` group keeps a one-line link pointing at it.
+Honest absence is first-class: the ``runtime`` tab shows the
 :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel rather than a
 fabricated zero (a real budget still paints a consumed-vs-budget bar +
 session-derived runtime-EU), and the ``cost`` tab renders "no metered
@@ -125,6 +128,7 @@ _TAB_LABEL_TEXT: dict[str, str] = {
     "evidence": "evidence",
     "runtime": "runtime",
     "cost": "cost",
+    "history": "history",
 }
 
 #: The unicode / ascii right-pointing marker prefixed to the ``criteria``
@@ -142,6 +146,14 @@ _CRITERIA_MARKER: tuple[str, str] = ("\u25b8", ">")
 #: source stays ASCII-clean per the sigils-module convention.
 _COST_MARKER: tuple[str, str] = ("\u00a4", "$")
 
+#: The unicode / ascii marker prefixed to the ``history`` tab label (no
+#: chrome role exists for it, so it is spelled out here). The unicode column
+#: is an anticlockwise open circle arrow (U+21BA) -- a single-cell "rewind /
+#: back-in-time" mark that reads as a timeline -- and the ascii column uses a
+#: plain ``<`` (back in time). Written ``\uXXXX`` so the source stays
+#: ASCII-clean per the sigils-module convention.
+_HISTORY_MARKER: tuple[str, str] = ("\u21ba", "<")
+
 
 def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
     """Return the chrome / sigil mark prefixed to *tab_id*'s pane label.
@@ -150,18 +162,20 @@ def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
     never invents a glyph: ``overview`` / ``gates`` / ``runtime`` are
     :func:`~eawf.surfaces.tui.widgets.sigils.chrome` roles, ``evidence``
     reuses the closed lifecycle
-    :func:`~eawf.surfaces.tui.widgets.sigils.glyph`, and ``criteria`` uses
-    the local :data:`_CRITERIA_MARKER` (no chrome role exists for it).
+    :func:`~eawf.surfaces.tui.widgets.sigils.glyph`, and ``criteria`` /
+    ``cost`` / ``history`` use the local :data:`_CRITERIA_MARKER` /
+    :data:`_COST_MARKER` / :data:`_HISTORY_MARKER` (no chrome role exists
+    for them).
 
     Args:
-        tab_id: One of the six chassis tab ids.
+        tab_id: One of the chassis tab ids.
         mode: The App's resolved render mode (``"unicode"`` / ``"ascii"``).
 
     Returns:
         The single-cell glyph string for *tab_id* in the resolved column.
 
     Raises:
-        KeyError: If *tab_id* is not one of the six chassis tab ids.
+        KeyError: If *tab_id* is not one of the chassis tab ids.
     """
     if tab_id == "evidence":
         return sigils.glyph(Sigil.CLOSED, mode=mode)
@@ -171,6 +185,9 @@ def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
     if tab_id == "cost":
         unicode_marker, ascii_marker = _COST_MARKER
         return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
+    if tab_id == "history":
+        unicode_marker, ascii_marker = _HISTORY_MARKER
+        return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
     chrome_role = {"overview": "overview", "gates": "gate", "runtime": "runtime"}[tab_id]
     return sigils.chrome(chrome_role, mode=mode)
 
@@ -179,7 +196,7 @@ def tab_label(tab_id: str, *, mode: RenderMode) -> str:
     """Return the full pane label (glyph + word) for *tab_id* in *mode*.
 
     Args:
-        tab_id: One of the six chassis tab ids.
+        tab_id: One of the chassis tab ids.
         mode: The App's resolved render mode (``"unicode"`` / ``"ascii"``).
 
     Returns:
@@ -187,7 +204,7 @@ def tab_label(tab_id: str, *, mode: RenderMode) -> str:
         followed by ``"overview"``.
 
     Raises:
-        KeyError: If *tab_id* is not one of the six chassis tab ids.
+        KeyError: If *tab_id* is not one of the chassis tab ids.
     """
     return f"{_tab_glyph(tab_id, mode=mode)} {_TAB_LABEL_TEXT[tab_id]}"
 
@@ -295,6 +312,12 @@ class DetailCard:
             and an attempt the pricing snapshot could not bill renders an
             em-dash plus an inert un-billed marker. Empty for a wave with no
             session attempts, so the modal renders no cost tab.
+        history: The ``history`` group — the entity's chronological event
+            timeline. Populated for an incident card from its store-loaded
+            timeline rows (one ``event`` row per recorded entry, oldest-first);
+            the incident's ``evidence`` group keeps a one-line link pointing
+            here (designer ruling A3-a). Empty for every other card kind, so
+            the modal renders no history tab.
         detail_markdown: Optional Markdown body for the ``overview`` tab.
             When ``None``, the ``overview`` tab renders ``rows`` as aligned
             field rows.
@@ -307,6 +330,7 @@ class DetailCard:
     evidence: tuple[tuple[str, str], ...] = ()
     runtime: tuple[tuple[str, str], ...] = ()
     cost: tuple[tuple[str, str], ...] = ()
+    history: tuple[tuple[str, str], ...] = ()
     detail_markdown: str | None = None
     #: The entity kind the card resolves. ``"wave"`` cards render the full
     #: five-tab chassis (overview / criteria / gates / evidence / runtime)
@@ -346,6 +370,7 @@ _EMPTY_TAB_NOTICE: dict[str, str] = {
     "evidence": "no evidence recorded yet",
     "runtime": "no runtime captured yet",
     "cost": "no metered sessions yet",
+    "history": "no timeline events recorded",
 }
 
 
@@ -1049,6 +1074,14 @@ def _backlog_card(state: State, item_id: str) -> DetailCard | None:
     return DetailCard(title=f"backlog {item.id}", rows=tuple(rows), status_enum=item.status)
 
 
+#: The one-line pointer the incident ``evidence`` group carries to its
+#: dedicated ``history`` tab (designer ruling A3-a placed the chronological
+#: timeline on a History tab; the evidence group keeps this link rather than
+#: re-rendering the timeline rows inline). The ``h`` hotkey jumps straight to
+#: the History tab.
+_HISTORY_LINK_LINE: str = "see the History tab (h) for the chronological event timeline"
+
+
 def _incident_card(
     state: State,
     incident_id: str,
@@ -1060,16 +1093,20 @@ def _incident_card(
     The overview group carries the incident metadata (severity / status /
     cause + the lifecycle open + close stamps). The chronological timeline of
     recorded events lives in the ``incident.jsonl`` store rather than on the
-    state record, so the ``evidence`` group is populated from the store-loaded
-    timeline when a ``state_path`` is given. An incident whose store has no
-    recorded event renders the honest-empty line, never a fabricated entry.
+    state record, so the ``history`` group is populated from the store-loaded
+    timeline when a ``state_path`` is given (designer ruling A3-a placed the
+    timeline on its own History tab); the ``evidence`` group then carries a
+    single one-line link pointing at it. An incident whose store has no
+    recorded event renders the honest-empty line on the History tab, never a
+    fabricated entry.
 
     Args:
         state: The bound state to resolve the incident from.
         incident_id: The selected incident id.
         state_path: When set, the chronological timeline is loaded from the
-            local ``incident.jsonl`` store; ``None`` leaves the timeline group
-            empty so the modal builds no evidence tab.
+            local ``incident.jsonl`` store onto the History tab; ``None``
+            leaves both the history and evidence groups empty so the modal
+            builds neither tab.
 
     Returns:
         The card, or ``None`` when the id is not a known incident.
@@ -1092,15 +1129,20 @@ def _incident_card(
     rows.append(("opened", _fmt_dt(incident.opened_at)))
     rows.append(("closed", _fmt_dt(incident.closed_at)))
     # The chronological event timeline lives in the JSONL store, not the state
-    # record; load it and fold it into the evidence group. With no
-    # ``state_path`` the group stays empty (the modal builds no evidence tab).
+    # record; load it onto the dedicated History tab (designer ruling A3-a).
+    # The evidence group keeps only a one-line link pointing at the History
+    # tab rather than re-rendering the timeline rows inline. With no
+    # ``state_path`` both groups stay empty (the modal builds neither tab).
+    history: tuple[tuple[str, str], ...] = ()
     evidence: tuple[tuple[str, str], ...] = ()
     if state_path is not None:
-        evidence = incident_timeline_rows(load_incident_timeline(state_path, incident_id))
+        history = incident_timeline_rows(load_incident_timeline(state_path, incident_id))
+        evidence = (("timeline", _HISTORY_LINK_LINE),)
     return DetailCard(
         title=f"incident {incident.id}",
         rows=tuple(rows),
         evidence=evidence,
+        history=history,
         status_enum=incident.status,
     )
 
@@ -1215,10 +1257,10 @@ class DetailModal(ModalScreen[None]):
     resolves the card from ``app.state`` via :func:`resolve_detail` when
     it routes the selection message. The modal owns only the presentation,
     the ``Tab`` / ``Shift+Tab`` tab cycle, the single-letter tab hotkeys
-    (``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` for overview / criteria /
-    gates / evidence / runtime / cost), and the ``Esc`` close binding. The
-    arrow keys keep their native per-pane scroll behaviour — they are
-    deliberately not bound here.
+    (``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` / ``h`` for overview /
+    criteria / gates / evidence / runtime / cost / history), and the ``Esc``
+    close binding. The arrow keys keep their native per-pane scroll behaviour
+    — they are deliberately not bound here.
     """
 
     DEFAULT_CSS: ClassVar[str] = """
@@ -1270,10 +1312,10 @@ class DetailModal(ModalScreen[None]):
     """
 
     #: ``Esc`` closes; ``Tab`` / ``Shift+Tab`` cycle the body tabs; the
-    #: single-letter keys jump straight to one of the six chassis tabs (the
-    #: ``$`` key jumps to the cost tab). The arrow keys are intentionally
-    #: absent so they keep scrolling the focused pane rather than switching
-    #: tabs.
+    #: single-letter keys jump straight to one of the chassis tabs (the
+    #: ``$`` key jumps to the cost tab, the ``h`` key to the history tab).
+    #: The arrow keys are intentionally absent so they keep scrolling the
+    #: focused pane rather than switching tabs.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "close", "close", show=False),
         Binding("tab", "next_tab", "next tab", show=False),
@@ -1284,6 +1326,7 @@ class DetailModal(ModalScreen[None]):
         Binding("v", "show_tab('evidence')", "evidence", show=False),
         Binding("r", "show_tab('runtime')", "runtime", show=False),
         Binding("dollar_sign", "show_tab('cost')", "cost", show=False),
+        Binding("h", "show_tab('history')", "history", show=False),
     ]
 
     def __init__(
@@ -1391,8 +1434,11 @@ class DetailModal(ModalScreen[None]):
             if card.cost:
                 present.append("cost")
             return tuple(present)
-        # Non-wave cards (phase / iter / backlog peeks) reuse only the groups
-        # they populate, so an entity with no such section renders no empty tab.
+        # Non-wave cards (phase / iter / backlog / incident peeks) reuse only
+        # the groups they populate, so an entity with no such section renders
+        # no empty tab. The ``history`` tab carries an incident's chronological
+        # event timeline (designer ruling A3-a); it is built only when the card
+        # populates the group.
         if card.criteria:
             present.append("criteria")
         if card.gates:
@@ -1403,6 +1449,8 @@ class DetailModal(ModalScreen[None]):
             present.append("runtime")
         if card.cost:
             present.append("cost")
+        if card.history:
+            present.append("history")
         return tuple(present)
 
     def _section_rows(self, tab_id: str) -> tuple[tuple[str, str], ...]:
@@ -1410,7 +1458,8 @@ class DetailModal(ModalScreen[None]):
 
         Args:
             tab_id: One of the chassis tab ids (``overview`` / ``criteria``
-                / ``gates`` / ``evidence`` / ``runtime`` / ``cost``).
+                / ``gates`` / ``evidence`` / ``runtime`` / ``cost`` /
+                ``history``).
 
         Returns:
             The matching section's rows.
@@ -1425,6 +1474,8 @@ class DetailModal(ModalScreen[None]):
             return self._card.runtime
         if tab_id == "cost":
             return self._card.cost
+        if tab_id == "history":
+            return self._card.history
         return self._card.rows
 
     def _render_mode(self) -> RenderMode:
@@ -1566,10 +1617,11 @@ class DetailModal(ModalScreen[None]):
         """Jump straight to the *tab_id* pane, or no-op when it is absent.
 
         Bound to the single-letter tab hotkeys (``o`` / ``c`` / ``g`` /
-        ``v`` / ``r`` / ``$`` for overview / criteria / gates / evidence /
-        runtime / cost). A key for a tab the card does not carry (e.g. ``g``
-        on a gate-less wave, or ``$`` on a wave with no session attempts) is
-        silently ignored so the binding stays harmless on every card shape.
+        ``v`` / ``r`` / ``$`` / ``h`` for overview / criteria / gates /
+        evidence / runtime / cost / history). A key for a tab the card does
+        not carry (e.g. ``g`` on a gate-less wave, ``$`` on a wave with no
+        session attempts, or ``h`` on a non-incident card) is silently
+        ignored so the binding stays harmless on every card shape.
 
         Args:
             tab_id: The target tab id (one of :attr:`_tab_ids`).

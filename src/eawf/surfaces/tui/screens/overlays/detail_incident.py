@@ -1,4 +1,4 @@
-"""Incident-timeline projection for the wave-detail chassis ``evidence`` tab.
+"""Incident-timeline projection for the detail chassis ``history`` tab.
 
 An :class:`~eawf.kernel.state.models.Incident` carries only its metadata in
 ``state.json`` (severity / status / open + close stamps); the chronological
@@ -9,7 +9,9 @@ record keyed by the incident id (``<id>`` and ``<id>-CLOSE``), and every record
 carries one or more :class:`~eawf.kernel.store.kinds.incident.TimelineEntry`
 rows. This module loads those records, gathers every entry that belongs to the
 selected incident, and renders them chronologically into the reused detail-card
-``(label, value)`` row shape.
+``(label, value)`` row shape that the incident card carries on its dedicated
+``history`` tab (designer ruling A3-a); the card's ``evidence`` group keeps
+only a one-line link pointing at that tab.
 
 Honest absence is first-class, never a fabricated entry: an incident whose
 store has no recorded timeline entry renders the exact :data:`NO_EVENTS_LINE`
@@ -113,7 +115,7 @@ def load_incident_timeline(state_path: Path, incident_id: str) -> tuple[Timeline
 
 
 def incident_timeline_rows(events: tuple[TimelineEvent, ...]) -> tuple[tuple[str, str], ...]:
-    """Build the ``evidence`` tab ``(label, value)`` rows for a timeline.
+    """Build the ``history`` tab ``(label, value)`` rows for a timeline.
 
     Each chronological event contributes one ``event`` row whose value pairs
     the recorded ISO timestamp with the event prose. An empty *events* yields

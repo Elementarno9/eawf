@@ -9,6 +9,7 @@ selection messages (:class:`BacklogTable.RowActivated` /
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -48,6 +49,7 @@ from eawf.kernel.store.kinds.agent_report import (
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.detail import (
+    _HISTORY_LINK_LINE,
     _TAB_LABEL_TEXT,
     DetailCard,
     DetailModal,
@@ -323,27 +325,36 @@ def test_resolve_detail_incident_timeline_is_chronological(tmp_path: Path) -> No
         timeline=[(_INC_NOW, "opened: validate exits 0")],
     )
     card = resolve_detail(state, "INC-001", state_path=state_path)
-    event_values = [value for label, value in card.evidence if label == "event"]
+    # The chronological timeline lands on the dedicated History tab (designer
+    # ruling A3-a), not the evidence group.
+    event_values = [value for label, value in card.history if label == "event"]
     assert len(event_values) == 2
     assert "opened: validate exits 0" in event_values[0]
     assert "closed: fixed the guard" in event_values[1]
+    # The evidence group keeps only a one-line link pointing at the History
+    # tab -- it carries no timeline event rows itself.
+    assert card.evidence == (("timeline", _HISTORY_LINK_LINE),)
+    assert not any(label == "event" for label, _ in card.evidence)
 
 
 def test_resolve_detail_incident_no_events_is_honest_empty(tmp_path: Path) -> None:
     state = _incident_state()
     state_path = tmp_path / "state.json"
-    # No incident store written at all: honest-empty line, not a fabricated
-    # entry, and never a crash.
+    # No incident store written at all: the History tab carries the honest-empty
+    # line, not a fabricated entry, and never a crash.
     card = resolve_detail(state, "INC-001", state_path=state_path)
-    assert card.evidence == (("timeline", "no timeline events recorded"),)
-    assert not any(label == "event" for label, _ in card.evidence)
+    assert card.history == (("timeline", "no timeline events recorded"),)
+    assert not any(label == "event" for label, _ in card.history)
+    # The evidence group still carries the one-line link to the History tab.
+    assert card.evidence == (("timeline", _HISTORY_LINK_LINE),)
 
 
-def test_resolve_detail_incident_no_state_path_leaves_evidence_empty() -> None:
+def test_resolve_detail_incident_no_state_path_leaves_history_empty() -> None:
     state = _incident_state()
-    # Without a state_path the timeline cannot load; the evidence group stays
-    # empty so the modal builds no evidence tab.
+    # Without a state_path the timeline cannot load; both the history and the
+    # evidence groups stay empty so the modal builds neither tab.
     card = resolve_detail(state, "INC-001")
+    assert card.history == ()
     assert card.evidence == ()
 
 
@@ -360,6 +371,85 @@ def test_detail_modal_incident_renders_timeline() -> None:
             assert isinstance(modal, DetailModal)
             rendered = capture_screen_text(app)
             assert "incident INC-001" in rendered
+
+    asyncio.run(body())
+
+
+def test_incident_card_builds_history_tab(tmp_path: Path) -> None:
+    """An incident card with timeline rows builds a present History tab.
+
+    The chronological timeline lives on its own ``history`` tab (designer
+    ruling A3-a); the evidence tab is still built (it carries the one-line
+    link), but the timeline event rows live only on the history tab.
+    """
+    state = _incident_state(status=IncidentStatus.RESOLVED)
+    state_path = tmp_path / "state.json"
+    _write_incident_timeline(
+        state_path,
+        record_id="INC-001",
+        timeline=[(_INC_NOW, "opened: validate exits 0")],
+    )
+    card = resolve_detail(state, "INC-001", state_path=state_path)
+    present = DetailModal._present_tabs(card)
+    assert "history" in present
+    assert "evidence" in present
+    # The history tab comes last in the non-wave chassis order.
+    assert present[-1] == "history"
+    # The section dispatcher routes the history tab to the history group.
+    modal = DetailModal(card)
+    assert modal._section_rows("history") == card.history
+
+
+def test_incident_card_no_state_path_builds_no_history_tab() -> None:
+    """No state_path -> no timeline -> the History tab is absent (not empty)."""
+    state = _incident_state()
+    card = resolve_detail(state, "INC-001")
+    present = DetailModal._present_tabs(card)
+    assert "history" not in present
+    assert "evidence" not in present
+
+
+def test_history_tab_label_carries_marker() -> None:
+    """The history tab label glues the local marker to the word ``history``."""
+    assert _TAB_LABEL_TEXT["history"] == "history"
+    unicode_label = tab_label("history", mode="unicode")
+    ascii_label = tab_label("history", mode=sigils.ASCII_MODE)
+    assert unicode_label.endswith(" history")
+    # The unicode column is the anticlockwise open circle arrow (U+21BA); the
+    # ascii column is a plain back-marker ``<``.
+    assert unicode_label == "↺ history"
+    assert ascii_label == "< history"
+
+
+def test_detail_modal_incident_history_tab_renders_events() -> None:
+    """The History tab paints the chronological timeline event rows (Pilot)."""
+
+    async def body() -> None:
+        # Build an incident card carrying one timeline row on its history group
+        # and the one-line link on its evidence group. The modal is constructed
+        # without ``state`` so ``_enrich_from_app`` no-ops and the injected card
+        # survives to render.
+        base = resolve_detail(_incident_state(status=IncidentStatus.RESOLVED), "INC-001")
+        card = replace(
+            base,
+            history=(("event", "2026-05-08T12:00:00+00:00  opened: validate exits 0"),),
+            evidence=(("timeline", _HISTORY_LINK_LINE),),
+        )
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            modal = DetailModal(card)
+            app.push_screen(modal)
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert "history" in modal._tab_ids
+            tabs = modal.query_one(TabbedContent)
+            tabs.active = "detail-tab-history"
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            rendered = capture_screen_text(app)
+            assert "opened: validate exits 0" in rendered
 
     asyncio.run(body())
 
@@ -1214,8 +1304,13 @@ def test_dispatch_tab_label_is_removed() -> None:
     assert "dp" not in _TAB_LABEL_TEXT
 
 
-def test_tab_label_text_is_the_six_chassis_ids() -> None:
-    """The chassis carries exactly the six cosmic-terminal tab ids."""
+def test_tab_label_text_is_the_chassis_ids() -> None:
+    """The chassis carries exactly the cosmic-terminal tab ids.
+
+    The five-tab wave chassis (overview / criteria / gates / evidence /
+    runtime) plus the data-gated ``cost`` and the incident ``history`` tab
+    (designer ruling A3-a) make up the full vocabulary.
+    """
     assert list(_TAB_LABEL_TEXT) == [
         "overview",
         "criteria",
@@ -1223,6 +1318,7 @@ def test_tab_label_text_is_the_six_chassis_ids() -> None:
         "evidence",
         "runtime",
         "cost",
+        "history",
     ]
 
 
