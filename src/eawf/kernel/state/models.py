@@ -8,6 +8,7 @@ constraint. Datetimes are tz-aware UTC (Pydantic accepts ISO-8601 with ``Z``).
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -967,6 +968,124 @@ class Principal(_StrictModel):
     runtime: str | None = None
 
 
+# ---- Fleet auto-drain loop --------------------------------------------------
+
+
+class FleetRunState(StrEnum):
+    """Run-state of the daemon-owned fleet auto-drain loop.
+
+    The closed state machine the loop advances through:
+
+    - ``IDLE`` -- armed but holding (e.g. ``state.dispatch_paused`` is set on
+      arm, so no wave is claimed); the loop has not begun draining.
+    - ``DRAINING`` -- actively claiming + dispatching the ready frontier into
+      lanes up to the concurrency cap, advancing as lanes free.
+    - ``PAUSED`` -- an operator pause-all stopped further claims; in-flight
+      lanes are left intact and a resume returns the run to ``DRAINING``.
+    - ``HALTED`` -- a halt-all blocked new claims but lets in-flight lanes
+      finish; distinct from a kill-all (which reaps in-flight work).
+    - ``DONE`` -- a terminal stop (frontier drained empty, or a convergence
+      criterion such as K consecutive clean rounds was met).
+    """
+
+    IDLE = "idle"
+    DRAINING = "draining"
+    PAUSED = "paused"
+    HALTED = "halted"
+    DONE = "done"
+
+
+class FleetTerminalReason(StrEnum):
+    """Why a :class:`FleetRun` reached :data:`FleetRunState.DONE`.
+
+    - ``drained`` -- the ready frontier emptied, so no further wave can be
+      claimed (the drain-to-empty stop).
+    - ``converged`` -- a convergence criterion (e.g. ``kclean`` -- K
+      consecutive rounds with zero progress) was met before the frontier
+      emptied, so the loop stopped early.
+    """
+
+    DRAINED = "drained"
+    CONVERGED = "converged"
+
+
+class FleetLane(_StrictModel):
+    """One in-flight dispatch slot in the fleet auto-drain loop.
+
+    A lane binds a claimed + dispatched wave to its dispatch session so the
+    loop can watch it to completion and free the slot for the next frontier
+    wave. The loop holds at most ``concurrency`` lanes at once.
+
+    Attributes:
+        wave_id: ``W<NN>`` wave the lane is driving.
+        session_id: Executor session id the dispatch registered for the
+            wave, or ``None`` on a plan-only / stateless dispatch.
+        dispatched_at: When the lane's dispatch was issued.
+    """
+
+    wave_id: WaveIdStr
+    session_id: str | None = None
+    dispatched_at: UtcDatetime
+
+
+class FleetCounters(_StrictModel):
+    """Running tallies the fleet auto-drain loop accumulates.
+
+    Attributes:
+        claimed: Total waves the loop has claimed across the run.
+        dispatched: Total waves the loop has dispatched across the run.
+        closed: Total lanes that closed clean across the run.
+        forked: Total lanes that forked (failed / re-planned) across the run.
+        rounds: Number of frontier-advance rounds the loop has run.
+        clean_rounds: Consecutive rounds with zero forks -- the convergence
+            counter the ``kclean`` criterion reads. Reset to zero on any fork.
+    """
+
+    claimed: int = Field(default=0, ge=0)
+    dispatched: int = Field(default=0, ge=0)
+    closed: int = Field(default=0, ge=0)
+    forked: int = Field(default=0, ge=0)
+    rounds: int = Field(default=0, ge=0)
+    clean_rounds: int = Field(default=0, ge=0)
+
+
+class FleetRun(_StrictModel):
+    """Daemon-owned state of the fleet auto-drain loop.
+
+    Persisted as the optional top-level :attr:`State.fleet_run` field
+    (default ``None`` -- no active run) so a state written before this field
+    existed re-validates unchanged. The loop runner
+    (:mod:`eawf.runtime.daemon.methods.fleet`) is the only mutator; the daemon
+    canonical state writer persists every run-state transition, so the loop
+    never writes ``state.json`` directly.
+
+    Attributes:
+        run_state: The closed :class:`FleetRunState` the loop is in.
+        concurrency: Maximum lanes the loop holds at once (the drain width).
+        frontier: Ready ``W<NN>`` wave ids still queued to claim, in claim
+            order. The loop pops from the head as lanes free.
+        lanes: In-flight dispatch slots, keyed by wave id.
+        counters: Running tallies for the run.
+        convergence: Convergence mode -- ``drain`` (stop only when the
+            frontier empties) or ``kclean`` (stop after K clean rounds).
+        kclean_k: K threshold for the ``kclean`` convergence mode -- the
+            number of consecutive clean rounds that ends the run. Ignored
+            under ``drain``.
+        terminal_reason: Why the run reached ``DONE``; ``None`` until then.
+        armed_at: When the run was armed.
+    """
+
+    run_state: FleetRunState = FleetRunState.IDLE
+    concurrency: int = Field(default=1, ge=1)
+    frontier: list[WaveIdStr] = Field(default_factory=list)
+    lanes: dict[str, FleetLane] = Field(default_factory=dict)
+    counters: FleetCounters = Field(default_factory=FleetCounters)
+    convergence: Literal["drain", "kclean"] = "drain"
+    kclean_k: int = Field(default=2, ge=1)
+    terminal_reason: FleetTerminalReason | None = None
+    armed_at: UtcDatetime
+
+
 # ---- State root -------------------------------------------------------------
 
 
@@ -999,6 +1118,10 @@ class State(_StrictModel):
     ``runtime_baseline: None`` on every wave for an explicit on-disk row.
     ``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults
     to ``None`` until the runtime.capture daemon RPC records fresh counters.
+
+    :attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``
+    (no active auto-drain loop), so a state written before the field existed
+    re-validates with it defaulted and no historical fact changes.
     """
 
     schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"]
@@ -1010,6 +1133,7 @@ class State(_StrictModel):
     workspace: WorkspaceIndex | None
     health: Health | None = None
     dispatch_paused: bool = False
+    fleet_run: FleetRun | None = None
     subprojects: dict[str, Subproject] | None = None
     goals: dict[str, Goal] | None = None
     outcomes: dict[str, Outcome] | None = None
