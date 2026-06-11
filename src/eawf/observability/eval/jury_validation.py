@@ -59,6 +59,12 @@ from eawf.observability.eval.reputation import (
     build_verdict_outcomes,
     expected_calibration_error,
 )
+from eawf.workflow.evidence.rung2 import (
+    ENTAIL_THRESHOLD,
+    EntailmentScorer,
+    LexicalEntailmentScorer,
+    score_claim,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -649,14 +655,562 @@ def validate_jury(
     )
 
 
+# --- verbosity-bias + faithfulness probes (P30-I09-W03) -------------------
+#
+# Two adversarial probes that validate the jury for *bias* rather than
+# *agreement*. The W02 reducer scores how well the jury tracked the realized
+# outcome; these score two specific failure modes a calibrated-on-aggregate jury
+# can still carry:
+#
+# - verbosity bias -- a juror that systematically passes a longer artifact (it
+#   confuses length for quality / thoroughness). The probe correlates each
+#   juror's pass signal with the judged artifact's byte-length and flags a juror
+#   whose pass-rate rises with length above a ceiling (a length-preferring
+#   juror);
+# - citation unfaithfulness -- an ``evidence_ref`` that resolves on disk yet does
+#   NOT entail the claim it cites (a hollow citation: the file is there, but it
+#   does not support the claim). The probe scores entailment with the in-process
+#   lexical scorer the EviBound rung-2 ships (:class:`LexicalEntailmentScorer`)
+#   -- a structural/heuristic check, never a model spawn -- and flags a resolving
+#   ref below the entailment floor as unfaithful.
+#
+# Both probes are None-gated under ``min_validation_n``: a probe with too few
+# observations refuses to score (status ``INSUFFICIENT``, every numeric field
+# ``None``) rather than fabricating a correlation or a faithfulness rate off a
+# starved sample.
+
+
+class ProbeStatus(StrEnum):
+    """Whether a bias probe scored its observations or refused.
+
+    :attr:`INSUFFICIENT` is the honest-negative surface: the observation set is
+    below the probe's ``min_validation_n`` floor, so every scored field stays
+    ``None``. :attr:`SCORED` means the probe cleared the floor and the numbers
+    are real.
+    """
+
+    INSUFFICIENT = "insufficient"
+    SCORED = "scored"
+
+
+#: Default Spearman rank-correlation ceiling above which a juror's pass-rate is
+#: read as rising with artifact length -- a length-preferring (verbosity-biased)
+#: juror. ``0.5`` is a deliberately conservative floor: a juror whose pass signal
+#: is more than half-explained by length ordering is flagged for operator review.
+_DEFAULT_VERBOSITY_BIAS_CEILING: float = 0.5
+
+
+class JurorLengthObservation(BaseModel):
+    """One juror's pass/refute decision on an artifact of a known byte-length.
+
+    ``extra="forbid"`` so a drifted field surfaces as a
+    :class:`pydantic.ValidationError` at construction. The verbosity-bias probe
+    reads a stream of these per juror: each row pairs the judged artifact's
+    byte-length with whether the juror passed it, so the probe can correlate the
+    pass signal with length.
+
+    Attributes:
+        juror_id: Stable identifier of the juror that cast the decision (the
+            juror is scored across all its observations).
+        artifact_bytes: Byte-length of the artifact the juror judged (``>= 0``).
+        passed: Whether the juror passed the artifact (``True``) or refuted /
+            reserved on it (``False``).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    juror_id: str = Field(min_length=1)
+    artifact_bytes: int = Field(ge=0)
+    passed: bool
+
+
+class VerbosityBiasConfig(BaseModel):
+    """The config governing the verbosity-bias probe.
+
+    ``extra="forbid"`` so a drifted config key surfaces as a
+    :class:`pydantic.ValidationError` at load rather than silently changing the
+    flag threshold.
+
+    Attributes:
+        min_validation_n: Honesty-gate floor -- a juror with fewer length
+            observations refuses to score its correlation (``>= 2``; a single
+            observation has no rank order to correlate). A starved juror yields a
+            ``None`` correlation and an unflagged row.
+        verbosity_bias_ceiling: Spearman rank-correlation ceiling above which a
+            juror is flagged length-preferring, in ``[-1.0, 1.0]``. A juror whose
+            length/pass correlation strictly exceeds this is flagged.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_validation_n: int = Field(default=_DEFAULT_MIN_VALIDATION_N, ge=2)
+    verbosity_bias_ceiling: float = Field(
+        default=_DEFAULT_VERBOSITY_BIAS_CEILING, ge=-1.0, le=1.0
+    )
+
+
+class JurorVerbosityBias(BaseModel):
+    """One juror's verbosity-bias score over its length observations.
+
+    ``extra="forbid"`` so a drifted field surfaces as a
+    :class:`pydantic.ValidationError` at construction. Every numeric field is
+    ``None`` EXACTLY when the juror carried fewer observations than the probe's
+    ``min_validation_n`` floor (or when its lengths / passes are constant, so no
+    rank correlation is defined) -- the refuse-to-score contract is unmissable in
+    the type.
+
+    Attributes:
+        juror_id: The juror this row scores.
+        n: Number of length observations the juror carried (``>= 0``).
+        length_pass_correlation: Spearman rank correlation between artifact
+            byte-length and the juror's pass signal, in ``[-1.0, 1.0]``. A
+            positive value means the juror passes longer artifacts more often.
+            ``None`` when the juror refused to score (too few observations) or
+            when the correlation is undefined (constant lengths or constant
+            passes -- never a fabricated zero).
+        length_preferring: ``True`` when *length_pass_correlation* strictly
+            exceeds the probe's ``verbosity_bias_ceiling`` -- a length-preferring
+            (verbosity-biased) juror. ``False`` otherwise, including when the
+            correlation is ``None`` (an unscored juror is never flagged).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    juror_id: str = Field(min_length=1)
+    n: int = Field(ge=0)
+    length_pass_correlation: float | None = Field(default=None, ge=-1.0, le=1.0)
+    length_preferring: bool = False
+
+
+class VerbosityBiasReport(BaseModel):
+    """The verbosity-bias probe over every juror -- a pure projection.
+
+    ``extra="forbid"`` so a drifted field surfaces as a
+    :class:`pydantic.ValidationError` at construction. The whole report is
+    ``INSUFFICIENT`` (and :attr:`jurors` empty) EXACTLY when the total
+    observation count is below the probe's ``min_validation_n`` floor, so the
+    refuse-to-score contract is unmissable: a caller cannot read a per-juror
+    correlation out of a starved observation set.
+
+    Attributes:
+        n: Total number of length observations across all jurors (``>= 0``).
+        status: :attr:`ProbeStatus.SCORED` when the observation set cleared the
+            floor, else :attr:`ProbeStatus.INSUFFICIENT`.
+        jurors: One :class:`JurorVerbosityBias` per scored juror, sorted by
+            juror id. Empty when the probe refused to score.
+        flagged_juror_ids: The ids of the jurors flagged length-preferring, in
+            juror-id order. Empty when none are flagged or the probe refused to
+            score.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    n: int = Field(ge=0)
+    status: ProbeStatus
+    jurors: tuple[JurorVerbosityBias, ...] = ()
+    flagged_juror_ids: tuple[str, ...] = ()
+
+
+def _rank(values: list[float]) -> list[float]:
+    """Return fractional (tie-averaged) ranks of *values*, ascending.
+
+    Ties share the average of the ranks they would occupy, so a constant column
+    produces all-equal ranks (which the caller reads as an undefined
+    correlation). Used by the Spearman correlation in
+    :func:`_spearman_correlation`.
+
+    Args:
+        values: The values to rank.
+
+    Returns:
+        One rank per input value, in input order.
+    """
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        average_rank = (i + j) / 2.0
+        for k in range(i, j + 1):
+            ranks[order[k]] = average_rank
+        i = j + 1
+    return ranks
+
+
+def _spearman_correlation(xs: list[float], ys: list[float]) -> float | None:
+    """Return the Spearman rank correlation between *xs* and *ys*, or ``None``.
+
+    Spearman's rho is the Pearson correlation of the fractional ranks of the two
+    series. It captures a monotone relationship (a juror whose pass-rate rises
+    with length scores positive) without assuming linearity. Returns ``None``
+    when either series is constant -- a constant column has zero rank variance,
+    so the correlation is undefined and is never fabricated as a zero.
+
+    Args:
+        xs: First series (artifact byte-lengths).
+        ys: Second series (pass signals, ``0.0`` / ``1.0``), aligned to *xs*.
+
+    Returns:
+        Spearman rho in ``[-1.0, 1.0]``, or ``None`` when undefined.
+
+    Raises:
+        ValueError: When *xs* and *ys* differ in length.
+    """
+    if len(xs) != len(ys):
+        raise ValueError(f"spearman length mismatch: {len(xs)} vs {len(ys)}")
+    rank_x = _rank(xs)
+    rank_y = _rank(ys)
+    n = len(xs)
+    mean_x = math.fsum(rank_x) / n
+    mean_y = math.fsum(rank_y) / n
+    cov = math.fsum((rx - mean_x) * (ry - mean_y) for rx, ry in zip(rank_x, rank_y, strict=True))
+    var_x = math.fsum((rx - mean_x) ** 2 for rx in rank_x)
+    var_y = math.fsum((ry - mean_y) ** 2 for ry in rank_y)
+    if var_x <= 0.0 or var_y <= 0.0:
+        return None
+    rho = cov / math.sqrt(var_x * var_y)
+    return max(-1.0, min(1.0, rho))
+
+
+def measure_verbosity_bias(
+    observations: list[JurorLengthObservation],
+    config: VerbosityBiasConfig | None = None,
+) -> VerbosityBiasReport:
+    """Probe each juror for verbosity bias -- a pure reducer.
+
+    Groups *observations* by juror and, for each juror, correlates the judged
+    artifact's byte-length with the juror's pass signal (Spearman rank
+    correlation, :func:`_spearman_correlation`). A juror whose correlation
+    strictly exceeds the :attr:`VerbosityBiasConfig.verbosity_bias_ceiling` is a
+    length-preferring (verbosity-biased) juror -- it passes longer artifacts more
+    often -- and is flagged.
+
+    Refuse-to-score: when the TOTAL observation count is below
+    :attr:`VerbosityBiasConfig.min_validation_n` the whole report is
+    :attr:`ProbeStatus.INSUFFICIENT` with an empty :attr:`VerbosityBiasReport.jurors`
+    -- the numbers are never fabricated on a starved sample. Above the floor, a
+    per-juror correlation is still ``None`` (and the juror is unflagged) when that
+    juror carries fewer than two observations or when its lengths / passes are
+    constant (an undefined rank correlation, never a fabricated zero).
+
+    The reducer is pure: no mutation, no IO, no spawn.
+
+    Args:
+        observations: One :class:`JurorLengthObservation` per (juror, artifact)
+            decision. May be empty (the probe refuses to score).
+        config: The :class:`VerbosityBiasConfig` supplying the min-N floor and
+            the flag ceiling. ``None`` uses the defaults.
+
+    Returns:
+        The :class:`VerbosityBiasReport`. Every per-juror correlation is ``None``
+        exactly when that juror refused to score; the whole report is
+        ``INSUFFICIENT`` exactly when the total observation count is below the
+        floor.
+    """
+    cfg = config if config is not None else VerbosityBiasConfig()
+    n = len(observations)
+    if n < cfg.min_validation_n:
+        logger.debug(
+            f"measure_verbosity_bias n={n} min={cfg.min_validation_n} status=insufficient"
+        )
+        return VerbosityBiasReport(n=n, status=ProbeStatus.INSUFFICIENT)
+
+    by_juror: dict[str, list[JurorLengthObservation]] = {}
+    for observation in observations:
+        by_juror.setdefault(observation.juror_id, []).append(observation)
+
+    juror_rows: list[JurorVerbosityBias] = []
+    flagged: list[str] = []
+    for juror_id in sorted(by_juror):
+        rows = by_juror[juror_id]
+        if len(rows) < 2:
+            juror_rows.append(JurorVerbosityBias(juror_id=juror_id, n=len(rows)))
+            continue
+        lengths = [float(row.artifact_bytes) for row in rows]
+        passes = [1.0 if row.passed else 0.0 for row in rows]
+        correlation = _spearman_correlation(lengths, passes)
+        length_preferring = correlation is not None and correlation > cfg.verbosity_bias_ceiling
+        if length_preferring:
+            flagged.append(juror_id)
+        juror_rows.append(
+            JurorVerbosityBias(
+                juror_id=juror_id,
+                n=len(rows),
+                length_pass_correlation=correlation,
+                length_preferring=length_preferring,
+            )
+        )
+
+    logger.debug(
+        f"measure_verbosity_bias n={n} status=scored jurors={len(juror_rows)} "
+        f"flagged={len(flagged)}"
+    )
+    return VerbosityBiasReport(
+        n=n,
+        status=ProbeStatus.SCORED,
+        jurors=tuple(juror_rows),
+        flagged_juror_ids=tuple(flagged),
+    )
+
+
+class CitedEvidenceRef(BaseModel):
+    """One claim joined to a resolving / non-resolving evidence reference.
+
+    ``extra="forbid"`` so a drifted field surfaces as a
+    :class:`pydantic.ValidationError` at construction. The faithfulness probe
+    reads a stream of these: each row pairs a claim with the evidence reference
+    it cites, whether that reference RESOLVES on disk, and the resolved evidence
+    text (when it resolves) the entailment is scored against.
+
+    Faithfulness is only ever asked of a RESOLVING ref -- a ref that does not
+    resolve is a separate (rung-1) failure, not an unfaithfulness. So a row with
+    ``resolved=False`` is carried for the count but is never scored for
+    entailment.
+
+    Attributes:
+        ref: The evidence reference string the claim cites (a repo-relative
+            path, URN, or dense marker).
+        claim: The claim text the reference is meant to support (the entailment
+            hypothesis).
+        resolved: Whether the reference resolves on disk (a rung-1 pass).
+            ``True`` rows are scored for entailment; ``False`` rows are counted
+            but not scored.
+        evidence_text: The resolved evidence text (the entailment premise) for a
+            ``resolved=True`` row, or ``None`` for an unresolved ref. A resolving
+            ref MUST carry its evidence text, else the probe cannot score it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ref: str = Field(min_length=1)
+    claim: str = Field(min_length=1)
+    resolved: bool
+    evidence_text: str | None = None
+
+
+class FaithfulnessConfig(BaseModel):
+    """The config governing the citation-faithfulness probe.
+
+    ``extra="forbid"`` so a drifted config key surfaces as a
+    :class:`pydantic.ValidationError` at load rather than silently changing the
+    entailment floor.
+
+    Attributes:
+        min_validation_n: Honesty-gate floor -- an observation set with fewer
+            cited refs refuses to score every field (``>= 1``). A starved set
+            yields a :class:`FaithfulnessReport` whose every numeric field is
+            ``None``.
+        entail_threshold: Entailment-probability floor at or above which a
+            resolving ref's citation is read as faithful, in ``[0.0, 1.0]``.
+            Defaults to the EviBound rung-2 :data:`~eawf.workflow.evidence.rung2.ENTAIL_THRESHOLD`
+            so the probe shares the rung-2 entailment bar. A resolving ref scoring
+            below this is flagged unfaithful.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_validation_n: int = Field(default=_DEFAULT_MIN_VALIDATION_N, ge=1)
+    entail_threshold: float = Field(default=ENTAIL_THRESHOLD, ge=0.0, le=1.0)
+
+
+class EvidenceRefFaithfulness(BaseModel):
+    """One cited evidence ref scored for faithfulness to its claim.
+
+    ``extra="forbid"`` so a drifted field surfaces as a
+    :class:`pydantic.ValidationError` at construction. A resolving ref carries a
+    scored entailment probability and a faithfulness bit; an unresolved ref is
+    carried unscored (faithfulness is only ever asked of a resolving ref).
+
+    Attributes:
+        ref: The evidence reference that was scored.
+        claim: The claim the reference cites.
+        resolved: Whether the reference resolved on disk.
+        scored: Whether the entailment was scored (``True`` only for a resolving
+            ref carrying its evidence text).
+        entailment_probability: The lexical entailment probability of the claim
+            against the resolved evidence, in ``[0.0, 1.0]``, or ``None`` for an
+            unscored (unresolved) ref.
+        faithful: ``True`` when a scored ref's entailment probability is at or
+            above the :attr:`FaithfulnessConfig.entail_threshold` -- the
+            resolving citation actually entails its claim. ``False`` when a
+            scored ref falls below the floor (a resolving-but-non-entailing ref:
+            unfaithful). ``None`` for an unscored ref.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ref: str = Field(min_length=1)
+    claim: str = Field(min_length=1)
+    resolved: bool
+    scored: bool
+    entailment_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    faithful: bool | None = None
+
+
+class FaithfulnessReport(BaseModel):
+    """The citation-faithfulness probe over every cited ref -- a pure projection.
+
+    ``extra="forbid"`` so a drifted field surfaces as a
+    :class:`pydantic.ValidationError` at construction. The whole report is
+    ``INSUFFICIENT`` (and :attr:`refs` empty, every rate ``None``) EXACTLY when
+    the cited-ref count is below the probe's ``min_validation_n`` floor, so the
+    refuse-to-score contract is unmissable.
+
+    Attributes:
+        n: Total number of cited refs the probe read (``>= 0``).
+        status: :attr:`ProbeStatus.SCORED` when the cited-ref count cleared the
+            floor, else :attr:`ProbeStatus.INSUFFICIENT`.
+        scored_n: Number of refs that were scored for entailment (the resolving
+            refs), ``>= 0``. The denominator behind
+            :attr:`unfaithful_rate`.
+        unfaithful_n: Number of resolving refs whose citation did NOT entail its
+            claim (resolving-but-non-entailing), ``>= 0``.
+        unfaithful_rate: Of the scored (resolving) refs, the fraction flagged
+            unfaithful, in ``[0.0, 1.0]``. ``None`` when the probe refused to
+            score OR when no ref resolved (an undefined rate with an empty
+            denominator -- never a fabricated zero).
+        refs: One :class:`EvidenceRefFaithfulness` per cited ref, in input order.
+            Empty when the probe refused to score.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    n: int = Field(ge=0)
+    status: ProbeStatus
+    scored_n: int = Field(default=0, ge=0)
+    unfaithful_n: int = Field(default=0, ge=0)
+    unfaithful_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    refs: tuple[EvidenceRefFaithfulness, ...] = ()
+
+
+def measure_faithfulness(
+    cited_refs: list[CitedEvidenceRef],
+    config: FaithfulnessConfig | None = None,
+    *,
+    scorer: EntailmentScorer | None = None,
+) -> FaithfulnessReport:
+    """Probe each cited evidence ref for faithfulness to its claim -- a pure reducer.
+
+    For every RESOLVING ref (a ref that resolves on disk, the rung-1 pass) the
+    probe scores whether the resolved evidence actually entails the claim it
+    cites, using the in-process lexical scorer the EviBound rung-2 ships
+    (:class:`~eawf.workflow.evidence.rung2.LexicalEntailmentScorer`) -- a
+    structural/heuristic content-overlap check, NEVER a model spawn. A resolving
+    ref whose entailment probability falls below the
+    :attr:`FaithfulnessConfig.entail_threshold` is a resolving-but-non-entailing
+    ref: a hollow citation (the file is there, but it does not support the claim),
+    flagged unfaithful.
+
+    An unresolved ref is carried for the count but never scored -- a ref that does
+    not resolve is a separate rung-1 failure, not an unfaithfulness.
+
+    Refuse-to-score: when the TOTAL cited-ref count is below
+    :attr:`FaithfulnessConfig.min_validation_n` the whole report is
+    :attr:`ProbeStatus.INSUFFICIENT` with an empty :attr:`FaithfulnessReport.refs`
+    and a ``None`` :attr:`FaithfulnessReport.unfaithful_rate` -- the numbers are
+    never fabricated on a starved sample. Above the floor, the unfaithful rate is
+    still ``None`` when no ref resolved (an undefined rate with an empty
+    denominator, never a fabricated zero).
+
+    The reducer is pure: no mutation, no IO, no spawn. The entailment scorer runs
+    in-process.
+
+    Args:
+        cited_refs: One :class:`CitedEvidenceRef` per (claim, evidence ref). May
+            be empty (the probe refuses to score).
+        config: The :class:`FaithfulnessConfig` supplying the min-N floor and the
+            entailment floor. ``None`` uses the defaults.
+        scorer: The in-process
+            :class:`~eawf.workflow.evidence.rung2.EntailmentScorer` backend.
+            ``None`` uses the zero-dependency
+            :class:`~eawf.workflow.evidence.rung2.LexicalEntailmentScorer`.
+
+    Returns:
+        The :class:`FaithfulnessReport`. Every numeric field is ``None`` exactly
+        when the probe refused to score; the unfaithful rate is additionally
+        ``None`` when no ref resolved (an empty denominator).
+
+    Raises:
+        ValueError: When a resolving ref carries no evidence text -- a resolving
+            ref MUST supply its resolved premise, else it cannot be scored.
+    """
+    cfg = config if config is not None else FaithfulnessConfig()
+    backend: EntailmentScorer = scorer if scorer is not None else LexicalEntailmentScorer()
+    n = len(cited_refs)
+    if n < cfg.min_validation_n:
+        logger.debug(
+            f"measure_faithfulness n={n} min={cfg.min_validation_n} status=insufficient"
+        )
+        return FaithfulnessReport(n=n, status=ProbeStatus.INSUFFICIENT)
+
+    refs: list[EvidenceRefFaithfulness] = []
+    scored_n = 0
+    unfaithful_n = 0
+    for cited in cited_refs:
+        if not cited.resolved:
+            refs.append(
+                EvidenceRefFaithfulness(
+                    ref=cited.ref,
+                    claim=cited.claim,
+                    resolved=False,
+                    scored=False,
+                )
+            )
+            continue
+        if cited.evidence_text is None:
+            raise ValueError(f"resolving ref carries no evidence text: {cited.ref!r}")
+        result = score_claim(cited.claim, cited.evidence_text, scorer=backend)
+        faithful = result.probability >= cfg.entail_threshold
+        scored_n += 1
+        if not faithful:
+            unfaithful_n += 1
+        refs.append(
+            EvidenceRefFaithfulness(
+                ref=cited.ref,
+                claim=cited.claim,
+                resolved=True,
+                scored=True,
+                entailment_probability=result.probability,
+                faithful=faithful,
+            )
+        )
+
+    unfaithful_rate = unfaithful_n / scored_n if scored_n > 0 else None
+    logger.debug(
+        f"measure_faithfulness n={n} status=scored scored={scored_n} "
+        f"unfaithful={unfaithful_n}"
+    )
+    return FaithfulnessReport(
+        n=n,
+        status=ProbeStatus.SCORED,
+        scored_n=scored_n,
+        unfaithful_n=unfaithful_n,
+        unfaithful_rate=unfaithful_rate,
+        refs=tuple(refs),
+    )
+
+
 __all__ = [
+    "CitedEvidenceRef",
+    "EvidenceRefFaithfulness",
+    "FaithfulnessConfig",
+    "FaithfulnessReport",
     "GoldLabel",
+    "JurorLengthObservation",
+    "JurorVerbosityBias",
     "JuryValidationConfig",
     "JuryValidationReport",
     "JuryValidationStatus",
     "LabelSource",
     "LabeledVerdict",
+    "ProbeStatus",
     "ValidationCohort",
+    "VerbosityBiasConfig",
+    "VerbosityBiasReport",
     "build_jury_validation_cohort",
+    "measure_faithfulness",
+    "measure_verbosity_bias",
     "validate_jury",
 ]
