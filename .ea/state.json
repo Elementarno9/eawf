@@ -6323,6 +6323,18 @@
       "scope_id": "P30-I15-W19",
       "status": "done",
       "updated_at": "2026-06-11T14:10:47.186512Z"
+    },
+    "P30-I15-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W20",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W20",
+      "scope_id": "P30-I15-W20",
+      "status": "done",
+      "updated_at": "2026-06-11T14:22:38.887660Z"
     }
   },
   "agent_sessions": {
@@ -9443,10 +9455,8 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I15-W20"
-    ],
-    "iter_id": "P30-I15",
+    "active_wave_ids": [],
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -20569,16 +20579,16 @@
       ]
     },
     "P30-I07": {
-      "audit_id": null,
+      "audit_id": "A64-P30-i07",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:28:51.649430Z",
       "description": "Bind the typed state that already exists onto the live TUI: full CriterionSpec rows, gates, agent-report evidence, provenance, and budget-vs-consumed runtime in wave-detail, plus the fleet claim/dispatch/watch/verdict chain and campaign-create CRUD. Then add five mock-delivered U-surfaces: per-session cost (U1), jury-ballot drill (U2), research control plane (U3), incident timeline (U4), and fleet parity lens (U5). Every wave binds to a real call path with a binding-proof and a negative test.",
       "estimate_id": null,
       "id": "P30-I07",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753563Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "TUI surface data-fill plus new U-surfaces (cost, jury, control plane)",
       "trigger": "none",
       "wave_ids": [
@@ -20602,16 +20612,16 @@
       ]
     },
     "P30-I08": {
-      "audit_id": null,
+      "audit_id": "A65-P30-i08",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:45.780518Z",
       "description": "Reskin the two non-repo scopes into the cosmic-terminal language the mocks fix as the brief: WorkspaceScreen (press w, the multi-repo grid + registry pane) and UserScreen/PortfolioTable (press u, the cross-repo portfolio). Each repo row leads with a lifecycle sigil, carries a green status-tinted bar, and the grid, portfolio, and _zoom quadrant share one focus tint. Deps the I02 reskin for sigils.py and the bar renderer; this iter consumes those symbols and adds no new render primitive.",
       "estimate_id": null,
       "id": "P30-I08",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753610Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Multi-scope dashboards — workspace + user scope reskin",
       "trigger": "none",
       "wave_ids": [
@@ -20625,16 +20635,16 @@
       ]
     },
     "P30-I09": {
-      "audit_id": null,
+      "audit_id": "A66-P30-i09",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:46.357621Z",
       "description": "Grow teeth on the trust pillar: build the silver/gold validation cohort, compute jury calibration (Fleiss-kappa, Brier/ECE, Wilson lower-bound, per-juror ballot persistence), un-idle the per-item spec jury and reliability-weighted aggregation, and stage the jury from advisory to blocking only after it earns authority on eawf's own labeled distribution. This iter OWNS the calibration build; the I10 quality iter only consumes its metrics. The honest-negative surface ships even data-starved.",
       "estimate_id": null,
       "id": "P30-I09",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753657Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Trust validation — validate, calibrate, and stage the cross-vendor jury",
       "trigger": "none",
       "wave_ids": [
@@ -20649,16 +20659,16 @@
       ]
     },
     "P30-I10": {
-      "audit_id": null,
+      "audit_id": "A67-P30-i10",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:46.929855Z",
       "description": "The cross-cutting QA iter. Converts the 1392 legacy no-op criteria to real falsifying gates, un-idles the registered audit-DSL kinds, adds the jury-calibration precondition kind (build lives in I08), wires the two inert spawn-safety guarantees, raises coverage, and cleans the backlog.",
       "estimate_id": null,
       "id": "P30-I10",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753704Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Quality enforcement — make every gate fire",
       "trigger": "none",
       "wave_ids": [
@@ -20681,16 +20691,16 @@
       ]
     },
     "P30-I11": {
-      "audit_id": null,
+      "audit_id": "A68-P30-i11",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:47.507098Z",
       "description": "Ship the dormant Track seam only: rename the existing dormant Subproject entity to Track, add a kind-parametrized TrackKindSpec, wire the lifecycle and add/switch RPC, stamp a silent phase-tag, default per-profile kinds, and pin every binding through the I01 idle-contract gate. Live surfaces (TUI overview, dispatch, rollup, leaderboard) and the QR migration are deferred to P31.",
       "estimate_id": null,
       "id": "P30-I11",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753748Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Track substrate — dormant entity rename + kind-parametrized seam",
       "trigger": "none",
       "wave_ids": [
@@ -20707,16 +20717,16 @@
       ]
     },
     "P30-I12": {
-      "audit_id": null,
+      "audit_id": "A69-P30-i12",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:48.082952Z",
       "description": "The full-auto-drain backend the fleet cockpit renders: a daemon-owned drive_frontier loop (claim->dispatch->watch->risk-tier-close->advance) with pause/halt/K-clean, a live pid registry, real agent.kill, budget HALT teeth, a RiskTier classifier + close gate, lane-only forks, repair escalation, daemon-owned resume, and in-loop cross-vendor deny parity. Every contract bound, nothing idle.",
       "estimate_id": null,
       "id": "P30-I12",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753794Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Autopilot drive-loop substrate plus real kill and budget teeth",
       "trigger": "none",
       "wave_ids": [
@@ -20734,16 +20744,16 @@
       ]
     },
     "P30-I13": {
-      "audit_id": null,
+      "audit_id": "A70-P30-i13",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:48.673542Z",
       "description": "The full-auto-drain cockpit the operator governs: FA1 arm modal, FA2 N-lane cockpit (single-wave is the N=1 case), FA3 lane grid, FA4 zoom + raw-output tail, FA5 fork inbox, FA6 failure card + new failure-toast class, FA7 run-summary, FA8 research auto-run, the S1-S12 tui_flow gates incl. S12 reattach, affordance parity, and the reused crash/degraded/narrow frames. Inherits the I02 reskin; goal #1 + #3.",
       "estimate_id": null,
       "id": "P30-I13",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753835Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Fleet cockpit FA1-FA8 plus S1-S12 flow gates",
       "trigger": "none",
       "wave_ids": [
@@ -20763,16 +20773,16 @@
       ]
     },
     "P30-I14": {
-      "audit_id": null,
+      "audit_id": "A71-P30-i14",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:49.262567Z",
       "description": "Fold the .ea/* cleanup tracks into P30's \"cap unbounded growth / turn on what's built\" theme. Two real defects (WAL never auto-GC'd ~1457 files; eawfd.log unbounded ~128MB no rotation) plus artifact-path normalization and an automated spec-archive cascade so specs self-clear at iter close. Three independent tracks; ~7-8 EU. Track 1 is highest impact, Track 3 lowest urgency.",
       "estimate_id": null,
       "id": "P30-I14",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753875Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Cleanup — cap unbounded growth, normalize artifact paths, spec lifecycle",
       "trigger": "none",
       "wave_ids": [
@@ -20790,16 +20800,16 @@
       ]
     },
     "P30-I15": {
-      "audit_id": null,
+      "audit_id": "A72-P30-i15",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-11T14:29:49.828763Z",
       "description": "P30's terminal co-closing iter. Makes the dev/release version surface honest (PEP 440 local suffix on editable installs, clean base on the wheel), dogfoods I01's optimistic drift checkpoint as a real phase-wide SHIP_GATE audit (the cure for the P29 A56 stub) with a regression that proves close_phase refuses a stub audit, and satisfies the v0.6.0 per-phase release pre-flight across the Claude + Codex + opencode plugin runtimes.",
       "estimate_id": null,
       "id": "P30-I15",
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753922Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Ship — honest dev-version surface, dogfood drift audit, cut v0.6.0",
       "trigger": "none",
       "wave_ids": [
@@ -21058,6 +21068,105 @@
       "status": "active",
       "store_record_id": "MEM-P30-I06-close-A63-P30-i06",
       "summary": "iter P30-I06 closed with audit A63-P30-i06; waves closed=10; outcomes P30-I06-W01: Bound live-spawn output to a validated ExecutorReportBody via assist_with_schema; synthetic b... | P30-I06-W02: Added 'eawf dispatch wave' headless spawn verb (daemon-only, typed errors, pid+runtime report... | P30-I06-W03: Binding-proof tests: dated opus-4-8 + bare opus alias both yield real non-zero priced dispatc...",
+      "tier": "working"
+    },
+    "MEM-P30-I07-close-A64-P30-i07": {
+      "confidence": "high",
+      "id": "MEM-P30-I07-close-A64-P30-i07",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:28:51.649430Z",
+      "scope_id": "P30-I07",
+      "status": "active",
+      "store_record_id": "MEM-P30-I07-close-A64-P30-i07",
+      "summary": "iter P30-I07 closed with audit A64-P30-i07; waves closed=17; outcomes P30-I07-W01: Detail criteria tab renders full typed CriterionSpec (tier label + evidence_kind + measurable... | P30-I07-W02: Gates section: Wave.gates GateSpec rows grouped under criterion_id; gate-less wave omits the ... | P30-I07-W03: Detail evidence tab renders latest auditor verdict + reason; honest no-verdict line (no fabri...",
+      "tier": "working"
+    },
+    "MEM-P30-I08-close-A65-P30-i08": {
+      "confidence": "high",
+      "id": "MEM-P30-I08-close-A65-P30-i08",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:45.780518Z",
+      "scope_id": "P30-I08",
+      "status": "active",
+      "store_record_id": "MEM-P30-I08-close-A65-P30-i08",
+      "summary": "iter P30-I08 closed with audit A65-P30-i08; waves closed=7; outcomes P30-I08-W01: Registry pane reskinned: lifecycle sigil per line + green-accent (active)/(stale) chips; hone... | P30-I08-W02: Workspace grid reskinned: lifecycle sigil + green status-tinted bar per repo row + totals; bl... | P30-I08-W03: Portfolio totals lifted to brand palette; reuses workspace-table family",
+      "tier": "working"
+    },
+    "MEM-P30-I09-close-A66-P30-i09": {
+      "confidence": "high",
+      "id": "MEM-P30-I09-close-A66-P30-i09",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:46.357621Z",
+      "scope_id": "P30-I09",
+      "status": "active",
+      "store_record_id": "MEM-P30-I09-close-A66-P30-i09",
+      "summary": "iter P30-I09 closed with audit A66-P30-i09; waves closed=8; outcomes P30-I09-W01: Jury-validation silver+gold cohort over verdict outcomes | P30-I09-W02: validate_jury reducer: Fleiss-kappa + Brier/ECE + unanimous-pass-on-known-bad; refuse-to-scor... | P30-I09-W03: verbosity-bias + citation-faithfulness jury probes (None-gated under min_n)",
+      "tier": "working"
+    },
+    "MEM-P30-I10-close-A67-P30-i10": {
+      "confidence": "high",
+      "id": "MEM-P30-I10-close-A67-P30-i10",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:46.929855Z",
+      "scope_id": "P30-I10",
+      "status": "active",
+      "store_record_id": "MEM-P30-I10-close-A67-P30-i10",
+      "summary": "iter P30-I10 closed with audit A67-P30-i10; waves closed=16; outcomes P30-I10-W01: Legacy-to-typed criterion converter + backfill tool; legacy count 0 on sample (B095) | P30-I10-W02: audit-DSL wired-on sweep + backlog_resolution close-gate; meta-gate fails on zero-caller kind | P30-I10-W03: jury_calibrated kind gates blocking authority on I09 metrics (B091)",
+      "tier": "working"
+    },
+    "MEM-P30-I11-close-A68-P30-i11": {
+      "confidence": "high",
+      "id": "MEM-P30-I11-close-A68-P30-i11",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:47.507098Z",
+      "scope_id": "P30-I11",
+      "status": "active",
+      "store_record_id": "MEM-P30-I11-close-A68-P30-i11",
+      "summary": "iter P30-I11 closed with audit A68-P30-i11; waves closed=10; outcomes P30-I11-W01: Subproject->Track rename + TrackKindSpec + 1.9->1.10 migration (schema bump) | P30-I11-W02: Track lifecycle + Project->Track edge + track.add/track.switch daemon RPC pair | P30-I11-W03: Test-lock: phase_open stamps current.track_id (stamping landed in W01 rename)",
+      "tier": "working"
+    },
+    "MEM-P30-I12-close-A69-P30-i12": {
+      "confidence": "high",
+      "id": "MEM-P30-I12-close-A69-P30-i12",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:48.082952Z",
+      "scope_id": "P30-I12",
+      "status": "active",
+      "store_record_id": "MEM-P30-I12-close-A69-P30-i12",
+      "summary": "iter P30-I12 closed with audit A69-P30-i12; waves closed=11; outcomes P30-I12-W01: Daemon FleetRun state + fleet.drive auto-drain loop (IDLE/DRAINING/PAUSED/HALTED/DONE; kclean... | P30-I12-W02: live per-lane pgid registry on FleetRun; fleet.drive wired live in server.py | P30-I12-W03: Real agent.kill resolves lane registry then signals pgid (SIGKILL/SIGTERM)",
+      "tier": "working"
+    },
+    "MEM-P30-I13-close-A70-P30-i13": {
+      "confidence": "high",
+      "id": "MEM-P30-I13-close-A70-P30-i13",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:48.673542Z",
+      "scope_id": "P30-I13",
+      "status": "active",
+      "store_record_id": "MEM-P30-I13-close-A70-P30-i13",
+      "summary": "iter P30-I13 closed with audit A70-P30-i13; waves closed=13; outcomes P30-I13-W01: FA1 arm/launch modal replaces autopilot arm-deferred stub | P30-I13-W02: FA2 fleet-cockpit vitals header over FleetRun; idle hero + push/poll refresh | P30-I13-W03: I13 finale wave",
+      "tier": "working"
+    },
+    "MEM-P30-I14-close-A71-P30-i14": {
+      "confidence": "high",
+      "id": "MEM-P30-I14-close-A71-P30-i14",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:49.262567Z",
+      "scope_id": "P30-I14",
+      "status": "active",
+      "store_record_id": "MEM-P30-I14-close-A71-P30-i14",
+      "summary": "iter P30-I14 closed with audit A71-P30-i14; waves closed=11; outcomes P30-I14-W01: Daemon WAL-GC sweep loop wired into both server entrypoints (cancel-in-finally), clock-inject... | P30-I14-W02: Opportunistic fallback-WAL GC, sentinel-throttled per process | P30-I14-W03: Daemon eawfd.log now RotatingFileHandler capped by EAWF_DAEMON_LOG_MAX_BYTES(16MiB)/BACKUP_CO...",
+      "tier": "working"
+    },
+    "MEM-P30-I15-close-A72-P30-i15": {
+      "confidence": "high",
+      "id": "MEM-P30-I15-close-A72-P30-i15",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-11T14:29:49.828763Z",
+      "scope_id": "P30-I15",
+      "status": "active",
+      "store_record_id": "MEM-P30-I15-close-A72-P30-i15",
+      "summary": "iter P30-I15 closed with audit A72-P30-i15; waves closed=20; outcomes P30-I15-W01: is_editable_install() via direct_url.json with .git fallback | P30-I15-W02: compose_display_version PEP440 +dev.g<sha>.dirty when editable, clean base on wheel | P30-I15-W03: Clean-base version binding-proof (no +dev in programmatic consumers)",
       "tier": "working"
     }
   },
@@ -21763,7 +21872,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T14:13:15.154101Z",
+  "updated_at": "2026-06-11T14:29:49.829198Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -85126,8 +85235,8 @@
       "blocks": [],
       "claim_session_id": "p30-i15-w20",
       "claimed_at": "2026-06-11T14:11:41.521910Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-11T14:22:38.887660Z",
+      "commit": "5f4224e041cb8a91021dcbcf0722736a91bd7756",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -85150,12 +85259,12 @@
       },
       "iter_id": "P30-I15",
       "opened_at": "2026-06-11T13:04:18.924273Z",
-      "outcome": null,
+      "outcome": "Eä Seal renders as an inline graphics-protocol image (resvg + textual-image) in the research empty hero when the optional eawf[seal] extra is installed; falls back to the unicode brand glyph otherwise. Header brand-mark seal deferred (shared Static->composite restructure).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
