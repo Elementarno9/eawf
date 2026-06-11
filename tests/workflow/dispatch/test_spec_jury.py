@@ -801,3 +801,105 @@ def test_live_ballot_fn_drives_producer_to_per_item_report(tmp_path: Path) -> No
     rows = iter_agent_reports(state_path, role=AgentSessionRole.AUDITOR, base_id=_WAVE_ID)
     assert len(rows) == 1
     assert {c.criterion for c in rows[-1].payload.body.criteria} == {"B1", "B2"}
+
+
+# --------------------------------------------------------------------------- #
+# persist_juror_findingsets -- raw ballots survive the lossy reduction.
+# --------------------------------------------------------------------------- #
+
+
+def _read_findingset_rows(state_path: Path) -> list[dict[str, Any]]:
+    """Return the decoded ``spec_jury_findingset`` evidence-store payloads."""
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.paths import store_path
+    from eawf.workflow.dispatch.spec_jury import SPEC_JURY_FINDINGSET_EVENT_TYPE
+
+    path = store_path(state_path, StoreKind.EVIDENCE)
+    rows: list[dict[str, Any]] = []
+    if not path.is_file():
+        return rows
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        envelope = Envelope.model_validate(json.loads(line))
+        if envelope.kind is not StoreKind.EVIDENCE:
+            continue
+        payload = envelope.payload
+        if payload.get("event_type") == SPEC_JURY_FINDINGSET_EVENT_TYPE:
+            rows.append(payload)
+    return rows
+
+
+def test_persist_juror_findingsets_writes_raw_ballots(tmp_path: Path) -> None:
+    """persist_juror_findingsets appends ONE evidence row carrying every ballot."""
+    from eawf.workflow.dispatch.spec_jury import persist_juror_findingsets
+
+    _, state_path = _write_state_with_auditor(tmp_path)
+    ballots = (
+        PerItemJurorBallot(juror="claude-code", votes=(RubricItemVote(item_id="B1", passed=True),)),
+        PerItemJurorBallot(
+            juror="codex",
+            votes=(RubricItemVote(item_id="B1", passed=False, refutation="cited gap"),),
+        ),
+    )
+    urn = persist_juror_findingsets(state_path, wave=_make_wave(), ballots=ballots, now=_T0)
+
+    assert urn.startswith("EV-")
+    rows = _read_findingset_rows(state_path)
+    assert len(rows) == 1
+    decoded = json.loads(rows[0]["extras"]["findingsets"])
+    assert [b["juror"] for b in decoded] == ["claude-code", "codex"]
+    # The un-reduced refutation survives -- the reduction folds it away.
+    assert decoded[1]["votes"][0]["refutation"] == "cited gap"
+    assert rows[0]["extras"]["juror_count"] == 2
+
+
+def test_persist_juror_findingsets_empty_ballots_still_writes_row(tmp_path: Path) -> None:
+    """Boundary: an all-abstain jury fire still records an (empty) FindingSet row.
+
+    A calibration sweep must see the all-abstain fire rather than infer it from a
+    gap, so the row is persisted with an empty ballot array + a zero count.
+    """
+    from eawf.workflow.dispatch.spec_jury import persist_juror_findingsets
+
+    _, state_path = _write_state_with_auditor(tmp_path)
+    urn = persist_juror_findingsets(state_path, wave=_make_wave(), ballots=(), now=_T0)
+
+    assert urn
+    rows = _read_findingset_rows(state_path)
+    assert len(rows) == 1
+    assert json.loads(rows[0]["extras"]["findingsets"]) == []
+    assert rows[0]["extras"]["juror_count"] == 0
+
+
+def test_producer_scored_run_persists_findingsets(tmp_path: Path) -> None:
+    """The scored produce path persists the raw FindingSets AND returns their urn."""
+    state, state_path = _write_state_with_auditor(tmp_path)
+    fn = _ballot_fn_factory(
+        {
+            "claude-code": {"B1": (True, None), "B2": (True, None)},
+            "codex": {"B1": (True, None), "B2": (False, "B2 not met")},
+        }
+    )
+    result = _run(
+        produce_spec_jury_verdict(
+            state=state,
+            state_path=state_path,
+            wave=_make_wave(),
+            spec=_make_wave_spec(),
+            auditor_session_id=_AUDITOR_SESSION,
+            per_item_ballot_fn=fn,
+            now=_T0,
+        )
+    )
+    assert result.status == "scored"
+    assert result.findingset_id is not None
+    rows = _read_findingset_rows(state_path)
+    assert len(rows) == 1
+    decoded = json.loads(rows[0]["extras"]["findingsets"])
+    # Both jurors' raw ballots are preserved, including the codex veto refutation.
+    assert {b["juror"] for b in decoded} == {"claude-code", "codex"}
+    codex = next(b for b in decoded if b["juror"] == "codex")
+    b2_vote = next(v for v in codex["votes"] if v["item_id"] == "B2")
+    assert b2_vote["refutation"] == "B2 not met"

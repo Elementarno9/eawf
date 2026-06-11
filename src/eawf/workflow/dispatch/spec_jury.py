@@ -56,7 +56,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -68,9 +68,15 @@ from eawf.kernel.spec.wave import WaveBehavior, WaveSpec
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     Confidence,
+    StoreKind,
 )
 from eawf.kernel.state.models import State, Wave
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AuditorReportBody, CriterionVerdict
+from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.kinds.evidence import mint_evidence_id
+from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.cross_vendor_jury import (
     JURY_RUNTIME_FAMILIES,
     PerItemJurorBallot,
@@ -116,6 +122,89 @@ _OUTCOME_VERDICT: dict[JuryAggregateOutcome, AgentReportVerdict] = {
     JuryAggregateOutcome.NEEDS_USER: AgentReportVerdict.BLOCKED,
 }
 
+#: ``event_type`` marking a raw-juror-FindingSet row in the evidence store.
+#: The reduced AUDITOR verdict is persisted separately (the gated close
+#: signal); this row preserves the UN-reduced per-juror ballots so a later
+#: Plan-Jury calibration sweep has the granular vote data the reduction
+#: collapses away.
+SPEC_JURY_FINDINGSET_EVENT_TYPE = "spec_jury_findingset"
+
+#: ``extras`` key holding the JSON-encoded array of raw per-juror ballots.
+_FINDINGSETS_KEY = "findingsets"
+
+#: ``extras`` key holding the wave id the FindingSets were collected for.
+_WAVE_KEY = "wave_id"
+
+#: ``extras`` key holding the count of jurors that cast a ballot.
+_JUROR_COUNT_KEY = "juror_count"
+
+
+def persist_juror_findingsets(
+    state_path: Path,
+    *,
+    wave: Wave,
+    ballots: tuple[PerItemJurorBallot, ...],
+    now: datetime | None = None,
+) -> str:
+    """Persist the raw per-juror ballots (FindingSets) and return their row urn.
+
+    The spec-jury close gate reduces the per-juror ballots into ONE auditor
+    verdict (:func:`reduce_per_item_ballots`) and persists only that reduction.
+    The reduction is lossy: the per-juror, per-item votes + refutations it folds
+    away are exactly the calibration signal a Plan-Jury sweep needs (Fleiss-kappa
+    over juror agreement, cross-vendor co-error rate). This appends ONE evidence
+    store row carrying the UN-reduced ballots as JSON so that signal survives.
+
+    The append rides the daemon-owned canonical store path
+    (:func:`eawf.kernel.store.append.append_envelope`), the same writer the
+    close-gate evidence ledger uses, so an on-disk FindingSet row is
+    indistinguishable from any other daemon-written evidence row.
+
+    Args:
+        state_path: Absolute path to ``state.json`` (the store lives at its
+            sibling ``store/evidence.jsonl``).
+        wave: The banded wave the jury was convened for.
+        ballots: The raw per-juror ballots collected from the jury fire. May be
+            empty (every juror abstained); an empty FindingSet row is still
+            persisted so a calibration sweep sees the all-abstain fire rather
+            than inferring it from a gap.
+        now: Optional fixed timestamp for the row (tests pin it).
+
+    Returns:
+        The fresh ``EV-<12 hex>`` evidence-record id the FindingSets were
+        persisted under (the same id-namespace every evidence-store row uses).
+    """
+    stamp = now or datetime.now(UTC)
+    row_id = mint_evidence_id()
+    findingsets_json = json.dumps([ballot.model_dump(mode="json") for ballot in ballots])
+    payload = EventPayload(
+        timestamp=stamp,
+        event_type=SPEC_JURY_FINDINGSET_EVENT_TYPE,
+        actor="spec_jury",
+        command="spec jury findingsets",
+        args_hash="",
+        status="ok",
+        message=f"raw juror findingsets wave={wave.id} jurors={len(ballots)}",
+        extras={
+            _WAVE_KEY: wave.id,
+            _JUROR_COUNT_KEY: len(ballots),
+            _FINDINGSETS_KEY: findingsets_json,
+        },
+    )
+    envelope = Envelope(
+        id=row_id,
+        kind=StoreKind.EVIDENCE,
+        scope_id=wave.id,
+        created_at=stamp,
+        updated_at=None,
+        summary=f"spec-jury findingsets {wave.id} jurors={len(ballots)}",
+        payload=payload.model_dump(mode="json"),
+    )
+    append_envelope(store_path(state_path, StoreKind.EVIDENCE), envelope)
+    logger.info(f"persist_juror_findingsets wave={wave.id} jurors={len(ballots)} row_id={row_id!r}")
+    return row_id
+
+
 #: Outcome of a spec-jury produce attempt.
 #:
 #: - ``"scored"`` -- a ballot fn was supplied, the jury convened, and the
@@ -146,6 +235,10 @@ class SpecJuryResult:
             or ``None`` for a skipped run.
         append_result: The canonical-writer append result for the persisted
             auditor verdict, or ``None`` for a skipped run.
+        findingset_id: The ``EV-<hex>`` evidence-store row id the raw per-juror
+            ballots (FindingSets) were persisted under on a scored run, or
+            ``None`` for a skipped run. The reduced verdict is lossy; this row
+            preserves the un-reduced ballots for Plan-Jury calibration.
         reason: Short human reason a run was skipped, or ``None`` when scored.
     """
 
@@ -154,6 +247,7 @@ class SpecJuryResult:
     verdict: AgentReportVerdict | None = None
     result: PerItemJuryResult | None = None
     append_result: AgentReportAppendResult | None = None
+    findingset_id: str | None = None
     reason: str | None = None
 
     @property
@@ -541,6 +635,9 @@ async def produce_spec_jury_verdict(
         include_diff=False,
     )
     ballots = tuple(await per_item_ballot_fn(prompt))
+    # Persist the UN-reduced ballots BEFORE the lossy reduction so the raw
+    # FindingSets survive on every jury fire for Plan-Jury calibration.
+    findingset_id = persist_juror_findingsets(state_path, wave=wave, ballots=ballots, now=now)
     rubric_item_ids = tuple(behavior.id for behavior in rubric)
     result = reduce_per_item_ballots(ballots, rubric_item_ids)
 
@@ -584,14 +681,17 @@ async def produce_spec_jury_verdict(
         verdict=verdict,
         result=result,
         append_result=append_result,
+        findingset_id=findingset_id,
     )
 
 
 __all__ = [
+    "SPEC_JURY_FINDINGSET_EVENT_TYPE",
     "PerItemBallotFn",
     "SpecJuryResult",
     "SpecJuryStatus",
     "live_per_item_ballot_fn",
+    "persist_juror_findingsets",
     "produce_spec_jury_verdict",
     "wave_in_uiux_band",
 ]
