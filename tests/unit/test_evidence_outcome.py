@@ -100,9 +100,9 @@ def test_set_outcome_unknown_outcome_raises_not_found(tmp_path: Path) -> None:
         outcome.set_outcome(
             state,
             outcome_id="OUT-999",
-            value=0.5,
-            status=OutcomeStatus.MET,
+            sample=0.5,
             audit_id="AUD-001",
+            evidence_refs=["repo:.ea/artifacts/eval.md"],
         )
 
 
@@ -121,9 +121,9 @@ def test_set_outcome_with_unknown_audit_raises_validation(tmp_path: Path) -> Non
         outcome.set_outcome(
             state,
             outcome_id="OUT-001",
-            value=0.5,
-            status=OutcomeStatus.MISSED,
+            sample=0.5,
             audit_id="AUD-DOES-NOT-EXIST",
+            evidence_refs=["repo:.ea/artifacts/eval.md"],
         )
 
 
@@ -158,9 +158,9 @@ def test_set_outcome_with_pending_audit_raises_validation(tmp_path: Path) -> Non
         outcome.set_outcome(
             state,
             outcome_id="OUT-001",
-            value=0.5,
-            status=OutcomeStatus.MISSED,
+            sample=0.5,
             audit_id="AUD-PENDING",
+            evidence_refs=["repo:.ea/artifacts/eval.md"],
         )
 
 
@@ -189,13 +189,15 @@ def test_set_outcome_happy_with_complete_audit(tmp_path: Path) -> None:
     event = outcome.set_outcome(
         state,
         outcome_id="OUT-001",
-        value=0.85,
-        status=OutcomeStatus.MISSED,
+        sample=0.85,
         audit_id="AUD-001",
+        evidence_refs=["repo:.ea/artifacts/eval.md"],
     )
     assert state.outcomes["OUT-001"].audit_id == "AUD-001"
-    assert state.outcomes["OUT-001"].status == OutcomeStatus.MISSED
-    assert state.outcomes["OUT-001"].value == 0.85
+    # MIN direction, threshold 1.0, sample 0.85 <= 1.0 -> derived MET.
+    assert state.outcomes["OUT-001"].status == OutcomeStatus.MET
+    assert state.outcomes["OUT-001"].sample == pytest.approx(0.85)
+    assert state.outcomes["OUT-001"].evidence_refs == ["repo:.ea/artifacts/eval.md"]
     assert event.payload["event_type"] == "outcome.set"
 
 
@@ -229,14 +231,15 @@ def test_state_transaction_persists_set_outcome(tmp_path: Path) -> None:
         event = outcome.set_outcome(
             state,
             outcome_id="OUT-001",
-            value=0.5,
-            status=OutcomeStatus.MISSED,
+            sample=0.5,
             audit_id="AUD-001",
+            evidence_refs=["repo:.ea/artifacts/eval.md"],
         )
         _io.append_jsonl(paths[StoreKind.EVENT], event)
 
     body = json.loads(state_path.read_text())
     assert body["outcomes"]["OUT-001"]["audit_id"] == "AUD-001"
+    assert body["outcomes"]["OUT-001"]["evidence_refs"] == ["repo:.ea/artifacts/eval.md"]
     events = (state_path.parent / "store" / "event.jsonl").read_text().splitlines()
     assert len(events) == 3
     types = [json.loads(line)["payload"]["event_type"] for line in events]

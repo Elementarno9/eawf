@@ -314,7 +314,23 @@ class Goal(_StrictModel):
 
 
 class Outcome(_StrictModel):
-    """Quantitative outcome attached to a goal."""
+    """Quantitative outcome attached to a goal.
+
+    An outcome is *measured* once :attr:`sample` is recorded: ``sample`` is the
+    latest observed value of :attr:`metric`, and :attr:`best_value` carries the
+    best value seen so far so the comparator can tell a fresh miss apart from a
+    regression off a previously-achieved best (see
+    :func:`eawf.workflow.evidence.outcome.compute_outcome_status`). The derived
+    :attr:`status` is never hand-set on a measured outcome -- the comparator
+    derives it from the threshold, the sample, and the favorable
+    :attr:`direction`.
+
+    :attr:`evidence_refs` carries the repo-relative paths / Eawf URNs / external
+    URLs that ratify a measured status claim. The model-level invariant forbids
+    a measured outcome (terminal :attr:`status` with a recorded :attr:`sample`)
+    from carrying an empty ``evidence_refs`` list, so a status claim cannot
+    fabricate its own evidence at the ingestion boundary.
+    """
 
     id: IdStr
     scope_id: str
@@ -322,9 +338,32 @@ class Outcome(_StrictModel):
     threshold: float
     direction: OutcomeDirection
     value: float | None = None
+    sample: float | None = None
+    best_value: float | None = None
     status: OutcomeStatus
     audit_id: str | None = None
+    evidence_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def _measured_outcome_requires_evidence(self) -> Outcome:
+        """Reject a measured outcome whose status claim cites no evidence.
+
+        A measured outcome carries a recorded :attr:`sample` and a terminal
+        :attr:`status` (anything past :attr:`OutcomeStatus.PENDING`); such a
+        claim MUST resolve to at least one evidence ref so the status cannot be
+        asserted without backing.
+
+        Raises:
+            ValueError: When ``status`` is terminal and ``sample`` is recorded
+                but ``evidence_refs`` is empty.
+        """
+        measured = self.sample is not None and self.status is not OutcomeStatus.PENDING
+        if measured and not self.evidence_refs:
+            raise ValueError(
+                f"measured outcome {self.id!r} has no resolving evidence ref"
+            )
+        return self
 
 
 class Phase(_DescribedEntity):

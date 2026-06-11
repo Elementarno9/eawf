@@ -374,7 +374,7 @@ Manage outcomes (define / set).
 | Verb | Summary |
 |---|---|
 | `define` | Define a new pending outcome. |
-| `set` | Record an outcome measurement; requires --audit of a complete audit. |
+| `set` | Record an outcome measurement; status is derived from the sample. |
 
 ### `eawf phase`
 

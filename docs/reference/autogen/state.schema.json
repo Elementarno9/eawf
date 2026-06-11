@@ -2433,7 +2433,7 @@
     },
     "Outcome": {
       "additionalProperties": false,
-      "description": "Quantitative outcome attached to a goal.",
+      "description": "Quantitative outcome attached to a goal.\n\nAn outcome is *measured* once :attr:`sample` is recorded: ``sample`` is the\nlatest observed value of :attr:`metric`, and :attr:`best_value` carries the\nbest value seen so far so the comparator can tell a fresh miss apart from a\nregression off a previously-achieved best (see\n:func:`eawf.workflow.evidence.outcome.compute_outcome_status`). The derived\n:attr:`status` is never hand-set on a measured outcome -- the comparator\nderives it from the threshold, the sample, and the favorable\n:attr:`direction`.\n\n:attr:`evidence_refs` carries the repo-relative paths / Eawf URNs / external\nURLs that ratify a measured status claim. The model-level invariant forbids\na measured outcome (terminal :attr:`status` with a recorded :attr:`sample`)\nfrom carrying an empty ``evidence_refs`` list, so a status claim cannot\nfabricate its own evidence at the ingestion boundary.",
       "properties": {
         "audit_id": {
           "anyOf": [
@@ -2447,8 +2447,28 @@
           "default": null,
           "title": "Audit Id"
         },
+        "best_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Best Value"
+        },
         "direction": {
           "$ref": "#/$defs/OutcomeDirection"
+        },
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
         },
         "id": {
           "minLength": 1,
@@ -2459,6 +2479,18 @@
         "metric": {
           "title": "Metric",
           "type": "string"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
         },
         "scope_id": {
           "title": "Scope Id",

@@ -17,7 +17,6 @@ from eawf.kernel.state.enums import (
     HypothesisStatus,
     HypothesisVerdict,
     OutcomeDirection,
-    OutcomeStatus,
     StoreKind,
 )
 from eawf.surfaces.cli import errors as cli_errors
@@ -146,8 +145,7 @@ def outcome_define(
 def outcome_set(
     ctx: typer.Context,
     outcome_id: Annotated[str, typer.Argument(help="Outcome id")],
-    value: Annotated[float, typer.Option("--value", help="Measured value")],
-    status: Annotated[OutcomeStatus, typer.Option("--status", help="met/missed/waived")],
+    sample: Annotated[float, typer.Option("--sample", help="Observed metric value")],
     audit: Annotated[
         str,
         typer.Option(
@@ -155,8 +153,20 @@ def outcome_set(
             help="Audit id (must reference a complete audit)",
         ),
     ],
+    evidence_ref: Annotated[
+        list[str],
+        typer.Option(
+            "--evidence-ref",
+            help="Evidence ref resolving the status claim (repeatable, required)",
+        ),
+    ],
 ) -> None:
-    """Record an outcome measurement; requires --audit of a complete audit."""
+    """Record an outcome measurement; status is derived from the sample.
+
+    The met/missed status is derived from the outcome threshold, the observed
+    --sample, and the outcome direction; it is never hand-set. Requires --audit
+    of a complete audit and at least one --evidence-ref.
+    """
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.evidence import outcome as outcome_evi
     from eawf.workflow.evidence._io import append_jsonl, store_paths
@@ -164,15 +174,17 @@ def outcome_set(
     flags = _flags(ctx)
     state_path = _state_path(flags)
 
+    derived_status = ""
     try:
         with state_transaction(state_path) as state:
             event = outcome_evi.set_outcome(
                 state,
                 outcome_id=outcome_id,
-                value=value,
-                status=status,
+                sample=sample,
                 audit_id=audit,
+                evidence_refs=list(evidence_ref),
             )
+            derived_status = state.outcomes[outcome_id].status.value
             append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
@@ -181,11 +193,11 @@ def outcome_set(
     _emit(
         {
             "outcome_id": outcome_id,
-            "value": value,
-            "status": status.value,
+            "sample": sample,
+            "status": derived_status,
             "audit_id": audit,
         },
-        f"outcome {outcome_id} set status={status.value}",
+        f"outcome {outcome_id} set status={derived_status}",
         flags,
     )
 

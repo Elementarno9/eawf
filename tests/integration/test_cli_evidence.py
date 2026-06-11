@@ -123,12 +123,12 @@ def test_outcome_set_without_audit_exits_validation_failed(state_path: Path) -> 
             "outcome",
             "set",
             "OUT-001",
-            "--value",
+            "--sample",
             "0.5",
-            "--status",
-            "missed",
             "--audit",
             "AUD-NOPE",
+            "--evidence-ref",
+            "repo:.ea/artifacts/eval.md",
         ],
     )
     assert result.exit_code == 2
@@ -159,18 +159,20 @@ def test_outcome_set_with_complete_audit_succeeds(state_path: Path) -> None:
             "outcome",
             "set",
             "OUT-001",
-            "--value",
-            "0.85",
-            "--status",
-            "missed",
+            "--sample",
+            "1.5",
             "--audit",
             "AUD-001",
+            "--evidence-ref",
+            "repo:.ea/artifacts/eval.md",
         ],
     )
     assert result.exit_code == 0, result.stdout
     body = json.loads(state_path.read_text())
+    # MIN direction, threshold 1.0, sample 1.5 > 1.0 -> derived missed.
     assert body["outcomes"]["OUT-001"]["status"] == "missed"
     assert body["outcomes"]["OUT-001"]["audit_id"] == "AUD-001"
+    assert body["outcomes"]["OUT-001"]["evidence_refs"] == ["repo:.ea/artifacts/eval.md"]
 
 
 # ---- hypothesis ------------------------------------------------------------
