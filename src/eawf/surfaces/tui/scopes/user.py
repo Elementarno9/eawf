@@ -46,7 +46,8 @@ from eawf.platform.registry.models import Registry, RegistryReadError, read_regi
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
-from eawf.surfaces.tui.widgets.footer import render_hint_label
+from eawf.surfaces.tui.widgets.footer import MODE_ROW_SEP, render_hint_label
+from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.registry_pane import REGISTRY_EMPTY_CELL, REGISTRY_HINT_LINE
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
@@ -60,6 +61,95 @@ logger = logging.getLogger(__name__)
 _PORTFOLIO_CODE = "PORTFOLIO"
 _PORTFOLIO_TITLE = "Portfolio"
 USER_SCOPE_INIT_NEEDED_KEY = "init_needed"
+
+#: The three scope-switch affordances, in the canonical left-to-right order
+#: the breadcrumb axis reads (repo -> workspace -> portfolio), each as a
+#: ``(label, key)`` pair. The label is the scope noun the operator sees in
+#: the breadcrumb; the key is the single keypress
+#: (:meth:`~eawf.surfaces.tui.app.EaApp.action_switch_scope`) that lands on
+#: that scope. The user portfolio scope's switch key is ``u`` -- its strip
+#: label is ``portfolio`` (the noun the breadcrumb shows), matching the
+#: reskin mock ``repo r  ·  workspace w  ·  portfolio u``.
+SCOPE_SWITCH_ITEMS: tuple[tuple[str, str], ...] = (
+    ("repo", "r"),
+    ("workspace", "w"),
+    ("portfolio", "u"),
+)
+
+
+def build_scope_switch_strip(active_label: str, *, separator: str = MODE_ROW_SEP) -> str:
+    """Build the workspace / user scope-switch mode strip as content markup.
+
+    Pure render source -- unit-testable without mounting the widget. Renders
+    each :data:`SCOPE_SWITCH_ITEMS` entry as a ``<label> <key>`` token (e.g.
+    ``repo r``) joined by *separator*, so the strip reads
+    ``repo r  ·  workspace w  ·  portfolio u`` -- the reskin mock. The token
+    whose *label* equals *active_label* is highlighted with a bold green
+    ``$accent`` span (the same brand-accent shape
+    :func:`~eawf.surfaces.tui.widgets.footer.build_mode_row` draws for the
+    active mode); every other token renders muted ``$muted``. A label that
+    matches no scope highlights nothing, so a bare / unexpected caller never
+    fabricates a false-active token. Labels + keys are markup-escaped
+    defensively so a bracket can never be parsed as a style tag.
+
+    Reusing the footer's :data:`~eawf.surfaces.tui.widgets.footer.MODE_ROW_SEP`
+    bullet keeps the scope strip and the always-visible mode row reading as
+    one visual family (the reskinned footer-mode strip the operator already
+    knows).
+
+    Args:
+        active_label: The label of the active scope (``repo`` / ``workspace``
+            / ``portfolio``); the matching token is accented.
+        separator: The bullet between tokens; defaults to the footer's
+            :data:`~eawf.surfaces.tui.widgets.footer.MODE_ROW_SEP` so the
+            strip matches the mode row.
+
+    Returns:
+        A Textual content-markup string for the scope-switch strip.
+    """
+    tokens: list[str] = []
+    for label, key in SCOPE_SWITCH_ITEMS:
+        text = f"{escape_markup(label)} {escape_markup(key)}"
+        if label == active_label:
+            tokens.append(f"[$accent][b]{text}[/b][/]")
+        else:
+            tokens.append(f"[$muted]{text}[/]")
+    return separator.join(tokens)
+
+
+class ScopeSwitchStrip(Static):
+    """The w/u scope-switch mode strip painted under a scope-screen body.
+
+    A :class:`~textual.widgets.Static` that paints
+    :func:`build_scope_switch_strip` for its host scope -- the workspace
+    scope passes ``workspace`` and the user portfolio passes ``portfolio``,
+    so each surface accents its own token in the shared
+    ``repo r  ·  workspace w  ·  portfolio u`` strip. The active label is
+    fixed per screen (each scope owns its own screen), so the strip is
+    constructed once at compose time; there is no per-state repaint.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    ScopeSwitchStrip {
+        width: 1fr;
+        height: 1;
+        color: $text-muted;
+        padding: 0 1;
+    }
+    """
+
+    def __init__(self, active_label: str, **kwargs: object) -> None:
+        """Construct the strip pinned to *active_label* as the active scope.
+
+        Args:
+            active_label: The label of the host scope (``workspace`` /
+                ``portfolio``); the matching token paints accented.
+            **kwargs: Forwarded to :class:`textual.widgets.Static`.
+        """
+        super().__init__(build_scope_switch_strip(active_label), **kwargs)  # type: ignore[arg-type]
+        #: The active-scope label this strip accents, exposed so a host /
+        #: test reads which token is highlighted without scraping markup.
+        self.active_label = active_label
 
 
 def synthesize_user_state(*, registry_path: Path | None = None, home: Path | None = None) -> State:
@@ -356,7 +446,7 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _USER_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the band, the portfolio pane (grid + honest-empty card), + zoom.
+        """Yield the band, the portfolio pane (grid + card), the scope strip, + zoom.
 
         The portfolio pane carries BOTH the :class:`PortfolioTable` and the
         :class:`HonestEmptyCard`: the card shows (and the grid hides) only
@@ -364,6 +454,11 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
         registry reads as the calm no-repos directive rather than a
         columns-only grid -- never a fabricated repo or a ``0 repos`` totals
         roll-up. A populated scope reads as the grid alone.
+
+        Below the pane sits the :class:`ScopeSwitchStrip` -- the
+        ``repo r  ·  workspace w  ·  portfolio u`` switch affordance with the
+        ``portfolio`` token accented, so the operator sees this scope is
+        active and which key reaches the others.
         """
         with Vertical(id="body"):
             yield from attention_band()
@@ -371,6 +466,7 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
                 yield Static("PORTFOLIO", classes="pane-title")
                 yield HonestEmptyCard(id="portfolio-empty")
                 yield PortfolioTable(id="portfolio-table")
+            yield ScopeSwitchStrip("portfolio", id="scope-switch-strip")
             yield Container(id="zoom-mount")
 
     def on_mount(self) -> None:
@@ -401,10 +497,13 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
 __all__ = [
     "HONEST_EMPTY_DIRECTIVE",
     "HONEST_EMPTY_HEADLINE",
+    "SCOPE_SWITCH_ITEMS",
     "USER_SCOPE_INIT_NEEDED_KEY",
     "HonestEmptyCard",
     "PortfolioTable",
+    "ScopeSwitchStrip",
     "UserScreen",
+    "build_scope_switch_strip",
     "render_no_repos_card",
     "state_has_no_repos",
     "synthesize_user_state",

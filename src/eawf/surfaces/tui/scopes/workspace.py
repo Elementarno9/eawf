@@ -42,7 +42,11 @@ from textual.widgets import Static
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
-from eawf.surfaces.tui.scopes.user import HonestEmptyCard, state_has_no_repos
+from eawf.surfaces.tui.scopes.user import (
+    HonestEmptyCard,
+    ScopeSwitchStrip,
+    state_has_no_repos,
+)
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.registry_pane import RegistryPane
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
@@ -124,6 +128,14 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
         registry reads as the calm no-repos directive rather than a
         columns-only grid -- never a fabricated repo or a ``0 repos`` totals
         roll-up. A populated workspace reads as the grid alone.
+
+        Below the browse container sits the
+        :class:`~eawf.surfaces.tui.scopes.user.ScopeSwitchStrip` -- the
+        ``repo r  ·  workspace w  ·  portfolio u`` switch affordance with the
+        ``workspace`` token accented, so the operator sees this scope is
+        active and which key reaches the others. It is a sibling of the
+        ``#pane-repos`` container the zoom mixin hides, so the strip stays
+        visible across a zoom.
         """
         with Vertical(id="body"):
             yield from attention_band()
@@ -135,6 +147,7 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
                 with Vertical(classes="pane", id="pane-registry"):
                     yield Static("REGISTRY", classes="pane-title")
                     yield RegistryPane(id="registry-pane")
+            yield ScopeSwitchStrip("workspace", id="scope-switch-strip")
             yield Container(id="zoom-mount")
 
     def on_mount(self) -> None:
