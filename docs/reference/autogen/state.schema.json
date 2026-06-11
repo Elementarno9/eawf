@@ -1073,8 +1073,14 @@
     },
     "FleetCounters": {
       "additionalProperties": false,
-      "description": "Running tallies the fleet auto-drain loop accumulates.\n\nAttributes:\n    claimed: Total waves the loop has claimed across the run.\n    dispatched: Total waves the loop has dispatched across the run.\n    closed: Total lanes that closed clean across the run.\n    forked: Total lanes that forked (failed / re-planned) across the run.\n    rounds: Number of frontier-advance rounds the loop has run.\n    clean_rounds: Consecutive rounds with zero forks -- the convergence\n        counter the ``kclean`` criterion reads. Reset to zero on any fork.",
+      "description": "Running tallies the fleet auto-drain loop accumulates.\n\nAttributes:\n    claimed: Total waves the loop has claimed across the run.\n    dispatched: Total waves the loop has dispatched across the run.\n    closed: Total lanes that closed clean across the run -- the FA7\n        run-summary ``N closed`` tally.\n    forked: Total lanes that forked (failed / re-planned) across the run.\n    failed: Total lanes whose watcher reported a genuine fork (the wave\n        failed / abandoned) across the run -- the FA7 run-summary\n        ``M failed`` tally, distinct from a safety-gate ``blocked``\n        downgrade. Additive (defaults ``0``) so a counters row written\n        before the field existed re-validates unchanged.\n    blocked: Total lanes whose clean close was DOWNGRADED to a fork by the\n        DL-5 RiskTier safety gate (a high / ui close under an unearned\n        advisory jury) across the run -- the FA7 ``K blocked`` tally.\n        Additive (defaults ``0``).\n    forks_resolved: Total forked lanes a reattach sweep re-dispatched\n        successfully across the run -- the FA7 ``N fork resolved`` tally.\n        Additive (defaults ``0``).\n    rounds: Number of frontier-advance rounds the loop has run.\n    clean_rounds: Consecutive rounds with zero forks -- the convergence\n        counter the ``kclean`` criterion reads. Reset to zero on any fork.\n    spent_eu: Cumulative effort units spent across every finished lane,\n        read off each lane's runtime delta -- the figure the EU budget cap\n        (DL-4) tests against, and the FA7 ``EU`` total. Additive (defaults\n        ``0.0``) so a counters row written before the field existed\n        re-validates unchanged.\n    spent_usd: Cumulative USD spent across every finished lane, read off\n        each lane's runtime delta -- the figure the USD budget cap (DL-4)\n        tests against, and the FA7 ``$`` total. Additive (defaults ``0.0``)\n        so an older row re-validates unchanged.",
       "properties": {
+        "blocked": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Blocked",
+          "type": "integer"
+        },
         "claimed": {
           "default": 0,
           "minimum": 0,
@@ -1099,10 +1105,22 @@
           "title": "Dispatched",
           "type": "integer"
         },
+        "failed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
         "forked": {
           "default": 0,
           "minimum": 0,
           "title": "Forked",
+          "type": "integer"
+        },
+        "forks_resolved": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Forks Resolved",
           "type": "integer"
         },
         "rounds": {
@@ -1110,10 +1128,81 @@
           "minimum": 0,
           "title": "Rounds",
           "type": "integer"
+        },
+        "spent_eu": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Spent Eu",
+          "type": "number"
+        },
+        "spent_usd": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Spent Usd",
+          "type": "number"
         }
       },
       "title": "FleetCounters",
       "type": "object"
+    },
+    "FleetFork": {
+      "additionalProperties": false,
+      "description": "One lane paused to a blocking fork, awaiting operator resolution -- DL-6.\n\nWhen a lane forks for a blocking reason (a high-risk close, an\nuncalibrated-jury advisory, or a needs-user split) the loop pauses ONLY\nthat lane -- it is removed from the in-flight :attr:`FleetRun.lanes` slot\nand appended to the :attr:`FleetRun.forks` queue -- while the sibling lanes\nkeep draining. The operator later resolves each queued fork via one of the\nclosed :class:`FleetForkResolution` paths.\n\nAttributes:\n    wave_id: ``W<NN>`` wave the paused lane was driving.\n    attempt: Dispatch attempt of the paused lane -- the second half of the\n        ``(wave_id, attempt)`` lane-registry key it was forked from.\n    risk_tier: The lane's resolved\n        :class:`~eawf.kernel.state.enums.RiskTier` at fork time, so the\n        cockpit renders the band badge on the queued fork.\n    reason: The :class:`FleetForkReason` that paused the lane.\n    evidence_ref: Repo-relative path / Eawf URN / external URL backing the\n        fork -- the close verdict, jury ballot, or needs-user question the\n        operator reads before resolving; ``None`` when the loop captured no\n        ref.\n    forked_at: When the lane was paused to this fork.",
+      "properties": {
+        "attempt": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "evidence_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Ref"
+        },
+        "forked_at": {
+          "format": "date-time",
+          "title": "Forked At",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/FleetForkReason"
+        },
+        "risk_tier": {
+          "$ref": "#/$defs/RiskTier"
+        },
+        "wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Wave Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "wave_id",
+        "risk_tier",
+        "reason",
+        "forked_at"
+      ],
+      "title": "FleetFork",
+      "type": "object"
+    },
+    "FleetForkReason": {
+      "description": "Why a fleet lane paused to a blocking fork rather than draining clean -- DL-6.\n\nThe closed set of reasons the loop pauses ONLY the offending lane (the\nsibling lanes keep draining) and enqueues a typed :class:`FleetFork`:\n\n- ``high_risk_close`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.UI`\n  (visual-band) lane reported a clean close, but the visual oracle is the\n  least deterministic, so the close is held for the operator rather than\n  auto-closed.\n- ``uncalibrated_jury`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.HIGH`\n  (jury-gated) lane reported a clean close, but the jury that would gate it\n  holds only :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY`\n  authority, so its advisory verdict cannot auto-close the wave (the\n  LOAD-BEARING DL-5 safety invariant surfaces here as a fork).\n- ``needs_user_split`` -- the lane's wave hit a needs-user split mid-run\n  (a clarification the executor could not resolve), so the lane pauses for\n  operator input.",
+      "enum": [
+        "high_risk_close",
+        "uncalibrated_jury",
+        "needs_user_split"
+      ],
+      "title": "FleetForkReason",
+      "type": "string"
     },
     "FleetLane": {
       "additionalProperties": false,
@@ -1170,7 +1259,7 @@
     },
     "FleetRun": {
       "additionalProperties": false,
-      "description": "Daemon-owned state of the fleet auto-drain loop.\n\nPersisted as the optional top-level :attr:`State.fleet_run` field\n(default ``None`` -- no active run) so a state written before this field\nexisted re-validates unchanged. The loop runner\n(:mod:`eawf.runtime.daemon.methods.fleet`) is the only mutator; the daemon\ncanonical state writer persists every run-state transition, so the loop\nnever writes ``state.json`` directly.\n\nAttributes:\n    run_state: The closed :class:`FleetRunState` the loop is in.\n    concurrency: Maximum lanes the loop holds at once (the drain width).\n    frontier: Ready ``W<NN>`` wave ids still queued to claim, in claim\n        order. The loop pops from the head as lanes free.\n    lanes: In-flight dispatch slots, keyed by wave id.\n    counters: Running tallies for the run.\n    convergence: Convergence mode -- ``drain`` (stop only when the\n        frontier empties) or ``kclean`` (stop after K clean rounds).\n    kclean_k: K threshold for the ``kclean`` convergence mode -- the\n        number of consecutive clean rounds that ends the run. Ignored\n        under ``drain``.\n    terminal_reason: Why the run reached ``DONE``; ``None`` until then.\n    armed_at: When the run was armed.",
+      "description": "Daemon-owned state of the fleet auto-drain loop.\n\nPersisted as the optional top-level :attr:`State.fleet_run` field\n(default ``None`` -- no active run) so a state written before this field\nexisted re-validates unchanged. The loop runner\n(:mod:`eawf.runtime.daemon.methods.fleet`) is the only mutator; the daemon\ncanonical state writer persists every run-state transition, so the loop\nnever writes ``state.json`` directly.\n\nAttributes:\n    run_state: The closed :class:`FleetRunState` the loop is in.\n    concurrency: Maximum lanes the loop holds at once (the drain width).\n    frontier: Ready ``W<NN>`` wave ids still queued to claim, in claim\n        order. The loop pops from the head as lanes free.\n    lanes: In-flight dispatch slots, keyed by wave id.\n    forks: Lanes paused to a blocking fork (high-risk close /\n        uncalibrated-jury advisory / needs-user split), awaiting operator\n        resolution (DL-6). Each paused lane is removed from ``lanes`` and\n        appended here while the sibling lanes keep draining. Additive\n        (defaults ``[]``) so a state written before the field existed\n        re-validates unchanged.\n    counters: Running tallies for the run.\n    convergence: Convergence mode -- ``drain`` (stop only when the\n        frontier empties) or ``kclean`` (stop after K clean rounds).\n    kclean_k: K threshold for the ``kclean`` convergence mode -- the\n        number of consecutive clean rounds that ends the run. Ignored\n        under ``drain``.\n    eu_cap: Optional cumulative effort-unit spend cap. When the run's\n        ``spent_eu`` reaches it the loop claims no further wave and ends\n        ``terminal_reason=budget`` (DL-4). ``None`` (the default) leaves\n        the run uncapped. Additive + back-compat.\n    usd_cap: Optional cumulative USD spend cap, applied identically to\n        ``eu_cap``. ``None`` leaves the run uncapped. Additive.\n    waves_cap: Optional claimed-wave count cap. When ``counters.claimed``\n        reaches it the loop claims no further wave and ends\n        ``terminal_reason=budget``. ``None`` leaves the run uncapped.\n        Additive.\n    hard_halt: The arm-modal budget-halt toggle. ``False`` (the default)\n        is the graceful-drain budget stop -- at the cap the loop stops\n        claiming but lets the in-flight lanes finish before ending\n        ``budget``. ``True`` arms the hard halt -- reaching the cap KILLS\n        the in-flight lanes (the DL-3 kill) instead of draining. Additive\n        + back-compat (an older run re-validates as graceful-drain).\n    terminal_reason: Why the run reached ``DONE``; ``None`` until then.\n        The FA7 run-summary surface relies on its presence as the\n        run-complete signal -- it is set in lockstep with the ``DONE``\n        transition and stays ``None`` while the run is not DONE.\n    ended_at: When the run reached ``DONE``; ``None`` until then. The\n        DAEMON stamps it at the terminal transition so the elapsed window\n        is computed once, daemon-side, rather than re-derived in the UI.\n        Additive (defaults ``None``) so an older run re-validates unchanged.\n    elapsed_hours: Wall-clock hours from ``armed_at`` to ``ended_at``,\n        computed DAEMON-side at run end -- the FA7 ``elapsed`` figure.\n        ``None`` until the run is DONE. Additive.\n    throughput: Run throughput in closed waves per hour, computed\n        DAEMON-side at run end as ``counters.closed / elapsed_hours`` (the\n        FA7 waves/hour figure); the loop computes it once so the cockpit\n        never recomputes it. ``None`` until the run is DONE, and ``0.0``\n        when the elapsed window is degenerate (zero hours) so the division\n        never divides by zero. Additive.\n    armed_at: When the run was armed.",
       "properties": {
         "armed_at": {
           "format": "date-time",
@@ -1195,6 +1284,52 @@
         "counters": {
           "$ref": "#/$defs/FleetCounters"
         },
+        "elapsed_hours": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Elapsed Hours"
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ended At"
+        },
+        "eu_cap": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Eu Cap"
+        },
+        "forks": {
+          "items": {
+            "$ref": "#/$defs/FleetFork"
+          },
+          "title": "Forks",
+          "type": "array"
+        },
         "frontier": {
           "items": {
             "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
@@ -1202,6 +1337,11 @@
           },
           "title": "Frontier",
           "type": "array"
+        },
+        "hard_halt": {
+          "default": false,
+          "title": "Hard Halt",
+          "type": "boolean"
         },
         "kclean_k": {
           "default": 2,
@@ -1230,6 +1370,45 @@
             }
           ],
           "default": null
+        },
+        "throughput": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Throughput"
+        },
+        "usd_cap": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usd Cap"
+        },
+        "waves_cap": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waves Cap"
         }
       },
       "required": [
@@ -1251,10 +1430,11 @@
       "type": "string"
     },
     "FleetTerminalReason": {
-      "description": "Why a :class:`FleetRun` reached :data:`FleetRunState.DONE`.\n\n- ``drained`` -- the ready frontier emptied, so no further wave can be\n  claimed (the drain-to-empty stop).\n- ``converged`` -- a convergence criterion (e.g. ``kclean`` -- K\n  consecutive rounds with zero progress) was met before the frontier\n  emptied, so the loop stopped early.",
+      "description": "Why a :class:`FleetRun` reached :data:`FleetRunState.DONE`.\n\n- ``drained`` -- the ready frontier emptied, so no further wave can be\n  claimed (the drain-to-empty stop).\n- ``converged`` -- a convergence criterion (e.g. ``kclean`` -- K\n  consecutive rounds with zero progress) was met before the frontier\n  emptied, so the loop stopped early.\n- ``budget`` -- a spend cap (EU / USD / waves) fired, so the loop stopped\n  claiming further waves. Under the graceful-drain default the in-flight\n  lanes finish before the run ends; under the armed hard-halt toggle the\n  in-flight lanes are killed at the cap (DL-4 budget HALT teeth).",
       "enum": [
         "drained",
-        "converged"
+        "converged",
+        "budget"
       ],
       "title": "FleetTerminalReason",
       "type": "string"
@@ -2565,7 +2745,7 @@
     },
     "Project": {
       "additionalProperties": false,
-      "description": "Repo-level project record.\n\nThe ``weekly_eu_target`` field is the operator-set weekly EU budget; when\nset, the TUI footer renders a ``weekly burn: <consumed_eu> / <target_eu>``\nrollup over the rolling 7-day window of :class:`ActualSummary.updated_at`.\nThe field is strictly optional (default ``None``) so adding it does not\nbump ``schema_version`` — projects without a target render no burn line.",
+      "description": "Repo-level project record.\n\nThe ``weekly_eu_target`` field is the operator-set weekly EU budget; when\nset, the TUI footer renders a ``weekly burn: <consumed_eu> / <target_eu>``\nrollup over the rolling 7-day window of :class:`ActualSummary.updated_at`.\nThe field is strictly optional (default ``None``) so adding it does not\nbump ``schema_version`` — projects without a target render no burn line.\n\n``track_ids`` is the Project end of the ``Project -> Track`` containment\nedge: each id names a :class:`Track` the project owns, completing the\n``Project -> Track -> Goal -> Outcome`` containment chain (the remaining\nedges live on :attr:`Track.goal_ids` and :attr:`Goal.outcome_ids`). The\nlist defaults empty so a project without any track loads unchanged and\nadding the field stays additive under ``extra=\"forbid\"``.",
       "properties": {
         "code": {
           "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
@@ -2610,6 +2790,13 @@
         "title": {
           "title": "Title",
           "type": "string"
+        },
+        "track_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Track Ids",
+          "type": "array"
         },
         "weekly_eu_target": {
           "anyOf": [
@@ -2752,6 +2939,17 @@
       ],
       "title": "ResponseClause",
       "type": "object"
+    },
+    "RiskTier": {
+      "description": "Auto-close risk band of a wave, keyed off its gate kinds.\n\nDistinct from :class:`~eawf.kernel.spec.common.OracleTier` (the\n``T1``-``T7`` falsifier-cost ladder): a wave's :class:`RiskTier` names how\nmuch HUMAN / jury judgement its close needs, so the fleet auto-drain loop\ncan decide whether the wave self-closes on a deterministic pass or must\nfork to a human / jury. The classifier\n(:func:`~eawf.workflow.verify.oracle.classify_risk_tier`) is a pure\nfunction of the wave's gate kinds.\n\nValues, in ascending judgement need:\n\n- :attr:`MECH` -- deterministic-only: every gate is a deterministic\n  falsifier (static / structural / contract / golden, the\n  ``T1``-``T5`` band). The wave self-closes on a deterministic pass with\n  no human in the loop.\n- :attr:`MED` -- auditor-gated: the wave carries a human-approval gate\n  (the ``T6`` band). It auto-closes only on a passing auditor verdict.\n- :attr:`HIGH` -- jury-gated: the wave carries a jury gate (the ``T7``\n  band) but is not a UI-band wave. It NEVER silently auto-closes while the\n  jury holds only advisory authority; it auto-closes via the jury path\n  once blocking authority is earned.\n- :attr:`UI` -- UI / visual-band: the wave's jury gate scores a UI /\n  visual surface (an svg / mockup / interaction artifact). Like\n  :attr:`HIGH` it forks until the jury earns blocking authority -- the\n  visual oracle is the least deterministic, so it is held to the same\n  earned-authority bar.",
+      "enum": [
+        "mech",
+        "med",
+        "high",
+        "ui"
+      ],
+      "title": "RiskTier",
+      "type": "string"
     },
     "RuntimeBaseline": {
       "additionalProperties": false,
@@ -3155,7 +3353,7 @@
     },
     "Track": {
       "additionalProperties": false,
-      "description": "Durable per-workstream vehicle under a Project.\n\nA Track is the lifecycle vehicle a Project hangs scoped Goals and\nOutcomes off (e.g. a quant-research strategy, an ML model, a\nreverse-engineering target). Its :attr:`kind` is a closed\n:class:`~eawf.kernel.state.enums.TrackKind` so an unknown kind fails as a\n:class:`pydantic.ValidationError` at the ingestion boundary rather than\nflowing downstream as a free string; the kind selects which\n:class:`~eawf.platform.profiles.models.TrackKindSpec` parametrizes the\ntrack's noun, status lifecycle, outcome template, and overview view.",
+      "description": "Durable per-workstream vehicle under a Project.\n\nA Track is the lifecycle vehicle a Project hangs scoped Goals and\nOutcomes off (e.g. a quant-research strategy, an ML model, a\nreverse-engineering target). Its :attr:`kind` is a closed\n:class:`~eawf.kernel.state.enums.TrackKind` so an unknown kind fails as a\n:class:`pydantic.ValidationError` at the ingestion boundary rather than\nflowing downstream as a free string; the kind selects which\n:class:`~eawf.platform.profiles.models.TrackKindSpec` parametrizes the\ntrack's noun, status lifecycle, outcome template, and overview view.\n\n:attr:`status` carries the Track lifecycle as a closed\n:class:`~eawf.kernel.state.enums.TrackStatus`, mirroring how\n:attr:`Phase.status` carries the phase lifecycle: a Track opens\n:attr:`~eawf.kernel.state.enums.TrackStatus.PLANNED`, advances to\n:attr:`~eawf.kernel.state.enums.TrackStatus.ACTIVE` when focused, and\nsettles on a terminal value. The lifecycle is dormant: no lifecycle\nstep (phase / iter / wave open or close) requires a Track, so the\n``track.add`` / ``track.switch`` mutator pair sets :attr:`status` and the\n:attr:`CurrentPointers.track_id` cursor without gating any other\ntransition. :attr:`goal_ids` is the Track end of the ``Track -> Goal``\ncontainment edge (the project end is :attr:`Project.track_ids`).",
       "properties": {
         "code": {
           "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",

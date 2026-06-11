@@ -51,6 +51,7 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     PluginInstallStatus,
     ProjectStatus,
+    RiskTier,
     ScopeKind,
     TrackKind,
     TrackStatus,
@@ -1137,6 +1138,85 @@ class FleetCounters(_StrictModel):
     spent_usd: float = Field(default=0.0, ge=0.0)
 
 
+class FleetForkReason(StrEnum):
+    """Why a fleet lane paused to a blocking fork rather than draining clean -- DL-6.
+
+    The closed set of reasons the loop pauses ONLY the offending lane (the
+    sibling lanes keep draining) and enqueues a typed :class:`FleetFork`:
+
+    - ``high_risk_close`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.UI`
+      (visual-band) lane reported a clean close, but the visual oracle is the
+      least deterministic, so the close is held for the operator rather than
+      auto-closed.
+    - ``uncalibrated_jury`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.HIGH`
+      (jury-gated) lane reported a clean close, but the jury that would gate it
+      holds only :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY`
+      authority, so its advisory verdict cannot auto-close the wave (the
+      LOAD-BEARING DL-5 safety invariant surfaces here as a fork).
+    - ``needs_user_split`` -- the lane's wave hit a needs-user split mid-run
+      (a clarification the executor could not resolve), so the lane pauses for
+      operator input.
+    """
+
+    HIGH_RISK_CLOSE = "high_risk_close"
+    UNCALIBRATED_JURY = "uncalibrated_jury"
+    NEEDS_USER_SPLIT = "needs_user_split"
+
+
+class FleetForkResolution(StrEnum):
+    """How an operator resolves a paused :class:`FleetFork` -- DL-6, the closed set.
+
+    - ``approve_close`` -- accept the held close: the wave resolves to
+      ``CLOSED`` and the fork is dequeued. The operator overrides the safety
+      hold.
+    - ``re_dispatch`` -- re-queue the wave onto the run frontier so the loop
+      claims + dispatches it again on a later round (a fresh lane / attempt).
+    - ``skip`` -- leave the wave PENDING and free the lane slot without
+      re-queuing -- the fork is dropped from the queue and the wave is left for
+      a later operator decision.
+    - ``abort_run`` -- halt the WHOLE run: every still-queued fork is abandoned
+      and the run transitions to ``HALTED``.
+    """
+
+    APPROVE_CLOSE = "approve_close"
+    RE_DISPATCH = "re_dispatch"
+    SKIP = "skip"
+    ABORT_RUN = "abort_run"
+
+
+class FleetFork(_StrictModel):
+    """One lane paused to a blocking fork, awaiting operator resolution -- DL-6.
+
+    When a lane forks for a blocking reason (a high-risk close, an
+    uncalibrated-jury advisory, or a needs-user split) the loop pauses ONLY
+    that lane -- it is removed from the in-flight :attr:`FleetRun.lanes` slot
+    and appended to the :attr:`FleetRun.forks` queue -- while the sibling lanes
+    keep draining. The operator later resolves each queued fork via one of the
+    closed :class:`FleetForkResolution` paths.
+
+    Attributes:
+        wave_id: ``W<NN>`` wave the paused lane was driving.
+        attempt: Dispatch attempt of the paused lane -- the second half of the
+            ``(wave_id, attempt)`` lane-registry key it was forked from.
+        risk_tier: The lane's resolved
+            :class:`~eawf.kernel.state.enums.RiskTier` at fork time, so the
+            cockpit renders the band badge on the queued fork.
+        reason: The :class:`FleetForkReason` that paused the lane.
+        evidence_ref: Repo-relative path / Eawf URN / external URL backing the
+            fork -- the close verdict, jury ballot, or needs-user question the
+            operator reads before resolving; ``None`` when the loop captured no
+            ref.
+        forked_at: When the lane was paused to this fork.
+    """
+
+    wave_id: WaveIdStr
+    attempt: Annotated[int, Field(ge=1)] = 1
+    risk_tier: RiskTier
+    reason: FleetForkReason
+    evidence_ref: Annotated[str, Field(min_length=1)] | None = None
+    forked_at: UtcDatetime
+
+
 class FleetRun(_StrictModel):
     """Daemon-owned state of the fleet auto-drain loop.
 
@@ -1153,6 +1233,12 @@ class FleetRun(_StrictModel):
         frontier: Ready ``W<NN>`` wave ids still queued to claim, in claim
             order. The loop pops from the head as lanes free.
         lanes: In-flight dispatch slots, keyed by wave id.
+        forks: Lanes paused to a blocking fork (high-risk close /
+            uncalibrated-jury advisory / needs-user split), awaiting operator
+            resolution (DL-6). Each paused lane is removed from ``lanes`` and
+            appended here while the sibling lanes keep draining. Additive
+            (defaults ``[]``) so a state written before the field existed
+            re-validates unchanged.
         counters: Running tallies for the run.
         convergence: Convergence mode -- ``drain`` (stop only when the
             frontier empties) or ``kclean`` (stop after K clean rounds).
@@ -1199,6 +1285,7 @@ class FleetRun(_StrictModel):
     concurrency: int = Field(default=1, ge=1)
     frontier: list[WaveIdStr] = Field(default_factory=list)
     lanes: dict[str, FleetLane] = Field(default_factory=dict)
+    forks: list[FleetFork] = Field(default_factory=list)
     counters: FleetCounters = Field(default_factory=FleetCounters)
     convergence: Literal["drain", "kclean"] = "drain"
     kclean_k: int = Field(default=2, ge=1)

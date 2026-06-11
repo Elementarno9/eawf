@@ -61,10 +61,14 @@ from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.state.enums import RiskTier, WaveStatus
 from eawf.kernel.state.models import (
     FleetCounters,
+    FleetFork,
+    FleetForkReason,
+    FleetForkResolution,
     FleetLane,
     FleetRun,
     FleetRunState,
     FleetTerminalReason,
+    State,
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.observability.eval.jury_validation import BlockAuthority
@@ -74,7 +78,8 @@ from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.cancel import CancelResult, cancel_process_group
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
-from eawf.workflow.lifecycle.wave import claim_wave, compute_runtime_delta
+from eawf.workflow.lifecycle.spec import WAVE_TRANSITIONS, validate_transition
+from eawf.workflow.lifecycle.wave import claim_wave, close_wave, compute_runtime_delta
 from eawf.workflow.verify.oracle import classify_risk_tier, risk_tier_auto_closes
 
 if TYPE_CHECKING:
@@ -89,7 +94,9 @@ logger = logging.getLogger(__name__)
 #:
 #: ``"closed"`` -- the lane's wave reached :data:`WaveStatus.CLOSED` (a clean
 #: round contribution). ``"forked"`` -- the lane failed or was re-planned, which
-#: resets the convergence streak.
+#: resets the convergence streak. ``"needs_user"`` -- the lane hit a needs-user
+#: split mid-run (a clarification the executor could not resolve), so it pauses
+#: to a blocking fork for operator input (DL-6) rather than failing outright.
 LaneOutcome = str
 
 class LaneDispatch(BaseModel):
@@ -202,6 +209,39 @@ def _default_lane_spend(ctx: MethodContext, wave_id: str) -> LaneSpend:
     return LaneSpend(eu=delta.elapsed_eu, usd=delta.actual_cost_usd)
 
 
+#: Read the evidence ref backing one lane's blocking fork (DL-6). Given the
+#: daemon context + the forking wave id + the resolved fork reason, returns the
+#: repo-relative path / Eawf URN / external URL the operator reads before
+#: resolving the fork, or ``None`` when no ref is available. The daemon wires
+#: :func:`_default_fork_evidence` (a synthetic per-wave fork URN); tests inject a
+#: deterministic fake to pin a specific ref.
+ForkEvidenceReader = Callable[["MethodContext", str, FleetForkReason], "str | None"]
+
+
+def _default_fork_evidence(
+    ctx: MethodContext, wave_id: str, reason: FleetForkReason
+) -> str | None:
+    """Derive the evidence ref backing a lane's blocking fork -- the live default.
+
+    The daemon-wired default: synthesize a stable Eawf-style fork URN from the
+    forking wave id + the fork reason so the queued :class:`FleetFork` always
+    carries a non-empty, PII-free ref the cockpit can render. A stateless
+    context yields the same synthetic ref (the URN needs no on-disk read), so an
+    instrumented and an uninstrumented run share one path.
+
+    Args:
+        ctx: Daemon method context (unused by the synthetic default -- present
+            so a live override can read ``state_path``).
+        wave_id: ``W<NN>`` wave whose forking lane to reference.
+        reason: The resolved :class:`FleetForkReason`.
+
+    Returns:
+        A synthetic ``urn:eawf:v1:fork:<wave>:<reason>`` ref.
+    """
+    del ctx
+    return f"urn:eawf:v1:fork:{wave_id}:{reason.value}"
+
+
 def budget_exhausted(run: FleetRun) -> bool:
     """Return whether any armed spend cap on *run* is reached -- pure, DL-4.
 
@@ -293,6 +333,21 @@ class DriveResult(BaseModel):
     run_state: FleetRunState
     terminal_reason: FleetTerminalReason | None
     counters: FleetCounters
+
+
+class ResolveForkParams(BaseModel):
+    """Params for the ``fleet.resolve_fork`` RPC -- DL-6.
+
+    Attributes:
+        wave_id: ``W<NN>`` wave whose queued fork to resolve.
+        attempt: 1-based dispatch attempt -- the second half of the fork key.
+        resolution: The operator's :class:`FleetForkResolution`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    wave_id: str
+    attempt: int = Field(default=1, ge=1)
+    resolution: FleetForkResolution
 
 
 def _persist_fleet_run(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
@@ -515,13 +570,57 @@ def gate_lane_outcome(
     Returns:
         The gated :data:`LaneOutcome` -- the input outcome, downgraded to
         ``"forked"`` only when a high / ui close lacks earned blocking
-        authority.
+        authority. A ``"needs_user"`` outcome passes through unchanged (it is a
+        DL-6 blocking-fork pause, not a clean close to gate).
     """
     if outcome != "closed":
         return outcome
     if risk_tier_auto_closes(risk_tier, block_authority=block_authority):
         return "closed"
     return "forked"
+
+
+def classify_fork_reason(
+    watched: LaneOutcome,
+    risk_tier: RiskTier,
+    *,
+    block_authority: BlockAuthority,
+) -> FleetForkReason | None:
+    """Resolve why a finished lane pauses to a BLOCKING fork, or ``None`` -- DL-6, pure.
+
+    A lane pauses to a blocking fork (removed from its slot, enqueued as a typed
+    :class:`FleetFork`, sibling lanes keep draining) only on a reason the
+    operator must resolve -- NOT on a genuine watcher failure, which is terminal:
+
+    - a ``"needs_user"`` watch (any tier) -> :attr:`FleetForkReason.NEEDS_USER_SPLIT`;
+    - a clean ``"closed"`` watch the DL-5 gate would NOT auto-close, split by the
+      held lane's band: a :attr:`RiskTier.HIGH` (jury-gated) lane forks because
+      the jury has not earned blocking authority ->
+      :attr:`FleetForkReason.UNCALIBRATED_JURY`; a :attr:`RiskTier.UI`
+      (visual-band) lane forks because the visual close is the least
+      deterministic, high-risk close -> :attr:`FleetForkReason.HIGH_RISK_CLOSE`;
+    - every other outcome (a clean auto-closing close, or a genuine
+      ``"forked"`` failure) -> ``None`` (no operator pause).
+
+    Args:
+        watched: The watcher's raw terminal :data:`LaneOutcome` (``"closed"`` /
+            ``"forked"`` / ``"needs_user"``).
+        risk_tier: The lane's resolved :class:`RiskTier`.
+        block_authority: The jury's earned authority for this close.
+
+    Returns:
+        The :class:`FleetForkReason` to enqueue, or ``None`` when the lane does
+        not pause to a blocking fork.
+    """
+    if watched == "needs_user":
+        return FleetForkReason.NEEDS_USER_SPLIT
+    if watched != "closed":
+        return None
+    if risk_tier_auto_closes(risk_tier, block_authority=block_authority):
+        return None
+    if risk_tier is RiskTier.UI:
+        return FleetForkReason.HIGH_RISK_CLOSE
+    return FleetForkReason.UNCALIBRATED_JURY
 
 
 @dataclass
@@ -549,6 +648,9 @@ class _Loop:
         spend: The injected per-lane spend reader. As each lane finishes its
             EU + USD spend is accumulated into the run's spend counters, so the
             DL-4 budget cap tests against live figures.
+        fork_evidence: The injected fork-evidence reader. When a lane pauses to
+            a DL-6 blocking fork the reader supplies the evidence ref the queued
+            :class:`FleetFork` carries.
     """
 
     ctx: MethodContext
@@ -558,6 +660,7 @@ class _Loop:
     block_authority: BlockAuthority = BlockAuthority.ADVISORY
     risk_tiers: dict[str, RiskTier] = field(default_factory=dict)
     spend: LaneSpendReader = _default_lane_spend
+    fork_evidence: ForkEvidenceReader = _default_fork_evidence
 
     def _persist(self) -> None:
         """Persist the current run snapshot through the daemon canonical writer."""
@@ -673,24 +776,52 @@ class _Loop:
         ``blocked`` instead, so the summary distinguishes a real failure from a
         safety hold.
 
+        DL-6: when a lane pauses to a BLOCKING fork -- a high-risk close, an
+        uncalibrated-jury advisory (the downgraded clean close), or a
+        needs-user split -- it is enqueued as a typed :class:`FleetFork` on
+        :attr:`FleetRun.forks` (the lane is already removed from ``lanes``, so
+        ONLY that lane pauses while the sibling lanes the drain still walks keep
+        draining). A genuine watcher fork is NOT enqueued -- it is a terminal
+        failure, not an operator pause.
+
         Args:
             wave_id: ``W<NN>`` wave whose in-flight lane to finish.
 
         Returns:
-            The gated :data:`LaneOutcome` (``"closed"`` or ``"forked"``).
+            The gated :data:`LaneOutcome` (``"closed"``, ``"forked"``, or
+            ``"needs_user"``). A needs-user lane reports ``"forked"`` to the
+            convergence streak so the round is not counted clean.
         """
-        watched = self.watch(self.ctx, self.run.lanes[wave_id])
+        lane = self.run.lanes[wave_id]
+        attempt = lane.attempt
+        watched = self.watch(self.ctx, lane)
         risk_tier = self.risk_tiers.pop(wave_id, RiskTier.MECH)
         outcome = gate_lane_outcome(watched, risk_tier, block_authority=self.block_authority)
         del self.run.lanes[wave_id]
-        if outcome == "forked":
+        fork_reason = classify_fork_reason(
+            watched, risk_tier, block_authority=self.block_authority
+        )
+        if fork_reason is not None:
+            # A BLOCKING fork: pause ONLY this lane to the fork queue (the lane
+            # is already deregistered above) and leave the sibling lanes
+            # draining. The downgraded-close hold + the needs-user split both
+            # land on the ``blocked`` safety tally.
             self.run.counters.forked += 1
-            # Split the fork across the FA7 summary tallies: a genuine watcher
-            # fork is a failure, a downgraded clean close is a safety block.
-            if watched == "forked":
-                self.run.counters.failed += 1
-            else:
-                self.run.counters.blocked += 1
+            self.run.counters.blocked += 1
+            self.run.forks.append(
+                FleetFork(
+                    wave_id=wave_id,
+                    attempt=attempt,
+                    risk_tier=risk_tier,
+                    reason=fork_reason,
+                    evidence_ref=self.fork_evidence(self.ctx, wave_id, fork_reason),
+                    forked_at=datetime.now(UTC),
+                )
+            )
+        elif outcome == "forked":
+            # A genuine watcher fork: a terminal failure, not an operator pause.
+            self.run.counters.forked += 1
+            self.run.counters.failed += 1
         else:
             self.run.counters.closed += 1
         lane_spend = self.spend(self.ctx, wave_id)
@@ -698,9 +829,13 @@ class _Loop:
         self.run.counters.spent_usd += lane_spend.usd
         logger.info(
             f"_finish_lane wave={wave_id} watched={watched} outcome={outcome} "
-            f"risk_tier={risk_tier.value} eu={lane_spend.eu} usd={lane_spend.usd}"
+            f"risk_tier={risk_tier.value} "
+            f"fork_reason={fork_reason.value if fork_reason else None} "
+            f"eu={lane_spend.eu} usd={lane_spend.usd}"
         )
-        return outcome
+        # A needs-user pause must reset the convergence streak too: report it as
+        # a fork to the drain loop's clean-round accounting.
+        return "forked" if fork_reason is not None else outcome
 
     def _finish_run(self, reason: FleetTerminalReason) -> None:
         """Stamp the terminal run-summary fields at the DONE transition -- DL-10.
@@ -849,6 +984,7 @@ def arm_drive(
     spawn: LaneSpawner | None = None,
     watch: LaneWatcher | None = None,
     spend: LaneSpendReader | None = None,
+    fork_evidence: ForkEvidenceReader | None = None,
     block_authority: BlockAuthority = BlockAuthority.ADVISORY,
 ) -> FleetRun:
     """Arm + run the fleet auto-drain loop over *frontier*.
@@ -890,6 +1026,9 @@ def arm_drive(
         spend: Optional :class:`LaneSpendReader` override (tests inject a fake);
             defaults to the live runtime-delta reader so the budget cap tests
             against real EU / USD figures.
+        fork_evidence: Optional :class:`ForkEvidenceReader` override (tests pin
+            a specific ref); defaults to the synthetic per-wave fork URN so a
+            DL-6 blocking fork always carries a non-empty evidence ref.
         block_authority: The jury's earned authority for this run -- gates
             whether a high / ui lane may auto-close or must fork. Defaults to
             :attr:`BlockAuthority.ADVISORY` (an uncalibrated jury), so a
@@ -937,6 +1076,7 @@ def arm_drive(
         watch=watch if watch is not None else _default_watcher,
         block_authority=block_authority,
         spend=spend if spend is not None else _default_lane_spend,
+        fork_evidence=fork_evidence if fork_evidence is not None else _default_fork_evidence,
     )
     terminal = loop.run_to_terminal()
     logger.info(
@@ -1223,6 +1363,170 @@ def _deregister_lane(ctx: MethodContext, *, wave_id: str, attempt: int) -> None:
         state.updated_at = datetime.now(UTC)
         atomic_write_json_locked(state_path, state.model_dump(mode="json"))
     logger.info(f"_deregister_lane wave={wave_id} attempt={attempt}")
+
+
+def resolve_fork_in_queue(
+    run: FleetRun | None, *, wave_id: str, attempt: int
+) -> FleetFork | None:
+    """Resolve the queued :class:`FleetFork` for ``(wave_id, attempt)`` -- pure, DL-6.
+
+    The named lookup :func:`resolve_fork` shares with its tests: the
+    ``(wave_id, attempt)`` pair keys a paused fork on :attr:`FleetRun.forks`, so
+    a re-dispatch of the same wave under a fresh attempt queues a distinct fork
+    and only the matching attempt resolves. Returns the first matching fork (the
+    queue holds at most one open fork per ``(wave_id, attempt)``), or ``None``
+    when no run is armed or no fork matches.
+
+    Args:
+        run: The armed :class:`FleetRun` (or ``None`` when no run is armed).
+        wave_id: ``W<NN>`` wave whose queued fork to resolve.
+        attempt: 1-based dispatch attempt -- the second half of the fork key.
+
+    Returns:
+        The matching :class:`FleetFork`, or ``None`` when none matches.
+    """
+    if run is None:
+        return None
+    for fork in run.forks:
+        if fork.wave_id == wave_id and fork.attempt == attempt:
+            return fork
+    return None
+
+
+def _reset_wave_pending(state: State, wave_id: str) -> None:
+    """Flip a claimed / in-progress wave back to PENDING through the legal edge.
+
+    The skip / re-dispatch fork resolutions free the held wave back to its
+    plannable PENDING status so the loop (re-dispatch) or a later operator
+    decision (skip) can re-claim it. The flip is guarded by the wave status
+    machine -- a wave already terminal (CLOSED / FAILED) has no legal edge to
+    PENDING and raises rather than silently regressing a closed wave.
+
+    Args:
+        state: State to mutate in place.
+        wave_id: ``W<NN>`` wave to reset.
+
+    Raises:
+        LifecycleError: When *wave_id* is unknown, or its current status has no
+            legal edge to PENDING.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        raise LifecycleError(f"unknown wave: {wave_id!r}")
+    validate_transition(
+        WAVE_TRANSITIONS,
+        wave.status,
+        WaveStatus.PENDING,
+        illegal_message=(
+            f"wave {wave_id!r} is terminal (status={wave.status.value!r}); "
+            f"cannot reset to pending"
+        ),
+    )
+    wave.status = WaveStatus.PENDING
+    wave.claim_session_id = None
+    if wave_id in state.current.active_wave_ids:
+        state.current.active_wave_ids.remove(wave_id)
+
+
+class FleetForkResolveResult(BaseModel):
+    """Outcome of :func:`resolve_fork` -- the run state after a fork resolution.
+
+    Attributes:
+        resolution: The :class:`FleetForkResolution` that was applied.
+        run_state: The :class:`FleetRunState` after the resolution (``HALTED``
+            on an abort, else the unchanged run state).
+        forks_open: The count of forks still queued after the resolution.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    resolution: FleetForkResolution
+    run_state: FleetRunState
+    forks_open: int
+
+
+def resolve_fork(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    attempt: int,
+    resolution: FleetForkResolution,
+) -> FleetForkResolveResult:
+    """Resolve a paused :class:`FleetFork` via one of the four DL-6 paths.
+
+    Reads the armed :class:`FleetRun` off ``state.json``, resolves the queued
+    fork for ``(wave_id, attempt)`` via :func:`resolve_fork_in_queue`, applies
+    the operator's *resolution*, and persists the mutated run through the daemon
+    canonical state writer (this function never opens ``state.json`` directly).
+    The four resolutions:
+
+    - :attr:`FleetForkResolution.APPROVE_CLOSE` -- close the held wave
+      (:func:`close_wave`), dequeue the fork, and bump ``forks_resolved``.
+    - :attr:`FleetForkResolution.RE_DISPATCH` -- reset the wave to PENDING and
+      re-queue it onto the run frontier so the loop re-claims it on a later
+      round; dequeue the fork and bump ``forks_resolved``.
+    - :attr:`FleetForkResolution.SKIP` -- reset the wave to PENDING (freeing the
+      lane) WITHOUT re-queuing it, and dequeue the fork -- the wave is left for
+      a later operator decision.
+    - :attr:`FleetForkResolution.ABORT_RUN` -- abandon EVERY queued fork and
+      transition the run to ``HALTED``.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` (the fork queue +
+            the resolution write target).
+        wave_id: ``W<NN>`` wave whose queued fork to resolve.
+        attempt: 1-based dispatch attempt -- the second half of the fork key.
+        resolution: The operator's :class:`FleetForkResolution`.
+
+    Returns:
+        A :class:`FleetForkResolveResult` carrying the applied resolution, the
+        run state after it, and the count of forks still queued.
+
+    Raises:
+        LifecycleError: When ``ctx.state_path`` is unset, no fleet run is armed,
+            no fork matches ``(wave_id, attempt)``, or *resolution* is not a
+            recognized :class:`FleetForkResolution`.
+    """
+    if ctx.state_path is None:
+        raise LifecycleError("no fleet run armed: state_path not configured")
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        run = state.fleet_run
+        if run is None:
+            raise LifecycleError("no fleet run armed")
+        fork = resolve_fork_in_queue(run, wave_id=wave_id, attempt=attempt)
+        if fork is None:
+            raise LifecycleError(f"no fork queued for wave: {wave_id!r} attempt={attempt}")
+        if resolution is FleetForkResolution.APPROVE_CLOSE:
+            close_wave(state, wave_id=wave_id, outcome="fork approve-close")
+            run.forks.remove(fork)
+            run.counters.forks_resolved += 1
+        elif resolution is FleetForkResolution.RE_DISPATCH:
+            _reset_wave_pending(state, wave_id)
+            if wave_id not in run.frontier:
+                run.frontier.append(wave_id)
+            run.forks.remove(fork)
+            run.counters.forks_resolved += 1
+        elif resolution is FleetForkResolution.SKIP:
+            _reset_wave_pending(state, wave_id)
+            run.forks.remove(fork)
+        elif resolution is FleetForkResolution.ABORT_RUN:
+            run.forks.clear()
+            run.run_state = FleetRunState.HALTED
+        else:
+            raise LifecycleError(f"unknown fork resolution: {resolution!r}")
+        state.fleet_run = run
+        state.updated_at = datetime.now(UTC)
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    logger.info(
+        f"resolve_fork wave={wave_id} attempt={attempt} resolution={resolution.value} "
+        f"run_state={run.run_state.value} forks_open={len(run.forks)}"
+    )
+    return FleetForkResolveResult(
+        resolution=resolution,
+        run_state=run.run_state,
+        forks_open=len(run.forks),
+    )
 
 
 #: Probe one lane's process group for liveness (DL-8 reattach). Given a
@@ -1572,5 +1876,42 @@ async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     logger.info(
         f"drive run_state={run.run_state.value} "
         f"reason={run.terminal_reason.value if run.terminal_reason else None}"
+    )
+    return result.model_dump(mode="json")
+
+
+@register("fleet.resolve_fork")
+async def resolve_fork_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Resolve a paused fleet fork via one of the four DL-6 resolutions.
+
+    The ``fleet.resolve_fork`` RPC: validates params per
+    :class:`ResolveForkParams`, applies the resolution through
+    :func:`resolve_fork` (close the wave / re-queue it / skip it / abort the
+    run), and returns the run state after the resolution. The mutation persists
+    only through the daemon canonical state writer.
+
+    Args:
+        ctx: Daemon method context. Needs ``state_path`` to read the fork queue
+            and persist the resolution.
+        params: JSON-RPC params per :class:`ResolveForkParams`.
+
+    Returns:
+        Dict matching :class:`FleetForkResolveResult`.
+
+    Raises:
+        ValueError: When *params* fails :class:`ResolveForkParams` validation.
+        LifecycleError: When no fleet run is armed or no fork matches the
+            ``(wave_id, attempt)`` pair.
+    """
+    args = ResolveForkParams.model_validate(params)
+    result = resolve_fork(
+        ctx,
+        wave_id=args.wave_id,
+        attempt=args.attempt,
+        resolution=args.resolution,
+    )
+    logger.info(
+        f"resolve_fork_rpc wave={args.wave_id} attempt={args.attempt} "
+        f"resolution={args.resolution.value} run_state={result.run_state.value}"
     )
     return result.model_dump(mode="json")
