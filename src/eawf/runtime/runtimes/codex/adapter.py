@@ -24,9 +24,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
 import sys
+import threading
 import uuid
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -44,6 +46,12 @@ from eawf.runtime.runtimes.adapter import (
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
+from eawf.runtime.sandbox.egress_proxy import (
+    EnforcementSink,
+    SandboxError,
+    emit_enforcement,
+    make_enforcement_event,
+)
 from eawf.runtime.sandbox.env_scrub import build_child_env
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
 from eawf.runtime.sandbox.policy import invert_deny_to_allow
@@ -61,6 +69,92 @@ _JAIL_WRAPPER_BINARY: dict[str, str] = {
     "darwin": "sandbox-exec",
     "linux": "bwrap",
 }
+
+#: Ceiling on live agent spawns in flight at once. Mirrors the claude lane's
+#: floor so the cross-vendor fleet shares one cap: a spawn past the cap fails
+#: fast with :class:`ConcurrentSpawnCapError` rather than queueing. The counter
+#: is codex-local (each adapter holds its own in-flight count) because this
+#: wave edits only the codex module and must not touch the shared adapter; the
+#: cap VALUE matches claude so the parity is honest.
+_CONCURRENT_SPAWN_CAP: int = 16
+
+#: Live in-flight spawn counter + its lock. Module-global because the cap is
+#: per-process (the daemon hosts every spawn); guarded by a lock so the
+#: increment / cap-check is atomic under the asyncio + worker-thread mix the
+#: daemon runs spawns on.
+_spawn_inflight: int = 0
+_spawn_lock = threading.Lock()
+
+
+class ConcurrentSpawnCapError(SandboxError):
+    """Raised when a codex spawn would exceed the concurrent-spawn cap.
+
+    Mirrors :class:`eawf.runtime.runtimes.claude.adapter.ConcurrentSpawnCapError`
+    so the cross-vendor floor refuses to fork a new jailed child once
+    :data:`_CONCURRENT_SPAWN_CAP` are already in flight; a runaway dispatch
+    loop fails fast at the spawn boundary rather than exhausting process /
+    socket resources.
+    """
+
+
+def _acquire_spawn_slot() -> None:
+    """Reserve one in-flight spawn slot or fail fast at the cap.
+
+    Raises:
+        ConcurrentSpawnCapError: When :data:`_CONCURRENT_SPAWN_CAP` spawns
+            are already in flight.
+    """
+    global _spawn_inflight
+    with _spawn_lock:
+        if _spawn_inflight >= _CONCURRENT_SPAWN_CAP:
+            raise ConcurrentSpawnCapError(
+                f"concurrent spawn cap reached: inflight={_spawn_inflight} "
+                f"cap={_CONCURRENT_SPAWN_CAP}"
+            )
+        _spawn_inflight += 1
+
+
+def _release_spawn_slot() -> None:
+    """Release one in-flight spawn slot (never drops below zero)."""
+    global _spawn_inflight
+    with _spawn_lock:
+        _spawn_inflight = max(_spawn_inflight - 1, 0)
+
+
+def _record_env_scrub(
+    child_env: dict[str, str],
+    *,
+    session: str,
+    sink: EnforcementSink | None,
+) -> None:
+    """Record the env-scrub decision for a built child env.
+
+    Mirrors the claude lane: compares the scrubbed child env against the
+    parent ``os.environ`` and records an ``env-scrub`` enforcement event
+    naming how many credential-bearing variables the allowlist dropped. A
+    scrub that dropped nothing is an ``info`` row (the floor still ran); a
+    scrub that dropped one or more vars is a ``block`` row (creds were
+    withheld from the child).
+
+    Args:
+        child_env: The scrubbed child env the spawn will use.
+        session: The spawning session id stamped on the event.
+        sink: The enforcement sink the event is persisted through.
+    """
+    # Count parent keys WITHHELD from the child (present in the parent env,
+    # absent from the scrubbed child). A raw length diff is wrong because the
+    # child reseeds floor keys (pinned PATH / defaulted LANG) the parent may
+    # lack; the withheld count is the true measure of what the allowlist drops.
+    dropped = sum(1 for key in os.environ if key not in child_env)
+    emit_enforcement(
+        sink,
+        make_enforcement_event(
+            session=session,
+            kind="env-scrub",
+            target=f"dropped={dropped}",
+            severity="block" if dropped > 0 else "info",
+        ),
+    )
 
 
 def _jail_wrapper_binary(platform: str) -> str | None:
@@ -95,7 +189,14 @@ def _repo_root_for(path: Path) -> Path | None:
         return None
 
 
-def _maybe_jail_argv(argv: list[str], *, runtime: str, cwd: str | None) -> list[str]:
+def _maybe_jail_argv(
+    argv: list[str],
+    *,
+    runtime: str,
+    cwd: str | None,
+    session: str = "",
+    sink: EnforcementSink | None = None,
+) -> list[str]:
     """Prefix *argv* with the OS jail when the host supports it.
 
     The jail is applied only when (a) the platform has an FS-jail wrapper
@@ -116,6 +217,10 @@ def _maybe_jail_argv(argv: list[str], *, runtime: str, cwd: str | None) -> list[
             repo root containing the process cwd; when the process cwd is
             not inside a discoverable root the spawn runs unjailed with a
             warning rather than confining to a bogus path.
+        session: The spawning session id stamped on a ``cwd-guard``
+            enforcement event when the cwd-outside-repo fallback fires.
+        sink: The enforcement sink a ``cwd-guard`` event is persisted
+            through; ``None`` only logs.
 
     Returns:
         Either ``jail_command(argv, ...)`` (jailed) or *argv* unchanged
@@ -141,6 +246,18 @@ def _maybe_jail_argv(argv: list[str], *, runtime: str, cwd: str | None) -> list[
         logger.warning(
             f"spawn_session jail=unavailable runtime={runtime!r} cwd={cwd_path!s} "
             "reason=cwd-outside-repo-root"
+        )
+        # A cwd that escapes (or cannot resolve) the repo root is a cwd-guard
+        # refusal: the jail confinement is dropped, so record the
+        # degraded-but-continued decision on the denial timeline.
+        emit_enforcement(
+            sink,
+            make_enforcement_event(
+                session=session,
+                kind="cwd-guard",
+                target=str(cwd_path),
+                severity="warn",
+            ),
         )
         return argv
 
@@ -517,6 +634,9 @@ class CodexAdapter:
         denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
+        on_pgid: Callable[[int], None] | None = None,
+        session: str = "",
+        enforcement_sink: EnforcementSink | None = None,
     ) -> SpawnResult:
         """Spawn a live ``codex exec`` subprocess and collect its result.
 
@@ -540,6 +660,14 @@ class CodexAdapter:
         supports it; a host without the wrapper binary runs unjailed with a
         warning rather than failing.
 
+        The sandbox-enforcement seam is at parity with the claude lane: the
+        env-scrub drop, the per-wave argv deny, and the cwd-guard fallback
+        are each recorded to *enforcement_sink* (when wired) so a
+        denial-timeline surface reads what the floor refused for *session*.
+        The floor also caps the number of live spawns in flight at once
+        (:data:`_CONCURRENT_SPAWN_CAP`): a spawn past the cap fails fast with
+        :class:`ConcurrentSpawnCapError` before any subprocess is forked.
+
         The model reasoning-effort level is NOT a parameter on the
         vendor-neutral seam; a caller that needs it passes
         ``-c model_reasoning_effort=<level>`` through *extra_args* (the
@@ -562,15 +690,18 @@ class CodexAdapter:
         default-allow codex. The overrides are spliced ahead of *extra_args*
         so the verbatim escape hatch stays at the argv tail, and the FS jail
         still confines the child on top. An empty deny-list adds no override
-        (byte-equivalent to a deny-free spawn).
-
-        This wave builds the spawn mechanism + the parse only. Metering,
-        cancellation, and the schema-forced re-ask loop are separate waves
-        and are deliberately NOT wired here.
+        (byte-equivalent to a deny-free spawn). A non-empty deny is recorded
+        as an ``argv-deny`` enforcement event (``block`` severity) so the
+        denial is auditable on the timeline -- the same shape the claude lane
+        records for its ``--disallowedTools`` deny.
 
         The optional *on_spawn* callback fires with the child PID the moment
         the subprocess exists -- before output is awaited -- so a cancel
         path can register the pid and halt a still-running call mid-flight.
+        The optional *on_pgid* callback fires with the child's process-GROUP
+        id (resolved via :func:`os.getpgid` right after spawn) so the
+        budget-HALT interlock can ``os.killpg`` the whole group when the wave
+        runs over its hard token cap -- at parity with the claude lane.
 
         Args:
             prompt: Rendered prompt passed to ``codex exec``.
@@ -591,11 +722,21 @@ class CodexAdapter:
                 error is raised.
             on_spawn: Optional callback invoked with the child PID right
                 after spawn (before output is awaited).
+            on_pgid: Optional callback invoked with the child's process-GROUP
+                id right after spawn so the budget-HALT interlock can reap
+                the whole group. Resolution failures (the child raced to
+                exit) are swallowed -- the cancel path falls back to the pid.
+            session: The spawning session id stamped on every enforcement
+                event this spawn records.
+            enforcement_sink: The sink each enforcement decision is persisted
+                through; ``None`` only logs.
 
         Returns:
             The validated :class:`SpawnResult` for the completed call.
 
         Raises:
+            ConcurrentSpawnCapError: When the concurrent-spawn cap is already
+                saturated (raised before any subprocess is forked).
             RuntimeSpawnError: the spawn timed out, exited non-zero, or
                 returned an unparseable / error event stream.
         """
@@ -614,6 +755,18 @@ class CodexAdapter:
                 f"spawn_session runtime={self.id!r} denied_tools={len(denied_tools)} "
                 f"mapped=inverted-allowlist allowed={len(invert_deny_to_allow(list(denied_tools)))}"
             )
+            # Record the deny on the denial timeline at parity with the claude
+            # lane: the target names the sorted denied tools so the timeline
+            # surface reads which tools were refused for the session.
+            emit_enforcement(
+                enforcement_sink,
+                make_enforcement_event(
+                    session=session,
+                    kind="argv-deny",
+                    target=" ".join(sorted(denied_tools)),
+                    severity="block",
+                ),
+            )
         argv = [
             self.cli_binary,
             "exec",
@@ -628,43 +781,68 @@ class CodexAdapter:
         # Prefix the OS filesystem jail (bubblewrap / seatbelt) when the
         # host supports it. ``start_new_session=True`` lands on the jail
         # wrapper (the group leader) so a pgid-reap still tears down the
-        # whole tree; an absent wrapper runs unjailed with a warning.
-        argv = _maybe_jail_argv(argv, runtime=self.id, cwd=cwd)
-        started_at = datetime.now(UTC)
-        proc = await asyncio.create_subprocess_exec(
-            *argv,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,
-            cwd=cwd,
-            env=build_child_env(self.id),
+        # whole tree; an absent wrapper runs unjailed with a warning. The
+        # cwd-guard fallback records a degraded-but-continued decision.
+        argv = _maybe_jail_argv(
+            argv, runtime=self.id, cwd=cwd, session=session, sink=enforcement_sink
         )
-        pid = proc.pid
-        logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")
-        if on_spawn is not None:
-            on_spawn(pid)
+        # Build the scrubbed child env + record the env-scrub decision (which
+        # credential-bearing families were dropped) onto the denial timeline.
+        child_env = build_child_env(self.id)
+        _record_env_scrub(child_env, session=session, sink=enforcement_sink)
+
+        # The concurrent-spawn cap is the LAST gate before the fork so the slot
+        # is held only for the real subprocess lifetime; it is released in the
+        # ``finally`` after the child is reaped / parsed.
+        _acquire_spawn_slot()
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except TimeoutError:
-            proc.kill()
-            await proc.wait()
-            # 124 is the conventional timeout exit code parse_error maps to
-            # RUNTIME_TIMEOUT, so a classifier routes the V5 switch ladder.
-            raise RuntimeSpawnError(
-                f"codex spawn timed out: timeout={timeout}s pid={pid}",
-                exit_status=124,
-            ) from None
-        ended_at = datetime.now(UTC)
-        return _parse_codex_result(
-            runtime=self.id,
-            model=model,
-            stdout=stdout or b"",
-            stderr=stderr or b"",
-            exit_status=proc.returncode if proc.returncode is not None else -1,
-            subprocess_pid=pid,
-            started_at=started_at,
-            ended_at=ended_at,
-        )
+            started_at = datetime.now(UTC)
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                start_new_session=True,
+                cwd=cwd,
+                env=child_env,
+            )
+            pid = proc.pid
+            logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")
+            if on_spawn is not None:
+                on_spawn(pid)
+            if on_pgid is not None:
+                # The child is its own group leader (start_new_session=True),
+                # so its pgid equals its pid; resolve via getpgid so a future
+                # double-fork still yields the leader. A child that already
+                # exited makes getpgid raise -- the cancel path then falls back
+                # to the pid, so the lookup failure is non-fatal.
+                try:
+                    on_pgid(os.getpgid(pid))
+                except ProcessLookupError:
+                    logger.warning(f"spawn_session pgid-unresolved pid={pid}")
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except TimeoutError:
+                proc.kill()
+                await proc.wait()
+                # 124 is the conventional timeout exit code parse_error maps to
+                # RUNTIME_TIMEOUT, so a classifier routes the V5 switch ladder.
+                raise RuntimeSpawnError(
+                    f"codex spawn timed out: timeout={timeout}s pid={pid}",
+                    exit_status=124,
+                ) from None
+            ended_at = datetime.now(UTC)
+            return _parse_codex_result(
+                runtime=self.id,
+                model=model,
+                stdout=stdout or b"",
+                stderr=stderr or b"",
+                exit_status=proc.returncode if proc.returncode is not None else -1,
+                subprocess_pid=pid,
+                started_at=started_at,
+                ended_at=ended_at,
+            )
+        finally:
+            _release_spawn_slot()
 
     async def continue_session(
         self,
@@ -729,4 +907,4 @@ class CodexAdapter:
 
 _ADAPTER_CHECK: RuntimeAdapter = CodexAdapter()
 
-__all__ = ["CodexAdapter"]
+__all__ = ["CodexAdapter", "ConcurrentSpawnCapError"]

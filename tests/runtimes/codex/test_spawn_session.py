@@ -129,7 +129,11 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
         return proc
 
     monkeypatch.setattr(codex_adapter.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(codex_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
+    monkeypatch.setattr(
+        codex_adapter,
+        "_maybe_jail_argv",
+        lambda argv, *, runtime, cwd, session="", sink=None: argv,
+    )
     return calls
 
 
@@ -584,7 +588,11 @@ def test_spawn_session_scrubs_child_env(monkeypatch: pytest.MonkeyPatch) -> None
         return proc
 
     monkeypatch.setattr(codex_adapter.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(codex_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
+    monkeypatch.setattr(
+        codex_adapter,
+        "_maybe_jail_argv",
+        lambda argv, *, runtime, cwd, session="", sink=None: argv,
+    )
     # Plant a sensitive var in the parent env; the scrubbed child must not carry it.
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "should-not-leak")
 
@@ -612,7 +620,14 @@ def test_spawn_session_jail_wrap_applied_when_supported(
 
     seen_by_jail: list[list[str]] = []
 
-    def _recording_jail(argv: list[str], *, runtime: str, cwd: str | None) -> list[str]:
+    def _recording_jail(
+        argv: list[str],
+        *,
+        runtime: str,
+        cwd: str | None,
+        session: str = "",
+        sink: object | None = None,
+    ) -> list[str]:
         seen_by_jail.append(list(argv))
         return ["JAIL", *argv]
 

@@ -153,7 +153,11 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
         return proc
 
     monkeypatch.setattr(opencode_adapter.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(opencode_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
+    monkeypatch.setattr(
+        opencode_adapter,
+        "_maybe_jail_argv",
+        lambda argv, *, runtime, cwd, session="", sink=None: argv,
+    )
     monkeypatch.setattr(opencode_adapter, "build_child_env", lambda *_a, **_k: {"PATH": "/usr/bin"})
     return calls
 
@@ -423,7 +427,11 @@ def test_spawn_session_scrubs_child_env(monkeypatch: pytest.MonkeyPatch) -> None
         return proc
 
     monkeypatch.setattr(opencode_adapter.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(opencode_adapter, "_maybe_jail_argv", lambda argv, *, runtime, cwd: argv)
+    monkeypatch.setattr(
+        opencode_adapter,
+        "_maybe_jail_argv",
+        lambda argv, *, runtime, cwd, session="", sink=None: argv,
+    )
     monkeypatch.setattr(
         opencode_adapter,
         "build_child_env",
@@ -494,7 +502,14 @@ def test_spawn_session_jail_wraps_inner_argv(monkeypatch: pytest.MonkeyPatch) ->
 
     seen_by_jail: list[list[str]] = []
 
-    def _recording_jail(argv: list[str], *, runtime: str, cwd: str | None) -> list[str]:
+    def _recording_jail(
+        argv: list[str],
+        *,
+        runtime: str,
+        cwd: str | None,
+        session: str = "",
+        sink: object | None = None,
+    ) -> list[str]:
         seen_by_jail.append(list(argv))
         return ["JAIL", *argv]
 
