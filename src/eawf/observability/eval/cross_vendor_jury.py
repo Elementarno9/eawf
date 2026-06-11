@@ -60,13 +60,13 @@ for existing callers.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from eawf.kernel.state.enums import AgentReportVerdict
+from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole
 from eawf.kernel.state.models import State, Wave
 from eawf.observability.eval.jury import (
     JurorBallot,
@@ -74,6 +74,7 @@ from eawf.observability.eval.jury import (
     JuryAggregateOutcome,
     aggregate_jury,
 )
+from eawf.observability.eval.reputation import RoleReliability
 from eawf.workflow.dispatch.llm_assist import DEFAULT_MAX_ATTEMPTS, SpawnFn
 from eawf.workflow.dispatch.verdict import produce_wave_verdict
 
@@ -99,6 +100,18 @@ JURY_QUORUM: int = 2
 #: model + cwd captured in the closure); a test binds a recording stub. The
 #: convener calls it once per juror so each juror spawns on its OWN vendor.
 type SpawnFactory = Callable[[str], SpawnFn]
+
+#: The role every cross-vendor juror is convened under. Each juror runs through
+#: :func:`eawf.workflow.dispatch.verdict.produce_wave_verdict`, which spawns a
+#: fresh-context AUDITOR session, so a juror's ballot is matched to its reputation
+#: row on the ``(AUDITOR, runtime)`` key when reliability weighting is threaded
+#: through.
+_JUROR_ROLE: AgentSessionRole = AgentSessionRole.AUDITOR
+
+#: The reliability map threaded from the reputation engine into the jury reducer.
+#: Keyed on ``(agent_role, runtime)`` -- the join key
+#: :func:`eawf.observability.eval.jury.juror_weight` looks each ballot up on.
+type JuryReliabilityMap = Mapping[tuple[AgentSessionRole, str], RoleReliability]
 
 
 class JurorOutcome(BaseModel):
@@ -332,8 +345,15 @@ def _vote_to_ballot(juror: str, vote: RubricItemVote) -> JurorBallot:
     vote with no refutation becomes ``PASS_WITH_FOLLOWUPS``, a non-veto non-pass
     the holistic reducer reads as a split when mixed with a ``PASS``.
 
+    The juror id is the runtime family, so the ballot is tagged with the
+    ``(AUDITOR, juror)`` reliability key -- harmless for the binary minority-veto
+    (binary ballots are never weighted, so a veto stays un-weighted) but it lets a
+    threaded reliability map match the ballot when a future graded per-item vote
+    arrives.
+
     Args:
-        juror: The juror id (carried onto the ballot's ``juror_id``).
+        juror: The juror id / runtime family (carried onto the ballot's
+            ``juror_id`` and its ``(agent_role, runtime)`` reliability key).
         vote: The juror's vote on one rubric item.
 
     Returns:
@@ -345,7 +365,13 @@ def _vote_to_ballot(juror: str, vote: RubricItemVote) -> JurorBallot:
         verdict = AgentReportVerdict.FAIL
     else:
         verdict = AgentReportVerdict.PASS_WITH_FOLLOWUPS
-    return JurorBallot(juror_id=juror, acceptance_style="binary", verdict=verdict)
+    return JurorBallot(
+        juror_id=juror,
+        acceptance_style="binary",
+        verdict=verdict,
+        agent_role=_JUROR_ROLE,
+        runtime=juror,
+    )
 
 
 def _fold_wave_outcome(
@@ -383,6 +409,8 @@ def _fold_wave_outcome(
 def reduce_per_item_ballots(
     ballots: tuple[PerItemJurorBallot, ...],
     rubric_item_ids: tuple[str, ...],
+    *,
+    reliability: JuryReliabilityMap | None = None,
 ) -> PerItemJuryResult:
     """Reduce per-item juror ballots into a per-item + wave-level result.
 
@@ -404,6 +432,14 @@ def reduce_per_item_ballots(
     -> wave ``FAIL``; else any item ``NEEDS_USER`` -> wave ``NEEDS_USER``; else
     ``PASS``.
 
+    When *reliability* is supplied it is threaded straight into the per-item
+    :func:`~eawf.observability.eval.jury.aggregate_jury` call so a future graded
+    per-item vote is reliability-weighted. The per-item ballots are binary today
+    (one ``PASS`` / ``FAIL`` / ``PASS_WITH_FOLLOWUPS`` verdict per vote), and the
+    binary minority-veto is **never** down-weighted -- so passing the map is
+    behavior-preserving for the current binary path: a single credible refutation
+    still vetoes the item regardless of that juror's weight.
+
     Boundary: an empty *rubric_item_ids* (no jury-scorable items) reduces to a
     clean ``PASS`` with no per-item verdicts -- a wave with nothing to score has
     nothing to veto. An item id no juror voted on reduces to ``NEEDS_USER`` for
@@ -415,6 +451,10 @@ def reduce_per_item_ballots(
             unless the rubric itself is empty).
         rubric_item_ids: The rubric behaviour ids to reduce, in render order.
             The reduction is scoped to exactly these ids.
+        reliability: Optional ``(agent_role, runtime)`` -> reliability map
+            threaded into each item's reduction. ``None`` (the default) weights
+            every juror neutrally, leaving the per-item reduction identical to its
+            unweighted self.
 
     Returns:
         The :class:`PerItemJuryResult` carrying the per-item verdicts, the
@@ -459,7 +499,7 @@ def reduce_per_item_ballots(
                 )
             )
             continue
-        aggregate = aggregate_jury(item_ballots)
+        aggregate = aggregate_jury(item_ballots, reliability=reliability)
         items.append(
             PerItemVerdict(
                 item_id=item_id,
@@ -553,6 +593,7 @@ def _reduce_jury(
     wave_id: str,
     jurors: tuple[JurorOutcome, ...],
     quorum: int,
+    reliability: JuryReliabilityMap | None = None,
 ) -> CrossVendorJuryResult:
     """Reduce the convened jurors' ballots into a typed result.
 
@@ -562,10 +603,20 @@ def _reduce_jury(
     :func:`eawf.observability.eval.jury.aggregate_jury`, mapping the aggregate's
     outcome + reasons onto the cross-vendor result.
 
+    Each cast ballot is tagged with its ``(AUDITOR, runtime)`` reliability key
+    so a threaded *reliability* map can match it. The holistic ballots are binary
+    (one auditor verdict per juror) and the binary minority-veto is **never**
+    down-weighted, so threading the map is behavior-preserving for the binary
+    close gate: a single credible ``fail`` / ``blocked`` still vetoes regardless
+    of that juror's reliability weight.
+
     Args:
         wave_id: The wave the jury was convened for.
         jurors: The convened jurors (votes + abstentions).
         quorum: Minimum number of cast ballots required to trust a reduction.
+        reliability: Optional ``(agent_role, runtime)`` -> reliability map fed to
+            :func:`eawf.observability.eval.jury.aggregate_jury`. ``None`` weights
+            every juror neutrally.
 
     Returns:
         The :class:`CrossVendorJuryResult`.
@@ -596,10 +647,12 @@ def _reduce_jury(
             acceptance_style="binary",
             # ``voted`` guarantees verdict is not None for every vote.
             verdict=juror.verdict,
+            agent_role=_JUROR_ROLE,
+            runtime=juror.runtime,
         )
         for juror in votes
     )
-    aggregate = aggregate_jury(ballots)
+    aggregate = aggregate_jury(ballots, reliability=reliability)
     reasons = aggregate.reasons
     if abstained_count:
         reasons = (
@@ -630,6 +683,7 @@ async def convene_cross_vendor_jury(
     spawn_factory: SpawnFactory,
     runtimes: tuple[str, ...] = JURY_RUNTIME_FAMILIES,
     quorum: int = JURY_QUORUM,
+    reliability: JuryReliabilityMap | None = None,
     repo_root: Path | None = None,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     now: datetime | None = None,
@@ -648,8 +702,10 @@ async def convene_cross_vendor_jury(
        abstains (recorded, not crashed).
     2. Reduce the cast ballots through
        :func:`eawf.observability.eval.jury.aggregate_jury` (binary minority-veto)
-       -- but only after EVERY juror has returned. A jury below *quorum* routes
-       to :attr:`~eawf.observability.eval.jury.JuryAggregateOutcome.NEEDS_USER`
+       -- but only after EVERY juror has returned, threading *reliability* into
+       the reducer so the graded mean is reliability-weighted. A jury below
+       *quorum* routes to
+       :attr:`~eawf.observability.eval.jury.JuryAggregateOutcome.NEEDS_USER`
        with no reduction.
 
     A :attr:`~eawf.observability.eval.jury.JuryAggregateOutcome.NEEDS_USER`
@@ -657,6 +713,15 @@ async def convene_cross_vendor_jury(
     operator-pause signal: the caller surfaces it rather than silently closing
     the wave. A single ``FAIL`` / ``BLOCKED`` ballot vetoes the vote to
     ``FAIL``; a unanimous ``PASS`` clears to ``PASS``.
+
+    Reliability weighting is the production wiring of the built-but-idle
+    reputation seam: a caller builds the live ``(agent_role, runtime)`` map via
+    :func:`eawf.observability.eval.reputation.build_jury_reliability_map` and
+    passes it as *reliability*, so a SCORED high-reliability juror pulls the
+    graded mean toward its score. The binary minority-veto is **never**
+    down-weighted -- one credible refutation still vetoes regardless of that
+    juror's weight -- and an empty / all-INSUFFICIENT map weights every juror
+    neutrally, so threading it is behavior-preserving until a group scores.
 
     The injected *spawn_factory* is the testability seam: production binds each
     runtime's :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.spawn_session`
@@ -679,6 +744,9 @@ async def convene_cross_vendor_jury(
             Defaults to the three disjoint families.
         quorum: Minimum number of cast ballots to trust a reduction. Below this
             the outcome is ``NEEDS_USER``. Defaults to :data:`JURY_QUORUM`.
+        reliability: Optional ``(agent_role, runtime)`` -> reliability map fed to
+            the jury reducer. ``None`` (the default) weights every juror
+            neutrally, leaving the reduction identical to its unweighted self.
         repo_root: Repository root forwarded to each juror's diff-base
             derivation. ``None`` falls back to the process cwd.
         max_attempts: Bounded re-ask ceiling forwarded to each juror.
@@ -715,7 +783,9 @@ async def convene_cross_vendor_jury(
         )
         jurors.append(juror)
 
-    return _reduce_jury(wave_id=wave.id, jurors=tuple(jurors), quorum=quorum)
+    return _reduce_jury(
+        wave_id=wave.id, jurors=tuple(jurors), quorum=quorum, reliability=reliability
+    )
 
 
 __all__ = [
@@ -723,6 +793,7 @@ __all__ = [
     "JURY_RUNTIME_FAMILIES",
     "CrossVendorJuryResult",
     "JurorOutcome",
+    "JuryReliabilityMap",
     "PerItemJurorBallot",
     "PerItemJuryResult",
     "PerItemVerdict",

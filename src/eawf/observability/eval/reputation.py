@@ -880,6 +880,83 @@ class ReputationTier(StrEnum):
     A = "A"
 
 
+def reliability_weighting_map(
+    reliabilities: list[RoleReliability],
+) -> dict[tuple[AgentSessionRole, str], RoleReliability]:
+    """Index scored reliabilities by ``(agent_role, runtime)`` for the jury.
+
+    The pure adapter between the reputation engine's list output and the
+    :func:`~eawf.observability.eval.jury.aggregate_jury` reliability map: the
+    scorer returns a flat list, but the jury reducer keys its weighting on the
+    ``(agent_role, runtime)`` pair (the join key
+    :func:`~eawf.observability.eval.jury.juror_weight` looks each ballot up on),
+    so this folds the list into that dict. No mutation, no IO -- a pure index.
+
+    Behavior-preserving today: while every group is
+    :attr:`~ReliabilityStatus.INSUFFICIENT` (the honest-negative surface, since
+    the verdict substrate is empty), the map carries only INSUFFICIENT rows, so
+    :func:`~eawf.observability.eval.jury.juror_weight` weights every juror
+    neutrally and the weighted mean equals the plain mean. The map lights up the
+    instant a group scores.
+
+    Args:
+        reliabilities: The per-role-runtime reliabilities the scorer produced.
+            May be empty (the empty map is the honest-negative result).
+
+    Returns:
+        A map from ``(agent_role, runtime)`` to its :class:`RoleReliability`,
+        ready to hand to :func:`~eawf.observability.eval.jury.aggregate_jury`.
+        Empty when *reliabilities* is empty.
+    """
+    return {(row.agent_role, row.runtime): row for row in reliabilities}
+
+
+def build_jury_reliability_map(
+    state: State,
+    state_path: Path,
+    config: ReputationConfig,
+    sibling_prior: dict[AgentSessionRole, float],
+) -> dict[tuple[AgentSessionRole, str], RoleReliability]:
+    """Build the live ``(agent_role, runtime)`` reliability map for the jury.
+
+    The end-to-end production wiring the cross-vendor jury convener calls to feed
+    :func:`~eawf.observability.eval.jury.aggregate_jury`: it projects the on-disk
+    AUDITOR verdict rows into realized outcomes
+    (:func:`build_verdict_outcomes`), scores each role-runtime group
+    (:func:`compute_role_reliability`), and indexes the result by the jury's
+    join key (:func:`reliability_weighting_map`). A pure read over the verdict
+    store + state -- no mutation, no daemon, no git.
+
+    Honest-negative end to end: the per-wave verdict store is empty today, so
+    :func:`build_verdict_outcomes` returns ``[]``, every group refuses to score,
+    and the map is empty. An empty (or all-INSUFFICIENT) map weights every juror
+    neutrally, so threading it through the convener is behavior-preserving until
+    real verdict rows accrue and a group scores.
+
+    Args:
+        state: Loaded, validated state supplying the phase / iter / wave tree the
+            outcomes are observed against.
+        state_path: Path to ``state.json``; the AUDITOR report store resolves
+            under its sibling ``store/`` directory.
+        config: The :class:`ReputationConfig` supplying the min-N floor and the
+            CI-width gate.
+        sibling_prior: Per-role held-rate in ``[0.0, 1.0]`` each group shrinks
+            toward (empirical Bayes).
+
+    Returns:
+        The live ``(agent_role, runtime)`` -> :class:`RoleReliability` map.
+        Empty when no verdict row has yet been observed.
+    """
+    outcomes = build_verdict_outcomes(state, state_path)
+    reliabilities = compute_role_reliability(outcomes, config, sibling_prior)
+    weighting_map = reliability_weighting_map(reliabilities)
+    logger.debug(
+        f"build_jury_reliability_map outcomes={len(outcomes)} "
+        f"reliabilities={len(reliabilities)} entries={len(weighting_map)}"
+    )
+    return weighting_map
+
+
 def map_reliability_to_tier(
     posterior_lower_bound: float,
     config: ReputationConfig,
@@ -932,10 +1009,12 @@ __all__ = [
     "ReputationTier",
     "RoleReliability",
     "VerdictOutcome",
+    "build_jury_reliability_map",
     "build_verdict_outcomes",
     "compute_role_reliability",
     "confidence_to_float",
     "expected_calibration_error",
     "fleet_verdict_rollup",
     "map_reliability_to_tier",
+    "reliability_weighting_map",
 ]
