@@ -666,6 +666,13 @@ class _Loop:
         spend). Shared by :meth:`_drain_lanes` and the :meth:`_budget_terminal`
         graceful drain so both finish a lane identically.
 
+        A forked lane is split across the two FA7 run-summary tallies: a lane
+        the watcher reported a genuine fork (``watched == "forked"``) bumps
+        ``failed``, while a clean close DOWNGRADED to a fork by the DL-5 safety
+        gate (``watched == "closed"`` but ``outcome == "forked"``) bumps
+        ``blocked`` instead, so the summary distinguishes a real failure from a
+        safety hold.
+
         Args:
             wave_id: ``W<NN>`` wave whose in-flight lane to finish.
 
@@ -678,6 +685,12 @@ class _Loop:
         del self.run.lanes[wave_id]
         if outcome == "forked":
             self.run.counters.forked += 1
+            # Split the fork across the FA7 summary tallies: a genuine watcher
+            # fork is a failure, a downgraded clean close is a safety block.
+            if watched == "forked":
+                self.run.counters.failed += 1
+            else:
+                self.run.counters.blocked += 1
         else:
             self.run.counters.closed += 1
         lane_spend = self.spend(self.ctx, wave_id)
@@ -688,6 +701,34 @@ class _Loop:
             f"risk_tier={risk_tier.value} eu={lane_spend.eu} usd={lane_spend.usd}"
         )
         return outcome
+
+    def _finish_run(self, reason: FleetTerminalReason) -> None:
+        """Stamp the terminal run-summary fields at the DONE transition -- DL-10.
+
+        The single terminal-transition path every stop reason routes through:
+        sets ``run_state=DONE``, the *reason*, and the FA7 run-summary
+        derivations that the cockpit READS rather than recomputes -- the
+        ``ended_at`` stamp, the ``elapsed_hours`` window from ``armed_at``, and
+        the ``throughput`` (closed waves per hour). The throughput is computed
+        DAEMON-side as ``counters.closed / elapsed_hours``; a degenerate
+        (zero-hour) window yields ``0.0`` so the division never divides by zero.
+
+        Args:
+            reason: Why the run reached :data:`FleetRunState.DONE`.
+        """
+        self.run.run_state = FleetRunState.DONE
+        self.run.terminal_reason = reason
+        ended_at = datetime.now(UTC)
+        self.run.ended_at = ended_at
+        elapsed_hours = (ended_at - self.run.armed_at).total_seconds() / 3600.0
+        elapsed_hours = max(elapsed_hours, 0.0)
+        self.run.elapsed_hours = elapsed_hours
+        closed = self.run.counters.closed
+        self.run.throughput = closed / elapsed_hours if elapsed_hours > 0.0 else 0.0
+        logger.info(
+            f"_finish_run reason={reason.value} closed={self.run.counters.closed} "
+            f"elapsed_hours={self.run.elapsed_hours} throughput={self.run.throughput}"
+        )
 
     def _converged(self) -> bool:
         """Return whether the ``kclean`` convergence criterion is met.
@@ -748,8 +789,7 @@ class _Loop:
             for wave_id in list(self.run.lanes):
                 self._finish_lane(wave_id)
             self._persist()
-        self.run.run_state = FleetRunState.DONE
-        self.run.terminal_reason = FleetTerminalReason.BUDGET
+        self._finish_run(FleetTerminalReason.BUDGET)
         self._persist()
         logger.info(
             f"_budget_terminal hard_halt={self.run.hard_halt} "
@@ -779,14 +819,12 @@ class _Loop:
             if not self.run.lanes:
                 # Nothing in flight and the fill found no frontier wave: the
                 # frontier has drained empty.
-                self.run.run_state = FleetRunState.DONE
-                self.run.terminal_reason = FleetTerminalReason.DRAINED
+                self._finish_run(FleetTerminalReason.DRAINED)
                 self._persist()
                 return self.run
             budget_stopped = self._drain_lanes()
             if self._converged():
-                self.run.run_state = FleetRunState.DONE
-                self.run.terminal_reason = FleetTerminalReason.CONVERGED
+                self._finish_run(FleetTerminalReason.CONVERGED)
                 self._persist()
                 return self.run
             if budget_stopped:
@@ -1406,7 +1444,9 @@ def reattach(
                 f"state=reattaching outcome=failed"
             )
             continue
-        # The wave is still in flight: re-dispatch it as a fresh lane.
+        # The wave is still in flight: re-dispatch it as a fresh lane. A dead
+        # lane re-dispatched back into flight is a resolved fork (the FA7
+        # ``fork resolved`` tally).
         dispatch = _normalise_dispatch(spawner(ctx, wave_id))
         run.lanes[wave_id] = FleetLane(
             wave_id=wave_id,
@@ -1416,6 +1456,7 @@ def reattach(
             dispatched_at=datetime.now(UTC),
         )
         run.counters.dispatched += 1
+        run.counters.forks_resolved += 1
         redispatched.append(
             ReattachLaneResult(
                 wave_id=wave_id,

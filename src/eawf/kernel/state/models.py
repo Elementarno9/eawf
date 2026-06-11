@@ -1075,25 +1075,42 @@ class FleetCounters(_StrictModel):
     Attributes:
         claimed: Total waves the loop has claimed across the run.
         dispatched: Total waves the loop has dispatched across the run.
-        closed: Total lanes that closed clean across the run.
+        closed: Total lanes that closed clean across the run -- the FA7
+            run-summary ``N closed`` tally.
         forked: Total lanes that forked (failed / re-planned) across the run.
+        failed: Total lanes whose watcher reported a genuine fork (the wave
+            failed / abandoned) across the run -- the FA7 run-summary
+            ``M failed`` tally, distinct from a safety-gate ``blocked``
+            downgrade. Additive (defaults ``0``) so a counters row written
+            before the field existed re-validates unchanged.
+        blocked: Total lanes whose clean close was DOWNGRADED to a fork by the
+            DL-5 RiskTier safety gate (a high / ui close under an unearned
+            advisory jury) across the run -- the FA7 ``K blocked`` tally.
+            Additive (defaults ``0``).
+        forks_resolved: Total forked lanes a reattach sweep re-dispatched
+            successfully across the run -- the FA7 ``N fork resolved`` tally.
+            Additive (defaults ``0``).
         rounds: Number of frontier-advance rounds the loop has run.
         clean_rounds: Consecutive rounds with zero forks -- the convergence
             counter the ``kclean`` criterion reads. Reset to zero on any fork.
         spent_eu: Cumulative effort units spent across every finished lane,
             read off each lane's runtime delta -- the figure the EU budget cap
-            (DL-4) tests against. Additive (defaults ``0.0``) so a counters row
-            written before the field existed re-validates unchanged.
+            (DL-4) tests against, and the FA7 ``EU`` total. Additive (defaults
+            ``0.0``) so a counters row written before the field existed
+            re-validates unchanged.
         spent_usd: Cumulative USD spent across every finished lane, read off
             each lane's runtime delta -- the figure the USD budget cap (DL-4)
-            tests against. Additive (defaults ``0.0``) so an older row
-            re-validates unchanged.
+            tests against, and the FA7 ``$`` total. Additive (defaults ``0.0``)
+            so an older row re-validates unchanged.
     """
 
     claimed: int = Field(default=0, ge=0)
     dispatched: int = Field(default=0, ge=0)
     closed: int = Field(default=0, ge=0)
     forked: int = Field(default=0, ge=0)
+    failed: int = Field(default=0, ge=0)
+    blocked: int = Field(default=0, ge=0)
+    forks_resolved: int = Field(default=0, ge=0)
     rounds: int = Field(default=0, ge=0)
     clean_rounds: int = Field(default=0, ge=0)
     spent_eu: float = Field(default=0.0, ge=0.0)
@@ -1139,6 +1156,22 @@ class FleetRun(_StrictModel):
             the in-flight lanes (the DL-3 kill) instead of draining. Additive
             + back-compat (an older run re-validates as graceful-drain).
         terminal_reason: Why the run reached ``DONE``; ``None`` until then.
+            The FA7 run-summary surface relies on its presence as the
+            run-complete signal -- it is set in lockstep with the ``DONE``
+            transition and stays ``None`` while the run is not DONE.
+        ended_at: When the run reached ``DONE``; ``None`` until then. The
+            DAEMON stamps it at the terminal transition so the elapsed window
+            is computed once, daemon-side, rather than re-derived in the UI.
+            Additive (defaults ``None``) so an older run re-validates unchanged.
+        elapsed_hours: Wall-clock hours from ``armed_at`` to ``ended_at``,
+            computed DAEMON-side at run end -- the FA7 ``elapsed`` figure.
+            ``None`` until the run is DONE. Additive.
+        throughput: Run throughput in closed waves per hour, computed
+            DAEMON-side at run end as ``counters.closed / elapsed_hours`` (the
+            FA7 waves/hour figure); the loop computes it once so the cockpit
+            never recomputes it. ``None`` until the run is DONE, and ``0.0``
+            when the elapsed window is degenerate (zero hours) so the division
+            never divides by zero. Additive.
         armed_at: When the run was armed.
     """
 
@@ -1154,6 +1187,9 @@ class FleetRun(_StrictModel):
     waves_cap: Annotated[int, Field(ge=1)] | None = None
     hard_halt: bool = False
     terminal_reason: FleetTerminalReason | None = None
+    ended_at: UtcDatetime | None = None
+    elapsed_hours: Annotated[float, Field(ge=0.0)] | None = None
+    throughput: Annotated[float, Field(ge=0.0)] | None = None
     armed_at: UtcDatetime
 
 
