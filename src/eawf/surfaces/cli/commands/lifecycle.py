@@ -654,6 +654,7 @@ from eawf.surfaces.cli.commands import lifecycle_wave as _lifecycle_wave  # noqa
 from eawf.surfaces.cli.commands import (  # noqa: E402
     lifecycle_wave_read as _lifecycle_wave_read,  # noqa: F401
 )
+from eawf.surfaces.cli.commands import track as _track  # noqa: E402, F401
 
 # Re-export sibling-owned helpers so existing import sites keep resolving
 # them from this module (``tests/unit/test_iter_bump_hint.py`` imports

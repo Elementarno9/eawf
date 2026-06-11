@@ -12,13 +12,21 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from eawf.kernel.state.enums import OutcomeDirection, OutcomeStatus
-from eawf.kernel.state.models import Outcome, State
+from eawf.kernel.state.models import Goal, Outcome, State, Track
 from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 from eawf.workflow.evidence.guards import require_complete_audit
 
 logger = logging.getLogger(__name__)
+
+#: Outcome directions the higher/lower-is-better comparator can derive a status
+#: from. ``EQUAL`` / ``RANGE`` are not derivable by :func:`compute_outcome_status`
+#: (it raises ``ValueError`` on them), so the reducer skips an outcome whose
+#: direction is not in this set rather than crashing the close path.
+_SYNCABLE_DIRECTIONS: frozenset[OutcomeDirection] = frozenset(
+    {OutcomeDirection.MAX, OutcomeDirection.MIN}
+)
 
 
 class OutcomeVerdict(StrEnum):
@@ -247,3 +255,93 @@ def set_outcome(
             f"verdict={verdict.value} status={status.value}"
         ),
     )
+
+
+def _track_outcome_ids(state: State, track: Track) -> list[str]:
+    """Return the ids of every Outcome reachable from *track*.
+
+    Walks the ``Track -> Goal -> Outcome`` containment chain
+    (:attr:`Track.goal_ids` -> :attr:`Goal.outcome_ids`). An id whose Goal or
+    Outcome row is absent is skipped so a partially-linked Track does not crash
+    the reducer; duplicate outcome ids across goals are de-duplicated while
+    preserving first-seen order.
+    """
+    goals: dict[str, Goal] = state.goals or {}
+    outcomes: dict[str, Outcome] = state.outcomes or {}
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for goal_id in track.goal_ids:
+        goal = goals.get(goal_id)
+        if goal is None:
+            continue
+        for outcome_id in goal.outcome_ids:
+            if outcome_id in seen or outcome_id not in outcomes:
+                continue
+            seen.add(outcome_id)
+            ordered.append(outcome_id)
+    return ordered
+
+
+def sync_track_outcomes(state: State, *, track_id: str) -> list[str]:
+    """Recompute every measured outcome status for a Track from its samples.
+
+    Re-derives the persisted :attr:`Outcome.status` of each Outcome reachable
+    from the Track (via the ``Track -> Goal -> Outcome`` containment chain) by
+    re-running the :func:`compute_outcome_status` comparator over the outcome's
+    threshold, recorded :attr:`Outcome.sample`, favorable
+    :attr:`Outcome.direction`, and running :attr:`Outcome.best_value`. This is
+    the lifecycle reducer the wave-close hook fires so closing work that moves a
+    metric updates the Track's standings without an operator re-running
+    ``outcome set`` by hand.
+
+    The reducer is *pure over already-recorded samples*: it never invents a
+    measurement. An outcome with no recorded ``sample`` (still
+    :attr:`OutcomeStatus.PENDING`) is left untouched, as is an outcome whose
+    favorable direction the comparator cannot derive a status from (``EQUAL`` /
+    ``RANGE`` -- see :data:`_SYNCABLE_DIRECTIONS`). For a syncable measured
+    outcome the derived comparator verdict maps onto the persisted status via
+    :data:`_VERDICT_STATUS`, so a sample that no longer clears its threshold
+    flips ``met -> missed`` and one that now clears it flips ``missed -> met``.
+
+    Args:
+        state: State to mutate in place.
+        track_id: Id of the Track whose outcome statuses to recompute. An
+            unknown id is a no-op (no Track means no outcomes to sync), so the
+            wave-close hook can fire unconditionally even when no Track is in
+            focus.
+
+    Returns:
+        The ids of the outcomes whose persisted status actually changed, in
+        containment order. Empty when no Track matched or no status moved.
+    """
+    tracks: dict[str, Track] = state.tracks or {}
+    track = tracks.get(track_id)
+    if track is None:
+        return []
+
+    outcomes: dict[str, Outcome] = dict(state.outcomes or {})
+    changed: list[str] = []
+    now = datetime.now(UTC)
+    for outcome_id in _track_outcome_ids(state, track):
+        outcome = outcomes[outcome_id]
+        if outcome.sample is None or outcome.direction not in _SYNCABLE_DIRECTIONS:
+            continue
+        verdict = compute_outcome_status(
+            threshold=outcome.threshold,
+            sample=outcome.sample,
+            direction=outcome.direction,
+            best_value=outcome.best_value,
+        )
+        status = _VERDICT_STATUS[verdict]
+        if status is outcome.status:
+            continue
+        outcomes[outcome_id] = outcome.model_copy(
+            update={"status": status, "updated_at": now}
+        )
+        changed.append(outcome_id)
+
+    if changed:
+        state.outcomes = outcomes
+        state.updated_at = now
+    logger.info(f"sync_track_outcomes track={track_id!r} changed={len(changed)}")
+    return changed

@@ -405,6 +405,29 @@ class TrackRpcResult(BaseModel):
     added: bool
 
 
+class TrackSyncParams(BaseModel):
+    """Params for :func:`track_sync_rpc`.
+
+    ``track_id`` names an existing Track whose measured outcome statuses are
+    recomputed from their samples (the same reducer the wave-close hook fires).
+    An unknown id is a no-op (the reducer returns no changes). When omitted the
+    daemon syncs the Track under :attr:`CurrentPointers.track_id`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    repo_root: str | None = None
+    track_id: str | None = None
+
+
+class TrackSyncRpcResult(BaseModel):
+    """Result of :func:`track_sync_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    track_id: str | None
+    changed_outcome_ids: list[str]
+    changed: int
+
+
 # ---- Idempotency cache ------------------------------------------------------
 
 
@@ -649,6 +672,53 @@ def _apply_wave_close(
     commit = params.get("commit")
     if commit is not None:
         wave.commit = str(commit)
+
+
+def _resolve_wave_track_id(state: State, wave_id: str) -> str | None:
+    """Return the Track id that owns *wave_id*, or ``None``.
+
+    Resolves the ``Wave -> Iter -> Phase`` chain and reads the
+    :attr:`Phase.track_id` the phase was stamped with when it opened while a
+    Track was in focus (the P30-I11-W03 silent phase-tag binding). Falls back to
+    :attr:`CurrentPointers.track_id` when the chain does not resolve a tag so a
+    close fired with a Track in focus but an un-tagged phase still syncs the
+    active Track. ``None`` means no Track owns the wave -- the close-time sync is
+    then a no-op.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return state.current.track_id
+    iter_row = (state.iters or {}).get(wave.iter_id)
+    if iter_row is not None:
+        phase = (state.phases or {}).get(iter_row.phase_id)
+        if phase is not None and phase.track_id:
+            return phase.track_id
+    return state.current.track_id
+
+
+def _sync_wave_close_track(state: State, mutation: Mutation) -> list[str]:
+    """Recompute the closing wave's Track outcome statuses in place.
+
+    The wave-close hook half of the Track outcome reducer (P30-I11-W07): once
+    ``_apply_wave_close`` has flipped the wave to CLOSED, the Track that owns the
+    wave has its measured outcome statuses re-derived from their samples via
+    :func:`eawf.workflow.evidence.outcome.sync_track_outcomes`, so closing work
+    that moves a metric updates the Track's standings without a manual
+    ``outcome set`` re-run. Resolving no Track (an un-tagged wave with no Track
+    in focus) makes the hook a no-op.
+
+    Returns:
+        The ids of the outcomes whose status changed (empty on a no-op).
+    """
+    from eawf.workflow.evidence.outcome import sync_track_outcomes
+
+    wave_id = str(mutation.params.get("wave_id", ""))
+    if not wave_id:
+        return []
+    track_id = _resolve_wave_track_id(state, wave_id)
+    if track_id is None:
+        return []
+    return sync_track_outcomes(state, track_id=track_id)
 
 
 def _wave_close_elapsed_eu(
@@ -2876,6 +2946,10 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                         elapsed_eu=wave_close_elapsed_eu,
                         runtime_delta=runtime_delta,
                     )
+                    # Recompute the closing wave's Track outcome statuses from
+                    # their samples so closing work that moved a metric updates
+                    # the Track standings (a no-op when no Track owns the wave).
+                    _sync_wave_close_track(state, mutation)
                 else:
                     apply_func(state, mutation)
             except LifecycleError as exc:
@@ -3197,6 +3271,57 @@ def _apply_track_switch(state: State, args: TrackSwitchParams) -> dict[str, Any]
     ).model_dump(mode="json")
 
 
+def _apply_track_sync(state: State, args: TrackSyncParams) -> dict[str, Any]:
+    """Recompute a Track's measured outcome statuses from their samples.
+
+    Resolves the target Track (the explicit ``track_id`` param, else the
+    :attr:`CurrentPointers.track_id` cursor) and runs the
+    :func:`eawf.workflow.evidence.outcome.sync_track_outcomes` reducer -- the
+    same reducer the wave-close hook fires -- so an operator can re-derive the
+    standings on demand. An absent target Track (no id and no cursor) yields a
+    typed no-op result with an empty change list rather than raising, so
+    ``track sync`` on a repo with no Track in focus is harmless.
+
+    Args:
+        state: Loaded :class:`State`. Mutated in place by the reducer.
+        args: Validated :class:`TrackSyncParams`.
+
+    Returns:
+        Result dict matching :class:`TrackSyncRpcResult`.
+    """
+    from eawf.workflow.evidence.outcome import sync_track_outcomes
+
+    track_id = args.track_id if args.track_id else state.current.track_id
+    changed = sync_track_outcomes(state, track_id=track_id) if track_id else []
+    logger.info(f"_apply_track_sync track={track_id!r} changed={len(changed)}")
+    return TrackSyncRpcResult(
+        track_id=track_id,
+        changed_outcome_ids=changed,
+        changed=len(changed),
+    ).model_dump(mode="json")
+
+
+@register("track.sync")
+async def track_sync_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Daemon-owned ``track.sync`` mutator.
+
+    Recomputes a Track's measured outcome statuses from their samples via the
+    same reducer the wave-close hook fires. The daemon is the sole canonical
+    mutator (AGENTS rule 4); the CLI ``track sync`` shim routes here over
+    JSON-RPC.
+    """
+    args = TrackSyncParams.model_validate(params)
+    repo_root = Path(args.repo_root) if args.repo_root else None
+    return _commit_worktree_state(
+        ctx=ctx,
+        repo_root=repo_root,
+        params=params,
+        command="track.sync",
+        scope_id=args.track_id,
+        apply_func=lambda state: _apply_track_sync(state, args),
+    )
+
+
 @register("track.add")
 async def track_add_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Daemon-owned ``track.add`` mutator.
@@ -3265,6 +3390,7 @@ __all__ = [
     "runtime_capture",
     "track_add_rpc",
     "track_switch_rpc",
+    "track_sync_rpc",
     "wave_autoland_rpc",
     "wave_land_batch_rpc",
     "wave_land_rpc",
