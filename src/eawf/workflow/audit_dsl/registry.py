@@ -65,6 +65,7 @@ from eawf.platform.artifacts.references import (
 )
 from eawf.platform.lint._conditional import changed_files
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
+from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
@@ -506,4 +507,38 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
 }
 
 
-__all__ = ["CHECK_REGISTRY", "CheckFn"]
+#: Close-gate kinds that score against the validated state model rather
+#: than a checkout file set, so they do NOT take the ``(CheckSpec, Path)``
+#: runner shape and are not dispatched through :func:`run_checks`. They
+#: are still *registered* audit-DSL kinds: the BIND-1 wired-on sweep
+#: (``tools/idle_contract_gate.py``) reads :func:`registered_audit_dsl_kinds`
+#: -- the union of :data:`CHECK_REGISTRY` and this set -- so a close-gate
+#: kind cannot ship registered-but-idle either.
+#:
+#: ``backlog_resolution`` reads the wave-linked backlog items off state
+#: and is driven from the close-readiness compute when ``verify.enforce``
+#: is active (see :func:`eawf.workflow.verify.readiness.compute`).
+CLOSE_GATE_KINDS: frozenset[str] = frozenset({BACKLOG_RESOLUTION_KIND})
+
+
+def registered_audit_dsl_kinds() -> frozenset[str]:
+    """Return every registered audit-DSL kind string.
+
+    The union of the file-set check kinds (:data:`CHECK_REGISTRY` keys)
+    and the state-scoring close-gate kinds (:data:`CLOSE_GATE_KINDS`).
+    This is the canonical kind population the BIND-1 idle-contract
+    meta-gate sweeps: a kind that appears here MUST have a production
+    caller (a tier mapping or a close-gate wiring) or the sweep reds.
+
+    Returns:
+        The frozenset of all registered kind strings.
+    """
+    return frozenset(CHECK_REGISTRY) | CLOSE_GATE_KINDS
+
+
+__all__ = [
+    "CHECK_REGISTRY",
+    "CLOSE_GATE_KINDS",
+    "CheckFn",
+    "registered_audit_dsl_kinds",
+]

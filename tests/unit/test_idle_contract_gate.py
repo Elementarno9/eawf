@@ -258,6 +258,61 @@ def test_runtime_gate_is_not_idle(mod) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Wired-on sweep: every registered audit-DSL kind must have a production binding.
+# --------------------------------------------------------------------------- #
+
+
+def test_audit_dsl_kinds_wired_passes_on_current_tree(mod) -> None:
+    # Default args read the live registered + wired sets: the post-W02 tree has
+    # every registered kind wired on, so the sweep passes.
+    result = mod.check_audit_dsl_kinds_wired()
+    assert result.passed is True
+    assert result.failure is None
+    assert "wired on" in result.message
+
+
+def test_audit_dsl_kinds_wired_fails_when_a_kind_is_reidled(mod) -> None:
+    # The load-bearing negative: a wired set missing a registered kind (a kind
+    # that lost its production binding) makes the sweep red, naming the kind.
+    def _reidled_wired() -> frozenset[str]:
+        return mod.wired_audit_dsl_kinds() - {"transition_coverage"}
+
+    result = mod.check_audit_dsl_kinds_wired(wired_fn=_reidled_wired)
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.AUDIT_DSL_KIND_IDLE
+    assert "transition_coverage" in result.message
+
+
+def test_audit_dsl_kinds_wired_names_a_brand_new_registered_kind(mod) -> None:
+    # A registered kind that nobody wired on (registered set has it, wired set
+    # does not) is exactly the idle case the sweep catches.
+    def _registered_with_orphan() -> frozenset[str]:
+        return mod.registered_audit_dsl_kinds() | {"widget_parity"}
+
+    result = mod.check_audit_dsl_kinds_wired(registered_fn=_registered_with_orphan)
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.AUDIT_DSL_KIND_IDLE
+    assert "widget_parity" in result.message
+
+
+def test_main_returns_nonzero_when_a_kind_is_reidled(mod, monkeypatch, capsys) -> None:
+    # End-to-end binding proof: re-idling a swept kind (the module-level wired
+    # source loses one registered kind) makes main() exit non-zero and names
+    # the registered-but-idle failure on stderr.
+    live_wired = mod.wired_audit_dsl_kinds()
+    monkeypatch.setattr(
+        mod,
+        "wired_audit_dsl_kinds",
+        lambda: live_wired - {"svg_pixel_diff"},
+    )
+    code = mod.main(["idle_contract_gate.py"])
+    captured = capsys.readouterr()
+    assert code != 0
+    assert "registered-but-idle" in captured.err
+    assert "svg_pixel_diff" in captured.err
+
+
+# --------------------------------------------------------------------------- #
 # CLI wrapper.
 # --------------------------------------------------------------------------- #
 

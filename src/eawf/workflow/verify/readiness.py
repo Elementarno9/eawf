@@ -54,6 +54,10 @@ from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.platform.profiles.models import VerifyBlock
+from eawf.workflow.audit_dsl.kinds.backlog_resolution import (
+    BACKLOG_RESOLUTION_KIND,
+    check_backlog_resolution,
+)
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
@@ -764,6 +768,51 @@ def _build_floor_views(
     return views
 
 
+def _build_backlog_resolution_view(
+    scope_id: str,
+    state: State,
+) -> CriterionView | None:
+    """Score the wave-linked backlog items into a close-gate :class:`CriterionView`.
+
+    Runs the :func:`~eawf.workflow.audit_dsl.kinds.backlog_resolution.check_backlog_resolution`
+    close-gate kind over the wave's linked backlog items. The view is
+    surfaced under ``source="floor"`` (the close-gate baseline family)
+    with a single gate result whose id is
+    :data:`~eawf.workflow.audit_dsl.kinds.backlog_resolution.BACKLOG_RESOLUTION_KIND`,
+    so a wave that leaves a linked backlog item dangling flips the
+    criterion to ``fail`` and -- when ``verify.enforce`` is active --
+    blocks the close (see :func:`_enforce_readiness`).
+
+    The check is the production caller that un-idles the
+    ``backlog_resolution`` registered kind: it fires on every wave whose
+    close-readiness is computed, scoring the wave's own dogfood backlog
+    links.
+
+    Args:
+        scope_id: The closing wave id the backlog items link against.
+        state: Validated state model the backlog items are read from.
+
+    Returns:
+        A :class:`CriterionView` when the wave links at least one
+        backlog item; ``None`` when the wave links none (no view is
+        surfaced so an unlinked wave's readiness is byte-unchanged).
+    """
+    result = check_backlog_resolution(state, wave_id=scope_id)
+    if not result.linked_ids:
+        return None
+    status: Literal["pass", "fail"] = "pass" if result.passed else "fail"
+    logger.debug(
+        f"_build_backlog_resolution_view wave={scope_id!r} status={status!r} "
+        f"linked={len(result.linked_ids)} dangling={len(result.dangling_ids)}"
+    )
+    return CriterionView(
+        id=BACKLOG_RESOLUTION_KIND,
+        source="floor",
+        status=status,
+        gate_results=[GateResult(gate_id=BACKLOG_RESOLUTION_KIND, status=status)],
+    )
+
+
 def _build_legacy_views(wave: Wave) -> tuple[list[CriterionView], list[str]]:
     """Project grandfathered criteria into advisory legacy :class:`CriterionView`.
 
@@ -821,6 +870,52 @@ def legacy_criterion_count(criteria: list[CriterionSpec]) -> int:
         The number of rows whose ``kind == GRANDFATHERED_KIND``.
     """
     return sum(1 for criterion in criteria if criterion.kind == GRANDFATHERED_KIND)
+
+
+#: Tiers for registered checkout-scoring kinds that the production close
+#: oracle runs (via :func:`compile_gate` + :func:`run_checks`) but that
+#: the kernel-level ``_GATE_KIND_TIER`` map does not yet name. Listed here
+#: so the close path -- and the BIND-1 wired-on sweep that reads
+#: :func:`wired_audit_dsl_kinds` -- treats them as production-bound rather
+#: than registered-but-idle. ``tui_flow`` is a T2 structural checkout gate
+#: (it drives a key sequence through the live key->Binding path and asserts
+#: a terminal observable state), so it sits with the other T2 structural
+#: kinds.
+_SUPPLEMENTAL_GATE_KIND_TIERS: dict[str, str] = {
+    "tui_flow": "T2_STRUCTURAL",
+}
+
+
+def wired_audit_dsl_kinds() -> frozenset[str]:
+    """Return every registered audit-DSL kind that has a production binding.
+
+    A registered kind (from
+    :func:`eawf.workflow.audit_dsl.registry.registered_audit_dsl_kinds`)
+    is *wired* when the production close path can reach it as a real
+    falsifier, proven by one of three bindings:
+
+    * a :data:`eawf.kernel.spec.common._GATE_KIND_TIER` entry -- the
+      oracle escalation tier the close gate sorts and scores by;
+    * a :data:`_SUPPLEMENTAL_GATE_KIND_TIERS` entry -- a checkout-scoring
+      kind the close path runs that the kernel tier map does not yet
+      name (``tui_flow``);
+    * membership in
+      :data:`eawf.workflow.audit_dsl.registry.CLOSE_GATE_KINDS` -- a
+      state-scoring close gate this module drives directly
+      (``backlog_resolution``, run by :func:`_build_backlog_resolution_view`).
+
+    The BIND-1 idle-contract meta-gate compares this wired set against
+    the full registered set: any registered kind absent here ships
+    registered-but-idle and reds CI.
+
+    Returns:
+        The frozenset of registered kind strings with a production
+        binding.
+    """
+    from eawf.kernel.spec.common import _GATE_KIND_TIER
+    from eawf.workflow.audit_dsl.registry import CLOSE_GATE_KINDS
+
+    return frozenset(_GATE_KIND_TIER) | frozenset(_SUPPLEMENTAL_GATE_KIND_TIERS) | CLOSE_GATE_KINDS
 
 
 def _not_ready_criteria(criteria: list[CriterionView]) -> list[str]:
@@ -986,9 +1081,19 @@ def compute(
     if not spec_views:
         floor_views = _build_floor_views(verify_block, runner_cwd=repo_root)
 
-    criteria: list[CriterionView] = [*spec_views, *floor_views, *legacy_views]
+    # Backlog-resolution close-gate (P30-I10 QUAL-2). Scores the wave's
+    # linked backlog items independently of the typed-spec / floor split:
+    # a wave that fixes a backlog item but leaves the linked row dangling
+    # surfaces a blocking ``fail`` here, and the ``verify.enforce`` path
+    # (see :func:`_enforce_readiness`) turns that into a close refusal. A
+    # wave linking no backlog items yields ``None`` (no view), so an
+    # unlinked wave's readiness is byte-unchanged.
+    backlog_view = _build_backlog_resolution_view(scope_id, state)
+    backlog_views = [backlog_view] if backlog_view is not None else []
+
+    criteria: list[CriterionView] = [*spec_views, *floor_views, *backlog_views, *legacy_views]
     warnings = list(legacy_warnings)
-    if not spec_views and not floor_views and not legacy_views:
+    if not spec_views and not floor_views and not backlog_views and not legacy_views:
         # Empty waves cannot be meaningfully blocking — flag the
         # advisory so operators notice the gap without raising.
         warnings.append("no criteria attached to wave")
@@ -1031,4 +1136,5 @@ __all__ = [
     "legacy_criterion_count",
     "load_active_verify_block",
     "resolve_wave_verify_block",
+    "wired_audit_dsl_kinds",
 ]

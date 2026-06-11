@@ -112,7 +112,7 @@ from eawf.runtime.daemon.methods.spec_sync_lints import (
 )
 from eawf.surfaces.render.envelope import OutputEnvelope
 from eawf.workflow.audit_dsl.models import CheckKind
-from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY
+from eawf.workflow.audit_dsl.registry import CHECK_REGISTRY, registered_audit_dsl_kinds
 from eawf.workflow.dispatch.spec_jury import produce_spec_jury_verdict  # noqa: F401
 from eawf.workflow.lifecycle.transitions import LifecycleError, open_iter, open_phase
 from eawf.workflow.lifecycle.wave import plan_wave as _plan_wave
@@ -123,7 +123,10 @@ from eawf.workflow.skills.engine import (
     SkillResult,
 )
 from eawf.workflow.skills.engine import run_skill as _run_skill
-from eawf.workflow.verify.readiness import resolve_wave_verify_block
+from eawf.workflow.verify.readiness import (
+    resolve_wave_verify_block,
+    wired_audit_dsl_kinds,
+)
 
 #: A resolver with the shape of
 #: :func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`. Injected so
@@ -159,6 +162,7 @@ class GateFailure(StrEnum):
     MOCKUP_GOLDEN_DIFF_IDLE = "mockup_golden_diff_idle"
     RESOLVE_ROUTING_IDLE = "resolve_routing_idle"
     RUNTIME_GATE_IDLE = "runtime_gate_idle"
+    AUDIT_DSL_KIND_IDLE = "audit_dsl_kind_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -752,6 +756,86 @@ def check_runtime_gate_is_not_idle(
 
 
 # =========================================================================== #
+# Registry-wide sweep: every registered audit-DSL kind must be wired on.
+# =========================================================================== #
+
+#: A registered-kinds source with the shape of
+#: :func:`eawf.workflow.audit_dsl.registry.registered_audit_dsl_kinds`. Injected
+#: so a test can drive the sweep with a synthetic kind set (e.g. one re-idled
+#: kind) without editing the real registry.
+type RegisteredKindsFn = Callable[[], frozenset[str]]
+
+#: A wired-kinds source with the shape of
+#: :func:`eawf.workflow.verify.readiness.wired_audit_dsl_kinds`. Injected so a
+#: test can simulate a kind losing its production binding (re-idling) and assert
+#: the sweep reds.
+type WiredKindsFn = Callable[[], frozenset[str]]
+
+
+def check_audit_dsl_kinds_wired(
+    *,
+    registered_fn: RegisteredKindsFn = registered_audit_dsl_kinds,
+    wired_fn: WiredKindsFn = wired_audit_dsl_kinds,
+) -> GateResult:
+    """Assert every registered audit-DSL kind has a production binding.
+
+    The wired-on sweep (P30-I10 QUAL-2) generalizes the B091 idle-verifier
+    lesson to the audit-DSL kind registry: a kind that is registered (so it
+    advertises itself as a falsifier) but has no production binding -- no
+    oracle-tier mapping and no close-gate wiring -- can never be escalated to
+    by the live close gate, so it ships registered-but-idle exactly like the
+    spec-jury producer did.
+
+    The check compares the full registered set (*registered_fn*, the
+    :data:`CHECK_REGISTRY` keys plus the state-scoring close-gate kinds)
+    against the wired set (*wired_fn*, the kernel ``_GATE_KIND_TIER`` map plus
+    the supplemental checkout-gate tiers plus the close-gate kinds). Any
+    registered kind absent from the wired set is idle and reds CI, naming the
+    offending kind(s).
+
+    Both sources are injectable so a test can drive the re-idle failure mode
+    (a wired set missing a registered kind) without editing the real registry
+    or tier map -- mirroring how :func:`check_idle_contract` injects its
+    ``profiles`` / ``resolve_fn``. The check reads only -- it never mutates
+    state, never writes a file, and never runs a mutating ``eawf`` command.
+
+    Args:
+        registered_fn: Source of the full registered kind set. Defaults to
+            the live :func:`registered_audit_dsl_kinds`.
+        wired_fn: Source of the production-wired kind set. Defaults to the
+            live :func:`wired_audit_dsl_kinds`.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when every
+        registered kind is wired; otherwise ``failure`` is
+        :attr:`GateFailure.AUDIT_DSL_KIND_IDLE` and the message names the
+        idle kind(s).
+    """
+    registered = registered_fn()
+    wired = wired_fn()
+    idle = sorted(registered - wired)
+    if idle:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.AUDIT_DSL_KIND_IDLE,
+            message=(
+                f"audit-DSL kind(s) ship registered-but-idle: {', '.join(idle)} "
+                "-- a registered kind needs an oracle-tier mapping or a close-gate "
+                "wiring (no production caller means the close gate can never "
+                "escalate to it)"
+            ),
+        )
+    return GateResult(
+        passed=True,
+        failure=None,
+        message=(
+            f"idle-contract gate: ok (all {len(registered)} registered audit-DSL "
+            "kinds are wired on -- each has an oracle-tier or close-gate binding)"
+        ),
+    )
+
+
+# =========================================================================== #
 # Meta-gate: detect a newly-defined contract that ships idle in a diff.
 # =========================================================================== #
 
@@ -1235,7 +1319,8 @@ def main(argv: list[str]) -> int:
     (:func:`check_skill_body_binding`), then the I03 contract probes
     (:func:`check_i03_contracts`), then the resolve_routing wiring probe
     (:func:`check_resolve_routing_wired`), then the runtime-gate binding check
-    (:func:`check_runtime_gate_is_not_idle`), then the meta-gate
+    (:func:`check_runtime_gate_is_not_idle`), then the registry-wide audit-DSL
+    wired-on sweep (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
     exit code is non-zero when any fails.
 
@@ -1295,6 +1380,18 @@ def main(argv: list[str]) -> int:
         print(runtime_gate.message)
     else:
         print(runtime_gate.message, file=sys.stderr)
+        failed = True
+
+    # Pass the module-level wired-on sources explicitly so a test (or a future
+    # caller) can patch them via attribute assignment.
+    kinds_wired = check_audit_dsl_kinds_wired(
+        registered_fn=registered_audit_dsl_kinds,
+        wired_fn=wired_audit_dsl_kinds,
+    )
+    if kinds_wired.passed:
+        print(kinds_wired.message)
+    else:
+        print(kinds_wired.message, file=sys.stderr)
         failed = True
 
     # Pass the module-level default sources explicitly so a test (or a future
