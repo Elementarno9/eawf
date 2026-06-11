@@ -33,6 +33,10 @@ Public surface:
   contract over one rendered surface (criteria + gates + goldens + recipe +
   rubric); :class:`~eawf.kernel.spec.visual.DeterminismRecipe` captures the
   byte-determinism knobs the runner and SVG stack rely on
+- :class:`~eawf.kernel.spec.eval_report.EvalReport` — pre-registered
+  build-report metric set (each :class:`~eawf.kernel.spec.eval_report.EvalMetric`
+  binds a declared figure to the repo-data source + recount key the
+  ``tools/recount_build_report.py`` tool re-derives it from)
 - :data:`~eawf.kernel.spec.common.TestRef`,
   :data:`~eawf.kernel.spec.common.FileScopeRef` — annotated path types
 
@@ -97,6 +101,8 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "DropReason": ("pruning", "DropReason"),
     "DroppedClaim": ("pruning", "DroppedClaim"),
     "EffectiveOverride": ("operator_input", "EffectiveOverride"),
+    "EvalMetric": ("eval_report", "EvalMetric"),
+    "EvalReport": ("eval_report", "EvalReport"),
     "EvidenceRef": ("common", "EvidenceRef"),
     "FileScopeRef": ("common", "FileScopeRef"),
     "GateCadence": ("common", "GateCadence"),
@@ -107,6 +113,8 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "IterSpec": ("iter", "IterSpec"),
     "IterWaveGroup": ("iter", "IterWaveGroup"),
     "MathAssurance": ("math", "MathAssurance"),
+    "MetricSource": ("eval_report", "MetricSource"),
+    "MetricUnit": ("eval_report", "MetricUnit"),
     "MathClaim": ("math", "MathClaim"),
     "MathExplainer": ("math", "MathExplainer"),
     "MissingRoundRunnerError": ("campaign_driver", "MissingRoundRunnerError"),
