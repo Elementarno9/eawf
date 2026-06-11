@@ -1073,7 +1073,7 @@
     },
     "FleetCounters": {
       "additionalProperties": false,
-      "description": "Running tallies the fleet auto-drain loop accumulates.\n\nAttributes:\n    claimed: Total waves the loop has claimed across the run.\n    dispatched: Total waves the loop has dispatched across the run.\n    closed: Total lanes that closed clean across the run.\n    forked: Total lanes that forked (failed / re-planned) across the run.\n    rounds: Number of frontier-advance rounds the loop has run.\n    clean_rounds: Consecutive rounds with zero forks -- the convergence\n        counter the ``kclean`` criterion reads. Reset to zero on any fork.",
+      "description": "Running tallies the fleet auto-drain loop accumulates.\n\nAttributes:\n    claimed: Total waves the loop has claimed across the run.\n    dispatched: Total waves the loop has dispatched across the run.\n    closed: Total lanes that closed clean across the run.\n    forked: Total lanes that forked (failed / re-planned) across the run.\n    rounds: Number of frontier-advance rounds the loop has run.\n    clean_rounds: Consecutive rounds with zero forks -- the convergence\n        counter the ``kclean`` criterion reads. Reset to zero on any fork.\n    spent_eu: Cumulative effort units spent across every finished lane,\n        read off each lane's runtime delta -- the figure the EU budget cap\n        (DL-4) tests against. Additive (defaults ``0.0``) so a counters row\n        written before the field existed re-validates unchanged.\n    spent_usd: Cumulative USD spent across every finished lane, read off\n        each lane's runtime delta -- the figure the USD budget cap (DL-4)\n        tests against. Additive (defaults ``0.0``) so an older row\n        re-validates unchanged.",
       "properties": {
         "claimed": {
           "default": 0,
@@ -1110,6 +1110,18 @@
           "minimum": 0,
           "title": "Rounds",
           "type": "integer"
+        },
+        "spent_eu": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Spent Eu",
+          "type": "number"
+        },
+        "spent_usd": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Spent Usd",
+          "type": "number"
         }
       },
       "title": "FleetCounters",
@@ -1170,7 +1182,7 @@
     },
     "FleetRun": {
       "additionalProperties": false,
-      "description": "Daemon-owned state of the fleet auto-drain loop.\n\nPersisted as the optional top-level :attr:`State.fleet_run` field\n(default ``None`` -- no active run) so a state written before this field\nexisted re-validates unchanged. The loop runner\n(:mod:`eawf.runtime.daemon.methods.fleet`) is the only mutator; the daemon\ncanonical state writer persists every run-state transition, so the loop\nnever writes ``state.json`` directly.\n\nAttributes:\n    run_state: The closed :class:`FleetRunState` the loop is in.\n    concurrency: Maximum lanes the loop holds at once (the drain width).\n    frontier: Ready ``W<NN>`` wave ids still queued to claim, in claim\n        order. The loop pops from the head as lanes free.\n    lanes: In-flight dispatch slots, keyed by wave id.\n    counters: Running tallies for the run.\n    convergence: Convergence mode -- ``drain`` (stop only when the\n        frontier empties) or ``kclean`` (stop after K clean rounds).\n    kclean_k: K threshold for the ``kclean`` convergence mode -- the\n        number of consecutive clean rounds that ends the run. Ignored\n        under ``drain``.\n    terminal_reason: Why the run reached ``DONE``; ``None`` until then.\n    armed_at: When the run was armed.",
+      "description": "Daemon-owned state of the fleet auto-drain loop.\n\nPersisted as the optional top-level :attr:`State.fleet_run` field\n(default ``None`` -- no active run) so a state written before this field\nexisted re-validates unchanged. The loop runner\n(:mod:`eawf.runtime.daemon.methods.fleet`) is the only mutator; the daemon\ncanonical state writer persists every run-state transition, so the loop\nnever writes ``state.json`` directly.\n\nAttributes:\n    run_state: The closed :class:`FleetRunState` the loop is in.\n    concurrency: Maximum lanes the loop holds at once (the drain width).\n    frontier: Ready ``W<NN>`` wave ids still queued to claim, in claim\n        order. The loop pops from the head as lanes free.\n    lanes: In-flight dispatch slots, keyed by wave id.\n    counters: Running tallies for the run.\n    convergence: Convergence mode -- ``drain`` (stop only when the\n        frontier empties) or ``kclean`` (stop after K clean rounds).\n    kclean_k: K threshold for the ``kclean`` convergence mode -- the\n        number of consecutive clean rounds that ends the run. Ignored\n        under ``drain``.\n    eu_cap: Optional cumulative effort-unit spend cap. When the run's\n        ``spent_eu`` reaches it the loop claims no further wave and ends\n        ``terminal_reason=budget`` (DL-4). ``None`` (the default) leaves\n        the run uncapped. Additive + back-compat.\n    usd_cap: Optional cumulative USD spend cap, applied identically to\n        ``eu_cap``. ``None`` leaves the run uncapped. Additive.\n    waves_cap: Optional claimed-wave count cap. When ``counters.claimed``\n        reaches it the loop claims no further wave and ends\n        ``terminal_reason=budget``. ``None`` leaves the run uncapped.\n        Additive.\n    hard_halt: The arm-modal budget-halt toggle. ``False`` (the default)\n        is the graceful-drain budget stop -- at the cap the loop stops\n        claiming but lets the in-flight lanes finish before ending\n        ``budget``. ``True`` arms the hard halt -- reaching the cap KILLS\n        the in-flight lanes (the DL-3 kill) instead of draining. Additive\n        + back-compat (an older run re-validates as graceful-drain).\n    terminal_reason: Why the run reached ``DONE``; ``None`` until then.\n    armed_at: When the run was armed.",
       "properties": {
         "armed_at": {
           "format": "date-time",
@@ -1195,6 +1207,19 @@
         "counters": {
           "$ref": "#/$defs/FleetCounters"
         },
+        "eu_cap": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Eu Cap"
+        },
         "frontier": {
           "items": {
             "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
@@ -1202,6 +1227,11 @@
           },
           "title": "Frontier",
           "type": "array"
+        },
+        "hard_halt": {
+          "default": false,
+          "title": "Hard Halt",
+          "type": "boolean"
         },
         "kclean_k": {
           "default": 2,
@@ -1230,6 +1260,32 @@
             }
           ],
           "default": null
+        },
+        "usd_cap": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usd Cap"
+        },
+        "waves_cap": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waves Cap"
         }
       },
       "required": [
@@ -1251,10 +1307,11 @@
       "type": "string"
     },
     "FleetTerminalReason": {
-      "description": "Why a :class:`FleetRun` reached :data:`FleetRunState.DONE`.\n\n- ``drained`` -- the ready frontier emptied, so no further wave can be\n  claimed (the drain-to-empty stop).\n- ``converged`` -- a convergence criterion (e.g. ``kclean`` -- K\n  consecutive rounds with zero progress) was met before the frontier\n  emptied, so the loop stopped early.",
+      "description": "Why a :class:`FleetRun` reached :data:`FleetRunState.DONE`.\n\n- ``drained`` -- the ready frontier emptied, so no further wave can be\n  claimed (the drain-to-empty stop).\n- ``converged`` -- a convergence criterion (e.g. ``kclean`` -- K\n  consecutive rounds with zero progress) was met before the frontier\n  emptied, so the loop stopped early.\n- ``budget`` -- a spend cap (EU / USD / waves) fired, so the loop stopped\n  claiming further waves. Under the graceful-drain default the in-flight\n  lanes finish before the run ends; under the armed hard-halt toggle the\n  in-flight lanes are killed at the cap (DL-4 budget HALT teeth).",
       "enum": [
         "drained",
-        "converged"
+        "converged",
+        "budget"
       ],
       "title": "FleetTerminalReason",
       "type": "string"

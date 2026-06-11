@@ -37,6 +37,9 @@ Determinism. The loop drives spawn + watch through two injectable callables
 (:class:`LaneSpawner` + :class:`LaneWatcher`); the daemon wires the live
 ``agent.dispatch`` spawn + status-poll watch, while tests inject deterministic
 fakes so the loop runs without real subprocesses.
+# noqa: EAWF010 cohesive fleet-loop surface mid-build across P30-I12 (drive +
+lanes/pgid + kill + risk-tier + reattach + budget teeth); the pure budget /
+spend helpers split into a sibling module once the loop settles.
 """
 
 from __future__ import annotations
@@ -54,6 +57,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.state.enums import RiskTier, WaveStatus
 from eawf.kernel.state.models import (
     FleetCounters,
@@ -64,12 +68,13 @@ from eawf.kernel.state.models import (
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.observability.eval.jury_validation import BlockAuthority
+from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES
 from eawf.runtime.daemon.methods import register
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.cancel import CancelResult, cancel_process_group
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
-from eawf.workflow.lifecycle.wave import claim_wave
+from eawf.workflow.lifecycle.wave import claim_wave, compute_runtime_delta
 from eawf.workflow.verify.oracle import classify_risk_tier, risk_tier_auto_closes
 
 if TYPE_CHECKING:
@@ -130,6 +135,97 @@ LaneSpawner = Callable[["MethodContext", str], "LaneDispatch | str | None"]
 LaneWatcher = Callable[["MethodContext", FleetLane], LaneOutcome]
 
 
+@dataclass(frozen=True)
+class LaneSpend:
+    """The effort-unit + USD spend a finished lane added to the run -- DL-4.
+
+    The budget HALT (DL-4) accumulates these per finished lane into the run's
+    :attr:`~eawf.kernel.state.models.FleetCounters.spent_eu` / ``spent_usd``
+    tallies so the cap check tests against live spend. A lane whose runtime was
+    not captured contributes zero on both axes (the run simply never accrues
+    spend toward its cap), so an instrumented and an uninstrumented run share
+    one accumulation path.
+
+    Attributes:
+        eu: Effort units the lane spent, read off its runtime delta (zero when
+            no runtime was captured).
+        usd: USD the lane spent, read off its runtime delta (zero when no
+            runtime was captured).
+    """
+
+    eu: float = 0.0
+    usd: float = 0.0
+
+
+#: Read one finished lane's :class:`LaneSpend` (EU + USD) for the budget HALT.
+#: Given the daemon context + the finished lane's wave id, returns the spend
+#: the lane added to the run. The daemon wires the live runtime-delta reader
+#: (:func:`_default_lane_spend`); tests inject a deterministic fake so the cap
+#: fires on injected figures without a real runtime sidecar.
+LaneSpendReader = Callable[["MethodContext", str], LaneSpend]
+
+
+def _default_lane_spend(ctx: MethodContext, wave_id: str) -> LaneSpend:
+    """Read a finished lane's EU + USD spend off the wave's runtime delta -- live.
+
+    The daemon-wired default: reads the wave's claim-time
+    :attr:`~eawf.kernel.state.models.Wave.runtime_baseline` and the latest
+    captured :attr:`~eawf.kernel.state.models.Wave.runtime_latest` off
+    ``state.json`` (free read access) and computes the close-time runtime delta
+    via :func:`~eawf.workflow.lifecycle.wave.compute_runtime_delta` -- the same
+    EUCAP runtime-delta read the wave-close rollup uses (I05-W06). A wave with
+    no captured runtime (no baseline / no latest) yields a zero
+    :class:`LaneSpend` so the run never accrues phantom spend. A stateless
+    context or a vanished wave likewise yields zero.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path``.
+        wave_id: ``W<NN>`` wave whose finished lane spend to read.
+
+    Returns:
+        The lane's :class:`LaneSpend` (zero on both axes when no runtime was
+        captured).
+    """
+    if ctx.state_path is None:
+        return LaneSpend()
+    wave = load_state(Path(ctx.state_path)).waves.get(wave_id)
+    if wave is None:
+        return LaneSpend()
+    delta = compute_runtime_delta(
+        wave.runtime_baseline,
+        wave.runtime_latest,
+        eu_minutes=DEFAULT_EU_MINUTES,
+        eu_basis=EuBasis.API_DURATION,
+    )
+    if delta is None:
+        return LaneSpend()
+    return LaneSpend(eu=delta.elapsed_eu, usd=delta.actual_cost_usd)
+
+
+def budget_exhausted(run: FleetRun) -> bool:
+    """Return whether any armed spend cap on *run* is reached -- pure, DL-4.
+
+    Tests the run's live tallies against its armed caps: the EU cap against
+    :attr:`~eawf.kernel.state.models.FleetCounters.spent_eu`, the USD cap
+    against ``spent_usd``, and the waves cap against ``claimed``. A cap left
+    ``None`` (the default) never fires, so a run armed with no cap -- or one
+    far under every armed cap -- always reports ``False`` (the negative path).
+    The first armed cap that is met returns ``True``; reaching any one cap is
+    sufficient to stop claiming.
+
+    Args:
+        run: The live :class:`FleetRun` to test against its armed caps.
+
+    Returns:
+        ``True`` when at least one armed cap is reached, else ``False``.
+    """
+    if run.eu_cap is not None and run.counters.spent_eu >= run.eu_cap:
+        return True
+    if run.usd_cap is not None and run.counters.spent_usd >= run.usd_cap:
+        return True
+    return run.waves_cap is not None and run.counters.claimed >= run.waves_cap
+
+
 def _normalise_dispatch(result: LaneDispatch | str | None) -> LaneDispatch:
     """Coerce a spawner return into a :class:`LaneDispatch`.
 
@@ -162,6 +258,14 @@ class DriveParams(BaseModel):
             frontier empties) or ``kclean`` (stop after K consecutive clean
             rounds).
         kclean_k: K threshold for the ``kclean`` mode. Ignored under ``drain``.
+        eu_cap: Optional cumulative EU spend cap; ``None`` leaves the run
+            uncapped. At the cap the loop stops claiming (DL-4).
+        usd_cap: Optional cumulative USD spend cap; ``None`` leaves the run
+            uncapped.
+        waves_cap: Optional claimed-wave count cap; ``None`` leaves the run
+            uncapped.
+        hard_halt: The arm-modal budget toggle. ``False`` (the default) drains
+            the in-flight lanes at the cap; ``True`` KILLS them (DL-3).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -169,6 +273,10 @@ class DriveParams(BaseModel):
     concurrency: int = Field(default=1, ge=1)
     convergence: str = "drain"
     kclean_k: int = Field(default=2, ge=1)
+    eu_cap: float | None = Field(default=None, gt=0.0)
+    usd_cap: float | None = Field(default=None, gt=0.0)
+    waves_cap: int | None = Field(default=None, ge=1)
+    hard_halt: bool = False
 
 
 class DriveResult(BaseModel):
@@ -438,6 +546,9 @@ class _Loop:
             tier is resolved + recorded when a lane is filled (the cockpit reads
             it for the lane badge) and drives the auto-close / fork gate when the
             lane finishes.
+        spend: The injected per-lane spend reader. As each lane finishes its
+            EU + USD spend is accumulated into the run's spend counters, so the
+            DL-4 budget cap tests against live figures.
     """
 
     ctx: MethodContext
@@ -446,6 +557,7 @@ class _Loop:
     watch: LaneWatcher
     block_authority: BlockAuthority = BlockAuthority.ADVISORY
     risk_tiers: dict[str, RiskTier] = field(default_factory=dict)
+    spend: LaneSpendReader = _default_lane_spend
 
     def _persist(self) -> None:
         """Persist the current run snapshot through the daemon canonical writer."""
@@ -462,8 +574,18 @@ class _Loop:
         real OS process group. A spawn that returned no pid records
         ``pgid=None`` (the lane is unkillable). The claimed / dispatched
         counters advance per wave.
+
+        The DL-4 budget cap gates the claim step: once an armed spend cap is
+        reached (:func:`budget_exhausted`) the fill claims no further wave even
+        with free lanes and frontier work remaining, so the run stops growing
+        spend past its cap. In-flight lanes are left for the drain / hard-halt
+        branch to resolve.
         """
         while len(self.run.lanes) < self.run.concurrency and self.run.frontier:
+            if budget_exhausted(self.run):
+                # A spend cap fired: stop claiming new waves (the in-flight
+                # lanes are resolved by the drain / hard-halt branch).
+                break
             wave_id = self.run.frontier.pop(0)
             dispatch = _normalise_dispatch(self.spawn(self.ctx, wave_id))
             self.run.lanes[wave_id] = FleetLane(
@@ -486,46 +608,86 @@ class _Loop:
                 f"killable={dispatch.pgid is not None} risk_tier={risk_tier.value}"
             )
 
-    def _drain_lanes(self) -> None:
-        """Watch every in-flight lane to its terminal outcome, freeing each slot.
+    def _drain_lanes(self) -> bool:
+        """Watch in-flight lanes to their terminal outcome, freeing each slot.
 
         Watches each open lane to completion (the watcher blocks until
         terminal); a ``closed`` outcome increments the closed counter and frees
         the slot, while a ``forked`` outcome increments the fork counter
-        (resetting the convergence streak) and frees the slot. Every lane is
-        freed by round end, so the next round's fill refills from the frontier.
+        (resetting the convergence streak) and frees the slot. Each finished
+        lane's EU + USD spend accrues onto the run's spend counters so the DL-4
+        budget cap tests against live figures.
 
         Freeing the slot **deregisters** the lane from the per-lane process
         registry (``del`` drops its ``(wave_id, attempt) -> pgid`` row), so the
         registry holds exactly the still-in-flight lanes -- a closed lane's
         pgid is no longer a live kill / reattach target.
+
+        The drain stops EARLY the moment a finished lane's spend pushes the run
+        over an armed cap WHILE the frontier still holds queued work (the DL-4
+        budget stop): the remaining un-watched lanes are left in flight for the
+        :meth:`_budget_terminal` branch to drain or kill, so a hard-halt run
+        has live lanes to reap rather than already-finished slots. A drain that
+        empties every lane without a budget stop counts a clean / forked round.
+
+        Returns:
+            ``True`` when the drain stopped early on a fired budget cap (with
+            frontier work still queued), else ``False`` -- the full round
+            completed and every lane was freed.
         """
         had_fork = False
+        budget_stopped = False
         for wave_id in list(self.run.lanes):
-            watched = self.watch(self.ctx, self.run.lanes[wave_id])
-            # Gate the watcher outcome through the lane's RiskTier: a high / ui
-            # lane that "closed" under an unearned (advisory) jury is downgraded
-            # to a fork so it never silently auto-closes -- the DL-5 safety
-            # invariant.
-            risk_tier = self.risk_tiers.pop(wave_id, RiskTier.MECH)
-            outcome = gate_lane_outcome(
-                watched, risk_tier, block_authority=self.block_authority
-            )
-            del self.run.lanes[wave_id]
-            if outcome == "forked":
-                self.run.counters.forked += 1
+            if self._finish_lane(wave_id) == "forked":
                 had_fork = True
-            else:
-                self.run.counters.closed += 1
-            logger.info(
-                f"_drain_lanes wave={wave_id} watched={watched} outcome={outcome} "
-                f"risk_tier={risk_tier.value}"
-            )
+            if self.run.frontier and budget_exhausted(self.run):
+                # The just-finished lane pushed spend over an armed cap and the
+                # frontier still holds queued work: stop watching the remaining
+                # in-flight lanes so the budget-terminal branch resolves them.
+                budget_stopped = True
+                break
         self.run.counters.rounds += 1
         if had_fork:
             self.run.counters.clean_rounds = 0
         else:
             self.run.counters.clean_rounds += 1
+        return budget_stopped
+
+    def _finish_lane(self, wave_id: str) -> LaneOutcome:
+        """Watch one lane to terminal, gate it, deregister it, and accrue spend.
+
+        The per-lane half of a drain: watches the lane to its terminal outcome,
+        gates the outcome through the lane's RiskTier (a high / ui ``closed``
+        under an unearned advisory jury is downgraded to a fork so it never
+        silently auto-closes -- the DL-5 safety invariant), deregisters the lane
+        from the registry, bumps the closed / forked counter, and accrues the
+        finished lane's EU + USD spend onto the run's spend counters (a lane
+        with no captured runtime adds zero, so the cap never moves on phantom
+        spend). Shared by :meth:`_drain_lanes` and the :meth:`_budget_terminal`
+        graceful drain so both finish a lane identically.
+
+        Args:
+            wave_id: ``W<NN>`` wave whose in-flight lane to finish.
+
+        Returns:
+            The gated :data:`LaneOutcome` (``"closed"`` or ``"forked"``).
+        """
+        watched = self.watch(self.ctx, self.run.lanes[wave_id])
+        risk_tier = self.risk_tiers.pop(wave_id, RiskTier.MECH)
+        outcome = gate_lane_outcome(watched, risk_tier, block_authority=self.block_authority)
+        del self.run.lanes[wave_id]
+        if outcome == "forked":
+            self.run.counters.forked += 1
+        else:
+            self.run.counters.closed += 1
+        lane_spend = self.spend(self.ctx, wave_id)
+        self.run.counters.spent_eu += lane_spend.eu
+        self.run.counters.spent_usd += lane_spend.usd
+        logger.info(
+            f"_finish_lane wave={wave_id} watched={watched} outcome={outcome} "
+            f"risk_tier={risk_tier.value} eu={lane_spend.eu} usd={lane_spend.usd}"
+        )
+        return outcome
 
     def _converged(self) -> bool:
         """Return whether the ``kclean`` convergence criterion is met.
@@ -537,15 +699,76 @@ class _Loop:
             return False
         return self.run.counters.clean_rounds >= self.run.kclean_k
 
+    def _budget_terminal(self) -> FleetRun:
+        """End the run on a fired budget cap -- graceful-drain or hard-halt.
+
+        The DL-4 budget HALT teeth. The claim gate has already stopped claiming
+        new waves; this resolves the still-in-flight lanes per the run's
+        :attr:`~eawf.kernel.state.models.FleetRun.hard_halt` toggle:
+
+        - Graceful drain (the default, ``hard_halt`` False): watch every
+          remaining in-flight lane to completion (no further claim), then end
+          ``DONE`` + ``terminal_reason=budget``. The in-flight work finishes.
+        - Hard halt (``hard_halt`` True): KILL every remaining in-flight lane
+          via the DL-3 :func:`kill_lane` (each kill deregisters the lane +
+          bumps the fork counter), then end ``DONE`` +
+          ``terminal_reason=budget``. The in-flight work is reaped at the cap.
+
+        Returns:
+            The terminal :class:`FleetRun` snapshot (``DONE`` / ``budget``).
+        """
+        if self.run.hard_halt:
+            # Persist the in-memory run first so the on-disk registry reflects
+            # the lanes that already finished this round (kill_lane + the
+            # re-read below both read through the canonical writer, so disk must
+            # be current before the kills land).
+            self._persist()
+            # Kill every in-flight lane at the cap (DL-3). Snapshot the lanes
+            # first because kill_lane deregisters each lane it reaps.
+            for lane in list(self.run.lanes.values()):
+                kill_lane(
+                    self.ctx,
+                    wave_id=lane.wave_id,
+                    attempt=lane.attempt,
+                    hard=True,
+                )
+                self.risk_tiers.pop(lane.wave_id, None)
+            # kill_lane wrote each deregistered lane through the canonical
+            # writer; re-read the run so the in-memory snapshot reflects the
+            # reaped lanes before the terminal transition.
+            refreshed = _require_run(self.ctx) if self.ctx.state_path is not None else None
+            if refreshed is not None:
+                self.run = refreshed
+            else:
+                self.run.lanes = {}
+        else:
+            # Graceful drain: finish every remaining in-flight lane to
+            # completion without claiming any further wave (the budget cap has
+            # already fired, so this drains unconditionally to empty).
+            for wave_id in list(self.run.lanes):
+                self._finish_lane(wave_id)
+            self._persist()
+        self.run.run_state = FleetRunState.DONE
+        self.run.terminal_reason = FleetTerminalReason.BUDGET
+        self._persist()
+        logger.info(
+            f"_budget_terminal hard_halt={self.run.hard_halt} "
+            f"spent_eu={self.run.counters.spent_eu} spent_usd={self.run.counters.spent_usd} "
+            f"claimed={self.run.counters.claimed}"
+        )
+        return self.run
+
     def run_to_terminal(self) -> FleetRun:
         """Drive the loop until it reaches a terminal or held state.
 
         The round structure: fill every free lane from the frontier, drain the
         in-flight lanes, then test the stop conditions. The loop stops with
         ``DONE`` + ``terminal_reason=converged`` when the ``kclean`` criterion
-        is met (before draining to empty), and with ``DONE`` +
-        ``terminal_reason=drained`` when the frontier AND every lane have
-        emptied. Each transition re-persists the run.
+        is met (before draining to empty), with ``DONE`` +
+        ``terminal_reason=budget`` when a spend cap fires with frontier work
+        still queued (DL-4 -- graceful-drain or hard-halt per the run toggle),
+        and with ``DONE`` + ``terminal_reason=drained`` when the frontier AND
+        every lane have emptied. Each transition re-persists the run.
 
         Returns:
             The terminal :class:`FleetRun` snapshot.
@@ -560,12 +783,17 @@ class _Loop:
                 self.run.terminal_reason = FleetTerminalReason.DRAINED
                 self._persist()
                 return self.run
-            self._drain_lanes()
+            budget_stopped = self._drain_lanes()
             if self._converged():
                 self.run.run_state = FleetRunState.DONE
                 self.run.terminal_reason = FleetTerminalReason.CONVERGED
                 self._persist()
                 return self.run
+            if budget_stopped:
+                # A spend cap fired mid-drain with frontier work still queued:
+                # resolve the still-in-flight lanes (drain or kill) and end on
+                # the budget cap.
+                return self._budget_terminal()
             self._persist()
 
 
@@ -576,8 +804,13 @@ def arm_drive(
     concurrency: int = 1,
     convergence: str = "drain",
     kclean_k: int = 2,
+    eu_cap: float | None = None,
+    usd_cap: float | None = None,
+    waves_cap: int | None = None,
+    hard_halt: bool = False,
     spawn: LaneSpawner | None = None,
     watch: LaneWatcher | None = None,
+    spend: LaneSpendReader | None = None,
     block_authority: BlockAuthority = BlockAuthority.ADVISORY,
 ) -> FleetRun:
     """Arm + run the fleet auto-drain loop over *frontier*.
@@ -590,8 +823,9 @@ def arm_drive(
       arm.
     - Otherwise the run transitions IDLE -> DRAINING and the loop fills
       ``min(concurrency, len(frontier))`` lanes, watches them, and advances the
-      frontier until it empties (``terminal_reason=drained``) or the ``kclean``
-      criterion is met (``terminal_reason=converged``).
+      frontier until it empties (``terminal_reason=drained``), the ``kclean``
+      criterion is met (``terminal_reason=converged``), or a spend cap fires
+      (``terminal_reason=budget`` -- DL-4).
 
     The run is persisted through the daemon canonical state writer on arm and
     on every subsequent transition (the loop never writes ``state.json``
@@ -603,10 +837,21 @@ def arm_drive(
         concurrency: Maximum lanes held at once.
         convergence: ``drain`` or ``kclean``.
         kclean_k: K threshold for ``kclean``.
+        eu_cap: Optional cumulative EU spend cap; ``None`` leaves the run
+            uncapped. At the cap the loop stops claiming new waves (DL-4).
+        usd_cap: Optional cumulative USD spend cap; ``None`` leaves the run
+            uncapped.
+        waves_cap: Optional claimed-wave count cap; ``None`` leaves the run
+            uncapped.
+        hard_halt: The arm-modal budget toggle. ``False`` (the default) lets
+            the in-flight lanes drain at the cap; ``True`` KILLS them (DL-3).
         spawn: Optional :class:`LaneSpawner` override (tests inject a fake);
             defaults to the live claim + ``agent.dispatch`` spawner.
         watch: Optional :class:`LaneWatcher` override (tests inject a fake);
             defaults to the on-disk wave-status watcher.
+        spend: Optional :class:`LaneSpendReader` override (tests inject a fake);
+            defaults to the live runtime-delta reader so the budget cap tests
+            against real EU / USD figures.
         block_authority: The jury's earned authority for this run -- gates
             whether a high / ui lane may auto-close or must fork. Defaults to
             :attr:`BlockAuthority.ADVISORY` (an uncalibrated jury), so a
@@ -614,7 +859,8 @@ def arm_drive(
 
     Returns:
         The :class:`FleetRun` snapshot after the loop returns -- ``DONE`` on a
-        drained / converged run, or ``IDLE`` when dispatch was paused on arm.
+        drained / converged / budget-capped run, or ``IDLE`` when dispatch was
+        paused on arm.
 
     Raises:
         LifecycleError: When *frontier* is empty -- the loop refuses to arm a
@@ -631,6 +877,10 @@ def arm_drive(
         counters=FleetCounters(),
         convergence="kclean" if convergence == "kclean" else "drain",
         kclean_k=kclean_k,
+        eu_cap=eu_cap,
+        usd_cap=usd_cap,
+        waves_cap=waves_cap,
+        hard_halt=hard_halt,
         terminal_reason=None,
         armed_at=now,
     )
@@ -648,6 +898,7 @@ def arm_drive(
         spawn=spawn if spawn is not None else _default_spawner,
         watch=watch if watch is not None else _default_watcher,
         block_authority=block_authority,
+        spend=spend if spend is not None else _default_lane_spend,
     )
     terminal = loop.run_to_terminal()
     logger.info(
@@ -688,18 +939,23 @@ def resume(
     *,
     spawn: LaneSpawner | None = None,
     watch: LaneWatcher | None = None,
+    spend: LaneSpendReader | None = None,
     block_authority: BlockAuthority = BlockAuthority.ADVISORY,
 ) -> FleetRun:
     """Resume a PAUSED fleet run: return to DRAINING and restart claiming.
 
     Flips a ``PAUSED`` run back to :data:`FleetRunState.DRAINING` and re-runs
     the loop over the remaining frontier + in-flight lanes. The transition +
-    every subsequent round persists through the daemon canonical writer.
+    every subsequent round persists through the daemon canonical writer. The
+    DL-4 spend caps carry through on the persisted run, so a resumed run still
+    halts on a fired budget cap.
 
     Args:
         ctx: Daemon method context.
         spawn: Optional :class:`LaneSpawner` override.
         watch: Optional :class:`LaneWatcher` override.
+        spend: Optional :class:`LaneSpendReader` override; defaults to the live
+            runtime-delta reader.
         block_authority: The jury's earned authority for the resumed run --
             gates whether a high / ui lane may auto-close or must fork. Defaults
             to :attr:`BlockAuthority.ADVISORY`, so a high / ui lane forks rather
@@ -720,6 +976,7 @@ def resume(
         spawn=spawn if spawn is not None else _default_spawner,
         watch=watch if watch is not None else _default_watcher,
         block_authority=block_authority,
+        spend=spend if spend is not None else _default_lane_spend,
     )
     terminal = loop.run_to_terminal()
     logger.info(f"resume run_state={terminal.run_state.value}")
@@ -1233,14 +1490,17 @@ async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Validates params per :class:`DriveParams`, arms the loop via
     :func:`arm_drive`, and returns the terminal :class:`FleetRun` snapshot. The
     loop claims, dispatches spawn=True, watches, closes-or-forks, and advances
-    the frontier unattended until it empties / converges, honouring
-    ``state.dispatch_paused`` (a paused state stays IDLE + claims nothing). The
-    run is persisted only through the daemon canonical state writer.
+    the frontier unattended until it empties / converges / hits a spend cap,
+    honouring ``state.dispatch_paused`` (a paused state stays IDLE + claims
+    nothing). The run is persisted only through the daemon canonical state
+    writer.
 
     Args:
         ctx: Daemon method context. Needs ``state_path`` (+ ``event_path`` for
             the live spawn path) to claim + dispatch + persist.
-        params: JSON-RPC params per :class:`DriveParams`.
+        params: JSON-RPC params per :class:`DriveParams` (including the optional
+            DL-4 ``eu_cap`` / ``usd_cap`` / ``waves_cap`` spend caps + the
+            ``hard_halt`` drain-vs-kill toggle).
 
     Returns:
         Dict matching :class:`DriveResult`.
@@ -1258,6 +1518,10 @@ async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         concurrency=args.concurrency,
         convergence=args.convergence,
         kclean_k=args.kclean_k,
+        eu_cap=args.eu_cap,
+        usd_cap=args.usd_cap,
+        waves_cap=args.waves_cap,
+        hard_halt=args.hard_halt,
     )
     result = DriveResult(
         run_state=run.run_state,

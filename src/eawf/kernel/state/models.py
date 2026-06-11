@@ -1014,10 +1014,15 @@ class FleetTerminalReason(StrEnum):
     - ``converged`` -- a convergence criterion (e.g. ``kclean`` -- K
       consecutive rounds with zero progress) was met before the frontier
       emptied, so the loop stopped early.
+    - ``budget`` -- a spend cap (EU / USD / waves) fired, so the loop stopped
+      claiming further waves. Under the graceful-drain default the in-flight
+      lanes finish before the run ends; under the armed hard-halt toggle the
+      in-flight lanes are killed at the cap (DL-4 budget HALT teeth).
     """
 
     DRAINED = "drained"
     CONVERGED = "converged"
+    BUDGET = "budget"
 
 
 class FleetLane(_StrictModel):
@@ -1075,6 +1080,14 @@ class FleetCounters(_StrictModel):
         rounds: Number of frontier-advance rounds the loop has run.
         clean_rounds: Consecutive rounds with zero forks -- the convergence
             counter the ``kclean`` criterion reads. Reset to zero on any fork.
+        spent_eu: Cumulative effort units spent across every finished lane,
+            read off each lane's runtime delta -- the figure the EU budget cap
+            (DL-4) tests against. Additive (defaults ``0.0``) so a counters row
+            written before the field existed re-validates unchanged.
+        spent_usd: Cumulative USD spent across every finished lane, read off
+            each lane's runtime delta -- the figure the USD budget cap (DL-4)
+            tests against. Additive (defaults ``0.0``) so an older row
+            re-validates unchanged.
     """
 
     claimed: int = Field(default=0, ge=0)
@@ -1083,6 +1096,8 @@ class FleetCounters(_StrictModel):
     forked: int = Field(default=0, ge=0)
     rounds: int = Field(default=0, ge=0)
     clean_rounds: int = Field(default=0, ge=0)
+    spent_eu: float = Field(default=0.0, ge=0.0)
+    spent_usd: float = Field(default=0.0, ge=0.0)
 
 
 class FleetRun(_StrictModel):
@@ -1107,6 +1122,22 @@ class FleetRun(_StrictModel):
         kclean_k: K threshold for the ``kclean`` convergence mode -- the
             number of consecutive clean rounds that ends the run. Ignored
             under ``drain``.
+        eu_cap: Optional cumulative effort-unit spend cap. When the run's
+            ``spent_eu`` reaches it the loop claims no further wave and ends
+            ``terminal_reason=budget`` (DL-4). ``None`` (the default) leaves
+            the run uncapped. Additive + back-compat.
+        usd_cap: Optional cumulative USD spend cap, applied identically to
+            ``eu_cap``. ``None`` leaves the run uncapped. Additive.
+        waves_cap: Optional claimed-wave count cap. When ``counters.claimed``
+            reaches it the loop claims no further wave and ends
+            ``terminal_reason=budget``. ``None`` leaves the run uncapped.
+            Additive.
+        hard_halt: The arm-modal budget-halt toggle. ``False`` (the default)
+            is the graceful-drain budget stop -- at the cap the loop stops
+            claiming but lets the in-flight lanes finish before ending
+            ``budget``. ``True`` arms the hard halt -- reaching the cap KILLS
+            the in-flight lanes (the DL-3 kill) instead of draining. Additive
+            + back-compat (an older run re-validates as graceful-drain).
         terminal_reason: Why the run reached ``DONE``; ``None`` until then.
         armed_at: When the run was armed.
     """
@@ -1118,6 +1149,10 @@ class FleetRun(_StrictModel):
     counters: FleetCounters = Field(default_factory=FleetCounters)
     convergence: Literal["drain", "kclean"] = "drain"
     kclean_k: int = Field(default=2, ge=1)
+    eu_cap: Annotated[float, Field(gt=0.0)] | None = None
+    usd_cap: Annotated[float, Field(gt=0.0)] | None = None
+    waves_cap: Annotated[int, Field(ge=1)] | None = None
+    hard_halt: bool = False
     terminal_reason: FleetTerminalReason | None = None
     armed_at: UtcDatetime
 
