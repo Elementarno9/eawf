@@ -7392,6 +7392,62 @@
       "status": "done",
       "updated_at": "2026-06-11T14:22:38.887660Z"
     },
+    "P30-I16-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W01",
+      "model": null,
+      "scope_id": "P30-I16-W01",
+      "status": "done",
+      "updated_at": "2026-06-11T21:40:14.831853Z"
+    },
+    "P30-I16-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W02",
+      "model": null,
+      "scope_id": "P30-I16-W02",
+      "status": "done",
+      "updated_at": "2026-06-11T21:40:33.674155Z"
+    },
+    "P30-I16-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W05",
+      "model": null,
+      "scope_id": "P30-I16-W05",
+      "status": "done",
+      "updated_at": "2026-06-11T21:40:43.606292Z"
+    },
+    "P30-I16-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W07",
+      "model": null,
+      "scope_id": "P30-I16-W07",
+      "status": "done",
+      "updated_at": "2026-06-11T21:40:52.929171Z"
+    },
     "P30-I16-W14": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 156790,
@@ -7434,6 +7490,34 @@
       "status": "done",
       "updated_at": "2026-06-11T16:40:09.852827Z"
     },
+    "P30-I16-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W18",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W18",
+      "model": null,
+      "scope_id": "P30-I16-W18",
+      "status": "done",
+      "updated_at": "2026-06-11T21:41:08.358143Z"
+    },
+    "P30-I16-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W19",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W19",
+      "model": null,
+      "scope_id": "P30-I16-W19",
+      "status": "done",
+      "updated_at": "2026-06-11T21:41:10.544020Z"
+    },
     "P30-I16-W20": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 94438,
@@ -7475,6 +7559,20 @@
       "scope_id": "P30-I16-W24",
       "status": "done",
       "updated_at": "2026-06-11T15:44:30.244780Z"
+    },
+    "P30-I16-W25": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W25",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W25",
+      "model": null,
+      "scope_id": "P30-I16-W25",
+      "status": "done",
+      "updated_at": "2026-06-11T21:41:12.086191Z"
     }
   },
   "agent_sessions": {
@@ -10595,10 +10693,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I16-W18",
-      "P30-I16-W19"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I16",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -19987,6 +20082,58 @@
       "scope_id": "P30-I15-W20",
       "updated_at": "2026-06-11T14:11:41.522256Z"
     },
+    "P30-I16-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W01-bucket-20260611T164407Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W01",
+      "updated_at": "2026-06-11T16:44:07.131280Z"
+    },
+    "P30-I16-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W02-bucket-20260611T164407Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W02",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W02",
+      "updated_at": "2026-06-11T16:44:07.617270Z"
+    },
+    "P30-I16-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W05-bucket-20260611T164408Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W05",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W05",
+      "updated_at": "2026-06-11T16:44:08.092468Z"
+    },
+    "P30-I16-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W07-bucket-20260611T164408Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W07",
+      "updated_at": "2026-06-11T16:44:08.594624Z"
+    },
     "P30-I16-W14": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I16-W14-bucket-20260611T161852Z",
@@ -20090,6 +20237,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I16-W24",
       "updated_at": "2026-06-11T15:43:15.561485Z"
+    },
+    "P30-I16-W25": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W25-bucket-20260611T164409Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W25",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W25",
+      "updated_at": "2026-06-11T16:44:09.074895Z"
     }
   },
   "fleet_run": null,
@@ -22134,7 +22294,8 @@
         "P30-I16-W21",
         "P30-I16-W22",
         "P30-I16-W23",
-        "P30-I16-W24"
+        "P30-I16-W24",
+        "P30-I16-W25"
       ]
     },
     "P30-I17": {
@@ -23253,7 +23414,7 @@
   "schema_version": "1.11",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T16:40:35.025990Z",
+  "updated_at": "2026-06-11T21:41:12.086406Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -86672,10 +86833,10 @@
       "blocks": [
         "P30-I16-W15"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T16:44:07.125468Z",
+      "closed_at": "2026-06-11T21:40:14.831853Z",
+      "commit": "31918c27b5e5d7c09100e989d5631b28d558ea26",
       "deps": [],
       "description": "I15-W18 added the wave status pill; iter/phase/backlog/incident cards still render bare status words.",
       "dispatch_history": [],
@@ -86729,12 +86890,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:17:18.408187Z",
-      "outcome": null,
+      "outcome": "Routed detail-card iter/phase/backlog/incident status cells through status_sigil; goldens regenerated.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -86771,10 +86932,10 @@
       "blocks": [
         "P30-I16-W15"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T16:44:07.617176Z",
+      "closed_at": "2026-06-11T21:40:33.674155Z",
+      "commit": "51795450974da4fae826575b326b8f9263aa0ec2",
       "deps": [],
       "description": "Evidence ballot rows render bare pass/fail words, the empty line and column header drifted from the U2 pin-strip, and the U1 un-priced cell renders the word \"unbilled\" instead of the pinned glyph.",
       "dispatch_history": [],
@@ -86828,12 +86989,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:30.881492Z",
-      "outcome": null,
+      "outcome": "Re-pinned U2/U1 cost+ballot literals to designer pin-strip; evidence goldens regenerated for U2 empty line.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -87069,10 +87230,10 @@
       "blocks": [
         "P30-I16-W15"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T16:44:08.092385Z",
+      "closed_at": "2026-06-11T21:40:43.606292Z",
+      "commit": "b95e957008ad6f702d680129b198424d3093cd8b",
       "deps": [],
       "description": "Inbox cards lack the spec approve/hold/dismiss keys; agent-watch cancel is k-only. Strict-spec alignment per D-B.",
       "dispatch_history": [],
@@ -87126,12 +87287,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:36.589621Z",
-      "outcome": null,
+      "outcome": "needs_user inbox binds a/h/x affordances; agent-watch x-cancel alias wired.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -87267,10 +87428,10 @@
       "blocks": [
         "P30-I16-W15"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T16:44:08.594532Z",
+      "closed_at": "2026-06-11T21:40:52.929171Z",
+      "commit": "f55ac48b4bd67b4f372aafa0f0c6e2bf5b6c180d",
       "deps": [],
       "description": "The overlay renders the DAG frontier but not the EU rollup or the EAWF022 dropped-detail report the surface-redesign-notes specify.",
       "dispatch_history": [],
@@ -87323,12 +87484,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:40.466204Z",
-      "outcome": null,
+      "outcome": "Plan-preview per-iter EU rollup row + dropped-detail report rendered + tested.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -88390,8 +88551,8 @@
       "blocks": [],
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:18:53.934005Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-11T21:41:08.358143Z",
+      "commit": "d91209c7e8b984d7d5ee9b4dce77ab9d40f680c1",
       "deps": [],
       "description": "Close-mechanism field on wave-close events; EAWF_DAEMONLESS waiver per D-D (env hatch keeps non-gate-bearing mutations; gate-bearing closes need an explicit per-invocation waiver flag recording a waiver event); band-merge intent ruling + resolver re-order; token-arm word-boundary fix.",
       "dispatch_history": [],
@@ -88453,12 +88614,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:25:01.249298Z",
-      "outcome": null,
+      "outcome": "Daemonless close-with-waiver door + close-mechanism + band/token hardening.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -88521,8 +88682,8 @@
       ],
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:18:54.431318Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-11T21:41:10.544020Z",
+      "commit": "2e012006c3ac8adbf928c0648e4fc14512816a45",
       "deps": [],
       "description": "Add harness/model attribution fields to ActualSummary and RuntimeCounters plus the session-tree rollup so EU actuals are calibratable (the T5/T6 non-negotiable that I05 missed).",
       "dispatch_history": [],
@@ -88564,12 +88725,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:25:03.121382Z",
-      "outcome": null,
+      "outcome": "Harness+model EU-capture attribution on ActualSummary/RuntimeCounters (schema 1.11).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -89064,6 +89225,72 @@
         }
       ],
       "title": "Apply ruff 0.15.12 repo-wide format sweep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I16-W25": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T16:44:09.074792Z",
+      "closed_at": "2026-06-11T21:41:12.086191Z",
+      "commit": "639b911a6864f553d0b2ef9dcd3bcb9d6fc1952f",
+      "deps": [],
+      "description": "Reactive: W18 built the daemonless-waiver door + close_mechanism + W19 built harness/model attribution, but neither is called from the live close/capture path. Wire both so the end-to-end criteria are genuinely true (no idle contract).",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave.py",
+        "src/eawf/surfaces/cli/commands/lifecycle_wave.py",
+        "src/eawf/kernel/state/io.py",
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/surfaces/cli/_mutation.py",
+        "tests/"
+      ],
+      "gates": [],
+      "id": "P30-I16-W25",
+      "intent": {
+        "desired_outcome": "Live daemonless close rejects gate-bearing without waiver; close events stamp close_mechanism; recorded actuals carry harness+model",
+        "evidence_refs": [],
+        "planned_steps": [
+          "call enforce_daemonless_close_waiver from the live close",
+          "stamp close_mechanism on all close events",
+          "thread harness+model in daemon runtime writer",
+          "test end-to-end"
+        ],
+        "priority_rationale": "Closes the two end-to-end gaps so W18/W19 criteria are genuinely met before iter close",
+        "problem": "W18 door + W19 attribution are implemented+unit-tested but not called from the live close/capture paths (idle contract)",
+        "risks": [
+          "touches the live close path used by orchestration; land + gauntlet before closing W18/W19"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I16",
+      "opened_at": "2026-06-11T16:43:58.915599Z",
+      "outcome": "Wired daemonless-waiver door + harness/model attribution into live close path.",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "A daemonless gate-bearing wave close WITHOUT the waiver flag is rejected end-to-end via the live lifecycle close (not only the unit); every wave-close event from both the daemon and the in-process fallback carries close_mechanism; the daemon runtime-capture writer threads harness+model into the pers",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A daemonless gate-bearing wave close WITHOUT the waiver flag is rejected end-to-end via the live lifecycle close (not only the unit); every wave-close event from both the daemon and the in-process fallback carries close_mechanism; the daemon runtime-capture writer threads harness+model into the persisted RuntimeLatest/ActualSummary so a recorded actual carries non-null attribution",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire daemonless-waiver door + harness/model attribution into live paths",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
