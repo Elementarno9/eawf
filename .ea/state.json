@@ -5652,6 +5652,18 @@
       "status": "done",
       "updated_at": "2026-06-11T03:38:16.259298Z"
     },
+    "P30-I11-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I11-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I11-W10",
+      "scope_id": "P30-I11-W10",
+      "status": "done",
+      "updated_at": "2026-06-11T05:00:07.430166Z"
+    },
     "P30-I12-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -9703,7 +9715,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -17739,6 +17751,19 @@
       "scope_id": "P30-I11-W09",
       "updated_at": "2026-06-11T03:37:49.448513Z"
     },
+    "P30-I11-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I11-W10-bucket-20260611T050006Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I11-W10",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I11-W10",
+      "updated_at": "2026-06-11T05:00:06.071379Z"
+    },
     "P30-I12-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I12-W01-bucket-20260610T234807Z",
@@ -19999,7 +20024,8 @@
         "P30-I11-W06",
         "P30-I11-W07",
         "P30-I11-W08",
-        "P30-I11-W09"
+        "P30-I11-W09",
+        "P30-I11-W10"
       ]
     },
     "P30-I12": {
@@ -21048,7 +21074,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T04:58:45.569641Z",
+  "updated_at": "2026-06-11T05:00:07.430360Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -80916,6 +80942,63 @@
         }
       ],
       "title": "Update concurrently-created test fixtures to the Track schema rename",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I11-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T05:00:06.065857Z",
+      "closed_at": "2026-06-11T05:00:07.430166Z",
+      "commit": "6f1a78e12438ad63c2b135ff14671f3c0f300e5e",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "docs/reference/autogen/cli.md"
+      ],
+      "gates": [],
+      "id": "P30-I11-W10",
+      "intent": {
+        "desired_outcome": "the autogen cli.md reflects the track sync command and the drift gate is green",
+        "evidence_refs": [],
+        "planned_steps": [
+          "regenerate the autogen pages to disk",
+          "verify the drift gate green"
+        ],
+        "priority_rationale": "Red autogen drift gate blocks iter and phase close",
+        "problem": "I11-W07 added the track sync CLI command but did not regenerate the autogen cli.md, reddening the docs-autogen drift gate",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I11",
+      "opened_at": "2026-06-11T05:00:05.155875Z",
+      "outcome": "Regenerated autogen cli.md for track sync; drift gate green",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "test_docs_autogen drift gate passes after regenerating cli.md to include the eawf track sync command added by I11-W07",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_docs_autogen drift gate passes after regenerating cli.md to include the eawf track sync command added by I11-W07",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Regenerate autogen cli.md for the track sync command",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
