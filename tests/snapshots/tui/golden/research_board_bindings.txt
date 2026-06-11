@@ -2,11 +2,11 @@
 
   ┌─ TOPIC TREE ──────────────────────────────────────────────────┐┌─ CLAIMS / EVIDENCE ───────────────────────────────────────────┐┌─ PROGRESS / BUDGET ────────────────────────────────────────────┐
   │ > ≡ Survey the options-pricing landscape                      ││                                                               ││ RUN staged -- live run not yet wired                           │
-  │     ❯ round 1                                                 ││ ◌ Implied vol surface is downward sloping in strike           ││ ROUND 1/1 (staged)                                             │
+  │     ◆ round 1 running                                         ││ ◌ Implied vol surface is downward sloping in strike           ││ ROUND 1/1 running                                              │
   │       ◌ market-structure                                      ││                                                               ││ ACTIVE 1 claim(s)                                              │
   │       ◌ pricing-models                                        ││ Options (supporting evidence)                                 ││ WAITING 1 open question(s)                                     │
-  │     ❯ round 1 -- questions                                    ││ none yet                                                      ││ PAUSED 0 checkpoint(s)                                         │
-  │       ◌ Which curve model fits the short tenor                ││                                                               ││ BUDGET 2 staged topic(s), 0 answered                           │
+  │     ◆ round 1 running -- questions                            ││ none yet                                                      ││ PAUSED 0 checkpoint(s)                                         │
+  │       ◌ Which curve model fits the short tenor                ││                                                               ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
   │ enter to peek the selected node                               ││ Conflicts (contradicting evidence)                            ││ RISKS none                                                     │
   │                                                               ││ none yet                                                      ││                                                                │
   │                                                               ││                                                               ││                                                                │
@@ -34,7 +34,7 @@
   │ no checkpoint -- nothing awaiting operator review                                                                                                                                                │
   └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-  enter peek  n new  o ask  t steer  a approve  p park  r follow-up  s snapshot  x cancel
+  enter peek  n new  o ask  t steer  b broadcast  v override  a approve  p park  r follow-up  s snapshot  x cancel
 
- ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  o ask  ·  p park  ·  r follow-up  ·  s snapshot  ·  t steer  ·  x cancel  ·  w/r/u scope  ·  c config  ·  F5  weekly burn: — no data•
+ ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  o ask  ·  p park  ·  r follow-up  ·  s snapshot  ·  t steer  ·  v override  ·  x cancel  ·  w/r/u scope  ·  c weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch

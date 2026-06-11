@@ -94,9 +94,13 @@ from eawf.surfaces.tui.modes.research_board import (
     NodeKind,
     OperatorNoteModal,
     ResearchBoardModeScreen,
+    RoundProgress,
+    RoundState,
     build_research_block,
     build_tree_nodes,
     claim_sigil_markup,
+    classify_round_state,
+    compute_round_progress,
     has_research_signal,
     index_claims_by_question,
     parse_domains,
@@ -107,6 +111,7 @@ from eawf.surfaces.tui.modes.research_board import (
     render_claims,
     render_progress,
     render_tree,
+    round_sigil_markup,
 )
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
@@ -419,7 +424,9 @@ def test_build_tree_nodes_open_question_groups_under_a_questions_round() -> None
     nodes = build_tree_nodes((), (_question(),))
     assert len(nodes) == 2
     assert nodes[0].kind is NodeKind.ROUND
-    assert nodes[0].label == "round 1 -- questions"
+    # The default question is OPEN, so the round classifies as running (the FA8
+    # auto-run state infixes the round label).
+    assert nodes[0].label == "round 1 running -- questions"
     assert nodes[1].kind is NodeKind.QUESTION
     assert nodes[1].depth == 2
     assert nodes[1].label == "Which curve model fits the short tenor"
@@ -1701,10 +1708,14 @@ def test_build_tree_nodes_campaign_and_questions_emit_both_rounds() -> None:
     """A campaign plus open questions emit the campaign round AND questions round."""
     nodes = build_tree_nodes((_campaign_row(),), (_question(),))
     rounds = [node for node in nodes if node.kind is NodeKind.ROUND]
-    assert {node.label for node in rounds} == {"round 1", "round 1 -- questions"}
+    # The default question is OPEN, so both rounds classify as running.
+    assert {node.label for node in rounds} == {
+        "round 1 running",
+        "round 1 running -- questions",
+    }
     # The campaign-owned round carries the campaign id; the questions round does not.
-    campaign_round = next(node for node in rounds if node.label == "round 1")
-    questions_round = next(node for node in rounds if node.label == "round 1 -- questions")
+    campaign_round = next(node for node in rounds if node.label == "round 1 running")
+    questions_round = next(node for node in rounds if node.label == "round 1 running -- questions")
     assert campaign_round.campaign_id == "RC-0001"
     assert questions_round.campaign_id is None
 
@@ -1771,7 +1782,8 @@ def test_research_board_renders_question_tree_with_nested_claims(tmp_path: Path)
             assert isinstance(pane, ResearchBoardModeScreen)
             tree_body = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
             lines = tree_body.splitlines()
-            round_label = "round 1 -- questions"
+            # The only question is ANSWERED, so the round classifies as saturated.
+            round_label = "round 1 saturated -- questions"
             question_label = "Which curve model fits the short tenor"
             claim_label = "Implied vol surface is downward sloping in strike"
             round_line = next(line for line in lines if round_label in line)
@@ -2099,5 +2111,323 @@ def test_research_board_empty_board_renders_no_word_spoken_hero(tmp_path: Path) 
             assert "no word spoken yet" in frame
             # The questions tree pane is NOT mounted on the empty board.
             assert not pane.query(f"#{TREE_PANE_ID}")
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W08 (FA8): classify_round_state -- the auto-run round grammar (boundary)
+# --------------------------------------------------------------------------
+
+
+def test_classify_round_state_empty_is_idle() -> None:
+    """An empty question ledger is the pre-auto-run IDLE round (no live round)."""
+    assert classify_round_state(()) is RoundState.IDLE
+
+
+def test_classify_round_state_any_open_is_running() -> None:
+    """Any open question keeps the round RUNNING even past answered / dropped."""
+    questions = (
+        _question("OQ-0001", status=OpenQuestionStatus.OPEN),
+        _question("OQ-0002", status=OpenQuestionStatus.ANSWERED),
+        _question("OQ-0003", status=OpenQuestionStatus.DROPPED),
+    )
+    assert classify_round_state(questions) is RoundState.RUNNING
+
+
+def test_classify_round_state_all_resolved_with_answer_is_saturated() -> None:
+    """No open question + at least one answered = a SATURATED round."""
+    questions = (
+        _question("OQ-0001", status=OpenQuestionStatus.ANSWERED),
+        _question("OQ-0002", status=OpenQuestionStatus.DROPPED),
+    )
+    assert classify_round_state(questions) is RoundState.SATURATED
+
+
+def test_classify_round_state_all_dropped_is_pruned() -> None:
+    """Every question dropped without an answer = a PRUNED round."""
+    questions = (
+        _question("OQ-0001", status=OpenQuestionStatus.DROPPED),
+        _question("OQ-0002", status=OpenQuestionStatus.DROPPED),
+    )
+    assert classify_round_state(questions) is RoundState.PRUNED
+
+
+# --------------------------------------------------------------------------
+# W08 (FA8): compute_round_progress -- the budget + pruned tally
+# --------------------------------------------------------------------------
+
+
+def test_compute_round_progress_counts_open_answered_and_pruned() -> None:
+    """The progress tallies open / answered questions + pruned candidates.
+
+    A pruned candidate is a dropped question OR a refuted / superseded claim
+    set aside this round, so the pruned count folds both sources.
+    """
+    campaigns = (_campaign_row(),)  # two staged domains -> two staged topics
+    claims = (
+        _claim("CL-0001", status=ClaimStatus.REFUTED),
+        _claim("CL-0002", status=ClaimStatus.SUPERSEDED),
+        _claim("CL-0003", status=ClaimStatus.SUPPORTED),
+    )
+    questions = (
+        _question("OQ-0001", status=OpenQuestionStatus.OPEN),
+        _question("OQ-0002", status=OpenQuestionStatus.ANSWERED),
+        _question("OQ-0003", status=OpenQuestionStatus.DROPPED),
+    )
+    progress = compute_round_progress(campaigns, claims, questions)
+    assert isinstance(progress, RoundProgress)
+    assert progress.state is RoundState.RUNNING  # an open question is present
+    assert progress.open_count == 1
+    assert progress.answered_count == 1
+    # 1 dropped question + 2 pruned (refuted / superseded) claims.
+    assert progress.pruned_count == 3
+    assert progress.spent_topics == 2  # two staged domains across the campaign
+
+
+def test_compute_round_progress_empty_scope_is_idle_zeroed() -> None:
+    """A scope with no campaign / claim / question is an idle, zeroed round."""
+    progress = compute_round_progress((), (), ())
+    assert progress.state is RoundState.IDLE
+    assert progress.open_count == 0
+    assert progress.answered_count == 0
+    assert progress.pruned_count == 0
+    assert progress.spent_topics == 0
+
+
+# --------------------------------------------------------------------------
+# W08 (FA8): round_sigil_markup -- the running / saturated / pruned sigil
+# --------------------------------------------------------------------------
+
+
+def test_round_sigil_markup_running_leads_with_the_live_diamond() -> None:
+    """A running round leads with the RUNNING diamond, never a raw state word."""
+    from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+
+    markup = round_sigil_markup(RoundState.RUNNING, mode=DEFAULT_RENDER_MODE)
+    assert glyph(Sigil.RUNNING, mode=DEFAULT_RENDER_MODE) in markup
+    assert "running" not in markup
+
+
+def test_round_sigil_markup_pruned_is_the_withheld_abandoned_mark() -> None:
+    """A pruned round wears the withheld ABANDONED mark, never the clean circle."""
+    from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+
+    markup = round_sigil_markup(RoundState.PRUNED, mode=DEFAULT_RENDER_MODE)
+    assert glyph(Sigil.ABANDONED, mode=DEFAULT_RENDER_MODE) in markup
+    # A pruned round must NOT read as a clean close.
+    assert glyph(Sigil.CLOSED, mode=DEFAULT_RENDER_MODE) not in markup
+
+
+def test_round_sigil_markup_covers_every_state() -> None:
+    """Every RoundState resolves a sigil markup -- no state falls through."""
+    for state in RoundState:
+        markup = round_sigil_markup(state, mode=DEFAULT_RENDER_MODE)
+        assert markup  # non-empty content markup for every state
+        assert state.value not in markup  # never the raw state word
+
+
+# --------------------------------------------------------------------------
+# W08 (FA8): the round node carries its auto-run state + sigil in the tree
+# --------------------------------------------------------------------------
+
+
+def test_build_tree_nodes_running_round_carries_running_state_and_sigil() -> None:
+    """A campaign with an open question renders a RUNNING round node + sigil."""
+    from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+
+    nodes = build_tree_nodes(
+        (_campaign_row(),),
+        (_question("OQ-0001", status=OpenQuestionStatus.OPEN),),
+    )
+    round_nodes = [node for node in nodes if node.kind is NodeKind.ROUND]
+    # Both the campaign round and the questions round classify as running.
+    assert round_nodes
+    for node in round_nodes:
+        assert node.round_state is RoundState.RUNNING
+        assert "running" in node.label
+    body = render_tree(nodes, -1, mode=DEFAULT_RENDER_MODE)
+    # The running round leads with the live diamond, not a flat dispatch arrow.
+    assert glyph(Sigil.RUNNING, mode=DEFAULT_RENDER_MODE) in body
+
+
+def test_build_tree_nodes_saturated_round_carries_saturated_state() -> None:
+    """A campaign whose only question is answered renders a SATURATED round."""
+    nodes = build_tree_nodes(
+        (_campaign_row(),),
+        (_question("OQ-0001", status=OpenQuestionStatus.ANSWERED),),
+    )
+    round_nodes = [node for node in nodes if node.kind is NodeKind.ROUND]
+    assert round_nodes
+    for node in round_nodes:
+        assert node.round_state is RoundState.SATURATED
+        assert "saturated" in node.label
+
+
+# --------------------------------------------------------------------------
+# W08 (FA8): render_progress -- the auto-run round phrase + budget band
+# --------------------------------------------------------------------------
+
+
+def test_render_progress_budget_band_surfaces_pruned_and_running() -> None:
+    """The progress pane reads the running round + the pruned budget tally.
+
+    The ROUND band reads the FA8 auto-run phrase (running) and the BUDGET band
+    folds the staged-topic spend + answered + pruned tallies.
+    """
+    campaigns = (_campaign_row(),)
+    claims = (_claim("CL-0001", status=ClaimStatus.REFUTED),)
+    questions = (
+        _question("OQ-0001", status=OpenQuestionStatus.OPEN),
+        _question("OQ-0002", status=OpenQuestionStatus.ANSWERED),
+        _question("OQ-0003", status=OpenQuestionStatus.DROPPED),
+    )
+    body = render_progress(campaigns, claims, questions, checkpoints=0)
+    assert "ROUND" in body
+    assert "running" in body  # the auto-run round phrase
+    assert "BUDGET" in body
+    assert "2 staged topic(s)" in body  # the spent-topic budget figure
+    assert "1 answered" in body
+    # 1 dropped question + 1 refuted claim = 2 pruned candidates.
+    assert "2 pruned" in body
+
+
+# --------------------------------------------------------------------------
+# W08 (FA8): the four operator-input campaign-fork bindings
+# --------------------------------------------------------------------------
+
+
+def test_research_board_operator_input_fork_bindings_exist_and_are_distinct() -> None:
+    """All four operator-input keys (o/t/b/v) bind their own campaign-fork action.
+
+    The FA8 grammar surfaces steer / broadcast / add-question / override through
+    the operator-input bindings rebound off the s/a collision -- each is a free
+    key that never displaces the live snapshot (``s``) / approve (``a``) / new
+    (``n``) handlers.
+    """
+    keys = {
+        binding.key: binding.action for binding in ResearchBoardModeScreen.BINDINGS
+    }
+    assert keys.get("o") == "add_question"
+    assert keys.get("t") == "steer"
+    assert keys.get("b") == "broadcast"
+    assert keys.get("v") == "override"
+    # The four operator-input keys never displaced the live s / a / n keys.
+    assert keys.get("s") == "snapshot"
+    assert keys.get("a") == "approve_checkpoint"
+    assert keys.get("n") == "new_campaign"
+
+
+def test_research_board_operator_input_keys_in_footer_hints() -> None:
+    """The broadcast + override operator-input keys are advertised in the footer."""
+    hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
+    assert "b broadcast" in hints
+    assert "v override" in hints
+
+
+@pytest.mark.parametrize(
+    ("key", "verb", "method", "params_key"),
+    [
+        ("o", "ask", "research.add_question", "title"),
+        ("t", "steer", "research.steer", "text"),
+        ("b", "broadcast", "research.broadcast", "notice"),
+        ("v", "override", "research.override", "verdict"),
+    ],
+)
+def test_campaign_fork_operator_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    verb: str,
+    method: str,
+    params_key: str,
+) -> None:
+    """Each W08 operator-input action resolves a campaign fork through the daemon.
+
+    The four FA8 operator-input channels (steer / broadcast / add-question /
+    override) each collect a free-text line through the operator-note modal and
+    route the committed note off the UI thread to its intended daemon method.
+    None of the four RPCs exists yet, so a method-not-found daemon answer surfaces
+    the honest "not yet wired" line -- the channel never fabricates a resolved
+    fork -- and the call reaches the daemon with the note under the channel's
+    params key. The four keys are the rebound operator-input keys, NOT the
+    pre-rebind s / a keys.
+    """
+    state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _MethodNotFoundClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _MethodNotFoundClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, called_method: str, params: dict[str, object]) -> dict[str, object]:
+            from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+            calls.append((called_method, params))
+            raise DaemonRpcError(code=-32601, message="method not found")
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _MethodNotFoundClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ResearchBoardModeScreen)
+            await pilot.press(key)  # open the operator-input modal
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, OperatorNoteModal)
+            modal.query_one(f"#{OperatorNoteModal.NOTE_INPUT_ID}", Input).value = "resolve fork"
+            modal.action_commit()
+            await settle_screen(pilot)  # drains the channel worker
+            board = app.screen
+            assert isinstance(board, ResearchBoardModeScreen)
+            rendered = str(board.query_one(f"#{ACTION_RESULT_ID}").render())  # type: ignore[attr-defined]
+            assert "not yet wired" in rendered
+            assert method in rendered
+
+    asyncio.run(body())
+    assert len(calls) == 1
+    called_method, params = calls[0]
+    assert called_method == method
+    assert params == {params_key: "resolve fork"}
+
+
+def test_idle_campaign_board_renders_honest_empty_start_hint(tmp_path: Path) -> None:
+    """An idle campaign board pins the honest-empty literal + the start hint.
+
+    The W08-C2 contract: a scope with no campaign / claim / question renders the
+    pinned hero literal AND the press-``n`` start hint -- never a fabricated
+    round node.
+    """
+    state_path = _write_state(tmp_path, _project_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            assert pane.empty is True
+            empty_body = str(pane.query_one(f"#{EMPTY_ID}").render())  # type: ignore[attr-defined]
+            # The honest-empty literal + the start hint, pinned verbatim.
+            assert "no word spoken yet" in empty_body
+            assert "a research campaign begins with a question" in empty_body
+            assert "press n" in empty_body
+            # Never a fabricated round node on the idle board.
+            assert "running" not in empty_body
+            assert "saturated" not in empty_body
 
     asyncio.run(body())

@@ -65,7 +65,9 @@ from eawf.surfaces.tui.modes.research_board import (
     EMPTY_NOTICE,
     EMPTY_SUBLINE,
     ResearchBoardModeScreen,
+    RoundState,
     claim_sigil_markup,
+    classify_round_state,
     question_sigil_markup,
 )
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
@@ -356,6 +358,79 @@ def test_research_board_reskin_populated_snapshot(tmp_path: Path) -> None:
             assert glyph(Sigil.FAILED, mode=app.render_mode) in claims_body
             assert glyph(Sigil.PENDING, mode=app.render_mode) in claims_body
             assert_screen_snapshot(app, _GOLDEN / "research_board_reskin_populated.txt")
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Snapshot: the FA8 auto-run round tree (W08) -- running / saturated / pruned
+# --------------------------------------------------------------------------
+
+
+def _autorun_questions() -> tuple[OpenQuestion, ...]:
+    """Questions spanning open + answered + dropped so the round reads running.
+
+    An open question keeps the round RUNNING; the answered one saturates the
+    budget tally; the dropped one prunes. The mix pins the running round sigil
+    AND the saturated / pruned budget figures in one auto-run frame.
+    """
+    return (
+        _question("OQ-0001", "Which curve model fits the short tenor"),
+        _question(
+            "OQ-0002",
+            "Does the smile invert past the 90 delta wing",
+            status=OpenQuestionStatus.ANSWERED,
+        ),
+        _question(
+            "OQ-0003",
+            "Is the overnight gamma path worth tracking",
+            status=OpenQuestionStatus.DROPPED,
+        ),
+    )
+
+
+def test_research_board_fa8_autorun_round_tree_snapshot(tmp_path: Path) -> None:
+    """The auto-run round tree pins the running sigil + the saturated / pruned budget.
+
+    The W08 contract: an auto-running campaign renders a running-round sigil
+    (the live diamond), the saturation / pruned progress (the BUDGET band's
+    answered + pruned tallies), and the budget band -- never a fabricated runner
+    state, only the honest projection of the ledgers on hand.
+    """
+    claims = (
+        _claim(
+            "CL-0001",
+            "Implied vol surface is downward sloping in strike",
+            status=ClaimStatus.SUPPORTED,
+        ),
+        _claim(
+            "CL-0002",
+            "Term-structure arbitrage is exploitable intraday",
+            status=ClaimStatus.REFUTED,
+        ),
+    )
+    questions = _autorun_questions()
+    # An open question is present, so the round classifies as running.
+    assert classify_round_state(questions) is RoundState.RUNNING
+    state = _seeded_state(claims, questions)
+    state_path = _write_seeded_scope(tmp_path, claims, questions)
+
+    async def body() -> None:
+        app = _HostApp(state=state, state_path=state_path)
+        async with app.run_test(size=_SIZE) as pilot:
+            await settle_screen(pilot)
+            from textual.widgets import Static
+
+            screen = app.screen
+            tree_body = str(screen.query_one("#research-tree-body", Static).render())
+            # The running round leads with the live diamond + the running label.
+            assert glyph(Sigil.RUNNING, mode=app.render_mode) in tree_body
+            assert "round 1 running" in tree_body
+            progress_body = str(screen.query_one("#research-progress-body", Static).render())
+            # The budget band reads the saturation (answered) + pruned tallies.
+            assert "1 answered" in progress_body
+            assert "pruned" in progress_body
+            assert_screen_snapshot(app, _GOLDEN / "research_board_fa8_autorun.txt")
 
     asyncio.run(body())
 

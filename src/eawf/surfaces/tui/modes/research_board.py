@@ -201,24 +201,31 @@ _CANCEL_METHOD: str = "research.cancel_campaign"
 #: rejected by the daemon and surfaced honestly rather than faking a node.
 _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 
-#: Daemon JSON-RPC methods the operator-channel keys route through -- the
-#: ``o`` (add-question) opener that appends an :class:`OpenQuestion` row to the
-#: scope, and the ``t`` (steer) channel that pushes an operator steer note into
-#: the running campaign. Neither RPC exists yet (full registry checked) -- the
-#: daemon answers method-not-found -- so each key collects its text through a
-#: modal and routes the committed note off the UI thread, surfacing the daemon's
-#: honest rejection / not-yet-wired result rather than fabricating a row or a
-#: steer. They go live for free once the matching RPC lands (the idle-contract
-#: pattern), the same way the ``n`` compose path went live with its stager.
+#: Daemon JSON-RPC methods the operator-channel keys route through -- the four
+#: campaign-fork channels the FA8 auto-run cockpit shares with the wave cockpit
+#: (one grammar): ``o`` (add-question) appends an :class:`OpenQuestion` row to
+#: the scope, ``t`` (steer) pushes an operator steer note into the running
+#: campaign, ``b`` (broadcast) fans a notice to every running round of the
+#: campaign, and ``v`` (override) forces an operator verdict onto the blocking
+#: fork. None of the four RPCs exist yet (full registry checked) -- the daemon
+#: answers method-not-found -- so each key collects its text through a modal and
+#: routes the committed note off the UI thread, surfacing the daemon's honest
+#: rejection / not-yet-wired result rather than fabricating a row, a steer, a
+#: broadcast, or an override. They go live for free once the matching RPC lands
+#: (the idle-contract pattern), the same way the ``n`` compose path went live
+#: with its stager.
 _ADD_QUESTION_METHOD: str = "research.add_question"
 _STEER_METHOD: str = "research.steer"
+_BROADCAST_METHOD: str = "research.broadcast"
+_OVERRIDE_METHOD: str = "research.override"
 
 #: Drawer line before any checkpoint is open (the idle checkpoint surface).
 CHECKPOINT_IDLE: str = "no checkpoint -- nothing awaiting operator review"
 
 #: Action-result line before any action key is pressed.
 ACTION_IDLE: str = (
-    "enter peek  n new  o ask  t steer  a approve  p park  r follow-up  s snapshot  x cancel"
+    "enter peek  n new  o ask  t steer  b broadcast  v override  "
+    "a approve  p park  r follow-up  s snapshot  x cancel"
 )
 
 #: Action-result line when an approve / park has no checkpoint to act on.
@@ -281,6 +288,12 @@ _RESEARCH_HINTS: tuple[str, ...] = (
     render_hint_label("n", "new"),
     render_hint_label("o", "ask"),
     render_hint_label("t", "steer"),
+    # The broadcast token ``b`` is a board-local operator-channel key absent from
+    # the shared footer vocabulary (CANONICAL_HINT_TOKENS), so its label is built
+    # as the same "<token> <action>" literal render_hint_label emits for a
+    # mode-specific token, without the shared-vocabulary guard.
+    "b broadcast",
+    render_hint_label("v", "override"),
     render_hint_label("a", "approve"),
     render_hint_label("p", "park"),
     render_hint_label("r", "follow-up"),
@@ -327,6 +340,142 @@ _QUESTION_SIGIL: dict[OpenQuestionStatus, Sigil | None] = {
     OpenQuestionStatus.ANSWERED: Sigil.CLOSED,
     OpenQuestionStatus.DROPPED: None,
 }
+
+
+class RoundState(StrEnum):
+    """The FA8 auto-run state of a campaign round, derived from its ledgers.
+
+    The live multi-round runner is spawn-gated, so the persisted campaign
+    record carries no per-round run status (only ACTIVE / CANCELLED). The
+    board derives the auto-run state honestly from the open-question +
+    candidate-claim ledgers already on hand, so the running / saturated /
+    pruned grammar reads off real signal rather than a fabricated runner.
+
+    Members:
+        RUNNING: At least one open question still needs an answer -- the
+            round is being worked (the auto-run live-round state). Renders
+            the :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.RUNNING`
+            filled-diamond.
+        SATURATED: Every tracked question is resolved (none open) yet at
+            least one was answered -- the round saturated (no more candidate
+            answers to add). Renders the
+            :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.CLOSED` circle.
+        PRUNED: Every tracked question was pruned (dropped) without an
+            answer -- the round closed out with nothing kept. Renders the
+            withheld :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.ABANDONED`
+            mark so a pruned round never reads as a clean close.
+        IDLE: The campaign is staged but carries no tracked question yet --
+            the pre-auto-run round (no live round to classify). Renders the
+            :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.PENDING` ring.
+    """
+
+    RUNNING = "running"
+    SATURATED = "saturated"
+    PRUNED = "pruned"
+    IDLE = "idle"
+
+
+#: :class:`RoundState` -> the lifecycle :class:`Sigil` its round node renders.
+#: A running round is the live diamond, a saturated round the closed circle, a
+#: pruned round the withheld abandoned mark (never the clean circle), and an
+#: idle (pre-auto-run) round the pending ring.
+_ROUND_SIGIL: dict[RoundState, Sigil] = {
+    RoundState.RUNNING: Sigil.RUNNING,
+    RoundState.SATURATED: Sigil.CLOSED,
+    RoundState.PRUNED: Sigil.ABANDONED,
+    RoundState.IDLE: Sigil.PENDING,
+}
+
+
+@dataclass(frozen=True)
+class RoundProgress:
+    """The FA8 auto-run progress of a campaign round, derived from its ledger.
+
+    A pure projection of the open-question + candidate-claim counts onto the
+    auto-run round grammar (running / saturated / pruned + a budget figure) so
+    the round node + budget band read off real signal rather than a fabricated
+    runner. The live multi-round-runner state lands free once the runner emits
+    a per-round status -- this is the honest pre-spawn surface.
+
+    Attributes:
+        state: The classified :class:`RoundState` of the round.
+        open_count: Open (still-running) questions.
+        answered_count: Answered (saturating) questions.
+        pruned_count: Pruned candidates -- dropped questions + refuted /
+            superseded claims that were set aside this round.
+        spent_topics: Staged topics fanned out across the campaigns (the
+            honest pre-spawn budget figure -- one staged sweep per topic).
+    """
+
+    state: RoundState
+    open_count: int
+    answered_count: int
+    pruned_count: int
+    spent_topics: int
+
+
+def classify_round_state(questions: tuple[OpenQuestion, ...]) -> RoundState:
+    """Classify the campaign round's auto-run state from its question ledger.
+
+    Derives the round grammar honestly from the open-question statuses: any
+    OPEN question means the round is still :attr:`RoundState.RUNNING`; with no
+    open question, an ANSWERED one means the round :attr:`RoundState.SATURATED`
+    and only DROPPED ones means it was :attr:`RoundState.PRUNED`; an empty
+    ledger is :attr:`RoundState.IDLE` (the pre-auto-run round).
+
+    Args:
+        questions: The state-resident open-question rows for the scope.
+
+    Returns:
+        The classified round state.
+    """
+    if not questions:
+        return RoundState.IDLE
+    if any(question.status is OpenQuestionStatus.OPEN for question in questions):
+        return RoundState.RUNNING
+    if any(question.status is OpenQuestionStatus.ANSWERED for question in questions):
+        return RoundState.SATURATED
+    return RoundState.PRUNED
+
+
+def compute_round_progress(
+    campaigns: tuple[CampaignRow, ...],
+    claims: tuple[Claim, ...],
+    questions: tuple[OpenQuestion, ...],
+) -> RoundProgress:
+    """Project the campaign ledgers onto the auto-run round progress.
+
+    Counts the open / answered questions, the pruned candidates (dropped
+    questions + refuted / superseded claims set aside this round), and the
+    staged-topic budget figure, then classifies the round state via
+    :func:`classify_round_state`. A pure function of the rows on hand.
+
+    Args:
+        campaigns: The staged campaign rows for the scope.
+        claims: The state-resident claim ledger rows.
+        questions: The state-resident open-question rows.
+
+    Returns:
+        The derived :class:`RoundProgress`.
+    """
+    open_count = sum(1 for question in questions if question.status is OpenQuestionStatus.OPEN)
+    answered_count = sum(
+        1 for question in questions if question.status is OpenQuestionStatus.ANSWERED
+    )
+    dropped_questions = sum(
+        1 for question in questions if question.status is OpenQuestionStatus.DROPPED
+    )
+    pruned_claims = sum(
+        1 for claim in claims if claim.status in (ClaimStatus.REFUTED, ClaimStatus.SUPERSEDED)
+    )
+    spent_topics = sum(campaign.domain_count for campaign in campaigns)
+    return RoundProgress(
+        state=classify_round_state(questions),
+        open_count=open_count,
+        answered_count=answered_count,
+        pruned_count=dropped_questions + pruned_claims,
+        spent_topics=spent_topics,
+    )
 
 
 def _muted_sigil_markup(*, mode: RenderMode) -> str:
@@ -417,6 +566,27 @@ def question_sigil_markup(status: OpenQuestionStatus, *, mode: RenderMode) -> st
             outside the shape-bearing subset.
     """
     return _sigil_markup(_QUESTION_SIGIL[status], mode=mode)
+
+
+def round_sigil_markup(round_state: RoundState, *, mode: RenderMode) -> str:
+    """Return the FA8 auto-run sigil markup for a campaign round *round_state*.
+
+    Maps the round state onto its lifecycle sigil (:data:`_ROUND_SIGIL`) and
+    renders the tinted shape via :func:`_sigil_markup` -- a running round leads
+    with the live diamond, a saturated round the closed circle, a pruned round
+    the withheld abandoned mark, and an idle (pre-auto-run) round the pending
+    ring -- so the round row reads its auto-run state off a sigil rather than a
+    flat dispatch arrow.
+
+    Args:
+        round_state: The round's :class:`RoundState`.
+        mode: The App's resolved render-mode label -- selects the glyph's
+            ASCII / unicode column.
+
+    Returns:
+        A content-markup span: the round state's tinted lifecycle sigil.
+    """
+    return _sigil_markup(_ROUND_SIGIL[round_state], mode=mode)
 
 
 @dataclass(frozen=True)
@@ -804,6 +974,10 @@ class TreeNode:
         claim_status: The :class:`~eawf.kernel.state.enums.ClaimStatus` of a
             :attr:`NodeKind.CLAIM` node, so the nested claim row renders the
             claim's lifecycle sigil; ``None`` on every other node kind.
+        round_state: The :class:`RoundState` of a :attr:`NodeKind.ROUND` node,
+            so the round row renders the FA8 auto-run running / saturated /
+            pruned sigil rather than a flat dispatch arrow; ``None`` on every
+            other node kind.
     """
 
     kind: NodeKind
@@ -813,6 +987,7 @@ class TreeNode:
     campaign_id: str | None = None
     question_status: OpenQuestionStatus | None = None
     claim_status: ClaimStatus | None = None
+    round_state: RoundState | None = None
 
 
 def read_campaign_rows(state_path: Path | None) -> tuple[CampaignRow, ...]:
@@ -928,6 +1103,36 @@ def index_claims_by_question(
     return {question_id: tuple(rows) for question_id, rows in grouped.items()}
 
 
+#: :class:`RoundState` -> the round node's auto-run label + peek detail. The
+#: label leads the round row (``round 1 running`` / ``saturated`` / ``pruned``)
+#: so the auto-run state reads off the row beside its sigil; the detail is the
+#: honest peek line surfaced when the round node is peeked. Live multi-round
+#: progress lands free once the runner emits a per-round status -- these are the
+#: honest pre-spawn lines.
+_ROUND_COPY: dict[RoundState, tuple[str, str]] = {
+    RoundState.RUNNING: ("round 1 running", "live round -- open questions still being answered"),
+    RoundState.SATURATED: ("round 1 saturated", "round saturated -- every question resolved"),
+    RoundState.PRUNED: ("round 1 pruned", "round pruned -- candidates dropped, none kept"),
+    RoundState.IDLE: ("round 1", "campaign staged -- live multi-round run not yet wired"),
+}
+
+
+def _round_label_detail(progress: RoundProgress) -> tuple[str, str]:
+    """Return the round node's auto-run label + peek detail for *progress*.
+
+    Maps the classified :class:`RoundState` onto its label + detail copy
+    (:data:`_ROUND_COPY`) so the running / saturated / pruned grammar reads off
+    the round row without re-deriving the state at the call site.
+
+    Args:
+        progress: The derived round progress.
+
+    Returns:
+        A ``(label, detail)`` pair for the round node.
+    """
+    return _ROUND_COPY[progress.state]
+
+
 def build_tree_nodes(
     campaigns: tuple[CampaignRow, ...],
     questions: tuple[OpenQuestion, ...],
@@ -962,6 +1167,8 @@ def build_tree_nodes(
     Returns:
         The flattened tree nodes in render order; empty when nothing to show.
     """
+    progress = compute_round_progress(campaigns, claims, questions)
+    round_label, round_detail = _round_label_detail(progress)
     nodes: list[TreeNode] = []
     for campaign in campaigns:
         nodes.append(
@@ -976,10 +1183,11 @@ def build_tree_nodes(
         nodes.append(
             TreeNode(
                 kind=NodeKind.ROUND,
-                label="round 1",
+                label=round_label,
                 depth=1,
-                detail="campaign staged -- live multi-round run not yet wired",
+                detail=round_detail,
                 campaign_id=campaign.campaign_id,
+                round_state=progress.state,
             )
         )
         for domain in campaign.domains[:_MAX_TOPICS_PER_CAMPAIGN]:
@@ -996,9 +1204,13 @@ def build_tree_nodes(
         nodes.append(
             TreeNode(
                 kind=NodeKind.ROUND,
-                label="round 1 -- questions",
+                label=f"{round_label} -- questions",
                 depth=1,
-                detail=f"{len(questions)} open question(s) tracked this round",
+                detail=(
+                    f"{progress.open_count} open / {progress.answered_count} answered / "
+                    f"{progress.pruned_count} pruned"
+                ),
+                round_state=progress.state,
             )
         )
         claims_by_question = index_claims_by_question(claims)
@@ -1069,6 +1281,8 @@ def _tree_node_markup(node: TreeNode, *, mode: RenderMode) -> str:
         return question_sigil_markup(node.question_status, mode=mode)
     if node.kind is NodeKind.CLAIM and node.claim_status is not None:
         return claim_sigil_markup(node.claim_status, mode=mode)
+    if node.kind is NodeKind.ROUND and node.round_state is not None:
+        return round_sigil_markup(node.round_state, mode=mode)
     role = _TREE_CHROME.get(node.kind)
     if role is not None:
         glyph = escape_markup(sigils.chrome(role, mode=mode))
@@ -1293,6 +1507,18 @@ def render_unresolved(
     return "\n".join(lines)
 
 
+#: :class:`RoundState` -> the ROUND band's auto-run phrase (the human reading
+#: of the round's classified state for the progress pane). A running round
+#: reads ``running``, a saturated one ``saturated``, a pruned one ``pruned``,
+#: and an idle (pre-auto-run) one ``staged``.
+_ROUND_BAND_PHRASE: dict[RoundState, str] = {
+    RoundState.RUNNING: "running",
+    RoundState.SATURATED: "saturated",
+    RoundState.PRUNED: "pruned",
+    RoundState.IDLE: "staged",
+}
+
+
 def render_progress(
     campaigns: tuple[CampaignRow, ...],
     claims: tuple[Claim, ...],
@@ -1304,10 +1530,11 @@ def render_progress(
 
     The bands -- RUN / ROUND / ACTIVE / WAITING / PAUSED / BUDGET / RISKS --
     are derived honestly from the staged campaign + the ledgers + the open
-    checkpoints. Live running / synthesis is spawn-gated with no TUI-callable
-    runner, so the RUN band reads ``staged`` (not ``running``) and the budget
-    band reads the staged-topic count rather than a live token spend -- the
-    honest pre-spawn surface.
+    checkpoints. The FA8 auto-run state of the round (running / saturated /
+    pruned, via :func:`compute_round_progress`) drives the ROUND band, and the
+    BUDGET band reads the staged-topic spend + the saturated / pruned tallies
+    rather than a live token spend -- the honest pre-spawn surface, since the
+    live multi-round runner is spawn-gated with no TUI-callable seam yet.
 
     Args:
         campaigns: The staged campaign rows for the scope.
@@ -1319,18 +1546,20 @@ def render_progress(
     Returns:
         A content-markup string of one band per line.
     """
+    progress = compute_round_progress(campaigns, claims, questions)
     blocking = sum(1 for question in questions if question.blocking)
-    answered = sum(1 for question in questions if question.status.value == "answered")
-    open_q = sum(1 for question in questions if question.status.value == "open")
-    topics = sum(campaign.domain_count for campaign in campaigns)
     run_state = "staged" if campaigns else "idle"
+    round_phrase = _ROUND_BAND_PHRASE[progress.state]
     lines = [
         f"[$accent]RUN[/] [$muted]{run_state} -- live run not yet wired[/]",
-        "[$accent]ROUND[/] [$muted]1/1 (staged)[/]",
+        f"[$accent]ROUND[/] [$muted]1/1 {round_phrase}[/]",
         f"[$accent]ACTIVE[/] [$muted]{len(claims)} claim(s)[/]",
-        f"[$accent]WAITING[/] [$muted]{open_q} open question(s)[/]",
+        f"[$accent]WAITING[/] [$muted]{progress.open_count} open question(s)[/]",
         f"[$accent]PAUSED[/] [$muted]{checkpoints} checkpoint(s)[/]",
-        f"[$accent]BUDGET[/] [$muted]{topics} staged topic(s), {answered} answered[/]",
+        (
+            f"[$accent]BUDGET[/] [$muted]{progress.spent_topics} staged topic(s), "
+            f"{progress.answered_count} answered, {progress.pruned_count} pruned[/]"
+        ),
     ]
     if blocking:
         lines.append(f"[$warn]RISKS[/] [$warn]{blocking} blocking question(s)[/]")
@@ -1414,12 +1643,13 @@ class ResearchBoardModeScreen(ScopeScreen):
     an open pause, surfacing the honest result; ``r`` (follow-up) / ``s``
     (snapshot) route through the daemon-client seam to their not-yet-existing
     methods and surface the honest "not yet wired" line (the idle-contract
-    pattern). ``o`` (add-question) and ``t`` (steer) are the operator-channel
-    keys: each collects a free-text line through a one-field
-    :class:`OperatorNoteModal` and routes it off the UI thread to its intended
-    ``research.add_question`` / ``research.steer`` RPC, surfacing the daemon's
-    honest not-yet-wired / rejection result. No action ever fakes an outcome
-    that did not happen.
+    pattern). ``o`` (add-question), ``t`` (steer), ``b`` (broadcast), and ``v``
+    (override) are the four FA8 operator-input campaign-fork channels: each
+    collects a free-text line through a one-field :class:`OperatorNoteModal` and
+    routes it off the UI thread to its intended ``research.add_question`` /
+    ``research.steer`` / ``research.broadcast`` / ``research.override`` RPC,
+    surfacing the daemon's honest not-yet-wired / rejection result. No action
+    ever fakes an outcome that did not happen.
 
     The screen self-binds to the host
     :class:`~eawf.surfaces.tui.app.EaApp` reactive ``state``: it seeds from
@@ -1482,8 +1712,9 @@ class ResearchBoardModeScreen(ScopeScreen):
     #: ``up`` / ``down`` move the tree cursor; ``enter`` peeks the selected
     #: node read-only. ``a`` approve / ``p`` park route checkpoint resolution
     #: through the real needs_user RPCs; ``r`` follow-up / ``s`` snapshot are
-    #: the honest-unavailable idle-contract keys. ``o`` (add-question) and ``t``
-    #: (steer) are the operator-channel keys -- both FREE keys (no app-wide or
+    #: the honest-unavailable idle-contract keys. ``o`` (add-question), ``t``
+    #: (steer), ``b`` (broadcast), and ``v`` (override) are the four FA8
+    #: operator-input campaign-fork channels -- all FREE keys (no app-wide or
     #: in-pane collision; the app binds ``w/r/u i c q h j k l`` + digits and the
     #: pane keeps arrows primary for the tree), so adding them never displaces
     #: ``s`` (snapshot) / ``a`` (approve) / ``n`` (new) from their live
@@ -1499,6 +1730,8 @@ class ResearchBoardModeScreen(ScopeScreen):
         Binding("n", "new_campaign", "new", show=False),
         Binding("o", "add_question", "ask", show=False),
         Binding("t", "steer", "steer", show=False),
+        Binding("b", "broadcast", "broadcast", show=False),
+        Binding("v", "override", "override", show=False),
         Binding("a", "approve_checkpoint", "approve", show=False),
         Binding("p", "park_checkpoint", "park", show=False),
         Binding("r", "followup", "follow-up", show=False),
@@ -1882,6 +2115,78 @@ class ResearchBoardModeScreen(ScopeScreen):
             verb="steer",
             method=_STEER_METHOD,
             params_key="text",
+        )
+
+    def action_broadcast(self) -> None:
+        """Open the broadcast modal; commit fans a notice to every running round.
+
+        The ``b`` operator-channel key broadcasts an operator notice across the
+        campaign's running rounds (the balanced-autonomy notice-broadcast channel
+        the campaign cockpit shares with the wave cockpit). Pushes a one-field
+        :class:`OperatorNoteModal` collecting the notice; ``Esc`` cancels (the
+        callback receives ``None`` and issues zero RPCs). A committed notice
+        routes off the UI thread to the ``research.broadcast`` RPC -- which does
+        not exist yet, so the daemon answers method-not-found and the channel
+        surfaces the honest "not yet wired" line rather than implying a broadcast
+        landed (the idle-contract pattern; it goes live for free once the RPC
+        lands).
+        """
+        modal = OperatorNoteModal(
+            title="broadcast a notice",
+            label="broadcast notice",
+            placeholder="hold synthesis until the new dataset lands",
+            noun="broadcast notice",
+        )
+        self.app.push_screen(modal, self._broadcast_committed)
+
+    def _broadcast_committed(self, note: str | None) -> None:
+        """Route a committed broadcast *note*, or no-op when cancelled.
+
+        Args:
+            note: The committed broadcast notice, or ``None`` when the operator
+                cancelled the modal (the board issues no RPC).
+        """
+        self._dispatch_channel(
+            note=note,
+            verb="broadcast",
+            method=_BROADCAST_METHOD,
+            params_key="notice",
+        )
+
+    def action_override(self) -> None:
+        """Open the override modal; commit forces an operator verdict on the fork.
+
+        The ``v`` operator-channel key overrides the campaign's blocking fork
+        with an operator verdict (the balanced-autonomy override channel; an
+        override persists locked until the operator clears it). Pushes a one-
+        field :class:`OperatorNoteModal` collecting the verdict; ``Esc`` cancels
+        (the callback receives ``None`` and issues zero RPCs). A committed
+        verdict routes off the UI thread to the ``research.override`` RPC --
+        which does not exist yet, so the daemon answers method-not-found and the
+        channel surfaces the honest "not yet wired" line rather than implying an
+        override landed (the idle-contract pattern; it goes live for free once
+        the RPC lands).
+        """
+        modal = OperatorNoteModal(
+            title="override the fork",
+            label="override verdict",
+            placeholder="accept the stronger claim and resume the round",
+            noun="override verdict",
+        )
+        self.app.push_screen(modal, self._override_committed)
+
+    def _override_committed(self, note: str | None) -> None:
+        """Route a committed override *note*, or no-op when cancelled.
+
+        Args:
+            note: The committed override verdict, or ``None`` when the operator
+                cancelled the modal (the board issues no RPC).
+        """
+        self._dispatch_channel(
+            note=note,
+            verb="override",
+            method=_OVERRIDE_METHOD,
+            params_key="verdict",
         )
 
     def _dispatch_channel(
@@ -2392,10 +2697,14 @@ __all__ = [
     "NodeKind",
     "OperatorNoteModal",
     "ResearchBoardModeScreen",
+    "RoundProgress",
+    "RoundState",
     "TreeNode",
     "build_research_block",
     "build_tree_nodes",
     "claim_sigil_markup",
+    "classify_round_state",
+    "compute_round_progress",
     "group_claims_by_evidence",
     "has_research_signal",
     "index_claims_by_question",
@@ -2410,4 +2719,5 @@ __all__ = [
     "render_progress",
     "render_tree",
     "render_unresolved",
+    "round_sigil_markup",
 ]

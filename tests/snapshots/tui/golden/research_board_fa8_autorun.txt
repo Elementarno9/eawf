@@ -4,28 +4,28 @@
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN staged -- live run not yet      │
   │ landscape                          ││ ● Implied vol surface is downward   ││ wired                               │
   │     ◆ round 1 running              ││ sloping in strike                   ││ ROUND 1/1 running                   │
-  │       ◌ market-structure           ││ ✕ Term-structure arbitrage is       ││ ACTIVE 4 claim(s)                   │
-  │       ◌ pricing-models             ││ exploitable intraday                ││ WAITING 2 open question(s)          │
-  │     ◆ round 1 running -- questions ││ ◌ Overnight gamma decay drives the  ││ PAUSED 0 checkpoint(s)              │
-  │       ◌ Which curve model fits the ││ skew                                ││ BUDGET 2 staged topic(s), 1         │
-  │ short tenor                        ││ ◌ Earlier vol-cluster claim         ││ answered, 2 pruned                  │
-  │       ● Does the smile invert past ││ subsumed by CL-0001                 ││ RISKS 1 blocking question(s)        │
+  │       ◌ market-structure           ││ ✕ Term-structure arbitrage is       ││ ACTIVE 2 claim(s)                   │
+  │       ◌ pricing-models             ││ exploitable intraday                ││ WAITING 1 open question(s)          │
+  │     ◆ round 1 running -- questions ││                                     ││ PAUSED 0 checkpoint(s)              │
+  │       ◌ Which curve model fits the ││ Options (supporting evidence)       ││ BUDGET 2 staged topic(s), 1         │
+  │ short tenor                        ││ ● 0 ref(s) Implied vol surface is   ││ answered, 2 pruned                  │
+  │       ● Does the smile invert past ││ downward sloping in strike          ││ RISKS none                          │
   │ the 90 delta wing                  ││                                     ││                                     │
-  │       ◌ Is the term-structure      ││ Options (supporting evidence)       ││                                     │
-  │ arbitrage real                     ││ ● 2 ref(s) Implied vol surface is   ││                                     │
-  │ enter to peek the selected node    ││ downward sloping in strike          ││                                     │
-  │                                    ││                                     ││                                     │
-  │                                    ││ Conflicts (contradicting evidence)  ││                                     │
-  │                                    ││ ✕ 1 ref(s) Term-structure arbitrage ││                                     │
-  │                                    ││ is exploitable intraday             ││                                     │
+  │       ◌ Is the overnight gamma     ││ Conflicts (contradicting evidence)  ││                                     │
+  │ path worth tracking                ││ ✕ 0 ref(s) Term-structure arbitrage ││                                     │
+  │ enter to peek the selected node    ││ is exploitable intraday             ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││ Unresolved                          ││                                     │
   │                                    ││ open round 1 Which curve model fits ││                                     │
   │                                    ││ the short tenor                     ││                                     │
   │                                    ││ answered round 1 Does the smile     ││                                     │
   │                                    ││ invert past the 90 delta wing       ││                                     │
-  │                                    ││ blocking round 1 Is the             ││                                     │
-  │                                    ││ term-structure arbitrage real       ││                                     │
+  │                                    ││ dropped round 1 Is the overnight    ││                                     │
+  │                                    ││ gamma path worth tracking           ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
+  │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   └────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘
