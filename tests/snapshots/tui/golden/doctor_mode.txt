@@ -2,20 +2,20 @@
 
   Health: degraded  6 checks, 2 warn
 
-  Install
-    ● tools_available             3 probes ok
-    ● config_resolves             2 profile(s) enabled
+  ╭─ INSTALL ─────────────────────────────────────────────╮ ╭─ STATE ───────────────────────────────────────────────╮
+  │   ● tools_available             3 probes ok           │ │   ● state_present               state.json found      │
+  │   ● config_resolves             2 profile(s) enabled  │ │   ● recent_events               12 recent event(s); 1 │
+  ╰───────────────────────────────────────────────────────╯ │ error(s) in window                                    │
+                                                            ╰───────────────────────────────────────────────────────╯
 
-  State
-    ● state_present               state.json found
-    ● recent_events               12 recent event(s); 1 error(s) in window
+  ╭─ DRIFT ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │   △ manifest_in_sync            drift: AGENTS.md::core=hand-edited                                              │
+  │   △ git_state_drift             2 drift(s); kinds: closed_no_pin, pinned_mismatch                               │
+  │                                                                                                                 │
+  │ drift:  2 wave(s)                                                                                               │
+  │ kinds:  closed_no_pin, pinned_mismatch                                                                          │
+  ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
-  Drift
-    △ manifest_in_sync            drift: AGENTS.md::core=hand-edited
-    △ git_state_drift             2 drift(s); kinds: closed_no_pin, pinned_mismatch
-
-  drift:  2 wave(s)
-  kinds:  closed_no_pin, pinned_mismatch
 
 
 
