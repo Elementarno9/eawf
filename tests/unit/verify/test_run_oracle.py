@@ -40,7 +40,9 @@ import pytest
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, OracleTier
 from eawf.kernel.state.models import Wave
 from eawf.observability.eval.jury import JuryAggregateOutcome
+from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
+from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify import oracle
 from eawf.workflow.verify.oracle import OracleResult, run_oracle
 
@@ -445,6 +447,187 @@ def test_run_oracle_correct_close_with_uncalibrated_veto_not_blocked(
 
     assert result.status != "fail"
     assert result.status == "pass"
+
+
+# --------------------------------------------------------------------------- #
+# W04 (TRUST-4): the staged advisory-to-block gate. A jury FAIL veto raises
+# LifecycleError ONLY when the caller passes BLOCKING authority; the same FAIL
+# under ADVISORY authority logs a warning and the close proceeds without raising.
+# --------------------------------------------------------------------------- #
+
+
+def _run_with_authority(
+    criterion: CriterionSpec,
+    gates: list[GateSpec],
+    *,
+    repo_root: Path,
+    block_authority: BlockAuthority,
+) -> OracleResult:
+    """Drive :func:`run_oracle` with an explicit block authority."""
+    return asyncio.run(
+        run_oracle(
+            criterion,
+            gates,
+            wave=_wave(),
+            state=object(),  # type: ignore[arg-type] - jury seam is mocked; state is unused
+            state_path=repo_root / "state.json",
+            events_path=repo_root / "event.jsonl",
+            repo_root=repo_root,
+            spawn_factory=_spawn_factory_stub,
+            block_authority=block_authority,
+        )
+    )
+
+
+def test_run_oracle_jury_fail_under_blocking_authority_raises(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    """C2: a jury FAIL under BLOCKING authority raises LifecycleError (close blocked).
+
+    The calibrated jury has earned blocking authority, so its veto is no longer
+    advisory: the close-gate jury branch raises :class:`LifecycleError` rather
+    than returning ``status="pass"``. This is the half of C2 where the jury
+    actually blocks.
+    """
+
+    async def _jury(**_kwargs: Any) -> Any:
+        class _Result:
+            outcome = JuryAggregateOutcome.FAIL
+
+        return _Result()
+
+    monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
+
+    with (
+        caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"),
+        pytest.raises(LifecycleError, match="cross-vendor jury vetoed close"),
+    ):
+        _run_with_authority(
+            _criterion(),
+            [],
+            repo_root=tmp_path,
+            block_authority=BlockAuthority.BLOCKING,
+        )
+
+    assert any("jury_veto_blocking" in r.getMessage() for r in caplog.records)
+    assert any("authority=blocking" in r.getMessage() for r in caplog.records)
+
+
+def test_run_oracle_jury_fail_under_advisory_authority_proceeds(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    """C2: the SAME jury FAIL under ADVISORY authority logs a warning, no raise.
+
+    The negative-space mirror of the blocking path: an uncalibrated jury holds
+    only advisory authority, so the identical FAIL veto returns ``status="pass"``
+    with a WARNING and the close proceeds -- never a LifecycleError.
+    """
+
+    async def _jury(**_kwargs: Any) -> Any:
+        class _Result:
+            outcome = JuryAggregateOutcome.FAIL
+
+        return _Result()
+
+    monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
+
+    with caplog.at_level("WARNING", logger="eawf.workflow.verify.oracle"):
+        result = _run_with_authority(
+            _criterion(),
+            [],
+            repo_root=tmp_path,
+            block_authority=BlockAuthority.ADVISORY,
+        )
+
+    assert result.tier is OracleTier.T7_JURY
+    assert result.status == "pass"
+    warnings = [r for r in caplog.records if "jury_veto_advisory" in r.getMessage()]
+    assert len(warnings) == 1
+    assert "close_proceeds=True" in warnings[0].getMessage()
+
+
+def test_run_oracle_default_authority_is_advisory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """C2: omitting block_authority defaults to ADVISORY (back-compat, no raise).
+
+    A caller that does not pass ``block_authority`` -- every pre-W04 call site --
+    keeps the advisory hold: a FAIL veto returns ``status="pass"`` rather than
+    raising, so the default is the safe back-compat behaviour.
+    """
+
+    async def _jury(**_kwargs: Any) -> Any:
+        class _Result:
+            outcome = JuryAggregateOutcome.FAIL
+
+        return _Result()
+
+    monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
+
+    result = _run(_criterion(), [], repo_root=tmp_path)
+
+    assert result.status == "pass"
+
+
+def test_run_oracle_jury_pass_under_blocking_authority_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """C2: a jury PASS under BLOCKING authority is a clean pass, never a raise.
+
+    Blocking authority only ever blocks a NON-pass outcome; a clean jury PASS
+    returns ``status="pass"`` regardless of authority -- the gate raises on a
+    veto, not on a clean close.
+    """
+
+    async def _jury(**_kwargs: Any) -> Any:
+        class _Result:
+            outcome = JuryAggregateOutcome.PASS
+
+        return _Result()
+
+    monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
+
+    result = _run_with_authority(
+        _criterion(),
+        [],
+        repo_root=tmp_path,
+        block_authority=BlockAuthority.BLOCKING,
+    )
+
+    assert result.tier is OracleTier.T7_JURY
+    assert result.status == "pass"
+
+
+def test_run_oracle_jury_needs_user_under_blocking_authority_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """C2: a NEEDS_USER jury outcome under BLOCKING authority also raises.
+
+    Blocking authority blocks ANY non-pass outcome, not only a substantive FAIL:
+    an unresolved split / sub-quorum (NEEDS_USER) under a calibrated jury raises
+    :class:`LifecycleError` rather than silently proceeding.
+    """
+
+    async def _jury(**_kwargs: Any) -> Any:
+        class _Result:
+            outcome = JuryAggregateOutcome.NEEDS_USER
+
+        return _Result()
+
+    monkeypatch.setattr(oracle, "verdict_requirement", lambda wave: "always")
+    monkeypatch.setattr(oracle, "convene_cross_vendor_jury", _jury)
+
+    with pytest.raises(LifecycleError, match="cross-vendor jury vetoed close"):
+        _run_with_authority(
+            _criterion(),
+            [],
+            repo_root=tmp_path,
+            block_authority=BlockAuthority.BLOCKING,
+        )
 
 
 def test_run_oracle_non_deterministic_criterion_skips_gates(

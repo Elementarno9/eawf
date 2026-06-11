@@ -171,6 +171,47 @@ class CheckpointBlock(BaseModel):
     drift_budget_eu: float = Field(default=3.5, ge=0.0)
 
 
+class JuryAuthorityConfig(BaseModel):
+    """The trust floors a cross-vendor jury must clear to earn blocking authority.
+
+    Mounted on :attr:`VerifyBlock.jury_authority`. Mirrors the four trust floors
+    the earned-authority gate
+    (:func:`eawf.observability.eval.jury_validation.jury_block_authority`) reads:
+    a jury veto is held ADVISORY (logged, never blocking) until the jury's
+    validation report and verbosity probe clear every floor here. The leaf is
+    declared in this profile-models module so the floors are auditable from the
+    profile and resolved through the config chain without pulling the
+    observability layer onto the profile cold-import path; the daemon close path
+    maps it onto the eval-module config it consumes.
+
+    ``extra="forbid"`` so a drifted config key surfaces as a
+    :class:`pydantic.ValidationError` at profile load rather than silently
+    widening the authority a jury may earn. Every default is tuned so a jury that
+    has NOT been validated stays advisory -- blocking authority is only ever
+    earned, so a profile that omits the leaf keeps the safe advisory-by-default
+    behaviour.
+
+    Attributes:
+        min_labeled_waves: Minimum labelled verdicts the validation cohort must
+            carry before the jury can earn blocking authority. ``Field(ge=1)``
+            rejects a zero floor (which would defeat the earned-authority
+            guarantee) at the load boundary.
+        known_bad_catch_lb_floor: Wilson / Beta lower-bound floor on the jury's
+            known-bad catch rate, in ``[0.0, 1.0]``. The conservative LOWER
+            bound (not the point estimate) must clear this floor.
+        unanimous_pass_ceiling: Ceiling on the unanimous-pass-on-known-bad
+            (false-clean) rate, in ``[0.0, 1.0]``. A jury whose false-clean rate
+            is at or above this ceiling is denied authority -- a hot blind spot
+            disqualifies the panel even when the catch-rate LB clears.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_labeled_waves: int = Field(default=20, ge=1)
+    known_bad_catch_lb_floor: float = Field(default=0.80, ge=0.0, le=1.0)
+    unanimous_pass_ceiling: float = Field(default=0.10, ge=0.0, le=1.0)
+
+
 class VerifyBlock(BaseModel):
     """Profile-fed verify spine configuration.
 
@@ -261,6 +302,14 @@ class VerifyBlock(BaseModel):
             oracle (T6/T7); when the computed ratio falls below this
             floor the close seam surfaces an ADVISORY finding (log only)
             but never blocks. Defaults to ``0.80``.
+        jury_authority: The trust floors a cross-vendor jury must clear to
+            earn BLOCKING authority at the close gate (a
+            :class:`JuryAuthorityConfig`). Until the jury's validation report
+            and verbosity probe clear every floor here, its veto is held
+            advisory (logged, never blocking) by
+            :func:`eawf.observability.eval.jury_validation.jury_block_authority`.
+            Defaults to the safe advisory-leaning floors so an enforcing
+            profile that omits the leaf keeps the advisory-only jury behaviour.
         checkpoint: Drift-cadence dial — one :class:`CheckpointBlock`
             knob carrying the cadence shape (``optimistic`` default /
             ``barrier``) plus the drift-budget units a later wave reads
@@ -282,6 +331,7 @@ class VerifyBlock(BaseModel):
     uiux_bands: list[str] = Field(default_factory=list)
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
     odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)
+    jury_authority: JuryAuthorityConfig = Field(default_factory=JuryAuthorityConfig)
     checkpoint: CheckpointBlock = Field(default_factory=CheckpointBlock)
 
 

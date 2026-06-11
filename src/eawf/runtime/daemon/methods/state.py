@@ -58,7 +58,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -132,6 +132,10 @@ from eawf.workflow.lifecycle.transitions import (
 )
 from eawf.workflow.lifecycle.wave import RuntimeDelta, compute_runtime_delta
 from eawf.workflow.verify.models import CloseReadiness
+
+if TYPE_CHECKING:
+    from eawf.observability.eval.jury_validation import BlockAuthority
+    from eawf.platform.profiles.models import VerifyBlock
 
 logger = logging.getLogger(__name__)
 
@@ -1253,6 +1257,87 @@ class WaveCloseRefusalError(LifecycleError):
         )
 
 
+def _resolve_jury_block_authority(
+    state: State,
+    *,
+    state_path: Path,
+    verify_block: VerifyBlock | None,
+) -> BlockAuthority:
+    """Compute the jury's earned block authority for the close gate -- pure read.
+
+    The TRUST-4 staged gate: a cross-vendor jury earns the right to BLOCK a
+    close (rather than merely log an advisory veto) only once it has cleared its
+    trust floors on eawf's own distribution. This helper scores the jury against
+    the ground-truth validation substrate and returns the resulting
+    :class:`~eawf.observability.eval.jury_validation.BlockAuthority`:
+
+    - it builds the validation cohort
+      (:func:`~eawf.observability.eval.jury_validation.build_jury_validation_cohort`)
+      and the verbosity-bias probe over the persisted substrate;
+    - it scores the validation report
+      (:func:`~eawf.observability.eval.jury_validation.validate_jury`) and the
+      verbosity report
+      (:func:`~eawf.observability.eval.jury_validation.measure_verbosity_bias`);
+    - it maps the profile's ``verify.jury_authority`` leaf onto the eval-module
+      :class:`~eawf.observability.eval.jury_validation.JuryAuthorityConfig` and
+      runs the earned-authority gate
+      (:func:`~eawf.observability.eval.jury_validation.jury_block_authority`).
+
+    Default-advisory by construction: the validation substrate is empty today
+    (no labelled cohort, no recorded ballots), so the cohort is honest-empty,
+    the validation report is :attr:`JuryValidationStatus.INSUFFICIENT`, and the
+    gate returns
+    :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY` --
+    an enforcing close never blocks on an uncalibrated jury.
+
+    Args:
+        state: Loaded, validated state supplying the wave tree the cohort is
+            anchored against. Read-only here.
+        state_path: Path to ``state.json``; the verdict + gold-label stores
+            resolve under its sibling ``store/`` directory.
+        verify_block: The resolved verify block (a
+            :class:`~eawf.platform.profiles.models.VerifyBlock`) whose
+            ``jury_authority`` leaf supplies the trust floors. ``None`` (or a
+            block with the default leaf) uses the safe advisory-leaning floors.
+
+    Returns:
+        The :class:`~eawf.observability.eval.jury_validation.BlockAuthority`
+        the jury has earned -- ``BLOCKING`` only when every trust floor clears,
+        else ``ADVISORY``.
+    """
+    from eawf.observability.eval.jury_validation import (
+        BlockAuthority,
+        build_jury_validation_cohort,
+        jury_block_authority,
+        measure_verbosity_bias,
+        validate_jury,
+    )
+    from eawf.observability.eval.jury_validation import (
+        JuryAuthorityConfig as EvalJuryAuthorityConfig,
+    )
+
+    if verify_block is None:
+        return BlockAuthority.ADVISORY
+    leaf = verify_block.jury_authority
+    authority_config = EvalJuryAuthorityConfig(
+        min_labeled_waves=leaf.min_labeled_waves,
+        known_bad_catch_lb_floor=leaf.known_bad_catch_lb_floor,
+        unanimous_pass_ceiling=leaf.unanimous_pass_ceiling,
+    )
+    cohort = build_jury_validation_cohort(state, state_path)
+    # The validation substrate is empty today -- no labelled verdict rows and no
+    # recorded per-wave ballots -- so the cohort is honest-empty and the jury
+    # has earned no authority. An empty cohort short-circuits to advisory rather
+    # than scoring (validate_jury would otherwise need the ballot substrate a
+    # later wave builds); this read stays honest-empty until then rather than
+    # fabricating a calibrated jury.
+    if not cohort.silver and not cohort.gold:
+        return BlockAuthority.ADVISORY
+    report = validate_jury(cohort, ballots_by_wave={})
+    verbosity = measure_verbosity_bias([])
+    return jury_block_authority(report, verbosity, authority_config)
+
+
 async def _enforce_wave_close_gate(
     state: State,
     mutation: Mutation,
@@ -1379,6 +1464,15 @@ async def _enforce_wave_close_gate(
     events_path = store_path(state_path, StoreKind.EVENT)
     spawn_factory = _jury_spawn_factory(state, wave, repo_root=repo_root)
     gate_specs = _load_gate_specs(wave_id, state)
+    # The staged advisory-to-block gate (TRUST-4): the jury's veto blocks the
+    # close only once it has EARNED blocking authority on eawf's own
+    # distribution. The authority is computed once per close from the validation
+    # substrate and threaded into every per-criterion run_oracle call; with an
+    # empty validation substrate (no labelled cohort today) the jury stays
+    # advisory, so an enforcing close never blocks on an uncalibrated jury.
+    block_authority = _resolve_jury_block_authority(
+        state, state_path=state_path, verify_block=verify_block
+    )
     deterministic_evidence: list[EvidenceRecord] = []
     for criterion in wave.success_criteria:
         if not criterion.required:
@@ -1393,6 +1487,7 @@ async def _enforce_wave_close_gate(
             events_path=events_path,
             repo_root=repo_root,
             spawn_factory=spawn_factory,
+            block_authority=block_authority,
         )
         if result.status != "pass":
             logger.warning(

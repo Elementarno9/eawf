@@ -44,12 +44,14 @@ from eawf.observability.eval.cross_vendor_jury import (
     convene_cross_vendor_jury,
 )
 from eawf.observability.eval.jury import JuryAggregateOutcome
+from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.workflow.audit_dsl.models import CheckResult
 from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.dispatch.verdict import (
     verdict_requirement,
     verify_wave_verdict_gate,
 )
+from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.verify.compile import compile_gate
 
 logger = logging.getLogger(__name__)
@@ -133,6 +135,7 @@ async def run_oracle(
     events_path: Path,
     repo_root: Path,
     spawn_factory: SpawnFactory,
+    block_authority: BlockAuthority = BlockAuthority.ADVISORY,
 ) -> OracleResult:
     """Score *criterion* by escalating its gates from cheapest tier upward.
 
@@ -154,11 +157,15 @@ async def run_oracle(
        exist), consult the
        jury tier: the async cross-vendor jury when
        :func:`verdict_requirement` is ``"always"``, else the sync
-       single-auditor :func:`verify_wave_verdict_gate`. A cross-vendor
-       jury veto (``FAIL``) is held advisory by :func:`jury_block_authority`
-       -- it is logged at WARNING and the close proceeds as ``"pass"`` --
-       until TRUST-4 supplies the earned-authority computation that lets a
-       calibrated jury block.
+       single-auditor :func:`verify_wave_verdict_gate`. A cross-vendor jury
+       veto (``FAIL`` / ``NEEDS_USER``) is held ADVISORY -- logged at WARNING,
+       close proceeds as ``"pass"`` -- unless the caller passes a *blocking*
+       *block_authority*, in which case the veto raises
+       :class:`LifecycleError` and blocks the close. The TRUST-4
+       earned-authority computation
+       (:func:`eawf.observability.eval.jury_validation.jury_block_authority`)
+       runs in the daemon close path and decides which authority to pass in; a
+       jury that has not cleared its trust floors stays advisory by default.
 
     Args:
         criterion: The criterion being scored. Read-only.
@@ -177,11 +184,24 @@ async def run_oracle(
             and the jury's diff base derives from.
         spawn_factory: Per-runtime spawn factory forwarded to the
             cross-vendor jury.
+        block_authority: Whether a cross-vendor jury veto may BLOCK the close
+            (:attr:`~eawf.observability.eval.jury_validation.BlockAuthority.BLOCKING`,
+            the veto raises :class:`LifecycleError`) or is held merely advisory
+            (:attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY`,
+            the default, the veto is logged and the close proceeds). The daemon
+            close path computes the earned authority and passes it in; an
+            uncalibrated jury stays advisory.
 
     Returns:
         An :class:`OracleResult` carrying the tier that produced the
         verdict, the closed status, and the producing gate id when a
         deterministic gate scored it.
+
+    Raises:
+        LifecycleError: When the cross-vendor jury vetoes (``FAIL`` /
+            ``NEEDS_USER``) AND *block_authority* is
+            :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.BLOCKING`
+            -- the calibrated jury blocks the close.
     """
     ordered = sorted(gates, key=_gate_sort_key)
     logger.debug(
@@ -243,14 +263,24 @@ async def run_oracle(
             repo_root=repo_root,
         )
         status = _jury_outcome_status(jr.outcome)
-        # An uncalibrated jury holds only ADVISORY authority, so it logs but
-        # never blocks a close on ANY non-pass outcome -- a substantive veto
-        # (FAIL) or an unresolved split / sub-quorum (NEEDS_USER, e.g.
-        # cross-vendor jurors that cannot yet convene to quorum). The non-pass
-        # signal is preserved in the WARNING log + the OracleResult detail.
-        # TRUST-4 replaces jury_block_authority with the earned-authority
-        # computation that lets a calibrated jury block on a non-pass.
-        if status != "pass" and jury_block_authority(wave) == "advisory":
+        # The staged advisory-to-block gate (TRUST-4). A non-pass jury outcome
+        # -- a substantive veto (FAIL) or an unresolved split / sub-quorum
+        # (NEEDS_USER) -- BLOCKS the close only when the caller passes BLOCKING
+        # authority: a calibrated jury that has cleared its trust floors raises
+        # LifecycleError so the close is refused. Under ADVISORY authority (the
+        # default, an uncalibrated / thin / biased jury) the same non-pass is
+        # logged at WARNING and the close proceeds as "pass" -- the non-pass
+        # signal is preserved in the log so an audit still sees the veto.
+        if status != "pass":
+            if block_authority is BlockAuthority.BLOCKING:
+                logger.warning(
+                    f"run_oracle jury_veto_blocking criterion={criterion.id!r} wave={wave.id} "
+                    f"outcome={jr.outcome.value} authority=blocking close_blocked=True"
+                )
+                raise LifecycleError(
+                    f"cross-vendor jury vetoed close: criterion={criterion.id!r} "
+                    f"wave={wave.id} outcome={jr.outcome.value}"
+                )
             logger.warning(
                 f"run_oracle jury_veto_advisory criterion={criterion.id!r} wave={wave.id} "
                 f"outcome={jr.outcome.value} authority=advisory close_proceeds=True"
@@ -261,7 +291,7 @@ async def run_oracle(
                 criterion_id=criterion.id,
                 detail=(
                     f"cross-vendor jury outcome={jr.outcome.value} held advisory "
-                    "until TRUST-4 earned-authority calibration"
+                    "until the jury earns blocking authority"
                 ),
             )
         logger.info(
@@ -293,25 +323,27 @@ async def run_oracle(
 
 
 def jury_block_authority(wave: Wave) -> Literal["advisory", "blocking"]:
-    """Return whether a cross-vendor jury veto may block *wave*'s close.
+    """Return the wave-keyed default jury authority -- always ``"advisory"``.
 
-    This is the single binding point for the jury's blocking authority. It
-    returns ``"advisory"`` unconditionally: the live holistic cross-vendor
-    jury blocks band-scoped closes today without ever having been calibrated
-    on eawf's own distribution, so a veto it casts is logged but never
-    blocking. TRUST-4 replaces this placeholder with the earned-authority
-    computation (a jury earns blocking authority only once its agreement and
-    calibration clear the trust floor) at this same call site, so the swap
-    is local to one function.
+    The earned-authority decision proper now lives in
+    :func:`eawf.observability.eval.jury_validation.jury_block_authority`, which
+    scores the jury's validation report + verbosity probe against the trust
+    floors and returns
+    :class:`~eawf.observability.eval.jury_validation.BlockAuthority`; the daemon
+    close path runs that computation and threads the result into
+    :func:`run_oracle` as ``block_authority``. This wave-keyed helper is the
+    safe default for a call site that has NO validation report to score yet (no
+    labelled cohort, an empty trust substrate): with no evidence a jury cannot
+    have EARNED blocking, so its veto is held advisory. It is retained as the
+    documented default so the absence-of-evidence path is explicit rather than
+    implicit.
 
     Args:
-        wave: The wave whose close is being scored. Read-only; reserved for
-            the TRUST-4 earned-authority lookup that will key off the wave's
-            band and the jury's measured reliability.
+        wave: The wave whose close is being scored. Read-only.
 
     Returns:
-        ``"advisory"`` until TRUST-4 lands; ``"blocking"`` is never returned
-        by this placeholder.
+        ``"advisory"`` -- a jury with no validation evidence never earns
+        blocking authority.
     """
     return "advisory"
 
