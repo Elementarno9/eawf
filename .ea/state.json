@@ -20728,7 +20728,11 @@
         "P30-I15-W13",
         "P30-I15-W14",
         "P30-I15-W15",
-        "P30-I15-W16"
+        "P30-I15-W16",
+        "P30-I15-W17",
+        "P30-I15-W18",
+        "P30-I15-W19",
+        "P30-I15-W20"
       ]
     }
   },
@@ -21669,7 +21673,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T12:48:06.919639Z",
+  "updated_at": "2026-06-11T13:04:18.924448Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -84858,6 +84862,227 @@
         }
       ],
       "title": "Polish per-surface render parity to the reskin mockup",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W17": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/*.py",
+        "src/eawf/surfaces/tui/widgets/*.py",
+        "src/eawf/surfaces/tui/screens/**/*.py"
+      ],
+      "gates": [],
+      "id": "P30-I15-W17",
+      "intent": {
+        "desired_outcome": "All pane borders render rounded (border: round) to match the mockup card chrome.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The operator flagged that rects are not rounded; the reskin used solid borders throughout though Textual round borders are a one-word swap that matches the mockup.",
+        "problem": "The TUI renders square pane borders (border: solid) while the cosmic-terminal mockup shows rounded card corners; Textual supports border: round but no pane uses it.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T13:04:17.309078Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "every border: solid becomes border: round so panes render rounded corners;goldens regenerated",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "every border: solid becomes border: round so panes render rounded corners;goldens regenerated",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Round all TUI pane borders to match the mockup chrome",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W18": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail.py"
+      ],
+      "gates": [],
+      "id": "P30-I15-W18",
+      "intent": {
+        "desired_outcome": "Overview leads with a counts glance, a dependency-path card (deps to this to blocks), and a status pill, then the narrative.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The operator flagged the wave-detail divergence; the mockup overview is a scannable glance of counts plus the mini-DAG, deferred earlier as needing card data plumbing.",
+        "problem": "The wave-detail overview renders a What/Why/Validation/Risks narrative dump instead of the mockup glance: a counts quad, a dependency-path card, and a status pill.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T13:04:17.842663Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "wave-detail overview shows a counts glance (criteria bound/gates passed/evidence records/runtime EU) plus a deps-this-blocks dependency-path card and a status pill",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "wave-detail overview shows a counts glance (criteria bound/gates passed/evidence records/runtime EU) plus a deps-this-blocks dependency-path card and a status pill",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Render the wave-detail overview glance and status pill",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W19": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/trust.py",
+        "src/eawf/surfaces/tui/modes/doctor.py"
+      ],
+      "gates": [],
+      "id": "P30-I15-W19",
+      "intent": {
+        "desired_outcome": "Trust shows a calibration|jury two-column quad; doctor shows install|state two-column cards at wide width.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The operator flagged the layout divergence; the mockup's two-column card groupings are the most visible structural difference, mis-deferred earlier as cosmetic.",
+        "problem": "Trust and doctor stack their sections single-column while the mockup groups them into side-by-side two-column rounded cards.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T13:04:18.388335Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "trust renders a calibration|jury two-column quad and doctor renders install|state two-column cards matching the mockup",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "trust renders a calibration|jury two-column quad and doctor renders install|state two-column cards matching the mockup",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Lay trust and doctor out as two-column card groupings",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I15-W20": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/header.py",
+        "src/eawf/surfaces/render/brand.py",
+        "pyproject.toml"
+      ],
+      "gates": [],
+      "id": "P30-I15-W20",
+      "intent": {
+        "desired_outcome": "The header renders the resvg-rasterized Seal via textual-image on a graphics terminal, falling back to the brand glyph elsewhere.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "The operator asked for the real SVG seal; Ghostty supports the Kitty graphics protocol and resvg is already a dependency, so a rasterize-and-embed path with a fallback is achievable.",
+        "problem": "The header leads with the unicode brand glyph; the mockup shows the real Seal SVG, which Ghostty can display via the Kitty graphics protocol but no image path is wired.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I15",
+      "opened_at": "2026-06-11T13:04:18.924273Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the header renders the rasterized SVG seal via a terminal image protocol when supported with a unicode glyph fallback",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the header renders the rasterized SVG seal via a terminal image protocol when supported with a unicode glyph fallback",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Render the SVG seal in the header via the image protocol",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
