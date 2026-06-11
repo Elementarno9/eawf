@@ -45,14 +45,14 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.enums import RiskTier, WaveStatus
 from eawf.kernel.state.models import (
     FleetCounters,
     FleetLane,
@@ -61,12 +61,14 @@ from eawf.kernel.state.models import (
     FleetTerminalReason,
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.runtime.daemon.methods import register
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.cancel import CancelResult, cancel_process_group
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.wave import claim_wave
+from eawf.workflow.verify.oracle import classify_risk_tier, risk_tier_auto_closes
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods import MethodContext
@@ -348,6 +350,70 @@ def _default_watcher(ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
         time.sleep(_WATCH_POLL_SECONDS)
 
 
+def _lane_risk_tier(ctx: MethodContext, wave_id: str) -> RiskTier:
+    """Resolve a wave's :class:`RiskTier` from its gate kinds at fill time.
+
+    Loads the wave from ``state.json`` (free read access) and runs the pure
+    :func:`~eawf.workflow.verify.oracle.classify_risk_tier` over its gates so
+    the loop can record the resolved tier on the lane (the cockpit badge) and
+    consult the auto-close / fork gate when the lane finishes. A stateless
+    context or a vanished wave classifies :attr:`RiskTier.MECH` -- with no
+    gates to inspect there is nothing that needs human judgement, so the
+    least-risk band is the safe resolution.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path``.
+        wave_id: ``W<NN>`` wave whose risk tier to resolve.
+
+    Returns:
+        The wave's classified :class:`RiskTier`.
+    """
+    if ctx.state_path is None:
+        return RiskTier.MECH
+    wave = load_state(Path(ctx.state_path)).waves.get(wave_id)
+    if wave is None:
+        return RiskTier.MECH
+    return classify_risk_tier(wave.gates)
+
+
+def gate_lane_outcome(
+    outcome: LaneOutcome,
+    risk_tier: RiskTier,
+    *,
+    block_authority: BlockAuthority,
+) -> LaneOutcome:
+    """Apply the RiskTier auto-close / fork gate to a watcher *outcome* -- pure.
+
+    The fleet loop's safety gate (DL-5). A lane that the watcher reports
+    ``"forked"`` always stays forked -- a failed lane never auto-closes. A lane
+    the watcher reports ``"closed"`` is held to its wave's :class:`RiskTier`:
+
+    - a :attr:`RiskTier.MECH` / :attr:`RiskTier.MED` close passes through (a
+      deterministic pass or an auditor verdict is complete ground truth);
+    - a :attr:`RiskTier.HIGH` / :attr:`RiskTier.UI` close passes through ONLY
+      when the jury has earned :attr:`BlockAuthority.BLOCKING`; under the
+      uncalibrated :attr:`BlockAuthority.ADVISORY` default the close is
+      DOWNGRADED to ``"forked"`` so the wave NEVER silently auto-closes on an
+      unearned jury. THIS NEGATIVE PATH IS THE LOAD-BEARING SAFETY INVARIANT.
+
+    Args:
+        outcome: The watcher's terminal :data:`LaneOutcome` (``"closed"`` /
+            ``"forked"``).
+        risk_tier: The lane's resolved :class:`RiskTier`.
+        block_authority: The jury's earned authority for this close.
+
+    Returns:
+        The gated :data:`LaneOutcome` -- the input outcome, downgraded to
+        ``"forked"`` only when a high / ui close lacks earned blocking
+        authority.
+    """
+    if outcome != "closed":
+        return outcome
+    if risk_tier_auto_closes(risk_tier, block_authority=block_authority):
+        return "closed"
+    return "forked"
+
+
 @dataclass
 class _Loop:
     """In-memory driver of one fleet auto-drain run.
@@ -362,12 +428,22 @@ class _Loop:
         run: The live run snapshot the loop advances + persists.
         spawn: The injected lane spawner.
         watch: The injected lane watcher.
+        block_authority: The jury's earned authority for this run -- gates
+            whether a high / ui lane may auto-close or must fork. An
+            uncalibrated jury is :attr:`BlockAuthority.ADVISORY` (the default),
+            so high / ui lanes fork under it.
+        risk_tiers: The per-lane RiskTier badge registry, keyed by wave id. The
+            tier is resolved + recorded when a lane is filled (the cockpit reads
+            it for the lane badge) and drives the auto-close / fork gate when the
+            lane finishes.
     """
 
     ctx: MethodContext
     run: FleetRun
     spawn: LaneSpawner
     watch: LaneWatcher
+    block_authority: BlockAuthority = BlockAuthority.ADVISORY
+    risk_tiers: dict[str, RiskTier] = field(default_factory=dict)
 
     def _persist(self) -> None:
         """Persist the current run snapshot through the daemon canonical writer."""
@@ -395,12 +471,17 @@ class _Loop:
                 pgid=dispatch.pgid,
                 dispatched_at=datetime.now(UTC),
             )
+            # Resolve + record the lane's RiskTier badge from the wave's gate
+            # kinds so the cockpit can render it and the drain-time auto-close /
+            # fork gate can consult it.
+            risk_tier = _lane_risk_tier(self.ctx, wave_id)
+            self.risk_tiers[wave_id] = risk_tier
             self.run.counters.claimed += 1
             self.run.counters.dispatched += 1
             logger.info(
                 f"_fill_lanes wave={wave_id} attempt={dispatch.attempt} "
                 f"session={dispatch.session_id!r} pgid={dispatch.pgid} "
-                f"killable={dispatch.pgid is not None}"
+                f"killable={dispatch.pgid is not None} risk_tier={risk_tier.value}"
             )
 
     def _drain_lanes(self) -> None:
@@ -419,14 +500,25 @@ class _Loop:
         """
         had_fork = False
         for wave_id in list(self.run.lanes):
-            outcome = self.watch(self.ctx, self.run.lanes[wave_id])
+            watched = self.watch(self.ctx, self.run.lanes[wave_id])
+            # Gate the watcher outcome through the lane's RiskTier: a high / ui
+            # lane that "closed" under an unearned (advisory) jury is downgraded
+            # to a fork so it never silently auto-closes -- the DL-5 safety
+            # invariant.
+            risk_tier = self.risk_tiers.pop(wave_id, RiskTier.MECH)
+            outcome = gate_lane_outcome(
+                watched, risk_tier, block_authority=self.block_authority
+            )
             del self.run.lanes[wave_id]
             if outcome == "forked":
                 self.run.counters.forked += 1
                 had_fork = True
             else:
                 self.run.counters.closed += 1
-            logger.info(f"_drain_lanes wave={wave_id} outcome={outcome}")
+            logger.info(
+                f"_drain_lanes wave={wave_id} watched={watched} outcome={outcome} "
+                f"risk_tier={risk_tier.value}"
+            )
         self.run.counters.rounds += 1
         if had_fork:
             self.run.counters.clean_rounds = 0
@@ -484,6 +576,7 @@ def arm_drive(
     kclean_k: int = 2,
     spawn: LaneSpawner | None = None,
     watch: LaneWatcher | None = None,
+    block_authority: BlockAuthority = BlockAuthority.ADVISORY,
 ) -> FleetRun:
     """Arm + run the fleet auto-drain loop over *frontier*.
 
@@ -512,6 +605,10 @@ def arm_drive(
             defaults to the live claim + ``agent.dispatch`` spawner.
         watch: Optional :class:`LaneWatcher` override (tests inject a fake);
             defaults to the on-disk wave-status watcher.
+        block_authority: The jury's earned authority for this run -- gates
+            whether a high / ui lane may auto-close or must fork. Defaults to
+            :attr:`BlockAuthority.ADVISORY` (an uncalibrated jury), so a
+            high / ui lane forks rather than silently auto-closing.
 
     Returns:
         The :class:`FleetRun` snapshot after the loop returns -- ``DONE`` on a
@@ -548,6 +645,7 @@ def arm_drive(
         run=run,
         spawn=spawn if spawn is not None else _default_spawner,
         watch=watch if watch is not None else _default_watcher,
+        block_authority=block_authority,
     )
     terminal = loop.run_to_terminal()
     logger.info(
@@ -588,6 +686,7 @@ def resume(
     *,
     spawn: LaneSpawner | None = None,
     watch: LaneWatcher | None = None,
+    block_authority: BlockAuthority = BlockAuthority.ADVISORY,
 ) -> FleetRun:
     """Resume a PAUSED fleet run: return to DRAINING and restart claiming.
 
@@ -599,6 +698,10 @@ def resume(
         ctx: Daemon method context.
         spawn: Optional :class:`LaneSpawner` override.
         watch: Optional :class:`LaneWatcher` override.
+        block_authority: The jury's earned authority for the resumed run --
+            gates whether a high / ui lane may auto-close or must fork. Defaults
+            to :attr:`BlockAuthority.ADVISORY`, so a high / ui lane forks rather
+            than silently auto-closing.
 
     Returns:
         The :class:`FleetRun` snapshot after the resumed loop returns.
@@ -614,6 +717,7 @@ def resume(
         run=run,
         spawn=spawn if spawn is not None else _default_spawner,
         watch=watch if watch is not None else _default_watcher,
+        block_authority=block_authority,
     )
     terminal = loop.run_to_terminal()
     logger.info(f"resume run_state={terminal.run_state.value}")

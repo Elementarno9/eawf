@@ -473,6 +473,42 @@ class ScopeTier(StrEnum):
     WAVE = "wave"
 
 
+class RiskTier(StrEnum):
+    """Auto-close risk band of a wave, keyed off its gate kinds.
+
+    Distinct from :class:`~eawf.kernel.spec.common.OracleTier` (the
+    ``T1``-``T7`` falsifier-cost ladder): a wave's :class:`RiskTier` names how
+    much HUMAN / jury judgement its close needs, so the fleet auto-drain loop
+    can decide whether the wave self-closes on a deterministic pass or must
+    fork to a human / jury. The classifier
+    (:func:`~eawf.workflow.verify.oracle.classify_risk_tier`) is a pure
+    function of the wave's gate kinds.
+
+    Values, in ascending judgement need:
+
+    - :attr:`MECH` -- deterministic-only: every gate is a deterministic
+      falsifier (static / structural / contract / golden, the
+      ``T1``-``T5`` band). The wave self-closes on a deterministic pass with
+      no human in the loop.
+    - :attr:`MED` -- auditor-gated: the wave carries a human-approval gate
+      (the ``T6`` band). It auto-closes only on a passing auditor verdict.
+    - :attr:`HIGH` -- jury-gated: the wave carries a jury gate (the ``T7``
+      band) but is not a UI-band wave. It NEVER silently auto-closes while the
+      jury holds only advisory authority; it auto-closes via the jury path
+      once blocking authority is earned.
+    - :attr:`UI` -- UI / visual-band: the wave's jury gate scores a UI /
+      visual surface (an svg / mockup / interaction artifact). Like
+      :attr:`HIGH` it forks until the jury earns blocking authority -- the
+      visual oracle is the least deterministic, so it is held to the same
+      earned-authority bar.
+    """
+
+    MECH = "mech"
+    MED = "med"
+    HIGH = "high"
+    UI = "ui"
+
+
 class StoreKind(StrEnum):
     RESEARCH = "research"
     AUDIT = "audit"

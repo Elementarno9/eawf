@@ -38,6 +38,7 @@ from eawf.kernel.spec.common import (
     _StrictModel,
     _tier_for_gate_kind,
 )
+from eawf.kernel.state.enums import RiskTier
 from eawf.kernel.state.models import IdStr, State, Wave
 from eawf.observability.eval.cross_vendor_jury import (
     SpawnFactory,
@@ -359,4 +360,143 @@ def _jury_outcome_status(
     return "needs_user"
 
 
-__all__ = ["OracleResult", "jury_block_authority", "run_oracle"]
+# --- RiskTier classifier (P30-I12-W05 / DL-5) -----------------------------
+#
+# The fleet auto-drain loop needs to know, BEFORE a lane closes, whether the
+# wave it drove can self-close on a deterministic pass or must fork to a human
+# / jury. That answer is the wave's :class:`~eawf.kernel.state.enums.RiskTier`,
+# classified purely from the wave's gate KINDS:
+#
+# - every gate is a deterministic falsifier (the ``T1``-``T5`` band) -> MECH,
+#   the wave self-closes on a deterministic pass with no human in the loop;
+# - the wave carries a UI / visual-band gate (a ``tui_flow`` / ``svg`` /
+#   ``mockup`` / affordance / transition-coverage surface, whose ground truth
+#   ultimately escalates to the visual jury) -> UI;
+# - the wave carries a non-UI jury gate -> HIGH;
+# - the wave carries an auditor / human-approval gate (and no jury / UI gate)
+#   -> MED.
+#
+# The classifier is a TOTAL, PURE function of the gate-kind strings: it reads
+# no IO, mutates nothing, and an empty gate set classifies MECH (a wave with no
+# gates has nothing that needs human judgement, so it is the least-risk band).
+
+#: UI / visual-band gate kinds. A wave carrying any of these gates is a UI-band
+#: wave: its ground truth is a visual / interaction surface whose final oracle
+#: is the cross-vendor visual jury (per the spec-as-layered-oracle VFL stack),
+#: so it is held to the same earned-blocking-authority bar as a jury wave.
+_UI_BAND_GATE_KINDS: frozenset[str] = frozenset(
+    {
+        "tui_flow",
+        "svg_well_formed",
+        "svg_pixel_diff",
+        "mockup_golden_diff",
+        "affordance_parity",
+        "transition_coverage",
+    }
+)
+
+#: Jury gate kinds -- a gate whose verdict is a cross-vendor jury vote. A wave
+#: carrying one (and no UI-band gate) classifies :attr:`RiskTier.HIGH`.
+_JURY_GATE_KINDS: frozenset[str] = frozenset(
+    {
+        "jury_verdict",
+        "cross_vendor_jury",
+    }
+)
+
+#: Auditor / human-approval gate kinds -- a gate whose verdict is a single
+#: auditor sign-off or operator attestation. A wave carrying one (and no jury /
+#: UI-band gate) classifies :attr:`RiskTier.MED`.
+_AUDITOR_GATE_KINDS: frozenset[str] = frozenset(
+    {
+        "auditor_verdict",
+        "human_approval",
+    }
+)
+
+
+def classify_risk_tier(gates: list[GateSpec]) -> RiskTier:
+    """Classify a wave's auto-close :class:`RiskTier` from its gate kinds.
+
+    A TOTAL, PURE function of the gate-kind strings -- it reads no IO, mutates
+    nothing, and returns the wave's risk band so the fleet auto-drain loop can
+    decide whether the wave self-closes or forks. The band is the HIGHEST
+    judgement need across the wave's gates:
+
+    1. any UI / visual-band gate (:data:`_UI_BAND_GATE_KINDS`) -> :attr:`RiskTier.UI`
+       -- the wave's ground truth is a visual surface whose final oracle is the
+       cross-vendor visual jury;
+    2. else any non-UI jury gate (:data:`_JURY_GATE_KINDS`) -> :attr:`RiskTier.HIGH`;
+    3. else any auditor / human-approval gate (:data:`_AUDITOR_GATE_KINDS`) ->
+       :attr:`RiskTier.MED` -- the wave auto-closes only on a passing auditor
+       verdict;
+    4. else (every gate is a deterministic falsifier, or the wave carries no
+       gate at all) -> :attr:`RiskTier.MECH` -- the wave self-closes on a
+       deterministic pass with no human in the loop.
+
+    The precedence is deliberate: a wave that mixes a deterministic gate with a
+    jury gate is classified by its riskiest gate, never its cheapest, so the
+    deterministic floor can never mask an unmet jury requirement.
+
+    Args:
+        gates: The wave's typed gate rows. May be empty (an empty set
+            classifies :attr:`RiskTier.MECH`).
+
+    Returns:
+        The wave's :class:`RiskTier`.
+    """
+    kinds = {gate.kind for gate in gates}
+    if kinds & _UI_BAND_GATE_KINDS:
+        return RiskTier.UI
+    if kinds & _JURY_GATE_KINDS:
+        return RiskTier.HIGH
+    if kinds & _AUDITOR_GATE_KINDS:
+        return RiskTier.MED
+    return RiskTier.MECH
+
+
+def risk_tier_auto_closes(
+    risk_tier: RiskTier,
+    *,
+    block_authority: BlockAuthority,
+) -> bool:
+    """Return whether a *risk_tier* wave may auto-close, or must fork.
+
+    The auto-close / fork gate the fleet loop consults once a lane reports its
+    wave reached a passing terminal. The LOAD-BEARING SAFETY INVARIANT lives
+    here: a :attr:`RiskTier.HIGH` or :attr:`RiskTier.UI` wave may auto-close
+    ONLY when the jury has earned :attr:`BlockAuthority.BLOCKING`; while the
+    jury is :attr:`BlockAuthority.ADVISORY` (the uncalibrated default) such a
+    wave always forks -- it never silently auto-closes on an unearned jury.
+
+    The bands:
+
+    - :attr:`RiskTier.MECH` -- always auto-closes (a deterministic pass is
+      complete ground truth, no human needed);
+    - :attr:`RiskTier.MED` -- always auto-closes (the auditor verdict the lane
+      already carries IS the human sign-off);
+    - :attr:`RiskTier.HIGH` / :attr:`RiskTier.UI` -- auto-closes IFF
+      *block_authority* is :attr:`BlockAuthority.BLOCKING` (the jury has earned
+      the right to gate the close); else forks.
+
+    Args:
+        risk_tier: The wave's classified :class:`RiskTier`.
+        block_authority: The jury's earned authority for this close. An
+            uncalibrated jury is :attr:`BlockAuthority.ADVISORY`, so a
+            high / ui wave forks under it.
+
+    Returns:
+        ``True`` when the wave may auto-close, ``False`` when it must fork.
+    """
+    if risk_tier in {RiskTier.MECH, RiskTier.MED}:
+        return True
+    return block_authority is BlockAuthority.BLOCKING
+
+
+__all__ = [
+    "OracleResult",
+    "classify_risk_tier",
+    "jury_block_authority",
+    "risk_tier_auto_closes",
+    "run_oracle",
+]
