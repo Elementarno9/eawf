@@ -168,6 +168,10 @@ COCKPIT_VITALS_ID: str = "autopilot-cockpit"
 #: trails it so the operator reads the next move.
 COCKPIT_IDLE: str = "autopilot idle -- press a to arm the fleet drive"
 
+#: The terminal run-state value that opens the FA7 run-summary card: a fleet run
+#: that reached :attr:`~eawf.kernel.state.models.FleetRunState.DONE`.
+_TERMINAL_RUN_STATE: str = "done"
+
 #: Caption labels in the vitals header, in render order. Bare ASCII so the row
 #: reads identically in both glyph columns.
 COCKPIT_LANES_LABEL: str = "lanes"
@@ -835,6 +839,11 @@ class AutopilotModeScreen(ScopeScreen):
         #: The wave ids the operator last staged through the multi-select shell
         #: (``m`` -> Space-toggle -> Enter). Empty until a batch commits.
         self._claim_batch: tuple[str, ...] = ()
+        #: The run-state string of the last fleet run the pane observed, so a
+        #: transition INTO the terminal ``done`` state opens the FA7 run-summary
+        #: card exactly once (a re-push of an already-DONE run does not reopen it).
+        #: ``None`` until the first state seed.
+        self._last_run_state: str | None = None
 
     def compose_body(self) -> ComposeResult:
         """Yield the cockpit vitals, the frontier header, the list, and the result.
@@ -1369,20 +1378,53 @@ class AutopilotModeScreen(ScopeScreen):
         self._clamp_selection()
         self._render_rows()
         mode = self._render_mode()
+        run = self._current_fleet_run()
         cockpit = self.query(f"#{COCKPIT_VITALS_ID}")
         if cockpit:
-            cockpit.first(Static).update(
-                render_cockpit_vitals(self._current_fleet_run(), mode=mode)
-            )
+            cockpit.first(Static).update(render_cockpit_vitals(run, mode=mode))
         header = self.query(f"#{FRONTIER_HEADER_ID}")
         if header:
             header.first(Static).update(
                 render_frontier_header(self._rows, self._blocked, mode=mode)
             )
+        self._maybe_open_run_summary(run)
         logger.info(
             f"autopilot_rebuild ready={len(self._rows)} blocked={len(self._blocked)} "
             f"selected={self.selected}"
         )
+
+    def _maybe_open_run_summary(self, run: FleetRun | None) -> None:
+        """Open the FA7 run-summary card when the fleet run reaches a terminal stop.
+
+        Watches the persisted :attr:`~eawf.kernel.state.models.FleetRun.run_state`
+        across rebuilds: a transition INTO the terminal ``done`` state (the
+        daemon stamped the run terminal) opens the
+        :class:`~eawf.surfaces.tui.screens.overlays.run_summary.RunSummaryModal`
+        over the cockpit exactly once. A re-push of an already-DONE run (the
+        last-seen state was already terminal) does NOT reopen the card, so a live
+        state poll that re-delivers the terminal run is idempotent. The card is
+        passed the persisted run so every figure is read off the terminal record.
+
+        Args:
+            run: The persisted fleet run for this rebuild, or ``None`` when no
+                run is armed.
+        """
+        previous = self._last_run_state
+        current = run.run_state.value if run is not None else None
+        self._last_run_state = current
+        if current != _TERMINAL_RUN_STATE or previous == _TERMINAL_RUN_STATE:
+            return
+        if run is None:  # pragma: no cover - current==done implies run is not None
+            return
+        from eawf.surfaces.tui.screens.overlays.run_summary import RunSummaryModal
+
+        reason = run.terminal_reason.value if run.terminal_reason else "unknown"
+        logger.info(f"autopilot_run_summary opened terminal_reason={reason!r}")
+        self._push_overlay(RunSummaryModal(run), self._on_run_summary_dismissed)
+
+    def _on_run_summary_dismissed(self, _result: None) -> None:
+        """Return to the cockpit after the run-summary card dismisses (no-op debrief)."""
+        logger.debug("autopilot_run_summary dismissed")
 
     def _render_rows(self) -> None:
         """Mount the ready/blocked split (or the honest-empty notice).

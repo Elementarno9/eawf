@@ -49,6 +49,7 @@ from eawf.kernel.state.models import (
     FleetLane,
     FleetRun,
     FleetRunState,
+    FleetTerminalReason,
     Project,
     State,
     Wave,
@@ -82,6 +83,7 @@ from eawf.surfaces.tui.modes.autopilot import (
 )
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
+from eawf.surfaces.tui.screens.overlays.run_summary import RunSummaryModal
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
@@ -212,6 +214,40 @@ def _draining_run(
         usd_cap=usd_cap,
         throughput=throughput,
         armed_at=_T0,
+    )
+
+
+def _done_run(
+    *,
+    reason: FleetTerminalReason = FleetTerminalReason.DRAINED,
+    closed: int = 4,
+    failed: int = 1,
+    blocked: int = 0,
+) -> FleetRun:
+    """Build a terminal (DONE) :class:`FleetRun` the FA7 run-summary card reads.
+
+    Seeds the terminal record the run-summary card opens over: the closed-lane
+    tallies, the terminal reason, and the daemon-stamped elapsed window.
+    """
+    return FleetRun(
+        run_state=FleetRunState.DONE,
+        concurrency=4,
+        frontier=[],
+        counters=FleetCounters(
+            claimed=closed + failed + blocked,
+            dispatched=closed + failed + blocked,
+            closed=closed,
+            failed=failed,
+            blocked=blocked,
+            forks_resolved=2,
+            spent_eu=6.0,
+            spent_usd=3.5,
+        ),
+        terminal_reason=reason,
+        elapsed_hours=1.25,
+        throughput=3.2,
+        armed_at=_T0,
+        ended_at=_T0,
     )
 
 
@@ -775,6 +811,99 @@ def test_autopilot_cockpit_refreshes_on_state_push(tmp_path: Path) -> None:
             assert "draining" in refreshed  # the header refreshed off the push
             assert "2/4 lanes" in refreshed
             assert COCKPIT_IDLE not in refreshed
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Run-summary terminal card -- auto-open on the DONE transition (W07)
+# --------------------------------------------------------------------------
+
+
+def test_autopilot_opens_run_summary_on_done_transition(tmp_path: Path) -> None:
+    """A fleet run flipping to DONE opens the FA7 run-summary card over the cockpit.
+
+    The load-bearing W07 wiring: the pane watches ``State.fleet_run.run_state``
+    across live pushes, and a transition INTO ``done`` (the daemon stamped the run
+    terminal) opens the
+    :class:`~eawf.surfaces.tui.screens.overlays.run_summary.RunSummaryModal`.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            assert isinstance(app.screen, AutopilotModeScreen)  # no card yet (still draining)
+            # Push a terminal (DONE) run onto the live reactive seam.
+            app.state = _state(fleet_run=_done_run(reason=FleetTerminalReason.BUDGET))
+            await settle_screen(pilot)
+            assert isinstance(app.screen, RunSummaryModal)  # the terminal card opened
+
+    asyncio.run(body())
+
+
+def test_autopilot_run_summary_not_reopened_on_repushed_done(tmp_path: Path) -> None:
+    """A re-push of an already-DONE run does NOT reopen the run-summary card.
+
+    The idempotence guard: a live poll that re-delivers the same terminal run
+    must not stack a second card. After the operator dismisses the card, a
+    re-push of the still-DONE run leaves the cockpit (no card) in place.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            cockpit = app.screen
+            app.state = _state(fleet_run=_done_run())
+            await settle_screen(pilot)
+            assert isinstance(app.screen, RunSummaryModal)
+            await pilot.press("enter")  # dismiss back to the cockpit
+            await settle_screen(pilot)
+            assert app.screen is cockpit
+            # Re-push the SAME terminal run (a live poll re-delivering it).
+            app.state = _state(fleet_run=_done_run())
+            await settle_screen(pilot)
+            assert app.screen is cockpit  # no second card stacked
+
+    asyncio.run(body())
+
+
+def test_autopilot_run_summary_card_reads_terminal_record(tmp_path: Path) -> None:
+    """The opened card reads its figures off the persisted terminal FleetRun (C2).
+
+    Proves the card surfaces the daemon's terminal record (not a recomputed
+    tally): the counts row reads the closed / failed / blocked counters off the
+    run pushed onto the live seam.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            app.state = _state(
+                fleet_run=_done_run(
+                    reason=FleetTerminalReason.CONVERGED, closed=4, failed=1, blocked=0
+                )
+            )
+            await settle_screen(pilot)
+            card = app.screen
+            assert isinstance(card, RunSummaryModal)
+            from eawf.surfaces.tui.screens.overlays.run_summary import RUN_SUMMARY_COUNTS_ID
+
+            counts = str(card.query_one(f"#{RUN_SUMMARY_COUNTS_ID}").render())  # type: ignore[attr-defined]
+            assert "4 closed" in counts
+            assert "1 failed" in counts
+            assert "0 blocked" in counts
 
     asyncio.run(body())
 
