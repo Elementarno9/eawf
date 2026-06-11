@@ -560,10 +560,11 @@ def test_agent_watch_mode_mounts_grid_for_two_active_executors(tmp_path: Path) -
 def test_agent_watch_session_keys_resolve_to_live_bindings() -> None:
     """Every advertised FA4 session key resolves to a live Binding (parity).
 
-    The affordance-parity contract: each of the four advertised session keys --
-    ``k`` (kill), ``space`` (pause), ``l`` (view log), ``Esc`` (back) -- maps to
-    a concrete :class:`~textual.binding.Binding` whose action method exists on
-    the screen, so no advertised key is a dead affordance.
+    The affordance-parity contract: each of the advertised session keys --
+    ``k`` (kill), ``x`` (the kill alias), ``space`` (pause), ``l`` (view log),
+    ``Esc`` (back) -- maps to a concrete
+    :class:`~textual.binding.Binding` whose action method exists on the screen,
+    so no advertised key is a dead affordance.
     """
     keys = {
         binding.key: binding.action
@@ -571,6 +572,8 @@ def test_agent_watch_session_keys_resolve_to_live_bindings() -> None:
         if hasattr(binding, "key")
     }
     assert keys.get("k") == "cancel_session"
+    # ``x`` aliases the kill verb to the SAME confirm-gated cancel action.
+    assert keys.get("x") == "cancel_session"
     assert keys.get("space") == "pause_session"
     assert keys.get("l") == "view_log"
     assert keys.get("escape") == "leave_zoom"
@@ -600,6 +603,72 @@ def test_agent_watch_cancel_key_opens_confirm_modal(tmp_path: Path) -> None:
             assert isinstance(app.screen, ConfirmModal)
 
     asyncio.run(body())
+
+
+def test_agent_watch_x_alias_opens_same_confirm_gated_kill(tmp_path: Path) -> None:
+    """Pressing ``x`` opens the SAME confirm-gated kill as ``k`` (alias parity).
+
+    ``x`` is bound as a cancel-verb alias of the ``k`` kill: it routes through
+    the identical ``cancel_session`` action, so pressing it opens the shared
+    :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` naming the
+    SIGTERM stop -- the destructive kill stays confirm-gated, never one
+    keystroke, whichever of the two keys the operator reaches for.
+    """
+    state = _state(sessions={"S-1": _session("S-1")})
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("x")  # alias of k -> same confirm modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+
+    asyncio.run(body())
+
+
+def test_agent_watch_x_alias_confirmed_issues_kill_rpc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A confirmed ``x``-cancel issues the SAME ``agent.kill`` RPC as ``k``.
+
+    Drives the ``x`` alias through its confirm-gated kill with a reachable
+    daemon stubbed by a fake client. The alias must reach the daemon with the
+    identical ``agent.kill`` request (the watched wave + attempt + term signal)
+    the ``k`` key fires, proving it routes through the existing kill path rather
+    than a duplicate.
+    """
+    state = _state(sessions={"S-1": _session("S-1")})
+    state_path = _write_state(tmp_path, state)
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _recording_client(calls))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("x")  # alias of k -> confirm modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("right")  # highlight Yes
+            await pilot.press("enter")  # confirm the kill
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    # The confirmed alias-cancel reached the daemon with the same kill request.
+    assert calls and calls[0][0] == "agent.kill"
+    assert calls[0][1]["wave_id"] == _WAVE
+    assert calls[0][1]["attempt"] == 1
+    assert calls[0][1]["signal"] == "term"
 
 
 def test_agent_watch_cancel_dismissed_issues_no_rpc(

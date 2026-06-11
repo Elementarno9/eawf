@@ -1536,13 +1536,15 @@ class AgentWatchModeScreen(ScopeScreen):
     """
 
     #: ``up`` / ``down`` scroll the stream; the FA4 session keys ``k`` (kill
-    #: this lane, confirm-gated), ``space`` (pause / resume this lane), ``l``
-    #: (view this session's log), and ``Esc`` (leave the zoom) act on the
-    #: watched session. The chrome bindings (palette / help / quit / scope /
-    #: mode digits) come from the shared chassis + app-wide bindings. ``k`` is
-    #: the kill verb here (not a vim-up alias) -- this pane keeps arrows primary
-    #: for scrolling and does not offer the j/k vim scroll aliases, so ``k`` is
-    #: free to mean "kill the watched session".
+    #: this lane, confirm-gated, with ``x`` as a cancel-verb alias), ``space``
+    #: (pause / resume this lane), ``l`` (view this session's log), and ``Esc``
+    #: (leave the zoom) act on the watched session. The chrome bindings (palette
+    #: / help / quit / scope / mode digits) come from the shared chassis +
+    #: app-wide bindings. ``k`` is the kill verb here (not a vim-up alias) --
+    #: this pane keeps arrows primary for scrolling and does not offer the j/k
+    #: vim scroll aliases, so ``k`` is free to mean "kill the watched session";
+    #: ``x`` aliases it to the SAME confirm-gated kill so the cancel-x verb (the
+    #: failed-look mark the result line already wears) is reachable directly.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "scroll_up", "up", show=False),
         Binding("down", "scroll_down", "down", show=False),
@@ -1551,6 +1553,7 @@ class AgentWatchModeScreen(ScopeScreen):
         Binding("home", "scroll_home", "home", show=False),
         Binding("end", "scroll_end", "end", show=False),
         Binding("k", "cancel_session", "kill", show=False),
+        Binding("x", "cancel_session", "kill", show=False),
         Binding("space", "pause_session", "pause", show=False),
         Binding("l", "view_log", "view log", show=False),
         Binding("escape", "leave_zoom", "back", show=False),

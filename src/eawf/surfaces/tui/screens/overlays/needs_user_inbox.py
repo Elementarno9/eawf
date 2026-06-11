@@ -235,14 +235,19 @@ class NeedsUserInbox(ModalScreen[None]):
     """
 
     #: ``↑`` / ``↓`` move the highlight, ``Enter`` opens the highlighted
-    #: pause, ``d`` dismisses (acknowledges) it for the session, ``Esc``
-    #: closes. Vim ``j`` / ``k`` ride the arrows.
+    #: pause's modal, ``a`` approves it (resolves with its first option) and
+    #: ``h`` holds it (resolves with its second option) -- both through the
+    #: shared resume path -- ``x`` (alias ``d``) dismisses (acknowledges) it for
+    #: the session, ``Esc`` closes. Vim ``j`` / ``k`` ride the arrows.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "move(-1)", "up", show=False),
         Binding("down", "move(1)", "down", show=False),
         Binding("k", "move(-1)", "up", show=False),
         Binding("j", "move(1)", "down", show=False),
         Binding("enter", "open_pause", "open", show=False),
+        Binding("a", "approve_row", "approve", show=False),
+        Binding("h", "hold_row", "hold", show=False),
+        Binding("x", "dismiss_row", "dismiss", show=False),
         Binding("d", "dismiss_row", "dismiss", show=False),
         Binding("escape", "close", "close", show=False),
     ]
@@ -291,7 +296,8 @@ class NeedsUserInbox(ModalScreen[None]):
                 else:
                     yield Static(EMPTY_INBOX_TEXT, classes="inbox-empty")
             yield Static(
-                "[ Up/Down move - Enter open - d dismiss - Esc close ]", classes="inbox-hint"
+                "[ Up/Down move - Enter open - a approve - h hold - x dismiss - Esc close ]",
+                classes="inbox-hint",
             )
 
     def on_mount(self) -> None:
@@ -369,6 +375,65 @@ class NeedsUserInbox(ModalScreen[None]):
 
         open_needs_user(app, target.question)
 
+    def action_approve_row(self) -> None:
+        """Approve the highlighted pause (resolve with its first option, ``a``).
+
+        Answers the highlighted pause through the App's shared
+        :meth:`~eawf.surfaces.tui.app.EaApp.resolve_needs_user_pause` resume
+        path -- the SAME daemon-RPC-then-local path the modal pick uses -- with
+        the pause question's FIRST option label (the affirmative). On a
+        successful resume the row drops out of the inbox live; a resume failure
+        leaves the row so the operator can retry. A no-op when the list is empty
+        or the host exposes no resume seam (a bare harness). Approve is the
+        general-kind affirmative analog of ``h`` (hold) and ``x`` (dismiss).
+        """
+        self._resolve_row(option_index=0, verb="approve")
+
+    def action_hold_row(self) -> None:
+        """Hold the highlighted pause (resolve with its second option, ``h``).
+
+        Answers the highlighted pause through the App's shared
+        :meth:`~eawf.surfaces.tui.app.EaApp.resolve_needs_user_pause` resume
+        path -- the SAME path ``a`` (approve) and the modal pick use -- with the
+        pause question's SECOND option label (the deferral / negative). On a
+        successful resume the row drops out of the inbox live; a resume failure
+        leaves the row so the operator can retry. A no-op when the list is empty
+        or the host exposes no resume seam.
+        """
+        self._resolve_row(option_index=1, verb="hold")
+
+    def _resolve_row(self, *, option_index: int, verb: str) -> None:
+        """Resolve the highlighted pause with its *option_index* option label.
+
+        The shared body behind ``a`` (approve, option 0) and ``h`` (hold,
+        option 1): looks up the highlighted pause, picks the option label at
+        *option_index* (every pause question carries 2-4 options, so index 0/1
+        always resolve), and routes it through the host's
+        :meth:`~eawf.surfaces.tui.app.EaApp.resolve_needs_user_pause` -- the one
+        resume seam the modal pick also uses. Drops the row only on a successful
+        resume so a failed answer stays visible for a retry. A no-op when the
+        list is empty or the host exposes no resume seam.
+
+        Args:
+            option_index: The pause question option to answer with (``0`` for
+                approve, ``1`` for hold).
+            verb: The action verb for the log line (``"approve"`` / ``"hold"``).
+        """
+        if not self._pauses or not (0 <= self.selected < len(self._pauses)):
+            return
+        target = self._pauses[self.selected]
+        resolve = getattr(self.app, "resolve_needs_user_pause", None)
+        if not callable(resolve):
+            return
+        choice = target.question.options[option_index].label
+        logger.info(
+            f"needs_user_inbox resolve_row verb={verb} "
+            f"pause_urn={target.pause_urn!r} choice={choice!r}"
+        )
+        if not resolve(target.pause_urn, choice):
+            return
+        self._drop_row(target.pause_urn)
+
     def action_dismiss_row(self) -> None:
         """Acknowledge (hide) the highlighted pause for this session.
 
@@ -376,10 +441,11 @@ class NeedsUserInbox(ModalScreen[None]):
         (the same set the Home attention band filters against, so the pause
         also disappears from the band) and removes the row from this inbox
         live. The general-kind ``dismiss`` analog of ``Enter``'s open + the
-        pause-specific ``defer``. Named ``action_dismiss_row`` (not
-        ``action_dismiss``) so it does not shadow the Textual screen-dismiss
-        action a :class:`~textual.screen.ModalScreen` already owns. A no-op
-        when the list is empty.
+        pause-specific ``defer``. Bound to ``x`` (and the legacy ``d`` alias).
+        Named ``action_dismiss_row`` (not ``action_dismiss``) so it does not
+        shadow the Textual screen-dismiss action a
+        :class:`~textual.screen.ModalScreen` already owns. A no-op when the list
+        is empty.
         """
         if not self._pauses or not (0 <= self.selected < len(self._pauses)):
             return
@@ -388,7 +454,19 @@ class NeedsUserInbox(ModalScreen[None]):
         if callable(dismiss):
             logger.info(f"needs_user_inbox dismiss pause_urn={target.pause_urn!r}")
             dismiss(_pause_dismiss_key(target))
-        self._pauses = tuple(p for p in self._pauses if p.pause_urn != target.pause_urn)
+        self._drop_row(target.pause_urn)
+
+    def _drop_row(self, pause_urn: str) -> None:
+        """Remove the resolved / dismissed *pause_urn* row and repaint live.
+
+        The shared row-removal tail behind ``a`` / ``h`` / ``x``: drops the
+        pause from the in-memory set, re-clamps the highlight, and schedules the
+        list rebuild so the row disappears immediately.
+
+        Args:
+            pause_urn: The pause whose row is dropped from the inbox.
+        """
+        self._pauses = tuple(p for p in self._pauses if p.pause_urn != pause_urn)
         self.selected = min(self.selected, len(self._pauses) - 1) if self._pauses else -1
         self.run_worker(self._rebuild_rows(), exclusive=True)
 

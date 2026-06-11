@@ -18,6 +18,7 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from textual.widgets import Static
 
 from eawf.kernel.state.enums import Urgency
@@ -368,5 +369,165 @@ def test_inbox_excludes_already_dismissed_pause(tmp_path: Path) -> None:
             rows = inbox.query(".inbox-row")
             assert len(rows) == 1
             assert "keep me" in str(rows.first(Static).render())
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W05 -- a/h/x per-card affordances resolve through the existing pause path
+# --------------------------------------------------------------------------
+
+
+def test_inbox_approve_resolves_pause_through_resume_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pressing ``a`` resolves the highlighted pause with its first option.
+
+    Approve answers the pause through the shared
+    ``resolve_needs_user_pause`` resume path (with the daemon socket forced
+    unavailable so the local ``resolve_pause`` fallback writes the resume row),
+    using the pause question's FIRST option label (``apply``). The resolved
+    pause drops out of ``list_open_pauses`` -- a ``needs_user_resume`` row was
+    appended through the existing path -- and its inbox row is gone.
+    """
+
+    async def body() -> None:
+        state_path = _temp_state(tmp_path)
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the urgent one"),
+            urgency=Urgency.URGENT,
+        )
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the low one"),
+            urgency=Urgency.LOW,
+        )
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            while any(isinstance(s, NeedsUserModal) for s in app.screen_stack):
+                await pilot.press("escape")
+                await pilot.pause()
+            urgent = next(
+                p
+                for p in list_open_pauses(state_path, scope_id=None)
+                if "urgent" in p.question.question
+            )
+            app.action_open_inbox()
+            await pilot.pause()
+            inbox = app.screen
+            assert isinstance(inbox, NeedsUserInbox)
+            assert len(inbox.query(".inbox-row")) == 2
+            # Approve the highlighted (urgent, index 0) pause with option 0.
+            await pilot.press("a")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            # The approved row is gone; the survivor remains.
+            assert len(inbox.query(".inbox-row")) == 1
+            assert "the low one" in str(inbox.query(".inbox-row").first(Static).render())
+            # The pause resolved through the existing resume path (resume row
+            # appended): it no longer lists as open, and the urgent one is gone.
+            open_now = list_open_pauses(state_path, scope_id=None)
+            assert urgent.pause_urn not in {p.pause_urn for p in open_now}
+            assert len(open_now) == 1
+
+    asyncio.run(body())
+
+
+def test_inbox_hold_resolves_pause_with_second_option(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pressing ``h`` resolves the highlighted pause with its second option.
+
+    Hold answers the pause through the SAME shared resume path as approve, but
+    with the pause question's SECOND option label (``cancel``). The resolved
+    pause drops out of ``list_open_pauses`` and its inbox row disappears.
+    """
+
+    async def body() -> None:
+        state_path = _temp_state(tmp_path)
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the urgent one"),
+            urgency=Urgency.URGENT,
+        )
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            while any(isinstance(s, NeedsUserModal) for s in app.screen_stack):
+                await pilot.press("escape")
+                await pilot.pause()
+            urgent = next(iter(list_open_pauses(state_path, scope_id=None)))
+            app.action_open_inbox()
+            await pilot.pause()
+            inbox = app.screen
+            assert isinstance(inbox, NeedsUserInbox)
+            assert len(inbox.query(".inbox-row")) == 1
+            await pilot.press("h")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            # The held pause resolved through the existing path; the inbox empties.
+            assert len(inbox.query(".inbox-row")) == 0
+            assert urgent.pause_urn not in {
+                p.pause_urn for p in list_open_pauses(state_path, scope_id=None)
+            }
+
+    asyncio.run(body())
+
+
+def test_inbox_x_dismisses_selected_pause(tmp_path: Path) -> None:
+    """Pressing ``x`` acknowledges (hides) the highlighted pause for the session.
+
+    ``x`` is the canonical dismiss key (with ``d`` as a legacy alias): it
+    records the pause's session dismiss key on the App's dismissed-set -- the
+    same acknowledge path the band filters against -- and drops the row from the
+    inbox live, leaving the pause itself open (an acknowledge, not a resume).
+    """
+
+    async def body() -> None:
+        state_path = _temp_state(tmp_path)
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the urgent one"),
+            urgency=Urgency.URGENT,
+        )
+        record_pause(
+            state_path,
+            scope_id=_SCOPE,
+            session=_SESSION,
+            question=_question("the low one"),
+            urgency=Urgency.LOW,
+        )
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            while any(isinstance(s, NeedsUserModal) for s in app.screen_stack):
+                await pilot.press("escape")
+                await pilot.pause()
+            app.action_open_inbox()
+            await pilot.pause()
+            inbox = app.screen
+            assert isinstance(inbox, NeedsUserInbox)
+            assert len(inbox.query(".inbox-row")) == 2
+            await pilot.press("x")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            # The dismissed row is gone and recorded on the acknowledge set; the
+            # pause itself stays open (dismiss != resume).
+            assert len(inbox.query(".inbox-row")) == 1
+            assert len(app.attention_dismissed()) == 1
+            assert "the low one" in str(inbox.query(".inbox-row").first(Static).render())
+            assert len(list_open_pauses(state_path, scope_id=None)) == 2
 
     asyncio.run(body())

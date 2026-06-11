@@ -1118,6 +1118,41 @@ class EaApp(App[None]):
         """
         self.open_needs_user_pause(pause_urn, question)
 
+    def resolve_needs_user_pause(self, pause_urn: str, choice: str) -> bool:
+        """Resolve *pause_urn* with *choice* through the shared resume path.
+
+        The single-keystroke counterpart to the modal pick: the global inbox's
+        ``a`` (approve) / ``h`` (hold) keys answer a highlighted pause with one
+        of its option labels directly, routing through the SAME
+        :meth:`_resolve_needs_user_pause` daemon-RPC-then-local resume path the
+        modal pick uses (so a direct answer and a modal answer record identical
+        ``needs_user_resume`` rows). A resume failure surfaces an error toast
+        and leaves the pause open for a retry, mirroring
+        :meth:`_on_needs_user_picked`.
+
+        Args:
+            pause_urn: The pause being answered.
+            choice: The chosen option label (one of the pause question's
+                option labels).
+
+        Returns:
+            ``True`` when the pause resolved, ``False`` when state is unbound or
+            the resume failed (the pause stays open).
+        """
+        if self._state_path is None:
+            return False
+        from eawf.workflow.skills.needs_user import PauseError
+
+        try:
+            self._resolve_needs_user_pause(pause_urn=pause_urn, choice=choice)
+        except (PauseError, OSError, ValueError) as exc:
+            logger.info(
+                f"resolve_needs_user_pause resume_failed pause_urn={pause_urn!r} err={exc!r}"
+            )
+            self.notify(f"resume failed: {exc}", severity="error")
+            return False
+        return True
+
     def _on_needs_user_picked(self, pause_urn: str, label: str | None) -> None:
         """Resolve *pause_urn* with the picked *label*, or clear on defer.
 
