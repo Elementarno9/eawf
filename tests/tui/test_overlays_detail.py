@@ -632,14 +632,19 @@ def test_detail_modal_two_gates_paint_both_kinds_under_criterion() -> None:
     asyncio.run(body())
 
 
-def test_detail_modal_no_gates_renders_no_gates_tab() -> None:
-    """A wave with ``gates == []`` builds no gates tab and ``g`` is a no-op."""
+def test_detail_modal_no_gates_renders_empty_gates_tab() -> None:
+    """A wave with ``gates == []`` still builds the gates tab, honest-empty.
+
+    W15: the wave detail renders the full five-tab chassis now (render the tabs
+    now, fill later), so an empty gates section is an empty-but-present seam, not
+    an absent tab; ``g`` navigates to it.
+    """
 
     async def body() -> None:
         state, wave_id = _state_with_gates([])
         card = resolve_detail(state, wave_id)
         assert card.gates == ()
-        assert "gates" not in DetailModal._present_tabs(card)
+        assert "gates" in DetailModal._present_tabs(card)
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
@@ -649,12 +654,14 @@ def test_detail_modal_no_gates_renders_no_gates_tab() -> None:
             await pilot.pause()
             await app.workers.wait_for_complete()
             tabs = modal.query_one(TabbedContent)
-            # No gates pane is built and ``g`` jumps nowhere.
-            assert "detail-tab-gates" not in {pane.id for pane in tabs.query(TabPane)}
-            before = tabs.active
+            # The gates pane IS built (always-present chassis) and ``g`` jumps to
+            # it; the body reads the honest-empty notice.
+            assert "detail-tab-gates" in {pane.id for pane in tabs.query(TabPane)}
             await pilot.press("g")
             await pilot.pause()
-            assert tabs.active == before
+            assert tabs.active == "detail-tab-gates"
+            pane = modal.query_one("#detail-tab-gates", TabPane)
+            assert "no gates declared yet" in str(pane.query_one(Static).render())
 
     asyncio.run(body())
 
@@ -1357,17 +1364,20 @@ def test_present_tabs_wave_includes_runtime_and_criteria() -> None:
     assert "evidence" in tabs
 
 
-def test_present_tabs_skips_empty_gates() -> None:
-    # The fixture wave carries no gate rows, so the modal builds no gates tab.
+def test_present_tabs_wave_keeps_empty_gates_tab() -> None:
+    # W15: a wave renders the full five-tab chassis now, so an empty gates
+    # section is an empty-but-present seam, not an absent tab.
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     card = resolve_detail(state, wave_id)
     assert card.gates == ()
-    assert "gates" not in DetailModal._present_tabs(card)
+    tabs = DetailModal._present_tabs(card)
+    assert tabs[:5] == ("overview", "criteria", "gates", "evidence", "runtime")
 
 
-def test_present_tabs_skips_empty_criteria() -> None:
-    # A wave with no success criteria yields no criteria tab.
+def test_present_tabs_skips_empty_criteria_on_non_wave_card() -> None:
+    # A non-wave card (default kind) keeps only the groups it populates, so an
+    # empty criteria section yields no criteria tab.
     card = DetailCard(title="t", rows=(("id", "x"),))
     assert "criteria" not in DetailModal._present_tabs(card)
 

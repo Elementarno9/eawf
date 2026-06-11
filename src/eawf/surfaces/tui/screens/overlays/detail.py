@@ -10,9 +10,12 @@ The body is split across up to six cosmic-terminal tabs --
 ``cost`` -- each with a chrome-glyph mnemonic from the reskin sigil
 vocabulary. ``Tab`` / ``Shift+Tab`` cycle the tabs; the single-letter keys
 ``o`` / ``c`` / ``g`` / ``v`` / ``r`` / ``$`` jump to one, and the arrow keys
-keep their native scroll. ``overview`` is always present; the rest build only
-when their section has data, so an absent tab renders nothing and its hotkey
-no-ops. Honest absence is first-class: the ``runtime`` tab shows the
+keep their native scroll. A ``wave`` card renders the full five-tab chassis
+always (overview / criteria / gates / evidence / runtime) -- an empty section
+shows an honest-empty notice rather than hiding the tab (the "render the tabs
+now, fill later" directive) -- while the ``cost`` tab stays data-gated and a
+non-wave card (phase / iter / backlog peek) builds only the groups it
+populates. Honest absence is first-class: the ``runtime`` tab shows the
 :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel rather than a
 fabricated zero (a real budget still paints a consumed-vs-budget bar +
 session-derived runtime-EU), and the ``cost`` tab renders "no metered
@@ -26,6 +29,8 @@ without mounting Textual; the modal is a thin view built from a pre-resolved
 card and never reaches back into App state itself.
 """
 
+# noqa: EAWF010 at-cap detail chassis; W15 added the always-present five-tab
+# honest-empty seam (a bounded render fix); extract-module split deferred.
 from __future__ import annotations
 
 import logging
@@ -295,6 +300,26 @@ class DetailCard:
     runtime: tuple[tuple[str, str], ...] = ()
     cost: tuple[tuple[str, str], ...] = ()
     detail_markdown: str | None = None
+    #: The entity kind the card resolves. ``"wave"`` cards render the full
+    #: five-tab chassis (overview / criteria / gates / evidence / runtime)
+    #: unconditionally -- honest-empty until the data lands, the "render the
+    #: tabs now, fill later" reskin directive -- while every other kind keeps
+    #: only the groups it populates.
+    kind: str = "entity"
+
+
+#: Honest-empty notice per always-present wave tab, rendered when the tab's
+#: section has no data yet -- the seam stays visible but reads honestly as
+#: not-yet-bound rather than a blank pane (the "render the tabs now, fill later"
+#: reskin directive). The ``overview`` tab is never empty (every card has an
+#: identity), so it carries no entry.
+_EMPTY_TAB_NOTICE: dict[str, str] = {
+    "criteria": "no criteria bound yet",
+    "gates": "no gates declared yet",
+    "evidence": "no evidence recorded yet",
+    "runtime": "no runtime captured yet",
+    "cost": "no metered sessions yet",
+}
 
 
 def _intent_rows(intent: IntentBrief | None) -> list[tuple[str, str]]:
@@ -766,6 +791,7 @@ def _wave_card(
         runtime=_wave_runtime(wave),
         cost=cost,
         detail_markdown=_wave_narrative_preview(state, wave, reports=report_rows),
+        kind="wave",
     )
 
 
@@ -1230,13 +1256,18 @@ class DetailModal(ModalScreen[None]):
 
     @staticmethod
     def _present_tabs(card: DetailCard) -> tuple[str, ...]:
-        """Return the ordered tab ids that have data for *card*.
+        """Return the ordered tab ids to build panes for *card*.
 
         The ``overview`` tab is ALWAYS present (every card carries an
-        identity); the ``criteria`` / ``gates`` / ``evidence`` / ``runtime``
-        / ``cost`` tabs appear only when their section is non-empty, so a
-        wave with no gates renders no gates tab and a wave with no session
-        attempts renders no cost tab. Order follows the chassis sequence.
+        identity). A ``wave`` card additionally renders the full five-tab
+        chassis -- ``criteria`` / ``gates`` / ``evidence`` / ``runtime`` are
+        ALWAYS present, honest-empty until their data lands (the "render the
+        tabs now, fill later" reskin directive), so a wave with no gates yet
+        still shows the gates tab as an empty-but-present seam; the ``cost``
+        tab stays data-gated (it is not one of the canonical five). Every
+        non-wave card (phase / iter / backlog peek) keeps only the groups it
+        populates, so an entity with no such section renders no empty tab.
+        Order follows the chassis sequence.
 
         Args:
             card: The resolved card.
@@ -1245,6 +1276,17 @@ class DetailModal(ModalScreen[None]):
             The ordered tab ids to build panes for.
         """
         present: list[str] = ["overview"]
+        if card.kind == "wave":
+            # Wave detail renders the full five-tab chassis now: criteria /
+            # gates / evidence / runtime are ALWAYS present, honest-empty until
+            # their data lands ("render the tabs now, fill later"). The cost tab
+            # stays data-gated -- it is not one of the canonical five.
+            present.extend(["criteria", "gates", "evidence", "runtime"])
+            if card.cost:
+                present.append("cost")
+            return tuple(present)
+        # Non-wave cards (phase / iter / backlog peeks) reuse only the groups
+        # they populate, so an entity with no such section renders no empty tab.
         if card.criteria:
             present.append("criteria")
         if card.gates:
@@ -1334,6 +1376,15 @@ class DetailModal(ModalScreen[None]):
             yield Markdown(self._card.detail_markdown)
             return
         rows = self._section_rows(tab_id)
+        if not rows:
+            # An always-present wave tab whose data has not landed yet renders an
+            # honest-empty notice rather than a blank pane (the "render the tabs
+            # now, fill later" directive keeps the seam visible + honest).
+            yield Static(
+                f"[$muted]{_EMPTY_TAB_NOTICE.get(tab_id, 'nothing here yet')}[/]",
+                classes="detail-row",
+            )
+            return
         label_width = max((len(label) for label, _ in rows), default=0)
         for label, value in rows:
             padded = f"{label}:".ljust(label_width + 1)
