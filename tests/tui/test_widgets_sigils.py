@@ -1,13 +1,19 @@
 """Unit tests for the SHAPE-layer ``widgets/sigils.py`` helper.
 
 Covers the two glyph columns (unicode vs ascii) across all five
-lifecycle sigils and all eight chrome roles, the COLOUR-layer delegation
+lifecycle sigils and every chrome role, the COLOUR-layer delegation
 (``tint`` resolves the Wong status hex via ``status_colour``, including
 the ``RUNNING -> in_progress`` key remap), the binary mode selection (any
 non-``"ascii"`` label resolves the unicode column, decoupling the helper
 from the not-yet-landed render-mode rename), and the deconfliction
 regression invariant (the ascii sigil alphabet shares no character with
 the EU / burn bar glyphs).
+
+The chrome-role count + coverage pin asserts the ratified fixtures below
+against the SOURCE ``_CHROME`` table (imported from the module under test),
+not a hand-kept count literal: an additive drift -- a new chrome role landed
+in source without ratifying its glyphs here -- fails the pin until the
+fixtures gain the role, so the role inventory cannot grow invisibly.
 
 The module is PURE -- no Textual primitive, no daemon -- so these tests
 mount nothing and need no lock.
@@ -33,6 +39,7 @@ from eawf.surfaces.tui.app import resolve_render_mode
 from eawf.surfaces.tui.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.eu_bar import GLYPH_EMPTY, GLYPH_FULL
 from eawf.surfaces.tui.widgets.sigils import (
+    _CHROME,
     FOLLOWUP_BADGE,
     Sigil,
     chrome,
@@ -61,6 +68,11 @@ _LIFECYCLE_ASCII: dict[Sigil, str] = {
     Sigil.ABANDONED: "%",
 }
 
+# The ratified chrome-role glyphs. ``brand`` is the leading fisheye wordmark
+# stand-in (the terminal-renderable Seal SVG fallback); it is a real shipped
+# chrome role, so it is pinned here alongside the eight action roles. The
+# count + coverage pin (``test_chrome_keys_match_source``) asserts these keys
+# equal the SOURCE ``_CHROME`` table, so a future role lands red until ratified.
 _CHROME_UNICODE: dict[str, str] = {
     "dispatch": "\u276f",
     "gate": "\u2394",
@@ -70,6 +82,7 @@ _CHROME_UNICODE: dict[str, str] = {
     "runtime": "$",
     "check_on": "\u25a3",
     "check_off": "\u25a2",
+    "brand": "\u25c9",
 }
 _CHROME_ASCII: dict[str, str] = {
     "dispatch": ">",
@@ -80,6 +93,7 @@ _CHROME_ASCII: dict[str, str] = {
     "runtime": "$",
     "check_on": "[x]",
     "check_off": "[ ]",
+    "brand": "*",
 }
 
 
@@ -114,7 +128,7 @@ def test_glyph_pending_ascii_is_o_not_dash() -> None:
 
 
 # --------------------------------------------------------------------------
-# Criterion 2 -- chrome glyph correctness for all eight roles + modes
+# Criterion 2 -- chrome glyph correctness for every role + modes
 # --------------------------------------------------------------------------
 
 
@@ -128,10 +142,15 @@ def test_chrome_ascii_column_for_every_role(role: str) -> None:
     assert chrome(role, mode="ascii") == _CHROME_ASCII[role]
 
 
-def test_chrome_covers_exactly_eight_roles() -> None:
-    # The contract names eight chrome roles; pin the count so a future edit
-    # that drops or adds one without a test update is caught.
-    assert len(_CHROME_ASCII) == 8
+def test_chrome_keys_match_source() -> None:
+    # Pin the role inventory against the SOURCE ``_CHROME`` table, not a count
+    # literal: a chrome role added to source without ratifying its glyphs in
+    # the fixtures above (additive drift) fails this assertion until the
+    # fixtures gain the role, so the inventory cannot grow invisibly. The two
+    # ratified fixtures must also stay in lockstep with each other.
+    source_roles = set(_CHROME)
+    assert set(_CHROME_UNICODE) == source_roles
+    assert set(_CHROME_ASCII) == source_roles
 
 
 def test_chrome_resolves_the_detail_tab_marker_roles() -> None:

@@ -53,6 +53,8 @@ import orjson
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical, VerticalScroll
+from textual.reactive import reactive
+from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
@@ -60,7 +62,7 @@ from eawf.surfaces.tui.widgets.empty_state import render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import enforcement_sigil
+from eawf.surfaces.tui.widgets.sigils import chrome, enforcement_sigil
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -76,6 +78,18 @@ TIMELINE_EMPTY_ID: str = "sandbox-events-empty"
 
 #: CSS class on each rendered enforcement row.
 TIMELINE_ROW_CLASS: str = "sandbox-events-row"
+
+#: CSS class added to the row the selection cursor currently rests on (the
+#: ``Enter``-open target). Exactly one mounted row carries it when the timeline
+#: is populated; a render-mode flip and a selection move both keep it on the
+#: cursor row so the operator sees which denial ``Enter`` would open.
+TIMELINE_SELECTED_CLASS: str = "sandbox-events-selected"
+
+#: Id of the per-row peek modal ``Enter`` opens over the selected denial. The
+#: peek surfaces the row's five named fields (time / session / kind / target /
+#: severity) full-width so a long denied target that the timeline column
+#: truncates is readable in full.
+ROW_PEEK_ID: str = "sandbox-events-peek"
 
 #: The pinned honest-empty notice. Byte-for-byte fixed -- the floor's whole
 #: value is that the denial timeline IS empty in the happy path, so the empty
@@ -302,6 +316,110 @@ def format_enforcement_markup(row: EnforcementRow, *, mode: RenderMode) -> str:
     return f"{mark_cell} {escape_markup(tail)}"
 
 
+def format_enforcement_peek(row: EnforcementRow) -> str:
+    """Render the selected *row*'s five named fields as a peek body (markup-free).
+
+    The ``Enter``-open peek lays the timeline row's five fields out one per
+    line (``time`` / ``session`` / ``kind`` / ``target`` / ``severity``) so a
+    long denied target the single-line timeline column truncates is readable in
+    full. Pure (markup-free, no Textual primitive) so the field layout is
+    unit-testable without mounting the modal.
+
+    Args:
+        row: The enforcement row the selection cursor rests on.
+
+    Returns:
+        A plain (markup-free) multi-line body, one ``label: value`` per field.
+    """
+    return "\n".join(
+        (
+            f"time:     {row.timestamp}",
+            f"session:  {row.session}",
+            f"kind:     {row.kind}",
+            f"target:   {row.target}",
+            f"severity: {row.severity}",
+        )
+    )
+
+
+class SandboxRowPeekModal(ModalScreen[None]):
+    """A transient peek over one selected enforcement row (``Enter`` opens it).
+
+    Surfaces the selected denial's five named fields full-width
+    (:func:`format_enforcement_peek`) so a long denied target the single-line
+    timeline column truncates is readable in full. The modal owns no mutation
+    -- it is a read-only detail peek built from a pre-resolved
+    :class:`EnforcementRow`, so it never reaches back into the timeline or the
+    event store. ``Esc`` closes.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    SandboxRowPeekModal {
+        align: center middle;
+    }
+    SandboxRowPeekModal > #sandbox-events-peek-card {
+        width: 70%;
+        height: auto;
+        max-height: 80%;
+        border: round $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    SandboxRowPeekModal .sandbox-events-peek-title {
+        text-style: bold;
+        color: $accent;
+        height: 1;
+    }
+    SandboxRowPeekModal .sandbox-events-peek-body {
+        height: auto;
+        margin-top: 1;
+    }
+    SandboxRowPeekModal .sandbox-events-peek-hint {
+        color: $text-muted;
+        height: 1;
+        margin-top: 1;
+    }
+    """
+
+    #: ``Esc`` closes the peek -- the only binding the transient owns. The
+    #: chassis keys come from the base; the peek adds nothing else.
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "close", "close", show=False),
+    ]
+
+    def __init__(self, row: EnforcementRow, *, mode: RenderMode) -> None:
+        """Construct the peek over a pre-resolved *row* in render *mode*.
+
+        Args:
+            row: The selected enforcement row to surface full-width.
+            mode: The App's resolved render-mode label, threaded into the
+                severity sigil + the title chrome mark.
+        """
+        super().__init__(id=ROW_PEEK_ID)
+        self._row = row
+        self._mode = mode
+
+    def compose(self) -> ComposeResult:
+        """Yield the titled card: severity sigil heading, field body, Esc hint."""
+        with VerticalScroll(id="sandbox-events-peek-card"):
+            yield Static(self._title(), classes="sandbox-events-peek-title")
+            yield Static(format_enforcement_peek(self._row), classes="sandbox-events-peek-body")
+            yield Static("[ Esc to close ]", classes="sandbox-events-peek-hint")
+
+    def _title(self) -> str:
+        """Return the heading: the severity sigil + the denial's kind + session."""
+        resolved = enforcement_sigil(self._row.severity)
+        mark = escape_markup(resolved.render(mode=self._mode))
+        mark_cell = f"[{resolved.tint_hex}]{mark}[/]" if resolved.tint_hex else mark
+        gate = chrome("gate", mode=self._mode)
+        title = escape_markup(f"{gate} {self._row.kind} · {self._row.session}")
+        return f"{mark_cell} {title}"
+
+    def action_close(self) -> None:
+        """Dismiss the peek (``Esc``)."""
+        self.dismiss(None)
+
+
 class SandboxEventsModeScreen(ScopeScreen):
     """Standalone pane showing the spawn-floor denial timeline, newest-first.
 
@@ -331,20 +449,37 @@ class SandboxEventsModeScreen(ScopeScreen):
     SandboxEventsModeScreen .sandbox-events-row {
         height: auto;
     }
+    SandboxEventsModeScreen .sandbox-events-selected {
+        background: $boost;
+        text-style: bold;
+    }
     """
 
-    #: ``up`` / ``down`` scroll the timeline; ``Enter`` re-reads the store
-    #: (so a just-recorded denial surfaces); ``g`` jumps to the newest row
-    #: (the top). The chassis bindings (palette / help / quit / scope / mode
+    #: ``up`` / ``down`` move the selection cursor (and scroll it into view);
+    #: ``Enter`` OPENS the selected denial in a full-field peek -- matching the
+    #: advertised ``Enter open`` footer affordance; ``r`` re-reads the store (so
+    #: a just-recorded denial surfaces); ``g`` jumps the cursor to the newest
+    #: row (the top). The chassis bindings (palette / help / quit / scope / mode
     #: digits) come from the shared base + app-wide bindings. ``g`` keeps the
     #: vim "go-to-top" meaning here -- the timeline is newest-first so the top
     #: is the latest denial.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "scroll_up", "up", show=False),
         Binding("down", "scroll_down", "down", show=False),
-        Binding("enter", "reload", "reload", show=False),
+        Binding("enter", "open_selected", "open", show=False),
+        Binding("r", "reload", "reload", show=False),
         Binding("g", "scroll_home", "top", show=False),
     ]
+
+    #: Index of the row the selection cursor rests on (the ``Enter``-open
+    #: target). Clamped to the loaded-row list -- ``0`` on the newest row when
+    #: the timeline is populated, ``-1`` when the floor refused nothing.
+    selected: reactive[int] = reactive(0, init=False)
+
+    #: The loaded enforcement tail, newest-first -- the row backing for the
+    #: selection cursor + the ``Enter`` peek. Seeded by :meth:`_reload_rows`;
+    #: an empty tuple before mount / on the honest-empty timeline.
+    _rows: tuple[EnforcementRow, ...] = ()
 
     #: Footer hints for the sandbox-events timeline (arrows primary per the
     #: keymap convention). Every advertised label is produced through
@@ -385,32 +520,75 @@ class SandboxEventsModeScreen(ScopeScreen):
         self._reload_rows()
 
     def action_reload(self) -> None:
-        """Re-read the event store so a just-recorded denial surfaces (``Enter``)."""
+        """Re-read the event store so a just-recorded denial surfaces (``r``)."""
         self._reload_rows()
 
     def action_scroll_up(self) -> None:
-        """Scroll the timeline up one line (``up``)."""
-        self.query_one(f"#{TIMELINE_LIST_ID}", VerticalScroll).scroll_up()
+        """Move the selection cursor up one row, scrolling it into view (``up``).
+
+        The cursor clamps at the newest row (index ``0``); the move repaints
+        the selection highlight (:meth:`watch_selected`) so the operator sees
+        which denial ``Enter`` would open. A no-op on the honest-empty timeline
+        (no row to select). The action name stays ``scroll_up`` so the
+        advertised ``up`` affordance resolves unchanged.
+        """
+        if self._rows:
+            self.selected = max(0, self.selected - 1)
 
     def action_scroll_down(self) -> None:
-        """Scroll the timeline down one line (``down``)."""
-        self.query_one(f"#{TIMELINE_LIST_ID}", VerticalScroll).scroll_down()
+        """Move the selection cursor down one row, scrolling it into view (``down``).
+
+        The cursor clamps at the oldest loaded row; the move repaints the
+        selection highlight. A no-op on the honest-empty timeline. The action
+        name stays ``scroll_down`` so the advertised ``down`` affordance
+        resolves unchanged.
+        """
+        if self._rows:
+            self.selected = min(len(self._rows) - 1, self.selected + 1)
 
     def action_scroll_home(self) -> None:
-        """Jump to the newest enforcement row, the timeline top (``g``)."""
+        """Jump the selection cursor to the newest enforcement row, the top (``g``)."""
+        if self._rows:
+            self.selected = 0
         self.query_one(f"#{TIMELINE_LIST_ID}", VerticalScroll).scroll_home()
+
+    def action_open_selected(self) -> None:
+        """Open the selected denial in a full-field peek modal (``Enter``).
+
+        Resolves the cursor row to its :class:`EnforcementRow` and pushes the
+        read-only :class:`SandboxRowPeekModal` through the App's cap-aware
+        ``push_modal`` (falling back to ``push_screen`` under a bare harness so
+        the push never raises). A no-op when the floor refused nothing -- the
+        binding still resolves, so the advertised ``Enter open`` affordance is
+        never a dead click.
+        """
+        row = self._selected_row()
+        if row is None:
+            logger.info("sandbox_events_open skipped reason=no-selection")
+            return
+        modal = SandboxRowPeekModal(row, mode=self._render_mode())
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal)
+        else:
+            self.app.push_screen(modal)
+        logger.info(f"sandbox_events_open kind={row.kind} session={row.session!r}")
 
     def _reload_rows(self) -> None:
         """Re-read the enforcement tail and rebuild the timeline rows.
 
         Clears the list, then either mounts one row per persisted enforcement
         event (newest-first) or the honest-empty notice when the floor refused
-        nothing. The shared rebuild path so the on-mount seed and the
-        ``Enter`` reload render identically.
+        nothing. The shared rebuild path so the on-mount seed and the ``r``
+        reload render identically. Stashes the loaded rows + resets the
+        selection cursor to the newest row (or ``-1`` on the honest-empty
+        timeline) so ``Enter`` opens a real denial.
         """
         listing = self.query_one(f"#{TIMELINE_LIST_ID}", VerticalScroll)
         listing.remove_children()
         rows = load_enforcement_rows(self._event_path())
+        self._rows = rows
+        self.set_reactive(type(self).selected, 0 if rows else -1)
         if not rows:
             # The honest-empty notice carries no id on a rebuild: the initial
             # compose's notice (which DOES carry the id) was just removed, but
@@ -419,25 +597,59 @@ class SandboxEventsModeScreen(ScopeScreen):
             listing.mount(Static(self._empty_hero(), classes="sandbox-events-empty"))
             return
         mode = self._render_mode()
-        widgets = [self._build_row(row, mode=mode) for row in rows]
+        widgets = [self._build_row(row, index=index, mode=mode) for index, row in enumerate(rows)]
         listing.mount_all(widgets)
 
-    def _build_row(self, row: EnforcementRow, *, mode: RenderMode) -> Static:
+    def _build_row(self, row: EnforcementRow, *, index: int, mode: RenderMode) -> Static:
         """Build one timeline :class:`~textual.widgets.Static` for *row*.
 
         Stashes the source row on the widget so a render-mode flip can repaint
-        the tinted severity column in place without re-reading the store.
+        the tinted severity column in place without re-reading the store, and
+        adds the selected-row highlight class to the cursor row so the
+        ``Enter``-open target is visible.
 
         Args:
             row: The enforcement row to render.
+            index: The row's position in the loaded tail (newest is ``0``),
+                compared against :attr:`selected` to mark the cursor row.
             mode: The App's resolved render-mode label.
 
         Returns:
             The composed row widget.
         """
-        widget = Static(format_enforcement_markup(row, mode=mode), classes=TIMELINE_ROW_CLASS)
+        classes = TIMELINE_ROW_CLASS
+        if index == self.selected:
+            classes = f"{TIMELINE_ROW_CLASS} {TIMELINE_SELECTED_CLASS}"
+        widget = Static(format_enforcement_markup(row, mode=mode), classes=classes)
         widget._enforcement_row = row  # type: ignore[attr-defined]
         return widget
+
+    def watch_selected(self) -> None:
+        """Move the selection highlight + scroll the cursor row into view.
+
+        Repaints the selected-row class onto the cursor row (and off the rest)
+        and scrolls the mounted cursor widget visible, so an ``up`` / ``down``
+        move keeps the ``Enter``-open target on screen. A no-op before mount
+        (the rows are not yet laid out).
+        """
+        if not self.is_mounted:
+            return
+        widgets = list(self.query(f".{TIMELINE_ROW_CLASS}").results(Static))
+        for index, widget in enumerate(widgets):
+            widget.set_class(index == self.selected, TIMELINE_SELECTED_CLASS)
+        if 0 <= self.selected < len(widgets):
+            widgets[self.selected].scroll_visible()
+
+    def _selected_row(self) -> EnforcementRow | None:
+        """Return the row the selection cursor rests on, or ``None`` when empty.
+
+        Returns:
+            The selected :class:`EnforcementRow`, or ``None`` when the timeline
+            is honest-empty / the cursor is out of range.
+        """
+        if not self._rows or not 0 <= self.selected < len(self._rows):
+            return None
+        return self._rows[self.selected]
 
     def _on_render_mode(self, _mode: object) -> None:
         """Repaint every mounted row when the App's render mode flips.
@@ -508,13 +720,17 @@ class SandboxEventsModeScreen(ScopeScreen):
 __all__ = [
     "EMPTY_NOTICE",
     "ENFORCEMENT_KINDS",
+    "ROW_PEEK_ID",
     "TIMELINE_EMPTY_ID",
     "TIMELINE_LIST_ID",
     "TIMELINE_RING_SIZE",
     "TIMELINE_ROW_CLASS",
+    "TIMELINE_SELECTED_CLASS",
     "EnforcementRow",
     "SandboxEventsModeScreen",
+    "SandboxRowPeekModal",
     "format_enforcement_markup",
+    "format_enforcement_peek",
     "format_enforcement_row",
     "load_enforcement_rows",
 ]

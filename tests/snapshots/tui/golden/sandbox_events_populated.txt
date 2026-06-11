@@ -1,0 +1,40 @@
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Sandbox    runtime: 1 running    HH:MM UTC
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │△ 09:30:04  EX-P01-W01-1          cwd-guard     /tmp/escape                                                       │
+  │✕ 09:30:03  EX-P01-W01-1          env-scrub     ANTHROPIC_API_KEY                                                 │
+  │✕ 09:30:02  EX-P01-W01-1          egress-block  evil.example.com:443                                              │
+  │✕ 09:30:01  EX-P01-W01-1          argv-deny     rm -rf /                                                          │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  │                                                                                                                  │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ↑↓ select  ·  Enter open  ·  …  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit weekly burn: — no data•
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox
