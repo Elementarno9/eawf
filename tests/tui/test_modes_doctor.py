@@ -846,7 +846,9 @@ def test_doctor_mode_grouped_snapshot() -> None:
             # Belt-and-braces text assertions over the same painted frame so
             # the close-gate criteria are pinned independently of the golden.
             frame = normalize_snapshot(capture_screen_text(app))
-            assert "Install" in frame and "State" in frame and "Drift" in frame
+            # W19: the install / state / drift sections are now two-column card
+            # border-titles, rendered uppercase to match the mockup chrome.
+            assert "INSTALL" in frame and "STATE" in frame and "DRIFT" in frame
             assert glyph(Sigil.CLOSED, mode="unicode") in frame  # ok sigil
             assert chrome("attention", mode="unicode") in frame  # warn sigil
             assert glyph(Sigil.FAILED, mode="unicode") in frame  # fail sigil

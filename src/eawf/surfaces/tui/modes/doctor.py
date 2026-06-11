@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Literal
 
 from textual.app import ComposeResult
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
@@ -552,6 +552,35 @@ def render_health_lines(health: DoctorHealth, *, mode: str = _DEFAULT_RENDER_MOD
     return lines
 
 
+def render_health_rollup(health: DoctorHealth) -> str:
+    """Render the ``Health: <word>  N checks, M warn`` rollup line."""
+    word = _ROLLUP_WORD[health.overall]
+    colour = {"ok": "$success", "warn": "$warning", "fail": "$error"}[health.overall]
+    warn_count = sum(1 for row in health.rows if row.status == "warn")
+    summary = f"[$text-muted]{len(health.rows)} checks, {warn_count} warn[/]"
+    return f"[$accent]Health:[/] [{colour}]{word}[/]  {summary}"
+
+
+def render_health_section_lines(
+    health: DoctorHealth, section: str, *, mode: str = _DEFAULT_RENDER_MODE
+) -> list[str]:
+    """Render one install / state / drift section's rows (no header line).
+
+    The section header is the host card's ``border_title``, so this returns only
+    the status-glyph rows; the ``drift`` section additionally appends the
+    drift-count + kinds block. An empty section renders an honest muted line.
+    """
+    rows = _group_rows(health.rows).get(section, [])
+    lines = [_status_glyph_line(row.name, row.status, row.detail, mode=mode) for row in rows]
+    if section == "drift" and health.drift_count:
+        if lines:
+            lines.append("")
+        lines.append(style_labeled_line(f"drift:  {health.drift_count} wave(s)"))
+        kinds = health.drift_kinds[:_DRIFT_ROW_CAP]
+        lines.append(style_labeled_line(f"kinds:  {', '.join(kinds)}"))
+    return lines or ["[$text-muted]no checks[/]"]
+
+
 class DoctorModeScreen(ScopeScreen):
     """Doctor-mode screen: the folded install / state / drift health view.
 
@@ -582,15 +611,38 @@ class DoctorModeScreen(ScopeScreen):
         height: 1fr;
         padding: 1 2;
     }
-    DoctorModeScreen .doctor-health-body {
+    DoctorModeScreen .doctor-rollup {
         height: auto;
+        margin-bottom: 1;
+    }
+    DoctorModeScreen .doctor-cards {
+        height: auto;
+        layout: horizontal;
+    }
+    DoctorModeScreen .doctor-card {
+        border: round $accent;
+        padding: 0 1;
+        height: auto;
+        width: 1fr;
+        margin-right: 1;
+        margin-bottom: 1;
     }
     """
 
     def compose_body(self) -> ComposeResult:
-        """Yield the scrollable health pane body."""
-        with VerticalScroll(id="doctor-health"), Vertical(classes="doctor-health-body"):
-            yield Static("", id="doctor-health-text")
+        """Yield the rollup + install|state two-column cards + drift card."""
+        with VerticalScroll(id="doctor-health"):
+            yield Static("", id="doctor-rollup", classes="doctor-rollup")
+            with Horizontal(classes="doctor-cards"):
+                for section, title in _SECTION_ORDER:
+                    if section == "drift":
+                        continue
+                    card = Static("", id=f"doctor-{section}", classes="doctor-card")
+                    card.border_title = title.upper()
+                    yield card
+            drift_card = Static("", id="doctor-drift", classes="doctor-card")
+            drift_card.border_title = "DRIFT"
+            yield drift_card
 
     def on_mount(self) -> None:
         """Apply the footer hints, paint a placeholder, then kick the gather."""
@@ -637,8 +689,7 @@ class DoctorModeScreen(ScopeScreen):
         health replaces it via :meth:`_paint_health` when the worker
         returns.
         """
-        text = self.query_one("#doctor-health-text", Static)
-        text.update(_GATHERING_PLACEHOLDER)
+        self.query_one("#doctor-rollup", Static).update(_GATHERING_PLACEHOLDER)
 
     def _paint_health(self, health: DoctorHealth) -> None:
         """Update the pane text from a folded :class:`DoctorHealth`.
@@ -650,8 +701,10 @@ class DoctorModeScreen(ScopeScreen):
         harness whose App carries no ``render_mode`` falls back to unicode.
         """
         mode = getattr(self.app, "render_mode", _DEFAULT_RENDER_MODE)
-        text = self.query_one("#doctor-health-text", Static)
-        text.update("\n".join(render_health_lines(health, mode=mode)))
+        self.query_one("#doctor-rollup", Static).update(render_health_rollup(health))
+        for section, _title in _SECTION_ORDER:
+            card = self.query_one(f"#doctor-{section}", Static)
+            card.update("\n".join(render_health_section_lines(health, section, mode=mode)))
 
     def action_force_refresh(self) -> None:
         """Re-gather the health on ``F5`` (overrides the chassis heartbeat ack)."""
