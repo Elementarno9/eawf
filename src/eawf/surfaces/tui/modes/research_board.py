@@ -77,6 +77,7 @@ from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.widgets.empty_state import render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
@@ -97,12 +98,14 @@ logger = logging.getLogger(__name__)
 #: reskin's voice rather than a measured "nothing to research".
 EMPTY_NOTICE: str = "no word spoken yet"
 
-#: Empty-state sub-line under :data:`EMPTY_NOTICE`. Pins the mock's literal
-#: press-``n`` compose hint copy: a campaign begins with a question, and ``n``
-#: opens the compose modal. The ``n`` compose modal itself is deferred to a
-#: later iter (the research-surface data work) -- this renders the hint, not
-#: the behaviour. The middle dot is a one-cell separator escaped in source.
-EMPTY_SUBLINE: str = "a research campaign begins with a question · press n"
+#: Empty-state sub-line under :data:`EMPTY_NOTICE`. Pins the mock's literal copy
+#: -- a campaign begins with a question. The compose affordance moved from a
+#: ``press n`` hint in the sub-line to a real ``[ n new campaign ]`` action chip
+#: rendered by :func:`~eawf.surfaces.tui.widgets.empty_state.render_empty_state`
+#: (the reskin's centered hero), so the sub-line carries only the framing copy.
+#: The ``n`` compose modal itself is still deferred to a later iter -- the chip
+#: renders the affordance, not yet the behaviour.
+EMPTY_SUBLINE: str = "a research campaign begins with a question"
 
 #: Per-section sentinel rendered when one pane is empty while the board as a
 #: whole still carries signal elsewhere (e.g. a campaign is staged but no
@@ -281,6 +284,14 @@ _UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 #: tokens AND the shared-token actions stay pinned to the canonical vocabulary
 #: -- which also fixes the historical ``w/u scope`` typo that dropped the repo
 #: letter.
+#: The board advertises its full action + FA8 operator-input vocabulary so every
+#: bound key is discoverable in the strip (the pinned P30 FA8-advertisement
+#: contracts in ``test_modes_research_board.py``). The strip is long, but the
+#: shared :func:`~eawf.surfaces.tui.widgets.footer.fit_hints` chokepoint sheds
+#: this per-mode MIDDLE band (keeping the nav head + the global tail ``c`` config
+#: / ``/`` palette / ``?`` help / ``q`` quit pinned) when it overflows a narrow
+#: row, so the cross-surface affordances never clip even though the authored set
+#: stays complete.
 _RESEARCH_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
     render_hint_label("Enter", "open"),
@@ -1472,7 +1483,10 @@ def render_conflicts(claims: tuple[Claim, ...], *, mode: RenderMode = DEFAULT_RE
 
 
 def render_unresolved(
-    questions: tuple[OpenQuestion, ...], *, round_number: int = STAGED_ROUND
+    questions: tuple[OpenQuestion, ...],
+    *,
+    round_number: int = STAGED_ROUND,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
 ) -> str:
     """Render the Unresolved tab -- one row per open question + status + round.
 
@@ -1496,10 +1510,20 @@ def render_unresolved(
         return f"[$muted]{NONE_YET}[/]"
     lines: list[str] = []
     for question in questions[:_MAX_ROWS]:
-        tint = "$warn" if question.blocking else "$accent"
-        status = "blocking" if question.blocking else question.status.value
+        if question.blocking:
+            # A blocking question leads with the attention sigil so the warn
+            # signal reads as a glyph (the sigil language), not only a tinted
+            # word; a non-blocking question keeps its lifecycle status word.
+            marker = f"[$warn]{escape_markup(sigils.chrome('attention', mode=mode))}[/] "
+            tint = "$warn"
+            status = "blocking"
+        else:
+            marker = ""
+            tint = "$accent"
+            status = question.status.value
         lines.append(
-            f"[{tint}]{status}[/] [$muted]round {round_number}[/] {escape_markup(question.title)}"
+            f"{marker}[{tint}]{status}[/] [$muted]round {round_number}[/] "
+            f"{escape_markup(question.title)}"
         )
     overflow = len(questions) - _MAX_ROWS
     if overflow > 0:
@@ -1696,7 +1720,9 @@ class ResearchBoardModeScreen(ScopeScreen):
     }
     ResearchBoardModeScreen #research-empty {
         height: 1fr;
-        border: solid $warn;
+        width: 1fr;
+        content-align: center middle;
+        text-align: center;
         padding: 1 2;
     }
     ResearchBoardModeScreen .research-center-section {
@@ -1803,7 +1829,7 @@ class ResearchBoardModeScreen(ScopeScreen):
                         id=UNRESOLVED_HEADER_ID,
                         classes="research-center-section",
                     )
-                    yield Static(render_unresolved(questions), id=UNRESOLVED_BODY_ID)
+                    yield Static(render_unresolved(questions, mode=mode), id=UNRESOLVED_BODY_ID)
                 with VerticalScroll(id=PROGRESS_PANE_ID, classes="research-pane") as progress:
                     progress.border_title = "PROGRESS / BUDGET"
                     yield Static(
@@ -2479,7 +2505,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._update_one("research-center-body", render_claims(claims, mode=mode))
         self._update_one(OPTIONS_BODY_ID, render_options(claims, mode=mode))
         self._update_one(CONFLICTS_BODY_ID, render_conflicts(claims, mode=mode))
-        self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions))
+        self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions, mode=mode))
         self._update_one(
             "research-progress-body",
             render_progress(campaigns, claims, questions, checkpoints=1 if pause else 0),
@@ -2565,14 +2591,21 @@ class ResearchBoardModeScreen(ScopeScreen):
         return "[$muted]enter to peek the selected node[/]"
 
     def _empty_body(self) -> str:
-        """Return the honest-empty notice body (headline + press-n sub-line).
+        """Return the honest-empty hero body: brand sigil + copy + action chips.
 
-        Pins the cosmic-terminal reskin mock's literal empty-state copy: the
-        :data:`EMPTY_NOTICE` headline over the :data:`EMPTY_SUBLINE` press-``n``
-        compose hint. The ``n`` compose modal itself is deferred -- this renders
-        the hint, not the behaviour.
+        Renders the cosmic-terminal reskin's centered empty-state hero via
+        :func:`~eawf.surfaces.tui.widgets.empty_state.render_empty_state`: a
+        muted brand sigil over the :data:`EMPTY_NOTICE` headline +
+        :data:`EMPTY_SUBLINE` framing copy, then the ``[ n new campaign ]`` /
+        ``[ d brief ]`` action chips (both ``n`` and ``d`` are live bindings).
+        The pane centers this hero via the ``#research-empty`` CSS.
         """
-        return f"[$warn]{EMPTY_NOTICE}[/]\n[$muted]{escape_markup(EMPTY_SUBLINE)}[/]"
+        return render_empty_state(
+            EMPTY_NOTICE,
+            EMPTY_SUBLINE,
+            mode=self._render_mode(),
+            chips=(("n", "new campaign"), ("d", "brief")),
+        )
 
     def _current_rows(
         self,

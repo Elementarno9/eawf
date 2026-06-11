@@ -2305,9 +2305,7 @@ def test_research_board_operator_input_fork_bindings_exist_and_are_distinct() ->
     key that never displaces the live snapshot (``s``) / approve (``a``) / new
     (``n``) handlers.
     """
-    keys = {
-        binding.key: binding.action for binding in ResearchBoardModeScreen.BINDINGS
-    }
+    keys = {binding.key: binding.action for binding in ResearchBoardModeScreen.BINDINGS}
     assert keys.get("o") == "add_question"
     assert keys.get("t") == "steer"
     assert keys.get("b") == "broadcast"
@@ -2422,10 +2420,12 @@ def test_idle_campaign_board_renders_honest_empty_start_hint(tmp_path: Path) -> 
             assert isinstance(pane, ResearchBoardModeScreen)
             assert pane.empty is True
             empty_body = str(pane.query_one(f"#{EMPTY_ID}").render())  # type: ignore[attr-defined]
-            # The honest-empty literal + the start hint, pinned verbatim.
+            # The honest-empty literal + the framing copy + the new-campaign
+            # action chip (the compose affordance moved from a "press n" hint to
+            # a real "[ n new campaign ]" chip in the centered hero).
             assert "no word spoken yet" in empty_body
             assert "a research campaign begins with a question" in empty_body
-            assert "press n" in empty_body
+            assert "new campaign" in empty_body
             # Never a fabricated round node on the idle board.
             assert "running" not in empty_body
             assert "saturated" not in empty_body
