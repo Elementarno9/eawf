@@ -52,6 +52,15 @@ exits non-zero:
   ``validate_jury`` has a live CLI caller (I09-W07): the ``eawf metrics
   jury-validation`` command binds it directly. Orphaning the reducer reds this
   row.
+- :func:`check_track_rpc_wired` -- a source-scan probe asserting the daemon
+  method table registers BOTH the ``track.add`` and ``track.switch`` RPCs
+  (I11-W02), so the CLI ``track add`` / ``track switch`` shims have a daemon
+  caller. Dropping either ``@register("track.<verb>")`` orphans the Track
+  add/switch seam and reds this row.
+- :func:`check_phase_track_tag_wired` -- a source-scan probe asserting
+  ``open_phase`` silently stamps each phase with ``track_id=state.current.track_id``
+  (I11-W03), so phases tag their owning Track. Dropping the stamp re-idles the
+  silent phase-tag binding and reds this row.
 - :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
   pre-commit gate stays enabled so the runtime close gate cannot ship idle.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
@@ -185,6 +194,8 @@ class GateFailure(StrEnum):
     JURY_RELIABILITY_MAP_IDLE = "jury_reliability_map_idle"
     JURY_BLOCK_AUTHORITY_IDLE = "jury_block_authority_idle"
     VALIDATE_JURY_CLI_IDLE = "validate_jury_cli_idle"
+    TRACK_RPC_IDLE = "track_rpc_idle"
+    PHASE_TRACK_TAG_IDLE = "phase_track_tag_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1018,6 +1029,144 @@ def check_validate_jury_cli_wired(
     )
 
 
+# =========================================================================== #
+# I11 Track bindings: the add/switch RPCs and the silent phase-tag stamp.
+# =========================================================================== #
+
+#: The daemon method module that registers the ``track.add`` / ``track.switch``
+#: RPCs (I11-W02). Read off the working tree; the CLI ``track add`` / ``track
+#: switch`` shims route their mutations here over JSON-RPC, so a dropped
+#: registration leaves the Track add/switch seam without a daemon caller and
+#: re-idles it. A test injects the text to drive both outcomes.
+_TRACK_RPC_MODULE = "src/eawf/runtime/daemon/methods/state.py"
+
+#: The lifecycle module whose ``open_phase`` silently stamps every phase with the
+#: current Track id (I11-W03). Read off the working tree; if the stamp stops
+#: firing, phases stop tagging their owning Track and the binding is idle.
+_PHASE_TRACK_TAG_MODULE = "src/eawf/workflow/lifecycle/phase.py"
+
+#: The ``@register("track.add")`` decorator that binds the add RPC into the
+#: daemon method table. The literal command token is what distinguishes a live
+#: registration from a docstring / cross-link mention of ``track.add``.
+_TRACK_ADD_REGISTER_RE = re.compile(r"""@register\(\s*['"]track\.add['"]\s*\)""")
+
+#: The ``@register("track.switch")`` decorator that binds the switch RPC.
+_TRACK_SWITCH_REGISTER_RE = re.compile(r"""@register\(\s*['"]track\.switch['"]\s*\)""")
+
+#: The silent phase-tag stamp: ``open_phase`` constructs each ``Phase`` with
+#: ``track_id=state.current.track_id``. A regression that drops the keyword
+#: (constructing the phase with no Track tag) leaves phases untagged and reds
+#: this row.
+_PHASE_TRACK_TAG_RE = re.compile(r"\btrack_id\s*=\s*state\.current\.track_id\b")
+
+
+def check_track_rpc_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _TRACK_RPC_MODULE,
+) -> GateResult:
+    """Assert the daemon registers the ``track.add`` / ``track.switch`` RPCs (I11-W02).
+
+    The TRACK-2 binding: the daemon method table registers both
+    :func:`eawf.runtime.daemon.methods.state.track_add_rpc` (``@register("track.add")``)
+    and :func:`eawf.runtime.daemon.methods.state.track_switch_rpc`
+    (``@register("track.switch")``), so the CLI ``track add`` / ``track switch``
+    shims have a daemon caller to route their mutations through. If a later
+    refactor drops either registration (orphaning the add/switch seam so the CLI
+    shim has no RPC to dispatch to), the source no longer matches and this gate
+    fails :attr:`GateFailure.TRACK_RPC_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-idled (registration-dropped)
+    outcomes.
+
+    Args:
+        module_text: The daemon method module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the daemon method module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        registers BOTH ``track.add`` and ``track.switch``; otherwise ``failure``
+        is :attr:`GateFailure.TRACK_RPC_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    registers_add = _TRACK_ADD_REGISTER_RE.search(text) is not None
+    registers_switch = _TRACK_SWITCH_REGISTER_RE.search(text) is not None
+    if registers_add and registers_switch:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (daemon registers track.add + track.switch "
+                "RPCs -- the Track add/switch seam has a daemon caller, not idle)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.TRACK_RPC_IDLE,
+        message=(
+            "track add/switch RPCs are idle: "
+            f"{module_path} registers_add={registers_add} "
+            f"registers_switch={registers_switch} (expected both True); the daemon "
+            "must @register('track.add') AND @register('track.switch') -- a dropped "
+            "registration orphans the Track add/switch seam from its CLI shim"
+        ),
+    )
+
+
+def check_phase_track_tag_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _PHASE_TRACK_TAG_MODULE,
+) -> GateResult:
+    """Assert ``open_phase`` silently stamps each phase with the Track id (I11-W03).
+
+    The TRACK-3 binding: :func:`eawf.workflow.lifecycle.phase.open_phase`
+    constructs every :class:`~eawf.kernel.state.models.Phase` with
+    ``track_id=state.current.track_id``, so a phase opened while a Track is in
+    focus is silently tagged with its owning Track. If a later refactor drops the
+    stamp (constructing the phase with no Track tag), phases stop tagging their
+    Track and the silent phase-tag binding regresses to idle -- the source no
+    longer matches and this gate fails :attr:`GateFailure.PHASE_TRACK_TAG_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-idled (stamp-dropped) outcomes.
+
+    Args:
+        module_text: The lifecycle phase module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the phase module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        carries a ``track_id=state.current.track_id`` phase-construction stamp;
+        otherwise ``failure`` is :attr:`GateFailure.PHASE_TRACK_TAG_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    if _PHASE_TRACK_TAG_RE.search(text) is not None:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (open_phase stamps track_id=state.current."
+                "track_id -- phases silently tag their owning Track, not idle)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.PHASE_TRACK_TAG_IDLE,
+        message=(
+            "phase track-tag stamp is idle: "
+            f"{module_path} carries no 'track_id=state.current.track_id' phase "
+            "construction stamp, so open_phase no longer tags phases with their "
+            "owning Track (the silent phase-tag binding regressed)"
+        ),
+    )
+
+
 def check_runtime_gate_is_not_idle(
     *,
     precommit_text: str | None = None,
@@ -1603,6 +1752,28 @@ def _render_findings(findings: Sequence[IdleContractFinding]) -> str:
     return "\n".join(lines)
 
 
+def _report_result(result: GateResult) -> bool:
+    """Print *result* to the right stream and report whether it failed.
+
+    A passing result prints its message to stdout; a failing one prints to
+    stderr. Folding the print + stream choice here keeps :func:`main` a flat
+    sequence of ``failed |= _report_result(...)`` calls instead of repeating the
+    ``if result.passed: ... else: ...`` block once per gate.
+
+    Args:
+        result: The gate outcome to report.
+
+    Returns:
+        ``True`` when *result* failed (so the caller can fold it into the
+        aggregate exit status), ``False`` on a pass.
+    """
+    if result.passed:
+        print(result.message)
+        return False
+    print(result.message, file=sys.stderr)
+    return True
+
+
 def main(argv: list[str]) -> int:
     """Run all idle-contract gates over the staged diff and current tree.
 
@@ -1614,9 +1785,11 @@ def main(argv: list[str]) -> int:
     binding probes (:func:`check_spec_jury_ballot_fn_wired`,
     :func:`check_jury_reliability_map_wired`,
     :func:`check_jury_block_authority_wired`,
-    :func:`check_validate_jury_cli_wired`), then the runtime-gate binding check
-    (:func:`check_runtime_gate_is_not_idle`), then the registry-wide audit-DSL
-    wired-on sweep (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
+    :func:`check_validate_jury_cli_wired`), then the two I11 Track binding probes
+    (:func:`check_track_rpc_wired`, :func:`check_phase_track_tag_wired`), then the
+    runtime-gate binding check (:func:`check_runtime_gate_is_not_idle`), then the
+    registry-wide audit-DSL wired-on sweep
+    (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
     exit code is non-zero when any fails.
 
@@ -1631,81 +1804,57 @@ def main(argv: list[str]) -> int:
     diff_range = argv[1] if len(argv) > 1 else "--cached"
 
     failed = False
-    result = check_idle_contract()
-    if result.passed:
-        print(result.message)
-    else:
-        print(result.message, file=sys.stderr)
-        failed = True
+    failed |= _report_result(check_idle_contract())
 
     # Pass the module-level run_skill explicitly so a test (or a future caller)
     # can patch it via attribute assignment -- a default-bound parameter would
     # snapshot the unpatched function at def time (see the same pattern below
     # for the meta-gate's diff / tree / read sources).
-    binding = check_skill_body_binding(run_skill_fn=_run_skill)
-    if binding.passed:
-        print(binding.message)
-    else:
-        print(binding.message, file=sys.stderr)
-        failed = True
+    failed |= _report_result(check_skill_body_binding(run_skill_fn=_run_skill))
 
-    i03 = check_i03_contracts(
-        plan_wave_fn=_plan_wave,
-        ui_require_gate_fn=_require_affordance_parity_for_ui_scope,
-        registry=CHECK_REGISTRY,
-        tier_for_gate_kind_fn=_tier_for_gate_kind,
+    failed |= _report_result(
+        check_i03_contracts(
+            plan_wave_fn=_plan_wave,
+            ui_require_gate_fn=_require_affordance_parity_for_ui_scope,
+            registry=CHECK_REGISTRY,
+            tier_for_gate_kind_fn=_tier_for_gate_kind,
+        )
     )
-    if i03.passed:
-        print(i03.message)
-    else:
-        print(i03.message, file=sys.stderr)
-        failed = True
 
     # The live-dispatch module is read off the working tree (not the
     # monkeypatchable _default_read), so this gate stays immune to the
     # meta-gate's injected reader stub -- mirroring check_runtime_gate_is_not_idle.
-    routing_wired = check_resolve_routing_wired()
-    if routing_wired.passed:
-        print(routing_wired.message)
-    else:
-        print(routing_wired.message, file=sys.stderr)
-        failed = True
+    failed |= _report_result(check_resolve_routing_wired())
 
     # The four I09 jury-validation bindings each read their live call-site off
     # the working tree (immune to the meta-gate's reader stub, like the routing
     # probe above): the spec-jury ballot fn (W05), the reputation reliability map
     # (W06), the earned block authority (W04), and the validate_jury CLI caller
     # (W07). Any re-idle of one fails its row and reds the gate.
-    for i09_check in (
+    #
+    # The two I11 Track bindings read their live source off the working tree the
+    # same way: the daemon-registered track.add / track.switch RPCs (W02) and the
+    # silent open_phase track-tag stamp (W03). Either re-idle fails its row.
+    for source_scan_check in (
         check_spec_jury_ballot_fn_wired(),
         check_jury_reliability_map_wired(),
         check_jury_block_authority_wired(),
         check_validate_jury_cli_wired(),
+        check_track_rpc_wired(),
+        check_phase_track_tag_wired(),
     ):
-        if i09_check.passed:
-            print(i09_check.message)
-        else:
-            print(i09_check.message, file=sys.stderr)
-            failed = True
+        failed |= _report_result(source_scan_check)
 
-    runtime_gate = check_runtime_gate_is_not_idle()
-    if runtime_gate.passed:
-        print(runtime_gate.message)
-    else:
-        print(runtime_gate.message, file=sys.stderr)
-        failed = True
+    failed |= _report_result(check_runtime_gate_is_not_idle())
 
     # Pass the module-level wired-on sources explicitly so a test (or a future
     # caller) can patch them via attribute assignment.
-    kinds_wired = check_audit_dsl_kinds_wired(
-        registered_fn=registered_audit_dsl_kinds,
-        wired_fn=wired_audit_dsl_kinds,
+    failed |= _report_result(
+        check_audit_dsl_kinds_wired(
+            registered_fn=registered_audit_dsl_kinds,
+            wired_fn=wired_audit_dsl_kinds,
+        )
     )
-    if kinds_wired.passed:
-        print(kinds_wired.message)
-    else:
-        print(kinds_wired.message, file=sys.stderr)
-        failed = True
 
     # Pass the module-level default sources explicitly so a test (or a future
     # caller) can patch them via attribute assignment -- a default-bound
