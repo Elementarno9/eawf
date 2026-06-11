@@ -25,15 +25,28 @@ import pytest
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import ScopeScreen, UserScreen
-from eawf.surfaces.tui.scopes.user import PortfolioTable, synthesize_user_state
+from eawf.surfaces.tui.scopes.user import (
+    HONEST_EMPTY_DIRECTIVE,
+    HONEST_EMPTY_HEADLINE,
+    HonestEmptyCard,
+    PortfolioTable,
+    render_no_repos_card,
+    state_has_no_repos,
+    synthesize_user_state,
+)
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.detail import DetailModal
 from eawf.surfaces.tui.screens.overlays.init_wizard import InitWizardModal
 from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 from eawf.surfaces.tui.widgets.header import BRAND, DEFAULT_PROJECT_CODE, Header
+from eawf.surfaces.tui.widgets.registry_pane import REGISTRY_EMPTY_CELL, REGISTRY_HINT_LINE
 from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
-from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
+from eawf.surfaces.tui.widgets.workspace_table import (
+    TOTALS_ROW_LABEL,
+    WorkspaceTable,
+    build_repo_rows,
+)
 
 
 def _abandoned_sigil_span(mode: str) -> str:
@@ -613,5 +626,147 @@ def test_user_scope_none_state_synthesizes_from_registry(tmp_path: Path) -> None
             # Two repo rows + the appended portfolio-totals summary row.
             assert table.row_count == 3
             assert {row.code for row in table.rows_data()} == {"ABC", "DEF"}
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Honest-empty card — the no-repos directive on an empty / unavailable registry
+# --------------------------------------------------------------------------
+
+
+def test_render_no_repos_card_carries_headline_and_directive() -> None:
+    """The card renders the byte-for-byte no-repos headline + growth directive."""
+    card = render_no_repos_card(mode="unicode")
+    # The headline + directive reuse the registry pane's pinned phrases so the
+    # card and the registry listing speak one voice (no second copy invented).
+    assert HONEST_EMPTY_HEADLINE == REGISTRY_EMPTY_CELL
+    assert HONEST_EMPTY_DIRECTIVE == REGISTRY_HINT_LINE
+    assert HONEST_EMPTY_HEADLINE in card
+    assert HONEST_EMPTY_DIRECTIVE in card
+
+
+def test_render_no_repos_card_leads_with_pending_sigil_in_accent() -> None:
+    """The card leads with the green accent pending sigil (calm not-yet-here mark)."""
+    for mode in ("unicode", "ascii"):
+        card = render_no_repos_card(mode=mode)
+        sigil = glyph(Sigil.PENDING, mode=mode)
+        # Accent (green) headline span leads with the pending sigil; the
+        # directive sub-line is muted. No spinner / false-busy chrome.
+        assert f"[$accent]{sigil} {HONEST_EMPTY_HEADLINE}[/]" in card
+        assert f"[$muted]{HONEST_EMPTY_DIRECTIVE}[/]" in card
+
+
+def test_render_no_repos_card_fabricates_no_totals_rollup() -> None:
+    """The card carries no totals sigma and no ``0 repos`` roll-up line."""
+    card = render_no_repos_card(mode="unicode")
+    assert TOTALS_ROW_LABEL not in card
+    assert "0 repos" not in card
+
+
+def test_state_has_no_repos_true_for_empty_registry(tmp_path: Path) -> None:
+    """A synthesized state over an empty registry resolves the honest-empty case."""
+    _write_registry(tmp_path, {})
+    state = synthesize_user_state(home=tmp_path)
+    assert state_has_no_repos(state) is True
+
+
+def test_state_has_no_repos_false_for_populated_registry(tmp_path: Path) -> None:
+    """A populated registry clears the honest-empty case (the grid renders)."""
+    _write_registry(tmp_path, {"ABC": {"code": "ABC", "path": "/abs/path/abc"}})
+    state = synthesize_user_state(home=tmp_path)
+    assert state_has_no_repos(state) is False
+
+
+def test_state_has_no_repos_true_for_none_state() -> None:
+    """A ``None`` state (no bound source) resolves the honest-empty case."""
+    assert state_has_no_repos(None) is True
+
+
+def test_user_empty_registry_shows_honest_card_hides_grid() -> None:
+    """With an empty registry the user scope shows the card and hides the grid."""
+
+    async def body() -> None:
+        app = EaApp(scope="user", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app.state = _empty_registry_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            table = app.screen.query_one(PortfolioTable)
+            # The card shows the no-repos directive; the grid hides.
+            assert card.display is True
+            assert table.display is False
+            # No fabricated repo row, no totals roll-up on the empty grid.
+            assert table.row_count == 0
+
+    asyncio.run(body())
+
+
+def test_user_empty_registry_card_renders_directive_text() -> None:
+    """The mounted honest-empty card paints the no-repos headline + directive.
+
+    Reads the card's own renderable (not an SVG screenshot, which escapes
+    spaces and can be overlaid by a schema-staleness banner), so the
+    no-repos directive assertion stays deterministic.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="user", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app.state = _empty_registry_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            painted = card.rendered_text()
+            assert HONEST_EMPTY_HEADLINE in painted
+            assert HONEST_EMPTY_DIRECTIVE in painted
+            # No fabricated totals sigma in the card body.
+            assert TOTALS_ROW_LABEL not in painted
+
+    asyncio.run(body())
+
+
+def test_user_populated_registry_hides_card_shows_grid() -> None:
+    """A populated registry hides the card and shows the grid (no card noise)."""
+
+    async def body() -> None:
+        app = EaApp(scope="user", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            table = app.screen.query_one(PortfolioTable)
+            # The fixture seeds one repo, so the grid shows and the card hides.
+            assert card.display is False
+            assert table.display is True
+            assert table.row_count >= 1
+
+    asyncio.run(body())
+
+
+def test_user_card_toggles_when_registry_becomes_populated() -> None:
+    """Binding a populated state hides the card mid-session and shows the grid."""
+
+    async def body() -> None:
+        app = EaApp(scope="user", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app.state = _empty_registry_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            table = app.screen.query_one(PortfolioTable)
+            assert card.display is True
+            assert table.display is False
+            # A repo registers mid-session: the card hides, the grid returns.
+            app.state = _multi_repo_state(["ABC", "DEF"])
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert card.display is False
+            assert table.display is True
+            assert table.row_count >= 1
 
     asyncio.run(body())

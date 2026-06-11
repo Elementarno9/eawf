@@ -45,8 +45,11 @@ from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
-from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
+from eawf.surfaces.tui.widgets.registry_pane import REGISTRY_EMPTY_CELL, REGISTRY_HINT_LINE
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +144,158 @@ def user_scope_init_needed(state: State | None) -> bool:
     return bool(state.indexes.get(USER_SCOPE_INIT_NEEDED_KEY))
 
 
+#: Headline of the honest-empty card -- the byte-for-byte no-repos line the
+#: registry pane already pins
+#: (:data:`~eawf.surfaces.tui.widgets.registry_pane.REGISTRY_EMPTY_CELL`),
+#: reused so the empty-grid card and the registry listing speak one phrase
+#: rather than inventing a second. A scope with zero registered repos shows
+#: this calm directive instead of a fabricated repo or a ``0 repos`` totals
+#: roll-up.
+HONEST_EMPTY_HEADLINE: str = REGISTRY_EMPTY_CELL
+
+#: Directive sub-line of the honest-empty card -- the explicit-growth hint
+#: (:data:`~eawf.surfaces.tui.widgets.registry_pane.REGISTRY_HINT_LINE`) so the
+#: operator reads the supported (explicit-only) way to register a repo. The
+#: registry never auto-discovers, so the card names ``eawf init`` /
+#: ``eawf repo add`` as the only growth path.
+HONEST_EMPTY_DIRECTIVE: str = REGISTRY_HINT_LINE
+
+
+def render_no_repos_card(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Render the calm honest-empty no-repos card in the brand voice.
+
+    Surfaced by both the user portfolio and the workspace scope when the
+    bound state resolves zero repos (an empty / unavailable registry): a
+    scope with no rows shows this card rather than a columns-only grid with
+    no guidance, and -- because there is nothing to sum -- without a
+    fabricated repo row or a ``0 repos`` totals roll-up.
+
+    The card leads with the green ``$accent`` pending sigil (the shared
+    not-yet-here SHAPE the lifecycle panes draw for a wave that has not
+    started, NOT a spinner or any false-busy chrome) and the
+    :data:`HONEST_EMPTY_HEADLINE` no-repos line in the same green
+    ``$accent``, then the muted :data:`HONEST_EMPTY_DIRECTIVE` naming the
+    explicit-only growth path. The colours resolve against the active
+    theme's green accent at render time via Textual content markup, so the
+    surface reads as intentionally empty -- ready for a first repo, not
+    broken.
+
+    Args:
+        mode: The App's resolved render-mode label, threaded so the pending
+            sigil resolves its ASCII / unicode glyph column; defaults to
+            :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE`.
+
+    Returns:
+        A content-markup string: the green-accent sigil + no-repos
+        headline line, then the muted explicit-growth directive sub-line.
+    """
+    sigil = glyph(Sigil.PENDING, mode=mode)
+    return "\n".join(
+        [
+            f"[$accent]{sigil} {HONEST_EMPTY_HEADLINE}[/]",
+            f"[$muted]{HONEST_EMPTY_DIRECTIVE}[/]",
+        ]
+    )
+
+
+def state_has_no_repos(state: State | None) -> bool:
+    """Return whether *state* resolves zero repo rows (the honest-empty case).
+
+    The single predicate both scopes toggle the honest-empty card on:
+    a ``None`` / non-workspace / empty-registry state yields no
+    :func:`~eawf.surfaces.tui.widgets.workspace_table.build_repo_rows`, so
+    the grid is empty and the card shows instead. Reusing the same row
+    builder the grid itself folds keeps the card and the grid in lockstep
+    -- the card shows exactly when (and only when) the grid would render
+    zero repo rows.
+
+    Args:
+        state: The bound scope state, or ``None``.
+
+    Returns:
+        ``True`` when the state resolves no repo rows; ``False`` otherwise.
+    """
+    return not build_repo_rows(state)
+
+
+class HonestEmptyCard(Static):
+    """Calm honest-empty no-repos card mounted beside an empty-grid scope.
+
+    A :class:`~textual.widgets.Static` that paints
+    :func:`render_no_repos_card` and toggles its own visibility off the
+    App's bound ``state``: it shows only when the state resolves zero repo
+    rows (an empty / unavailable registry) and hides the moment a repo is
+    registered, so a populated scope reads as the grid alone and an empty
+    scope reads as the directive card rather than a columns-only grid.
+
+    The card carries NO totals row and fabricates NO repo -- it is the
+    honest-empty surface itself, paired with a grid the host hides while
+    the card is shown.
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    HonestEmptyCard {
+        width: 1fr;
+        height: auto;
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, **kwargs: object) -> None:
+        """Construct the card with an empty painted-markup cache.
+
+        Args:
+            **kwargs: Forwarded to :class:`textual.widgets.Static`.
+        """
+        super().__init__(**kwargs)  # type: ignore[arg-type]
+        #: The last-painted content markup, exposed via :meth:`rendered_text`
+        #: so a host / test reads the card body without scraping the
+        #: compositor. Empty until the first :meth:`_repaint`.
+        self._painted: str = ""
+
+    def on_mount(self) -> None:
+        """Paint the card, seed visibility, and watch the App's state."""
+        self._repaint()
+        if hasattr(self.app, "state"):
+            self.watch(self.app, "state", self._on_app_state)
+
+    def _on_app_state(self, _state: State | None) -> None:
+        """Repaint + re-toggle visibility when the bound state changes."""
+        self._repaint()
+
+    def rendered_text(self) -> str:
+        """Return the last-painted card markup (the no-repos card body).
+
+        The directive the card painted, read without scraping the
+        compositor. Empty until the mount-time first paint has run.
+
+        Returns:
+            The last-painted content markup string.
+        """
+        return self._painted
+
+    def _render_mode(self) -> RenderMode:
+        """Return the host app's live render mode, or the safe default.
+
+        Threads :attr:`eawf.surfaces.tui.app.EaApp.render_mode` into the
+        pending sigil so an ASCII / unicode flip rerenders the card with
+        the matching glyph column; falls back to
+        :data:`~eawf.surfaces.tui.widgets.eu_bar.DEFAULT_RENDER_MODE` under a
+        bare harness whose host App carries no ``render_mode`` attribute.
+
+        Returns:
+            The active ``"unicode"`` / ``"ascii"`` mode.
+        """
+        return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
+
+    def _repaint(self) -> None:
+        """Repaint the card body and show / hide it off the bound state."""
+        state = getattr(self.app, "state", None)
+        self.display = state_has_no_repos(state)
+        self._painted = render_no_repos_card(mode=self._render_mode())
+        self.update(self._painted)
+
+
 #: Footer hints tuned for the user portfolio screen (arrows primary; the
 #: user scope opens the focused repo on Enter, like the workspace). Every label
 #: is produced through
@@ -201,19 +356,57 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = _USER_HINTS
 
     def compose_body(self) -> ComposeResult:
-        """Yield the Home attention band, the portfolio table, + zoom mount."""
+        """Yield the band, the portfolio pane (grid + honest-empty card), + zoom.
+
+        The portfolio pane carries BOTH the :class:`PortfolioTable` and the
+        :class:`HonestEmptyCard`: the card shows (and the grid hides) only
+        when the bound state resolves zero repos, so an empty / unavailable
+        registry reads as the calm no-repos directive rather than a
+        columns-only grid -- never a fabricated repo or a ``0 repos`` totals
+        roll-up. A populated scope reads as the grid alone.
+        """
         with Vertical(id="body"):
             yield from attention_band()
             with Vertical(classes="pane", id="pane-portfolio"):
                 yield Static("PORTFOLIO", classes="pane-title")
+                yield HonestEmptyCard(id="portfolio-empty")
                 yield PortfolioTable(id="portfolio-table")
             yield Container(id="zoom-mount")
 
+    def on_mount(self) -> None:
+        """Seed the grid / card split, then watch the App state to re-toggle.
+
+        Calls the base chassis ``on_mount`` (footer hints) first, then hides
+        the portfolio grid whenever the honest-empty card is showing so an
+        empty scope never renders a columns-only grid beneath the directive
+        card.
+        """
+        super().on_mount()
+        self._sync_empty_split()
+        if hasattr(self.app, "state"):
+            self.watch(self.app, "state", self._on_app_state_split)
+
+    def _on_app_state_split(self, _state: State | None) -> None:
+        """Re-toggle the grid / card split when the bound state changes."""
+        self._sync_empty_split()
+
+    def _sync_empty_split(self) -> None:
+        """Hide the portfolio grid exactly when the honest-empty card shows."""
+        empty = state_has_no_repos(getattr(self.app, "state", None))
+        tables = self.query("#portfolio-table")
+        if tables:
+            tables.first().display = not empty
+
 
 __all__ = [
+    "HONEST_EMPTY_DIRECTIVE",
+    "HONEST_EMPTY_HEADLINE",
     "USER_SCOPE_INIT_NEEDED_KEY",
+    "HonestEmptyCard",
     "PortfolioTable",
     "UserScreen",
+    "render_no_repos_card",
+    "state_has_no_repos",
     "synthesize_user_state",
     "user_scope_init_needed",
 ]

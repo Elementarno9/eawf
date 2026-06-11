@@ -39,8 +39,10 @@ from textual.binding import Binding, BindingType
 from textual.containers import Container, Vertical
 from textual.widgets import Static
 
+from eawf.kernel.state.models import State
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
+from eawf.surfaces.tui.scopes.user import HonestEmptyCard, state_has_no_repos
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.registry_pane import RegistryPane
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable
@@ -115,17 +117,49 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
         read-only :class:`RegistryPane` (the explicit registry listing).
         The container is what the zoom mixin hides on Enter and restores
         on Esc, so the table + registry pane hide and return together.
+
+        The workspace pane carries BOTH the :class:`WorkspaceTable` and a
+        :class:`HonestEmptyCard`: the card shows (and the grid hides) only
+        when the bound state resolves zero repos, so an empty / unavailable
+        registry reads as the calm no-repos directive rather than a
+        columns-only grid -- never a fabricated repo or a ``0 repos`` totals
+        roll-up. A populated workspace reads as the grid alone.
         """
         with Vertical(id="body"):
             yield from attention_band()
             with Vertical(id="pane-repos"):
                 with Vertical(classes="pane", id="pane-workspace"):
                     yield Static("WORKSPACE", classes="pane-title")
+                    yield HonestEmptyCard(id="workspace-empty")
                     yield WorkspaceTable(id="workspace-table")
                 with Vertical(classes="pane", id="pane-registry"):
                     yield Static("REGISTRY", classes="pane-title")
                     yield RegistryPane(id="registry-pane")
             yield Container(id="zoom-mount")
 
+    def on_mount(self) -> None:
+        """Seed the grid / card split, then watch the App state to re-toggle.
 
-__all__ = ["WorkspaceScreen"]
+        Calls the base chassis ``on_mount`` (footer hints) first, then hides
+        the workspace grid whenever the honest-empty card is showing so an
+        empty scope never renders a columns-only grid beneath the directive
+        card.
+        """
+        super().on_mount()
+        self._sync_empty_split()
+        if hasattr(self.app, "state"):
+            self.watch(self.app, "state", self._on_app_state_split)
+
+    def _on_app_state_split(self, _state: State | None) -> None:
+        """Re-toggle the grid / card split when the bound state changes."""
+        self._sync_empty_split()
+
+    def _sync_empty_split(self) -> None:
+        """Hide the workspace grid exactly when the honest-empty card shows."""
+        empty = state_has_no_repos(getattr(self.app, "state", None))
+        tables = self.query("#workspace-table")
+        if tables:
+            tables.first().display = not empty
+
+
+__all__ = ["HonestEmptyCard", "WorkspaceScreen"]

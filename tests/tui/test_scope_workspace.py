@@ -29,6 +29,11 @@ from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.scopes import RepoScreen, ScopeScreen, WorkspaceScreen
+from eawf.surfaces.tui.scopes.user import (
+    HONEST_EMPTY_DIRECTIVE,
+    HONEST_EMPTY_HEADLINE,
+    HonestEmptyCard,
+)
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.snapshot import capture_screen_text
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
@@ -40,6 +45,7 @@ from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.status_pane import StatusPane
 from eawf.surfaces.tui.widgets.workspace_table import (
     GIT_UNAVAILABLE_CELL,
+    TOTALS_ROW_LABEL,
     RepoRow,
     WorkspaceTable,
     _eu_cell,
@@ -110,6 +116,14 @@ def _multi_repo_state(codes: list[str]) -> State:
         for code in codes
     }
     payload["workspace"]["current_repo_code"] = codes[0]
+    return State.model_validate(payload)
+
+
+def _empty_workspace_state() -> State:
+    """Return a workspace state with zero repos (the honest-empty case)."""
+    payload = orjson.loads(_WORKSPACE.read_bytes())
+    payload["workspace"]["repos"] = {}
+    payload["workspace"]["current_repo_code"] = None
     return State.model_validate(payload)
 
 
@@ -609,5 +623,97 @@ def test_workspace_screen_first_paint_renders_brand() -> None:
             rendered = capture_screen_text(app)
             assert BRAND in rendered
             assert "workspace" in rendered
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Honest-empty card — the no-repos directive on an empty / unavailable registry
+# --------------------------------------------------------------------------
+
+
+def test_workspace_empty_state_shows_honest_card_hides_grid() -> None:
+    """With zero repos the workspace scope shows the card and hides the grid."""
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app.state = _empty_workspace_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            table = app.screen.query_one(WorkspaceTable)
+            # The card shows the no-repos directive; the grid hides.
+            assert card.display is True
+            assert table.display is False
+            # No fabricated repo row, no totals roll-up on the empty grid.
+            assert table.row_count == 0
+
+    asyncio.run(body())
+
+
+def test_workspace_empty_state_card_renders_directive_text() -> None:
+    """The mounted honest-empty card paints the no-repos headline + directive.
+
+    Reads the card's own renderable (not an SVG screenshot, which escapes
+    spaces and can be overlaid by a schema-staleness banner), so the
+    no-repos directive assertion stays deterministic.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            app.state = _empty_workspace_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            painted = card.rendered_text()
+            assert HONEST_EMPTY_HEADLINE in painted
+            assert HONEST_EMPTY_DIRECTIVE in painted
+            # No fabricated totals sigma in the card body.
+            assert TOTALS_ROW_LABEL not in painted
+
+    asyncio.run(body())
+
+
+def test_workspace_populated_state_hides_card_shows_grid() -> None:
+    """A populated workspace hides the card and shows the grid (no card noise)."""
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            table = app.screen.query_one(WorkspaceTable)
+            # The fixture seeds one repo, so the grid shows and the card hides.
+            assert card.display is False
+            assert table.display is True
+            assert table.row_count >= 1
+
+    asyncio.run(body())
+
+
+def test_workspace_card_toggles_when_state_becomes_empty() -> None:
+    """Binding an empty state shows the card mid-session and hides the grid."""
+
+    async def body() -> None:
+        app = EaApp(scope="workspace", state_path=_WORKSPACE)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            card = app.screen.query_one(HonestEmptyCard)
+            table = app.screen.query_one(WorkspaceTable)
+            assert card.display is False
+            assert table.display is True
+            # Every repo deregisters mid-session: the card shows, the grid hides.
+            app.state = _empty_workspace_state()
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            assert card.display is True
+            assert table.display is False
+            assert table.row_count == 0
 
     asyncio.run(body())
