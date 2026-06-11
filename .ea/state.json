@@ -6336,6 +6336,42 @@
       "status": "done",
       "updated_at": "2026-06-11T14:22:38.887660Z"
     },
+    "P30-I16-W16": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 103297,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W16",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I16-W16",
+      "scope_id": "P30-I16-W16",
+      "status": "done",
+      "updated_at": "2026-06-11T16:16:28.367979Z"
+    },
+    "P30-I16-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 94438,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W20",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I16-W20",
+      "scope_id": "P30-I16-W20",
+      "status": "done",
+      "updated_at": "2026-06-11T16:16:36.990190Z"
+    },
+    "P30-I16-W22": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 234013,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W22",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I16-W22",
+      "scope_id": "P30-I16-W22",
+      "status": "done",
+      "updated_at": "2026-06-11T16:16:38.211985Z"
+    },
     "P30-I16-W24": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -18841,6 +18877,45 @@
       "scope_id": "P30-I15-W20",
       "updated_at": "2026-06-11T14:11:41.522256Z"
     },
+    "P30-I16-W16": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W16-bucket-20260611T154706Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I16-W16",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I16-W16",
+      "updated_at": "2026-06-11T15:47:06.200553Z"
+    },
+    "P30-I16-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W20-bucket-20260611T154706Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W20",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W20",
+      "updated_at": "2026-06-11T15:47:06.705573Z"
+    },
+    "P30-I16-W22": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W22-bucket-20260611T154707Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I16-W22",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I16-W22",
+      "updated_at": "2026-06-11T15:47:07.207394Z"
+    },
     "P30-I16-W24": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I16-W24-bucket-20260611T154315Z",
@@ -22016,7 +22091,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T15:44:30.244991Z",
+  "updated_at": "2026-06-11T16:16:38.212202Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -86979,10 +87054,10 @@
     "P30-I16-W16": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T15:47:06.200468Z",
+      "closed_at": "2026-06-11T16:16:28.367979Z",
+      "commit": "b36d265fec2d7a9658930759a2e236e7e86898f2",
       "deps": [],
       "description": "The campaign rank-1 fix: sandbox-exec -f to -p flag fix, pinning test flip, semantics-executing smoke test, juror stderr logging, PATH threading, network carve. Unlocks real juror ballots, the first priced session, and the dark-tier proof.",
       "dispatch_history": [],
@@ -87025,12 +87100,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:57.496381Z",
-      "outcome": null,
+      "outcome": "macOS seatbelt jail flag -f->-p fix; semantics-executing smoke test (denied-write blocked, allowed-write passes) + pinning test asserts -p; gated on darwin+sandbox-exec",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -87059,7 +87134,7 @@
       ],
       "title": "Jail repair ladder",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 103297,
       "worktree_id": null
     },
     "P30-I16-W17": {
@@ -87367,10 +87442,10 @@
     "P30-I16-W20": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T15:47:06.705477Z",
+      "closed_at": "2026-06-11T16:16:36.990190Z",
+      "commit": "68aba24a44a2ef435b0b943bb8cf6021aea9a354",
       "deps": [],
       "description": "EvalReport schema + tools/recount_build_report.py, landing BEFORE phase close per D-T5-2 so issue #1 can cite pre-registered metrics.",
       "dispatch_history": [],
@@ -87412,12 +87487,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:25:05.004325Z",
-      "outcome": null,
+      "outcome": "typed EvalReport schema (strict) validates build-report metric set; recount_build_report.py reproduces each metric from state.json alone, exits nonzero on unreproducible figure (API-cost + git counts correctly excluded)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -87446,7 +87521,7 @@
       ],
       "title": "Build-Report pre-registration",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 94438,
       "worktree_id": null
     },
     "P30-I16-W21": {
@@ -87542,10 +87617,10 @@
     "P30-I16-W22": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T15:47:07.207304Z",
+      "closed_at": "2026-06-11T16:16:38.211985Z",
+      "commit": "80fd3d0615973b08423e423cd7dcdb5dfd9acf69",
       "deps": [],
       "description": "D-F: pwd-upward anchor resolution for the three anchor-dependent checks; install-mode-aware manifest (plugin-cache satisfies plugin-owned regions, no local .claude duplication); drift ack/retro-pin verb for the 12 historical drifts; stop stray side-effect writes (instrument-probe.json, researchcfg.yaml, coverage.xml — root-caused per class); release install-smoke CI gate. Campaign docs are owned by I18-W07, not here.",
       "dispatch_history": [],
@@ -87608,12 +87683,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:25:08.794813Z",
-      "outcome": null,
+      "outcome": "eawf doctor green-path: pwd-upward anchor, install-mode manifest-from-cache, eawf wave ack-drift verb + drift-acks.json, instrument-probe routed to per-user cache; release install-smoke job gates publish",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -87666,7 +87741,7 @@
       ],
       "title": "Doctor green-path and operational hygiene",
       "token_budget": null,
-      "tokens_consumed": 0,
+      "tokens_consumed": 234013,
       "worktree_id": null
     },
     "P30-I16-W23": {
