@@ -507,6 +507,7 @@ def _run_mutation(
     text_factory: Any = None,
     envelope: Any = None,
     envelope_factory: Any = None,
+    extras_factory: Any = None,
     closure_kind: bool = False,
     mutation_kind: MutationKind | None = None,
     params: dict[str, Any] | None = None,
@@ -539,6 +540,12 @@ def _run_mutation(
         params: Kind-specific param dict carried in :attr:`Mutation.params`
             on the daemon path. Required when *mutation_kind* is set;
             ignored otherwise.
+        extras_factory: Optional zero-arg callable evaluated AFTER ``mutate``
+            runs (so it can read holders the mutator populated) returning the
+            advisory extras dict to stamp on the in-process fallback close
+            event -- the channel the daemonless wave-close path uses to thread
+            ``close_mechanism`` onto its event so both close paths agree.
+            ``None`` keeps the historical empty-extras shape.
     """
     from pydantic import ValidationError as PydValidationError
 
@@ -588,6 +595,10 @@ def _run_mutation(
                 raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
             state.updated_at = datetime.now(UTC)
             resolved_scope_id = scope_id if scope_id is not None else scope_id_factory()
+            # ``extras_factory`` runs after ``mutate`` so the close handler's
+            # daemonless-waiver mechanism (resolved inside the mutator) lands on
+            # the event row; ``None`` keeps the empty-extras shape.
+            commit_extras = extras_factory() if extras_factory is not None else None
             # The library writer raises ``StateValidationError`` for a
             # post-apply invariant rejection; map it onto the CLI
             # ``ValidationError`` bucket (exit 2) so the surrounding
@@ -601,6 +612,7 @@ def _run_mutation(
                     args=args,
                     scope_id=resolved_scope_id,
                     summary=command,
+                    extras=commit_extras,
                 )
             except StateValidationError as exc:
                 raise cli_errors.ValidationError(str(exc)) from exc

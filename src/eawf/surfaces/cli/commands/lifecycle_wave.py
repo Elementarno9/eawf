@@ -386,6 +386,53 @@ def _persist_close_waiver_inputs(
         _persist_no_runtime_waiver(ctx=ctx, flags=flags, wave_id=wave_id)
 
 
+def _stamp_close_mechanism(
+    state: State,
+    *,
+    wave_id: str,
+    state_path: Path,
+    waived: bool,
+    holder: list[Any],
+) -> None:
+    """Run the daemonless bypass door for a closing wave and record its mechanism.
+
+    The W18 -> W25 wiring point for the in-process close path: under
+    ``EAWF_DAEMONLESS`` the daemon close gate never runs, so a GATE-BEARING wave
+    would slip its falsifiers. :func:`enforce_daemonless_close_waiver` REJECTS
+    such a close unless *waived* (the operator's ``--no-runtime`` flag), and on
+    the allowed bypass appends an auditable waiver event naming the wave +
+    reason. A daemon-mediated or non-gate-bearing close passes through untouched.
+    The resolved :class:`~eawf.surfaces.cli._mutation.CloseMechanism` is appended to
+    *holder* so the caller can stamp it on the close event's ``extras`` map.
+
+    Args:
+        state: Loaded state -- the closing wave row is read for its gates.
+        wave_id: Id of the wave being closed.
+        state_path: Path to ``state.json``; anchors the waiver event store.
+        waived: Whether the operator passed ``--no-runtime`` this call.
+        holder: One-element sink the resolved mechanism is appended to. Left
+            empty when the wave id is absent (the close path then defaults the
+            stamp to ``"daemon"``).
+
+    Raises:
+        cli_errors.UserError: When the close is daemonless + gate-bearing + NOT
+            waived (re-raised from :func:`enforce_daemonless_close_waiver`).
+    """
+    from eawf.surfaces.cli._mutation import enforce_daemonless_close_waiver
+
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return
+    holder.append(
+        enforce_daemonless_close_waiver(
+            wave,
+            state_path=state_path,
+            waived=waived,
+            reason=NO_RUNTIME_WAIVER_REASON if waived else None,
+        )
+    )
+
+
 @wave_app.command("plan")
 def wave_plan_cmd(
     ctx: typer.Context,
@@ -815,6 +862,9 @@ def wave_close_cmd(
     drift_warnings: list[str] = []
     close_succeeded = [False]
     readiness_holder: list[CloseReadiness] = []
+    from eawf.surfaces.cli._mutation import CloseMechanism
+
+    close_mechanism_holder: list[CloseMechanism] = []
 
     def _close_and_pin(state: State) -> None:
         state_path = resolve_state_path(flags.workspace)
@@ -822,6 +872,16 @@ def wave_close_cmd(
         config_root = _config_root_for_state_path(state_path)
         repo_root = _resolve_repo_root_for_drift(flags.workspace)
         anchor_for_sha = repo_root if repo_root is not None else config_root
+        # Daemonless bypass door (W18 -> W25 wiring): gate-bearing daemonless
+        # closes need the --no-runtime waiver; the resolved mechanism is stamped
+        # on the close event below.
+        _stamp_close_mechanism(
+            state,
+            wave_id=wave_id,
+            state_path=state_path,
+            waived=no_runtime,
+            holder=close_mechanism_holder,
+        )
         # Band-conditional enforcement: the helper loads + band-narrows the
         # active verify block so the direct-write fallback matches the daemon
         # close gate (a non-band wave stays advisory under a band-scoped
@@ -906,6 +966,12 @@ def wave_close_cmd(
             ),
         },
         mutate=_close_and_pin,
+        extras_factory=lambda: {
+            "readiness_warnings_count": (
+                len(readiness_holder[0].warnings) if readiness_holder else 0
+            ),
+            "close_mechanism": (close_mechanism_holder[0] if close_mechanism_holder else "daemon"),
+        },
         closure_kind=True,
     )
     if close_succeeded[0]:

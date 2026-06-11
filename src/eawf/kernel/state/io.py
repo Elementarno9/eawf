@@ -127,6 +127,7 @@ def build_event_envelope(
     before_version: str,
     after_version: str,
     summary: str,
+    extras: dict[str, str | int | float | bool] | None = None,
 ) -> Envelope:
     """Build (but do not append) the canonical ``EVENT``-kind envelope.
 
@@ -144,6 +145,11 @@ def build_event_envelope(
         before_version: State digest before the mutation.
         after_version: State digest after the mutation.
         summary: Human-readable one-line summary.
+        extras: Optional advisory metrics folded onto the event's
+            :attr:`EventPayload.extras` map. The daemonless fallback close
+            path passes ``close_mechanism`` here so its event carries the same
+            stamp the daemon close event writes. ``None`` keeps the historical
+            empty-extras shape for every non-close mutation.
 
     Returns:
         An unsaved :class:`~eawf.kernel.store.envelope.Envelope`.
@@ -172,6 +178,7 @@ def build_event_envelope(
             after_state_version=after_version,
             status="ok",
             message=summary,
+            extras=dict(extras) if extras else {},
         ).model_dump(mode="json"),
         blob_refs=[],
         artifact_ids=[],
@@ -324,6 +331,7 @@ def commit_mutation(
     args: dict[str, Any],
     scope_id: str,
     summary: str,
+    extras: dict[str, str | int | float | bool] | None = None,
 ) -> dict[str, Any]:
     """Validate + WAL-pending + persist state + append event, crash-safely.
 
@@ -368,6 +376,11 @@ def commit_mutation(
         args: Verb args; hashed into the event ``args_hash``.
         scope_id: Scope the event is attributed to.
         summary: Human-readable one-line summary.
+        extras: Optional advisory metrics folded onto the event envelope's
+            :attr:`EventPayload.extras` map. The daemonless wave-close path
+            passes ``close_mechanism`` here so the fallback close event carries
+            the same stamp the daemon close event writes; ``None`` keeps the
+            historical empty-extras shape for every other mutation.
 
     Returns:
         The candidate payload (already JSON-mode-dumped) so the caller can
@@ -402,6 +415,7 @@ def commit_mutation(
         before_version=before_version,
         after_version=after_version,
         summary=summary,
+        extras=extras,
     )
     record_id = uuid.uuid4().hex
     record = WalRecord(

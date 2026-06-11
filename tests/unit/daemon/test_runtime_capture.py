@@ -174,6 +174,49 @@ def test_runtime_capture_updates_two_active_waves_and_logs_ambiguity(
     _run(body)
 
 
+def test_runtime_capture_threads_harness_and_model_attribution(tmp_path: Path) -> None:
+    """W25: the runtime-capture writer threads harness+model onto RuntimeLatest.
+
+    W19 added the parser-stamped ``harness`` + ``model`` attribution to the
+    capture params, but the daemon writer dropped them when persisting. With the
+    wiring in place the persisted ``runtime_latest`` carries NON-NULL attribution
+    so a recorded actual derived from it is calibratable by harness+model.
+    """
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=["P30-I05-W04"]))
+
+    async def body() -> None:
+        await runtime_capture(
+            ctx,
+            _capture_params(harness="claude-code", model="claude-opus-4-1"),
+        )
+
+        payload = orjson.loads(state_path.read_bytes())
+        latest = payload["waves"]["P30-I05-W04"]["runtime_latest"]
+        assert latest["harness"] == "claude-code"
+        assert latest["model"] == "claude-opus-4-1"
+
+    _run(body)
+
+
+def test_runtime_capture_attribution_defaults_null_when_absent(tmp_path: Path) -> None:
+    """Boundary: a capture with no harness/model persists null attribution.
+
+    The fields stay nullable -- a payload that supplies no attribution does not
+    fabricate a value, so the persisted snapshot carries ``None`` for both.
+    """
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=["P30-I05-W04"]))
+
+    async def body() -> None:
+        await runtime_capture(ctx, _capture_params())
+
+        payload = orjson.loads(state_path.read_bytes())
+        latest = payload["waves"]["P30-I05-W04"]["runtime_latest"]
+        assert latest["harness"] is None
+        assert latest["model"] is None
+
+    _run(body)
+
+
 def test_runtime_capture_refuses_without_active_waves(tmp_path: Path) -> None:
     ctx, _state_path = _ctx(tmp_path, _state_payload(active_wave_ids=[]))
 

@@ -1804,7 +1804,16 @@ def _compute_wave_close_extras(
             logger.warning(
                 f"close_advisory wave={wave_id!r} criterion={view.id!r} status={view.status!r}"
             )
-    extras: dict[str, str | int | float | bool] = {"readiness_warnings_count": count}
+    # The daemon mediates this close (it is the canonical writer running this
+    # code), so the mechanism is always "daemon"; the daemonless-with-waiver
+    # bypass stamps its own mechanism on the in-process fallback close event.
+    # Stamping it here guarantees EVERY daemon close event carries
+    # close_mechanism alongside the in-process path so an audit can tell the two
+    # apart without re-deriving.
+    extras: dict[str, str | int | float | bool] = {
+        "readiness_warnings_count": count,
+        "close_mechanism": "daemon",
+    }
     # P28-I02-W03: surface the close-time token + cost rollup on the
     # event envelope. The wave_close apply (close_wave -> upsert
     # ActualSummary) populated these from Wave.tokens_consumed; cost
@@ -2520,7 +2529,15 @@ def _build_runtime_capture_event_envelope(
 
 
 def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
-    """Convert capture params into the state-model runtime snapshot."""
+    """Convert capture params into the state-model runtime snapshot.
+
+    Threads the parser-stamped ``harness`` + ``model`` attribution off the
+    capture params (W19 added them to :class:`RuntimeCounters`, which
+    :class:`RuntimeCaptureParams` extends) onto the persisted
+    :class:`RuntimeLatest` so a recorded actual derived from this snapshot
+    carries non-null attribution and becomes calibratable by harness+model.
+    Both stay nullable -- a payload with no recognised model still persists.
+    """
     captured_at = params.captured_at or datetime.now(UTC)
     cost_usd = float(params.cost_usd) if params.cost_usd is not None else None
     return RuntimeLatest(
@@ -2531,6 +2548,8 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
         output_tokens=params.output_tokens,
         cache_creation_input_tokens=params.cache_creation_input_tokens,
         cache_read_input_tokens=params.cache_read_input_tokens,
+        harness=params.harness,
+        model=params.model,
         captured_at=captured_at,
     )
 

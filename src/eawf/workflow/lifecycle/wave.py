@@ -773,6 +773,11 @@ def close_wave(
     per-model rate table that turns tokens into dollars is not yet wired
     (the field exists so the post-mutation event envelope can publish a
     typed cost value once the rate table lands).
+    The auto-created actual also carries the ``harness`` + ``model``
+    attribution off the wave's latest runtime snapshot
+    (:attr:`Wave.runtime_latest`, stamped by the daemon runtime-capture writer)
+    so a recorded actual is calibratable by harness+model; both stay ``None``
+    when no runtime was captured.
 
     Args:
         state: State to mutate in place.
@@ -844,6 +849,12 @@ def close_wave(
     existing = state.actuals.get(wave_id)
     auto_elapsed_eu = actual_elapsed_eu if actual_elapsed_eu is not None else 0.0
     auto_cost_usd = actual_cost_usd if actual_cost_usd is not None else 0.0
+    # Thread the captured harness+model attribution off the wave's latest
+    # runtime snapshot (stamped by the daemon runtime-capture writer) onto the
+    # auto-created actual so a recorded actual is calibratable by harness+model.
+    # Both stay nullable when no runtime was captured.
+    actual_harness = wave.runtime_latest.harness if wave.runtime_latest is not None else None
+    actual_model = wave.runtime_latest.model if wave.runtime_latest is not None else None
     if existing is None:
         state.actuals[wave_id] = ActualSummary(
             id=f"ACT-{wave_id}",
@@ -854,6 +865,8 @@ def close_wave(
             agent_runtime_eu=actual_agent_runtime_eu,
             actual_tokens=wave.tokens_consumed,
             actual_cost_usd=auto_cost_usd,
+            harness=actual_harness,
+            model=actual_model,
             current_store_record_id=f"REC-{wave_id}",
             updated_at=now,
         )
@@ -862,6 +875,10 @@ def close_wave(
         existing.actual_tokens = wave.tokens_consumed
         if actual_cost_usd is not None:
             existing.actual_cost_usd = actual_cost_usd
+        if actual_harness is not None:
+            existing.harness = actual_harness
+        if actual_model is not None:
+            existing.model = actual_model
         existing.updated_at = now
     logger.info(
         f"close_wave id={wave_id} outcome={outcome!r} "

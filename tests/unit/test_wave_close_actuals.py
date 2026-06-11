@@ -366,6 +366,51 @@ def test_close_wave_no_elapsed_eu_leaves_zero() -> None:
     assert state.actuals["P01-I01-W01"].elapsed_eu == pytest.approx(0.0)
 
 
+def test_close_wave_threads_attribution_onto_auto_actual() -> None:
+    """W25: the auto-created actual carries the wave's captured harness+model.
+
+    A captured ``runtime_latest`` (stamped by the daemon runtime-capture writer)
+    carries the harness+model attribution; the close-time ActualSummary upsert
+    threads it onto the recorded actual so the actual is calibratable by
+    harness+model.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    state.waves["P01-I01-W01"].runtime_latest = RuntimeLatest(
+        api_duration_ms=17000,
+        harness="claude-code",
+        model="claude-opus-4-1",
+        captured_at=datetime.now(UTC),
+    )
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W01"]
+    assert actual.harness == "claude-code"
+    assert actual.model == "claude-opus-4-1"
+
+
+def test_close_wave_null_attribution_when_no_runtime_latest() -> None:
+    """Boundary: with no captured runtime, the recorded actual stays unattributed.
+
+    A wave with no ``runtime_latest`` leaves the auto-created actual's harness +
+    model at ``None`` -- the close does not fabricate attribution.
+    """
+    state = _empty_state()
+    _seed_wave(state)
+    claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
+    assert state.waves["P01-I01-W01"].runtime_latest is None
+
+    close_wave(state, wave_id="P01-I01-W01", outcome="ok")
+
+    assert state.actuals is not None
+    actual = state.actuals["P01-I01-W01"]
+    assert actual.harness is None
+    assert actual.model is None
+
+
 def test_compute_runtime_delta_absent_baseline_returns_none() -> None:
     latest = RuntimeLatest(
         api_duration_ms=17000,

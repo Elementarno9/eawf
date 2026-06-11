@@ -93,6 +93,10 @@ def test_session_end_capture_hook_invokes_runtime_capture_rpc() -> None:
                 "output_tokens": 50,
                 "cache_creation_input_tokens": 5,
                 "cache_read_input_tokens": 7,
+                # W19 stamps the parser harness attribution onto every capture;
+                # this payload carries no model block so ``model`` stays None.
+                "harness": "claude-code",
+                "model": None,
                 "session_id": "session-1",
                 "captured_at": "2026-06-10T12:00:00+00:00",
                 "repo_root": "workspace",

@@ -85,4 +85,8 @@ def test_statusline_render_writes_runtime_counter_sidecar(
         cost_usd=Decimal("0.42"),
         input_tokens=100,
         output_tokens=50,
+        # W19 stamps the parser harness attribution onto every parsed counter
+        # set; this payload carries no model block so ``model`` stays None.
+        harness="claude-code",
+        model=None,
     )
