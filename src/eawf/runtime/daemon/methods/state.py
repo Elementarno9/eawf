@@ -75,9 +75,11 @@ from eawf.kernel.state.enums import (
     EffortBucket,
     PhaseStatus,
     StoreKind,
+    TrackKind,
+    TrackStatus,
     WaveStatus,
 )
-from eawf.kernel.state.models import RuntimeLatest, State, Wave
+from eawf.kernel.state.models import RuntimeLatest, State, Track, Wave
 from eawf.kernel.state.mutations import (
     DecisionMutationError,
     MemoryMutationError,
@@ -201,6 +203,18 @@ class ReadResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     state: dict[str, Any]
     version: str
+
+
+class TrackMutationError(ValueError):
+    """Raised when a ``track.*`` apply rejects the mutation.
+
+    Mirrors :class:`~eawf.kernel.state.mutations.MemoryMutationError` so the
+    daemon maps a track rejection (unknown id on switch, duplicate id on
+    add) to ``-32602 invalid_params`` -- the same wire code + exit code the
+    non-closure lifecycle rejections use. Subclasses :class:`ValueError`
+    so :func:`_commit_worktree_state` catches it ahead of the generic
+    apply path and re-raises a plain ``ValueError``.
+    """
 
 
 class MutateParams(BaseModel):
@@ -342,6 +356,53 @@ class WaveAutolandRpcResult(BaseModel):
     error: str | None
     remaining: list[str]
     dry_run: bool
+
+
+# ---- track.* params + result -------------------------------------------------
+
+
+class TrackAddParams(BaseModel):
+    """Params for :func:`track_add_rpc`.
+
+    The caller supplies the full Track identity; the daemon is the sole
+    mutator that writes the row onto :attr:`State.tracks`, links it under
+    the owning :attr:`Project.track_ids`, and moves the
+    :attr:`CurrentPointers.track_id` cursor to the freshly added Track so
+    an ``add`` doubles as a ``switch``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    repo_root: str | None = None
+    track_id: str
+    code: str
+    slug: str
+    title: str
+    kind: TrackKind
+    domains: list[str] = Field(default_factory=list)
+    status: TrackStatus = TrackStatus.PLANNED
+    owner: str | None = None
+
+
+class TrackSwitchParams(BaseModel):
+    """Params for :func:`track_switch_rpc`.
+
+    ``track_id`` names an existing Track; the daemon moves the
+    :attr:`CurrentPointers.track_id` cursor onto it. An unknown id raises a
+    typed :class:`TrackMutationError` (mapped to ``-32602 invalid_params``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    repo_root: str | None = None
+    track_id: str
+
+
+class TrackRpcResult(BaseModel):
+    """Result of :func:`track_add_rpc` / :func:`track_switch_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    track_id: str
+    current_track_id: str | None
+    added: bool
 
 
 # ---- Idempotency cache ------------------------------------------------------
@@ -2309,6 +2370,13 @@ def _build_worktree_event_envelope(
             "remaining_count": len(result.get("remaining", [])),
             "dry_run": bool(result.get("dry_run", False)),
         }
+    elif command in ("track.add", "track.switch"):
+        track_id = result.get("track_id")
+        if isinstance(track_id, str) and track_id:
+            extras["track_id"] = track_id
+        current_track_id = result.get("current_track_id")
+        if isinstance(current_track_id, str) and current_track_id:
+            extras["current_track_id"] = current_track_id
     payload = EventPayload(
         timestamp=now,
         event_type=command,
@@ -2400,18 +2468,24 @@ def _runtime_latest_from_params(params: RuntimeCaptureParams) -> RuntimeLatest:
 def _commit_worktree_state(
     *,
     ctx: MethodContext,
-    repo_root: Path,
+    repo_root: Path | None,
     params: dict[str, Any],
     command: str,
     scope_id: str | None,
     apply_func: Callable[[State], dict[str, Any]],
 ) -> dict[str, Any]:
-    """Run a worktree mutator under daemon-owned state persistence."""
+    """Run a daemon-owned mutator under canonical state persistence.
+
+    When *repo_root* is ``None`` the mutator paths resolve via the
+    boot-time ``ctx.state_path`` anchor (the legacy / in-process test
+    fallback). A real *repo_root* routes the state + event writes to that
+    repo, matching the per-request anchoring the worktree-land handlers use.
+    """
     from eawf.runtime.lock import portalock
     from eawf.surfaces.cli import errors as cli_errors
 
     state_path, event_path, wal_path = _resolve_mutator_paths(
-        repo_root=str(repo_root),
+        repo_root=str(repo_root) if repo_root is not None else None,
         ctx=ctx,
     )
     ctx.in_flight_mutations += 1
@@ -2421,6 +2495,12 @@ def _commit_worktree_state(
             before_version = _state_version(payload)
             try:
                 result = apply_func(state)
+            except TrackMutationError as exc:
+                # track.* rejections (unknown id on switch, duplicate id on
+                # add) surface as a plain ValueError -> -32602 invalid_params,
+                # matching the non-closure lifecycle + memory/decision
+                # rejection taxonomy.
+                raise ValueError(str(exc)) from exc
             except cli_errors.ValidationError as exc:
                 raise DaemonValidationError(f"validation_failed: {exc}") from exc
             except cli_errors.CliError as exc:
@@ -3031,6 +3111,141 @@ async def wave_autoland_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[
         )
 
 
+# ---- track.* mutators --------------------------------------------------------
+
+
+def _tracks(state: State) -> dict[str, Track]:
+    """Return ``state.tracks`` as a non-``None`` dict in place.
+
+    Creates a fresh empty dict on the state when the field is currently
+    ``None`` so a first ``track.add`` has somewhere to land.
+    """
+    if state.tracks is None:
+        state.tracks = {}
+    return state.tracks
+
+
+def _apply_track_add(state: State, args: TrackAddParams) -> dict[str, Any]:
+    """Add a Track and move the current-track cursor onto it.
+
+    Constructs the :class:`Track` row (an unknown ``kind`` already failed
+    the typed ``TrackAddParams`` contract at the RPC boundary), links it
+    under the owning :attr:`Project.track_ids`, and moves
+    :attr:`CurrentPointers.track_id` to the freshly added Track so an add
+    doubles as a switch.
+
+    Args:
+        state: Loaded :class:`State`. Mutated in place.
+        args: Validated :class:`TrackAddParams`.
+
+    Returns:
+        Result dict matching :class:`TrackRpcResult`.
+
+    Raises:
+        TrackMutationError: when a Track with ``track_id`` already exists.
+    """
+    tracks = _tracks(state)
+    if args.track_id in tracks:
+        raise TrackMutationError(f"track already exists: {args.track_id!r}")
+    tracks[args.track_id] = Track(
+        id=args.track_id,
+        code=args.code,
+        slug=args.slug,
+        title=args.title,
+        kind=args.kind,
+        domains=list(args.domains),
+        status=args.status,
+        owner=args.owner,
+    )
+    if (
+        state.project is not None
+        and state.project.code == args.code
+        and args.track_id not in state.project.track_ids
+    ):
+        state.project.track_ids = [*state.project.track_ids, args.track_id]
+    state.current.track_id = args.track_id
+    logger.info(f"_apply_track_add track={args.track_id!r} kind={args.kind.value}")
+    return TrackRpcResult(
+        track_id=args.track_id,
+        current_track_id=state.current.track_id,
+        added=True,
+    ).model_dump(mode="json")
+
+
+def _apply_track_switch(state: State, args: TrackSwitchParams) -> dict[str, Any]:
+    """Move the current-track cursor onto an existing Track.
+
+    Args:
+        state: Loaded :class:`State`. Mutated in place.
+        args: Validated :class:`TrackSwitchParams`.
+
+    Returns:
+        Result dict matching :class:`TrackRpcResult`.
+
+    Raises:
+        TrackMutationError: when no Track matches ``track_id``.
+    """
+    tracks = state.tracks or {}
+    if args.track_id not in tracks:
+        raise TrackMutationError(f"unknown track: {args.track_id!r}")
+    state.current.track_id = args.track_id
+    logger.info(f"_apply_track_switch track={args.track_id!r}")
+    return TrackRpcResult(
+        track_id=args.track_id,
+        current_track_id=state.current.track_id,
+        added=False,
+    ).model_dump(mode="json")
+
+
+@register("track.add")
+async def track_add_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Daemon-owned ``track.add`` mutator.
+
+    Adds a Track row, links it under the owning project, and moves the
+    current-track cursor onto it. The daemon is the sole canonical
+    mutator (AGENTS rule 4); the CLI ``track add`` shim routes here over
+    JSON-RPC.
+
+    Raises:
+        TrackMutationError: when a Track with the supplied id already
+            exists; surfaced as ``-32602 invalid_params``.
+    """
+    args = TrackAddParams.model_validate(params)
+    repo_root = Path(args.repo_root) if args.repo_root else None
+    return _commit_worktree_state(
+        ctx=ctx,
+        repo_root=repo_root,
+        params=params,
+        command="track.add",
+        scope_id=args.track_id,
+        apply_func=lambda state: _apply_track_add(state, args),
+    )
+
+
+@register("track.switch")
+async def track_switch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Daemon-owned ``track.switch`` mutator.
+
+    Moves :attr:`CurrentPointers.track_id` onto an existing Track. The
+    daemon is the sole canonical mutator (AGENTS rule 4); the CLI
+    ``track switch`` shim routes here over JSON-RPC.
+
+    Raises:
+        TrackMutationError: when no Track matches the supplied id;
+            surfaced as ``-32602 invalid_params``.
+    """
+    args = TrackSwitchParams.model_validate(params)
+    repo_root = Path(args.repo_root) if args.repo_root else None
+    return _commit_worktree_state(
+        ctx=ctx,
+        repo_root=repo_root,
+        params=params,
+        command="track.switch",
+        scope_id=args.track_id,
+        apply_func=lambda state: _apply_track_switch(state, args),
+    )
+
+
 def event_store_path_for(state_path: Path) -> Path:
     """Return the ``event.jsonl`` path that pairs with *state_path*.
 
@@ -3045,8 +3260,11 @@ __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
     "VALIDATION_FAILED",
     "_APPLY_REGISTRY",
+    "TrackMutationError",
     "event_store_path_for",
     "runtime_capture",
+    "track_add_rpc",
+    "track_switch_rpc",
     "wave_autoland_rpc",
     "wave_land_batch_rpc",
     "wave_land_rpc",

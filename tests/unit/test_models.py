@@ -541,6 +541,74 @@ def test_track_kind_rejects_unknown_value() -> None:
         )
 
 
+def test_project_track_ids_defaults_empty() -> None:
+    """The Project -> Track containment edge defaults to an empty list."""
+    project = models.Project(
+        code="QR",
+        slug="quant-research",
+        title="Quant Research",
+        description=None,
+        domains=["quant"],
+        default_branch="main",
+        status="active",
+        repo_urn="urn:eawf:v1:repo:QR",
+    )
+    assert project.track_ids == []
+
+
+def test_project_track_ids_links_track() -> None:
+    """A Project may carry the ids of the Tracks it owns."""
+    project = models.Project(
+        code="QR",
+        slug="quant-research",
+        title="Quant Research",
+        domains=["quant"],
+        default_branch="main",
+        status="active",
+        repo_urn="urn:eawf:v1:repo:QR",
+        track_ids=["QR-X", "QR-Y"],
+    )
+    assert project.track_ids == ["QR-X", "QR-Y"]
+
+
+def test_track_status_accepts_planned_active_lifecycle() -> None:
+    """Track.status mirrors the Phase lifecycle via the TrackStatus enum."""
+    planned = models.Track(
+        id="QR-P",
+        code="QR",
+        slug="quant-research",
+        title="Quant Research",
+        kind="strategy",
+        domains=["quant"],
+        status="planned",
+    )
+    active = models.Track(
+        id="QR-A",
+        code="QR",
+        slug="quant-research",
+        title="Quant Research",
+        kind="strategy",
+        domains=["quant"],
+        status="active",
+    )
+    assert planned.status.value == "planned"
+    assert active.status.value == "active"
+
+
+def test_track_status_rejects_unknown_value() -> None:
+    """An unknown ``Track.status`` fails as a ValidationError at the boundary."""
+    with pytest.raises(ValidationError):
+        models.Track(
+            id="QR-X",
+            code="QR",
+            slug="quant-research",
+            title="Quant Research",
+            kind="strategy",
+            domains=["quant"],
+            status="halted",
+        )
+
+
 def test_workspace_index_code_pattern() -> None:
     with pytest.raises(ValidationError):
         models.WorkspaceIndex(code="lower-case", title="bad", repos={})

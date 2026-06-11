@@ -211,6 +211,13 @@ class Project(_StrictModel):
     rollup over the rolling 7-day window of :class:`ActualSummary.updated_at`.
     The field is strictly optional (default ``None``) so adding it does not
     bump ``schema_version`` — projects without a target render no burn line.
+
+    ``track_ids`` is the Project end of the ``Project -> Track`` containment
+    edge: each id names a :class:`Track` the project owns, completing the
+    ``Project -> Track -> Goal -> Outcome`` containment chain (the remaining
+    edges live on :attr:`Track.goal_ids` and :attr:`Goal.outcome_ids`). The
+    list defaults empty so a project without any track loads unchanged and
+    adding the field stays additive under ``extra="forbid"``.
     """
 
     code: ProjectCodeStr
@@ -222,6 +229,7 @@ class Project(_StrictModel):
     status: ProjectStatus
     repo_urn: UrnStr
     weekly_eu_target: float | None = None
+    track_ids: list[str] = Field(default_factory=list)
 
 
 class WorkspaceRepoRef(_StrictModel):
@@ -266,6 +274,18 @@ class Track(_StrictModel):
     flowing downstream as a free string; the kind selects which
     :class:`~eawf.platform.profiles.models.TrackKindSpec` parametrizes the
     track's noun, status lifecycle, outcome template, and overview view.
+
+    :attr:`status` carries the Track lifecycle as a closed
+    :class:`~eawf.kernel.state.enums.TrackStatus`, mirroring how
+    :attr:`Phase.status` carries the phase lifecycle: a Track opens
+    :attr:`~eawf.kernel.state.enums.TrackStatus.PLANNED`, advances to
+    :attr:`~eawf.kernel.state.enums.TrackStatus.ACTIVE` when focused, and
+    settles on a terminal value. The lifecycle is dormant: no lifecycle
+    step (phase / iter / wave open or close) requires a Track, so the
+    ``track.add`` / ``track.switch`` mutator pair sets :attr:`status` and the
+    :attr:`CurrentPointers.track_id` cursor without gating any other
+    transition. :attr:`goal_ids` is the Track end of the ``Track -> Goal``
+    containment edge (the project end is :attr:`Project.track_ids`).
     """
 
     id: ProjectCodeStr
