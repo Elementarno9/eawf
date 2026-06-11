@@ -7,7 +7,9 @@ spawn:
   ``--unshare-pid`` + ``--die-with-parent`` pair, a read-only root bind, a
   read-write bind of the validated cwd -- and crucially NO ``--new-session``
   / ``setsid`` (the pgid-preservation invariant the kill ladder depends on);
-- the macOS argv prefix is ``sandbox-exec -f <profile>`` whose profile
+- the macOS argv prefix is ``sandbox-exec -p <profile>`` (the inline
+  profile-string form, NOT ``-f`` which reads a profile from a FILE path
+  and would treat the inline text as a missing filename) whose profile
   denies default, confines writes to the cwd, denies the cross-tool cred
   dirs, and carves out the spawning lane's own credential -- no setsid;
 - a cwd outside the repo root is refused via the shared cwd_guard;
@@ -18,15 +20,25 @@ spawn:
   scrubbed ``env=`` intact either way.
 
 Platform is ALWAYS injected (``platform=`` / monkeypatched ``sys.platform``)
-so the suite runs identically on any host. The subprocess + ``shutil.which``
-are ALWAYS mocked -- no real ``claude`` / ``bwrap`` / ``sandbox-exec`` ever
-runs. ``HOME`` is a ``tmp_path`` (never the real $HOME) so no machine path
-leaks into a fixture.
+so the unit suite runs identically on any host. The unit-level subprocess +
+``shutil.which`` are ALWAYS mocked -- no real ``claude`` / ``bwrap`` ever
+runs there. ``HOME`` is a ``tmp_path`` (never the real $HOME) so no machine
+path leaks into a fixture.
+
+The ONE exception is the macOS-guarded semantics smoke test
+:func:`test_seatbelt_jail_executes_real_write_policy_on_macos`, which DOES
+run a real ``sandbox-exec`` so the ``-p`` flag fix is proven against the
+kernel's seatbelt enforcement (a denied write is actually blocked + an
+allowed write actually lands) rather than only by argv shape. It skips on
+non-macOS and when ``sandbox-exec`` is absent so CI on Linux stays green.
 """
 
 from __future__ import annotations
 
 import asyncio
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -45,6 +57,16 @@ from eawf.runtime.sandbox.jail import (
 _CLAUDE: str = "claude-code"
 _CODEX: str = "codex"
 _OPENCODE: str = "opencode"
+
+#: The real-spawn semantics smoke test runs ONLY on macOS with ``sandbox-exec``
+#: actually present -- it exercises the kernel's seatbelt enforcement, so it
+#: must skip everywhere else (Linux CI, a macOS without the binary) instead of
+#: failing. On THIS darwin machine the binary is present and the test runs.
+_seatbelt_unavailable = sys.platform != "darwin" or shutil.which("sandbox-exec") is None
+_REQUIRE_SEATBELT = pytest.mark.skipif(
+    _seatbelt_unavailable,
+    reason="real seatbelt semantics smoke needs macOS + sandbox-exec on PATH",
+)
 
 #: The cross-tool credential dirs the jail must deny read of (every one of
 #: these, on both lanes).
@@ -164,15 +186,22 @@ def test_build_jail_argv_linux_masks_every_cred_dir(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# macOS argv: sandbox-exec -f <profile> + profile shape + NO setsid
+# macOS argv: sandbox-exec -p <profile> + profile shape + NO setsid
 # ---------------------------------------------------------------------------
 
 
 def test_build_jail_argv_darwin_is_sandbox_exec_prefix(tmp_path: Path) -> None:
-    """The macOS prefix is ``sandbox-exec -f <profile>``."""
+    """The macOS prefix is ``sandbox-exec -p <profile>`` (inline-string form).
+
+    ``-p`` takes the seatbelt profile as an inline STRING argument; ``-f``
+    reads it from a FILE path and so would treat the inline profile text as
+    a missing filename, failing every real jailed spawn. This pins the
+    inline-profile form the seatbelt path actually intends.
+    """
     root, cwd = _repo_with_cwd(tmp_path)
     argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="darwin", home=tmp_path)
-    assert argv[:2] == ["sandbox-exec", "-f"]
+    assert argv[:2] == ["sandbox-exec", "-p"]
+    assert "-f" not in argv  # the file-path form is the defect, never emitted
     assert len(argv) == 3
     profile = argv[2]
     assert "(deny default)" in profile
@@ -188,6 +217,97 @@ def test_build_jail_argv_darwin_no_setsid(tmp_path: Path) -> None:
     argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="darwin", home=tmp_path)
     assert not any("setsid" in token for token in argv)
     assert not any("new-session" in token for token in argv)
+
+
+# ---------------------------------------------------------------------------
+# macOS semantics smoke: a REAL jailed spawn enforces the write policy
+# ---------------------------------------------------------------------------
+
+
+@_REQUIRE_SEATBELT
+def test_seatbelt_jail_executes_real_write_policy_on_macos(tmp_path: Path) -> None:
+    """A REAL jailed spawn enforces the seatbelt write policy on macOS.
+
+    This executes sandbox semantics rather than only constructing the
+    profile object: it builds the production ``sandbox-exec -p <profile>``
+    prefix via :func:`build_jail_argv`, then runs two tiny ``/bin/sh``
+    writes under it. The bar:
+
+    - a write to a path OUTSIDE the confined cwd is BLOCKED -- the spawn
+      exits non-zero and the target file is never created (the seatbelt
+      ``(deny default)`` floor with no write-allow for that subtree); and
+    - a write to a path INSIDE the confined cwd PASSES -- the spawn exits
+      zero and the file lands (the ``(allow file-write* (subpath <cwd>))``
+      carve-out).
+
+    Together these prove the ``-f`` -> ``-p`` flag fix actually reaches the
+    kernel's enforcement: with the old ``-f`` form ``sandbox-exec`` would
+    have read the inline profile text as a missing filename and failed both
+    spawns before any policy ran.
+    """
+    root, cwd = _repo_with_cwd(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+
+    prefix = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="darwin", home=home)
+    # Sanity: this is the inline-profile form the fix emits.
+    assert prefix[:2] == ["sandbox-exec", "-p"]
+
+    # A denied target OUTSIDE the writable cwd (and outside the profile's
+    # /private/tmp temp carve-outs, since tmp_path resolves elsewhere).
+    denied_dir = tmp_path / "outside"
+    denied_dir.mkdir()
+    denied_target = denied_dir / "blocked.txt"
+    allowed_target = cwd / "allowed.txt"
+
+    denied = subprocess.run(
+        [*prefix, "/bin/sh", "-c", f"echo nope > {denied_target}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert denied.returncode != 0, (
+        f"denied write should be blocked; got rc=0 stderr={denied.stderr!r}"
+    )
+    assert not denied_target.exists(), "blocked write must never create the file"
+
+    allowed = subprocess.run(
+        [*prefix, "/bin/sh", "-c", f"echo hi > {allowed_target}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert allowed.returncode == 0, (
+        f"allowed write under cwd should pass; rc={allowed.returncode} stderr={allowed.stderr!r}"
+    )
+    assert allowed_target.read_text().strip() == "hi"
+
+
+@_REQUIRE_SEATBELT
+def test_seatbelt_jail_old_file_flag_form_would_fail_to_run(tmp_path: Path) -> None:
+    """Regression guard: the old ``-f`` form fails the spawn before policy runs.
+
+    Feeding the SAME inline profile text under ``-f`` makes ``sandbox-exec``
+    look for a file named by the profile text -- it does not exist, so the
+    spawn exits non-zero and reports the profile text as a missing path. This
+    pins WHY the flag had to change: ``-f`` never reaches enforcement at all.
+    """
+    _root, cwd = _repo_with_cwd(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CLAUDE, home=home)
+    broken = subprocess.run(
+        ["sandbox-exec", "-f", profile, "/usr/bin/true"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert broken.returncode != 0
+    # ``-f`` resolved the profile text AS a path: depending on its length the
+    # OS reports either "No such file or directory" or "File name too long" --
+    # both prove the spawn failed before any seatbelt policy ran.
+    assert "No such file or directory" in broken.stderr or "File name too long" in broken.stderr
 
 
 def test_build_seatbelt_profile_denies_default_and_confines_writes(tmp_path: Path) -> None:

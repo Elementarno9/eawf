@@ -10,10 +10,13 @@ module builds the OS-native container around that child:
   the root, a single read-write bind of the validated cwd, ``--unshare-pid``
   with ``--die-with-parent`` (BOTH required -- bubblewrap issue #529), and
   tmpfs masks over the cross-tool credential dirs.
-- **macOS** -- a ``sandbox-exec -f <profile>`` argv PREFIX over a generated
+- **macOS** -- a ``sandbox-exec -p <profile>`` argv PREFIX over a generated
   seatbelt profile (``(deny default)`` + ``(allow process*)`` + a
   read allowlist that denies the cross-tool cred dirs + an
-  ``(allow file-write* (subpath CWD))`` clause).
+  ``(allow file-write* (subpath CWD))`` clause). The profile rides INLINE
+  in the argv, so the flag is ``-p`` (inline-profile-string form), NOT
+  ``-f`` (file-path form): ``-f`` reads a profile FROM a file and so treats
+  the inline text as a missing filename, failing the spawn before it runs.
 
 The module returns an argv PREFIX, never a launched process: the daemon
 stays the SOLE session-setter. The spawn keeps
@@ -326,7 +329,8 @@ def build_jail_argv(
 
     Returns:
         The argv prefix (``["bwrap", ...]`` on Linux, ``["sandbox-exec",
-        "-f", <profile-text>]`` on macOS).
+        "-p", <profile-text>]`` on macOS -- the inline-profile-string form,
+        since the profile rides in the argv rather than on disk).
 
     Raises:
         JailUnavailableOnWindowsError: On Windows -- no FS-jail parity.
@@ -355,7 +359,9 @@ def build_jail_argv(
             f"build_jail_argv runtime={runtime!r} platform={resolved_platform!r} "
             f"wrapper=sandbox-exec cwd={cwd.resolve(strict=False)!s}"
         )
-        return ["sandbox-exec", "-f", profile]
+        # Inline-profile form: ``-p`` takes the seatbelt source as a string
+        # argument. ``-f`` would read it as a FILE path and fail the spawn.
+        return ["sandbox-exec", "-p", profile]
 
     # Linux (the only remaining supported platform).
     argv = _build_linux_argv(cwd=cwd, runtime=runtime, home=home_dir)
