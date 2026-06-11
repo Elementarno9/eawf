@@ -80,6 +80,28 @@ Honest-empty is the COMMON path: a scope whose wave graph has no claim-ready
 wave renders the muted :data:`EMPTY_NOTICE` banner instead of an empty table
 that reads as a quiet "ready to go", like the evidence / trust / research modes'
 honest-empty surfaces; any blocked waves still render below it.
+
+The fleet cockpit vitals header (the N-lane evolution)
+------------------------------------------------------
+Above the ready/blocked split the pane renders a single **vitals header** line
+that reads the persisted :attr:`~eawf.kernel.state.models.State.fleet_run`
+(:class:`~eawf.kernel.state.models.FleetRun` + its
+:class:`~eawf.kernel.state.models.FleetCounters`) and surfaces, in one row, the
+run-state sigil, the ``N/M lanes`` occupancy, the ``frontier K left`` queue
+depth, the EU block-bar with its spend ratio, the ``$ used/cap`` spend, the
+``wv/hr`` throughput, and the fork badge. Every figure is read STRAIGHT off the
+persisted ``fleet_run`` -- the daemon loop is the only mutator and it persists
+the counters, throughput, and terminal reason, so the cockpit never recomputes a
+tally in the UI (the FA7 run-summary contract: surface what the daemon stored).
+Single-wave dispatch is just the ``N=1``, concurrency-1 case of the same header.
+
+Before the fleet is armed (``fleet_run`` is ``None`` or its run-state is
+``IDLE``) the header renders the honest-empty cockpit hero -- the pinned
+:data:`COCKPIT_IDLE` literal plus the ``a`` arm hint -- rather than a fabricated
+zeroed vitals row that would read as a primed-but-stalled run. The vitals
+refresh on the same daemon-push + mtime-poll backstop the rest of the TUI rides
+(the App's reactive ``state`` flows a fresh ``fleet_run`` into :meth:`_rebuild`),
+so the header never goes stale until a restart.
 """
 
 from __future__ import annotations
@@ -104,7 +126,7 @@ from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets import sigils
-from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
+from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, render_bar_markup
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
@@ -113,7 +135,7 @@ if TYPE_CHECKING:
 
     from textual.screen import ModalScreen
 
-    from eawf.kernel.state.models import State, Wave
+    from eawf.kernel.state.models import FleetRun, State, Wave
     from eawf.surfaces.tui.screens.overlays.arm import ArmSpec
     from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
     from eawf.surfaces.tui.widgets.eu_bar import RenderMode
@@ -134,6 +156,46 @@ BLOCKED_SECTION_ID: str = "autopilot-blocked-section"
 
 #: Id of the honest-empty notice shown when no wave is claim-ready.
 FRONTIER_EMPTY_ID: str = "autopilot-empty"
+
+#: Id of the fleet-cockpit vitals header row (above the frontier header). Carries
+#: the run-state sigil + lanes / frontier / EU / $ / throughput / fork vitals
+#: when a run is armed, or the honest-empty cockpit hero when it is not.
+COCKPIT_VITALS_ID: str = "autopilot-cockpit"
+
+#: Honest-empty cockpit hero shown before the fleet is armed (``fleet_run`` is
+#: ``None`` or ``IDLE``): a calm pinned literal rather than a fabricated zeroed
+#: vitals row that would read as a primed-but-stalled run. The ``a`` arm hint
+#: trails it so the operator reads the next move.
+COCKPIT_IDLE: str = "autopilot idle -- press a to arm the fleet drive"
+
+#: Caption labels in the vitals header, in render order. Bare ASCII so the row
+#: reads identically in both glyph columns.
+COCKPIT_LANES_LABEL: str = "lanes"
+COCKPIT_FRONTIER_LABEL: str = "frontier"
+COCKPIT_FRONTIER_SUFFIX: str = "left"
+COCKPIT_THROUGHPUT_LABEL: str = "wv/hr"
+
+#: Run-state sigil map: a :class:`~eawf.kernel.state.models.FleetRunState` value
+#: -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` whose shape
+#: reads the run-state honestly. DRAINING wears the RUNNING diamond (the loop is
+#: actively claiming), PAUSED / HALTED the CLAIMED half-circle (held, not
+#: progressing), DONE the CLOSED filled circle (terminal), IDLE the PENDING ring
+#: (armed-but-not-yet-draining). Reusing the lifecycle alphabet keeps the cockpit
+#: from inventing a glyph of its own. Keyed by the run-state string value so the
+#: lookup stays decoupled from importing the enum at module load.
+_RUN_STATE_SIGILS: dict[str, sigils.Sigil] = {
+    "idle": sigils.Sigil.PENDING,
+    "draining": sigils.Sigil.RUNNING,
+    "paused": sigils.Sigil.CLAIMED,
+    "halted": sigils.Sigil.CLAIMED,
+    "done": sigils.Sigil.CLOSED,
+}
+
+#: The fork badge shape the vitals header trails when the run has recorded a
+#: fork (a failed / re-planned lane): the FAILED cross so a forked run reads as
+#: needing attention, distinct from a clean drain. The ``(unicode, ascii)`` pair
+#: is resolved against the active glyph column.
+_FORK_BADGE: tuple[str, str] = sigils._LIFECYCLE[sigils.Sigil.FAILED]
 
 #: Id of the dispatch-result line (below the list); honest about whether the
 #: request was issued, accepted, or could not reach the daemon.
@@ -491,6 +553,72 @@ def render_frontier_header(
     )
 
 
+def _fork_badge(run: FleetRun, *, mode: RenderMode) -> str:
+    """Render the fork badge for *run*, or the empty string when fork-free.
+
+    Trails the vitals header with the FAILED-cross badge + the forked count when
+    the run has recorded at least one fork (a failed / re-planned lane, read off
+    :attr:`FleetCounters.forked`). A clean drain (zero forks) trails nothing, so
+    the badge only appears when it carries signal.
+
+    Args:
+        run: The persisted fleet run whose counters back the badge.
+        mode: The App's resolved render-mode label -- selects the glyph column.
+
+    Returns:
+        A content-markup badge fragment (leading space) when ``forked > 0``,
+        else the empty string.
+    """
+    forked = run.counters.forked
+    if forked <= 0:
+        return ""
+    glyph = escape_markup(_FORK_BADGE[1] if mode == sigils.ASCII_MODE else _FORK_BADGE[0])
+    return f" [$err]{glyph} {forked} fork{'' if forked == 1 else 's'}[/]"
+
+
+def render_cockpit_vitals(run: FleetRun | None, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Render the fleet-cockpit vitals header off the persisted *run*.
+
+    Reads the persisted :class:`~eawf.kernel.state.models.FleetRun` (its
+    run-state, lanes, frontier queue, and :class:`FleetCounters`) into a single
+    header row -- run-state sigil, ``N/M lanes`` occupancy, ``frontier K left``
+    queue depth, the EU block-bar with its spend ratio, ``$ used/cap`` spend,
+    ``wv/hr`` throughput, and the fork badge -- every figure read STRAIGHT off
+    *run* so the cockpit never recomputes a tally in the UI (the FA7 contract:
+    surface what the daemon stored). Before the fleet is armed (*run* is ``None``
+    or its run-state is ``IDLE``) the honest-empty cockpit hero
+    (:data:`COCKPIT_IDLE`) renders instead of a fabricated zeroed vitals row.
+
+    Args:
+        run: The persisted fleet run, or ``None`` when no run is armed.
+        mode: The App's resolved render-mode label -- selects the glyph column
+            for the run-state sigil, the EU bar, and the fork badge.
+
+    Returns:
+        A content-markup vitals header string, or the honest-empty cockpit hero
+        when no run is armed.
+    """
+    if run is None or run.run_state.value == "idle":
+        return f"[$muted]{COCKPIT_IDLE}[/]"
+    sigil = escape_markup(sigils.glyph(_RUN_STATE_SIGILS[run.run_state.value], mode=mode))
+    lanes = f"{len(run.lanes)}/{run.concurrency} {COCKPIT_LANES_LABEL}"
+    frontier = f"{COCKPIT_FRONTIER_LABEL} {len(run.frontier)} {COCKPIT_FRONTIER_SUFFIX}"
+    eu_bar = render_bar_markup(run.counters.spent_eu, run.eu_cap or 0.0, mode=mode)
+    spend = f"$ {run.counters.spent_usd:.2f}/{run.usd_cap:.2f}" if run.usd_cap else "$ uncapped"
+    runtime = escape_markup(sigils.chrome("runtime", mode=mode))
+    throughput = (
+        f"{run.throughput:.1f} {COCKPIT_THROUGHPUT_LABEL}"
+        if run.throughput
+        else f"-- {COCKPIT_THROUGHPUT_LABEL}"
+    )
+    return (
+        f"[$accent]{sigil} {escape_markup(run.run_state.value)}[/] "
+        f"[$ok]{lanes}[/]  [$muted]{frontier}[/]  "
+        f"EU {eu_bar}  [$muted]{escape_markup(spend)}[/]  "
+        f"[$muted]{runtime} {throughput}[/]{_fork_badge(run, mode=mode)}"
+    )
+
+
 def render_section_caption(caption: str, count: int) -> str:
     """Render a ready/blocked band caption naming the band and its row count.
 
@@ -634,6 +762,10 @@ class AutopilotModeScreen(ScopeScreen):
         height: 1fr;
         padding: 1 2;
     }
+    AutopilotModeScreen #autopilot-cockpit {
+        height: auto;
+        margin-bottom: 1;
+    }
     AutopilotModeScreen #autopilot-header {
         height: auto;
         margin-bottom: 1;
@@ -705,10 +837,12 @@ class AutopilotModeScreen(ScopeScreen):
         self._claim_batch: tuple[str, ...] = ()
 
     def compose_body(self) -> ComposeResult:
-        """Yield the frontier header, the (empty) ready/blocked list, and the result.
+        """Yield the cockpit vitals, the frontier header, the list, and the result.
 
-        The header leads with the dispatch chrome arrow; the list container
-        starts empty and :meth:`on_mount` populates it through
+        The vitals header leads (the run-state sigil + lanes / frontier / EU / $
+        / throughput / fork vitals when armed, or the honest-empty cockpit hero
+        when not); the frontier header follows with the dispatch chrome arrow;
+        the list container starts empty and :meth:`on_mount` populates it through
         :meth:`_render_rows` (single-sourced); the result line carries the idle
         dispatch surface until ``d`` is pressed.
         """
@@ -716,6 +850,10 @@ class AutopilotModeScreen(ScopeScreen):
         self._blocked = self._current_blocked()
         mode = self._render_mode()
         with Vertical(id="autopilot-body"):
+            yield Static(
+                render_cockpit_vitals(self._current_fleet_run(), mode=mode),
+                id=COCKPIT_VITALS_ID,
+            )
             yield Static(
                 render_frontier_header(self._rows, self._blocked, mode=mode),
                 id=FRONTIER_HEADER_ID,
@@ -1230,10 +1368,16 @@ class AutopilotModeScreen(ScopeScreen):
         self._blocked = self._current_blocked()
         self._clamp_selection()
         self._render_rows()
+        mode = self._render_mode()
+        cockpit = self.query(f"#{COCKPIT_VITALS_ID}")
+        if cockpit:
+            cockpit.first(Static).update(
+                render_cockpit_vitals(self._current_fleet_run(), mode=mode)
+            )
         header = self.query(f"#{FRONTIER_HEADER_ID}")
         if header:
             header.first(Static).update(
-                render_frontier_header(self._rows, self._blocked, mode=self._render_mode())
+                render_frontier_header(self._rows, self._blocked, mode=mode)
             )
         logger.info(
             f"autopilot_rebuild ready={len(self._rows)} blocked={len(self._blocked)} "
@@ -1255,7 +1399,12 @@ class AutopilotModeScreen(ScopeScreen):
         container.remove_children()
         mode = self._render_mode()
         if not self._rows:
-            container.mount(Static(EMPTY_NOTICE, id=FRONTIER_EMPTY_ID, classes="autopilot-empty"))
+            # The honest-empty notice carries no id on a (re)mount: Textual defers
+            # the remove_children() above, so re-using a fixed id here would race a
+            # DuplicateIds when a rapid second rebuild (a live state push landing
+            # before the first remove flushed) re-mounts it. The class is enough
+            # for styling + the test probe.
+            container.mount(Static(EMPTY_NOTICE, classes="autopilot-empty"))
         else:
             container.mount(
                 Static(
@@ -1368,6 +1517,18 @@ class AutopilotModeScreen(ScopeScreen):
         app_state = getattr(self.app, "state", None)
         return app_state if isinstance(app_state, State) else None
 
+    def _current_fleet_run(self) -> FleetRun | None:
+        """Return the bound state's persisted fleet run, or ``None`` when unarmed.
+
+        Reads :attr:`~eawf.kernel.state.models.State.fleet_run` off the bound
+        state -- the daemon-owned auto-drain loop persists it, so the cockpit
+        vitals header reads it straight rather than recomputing any tally. An
+        unbound state (fresh / user scope) or a state written before the field
+        existed reads as no armed run.
+        """
+        state = self._current_state()
+        return state.fleet_run if state is not None else None
+
     def _daemon_available(self) -> bool:
         """Return whether the App reports a reachable daemon socket.
 
@@ -1391,6 +1552,8 @@ __all__ = [
     "BLOCKED_CAPTION",
     "BLOCKED_ROW_CLASS",
     "BLOCKED_SECTION_ID",
+    "COCKPIT_IDLE",
+    "COCKPIT_VITALS_ID",
     "DISPATCH_FLAVOUR",
     "DISPATCH_IDLE",
     "DISPATCH_NO_DAEMON",
@@ -1423,6 +1586,7 @@ __all__ = [
     "build_frontier_items",
     "ready_rows",
     "render_blocked_row",
+    "render_cockpit_vitals",
     "render_frontier_header",
     "render_ready_row",
     "render_section_caption",

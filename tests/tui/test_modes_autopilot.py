@@ -45,6 +45,10 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.models import (
     CurrentPointers,
+    FleetCounters,
+    FleetLane,
+    FleetRun,
+    FleetRunState,
     Project,
     State,
     Wave,
@@ -52,6 +56,8 @@ from eawf.kernel.state.models import (
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.autopilot import (
     BATCH_NO_DAEMON,
+    COCKPIT_IDLE,
+    COCKPIT_VITALS_ID,
     DISPATCH_IDLE,
     DISPATCH_NO_DAEMON,
     DISPATCH_RESULT_ID,
@@ -70,6 +76,7 @@ from eawf.surfaces.tui.modes.autopilot import (
     ReadyWaveRow,
     build_frontier_items,
     ready_rows,
+    render_cockpit_vitals,
     render_frontier_header,
     render_ready_row,
 )
@@ -127,11 +134,13 @@ def _ready_row(wave_id: str = "P01-I01-W02", *, iter_id: str = "P01-I01") -> Rea
     return ReadyWaveRow(wave_id=wave_id, iter_id=iter_id, title=f"Wave {wave_id}")
 
 
-def _state(*, waves: dict[str, Wave] | None = None) -> State:
-    """Build a minimal repo state, optionally with a wave graph."""
+def _state(
+    *, waves: dict[str, Wave] | None = None, fleet_run: FleetRun | None = None
+) -> State:
+    """Build a minimal repo state, optionally with a wave graph + a fleet run."""
     return State.model_validate(
         {
-            "schema_version": "1.3",
+            "schema_version": "1.10" if fleet_run is not None else "1.3",
             "scope_kind": ScopeKind.REPO.value,
             "urn": "urn:eawf:v1:state:QR",
             "updated_at": _T0.isoformat(),
@@ -146,6 +155,7 @@ def _state(*, waves: dict[str, Wave] | None = None) -> State:
             ).model_dump(mode="json"),
             "current": CurrentPointers(project_code="QR").model_dump(mode="json"),
             "workspace": None,
+            "fleet_run": fleet_run.model_dump(mode="json") if fleet_run is not None else None,
             "phases": {},
             "iters": {},
             "waves": (
@@ -158,6 +168,50 @@ def _state(*, waves: dict[str, Wave] | None = None) -> State:
             "plugins": {},
             "indexes": {},
         }
+    )
+
+
+def _draining_run(
+    *,
+    concurrency: int = 4,
+    lanes: int = 2,
+    frontier: int = 3,
+    spent_eu: float = 6.0,
+    eu_cap: float = 10.0,
+    spent_usd: float = 4.50,
+    usd_cap: float = 8.0,
+    throughput: float | None = 2.5,
+    forked: int = 0,
+) -> FleetRun:
+    """Build a DRAINING :class:`FleetRun` with the vitals the cockpit reads.
+
+    Every figure the cockpit header surfaces (lanes / frontier / EU / $ /
+    throughput / fork) is seeded here so the assertions read off a persisted
+    run rather than a recomputed tally.
+    """
+    lane_rows = {
+        f"P01-I01-W{idx + 2:02d}": FleetLane(
+            wave_id=f"P01-I01-W{idx + 2:02d}", attempt=1, pgid=1000 + idx, dispatched_at=_T0
+        )
+        for idx in range(lanes)
+    }
+    return FleetRun(
+        run_state=FleetRunState.DRAINING,
+        concurrency=concurrency,
+        frontier=[f"P01-I02-W{idx + 10:02d}" for idx in range(frontier)],
+        lanes=lane_rows,
+        counters=FleetCounters(
+            claimed=lanes + frontier,
+            dispatched=lanes,
+            closed=4,
+            forked=forked,
+            spent_eu=spent_eu,
+            spent_usd=spent_usd,
+        ),
+        eu_cap=eu_cap,
+        usd_cap=usd_cap,
+        throughput=throughput,
+        armed_at=_T0,
     )
 
 
@@ -285,6 +339,95 @@ def test_render_ready_row_surfaces_wave_id_iter_and_title() -> None:
     assert "P01-I01-W02" in body
     assert "P01-I01" in body
     assert "Wave P01-I01-W02" in body
+
+
+# --------------------------------------------------------------------------
+# render_cockpit_vitals -- the FA2 N-lane fleet cockpit vitals header (W02)
+# --------------------------------------------------------------------------
+
+
+def test_render_cockpit_vitals_none_run_shows_honest_idle_hero() -> None:
+    """No armed run renders the honest-empty cockpit hero, not a zeroed vitals row."""
+    body = render_cockpit_vitals(None, mode="unicode")
+    assert COCKPIT_IDLE in body
+    # No fabricated lanes / EU vitals leak into the honest-empty hero.
+    assert "lanes" not in body
+    assert "frontier" not in body
+
+
+def test_render_cockpit_vitals_idle_run_shows_honest_idle_hero() -> None:
+    """An armed-but-IDLE run renders the honest-empty hero (not yet draining)."""
+    run = FleetRun(run_state=FleetRunState.IDLE, armed_at=_T0)
+    body = render_cockpit_vitals(run, mode="unicode")
+    assert COCKPIT_IDLE in body
+    assert "lanes" not in body
+
+
+def test_render_cockpit_vitals_draining_surfaces_every_vital_off_persisted_run() -> None:
+    """A DRAINING run surfaces lanes / frontier / EU ratio / $ / throughput vitals.
+
+    The load-bearing C1 assertion: every figure is read STRAIGHT off the
+    persisted :class:`FleetRun` + :class:`FleetCounters` -- the ``N/M lanes``
+    occupancy, the ``frontier K left`` queue depth, the EU spend ratio
+    (``6/10`` EU is 60 %), the ``$ used/cap`` spend, and the ``wv/hr``
+    throughput -- never recomputed in the UI.
+    """
+    run = _draining_run(
+        concurrency=4, lanes=2, frontier=3, spent_eu=6.0, eu_cap=10.0, spent_usd=4.5, usd_cap=8.0
+    )
+    body = render_cockpit_vitals(run, mode="unicode")
+    assert "draining" in body
+    assert "2/4 lanes" in body  # N/M lanes off len(lanes) / concurrency
+    assert "frontier 3 left" in body  # K left off len(frontier)
+    assert "60%" in body  # the EU block-bar ratio off spent_eu / eu_cap
+    assert "$ 4.50/8.00" in body  # $ used/cap off the counters + usd_cap
+    assert "2.5 wv/hr" in body  # throughput off the persisted FleetRun.throughput
+
+
+def test_render_cockpit_vitals_run_state_sigil_matches_run_state() -> None:
+    """The vitals header leads with the run-state sigil for the run's state."""
+    from eawf.surfaces.tui.widgets import sigils
+
+    run = _draining_run()
+    body = render_cockpit_vitals(run, mode="unicode")
+    # DRAINING reuses the RUNNING lifecycle diamond (the loop is claiming).
+    assert sigils.glyph(sigils.Sigil.RUNNING, mode="unicode") in body
+
+
+def test_render_cockpit_vitals_fork_badge_only_when_forked() -> None:
+    """The fork badge trails the header only when the run recorded a fork."""
+    from eawf.surfaces.tui.widgets import sigils
+
+    cross = sigils.glyph(sigils.Sigil.FAILED, mode="unicode")
+    clean = render_cockpit_vitals(_draining_run(forked=0), mode="unicode")
+    forked = render_cockpit_vitals(_draining_run(forked=2), mode="unicode")
+    assert cross not in clean  # a clean drain trails no fork badge
+    assert cross in forked  # a forked run trails the FAILED-cross badge
+    assert "2 forks" in forked
+
+
+def test_render_cockpit_vitals_uncapped_budget_reads_honestly() -> None:
+    """An uncapped run reads ``uncapped`` rather than a fabricated cap figure."""
+    run = FleetRun(
+        run_state=FleetRunState.DRAINING,
+        concurrency=2,
+        frontier=[],
+        counters=FleetCounters(spent_usd=1.0),
+        throughput=None,
+        armed_at=_T0,
+    )
+    body = render_cockpit_vitals(run, mode="unicode")
+    assert "uncapped" in body  # no usd_cap -> honest uncapped, no faked figure
+    assert "-- wv/hr" in body  # no throughput yet -> honest dash, never a faked 0
+
+
+def test_render_cockpit_vitals_ascii_mode_uses_ascii_sigil() -> None:
+    """ASCII render mode resolves the run-state sigil in the ASCII column."""
+    from eawf.surfaces.tui.widgets import sigils
+
+    run = _draining_run()
+    body = render_cockpit_vitals(run, mode="ascii")
+    assert sigils.glyph(sigils.Sigil.RUNNING, mode="ascii") in body  # ascii "*"
 
 
 # --------------------------------------------------------------------------
@@ -544,6 +687,94 @@ def test_autopilot_pane_keeps_chassis_brand(tmp_path: Path) -> None:
             header_row = frame.splitlines()[0]
             assert BRAND in header_row
             assert "Autopilot" in header_row
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Mounted cockpit vitals -- DRAINING header, idle hero, live push refresh (W02)
+# --------------------------------------------------------------------------
+
+
+def test_autopilot_cockpit_idle_hero_when_unarmed(tmp_path: Path) -> None:
+    """A scope with no armed fleet run renders the honest-empty cockpit hero.
+
+    The C2 assertion: before arming, the cockpit vitals row shows the pinned
+    :data:`COCKPIT_IDLE` literal + arm hint rather than a fabricated vitals row.
+    """
+    state_path = _write_state(tmp_path, _state())  # no fleet_run
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            vitals = pane.query_one(f"#{COCKPIT_VITALS_ID}")
+            assert COCKPIT_IDLE in str(vitals.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_cockpit_draining_surfaces_persisted_vitals(tmp_path: Path) -> None:
+    """A mounted DRAINING run renders the vitals read off the persisted fleet_run.
+
+    The C1 assertion at mount: lanes / frontier / EU ratio / $ / throughput all
+    surface in the cockpit header straight off ``State.fleet_run`` -- never a
+    recomputed tally in the UI.
+    """
+    state = _state(waves=_frontier_state().waves, fleet_run=_draining_run())
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            rendered = str(pane.query_one(f"#{COCKPIT_VITALS_ID}").render())  # type: ignore[attr-defined]
+            assert "draining" in rendered
+            assert "2/4 lanes" in rendered
+            assert "frontier 3 left" in rendered
+            assert "2.5 wv/hr" in rendered
+            assert COCKPIT_IDLE not in rendered  # the armed run is not the idle hero
+
+    asyncio.run(body())
+
+
+def test_autopilot_cockpit_refreshes_on_state_push(tmp_path: Path) -> None:
+    """A fresh fleet_run pushed onto the App's reactive state refreshes the vitals.
+
+    The C3 assertion: the cockpit rides the same daemon-push + poll-backstop seam
+    the rest of the TUI does -- a new ``State`` flowed onto ``app.state`` (the
+    push path the binding marshals; the mtime-poll feeds the same reactive)
+    refreshes the vitals header, so it never goes stale until a restart. Mounts
+    on an unarmed (idle-hero) scope, then pushes a DRAINING state and asserts the
+    header flipped to the live vitals.
+    """
+    state_path = _write_state(tmp_path, _state())  # unarmed at mount
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            vitals = pane.query_one(f"#{COCKPIT_VITALS_ID}")
+            assert COCKPIT_IDLE in str(vitals.render())  # type: ignore[attr-defined]
+            # Push a fresh DRAINING state onto the App reactive (the live seam).
+            app.state = _state(fleet_run=_draining_run())
+            await settle_screen(pilot)
+            refreshed = str(vitals.render())  # type: ignore[attr-defined]
+            assert "draining" in refreshed  # the header refreshed off the push
+            assert "2/4 lanes" in refreshed
+            assert COCKPIT_IDLE not in refreshed
 
     asyncio.run(body())
 

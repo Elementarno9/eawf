@@ -1,5 +1,7 @@
  Eä  repo ❯ QR ❯ Autopilot    ≈ idle    HH:MM UTC
 
+  autopilot idle -- press a to arm the fleet drive
+
   ❯ ready frontier 1 wave claimable + 2 blocked
 
   ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -10,8 +12,6 @@
   │ blocked (2)                                                                                                      │
   │ P01-I01-W03 P01-I01 Held by sibling <- P01-I01-W02                                                               │
   │ P01-I01-W04 P01-I01 Waiting on open dep <- P01-I01-W02                                                           │
-  │                                                                                                                  │
-  │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │
   │                                                                                                                  │

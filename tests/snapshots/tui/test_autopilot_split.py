@@ -40,6 +40,7 @@ from eawf.surfaces.tui.modes.autopilot import (
     BLOCKED_BY_MARKER,
     BLOCKED_CAPTION,
     BLOCKED_ROW_CLASS,
+    COCKPIT_IDLE,
     DISPATCH_FLAVOUR,
     DISPATCH_IDLE,
     DISPATCH_RESULT_ID,
@@ -299,6 +300,9 @@ def test_autopilot_split_snapshot(tmp_path: Path) -> None:
             screen = app.screen
             assert isinstance(screen, AutopilotModeScreen)
             frame = normalize_snapshot(capture_screen_text(app))
+            # The split state arms no fleet run, so the cockpit vitals header
+            # renders the honest-empty idle hero (the pinned spec literal).
+            assert COCKPIT_IDLE in frame
             # The ready band lists the lone ready wave with the dispatch arrow.
             assert READY_CAPTION in frame
             assert "P01-I01-W02" in frame
