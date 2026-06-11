@@ -67,6 +67,7 @@ from eawf.platform.lint._conditional import changed_files
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
+from eawf.workflow.audit_dsl.kinds.jury_calibrated import JURY_CALIBRATED_KIND
 from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
 from eawf.workflow.audit_dsl.kinds.svg_well_formed import check_svg_well_formed
@@ -518,7 +519,13 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
 #: ``backlog_resolution`` reads the wave-linked backlog items off state
 #: and is driven from the close-readiness compute when ``verify.enforce``
 #: is active (see :func:`eawf.workflow.verify.readiness.compute`).
-CLOSE_GATE_KINDS: frozenset[str] = frozenset({BACKLOG_RESOLUTION_KIND})
+#:
+#: ``jury_calibrated`` reads the I09 jury-validation metrics
+#: (:class:`eawf.observability.eval.jury_validation.JuryValidationReport`)
+#: plus the scope's Oracle-Determinism-Ratio and gates the cross-vendor
+#: jury's blocking authority on them (see
+#: :func:`eawf.workflow.audit_dsl.kinds.jury_calibrated.check_jury_calibrated`).
+CLOSE_GATE_KINDS: frozenset[str] = frozenset({BACKLOG_RESOLUTION_KIND, JURY_CALIBRATED_KIND})
 
 
 def registered_audit_dsl_kinds() -> frozenset[str]:
