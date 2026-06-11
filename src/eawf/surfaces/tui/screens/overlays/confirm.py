@@ -63,7 +63,7 @@ class ConfirmModal(ModalScreen[bool]):
         min-width: 40;
         max-width: 80;
         height: auto;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

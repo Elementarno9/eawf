@@ -828,7 +828,7 @@ class WatchGrid(Widget):
     }
     WatchGrid .watch-tile {
         height: 1fr;
-        border: solid $accent;
+        border: round $accent;
         padding: 0 1;
     }
     WatchGrid .watch-tile-header {
@@ -1315,7 +1315,7 @@ class LaneGrid(Widget):
     }
     LaneGrid #watch-lane-grid {
         height: 1fr;
-        border: solid $accent;
+        border: round $accent;
     }
     LaneGrid .watch-lane-row {
         height: auto;
@@ -1446,7 +1446,7 @@ class VerdictRollupPane(Widget):
     VerdictRollupPane {
         height: auto;
         max-height: 8;
-        border: solid $accent;
+        border: round $accent;
         margin-bottom: 1;
         padding: 0 1;
     }
@@ -1522,7 +1522,7 @@ class AgentWatchModeScreen(ScopeScreen):
     }
     AgentWatchModeScreen #watch-list {
         height: 1fr;
-        border: solid $accent;
+        border: round $accent;
     }
     AgentWatchModeScreen #watch-output {
         height: 1fr;

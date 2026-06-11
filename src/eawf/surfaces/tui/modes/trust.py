@@ -701,13 +701,13 @@ class TrustModeScreen(ScopeScreen):
         padding: 1 2;
     }
     TrustModeScreen .trust-section {
-        border: solid $accent;
+        border: round $accent;
         padding: 0 1;
         margin-bottom: 1;
         height: auto;
     }
     TrustModeScreen #trust-section-overview.-starved {
-        border: solid $warn;
+        border: round $warn;
     }
     """
 

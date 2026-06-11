@@ -801,10 +801,7 @@ def render_lane_cell(row: LaneCellRow, *, mode: RenderMode = DEFAULT_RENDER_MODE
         badge = _LANE_FORK_BADGE[1] if mode == sigils.ASCII_MODE else _LANE_FORK_BADGE[0]
         glyph = escape_markup(badge)
         return f"[$err]{glyph} {wave} {FORK_ESCALATION_LABEL}[/]"
-    return (
-        f"[$accent]{wave}[/] "
-        f"[$muted]{REPAIR_LABEL} {row.attempt}/{REPAIR_BUDGET}[/]"
-    )
+    return f"[$accent]{wave}[/] [$muted]{REPAIR_LABEL} {row.attempt}/{REPAIR_BUDGET}[/]"
 
 
 def render_blocked_row(row: BlockedWaveRow) -> str:
@@ -915,7 +912,7 @@ class AutopilotModeScreen(ScopeScreen):
     }
     AutopilotModeScreen #autopilot-list {
         height: 1fr;
-        border: solid $accent;
+        border: round $accent;
     }
     AutopilotModeScreen .autopilot-row {
         height: auto;

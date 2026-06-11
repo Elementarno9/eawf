@@ -141,7 +141,7 @@ class CalibrationDrillModal(ModalScreen[None]):
         max-width: 70;
         height: auto;
         max-height: 80%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

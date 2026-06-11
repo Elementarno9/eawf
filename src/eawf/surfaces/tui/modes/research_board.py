@@ -712,7 +712,7 @@ class ComposeCampaignModal(ModalScreen["CampaignDraft | None"]):
         width: 70%;
         max-width: 90;
         height: auto;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }
@@ -827,7 +827,7 @@ class OperatorNoteModal(ModalScreen["str | None"]):
         width: 70%;
         max-width: 90;
         height: auto;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }
@@ -1690,7 +1690,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         height: 1fr;
     }
     ResearchBoardModeScreen .research-pane {
-        border: solid $accent;
+        border: round $accent;
         padding: 0 1;
         height: 1fr;
     }
@@ -1709,7 +1709,7 @@ class ResearchBoardModeScreen(ScopeScreen):
     }
     ResearchBoardModeScreen #research-drawer {
         height: auto;
-        border: solid $warn;
+        border: round $warn;
         padding: 0 1;
         margin-top: 1;
     }

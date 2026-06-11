@@ -358,7 +358,7 @@ class MetricsModal(ModalScreen[None]):
     MetricsModal > #metrics-card {
         width: 90%;
         height: 80%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }
@@ -374,12 +374,12 @@ class MetricsModal(ModalScreen[None]):
         height: 1fr;
     }
     MetricsModal .metric-tile {
-        border: solid $accent;
+        border: round $accent;
         padding: 0 1;
         height: 1fr;
     }
     MetricsModal .metric-tile.-focused {
-        border: solid $primary;
+        border: round $primary;
     }
     MetricsModal .metrics-honest {
         color: $text-muted;
@@ -652,7 +652,7 @@ class CalibrationDrillModal(ModalScreen[None]):
         width: 80%;
         max-width: 120;
         height: 75%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }
@@ -719,7 +719,7 @@ class VarianceDrillModal(ModalScreen[None]):
         width: 84%;
         max-width: 120;
         height: 75%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

@@ -150,7 +150,7 @@ class ConfigModal(ModalScreen[None]):
     ConfigModal > #config-box {
         width: 90%;
         height: 85%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

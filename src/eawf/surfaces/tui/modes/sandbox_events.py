@@ -320,7 +320,7 @@ class SandboxEventsModeScreen(ScopeScreen):
     }
     SandboxEventsModeScreen #sandbox-events-list {
         height: 1fr;
-        border: solid $accent;
+        border: round $accent;
     }
     SandboxEventsModeScreen .sandbox-events-empty {
         color: $text-muted;

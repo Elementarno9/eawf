@@ -88,7 +88,7 @@ class EditFieldModal(ModalScreen[Any]):
         width: 70%;
         max-width: 90;
         height: auto;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

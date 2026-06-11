@@ -1141,7 +1141,7 @@ class DetailModal(ModalScreen[None]):
         max-width: 120;
         height: auto;
         max-height: 85%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

@@ -301,7 +301,7 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
         min-width: 64;
         max-width: 90;
         height: auto;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

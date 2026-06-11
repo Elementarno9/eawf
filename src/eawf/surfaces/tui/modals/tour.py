@@ -122,7 +122,7 @@ class TourModal(ModalScreen[None]):
         max-width: 80;
         height: auto;
         max-height: 80%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

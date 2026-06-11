@@ -154,6 +154,7 @@ def phase_bar_cells(width: int) -> int:
         return _NARROW_BAR_CELLS
     return _WIDE_BAR_CELLS
 
+
 #: Cell text rendered for a repo whose git probe could not resolve
 #: (timeout / missing binary / non-git path). The substring ``git?`` is
 #: part of the ``GIT_UNAVAILABLE`` contract the host + tests assert on.
@@ -1372,9 +1373,7 @@ class WorkspaceTable(DataTable[str]):
         """
         return {
             "repo": _repo_cell_markup(row, mode=self.render_mode, palette=palette),
-            "phase": _phase_cell(
-                row, mode=self.render_mode, palette=palette, bar_cells=bar_cells
-            ),
+            "phase": _phase_cell(row, mode=self.render_mode, palette=palette, bar_cells=bar_cells),
             "eu": _eu_cell(row, mode=self.render_mode, palette=palette),
             "git": self._git_cells.get(row.code, GIT_PENDING_CELL),
             "pr": _pr_cell(row.open_prs),

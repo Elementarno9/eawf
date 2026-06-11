@@ -141,7 +141,7 @@ class AuditFailedModal(ModalScreen[str]):
         max-width: 100;
         height: auto;
         max-height: 80%;
-        border: solid $error;
+        border: round $error;
         background: $surface;
         padding: 1 2;
     }

@@ -159,7 +159,7 @@ class PlanPreviewModal(ModalScreen[str]):
         max-width: 110;
         height: auto;
         max-height: 85%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

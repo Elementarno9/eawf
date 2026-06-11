@@ -133,7 +133,7 @@ class EvidenceDrillModal(ModalScreen[None]):
         max-width: 90;
         height: auto;
         max-height: 80%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

@@ -242,7 +242,7 @@ class CrossRepoPrModal(ModalScreen[None]):
         width: 80%;
         max-width: 120;
         height: 70%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

@@ -330,7 +330,7 @@ class EventsModal(ModalScreen[None]):
     EventsModal > #events-card {
         width: 90%;
         height: 80%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

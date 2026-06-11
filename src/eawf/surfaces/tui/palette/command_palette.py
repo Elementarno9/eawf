@@ -192,7 +192,7 @@ class CommandPalette(ModalScreen[None]):
         max-width: 100;
         height: auto;
         margin-top: 2;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 0 1;
     }

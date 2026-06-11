@@ -392,7 +392,7 @@ class BriefViewerScreen(ModalScreen[None]):
     BriefViewerScreen #research-brief-viewer {
         width: 100%;
         height: 1fr;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
     }
     """

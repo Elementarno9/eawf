@@ -300,7 +300,7 @@ class HelpScreen(ModalScreen[None]):
     HelpScreen > #help-container {
         width: 90%;
         height: 90%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

@@ -78,9 +78,7 @@ DEFAULT_VERBOSITY: ToastVerbosity = "important"
 #: ``all`` (none yet — the verbose bands land in later waves). ``failure`` is
 #: the distinct fleet-lane-failed class — a gate-fail / agent-error /
 #: dispatch-fail forked a lane, read off the run's rising ``failed`` tally.
-ToastCategory = Literal[
-    "wave_close", "audit_verdict", "needs_user", "failure", "summary"
-]
+ToastCategory = Literal["wave_close", "audit_verdict", "needs_user", "failure", "summary"]
 
 #: Textual notification severities the rack uses. Wave close / audit pass read
 #: as ``information``; a major / minor audit verdict and the needs-user raise

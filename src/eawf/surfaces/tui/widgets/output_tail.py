@@ -63,7 +63,7 @@ class OutputTail(VerticalScroll):
     DEFAULT_CSS: ClassVar[str] = """
     OutputTail {
         height: 1fr;
-        border: solid $accent;
+        border: round $accent;
         padding: 0 1;
     }
     OutputTail .output-tail-row {

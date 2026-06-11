@@ -280,7 +280,7 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         max-width: 108;
         height: auto;
         max-height: 84%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }

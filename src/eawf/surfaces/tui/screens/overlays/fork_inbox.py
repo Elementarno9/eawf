@@ -302,7 +302,7 @@ class ForkInboxModal(ModalScreen[None]):
         max-width: 96;
         height: auto;
         max-height: 90%;
-        border: solid $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }
@@ -483,9 +483,7 @@ class ForkInboxModal(ModalScreen[None]):
         if fork is None:
             return
         resolution = _RESOLUTION_BY_KEY[key]
-        result_line = issue_resolve(
-            fork, resolution, daemon_available=self._daemon_available()
-        )
+        result_line = issue_resolve(fork, resolution, daemon_available=self._daemon_available())
         self._set_result(result_line)
         logger.info(
             f"fork_inbox resolved wave={fork.wave_id} attempt={fork.attempt} "
@@ -507,7 +505,7 @@ class ForkInboxModal(ModalScreen[None]):
         remaining = tuple(item for item in self._forks if item is not fork)
         self._forks = remaining
         if not remaining:
-            logger.info("fork_inbox drained -- dismissing")
+            logger.info("_drop_resolved drained=True remaining=0")
             self.dismiss(None)
             return
         self.index = min(self.index, len(remaining) - 1)
