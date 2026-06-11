@@ -46,7 +46,7 @@ from typing import ClassVar
 from rich.markup import escape
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Static
 
@@ -699,6 +699,12 @@ class TrustModeScreen(ScopeScreen):
     TrustModeScreen #trust-body {
         height: 1fr;
         padding: 1 2;
+        layout: horizontal;
+    }
+    TrustModeScreen .trust-column {
+        width: 1fr;
+        height: 1fr;
+        padding-right: 1;
     }
     TrustModeScreen .trust-section {
         border: round $accent;
@@ -790,15 +796,18 @@ class TrustModeScreen(ScopeScreen):
         """Yield the scrollable section column for the trust scorecard."""
         scorecard = self._current_scorecard()
         self.starved = scorecard is not None and is_data_starved(scorecard)
-        with VerticalScroll(id="trust-body"):
-            for section_id, heading in self.SECTIONS:
-                section = Static(
-                    self._section_body(section_id, scorecard),
-                    id=section_id,
-                    classes="trust-section",
-                )
-                section.border_title = heading
-                yield section
+        half = (len(self.SECTIONS) + 1) // 2
+        with Horizontal(id="trust-body"):
+            for column in (self.SECTIONS[:half], self.SECTIONS[half:]):
+                with VerticalScroll(classes="trust-column"):
+                    for section_id, heading in column:
+                        section = Static(
+                            self._section_body(section_id, scorecard),
+                            id=section_id,
+                            classes="trust-section",
+                        )
+                        section.border_title = heading
+                        yield section
 
     def on_mount(self) -> None:
         """Apply footer hints, arm the refresh seam, and tint the overview."""
