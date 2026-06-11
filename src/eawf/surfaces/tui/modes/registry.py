@@ -9,7 +9,7 @@ multi-repo / QoL) can build in parallel without colliding on a central
 dict in ``app.py``.
 
 Mode vs scope are orthogonal axes. A **mode** is a content surface
-(Home / Trust / Doctor / ...), switched with digit keys ``1``..``8``. The
+(Home / Trust / Doctor / ...), switched with digit keys ``1``..``9``. The
 **scope** (repo / workspace / user, switched with ``w`` / ``r`` / ``u``)
 stays an in-mode operation: the Home mode renders the resolved scope
 screen, and the scope switch swaps that screen within the Home mode's own
@@ -73,7 +73,7 @@ class ModeSpec:
             :attr:`textual.app.App.MODES` and the value
             ``switch_mode`` is called with. Also the breadcrumb segment
             and the ``/<name>`` palette-verb stem.
-        digit: The digit key (``"1"``..``"8"``) that switches to this
+        digit: The digit key (``"1"``..``"9"``) that switches to this
             mode. Digits are the mode axis only; arrows stay primary
             intra-pane per the keymap convention.
         title: The human-readable mode title shown in the breadcrumb and
@@ -272,8 +272,29 @@ def _doctor_factory(app: EaApp) -> Screen[None]:
     return doctor_mode_factory(app)
 
 
+def _sandbox_events_factory(_app: EaApp) -> Screen[None]:
+    """Build the sandbox-enforcement timeline pane (digit 9).
+
+    Lazy-imports
+    :class:`~eawf.surfaces.tui.modes.sandbox_events.SandboxEventsModeScreen`
+    (which imports the scope chassis) so the registry stays import-cycle-free,
+    the same deferral the sibling factories use. The pane reads the on-disk
+    event store for the floor's persisted enforcement rows on mount, so it
+    needs no per-instance launch state and ignores the app argument.
+
+    Args:
+        _app: The live app (unused; the screen reads ``self.app`` on mount).
+
+    Returns:
+        A fresh :class:`SandboxEventsModeScreen` for the Sandbox-events stack.
+    """
+    from eawf.surfaces.tui.modes.sandbox_events import SandboxEventsModeScreen
+
+    return SandboxEventsModeScreen()
+
+
 #: The default mode layout seeded on the chassis. Digit order is the switch
-#: order (``1``..``8``), matching the ratified mode-order brief. ``home``
+#: order (``1``..``9``), matching the ratified mode-order brief. ``home``
 #: (the launch default, :data:`DEFAULT_MODE`) renders the resolved scope
 #: screen; ``autopilot`` renders the ready-wave dependency frontier with
 #: dispatch controls (honest-empty until a wave is claim-ready);
@@ -283,9 +304,12 @@ def _doctor_factory(app: EaApp) -> Screen[None]:
 #: install / state / drift health view; ``evidence`` renders the agent-report
 #: rollup (honest-empty until reports exist); ``feed`` renders the live event
 #: feed; ``agent_watch`` zooms one dispatched session's live stream with a
-#: cancel control (honest-empty until a session is dispatched). Config is not
-#: a mode -- it is reachable from every scope via the ``c`` key (and the
-#: ``/config`` palette verb), so it owns no digit here.
+#: cancel control (honest-empty until a session is dispatched);
+#: ``sandbox_events`` renders the spawn-safety floor's denial timeline (the
+#: argv-deny / egress-block / env-scrub / cwd-guard rows the floor persisted,
+#: honest-empty until the floor refuses something). Config is not a mode -- it
+#: is reachable from every scope via the ``c`` key (and the ``/config`` palette
+#: verb), so it owns no digit here.
 MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("home", "1", "Home", _home_screen),
     ModeSpec("autopilot", "2", "Autopilot", _autopilot_factory),
@@ -295,6 +319,7 @@ MODE_REGISTRY: tuple[ModeSpec, ...] = (
     ModeSpec("evidence", "6", "Evidence", _evidence_factory),
     ModeSpec("feed", "7", "Feed", _feed_factory),
     ModeSpec("agent_watch", "8", "Watch", _agent_watch_factory),
+    ModeSpec("sandbox_events", "9", "Sandbox", _sandbox_events_factory),
 )
 
 #: The launch mode -- the chassis boots into Home (the scope-bearing

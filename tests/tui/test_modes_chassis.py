@@ -72,6 +72,7 @@ _EXPECTED_MODES: tuple[tuple[str, str, str], ...] = (
     ("evidence", "6", "Evidence"),
     ("feed", "7", "Feed"),
     ("agent_watch", "8", "Watch"),
+    ("sandbox_events", "9", "Sandbox"),
 )
 
 

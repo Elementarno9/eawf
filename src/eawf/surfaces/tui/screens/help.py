@@ -174,6 +174,7 @@ def _mode_screen_classes() -> dict[str, type]:
     from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
     from eawf.surfaces.tui.modes.feed import FeedModeScreen
     from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
+    from eawf.surfaces.tui.modes.sandbox_events import SandboxEventsModeScreen
     from eawf.surfaces.tui.modes.trust import TrustModeScreen
 
     return {
@@ -184,6 +185,7 @@ def _mode_screen_classes() -> dict[str, type]:
         "evidence": EvidenceModeScreen,
         "feed": FeedModeScreen,
         "agent_watch": AgentWatchModeScreen,
+        "sandbox_events": SandboxEventsModeScreen,
     }
 
 

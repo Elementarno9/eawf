@@ -306,13 +306,14 @@ def test_help_renders_mode_action_and_reference_sections() -> None:
             # The honest "(navigation only)" note appears for a mode that
             # declares no own action keys (Doctor / Evidence / Feed). The
             # offset accounts for the Trust mode's verifier + calibration
-            # action-key rows, which push the no-action modes further down.
-            container.scroll_to(y=38, animate=False)
+            # action-key rows AND the Sandbox mode's nav action-key rows, which
+            # push the no-action modes further down.
+            container.scroll_to(y=44, animate=False)
             await pilot.pause()
             await app.workers.wait_for_complete()
             assert "(navigation only)" in capture_screen_text(app)
             # Scroll further to the reference-nav section (alt-arrow nav).
-            container.scroll_to(y=54, animate=False)
+            container.scroll_to(y=60, animate=False)
             await pilot.pause()
             await app.workers.wait_for_complete()
             ref = capture_screen_text(app)

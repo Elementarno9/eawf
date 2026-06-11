@@ -3,8 +3,8 @@
 The TUI runs two orthogonal axes: a **scope** (``repo`` / ``workspace`` /
 ``user``, switched with ``w`` / ``r`` / ``u``) and a **mode** (``home`` /
 ``autopilot`` / ``research_board`` / ``trust`` / ``doctor`` / ``evidence`` /
-``feed`` / ``agent_watch``, switched with digit keys
-``1``..``8``). The W16 chassis left every ``(scope, mode)`` pair reachable;
+``feed`` / ``agent_watch`` / ``sandbox_events``, switched with digit keys
+``1``..``9``). The W16 chassis left every ``(scope, mode)`` pair reachable;
 this module pins the **bounded** subset that is genuinely legal and refuses
 the rest at the boundary, so a switch never lands the operator in a view that
 has no honest data source.
@@ -32,6 +32,7 @@ feed              yes   yes        no
 research_board    yes   yes        no
 agent_watch       yes   yes        no
 autopilot         yes   yes        no
+sandbox_events    yes   yes        no
 ================  ====  =========  ====
 
 * ``home`` is the scope-bearing mode -- it *renders* the resolved scope
@@ -42,24 +43,26 @@ autopilot         yes   yes        no
   legal everywhere. (Config is not a mode -- it opens the registry-driven
   config window from every scope via the ``c`` key.)
 * ``trust`` / ``evidence`` / ``feed`` / ``research_board`` / ``agent_watch`` /
-  ``autopilot`` read a **single scope's** ``state.json`` + its per-scope stores
-  under ``<state_dir>/store/`` (the trust scorecard, the agent-report rollup,
-  the event feed, the research-campaign / claim / open-question board, the
-  dispatched-session table the agent-watch zoom streams, and the wave graph the
-  autopilot frontier reduces). The **user** scope is the cross-repo portfolio
-  aggregate -- it has no single repo's ``state.json`` (its state is synthesized
-  from the registry with ``project=None`` and no ``phases``), so those
-  data-bound modes have no honest single-scope source there. They would render
-  honest-empty, but honest-empty at the portfolio scope reads as "no reports /
-  no trust / no campaign data / no dispatched session / no ready waves exist"
-  when the truth is "this is not a report-bearing scope" -- a misleading view.
-  So the portfolio scope is excluded for the data-bound modes; ``repo`` and
-  ``workspace`` (which each anchor on one real ``state.json``) keep them.
+  ``autopilot`` / ``sandbox_events`` read a **single scope's** ``state.json`` +
+  its per-scope stores under ``<state_dir>/store/`` (the trust scorecard, the
+  agent-report rollup, the event feed, the research-campaign / claim /
+  open-question board, the dispatched-session table the agent-watch zoom
+  streams, the wave graph the autopilot frontier reduces, and the
+  sandbox-enforcement timeline the spawn floor persisted to one scope's
+  ``event.jsonl``). The **user** scope is the cross-repo portfolio aggregate --
+  it has no single repo's ``state.json`` (its state is synthesized from the
+  registry with ``project=None`` and no ``phases``), so those data-bound modes
+  have no honest single-scope source there. They would render honest-empty, but
+  honest-empty at the portfolio scope reads as "no reports / no trust / no
+  campaign data / no dispatched session / no ready waves / no sandbox events
+  exist" when the truth is "this is not a report-bearing scope" -- a misleading
+  view. So the portfolio scope is excluded for the data-bound modes; ``repo``
+  and ``workspace`` (which each anchor on one real ``state.json``) keep them.
 
 Everywhere the matrix is unconstrained the W16 orthogonality holds: scope
 and mode switch independently. The bound only bites the genuinely-invalid
 corner (user x {trust, evidence, feed, research_board, agent_watch,
-autopilot}).
+autopilot, sandbox_events}).
 """
 
 from __future__ import annotations
@@ -80,11 +83,12 @@ NAV_SCOPES: tuple[str, ...] = ("repo", "workspace", "user")
 #: ``research_campaign`` store; ``agent_watch`` reads a single scope's
 #: ``agent_sessions`` table to pick the dispatched session it streams;
 #: ``autopilot`` reduces a single scope's wave graph into its ready
-#: dependency frontier, so the portfolio aggregate has no honest single-scope
-#: source for any of them. Every other mode is scope-agnostic and legal at
-#: every scope.
+#: dependency frontier; ``sandbox_events`` reads a single scope's
+#: ``event.jsonl`` for the spawn floor's persisted enforcement rows, so the
+#: portfolio aggregate has no honest single-scope source for any of them. Every
+#: other mode is scope-agnostic and legal at every scope.
 _SCOPE_BOUND_MODES: frozenset[str] = frozenset(
-    {"trust", "evidence", "feed", "research_board", "agent_watch", "autopilot"}
+    {"trust", "evidence", "feed", "research_board", "agent_watch", "autopilot", "sandbox_events"}
 )
 
 #: The scopes the scope-bound modes are illegal at -- the cross-repo

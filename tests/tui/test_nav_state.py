@@ -54,7 +54,15 @@ _WORKSPACE = _FIXTURES / "05-workspace-state.json"
 
 #: The modes whose pane reads a single scope's state -- illegal at the
 #: cross-repo ``user`` portfolio scope (no single repo state to read).
-_SCOPE_BOUND = ("trust", "evidence", "feed", "research_board", "agent_watch", "autopilot")
+_SCOPE_BOUND = (
+    "trust",
+    "evidence",
+    "feed",
+    "research_board",
+    "agent_watch",
+    "autopilot",
+    "sandbox_events",
+)
 #: The scope-agnostic modes -- legal at every scope.
 _SCOPE_FREE = ("home", "doctor")
 

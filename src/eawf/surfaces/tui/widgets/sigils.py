@@ -357,6 +357,56 @@ def _withheld(*, tint_hex: str | None) -> ResolvedSigil:
     return ResolvedSigil(glyph_unicode=unicode_glyph, glyph_ascii=ascii_glyph, tint_hex=tint_hex)
 
 
+#: The sandbox-enforcement severity alphabet: a severity string ->
+#: :class:`ResolvedSigil`. The spawn floor records an enforcement decision at
+#: one of three severities (``block`` / ``warn`` / ``info``, the
+#: ``EnforcementSeverity`` literal). A hard ``block`` (the floor REFUSED the
+#: action -- an argv head, an egress host) wears the FAILED cross so a denial
+#: reads as a hard stop; a ``warn`` / ``info`` (the floor degraded but let the
+#: spawn continue -- a cwd-guard fallback, an env-scrub note) wears the warn
+#: triangle, shape-distinct from the cross so a soft note never reads as a hard
+#: deny. Both shapes are reused from the existing lifecycle / chrome alphabets,
+#: so no new glyph is invented and the chrome-role count + ascii deconfliction
+#: invariants stay intact.
+_ENFORCEMENT_SEVERITY: dict[str, ResolvedSigil] = {
+    "block": _from_sigil(Sigil.FAILED),
+    "warn": _warn(),
+    "info": _warn(),
+}
+
+#: The :class:`ResolvedSigil` a severity string outside the known alphabet
+#: resolves to: the hard-deny cross. An enforcement row whose severity spelling
+#: is novel still reads as a real glyph (never a bare word / fallthrough), and
+#: an unrecognised severity defaults to the hard-deny mark so a denial is never
+#: under-stated.
+_ENFORCEMENT_FALLBACK: ResolvedSigil = _from_sigil(Sigil.FAILED)
+
+
+def enforcement_sigil(severity: str) -> ResolvedSigil:
+    """Return the :class:`ResolvedSigil` for a sandbox-enforcement *severity*.
+
+    The single resolver the sandbox-events timeline pane calls to turn a
+    persisted enforcement severity (``block`` / ``warn`` / ``info``, the
+    ``EnforcementSeverity`` literal the floor writes) into its severity sigil:
+    a hard ``block`` deny wears the FAILED cross (a refusal reads as a hard
+    stop), a ``warn`` / ``info`` degraded-but-continued note wears the warn
+    triangle (shape-distinct so a soft note never reads as a hard deny). An
+    unrecognised severity defaults to the hard-deny cross
+    (:data:`_ENFORCEMENT_FALLBACK`) so a row always renders a real glyph and a
+    denial is never under-stated -- the resolver is total, never raising.
+
+    Args:
+        severity: The enforcement severity string read off the persisted
+            event row.
+
+    Returns:
+        The :class:`ResolvedSigil` for *severity* (the hard-deny cross for an
+        unknown / ``block`` severity, the warn triangle for ``warn`` /
+        ``info``).
+    """
+    return _ENFORCEMENT_SEVERITY.get(severity, _ENFORCEMENT_FALLBACK)
+
+
 #: The ratified extended-status map, keyed by enum CLASS then by member, so the
 #: cross-class StrEnum value collisions (e.g. ``AgentReportVerdict.BLOCKED`` and
 #: ``OpenQuestionStatus.BLOCKED`` both ``== "blocked"``) stay distinct: a flat
@@ -490,6 +540,7 @@ __all__ = [
     "ResolvedSigil",
     "Sigil",
     "chrome",
+    "enforcement_sigil",
     "glyph",
     "status_sigil",
     "tint",
