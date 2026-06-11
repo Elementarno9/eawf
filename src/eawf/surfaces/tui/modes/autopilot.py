@@ -135,7 +135,7 @@ if TYPE_CHECKING:
 
     from textual.screen import ModalScreen
 
-    from eawf.kernel.state.models import FleetRun, State, Wave
+    from eawf.kernel.state.models import FleetFork, FleetRun, State, Wave
     from eawf.surfaces.tui.screens.overlays.arm import ArmSpec
     from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
     from eawf.surfaces.tui.widgets.eu_bar import RenderMode
@@ -306,6 +306,11 @@ BATCH_NO_DAEMON: str = "claim batch: daemon unavailable -- not issued"
 #: ``rejected`` on a daemon rejection (the rest of the fleet still proceeds).
 _BATCH_SPAWNED: str = "spawned"
 _BATCH_REJECTED: str = "rejected"
+
+#: Result line when ``f`` (fork inbox) is pressed with no queued fork -- the
+#: pane has nothing to resolve, so it says so honestly rather than opening an
+#: empty inbox card on top of the cockpit.
+FORK_INBOX_NO_TARGET: str = "fork inbox: no blocking fork to resolve"
 
 #: Footer hints for the Autopilot pane (full key names, arrows primary). The
 #: intervention keys ride after dispatch for discoverability; the mode-switch
@@ -818,6 +823,7 @@ class AutopilotModeScreen(ScopeScreen):
         Binding("K", "kill_selected", "kill", show=False),
         Binding("space", "toggle_pause", "pause", show=False),
         Binding("a", "arm_flow", "arm", show=False),
+        Binding("f", "open_fork_inbox", "forks", show=False),
         Binding("m", "open_multi_select", "select", show=False),
     ]
 
@@ -844,6 +850,11 @@ class AutopilotModeScreen(ScopeScreen):
         #: card exactly once (a re-push of an already-DONE run does not reopen it).
         #: ``None`` until the first state seed.
         self._last_run_state: str | None = None
+        #: The queued-fork count of the last fleet run the pane observed, so a
+        #: RISE in the count (a lane newly forked) auto-raises the FA5 fork inbox
+        #: exactly once -- a re-push at the same depth (a live poll re-delivering
+        #: the same queue) does NOT re-raise it. ``0`` until the first state seed.
+        self._last_fork_count: int = 0
 
     def compose_body(self) -> ComposeResult:
         """Yield the cockpit vitals, the frontier header, the list, and the result.
@@ -1388,6 +1399,7 @@ class AutopilotModeScreen(ScopeScreen):
                 render_frontier_header(self._rows, self._blocked, mode=mode)
             )
         self._maybe_open_run_summary(run)
+        self._maybe_open_fork_inbox(run)
         logger.info(
             f"autopilot_rebuild ready={len(self._rows)} blocked={len(self._blocked)} "
             f"selected={self.selected}"
@@ -1425,6 +1437,66 @@ class AutopilotModeScreen(ScopeScreen):
     def _on_run_summary_dismissed(self, _result: None) -> None:
         """Return to the cockpit after the run-summary card dismisses (no-op debrief)."""
         logger.debug("autopilot_run_summary dismissed")
+
+    def _maybe_open_fork_inbox(self, run: FleetRun | None) -> None:
+        """Auto-raise the FA5 fork inbox when a lane newly forks (DL-6).
+
+        Watches the queued-fork depth (:attr:`~eawf.kernel.state.models.FleetRun.forks`)
+        across rebuilds: a RISE in the count (the daemon paused a fresh lane to a
+        blocking fork) auto-raises the
+        :class:`~eawf.surfaces.tui.screens.overlays.fork_inbox.ForkInboxModal`
+        over the cockpit so the operator-as-decider sees the interrupt. A re-push
+        at the same depth (a live poll re-delivering the same queue) does NOT
+        re-raise it, so the auto-raise fires once per new fork batch. The inbox is
+        passed the persisted fork queue so every card reads off the daemon record.
+
+        Args:
+            run: The persisted fleet run for this rebuild, or ``None`` when no
+                run is armed.
+        """
+        previous = self._last_fork_count
+        forks = tuple(run.forks) if run is not None else ()
+        self._last_fork_count = len(forks)
+        if len(forks) <= previous or not forks:
+            return
+        logger.info(f"autopilot_fork_inbox auto-raised queued={len(forks)}")
+        self._open_fork_inbox(forks)
+
+    def action_open_fork_inbox(self) -> None:
+        """Open the FA5 fork inbox over the cockpit (``f``).
+
+        Reads the persisted fork queue
+        (:attr:`~eawf.kernel.state.models.FleetRun.forks`) and opens the
+        :class:`~eawf.surfaces.tui.screens.overlays.fork_inbox.ForkInboxModal`
+        over it. With no queued fork there is nothing to resolve, surfaced
+        honestly without opening an empty inbox card.
+        """
+        run = self._current_fleet_run()
+        forks = tuple(run.forks) if run is not None else ()
+        if not forks:
+            self._set_result(f"[$warn]{FORK_INBOX_NO_TARGET}[/]")
+            logger.info("action_open_fork_inbox no_target")
+            return
+        self._open_fork_inbox(forks)
+
+    def _open_fork_inbox(self, forks: tuple[FleetFork, ...]) -> None:
+        """Push the fork-inbox overlay over *forks* (the shared open seam).
+
+        Shared by the ``f`` key and the auto-raise so both route through one
+        push; the overlay reads the queued forks and routes each resolution to
+        the ``fleet.resolve_fork`` RPC itself.
+
+        Args:
+            forks: The queued forks the inbox debriefs, in queue order.
+        """
+        from eawf.surfaces.tui.screens.overlays.fork_inbox import ForkInboxModal
+
+        self._push_overlay(ForkInboxModal(forks), self._on_fork_inbox_dismissed)
+        logger.info(f"autopilot_fork_inbox opened queued={len(forks)}")
+
+    def _on_fork_inbox_dismissed(self, _result: None) -> None:
+        """Return to the cockpit after the fork inbox dismisses (no-op debrief)."""
+        logger.debug("autopilot_fork_inbox dismissed")
 
     def _render_rows(self) -> None:
         """Mount the ready/blocked split (or the honest-empty notice).
@@ -1602,6 +1674,7 @@ __all__ = [
     "DISPATCH_NO_TARGET",
     "DISPATCH_RESULT_ID",
     "EMPTY_NOTICE",
+    "FORK_INBOX_NO_TARGET",
     "FRONTIER_EMPTY_ID",
     "FRONTIER_HEADER_ID",
     "FRONTIER_LIST_ID",

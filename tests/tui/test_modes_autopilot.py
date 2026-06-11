@@ -40,12 +40,15 @@ from textual.pilot import Pilot
 from eawf.kernel.spec.auq_bridge import compute_ready_frontier
 from eawf.kernel.state.enums import (
     ProjectStatus,
+    RiskTier,
     ScopeKind,
     WaveStatus,
 )
 from eawf.kernel.state.models import (
     CurrentPointers,
     FleetCounters,
+    FleetFork,
+    FleetForkReason,
     FleetLane,
     FleetRun,
     FleetRunState,
@@ -63,6 +66,7 @@ from eawf.surfaces.tui.modes.autopilot import (
     DISPATCH_NO_DAEMON,
     DISPATCH_RESULT_ID,
     EMPTY_NOTICE,
+    FORK_INBOX_NO_TARGET,
     FRONTIER_ROW_CLASS,
     HALT_NO_DAEMON,
     HALT_NO_TARGET,
@@ -82,6 +86,7 @@ from eawf.surfaces.tui.modes.autopilot import (
     render_ready_row,
 )
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+from eawf.surfaces.tui.screens.overlays.fork_inbox import ForkInboxModal
 from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
 from eawf.surfaces.tui.screens.overlays.run_summary import RunSummaryModal
 from eawf.surfaces.tui.snapshot import (
@@ -906,6 +911,172 @@ def test_autopilot_run_summary_card_reads_terminal_record(tmp_path: Path) -> Non
             assert "0 blocked" in counts
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Fork inbox -- f key + auto-raise on a new fork (W05)
+# --------------------------------------------------------------------------
+
+
+def _forked_run(*, forks: int = 1) -> FleetRun:
+    """Build a DRAINING :class:`FleetRun` carrying *forks* queued blocking forks.
+
+    Seeds the fork queue the FA5 inbox reads: each queued fork names a forked
+    wave, its risk tier, the fork reason, and an evidence ref.
+    """
+    fork_rows = [
+        FleetFork(
+            wave_id=f"P01-I01-W{idx + 2:02d}",
+            attempt=1,
+            risk_tier=RiskTier.UI,
+            reason=FleetForkReason.HIGH_RISK_CLOSE,
+            evidence_ref=f"urn:eawf:v1:close:P01-I01-W{idx + 2:02d}",
+            forked_at=_T0,
+        )
+        for idx in range(forks)
+    ]
+    return FleetRun(
+        run_state=FleetRunState.DRAINING,
+        concurrency=4,
+        frontier=["P01-I02-W10"],
+        forks=fork_rows,
+        counters=FleetCounters(claimed=forks + 1, dispatched=1, forked=forks),
+        armed_at=_T0,
+    )
+
+
+def test_autopilot_fork_inbox_binding_exists() -> None:
+    """The Autopilot pane binds ``f`` to the fork-inbox action."""
+    keys = {
+        binding.key: binding.action
+        for binding in AutopilotModeScreen.BINDINGS
+        if hasattr(binding, "key")
+    }
+    assert keys.get("f") == "open_fork_inbox"
+
+
+def test_autopilot_f_key_no_fork_surfaces_honest_no_target(tmp_path: Path) -> None:
+    """Pressing ``f`` with no queued fork surfaces the honest no-target line."""
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("f")  # no queued fork -> no inbox
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)  # no overlay opened
+            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert FORK_INBOX_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_autopilot_f_key_opens_fork_inbox_over_queued_fork(tmp_path: Path) -> None:
+    """Pressing ``f`` with a queued fork opens the FA5 fork inbox over the cockpit."""
+    state_path = _write_state(tmp_path, _state(fleet_run=_forked_run(forks=1)))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            # The fork is present at mount; the auto-raise opens it -- dismiss first.
+            if isinstance(app.screen, ForkInboxModal):
+                await pilot.press("escape")
+                await settle_screen(pilot)
+            await pilot.press("f")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ForkInboxModal)  # the inbox opened
+
+    asyncio.run(body())
+
+
+def test_autopilot_auto_raises_fork_inbox_on_new_fork(tmp_path: Path) -> None:
+    """A fleet run whose fork count rises auto-raises the FA5 fork inbox.
+
+    The load-bearing W05 wiring (C1): the pane watches the queued-fork depth
+    across live pushes, and a RISE in the count (the daemon paused a fresh lane
+    to a blocking fork) auto-raises the
+    :class:`~eawf.surfaces.tui.screens.overlays.fork_inbox.ForkInboxModal`.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run(forked=0)))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            assert isinstance(app.screen, AutopilotModeScreen)  # no fork yet
+            # Push a state with a newly-queued fork onto the live reactive seam.
+            app.state = _state(fleet_run=_forked_run(forks=1))
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ForkInboxModal)  # auto-raised
+
+    asyncio.run(body())
+
+
+def test_autopilot_fork_inbox_not_reraised_on_same_queue_depth(tmp_path: Path) -> None:
+    """A re-push at the SAME fork depth does NOT re-raise the inbox (idempotence)."""
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run(forked=0)))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            cockpit = app.screen
+            app.state = _state(fleet_run=_forked_run(forks=1))
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ForkInboxModal)
+            await pilot.press("escape")  # dismiss back to the cockpit
+            await settle_screen(pilot)
+            assert app.screen is cockpit
+            # Re-push the SAME single-fork queue (a live poll re-delivering it).
+            app.state = _state(fleet_run=_forked_run(forks=1))
+            await settle_screen(pilot)
+            assert app.screen is cockpit  # no second card stacked
+
+    asyncio.run(body())
+
+
+def test_autopilot_fork_inbox_resolution_routes_resolve_fork(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Choosing a resolution in the inbox routes ``fleet.resolve_fork`` (C1).
+
+    The end-to-end W05 contract: the auto-raised inbox card's option key reaches
+    the daemon with the forked wave's id + attempt + the chosen resolution.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run(forked=0)))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _make_recording_client(calls))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            app.state = _state(fleet_run=_forked_run(forks=1))
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ForkInboxModal)
+            await pilot.press("a")  # approve-close
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert calls and calls[0][0] == "fleet.resolve_fork"
+    assert calls[0][1]["wave_id"] == "P01-I01-W02"
+    assert calls[0][1]["resolution"] == "approve_close"
 
 
 # --------------------------------------------------------------------------
