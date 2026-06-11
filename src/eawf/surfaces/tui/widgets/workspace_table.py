@@ -1,3 +1,6 @@
+# noqa: EAWF010 cohesive workspace-grid surface; the pure width-helpers +
+# cell-map slicing split into a sibling module once the responsive-degrade
+# seam settles (extract-module follow-up), not mid-wave.
 """``WorkspaceTable`` — per-repo portfolio grid with zoom-on-Enter.
 
 A :class:`~textual.widgets.DataTable` of the workspace's linked repos —
@@ -25,34 +28,28 @@ carrying the repo code; the host :class:`~eawf.surfaces.tui.scopes.workspace.Wor
 zooms that repo into a 2x2 quadrant. The downstream user-portfolio table
 (W07) reuses this widget family.
 
-The grid paints in the Eae cosmic-terminal language: every per-repo row
-AND the totals row LEAD with a lifecycle sigil drawn from the shared I02
-sigils source (:func:`repo_row_sigil` / :func:`totals_row_sigil` +
-:mod:`eawf.surfaces.tui.widgets.sigils`) -- the RUNNING diamond for a repo
-with an active phase, the ABANDONED circled-slash for a stale one, the
-CLOSED circle otherwise -- and the per-repo phase-completion bar is tinted
-the green status hue (:func:`_green_hex`) so a calm row reads green. The
+The grid paints in the Eae cosmic-terminal language. Every per-repo row AND
+the totals row LEAD with a lifecycle sigil (:func:`repo_row_sigil` /
+:func:`totals_row_sigil`): the RUNNING diamond for an active phase, the
+ABANDONED circled-slash for a stale repo, the CLOSED circle otherwise. The
+per-repo phase bar is tinted the green status hue (:func:`_green_hex`); the
 blocker / stale attention chip renders as the warn marker (the
-:func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``attention`` triangle,
-tinted the warn band) rather than a bare ``(blocked)`` / ``(stale)`` word,
-so a repo needing the operator reads ATTENTION-shaped at a glance.
-
-The roll-up totals row reads in the BRAND voice rather than the per-repo
-status green: its leading sigil and summed completion bar carry the brand
-accent (:func:`_brand_hex` -- the green-rotated ``$accent`` / ``$primary``
-theme var, fallback :data:`~eawf.surfaces.render.brand.ACCENT_HEX`) instead
-of the legacy band ``ok`` hue, so the summary lifts off the per-repo rows as
-the portfolio's own line rather than reading as one more repo. The totals
-EU bar keeps its consumed-fraction burn band -- that band is a meaningful
-over/under signal on the aggregate too, not the legacy status green.
+:func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``attention`` triangle, warn
+band) rather than a bare word. The roll-up totals row reads in the BRAND voice
+(:func:`_brand_hex`) so the summary lifts off the per-repo rows as the
+portfolio's own line; its EU bar keeps the consumed-fraction burn band.
 
 Every sigil + bar + chip span is baked to a concrete ``#rrggbb`` hex at
-row-build time: a :class:`textual.widgets.DataTable` ``str`` cell is
-Rich-parsed and cannot resolve the Textual ``$accent`` / ``$warn`` palette
-vars (they raise ``MarkupError``), so the tint must be a literal hex (see
-:func:`_band_palette` for the same constraint on the EU bar). The plain
-:func:`format_totals_line` formatter stays untinted so the headless offline
-render keeps its colourless frame.
+row-build time: a :class:`textual.widgets.DataTable` ``str`` cell is Rich-parsed
+and cannot resolve the Textual ``$accent`` / ``$warn`` palette vars (see
+:func:`_band_palette`). The plain :func:`format_totals_line` stays untinted so
+the headless offline render keeps its colourless frame.
+
+The row layout is width-responsive (:func:`visible_columns` /
+:func:`phase_bar_cells`): at or below 80 cols the grid drops the low-priority
+``git`` / ``pr`` / ``age`` columns and shrinks the phase bar, keeping the
+load-bearing sigil + status-tinted bars un-clipped rather than overflowing the
+pane edge.
 """
 
 from __future__ import annotations
@@ -66,6 +63,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from textual.events import Resize
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import DataTable
@@ -95,6 +93,66 @@ logger = logging.getLogger(__name__)
 #: two bar columns + git absorb the middle of the row; ``pr`` carries the
 #: open-PR total per repo between the live git cell and the age cell.
 _COLUMNS: tuple[str, ...] = ("repo", "phase", "eu", "git", "pr", "age")
+
+#: The load-bearing columns that survive every width: the repo cell (the
+#: leading lifecycle sigil + warn-marker status tint) and the two status-tinted
+#: bars. A narrow terminal degrades to exactly these three so the sigil + tint +
+#: bar are never dropped or clipped -- the reskin's irreducible signal.
+_NARROW_COLUMNS: tuple[str, ...] = ("repo", "phase", "eu")
+
+#: Terminal width (cells) at or below which the grid degrades to
+#: :data:`_NARROW_COLUMNS`. 80 cols is the canonical narrow terminal (a tmux
+#: split / an 80x24 default), the regime where the wide six-column row would
+#: overflow the ``overflow-x: hidden`` pane edge and clip the trailing columns.
+_NARROW_WIDTH_THRESHOLD: int = 80
+
+#: Phase-completion bar cell count at the wide width.
+_WIDE_BAR_CELLS: int = 6
+
+#: Phase-completion bar cell count at the narrow width -- shrunk from
+#: :data:`_WIDE_BAR_CELLS` so the degraded ``repo / phase / eu`` row fits 80
+#: cells. The bar keeps its status tint; only its glyph run is shorter.
+_NARROW_BAR_CELLS: int = 4
+
+
+def visible_columns(width: int) -> tuple[str, ...]:
+    """Return the column subset a grid of *width* cells renders.
+
+    The responsive-degrade lever: at or below :data:`_NARROW_WIDTH_THRESHOLD`
+    the grid drops the low-priority ``git`` / ``pr`` / ``age`` columns and keeps
+    only the load-bearing :data:`_NARROW_COLUMNS`, so a narrow terminal degrades
+    the row layout rather than overflowing the pane edge and clipping the sigil.
+    Above the threshold (or at a pre-layout width of ``0``, where no clip can yet
+    occur) the full :data:`_COLUMNS` row renders.
+
+    Args:
+        width: The grid's measured content width in cells.
+
+    Returns:
+        The ordered column-id tuple to render at *width*.
+    """
+    if 0 < width <= _NARROW_WIDTH_THRESHOLD:
+        return _NARROW_COLUMNS
+    return _COLUMNS
+
+
+def phase_bar_cells(width: int) -> int:
+    """Return the phase-completion bar cell count for a grid of *width* cells.
+
+    The bar shrinks from :data:`_WIDE_BAR_CELLS` to :data:`_NARROW_BAR_CELLS`
+    once the grid degrades (at or below :data:`_NARROW_WIDTH_THRESHOLD`) so the
+    narrowed row fits an 80-cell terminal -- the bar keeps its tint, only its
+    glyph run is shorter. A pre-layout width of ``0`` keeps the wide count.
+
+    Args:
+        width: The grid's measured content width in cells.
+
+    Returns:
+        The phase-bar cell count to render at *width*.
+    """
+    if 0 < width <= _NARROW_WIDTH_THRESHOLD:
+        return _NARROW_BAR_CELLS
+    return _WIDE_BAR_CELLS
 
 #: Cell text rendered for a repo whose git probe could not resolve
 #: (timeout / missing binary / non-git path). The substring ``git?`` is
@@ -893,7 +951,13 @@ def _totals_sigil_markup(sigil: Sigil, *, mode: RenderMode, palette: Mapping[str
     return f"[{_brand_hex(palette)}]{mark}[/]"
 
 
-def _phase_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | None = None) -> str:
+def _phase_cell(
+    row: RepoRow,
+    *,
+    mode: RenderMode,
+    palette: Mapping[str, str] | None = None,
+    bar_cells: int = _WIDE_BAR_CELLS,
+) -> str:
     """Render *row*'s active-phase id + green status-tinted completion bar cell.
 
     The phase id leads the cell; the completion bar is tinted the green status
@@ -906,11 +970,14 @@ def _phase_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | 
         mode: The active bar render mode.
         palette: The status-tint band map (see :func:`_band_palette`);
             defaults to the built-in palette when omitted.
+        bar_cells: The completion bar's cell count -- shrunk on a narrow grid
+            (see :func:`phase_bar_cells`) so the degraded row fits an 80-cell
+            terminal while the bar keeps its status tint.
 
     Returns:
         The phase cell markup (``<phase_id> <green-bar>``).
     """
-    bar = render_completion_bar(row.phase_done, row.phase_total, width=6, mode=mode)
+    bar = render_completion_bar(row.phase_done, row.phase_total, width=bar_cells, mode=mode)
     colours = palette if palette is not None else DEFAULT_BAND_PALETTE
     return f"{row.phase_id or '—'} {_green_bar_markup(bar, palette=colours)}"
 
@@ -982,7 +1049,11 @@ def _eu_cell(row: RepoRow, *, mode: RenderMode, palette: Mapping[str, str] | Non
 
 
 def _totals_phase_cell(
-    totals: PortfolioTotals, *, mode: RenderMode, palette: Mapping[str, str] | None = None
+    totals: PortfolioTotals,
+    *,
+    mode: RenderMode,
+    palette: Mapping[str, str] | None = None,
+    bar_cells: int = _WIDE_BAR_CELLS,
 ) -> str:
     """Render the totals row's phase cell: the summed brand-accent-tinted bar.
 
@@ -998,11 +1069,14 @@ def _totals_phase_cell(
         mode: The active bar render mode.
         palette: The status-tint band map (see :func:`_band_palette`);
             defaults to the built-in palette + brand accent when omitted.
+        bar_cells: The completion bar's cell count -- shrunk on a narrow grid
+            (see :func:`phase_bar_cells`) so the degraded totals row fits an
+            80-cell terminal while the bar keeps its brand tint.
 
     Returns:
         The totals phase cell (``<repo_count> repos <brand-bar> done/total``).
     """
-    bar = render_completion_bar(totals.wave_done, totals.wave_total, width=6, mode=mode)
+    bar = render_completion_bar(totals.wave_done, totals.wave_total, width=bar_cells, mode=mode)
     colours = palette if palette is not None else _DEFAULT_BRAND_PALETTE
     return f"{totals.repo_count} repos {_brand_bar_markup(bar, palette=colours)}"
 
@@ -1084,11 +1158,14 @@ class WorkspaceTable(DataTable[str]):
         self._git_cells: dict[str, str] = {}
         #: Monotonic timestamp of the last probe per repo, for the TTL.
         self._git_probed_at: dict[str, float] = {}
+        #: The column set last installed on the table, so a rebuild only
+        #: re-adds columns when the width crosses the narrow threshold (a
+        #: same-width rebuild keeps the existing columns).
+        self._installed_columns: tuple[str, ...] = ()
 
     def on_mount(self) -> None:
         """Add columns, seed state + render mode from the app, watch both."""
-        for column in _COLUMNS:
-            self.add_column(column, key=column)
+        self._install_columns(visible_columns(self._content_width()))
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
             self.state = app_state
@@ -1118,6 +1195,45 @@ class WorkspaceTable(DataTable[str]):
     def watch_render_mode(self) -> None:
         """Rebuild rows so the bar cells repaint in the new glyph set."""
         self._rebuild()
+
+    def on_resize(self, event: Resize) -> None:
+        """Re-cut the column set + bar width to the new grid width on resize.
+
+        A shrink past :data:`_NARROW_WIDTH_THRESHOLD` degrades the row to the
+        load-bearing :data:`_NARROW_COLUMNS` (dropping ``git`` / ``pr`` /
+        ``age``) and narrows the phase bar, so the row reflows inside the pane
+        rather than overflowing the ``overflow-x: hidden`` edge and clipping the
+        leading sigil; a grow back restores the full row.
+
+        Args:
+            event: The Textual resize event (unused; the new width is read from
+                :attr:`size` during the rebuild).
+        """
+        del event
+        self._rebuild()
+
+    def _content_width(self) -> int:
+        """Return the grid's measured content width in cells.
+
+        The width the responsive degrade reads (``0`` pre-layout / bare harness,
+        which both width helpers treat as the wide no-clip regime).
+        """
+        return self.size.width
+
+    def _install_columns(self, columns: tuple[str, ...]) -> None:
+        """Replace the table's columns with *columns*, recording the new set.
+
+        Clears every row + column (``clear(columns=True)``) and re-adds the
+        target columns keyed by id, so :meth:`add_row` / ``get_cell`` keep
+        addressing cells by the same keys across a width-regime change.
+
+        Args:
+            columns: The ordered column-id tuple to install.
+        """
+        self.clear(columns=True)
+        for column in columns:
+            self.add_column(column, key=column)
+        self._installed_columns = columns
 
     def rows_data(self) -> list[RepoRow]:
         """Return the current repo rows (pure accessor for host / tests)."""
@@ -1198,57 +1314,97 @@ class WorkspaceTable(DataTable[str]):
         self._rebuild()
 
     def _rebuild(self) -> None:
-        """Repopulate the rows from the current state + git cells + mode.
+        """Repopulate the rows from the current state + git cells + mode + width.
+
+        Width-responsive: the column set + the phase bar width are re-cut to
+        the grid's current content width (see :func:`visible_columns` /
+        :func:`phase_bar_cells`) so a narrow terminal degrades to the
+        load-bearing ``repo / phase / eu`` columns rather than overflowing the
+        ``overflow-x: hidden`` pane edge and clipping the leading sigil. Columns
+        are re-installed only when the visible set crosses the narrow threshold
+        (a same-regime rebuild keeps them).
 
         The :attr:`_rebuilding` re-entrancy guard coalesces the nested
         calls the ``state`` / ``render_mode`` watchers + the explicit
         :meth:`on_mount` call can trigger in one flush, mirroring the
         :class:`~eawf.surfaces.tui.widgets.backlog_table.BacklogTable` guard.
         """
-        if not self.columns or self._rebuilding:
+        if self._rebuilding:
             return
         self._rebuilding = True
         try:
-            self.clear()
+            width = self._content_width()
+            columns = visible_columns(width)
+            bar_cells = phase_bar_cells(width)
+            if columns != self._installed_columns:
+                self._install_columns(columns)
+            else:
+                self.clear()
+            if not self.columns:
+                return
             palette = _band_palette(self.app)
             rows = self.rows_data()
             for row in rows:
-                git_cell = self._git_cells.get(row.code, GIT_PENDING_CELL)
-                self.add_row(
-                    _repo_cell_markup(row, mode=self.render_mode, palette=palette),
-                    _phase_cell(row, mode=self.render_mode, palette=palette),
-                    _eu_cell(row, mode=self.render_mode, palette=palette),
-                    git_cell,
-                    _pr_cell(row.open_prs),
-                    row.age,
-                    key=row.code,
-                )
-            self._add_totals_row(rows, palette=palette)
+                cells = self._repo_cell_map(row, palette=palette, bar_cells=bar_cells)
+                self.add_row(*(cells[col] for col in columns), key=row.code)
+            self._add_totals_row(rows, columns, palette=palette, bar_cells=bar_cells)
         finally:
             self._rebuilding = False
 
-    def _add_totals_row(self, rows: list[RepoRow], *, palette: Mapping[str, str]) -> None:
+    def _repo_cell_map(
+        self, row: RepoRow, *, palette: Mapping[str, str], bar_cells: int
+    ) -> dict[str, str]:
+        """Return *row*'s cells keyed by column id (the full six-column set).
+
+        The width-responsive rebuild slices this map by the visible column set,
+        so every cell renderer lives in one place regardless of which columns
+        the current width drops. The repo cell always carries its leading
+        lifecycle sigil + warn-marker status tint.
+
+        Args:
+            row: The repo row to render.
+            palette: The status-tint band map (see :func:`_band_palette`).
+            bar_cells: The phase-bar cell count for the current width (see
+                :func:`phase_bar_cells`).
+
+        Returns:
+            A ``{column_id: cell_text}`` map over every :data:`_COLUMNS` id.
+        """
+        return {
+            "repo": _repo_cell_markup(row, mode=self.render_mode, palette=palette),
+            "phase": _phase_cell(
+                row, mode=self.render_mode, palette=palette, bar_cells=bar_cells
+            ),
+            "eu": _eu_cell(row, mode=self.render_mode, palette=palette),
+            "git": self._git_cells.get(row.code, GIT_PENDING_CELL),
+            "pr": _pr_cell(row.open_prs),
+            "age": row.age,
+        }
+
+    def _add_totals_row(
+        self,
+        rows: list[RepoRow],
+        columns: tuple[str, ...],
+        *,
+        palette: Mapping[str, str],
+        bar_cells: int,
+    ) -> None:
         """Append the portfolio-totals summary row under the repo rows.
 
-        Folds *rows* via :func:`portfolio_totals` and renders one summary
-        row whose phase cell carries the portfolio-wide brand-accent-tinted
-        completion bar, whose EU cell carries the summed consumed-fraction
-        burn bar, and whose PR cell carries the summed open-PR count. The git
-        + age columns are blank on the summary row (no live probe spans the
-        portfolio); the repo column LEADS with the totals' brand-tinted
-        lifecycle sigil (:func:`totals_row_sigil` + :func:`_totals_sigil_markup`)
-        then the :data:`TOTALS_ROW_LABEL` sigma, so the row reads as a roll-up
-        in the brand voice that lines up under the per-repo sigil column
-        rather than as one more repo.
-
-        An empty repo set adds no totals row -- there is nothing to sum, so
-        the table stays at zero rows rather than rendering a ``Σ 0 repos``
-        row on an otherwise-empty grid.
+        Folds *rows* via :func:`portfolio_totals` and renders one summary row in
+        the brand voice (the repo column leads with the totals' brand-tinted
+        lifecycle sigil + the :data:`TOTALS_ROW_LABEL` sigma; the phase / eu
+        cells carry the summed bars). The row is sliced to the visible *columns*
+        so the summary degrades with the per-repo rows at a narrow width. An
+        empty repo set adds no totals row (nothing to sum).
 
         Args:
             rows: The repo rows already added above the totals row.
+            columns: The visible column-id set the row is sliced to.
             palette: Band-colour map for the bars + sigil (see
                 :func:`_band_palette`).
+            bar_cells: The phase-bar cell count for the current width (see
+                :func:`phase_bar_cells`).
         """
         if not rows:
             return
@@ -1256,15 +1412,17 @@ class WorkspaceTable(DataTable[str]):
         sigil = _totals_sigil_markup(
             totals_row_sigil(totals), mode=self.render_mode, palette=palette
         )
-        self.add_row(
-            f"{sigil} {TOTALS_ROW_LABEL}",
-            _totals_phase_cell(totals, mode=self.render_mode, palette=palette),
-            _totals_eu_cell(totals, mode=self.render_mode, palette=palette),
-            "",
-            _pr_cell(totals.open_prs),
-            "",
-            key=TOTALS_ROW_KEY,
-        )
+        cells = {
+            "repo": f"{sigil} {TOTALS_ROW_LABEL}",
+            "phase": _totals_phase_cell(
+                totals, mode=self.render_mode, palette=palette, bar_cells=bar_cells
+            ),
+            "eu": _totals_eu_cell(totals, mode=self.render_mode, palette=palette),
+            "git": "",
+            "pr": _pr_cell(totals.open_prs),
+            "age": "",
+        }
+        self.add_row(*(cells[col] for col in columns), key=TOTALS_ROW_KEY)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Post :class:`RowZoomed` for the Enter-selected row.
@@ -1323,11 +1481,13 @@ __all__ = [
     "completion_pair",
     "eu_pair",
     "format_totals_line",
+    "phase_bar_cells",
     "portfolio_totals",
     "repo_has_blocker",
     "repo_is_stale",
     "repo_row_from_path",
     "repo_row_sigil",
     "totals_row_sigil",
+    "visible_columns",
     "warn_chip_markup",
 ]

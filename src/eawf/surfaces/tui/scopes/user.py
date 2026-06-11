@@ -414,6 +414,15 @@ class PortfolioTable(WorkspaceTable):
     repo's 2x2 quadrant exactly as the workspace scope does. The subclass
     exists only to give the user scope a distinct widget type for
     ``query_one(PortfolioTable)`` lookups.
+
+    The narrow-terminal degrade is inherited verbatim too: at or below the
+    workspace table's
+    :data:`~eawf.surfaces.tui.widgets.workspace_table._NARROW_WIDTH_THRESHOLD`
+    the portfolio grid drops the low-priority ``git`` / ``pr`` / ``age`` columns
+    and shrinks the phase bar, keeping the leading lifecycle sigil + the
+    status-tinted bars (the reskin's load-bearing signal) un-clipped rather than
+    overflowing the pane edge -- so the user portfolio reflows on an 80-column
+    terminal exactly as the workspace grid does.
     """
 
 
