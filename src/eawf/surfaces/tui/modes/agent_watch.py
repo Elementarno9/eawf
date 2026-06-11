@@ -31,6 +31,28 @@ scope has no dispatched executor session at all the pane renders the
 honest-empty :data:`EMPTY_NOTICE` banner rather than implying a stream is
 flowing.
 
+The raw-output tail (FA4 zoom)
+------------------------------
+The zoom adds a raw-output tail (:class:`~eawf.surfaces.tui.widgets.output_tail.OutputTail`)
+beneath the typed lifecycle stream. The lifecycle stream shows WHAT happened
+to the session (``dispatch_cost`` / ``agent_end`` / ...); the tail shows what
+the agent SAYS -- its raw stdout lines as they arrive, auto-scrolled so the
+newest line stays in view. It is fed by the App's optional raw-output seam
+(``live_output_buffer`` for the on-mount seed + the ``append_output`` fan-out
+for live lines), keyed -- like the typed stream -- on the watched session's
+wave id; a bare harness without that seam degrades to the pinned
+``waiting for output...`` notice rather than a frozen blank pane.
+
+Per-session keys (the FA4 zoom controls)
+----------------------------------------
+The zoom advertises four session keys: ``k`` confirm-gated kills this lane
+(the ``agent.kill`` RPC, gated behind a
+:class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` so a
+destructive stop is never one keystroke), ``space`` pauses / resumes this
+lane (the ``agent.pause`` / ``agent.resume`` RPC), ``l`` views the watched
+session's log, and ``Esc`` leaves the zoom. Every advertised key resolves to
+a live :class:`~textual.binding.Binding` (affordance parity).
+
 Cancel (the SP-6 path)
 ----------------------
 The cancel action (the ``k`` key) asks the daemon to stop the watched
@@ -48,6 +70,7 @@ honestly too.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
@@ -55,6 +78,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Grid, Vertical, VerticalScroll
 from textual.reactive import reactive
+from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Static
 
@@ -65,6 +89,7 @@ from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.output_tail import OutputTail
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 
 if TYPE_CHECKING:
@@ -111,6 +136,35 @@ CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
 
 #: Result line when there is no session to cancel.
 CANCEL_NO_TARGET: str = "cancel: no session to cancel"
+
+#: Id of the raw-output tail pane mounted beneath the typed lifecycle stream.
+WATCH_OUTPUT_ID: str = "watch-output"
+
+#: Daemon JSON-RPC method the ``k`` (kill-this-lane) key routes through; the
+#: signal param selects the SIGTERM-grace-SIGKILL ladder entry point.
+_KILL_METHOD: str = "agent.kill"
+
+#: Graceful SIGTERM signal the ``k`` key sends -- the soft ladder entry.
+_SIGNAL_TERM: str = "term"
+
+#: Daemon JSON-RPC methods the ``space`` (pause / resume this lane) key routes
+#: through. ``agent.pause`` persists ``dispatch_paused = True`` (a deliberate
+#: stop that blocks the next claim); ``agent.resume`` clears it. The flag picks
+#: which method fires.
+_PAUSE_RPC: str = "agent.pause"
+_RESUME_RPC: str = "agent.resume"
+
+#: Result line when the pause / resume request could not reach the daemon.
+PAUSE_NO_DAEMON: str = "pause: daemon unavailable -- request not issued"
+
+#: Result line when there is no session to pause.
+PAUSE_NO_TARGET: str = "pause: no session to pause"
+
+#: Result line when the log-view key has no session to view a log for.
+LOG_NO_TARGET: str = "log: no session to view a log for"
+
+#: Result line when no session-log handle is recorded for the watched attempt.
+LOG_NO_HANDLE: str = "log: no session log recorded yet"
 
 #: Id of the multi-session watch-grid container -- the parallel tile pane the
 #: grid surface mounts one tile per ACTIVE executor session into.
@@ -295,6 +349,10 @@ class WatchTarget:
         status: The session lifecycle status at pick time.
         attempt: The wave attempt number to cancel -- the highest recorded
             attempt for the wave, defaulting to ``1`` when none is recorded.
+        log_handle: The opaque session-log handle for the watched attempt
+            (the per-runtime URN the adapter mints), or ``None`` when the
+            live spawn has not yet recorded a session-attempt row for the
+            wave. The ``l`` view-log key resolves the log surface from it.
     """
 
     session_id: str
@@ -302,6 +360,7 @@ class WatchTarget:
     runtime: str
     status: AgentSessionStatus
     attempt: int
+    log_handle: str | None = None
 
     @property
     def label(self) -> str:
@@ -339,12 +398,14 @@ def pick_watch_target(state: State | None) -> WatchTarget | None:
     active = [sess for sess in executors if sess.status is AgentSessionStatus.ACTIVE]
     pool = active if active else executors
     picked = max(pool, key=lambda sess: sess.started_at)
+    attempt = _latest_attempt(state, wave_id=picked.scope_id)
     target = WatchTarget(
         session_id=picked.id,
         wave_id=picked.scope_id,
         runtime=picked.runtime,
         status=picked.status,
-        attempt=_latest_attempt(state, wave_id=picked.scope_id),
+        attempt=attempt,
+        log_handle=_log_handle(state, wave_id=picked.scope_id, attempt=attempt),
     )
     logger.info(
         f"pick_watch_target session={target.session_id!r} wave={target.wave_id} "
@@ -373,6 +434,31 @@ def _latest_attempt(state: State, *, wave_id: str) -> int:
     if wave is None or not wave.sessions:
         return 1
     return max(wave.sessions)
+
+
+def _log_handle(state: State, *, wave_id: str, attempt: int) -> str | None:
+    """Return the session-log handle for *wave_id* attempt *attempt*, or ``None``.
+
+    The ``l`` view-log key resolves a log surface from the watched attempt's
+    recorded session-log handle (the per-runtime URN the adapter mints at
+    spawn). A wave with no session table yet -- or one whose *attempt* row has
+    not been persisted -- has no handle to view, so this returns ``None`` and
+    the action surfaces the honest "no session log recorded yet" line rather
+    than opening a missing log.
+
+    Args:
+        state: The bound read-only state.
+        wave_id: The wave whose session-log handle is resolved.
+        attempt: The attempt row to read the handle off.
+
+    Returns:
+        The recorded session-log handle, or ``None`` when none exists.
+    """
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return None
+    row = wave.sessions.get(attempt)
+    return row.session_log_handle if row is not None else None
 
 
 def render_watch_header(
@@ -780,6 +866,10 @@ class AgentWatchModeScreen(ScopeScreen):
         height: 1fr;
         border: solid $accent;
     }
+    AgentWatchModeScreen #watch-output {
+        height: 1fr;
+        margin-top: 1;
+    }
     AgentWatchModeScreen #watch-result {
         height: auto;
         margin-top: 1;
@@ -787,12 +877,14 @@ class AgentWatchModeScreen(ScopeScreen):
     }
     """
 
-    #: ``up`` / ``down`` scroll the stream; ``k`` issues the cancel. The
-    #: chrome bindings (palette / help / quit / scope / mode digits) come from
-    #: the shared chassis + app-wide bindings. ``k`` is the cancel verb here
-    #: (not a vim-up alias) -- this pane keeps arrows primary for scrolling and
-    #: does not offer the j/k vim scroll aliases, so ``k`` is free to mean
-    #: "kill the watched session".
+    #: ``up`` / ``down`` scroll the stream; the FA4 session keys ``k`` (kill
+    #: this lane, confirm-gated), ``space`` (pause / resume this lane), ``l``
+    #: (view this session's log), and ``Esc`` (leave the zoom) act on the
+    #: watched session. The chrome bindings (palette / help / quit / scope /
+    #: mode digits) come from the shared chassis + app-wide bindings. ``k`` is
+    #: the kill verb here (not a vim-up alias) -- this pane keeps arrows primary
+    #: for scrolling and does not offer the j/k vim scroll aliases, so ``k`` is
+    #: free to mean "kill the watched session".
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "scroll_up", "up", show=False),
         Binding("down", "scroll_down", "down", show=False),
@@ -800,16 +892,24 @@ class AgentWatchModeScreen(ScopeScreen):
         Binding("pagedown", "page_down", "page down", show=False),
         Binding("home", "scroll_home", "home", show=False),
         Binding("end", "scroll_end", "end", show=False),
-        Binding("k", "cancel_session", "cancel", show=False),
+        Binding("k", "cancel_session", "kill", show=False),
+        Binding("space", "pause_session", "pause", show=False),
+        Binding("l", "view_log", "view log", show=False),
+        Binding("escape", "leave_zoom", "back", show=False),
     ]
 
     #: Footer hints for the agent-watch zoom. The mode digits are surfaced by
     #: the always-visible mode row, not duplicated here. Every label is produced
     #: through :func:`~eawf.surfaces.tui.widgets.footer.render_hint_label` so the
-    #: key tokens stay pinned to the canonical vocabulary.
+    #: key tokens stay pinned to the canonical vocabulary. ``l`` (view log) is
+    #: bound (affordance parity) but kept off the strip: it is not a member of
+    #: the footer's frozen token vocabulary, so advertising it there would fail
+    #: the authoring-time guard -- the Binding itself is the affordance.
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = (
         render_hint_label("↑↓", "select"),
-        render_hint_label("k", "cancel"),
+        render_hint_label("k", "kill"),
+        render_hint_label("space", "pause"),
+        render_hint_label("Esc", "back"),
         render_hint_label("w/r/u", "scope"),
         render_hint_label("/", "palette"),
         render_hint_label("?", "help"),
@@ -845,11 +945,12 @@ class AgentWatchModeScreen(ScopeScreen):
         dispatched the live surface is the fleet parity :class:`WatchGrid` --
         every session side-by-side, each streaming its own session's events.
         Otherwise it is the single-session zoom: a header leading with the
-        watched target's lifecycle sigil (or the honest-empty banner), a stream
-        column starting with a single live-waiting / honest-empty notice, and
-        the cancel result line. The ACTIVE-executor fleet this body is composed
-        for is recorded so the poll backstop (:meth:`_on_app_state`) recomposes
-        only when that fleet changes.
+        watched target's lifecycle sigil (or the honest-empty banner), a typed
+        lifecycle stream column starting with a single live-waiting /
+        honest-empty notice, the raw-output tail (:class:`OutputTail`) showing
+        the agent's own stdout lines, and the cancel result line. The
+        ACTIVE-executor fleet this body is composed for is recorded so the poll
+        backstop (:meth:`_on_app_state`) recomposes only when that fleet changes.
         """
         sessions = active_executor_sessions(self._current_state())
         mode = self._render_mode()
@@ -865,6 +966,7 @@ class AgentWatchModeScreen(ScopeScreen):
             yield Static(render_watch_header(self.target, mode=mode), id=WATCH_HEADER_ID)
             with VerticalScroll(id=WATCH_LIST_ID):
                 yield Static(self._empty_notice(), id=WATCH_EMPTY_ID, classes="watch-empty")
+            yield OutputTail(id=WATCH_OUTPUT_ID)
             yield Static(self._cancel_idle_line(), id=WATCH_RESULT_ID)
 
     def on_mount(self) -> None:
@@ -872,10 +974,11 @@ class AgentWatchModeScreen(ScopeScreen):
 
         Calls the base chassis mount (footer hints) first, then registers with
         the App so subsequent pushes fan out to :meth:`append_event`, and seeds
-        the scroll from the App's live buffer filtered to the watched session
-        (oldest-first buffer -> each prepended, so the most recent buffered
-        event ends on top). A bare harness without the App fan-out hooks
-        degrades to an empty live pane.
+        both the typed lifecycle scroll AND the raw-output tail from the App's
+        live buffers filtered to the watched session (oldest-first buffer ->
+        each prepended for the lifecycle stream, appended for the tail). A bare
+        harness without the App fan-out hooks degrades to an empty live pane and
+        the pinned ``waiting for output...`` tail notice.
         """
         super().on_mount()
         if hasattr(self.app, "render_mode"):
@@ -886,6 +989,7 @@ class AgentWatchModeScreen(ScopeScreen):
         if callable(register):
             register(self)
         self._seed_from_buffer()
+        self._seed_output_from_buffer()
 
     def _seed_from_buffer(self) -> None:
         """Seed the freshly-composed surface from the App's live event buffer.
@@ -906,6 +1010,25 @@ class AgentWatchModeScreen(ScopeScreen):
         for envelope in buffer:
             if is_watched_event(envelope, self.target):
                 self._render_event(envelope)
+
+    def _seed_output_from_buffer(self) -> None:
+        """Seed the raw-output tail from the App's live raw-output buffer.
+
+        Replays the App's oldest-first ``live_output_buffer`` -- a tuple of
+        ``(wave_id, line)`` rows -- into the tail, filtered to the watched
+        session's wave, so a mode switch (or a recompose) shows the agent stdout
+        that arrived before the tail existed. Appended in order via
+        :meth:`OutputTail.extend` so the newest line ends at the bottom and the
+        pane is scrolled once. A no-op in the grid path (the parity grid has no
+        per-tile output tail), or under a bare harness whose App exposes no
+        output buffer -- the tail keeps its pinned waiting notice.
+        """
+        if self._grid is not None or self.target is None:
+            return
+        buffer = getattr(self.app, "live_output_buffer", ())
+        lines = [line for wave_id, line in buffer if wave_id == self.target.wave_id]
+        if lines:
+            self._output_tail().extend(lines)
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Recompose the body when a poll tick changes the ACTIVE-executor fleet.
@@ -952,6 +1075,7 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         await self.recompose()
         self._seed_from_buffer()
+        self._seed_output_from_buffer()
 
     def _on_render_mode(self, _mode: object) -> None:
         """Repaint the mode-sensitive chrome when the App's render mode flips.
@@ -1001,6 +1125,28 @@ class AgentWatchModeScreen(ScopeScreen):
             return
         self._render_event(envelope)
 
+    def append_output(self, wave_id: str, line: str) -> None:
+        """Route one live raw-output *line* to the tail when it names the wave.
+
+        The App raw-output fan-out entry point: a no-op when the pane has been
+        unmounted between the App scheduling the push and this running, when the
+        body is the parity grid (no per-tile output tail in the multi-session
+        path), or when *wave_id* does not match the watched session's wave (the
+        tail shows one session's stdout, not the whole fleet's). A matching line
+        appends to the tail and auto-scrolls so the newest output stays in view.
+
+        Args:
+            wave_id: The wave the output line belongs to (the dispatching
+                session's ``scope_id``).
+            line: The raw stdout line the spawned agent emitted.
+        """
+        if not self.is_mounted or self._grid is not None or self.target is None:
+            return
+        if wave_id != self.target.wave_id:
+            return
+        self._output_tail().append_line(line)
+        logger.debug(f"append_output wave={wave_id} len={len(line)}")
+
     def refresh_empty_notice(self) -> None:
         """Update the live-waiting notice text to track the degraded flag.
 
@@ -1016,12 +1162,16 @@ class AgentWatchModeScreen(ScopeScreen):
             notice.first(Static).update(self._empty_notice())
 
     def action_cancel_session(self) -> None:
-        """Ask the daemon to cancel the watched session, surfacing the result.
+        """Confirm-gate, then ask the daemon to kill the watched session (``k``).
 
-        Issues the ``agent.kill`` request for the watched session's wave +
-        attempt through the daemon-client seam and updates the result line with
-        the typed outcome. With no target there is nothing to cancel; when the
-        daemon is unreachable the result says so rather than implying a kill.
+        Gates the destructive kill behind a
+        :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` so a
+        SIGTERM-class stop of this lane is never one keystroke; only on a
+        confirmed ``Yes`` does it issue the ``agent.kill`` request for the
+        watched session's wave + attempt through the daemon-client seam and
+        surface the typed outcome. With no target there is nothing to cancel
+        (surfaced honestly without opening the modal); when the daemon is
+        unreachable the result says so rather than implying a kill.
         ``agent.kill`` is still a daemon-side placeholder that returns
         ``killed=false``, so the surfaced result reports that honestly rather
         than faking a successful kill.
@@ -1030,12 +1180,148 @@ class AgentWatchModeScreen(ScopeScreen):
         if target is None:
             self._set_result(CANCEL_NO_TARGET)
             return
-        result_line = self._issue_kill(target)
+        from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+
+        def _on_confirm(confirmed: bool | None) -> None:
+            if not confirmed:
+                logger.debug(f"action_cancel_session cancelled wave={target.wave_id}")
+                return
+            result_line = self._issue_kill(target)
+            self._set_result(result_line)
+            logger.info(
+                f"action_cancel_session wave={target.wave_id} attempt={target.attempt} "
+                f"result={result_line!r}"
+            )
+
+        prompt = f"Kill {target.wave_id}? graceful stop (SIGTERM ladder)."
+        self._push_overlay(ConfirmModal(prompt), _on_confirm)
+
+    def action_pause_session(self) -> None:
+        """Pause / resume the watched lane through the real daemon RPC (``space``).
+
+        Reads the current
+        :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag and issues
+        ``agent.resume`` when already paused, else ``agent.pause`` -- a
+        deliberate operator stop the daemon persists and
+        :func:`eawf.workflow.lifecycle.wave.claim_wave` reads to block the next
+        claim. Pause is non-destructive (no confirm). With no target there is
+        nothing to pause (surfaced honestly); the line carries the persisted
+        verdict, or the honest unavailable line when the daemon is unreachable.
+        """
+        target = self.target
+        if target is None:
+            self._set_result(f"[$warn]{PAUSE_NO_TARGET}[/]")
+            return
+        result_line = self._issue_pause()
         self._set_result(result_line)
-        logger.info(
-            f"action_cancel_session wave={target.wave_id} attempt={target.attempt} "
-            f"result={result_line!r}"
-        )
+        logger.info(f"action_pause_session wave={target.wave_id} result={result_line!r}")
+
+    def action_view_log(self) -> None:
+        """View the watched session's log, surfacing its handle (``l``).
+
+        Resolves the watched attempt's recorded session-log handle (the
+        per-runtime URN the adapter mints) and surfaces it as the result line so
+        the operator can locate the session log; a non-destructive read. With no
+        target there is nothing to view, and a watched attempt with no recorded
+        handle yet surfaces the honest "no session log recorded yet" line rather
+        than pointing at a missing log.
+        """
+        target = self.target
+        if target is None:
+            self._set_result(f"[$warn]{LOG_NO_TARGET}[/]")
+            return
+        if target.log_handle is None:
+            self._set_result(f"[$warn]{LOG_NO_HANDLE}[/]")
+            logger.info(f"action_view_log no_handle wave={target.wave_id} attempt={target.attempt}")
+            return
+        result_line = f"[$ok]log:[/] [$muted]{escape_markup(target.log_handle)}[/]"
+        self._set_result(result_line)
+        logger.info(f"action_view_log wave={target.wave_id} handle={target.log_handle!r}")
+
+    #: The mode ``Esc`` steps the FA4 zoom out to -- the broad live-stream Feed
+    #: the zoom drills one session out of, mirroring the crash-frame's
+    #: feed-return. Switching back to the whole-fleet feed is the natural "leave
+    #: this one session" gesture.
+    _LEAVE_MODE: ClassVar[str] = "feed"
+
+    def action_leave_zoom(self) -> None:
+        """Leave the session zoom for the broad Feed mode (``Esc``).
+
+        Switches back to the whole-fleet :data:`_LEAVE_MODE` (the live-stream
+        Feed the zoom drills one session out of) via the App's ``switch_mode``
+        seam, the way the crash-frame returns to the feed; degrades to a quiet
+        no-op under a bare harness whose App exposes no ``switch_mode`` (the
+        binding stays live for affordance parity).
+        """
+        switch_mode = getattr(self.app, "switch_mode", None)
+        if callable(switch_mode):
+            switch_mode(self._LEAVE_MODE)
+            logger.info(f"action_leave_zoom mode={self._LEAVE_MODE!r}")
+            return
+        logger.debug("action_leave_zoom no_switch_seam")
+
+    def _push_overlay(
+        self, modal: ModalScreen[bool], callback: Callable[[bool | None], None]
+    ) -> None:
+        """Push an overlay *modal* with *callback*, cap-aware when possible.
+
+        The shared overlay-push seam for this pane's confirm-gated kill: routes
+        through the App's depth-capped ``push_modal`` when exposed, falling back
+        to a plain ``push_screen`` under a bare harness so the push never raises.
+
+        Args:
+            modal: The overlay screen to push (the kill ConfirmModal).
+            callback: Invoked with the modal's dismiss value when it closes.
+        """
+        push_modal = getattr(self.app, "push_modal", None)
+        if callable(push_modal):
+            push_modal(modal, callback=callback)
+            return
+        self.app.push_screen(modal, callback)
+
+    def _issue_pause(self) -> str:
+        """Toggle dispatch pause via the real RPC and return a result line.
+
+        Calls ``agent.resume`` (when paused) or ``agent.pause`` (when not)
+        through the :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam
+        when available; the line reports the persisted verdict (``paused`` /
+        ``resumed``), or the honest unavailable line rather than a faked toggle.
+
+        Returns:
+            A content-markup result line describing the pause / resume outcome.
+        """
+        unavailable = f"[$warn]{PAUSE_NO_DAEMON}[/]"
+        if not self._daemon_available():
+            return unavailable
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        paused = self._currently_paused()
+        method = _RESUME_RPC if paused else _PAUSE_RPC
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                result = client.call(method, {})
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_pause daemon_rejected method={method!r} message={exc.message!r}")
+            return "[$warn]pause: daemon rejected request[/]"
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_pause daemon_fallback method={method!r} cause={exc!r}")
+            return unavailable
+        now_paused = bool(result.get("paused", not paused))
+        verb = "paused" if now_paused else "resumed"
+        return f"[$ok]pause: {verb}[/]"
+
+    def _currently_paused(self) -> bool:
+        """Return the bound state's ``dispatch_paused`` flag (``False`` if unbound).
+
+        The pause toggle reads the current flag to pick which RPC to issue; an
+        unbound state reads as not-paused so the first ``space`` issues
+        ``agent.pause``.
+
+        Returns:
+            The persisted ``dispatch_paused`` flag, or ``False`` when unbound.
+        """
+        state = self._current_state()
+        return bool(state.dispatch_paused) if state is not None else False
 
     def _issue_kill(self, target: WatchTarget) -> str:
         """Issue the ``agent.kill`` RPC for *target* and return a result line.
@@ -1061,8 +1347,12 @@ class AgentWatchModeScreen(ScopeScreen):
         try:
             with DaemonClient(call_timeout_seconds=1.0) as client:
                 result = client.call(
-                    "agent.kill",
-                    {"wave_id": target.wave_id, "attempt": target.attempt, "signal": "term"},
+                    _KILL_METHOD,
+                    {
+                        "wave_id": target.wave_id,
+                        "attempt": target.attempt,
+                        "signal": _SIGNAL_TERM,
+                    },
                 )
         except DaemonRpcError as exc:
             logger.debug(f"_issue_kill daemon_rejected message={exc.message!r}")
@@ -1071,7 +1361,7 @@ class AgentWatchModeScreen(ScopeScreen):
             logger.debug(f"_issue_kill daemon_fallback cause={exc!r}")
             return f"[$warn]{CANCEL_NO_DAEMON}[/]"
         killed = bool(result.get("killed"))
-        signal = str(result.get("signal", "term"))
+        signal = str(result.get("signal", _SIGNAL_TERM))
         if killed:
             return f"[$ok]cancel: killed[/] [$muted]signal={escape_markup(signal)}[/]"
         # ``agent.kill`` is still a placeholder returning killed=false; report
@@ -1147,6 +1437,17 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
+    def _output_tail(self) -> OutputTail:
+        """Return the mounted raw-output tail for the single-session zoom.
+
+        Only valid in the single-session zoom path (the grid path has no tail);
+        callers gate on ``self._grid is None`` before reaching here.
+
+        Returns:
+            The mounted :class:`OutputTail` for the watched session.
+        """
+        return self.query_one(f"#{WATCH_OUTPUT_ID}", OutputTail)
+
     def _pick_target(self) -> WatchTarget | None:
         """Resolve the default watch target from the bound read-only state."""
         return pick_watch_target(self._current_state())
@@ -1218,6 +1519,10 @@ __all__ = [
     "CANCEL_NO_DAEMON",
     "CANCEL_NO_TARGET",
     "EMPTY_NOTICE",
+    "LOG_NO_HANDLE",
+    "LOG_NO_TARGET",
+    "PAUSE_NO_DAEMON",
+    "PAUSE_NO_TARGET",
     "ROLLUP_EMPTY_NOTICE",
     "WATCH_DEGRADED",
     "WATCH_EMPTY_ID",
@@ -1225,6 +1530,7 @@ __all__ = [
     "WATCH_GRID_ID",
     "WATCH_HEADER_ID",
     "WATCH_LIST_ID",
+    "WATCH_OUTPUT_ID",
     "WATCH_RESULT_ID",
     "WATCH_ROLLUP_EMPTY_ID",
     "WATCH_ROLLUP_ID",

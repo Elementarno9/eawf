@@ -30,6 +30,7 @@ is CPU-idle-based, not worker-aware) before asserting.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -53,7 +54,11 @@ from eawf.surfaces.tui.modes.agent_watch import (
     CANCEL_IDLE,
     CANCEL_NO_DAEMON,
     EMPTY_NOTICE,
+    LOG_NO_HANDLE,
+    PAUSE_NO_DAEMON,
+    PAUSE_NO_TARGET,
     WATCH_EMPTY_ID,
+    WATCH_OUTPUT_ID,
     WATCH_RESULT_ID,
     WATCH_ROW_CLASS,
     WATCH_TILE_CLASS,
@@ -67,10 +72,17 @@ from eawf.surfaces.tui.modes.agent_watch import (
     render_watch_header,
     tile_dom_id,
 )
+from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
+)
+from eawf.surfaces.tui.widgets.output_tail import (
+    OUTPUT_TAIL_ROW_CLASS,
+    OUTPUT_TAIL_WAITING_ID,
+    WAITING_NOTICE,
+    OutputTail,
 )
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
@@ -196,6 +208,41 @@ def _write_state(tmp_path: Path, state: State) -> Path:
     state_path = ea_dir / "state.json"
     state_path.write_text(state.model_dump_json(), encoding="utf-8")
     return state_path
+
+
+def _recording_client(
+    calls: list[tuple[str, dict[str, object]]],
+    *,
+    response: dict[str, object] | None = None,
+) -> Callable[..., object]:
+    """Return a ``DaemonClient`` factory recording each RPC into *calls*.
+
+    The fake client records ``(method, params)`` for every ``call`` and returns
+    *response* (defaulting to the daemon's placeholder ``agent.kill`` reply), so
+    a test can assert exactly which RPC fired without a live daemon.
+
+    Args:
+        calls: The list each ``(method, params)`` is appended to.
+        response: The dict the fake ``call`` returns; defaults to the daemon's
+            placeholder ``{"killed": False, "signal": "term"}`` kill reply.
+
+    Returns:
+        A factory accepting any args + kwargs and returning the fake client.
+    """
+    reply = response if response is not None else {"killed": False, "signal": "term"}
+
+    class _FakeClient:
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return reply
+
+    return lambda *_a, **_k: _FakeClient()
 
 
 # --------------------------------------------------------------------------
@@ -510,25 +557,94 @@ def test_agent_watch_mode_mounts_grid_for_two_active_executors(tmp_path: Path) -
     asyncio.run(body())
 
 
-def test_agent_watch_cancel_binding_exists() -> None:
-    """The Watch pane binds ``k`` to the cancel action."""
+def test_agent_watch_session_keys_resolve_to_live_bindings() -> None:
+    """Every advertised FA4 session key resolves to a live Binding (parity).
+
+    The affordance-parity contract: each of the four advertised session keys --
+    ``k`` (kill), ``space`` (pause), ``l`` (view log), ``Esc`` (back) -- maps to
+    a concrete :class:`~textual.binding.Binding` whose action method exists on
+    the screen, so no advertised key is a dead affordance.
+    """
     keys = {
         binding.key: binding.action
         for binding in AgentWatchModeScreen.BINDINGS
         if hasattr(binding, "key")
     }
     assert keys.get("k") == "cancel_session"
+    assert keys.get("space") == "pause_session"
+    assert keys.get("l") == "view_log"
+    assert keys.get("escape") == "leave_zoom"
+    # Each advertised key's action method exists on the screen (no dead binding).
+    for action in ("cancel_session", "pause_session", "view_log", "leave_zoom"):
+        assert callable(getattr(AgentWatchModeScreen, f"action_{action}"))
+
+
+def test_agent_watch_cancel_key_opens_confirm_modal(tmp_path: Path) -> None:
+    """Pressing ``k`` opens a ConfirmModal gating the destructive kill.
+
+    The destructive lane-kill is never one keystroke: ``k`` first opens the
+    shared :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
+    naming the SIGTERM stop, so the operator confirms before any RPC fires.
+    """
+    state = _state(sessions={"S-1": _session("S-1")})
+    state_path = _write_state(tmp_path, state)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("k")  # destructive -> confirm modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+
+    asyncio.run(body())
+
+
+def test_agent_watch_cancel_dismissed_issues_no_rpc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancelling the kill confirm (``Esc``) issues no ``agent.kill`` RPC.
+
+    The destructive gate must not fire the kill when the operator backs out:
+    pressing ``Esc`` on the confirm modal dismisses it as ``No`` so the daemon
+    is never reached.
+    """
+    state = _state(sessions={"S-1": _session("S-1")})
+    state_path = _write_state(tmp_path, state)
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _recording_client(calls))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press("k")
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("escape")  # cancel == No
+            await settle_screen(pilot)
+
+    asyncio.run(body())
+    assert calls == []  # the cancelled kill never reached the daemon
 
 
 def test_agent_watch_cancel_action_no_daemon_surfaces_honest_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With no reachable daemon the cancel action reports the request was not issued.
+    """With no reachable daemon the confirmed kill reports the request was not issued.
 
     The cancel action must never fake a kill: when the daemon socket is
-    unavailable it surfaces the honest "daemon unavailable" line rather than a
-    success.
+    unavailable the confirmed kill surfaces the honest "daemon unavailable" line
+    rather than a success.
     """
     state = _state(sessions={"S-1": _session("S-1")})
     state_path = _write_state(tmp_path, state)
@@ -543,7 +659,11 @@ def test_agent_watch_cancel_action_no_daemon_surfaces_honest_result(
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)
-            await pilot.press("k")  # cancel
+            await pilot.press("k")  # -> confirm modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("right")  # highlight Yes
+            await pilot.press("enter")  # confirm
             await settle_screen(pilot)
             result = pane.query_one(f"#{WATCH_RESULT_ID}")
             assert CANCEL_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
@@ -555,42 +675,34 @@ def test_agent_watch_cancel_action_surfaces_placeholder_kill_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The cancel action issues an ``agent.kill`` request and surfaces its result.
+    """The confirmed cancel issues an ``agent.kill`` request and surfaces its result.
 
-    Drives the cancel path with a reachable daemon stubbed by a fake client
-    that returns the placeholder ``killed=false`` result the daemon currently
-    sends. The action must surface that the request was issued and the daemon's
-    honest verdict (not killed) rather than faking success.
+    Drives the confirmed cancel path with a reachable daemon stubbed by a fake
+    client that returns the placeholder ``killed=false`` result the daemon
+    currently sends. The action must surface that the request was issued and the
+    daemon's honest verdict (not killed) rather than faking success.
     """
     state = _state(sessions={"S-1": _session("S-1")})
     state_path = _write_state(tmp_path, state)
     calls: list[tuple[str, dict[str, object]]] = []
-
-    class _FakeClient:
-        def __enter__(self) -> _FakeClient:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
-            calls.append((method, params))
-            # Mirror the daemon's placeholder agent.kill response.
-            return {"killed": False, "signal": "term"}
 
     async def body() -> None:
         from eawf.surfaces.cli import _daemon_client as dc
 
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
-        monkeypatch.setattr(dc, "DaemonClient", lambda *a, **k: _FakeClient())
+        monkeypatch.setattr(dc, "DaemonClient", _recording_client(calls))
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press(_WATCH_DIGIT)
             await settle_screen(pilot)
             pane = app.screen
             assert isinstance(pane, AgentWatchModeScreen)
-            await pilot.press("k")  # cancel
+            await pilot.press("k")  # -> confirm modal
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("right")  # highlight Yes
+            await pilot.press("enter")  # confirm
             await settle_screen(pilot)
             result = pane.query_one(f"#{WATCH_RESULT_ID}")
             rendered = str(result.render())  # type: ignore[attr-defined]
@@ -598,10 +710,247 @@ def test_agent_watch_cancel_action_surfaces_placeholder_kill_result(
             assert CANCEL_IDLE not in rendered
 
     asyncio.run(body())
-    # The cancel action reached the daemon with the watched wave + attempt.
+    # The confirmed cancel reached the daemon with the watched wave + attempt + term.
     assert calls and calls[0][0] == "agent.kill"
     assert calls[0][1]["wave_id"] == _WAVE
     assert calls[0][1]["attempt"] == 1
+    assert calls[0][1]["signal"] == "term"
+
+
+# --------------------------------------------------------------------------
+# Raw-output tail (the FA4 zoom add) mounted in the session zoom
+# --------------------------------------------------------------------------
+
+
+def test_agent_watch_zoom_mounts_output_tail_with_waiting_notice(tmp_path: Path) -> None:
+    """The single-session zoom mounts a raw-output tail showing the waiting notice.
+
+    The zoom adds the raw-output tail beneath the typed lifecycle stream; before
+    any agent stdout arrives it shows the pinned ``waiting for output...`` notice
+    rather than a frozen blank pane.
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            tail = pane.query_one(f"#{WATCH_OUTPUT_ID}", OutputTail)
+            assert tail.query(f"#{OUTPUT_TAIL_WAITING_ID}")
+            assert not tail.has_output
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert WAITING_NOTICE in frame
+
+    asyncio.run(body())
+
+
+def test_agent_watch_append_output_streams_watched_wave_only(tmp_path: Path) -> None:
+    """A raw-output line for the watched wave lands in the tail; off-wave does not.
+
+    The raw-output fan-out is filtered to the watched session's wave: a line for
+    the watched wave appends to the tail (replacing the waiting notice), while a
+    line for a sibling wave is dropped (the tail shows one session's stdout).
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            pane.append_output(_WAVE, "agent says hello")
+            pane.append_output("P01-I01-W02", "other lane output")
+            await settle_screen(pilot)
+            tail = pane.query_one(f"#{WATCH_OUTPUT_ID}", OutputTail)
+            rows = [str(r.render()) for r in tail.query(f".{OUTPUT_TAIL_ROW_CLASS}").results()]
+            assert any("agent says hello" in row for row in rows)
+            assert all("other lane output" not in row for row in rows)
+            assert tail.has_output
+            assert not tail.query(f"#{OUTPUT_TAIL_WAITING_ID}")  # notice dropped
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Pause this lane (space) + view log (l)
+# --------------------------------------------------------------------------
+
+
+def _state_with_logged_wave(*, handle: str = "urn:eawf:v1:session-log:claude:abc") -> State:
+    """Build a state whose watched wave carries one session-attempt + log handle.
+
+    The ``l`` view-log path resolves the handle off the wave's session table, so
+    this builder seeds a wave row carrying one ``SessionAttempt`` with
+    *handle* alongside the ACTIVE executor session the picker selects.
+    """
+    from eawf.kernel.state.enums import WaveStatus
+    from eawf.kernel.state.models import SessionAttempt, Wave
+
+    wave = Wave(
+        id=_WAVE,
+        iter_id="P01-I01",
+        title="seeded watched wave",
+        status=WaveStatus.IN_PROGRESS,
+        opened_at=_T0,
+        sessions={
+            1: SessionAttempt(
+                attempt=1,
+                runtime="claude",
+                session_id="S-1",
+                session_log_handle=handle,
+                started_at=_T0,
+            )
+        },
+    )
+    state = _state(sessions={"S-1": _session("S-1")})
+    state.waves[_WAVE] = wave
+    return state
+
+
+def test_agent_watch_pause_no_target_surfaces_honest_line(tmp_path: Path) -> None:
+    """``space`` on an honest-empty scope (no session) says there is nothing to pause.
+
+    With no dispatched session the pause key has no lane to act on, so it
+    surfaces the honest "no session to pause" line without reaching the daemon.
+    """
+    state_path = _write_state(tmp_path, _state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert pane.target is None
+            await pilot.press("space")  # pause this lane (none)
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{WATCH_RESULT_ID}")
+            assert PAUSE_NO_TARGET in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_agent_watch_pause_no_daemon_surfaces_honest_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no reachable daemon ``space`` reports the pause was not issued.
+
+    Pause is non-destructive (no confirm gate), but an unreachable daemon must
+    still surface the honest unavailable line rather than faking a toggle.
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            await pilot.press("space")  # pause this lane
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{WATCH_RESULT_ID}")
+            assert PAUSE_NO_DAEMON in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_agent_watch_pause_issues_pause_rpc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``space`` issues ``agent.pause`` and surfaces the persisted verdict.
+
+    With a reachable daemon and a not-paused state the pause toggle fires
+    ``agent.pause`` (no confirm) and reports the persisted ``paused`` verdict.
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _recording_client(calls, response={"paused": True}))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            await pilot.press("space")  # pause this lane
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{WATCH_RESULT_ID}")
+            assert "paused" in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+    # The pause toggle reached the daemon with agent.pause (not-paused -> pause).
+    assert calls and calls[0][0] == "agent.pause"
+
+
+def test_agent_watch_view_log_no_handle_surfaces_honest_line(tmp_path: Path) -> None:
+    """``l`` on a wave with no recorded session-log handle says so honestly.
+
+    The seeded scope has an ACTIVE executor session but no wave session table,
+    so no log handle is recorded; the view-log key surfaces the honest
+    "no session log recorded yet" line rather than pointing at a missing log.
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            await pilot.press("l")  # view log
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{WATCH_RESULT_ID}")
+            assert LOG_NO_HANDLE in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+
+
+def test_agent_watch_view_log_surfaces_recorded_handle(tmp_path: Path) -> None:
+    """``l`` surfaces the watched attempt's recorded session-log handle.
+
+    A wave carrying a session-attempt row with a recorded log handle resolves
+    onto the watch target, so the view-log key surfaces that handle.
+    """
+    handle = "urn:eawf:v1:session-log:claude:deadbeef"
+    state_path = _write_state(tmp_path, _state_with_logged_wave(handle=handle))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert pane.target is not None
+            assert pane.target.log_handle == handle
+            await pilot.press("l")  # view log
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{WATCH_RESULT_ID}")
+            assert handle in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
 
 
 def test_agent_watch_pane_keeps_chassis_brand(tmp_path: Path) -> None:
