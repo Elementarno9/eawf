@@ -5244,6 +5244,18 @@
       "status": "done",
       "updated_at": "2026-06-11T00:11:19.541245Z"
     },
+    "P30-I08-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I08-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I08-W06",
+      "scope_id": "P30-I08-W06",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:20.135110Z"
+    },
     "P30-I09-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5268,6 +5280,30 @@
       "status": "done",
       "updated_at": "2026-06-11T00:11:20.331376Z"
     },
+    "P30-I09-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I09-W03",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I09-W03",
+      "scope_id": "P30-I09-W03",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:20.834395Z"
+    },
+    "P30-I09-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I09-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I09-W07",
+      "scope_id": "P30-I09-W07",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:21.547524Z"
+    },
     "P30-I10-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5279,6 +5315,18 @@
       "scope_id": "P30-I10-W01",
       "status": "done",
       "updated_at": "2026-06-11T00:11:21.123011Z"
+    },
+    "P30-I10-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W02",
+      "scope_id": "P30-I10-W02",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:22.254002Z"
     },
     "P30-I10-W04": {
       "actual_cost_usd": 0.0,
@@ -5303,6 +5351,18 @@
       "scope_id": "P30-I10-W05",
       "status": "done",
       "updated_at": "2026-06-11T00:11:21.916330Z"
+    },
+    "P30-I10-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W06",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W06",
+      "scope_id": "P30-I10-W06",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:22.941994Z"
     },
     "P30-I10-W10": {
       "actual_cost_usd": 0.0,
@@ -5375,6 +5435,54 @@
       "scope_id": "P30-I12-W01",
       "status": "done",
       "updated_at": "2026-06-11T00:11:24.985686Z"
+    },
+    "P30-I12-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I12-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I12-W02",
+      "scope_id": "P30-I12-W02",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:23.709240Z"
+    },
+    "P30-I13-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I13-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I13-W01",
+      "scope_id": "P30-I13-W01",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:24.452904Z"
+    },
+    "P30-I13-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I13-W08",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I13-W08",
+      "scope_id": "P30-I13-W08",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:25.159288Z"
+    },
+    "P30-I13-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I13-W12",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I13-W12",
+      "scope_id": "P30-I13-W12",
+      "status": "done",
+      "updated_at": "2026-06-11T00:46:25.877169Z"
     },
     "P30-I14-W01": {
       "actual_cost_usd": 0.0,
@@ -8603,8 +8711,10 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
-    "iter_id": "P30-I12",
+    "active_wave_ids": [
+      "P30-I10-W09"
+    ],
+    "iter_id": "P30-I13",
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -16794,6 +16904,19 @@
       "scope_id": "P30-I08-W05",
       "updated_at": "2026-06-10T23:48:03.676500Z"
     },
+    "P30-I08-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I08-W06-bucket-20260611T001359Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I08-W06",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I08-W06",
+      "updated_at": "2026-06-11T00:13:59.585920Z"
+    },
     "P30-I09-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I09-W01-bucket-20260610T231210Z",
@@ -16820,6 +16943,32 @@
       "scope_id": "P30-I09-W02",
       "updated_at": "2026-06-10T23:48:04.157088Z"
     },
+    "P30-I09-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I09-W03-bucket-20260611T001400Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I09-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I09-W03",
+      "updated_at": "2026-06-11T00:14:00.068262Z"
+    },
+    "P30-I09-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I09-W07-bucket-20260611T001400Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I09-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I09-W07",
+      "updated_at": "2026-06-11T00:14:00.568530Z"
+    },
     "P30-I10-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I10-W01-bucket-20260610T234804Z",
@@ -16832,6 +16981,19 @@
       "reference_class": "bucket:XL",
       "scope_id": "P30-I10-W01",
       "updated_at": "2026-06-10T23:48:04.631028Z"
+    },
+    "P30-I10-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W02-bucket-20260611T001401Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I10-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I10-W02",
+      "updated_at": "2026-06-11T00:14:01.042263Z"
     },
     "P30-I10-W04": {
       "confidence": "low",
@@ -16858,6 +17020,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I10-W05",
       "updated_at": "2026-06-10T23:48:05.120166Z"
+    },
+    "P30-I10-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W06-bucket-20260611T001401Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I10-W06",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I10-W06",
+      "updated_at": "2026-06-11T00:14:01.526677Z"
+    },
+    "P30-I10-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W09-bucket-20260611T001402Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I10-W09",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I10-W09",
+      "updated_at": "2026-06-11T00:14:02.029576Z"
     },
     "P30-I10-W10": {
       "confidence": "low",
@@ -16936,6 +17124,58 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I12-W01",
       "updated_at": "2026-06-10T23:48:07.026349Z"
+    },
+    "P30-I12-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I12-W02-bucket-20260611T001402Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I12-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I12-W02",
+      "updated_at": "2026-06-11T00:14:02.519201Z"
+    },
+    "P30-I13-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I13-W01-bucket-20260611T001403Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I13-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I13-W01",
+      "updated_at": "2026-06-11T00:14:03.008193Z"
+    },
+    "P30-I13-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I13-W08-bucket-20260611T001403Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I13-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I13-W08",
+      "updated_at": "2026-06-11T00:14:03.491477Z"
+    },
+    "P30-I13-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I13-W12-bucket-20260611T004602Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I13-W12",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I13-W12",
+      "updated_at": "2026-06-11T00:46:02.986062Z"
     },
     "P30-I14-W01": {
       "confidence": "low",
@@ -19000,7 +19240,7 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753835Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Fleet cockpit FA1-FA8 plus S1-S12 flow gates",
       "trigger": "none",
       "wave_ids": [
@@ -19014,7 +19254,8 @@
         "P30-I13-W08",
         "P30-I13-W09",
         "P30-I13-W10",
-        "P30-I13-W11"
+        "P30-I13-W11",
+        "P30-I13-W12"
       ]
     },
     "P30-I14": {
@@ -20006,7 +20247,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-11T00:11:25.713652Z",
+  "updated_at": "2026-06-11T00:46:25.877321Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -77861,10 +78102,10 @@
       "blocks": [
         "P30-I08-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:13:59.585814Z",
+      "closed_at": "2026-06-11T00:46:20.135110Z",
+      "commit": "e2e4e0db4b12a1c1b21f3f86ece0dcf4032b91b9",
       "deps": [
         "P30-I08-W02",
         "P30-I08-W03"
@@ -77881,12 +78122,12 @@
       "intent": null,
       "iter_id": "P30-I08",
       "opened_at": "2026-06-09T12:29:17.817274Z",
-      "outcome": null,
+      "outcome": "w/u scope-switch strip + per-scope snapshot golden",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78092,10 +78333,10 @@
       "blocks": [
         "P30-I09-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:00.068172Z",
+      "closed_at": "2026-06-11T00:46:20.834395Z",
+      "commit": "ef62d1767f468d8fed49a38e86b09a295be622d2",
       "deps": [
         "P30-I09-W02"
       ],
@@ -78111,12 +78352,12 @@
       "intent": null,
       "iter_id": "P30-I09",
       "opened_at": "2026-06-09T12:29:17.805405Z",
-      "outcome": null,
+      "outcome": "verbosity-bias + citation-faithfulness jury probes (None-gated under min_n)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78358,10 +78599,10 @@
     "P30-I09-W07": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:00.568438Z",
+      "closed_at": "2026-06-11T00:46:21.547524Z",
+      "commit": "3d00a07e1a95fb6ab4971d21c6757594ac4e86c8",
       "deps": [
         "P30-I09-W02"
       ],
@@ -78378,12 +78619,12 @@
       "intent": null,
       "iter_id": "P30-I09",
       "opened_at": "2026-06-09T12:29:17.805886Z",
-      "outcome": null,
+      "outcome": "jury-validation honest-negative CLI + real ECE bound into Trust mode",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78514,10 +78755,10 @@
         "P30-I10-W07",
         "P30-I10-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:01.042168Z",
+      "closed_at": "2026-06-11T00:46:22.254002Z",
+      "commit": "0d03cc3199e61da2b997183d0b582611b55fc1c5",
       "deps": [
         "P30-I10-W01"
       ],
@@ -78534,12 +78775,12 @@
       "intent": null,
       "iter_id": "P30-I10",
       "opened_at": "2026-06-09T12:29:17.782255Z",
-      "outcome": null,
+      "outcome": "audit-DSL wired-on sweep + backlog_resolution close-gate; meta-gate fails on zero-caller kind",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78730,10 +78971,10 @@
     "P30-I10-W06": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:01.526578Z",
+      "closed_at": "2026-06-11T00:46:22.941994Z",
+      "commit": "37ca5a56b4e0b94e3c1ff76391811f3a76335570",
       "deps": [
         "P30-I10-W01"
       ],
@@ -78749,12 +78990,12 @@
       "intent": null,
       "iter_id": "P30-I10",
       "opened_at": "2026-06-09T12:29:17.783164Z",
-      "outcome": null,
+      "outcome": "per-package coverage ratchets for 7 ungated packages + TUI behavioural floor (green now)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78891,8 +79132,8 @@
     "P30-I10-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:02.029476Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -78918,7 +79159,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -79798,10 +80039,10 @@
         "P30-I12-W08",
         "P30-I13-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:02.519104Z",
+      "closed_at": "2026-06-11T00:46:23.709240Z",
+      "commit": "db7d373c4cf9dccb9ad12f9630ed17138e353b85",
       "deps": [
         "P30-I12-W01"
       ],
@@ -79817,12 +80058,12 @@
       "intent": null,
       "iter_id": "P30-I12",
       "opened_at": "2026-06-09T12:29:17.821948Z",
-      "outcome": null,
+      "outcome": "live per-lane pgid registry on FleetRun; fleet.drive wired live in server.py",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80470,10 +80711,10 @@
     "P30-I13-W01": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:03.008095Z",
+      "closed_at": "2026-06-11T00:46:24.452904Z",
+      "commit": "0c59e977ce08d8b76cfe8970ad8b50daa501cc12",
       "deps": [
         "P30-I12-W01"
       ],
@@ -80489,12 +80730,12 @@
       "intent": null,
       "iter_id": "P30-I13",
       "opened_at": "2026-06-09T12:29:17.824140Z",
-      "outcome": null,
+      "outcome": "FA1 arm/launch modal replaces autopilot arm-deferred stub",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -80944,10 +81185,10 @@
     "P30-I13-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:14:03.491385Z",
+      "closed_at": "2026-06-11T00:46:25.159288Z",
+      "commit": "25024216033466989061325e346a18ccf4b882e6",
       "deps": [
         "P30-I07-W15",
         "P30-I12-W01"
@@ -80963,12 +81204,12 @@
       "intent": null,
       "iter_id": "P30-I13",
       "opened_at": "2026-06-09T12:29:17.824608Z",
-      "outcome": null,
+      "outcome": "FA8 research-campaign auto-run extending the U3 board (o/t/b/v operator-input grammar)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -81211,6 +81452,63 @@
         }
       ],
       "title": "Live-test the cockpit with worker offload and poll backstop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I13-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:46:02.985952Z",
+      "closed_at": "2026-06-11T00:46:25.877169Z",
+      "commit": "c2373fef0afe13744331682a02afef9b47de29ff",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/footer.py"
+      ],
+      "gates": [],
+      "id": "P30-I13-W12",
+      "intent": {
+        "desired_outcome": "the frozen footer hint vocabulary gains b so the operator-input broadcast hint is canonical and the gate passes",
+        "evidence_refs": [],
+        "planned_steps": [
+          "add b to CANONICAL_HINT_TOKENS",
+          "rerun the footer hint-canon suite green"
+        ],
+        "priority_rationale": "Red hint-canon gate blocks iter and phase close; fast reactive repair of I13-W08 cross-file fallout",
+        "problem": "I13-W08 surfaced a b broadcast operator-input hint but b is absent from footer CANONICAL_HINT_TOKENS, reddening the W22 hint-canon regression gate",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I13",
+      "opened_at": "2026-06-11T00:46:02.059449Z",
+      "outcome": "reactive: b broadcast added to canonical footer hint vocabulary",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "test_every_mode_and_scope_hint_parses_to_canon passes after b is added to CANONICAL_HINT_TOKENS so the research_board broadcast hint parses to canon",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_every_mode_and_scope_hint_parses_to_canon passes after b is added to CANONICAL_HINT_TOKENS so the research_board broadcast hint parses to canon",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add b broadcast to canonical footer hint vocabulary",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
