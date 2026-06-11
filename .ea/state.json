@@ -5916,6 +5916,30 @@
       "status": "done",
       "updated_at": "2026-06-11T05:42:59.891989Z"
     },
+    "P30-I13-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I13-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I13-W10",
+      "scope_id": "P30-I13-W10",
+      "status": "done",
+      "updated_at": "2026-06-11T05:56:49.808141Z"
+    },
+    "P30-I13-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I13-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I13-W11",
+      "scope_id": "P30-I13-W11",
+      "status": "done",
+      "updated_at": "2026-06-11T05:56:49.094065Z"
+    },
     "P30-I13-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -9775,7 +9799,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -18097,6 +18121,32 @@
       "scope_id": "P30-I13-W09",
       "updated_at": "2026-06-11T05:15:12.884132Z"
     },
+    "P30-I13-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I13-W10-bucket-20260611T054354Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I13-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I13-W10",
+      "updated_at": "2026-06-11T05:43:54.289442Z"
+    },
+    "P30-I13-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I13-W11-bucket-20260611T054354Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I13-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I13-W11",
+      "updated_at": "2026-06-11T05:43:54.769219Z"
+    },
     "P30-I13-W12": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I13-W12-bucket-20260611T004602Z",
@@ -21199,7 +21249,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T05:42:59.892153Z",
+  "updated_at": "2026-06-11T05:56:49.808315Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -82543,10 +82593,10 @@
     "P30-I13-W10": {
       "agent_role": "auditor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T05:43:54.289327Z",
+      "closed_at": "2026-06-11T05:56:49.808141Z",
+      "commit": "b76cc10881d583238f5cab189667eed971aa8299",
       "deps": [
         "P30-I13-W02"
       ],
@@ -82562,12 +82612,12 @@
       "intent": null,
       "iter_id": "P30-I13",
       "opened_at": "2026-06-09T12:29:17.831650Z",
-      "outcome": null,
+      "outcome": "FA affordance-parity audit + RS-26 crash/E1 degraded/E4 narrow edge frames (I13 complete)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -82620,10 +82670,10 @@
     "P30-I13-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T05:43:54.769119Z",
+      "closed_at": "2026-06-11T05:56:49.094065Z",
+      "commit": "7aebfefab50b8f5a8d0aeba450480e6997dd8870",
       "deps": [
         "P30-I13-W02",
         "P30-I13-W03",
@@ -82642,12 +82692,12 @@
       "intent": null,
       "iter_id": "P30-I13",
       "opened_at": "2026-06-09T12:29:17.832599Z",
-      "outcome": null,
+      "outcome": "Cockpit live-test: worker-offload single-wave RPCs + DuplicateIds fix + poll backstop",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
