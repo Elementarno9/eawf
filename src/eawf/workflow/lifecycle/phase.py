@@ -24,7 +24,13 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import Phase, State
+from eawf.kernel.state.models import Audit, Phase, State
+from eawf.observability.metrics.odr import (
+    DriftPulseReport,
+    WavePlanRow,
+    drift_budget_pulse,
+)
+from eawf.workflow.estimation.buckets import wave_estimate_eu
 from eawf.workflow.lifecycle._errors import LifecycleError, check_title_clarity
 from eawf.workflow.lifecycle.spec import PHASE_TRANSITIONS, validate_transition
 
@@ -63,6 +69,25 @@ _RELEASE_PREFLIGHT_CHECK_IDS: frozenset[str] = frozenset(
     {"release-preflight", "release_readiness", "release-readiness"}
 )
 _LEGACY_STUB_CHECK_IDS: frozenset[str] = frozenset({"stub"})
+
+#: Default drift-budget pulse cadence for the phase-wide SHIP_GATE drift
+#: checkpoint, mirroring the iter-close defaults
+#: (:data:`eawf.workflow.lifecycle.iter_._DEFAULT_DRIFT_BUDGET_WAVES` /
+#: ``_DEFAULT_DRIFT_BUDGET_EU``) so the phase checkpoint sizes the same window
+#: shape the I01 iter pulse uses. ``budget_waves=0`` would disable the
+#: wave-count arm, so the phase checkpoint fires the pulse over the full
+#: closed-wave window unconditionally by passing a budget the window already
+#: meets (see :func:`_phase_drift_pulse`).
+_DEFAULT_PHASE_DRIFT_BUDGET_WAVES: int = 3
+_DEFAULT_PHASE_DRIFT_BUDGET_EU: float = 3.5
+
+#: Check-row name for the aggregate cohesion lens the phase drift checkpoint
+#: appends after the per-wave drift lenses.
+_DRIFT_COHESION_CHECK_NAME: str = "phase-drift-cohesion"
+
+#: ``kind`` tag stamped on every phase drift check row so the rows are
+#: attributable to the drift-checkpoint reducer in the audit record.
+_DRIFT_CHECK_KIND: str = "wave_plan_drift"
 
 
 def open_phase(
@@ -249,6 +274,210 @@ def _audit_has_real_close_evidence(state: State, *, audit: object) -> bool:
         return report_artifact_id in state.artifacts
     check_results = getattr(audit, "check_results", [])
     return any(_audit_row_has_result(row) for row in check_results)
+
+
+def _phase_closed_wave_plan_rows(state: State, *, phase_id: str) -> list[WavePlanRow]:
+    """Build delivered-vs-planned criteria rows for a phase's closed waves.
+
+    The phase-wide analogue of
+    :func:`eawf.workflow.lifecycle.iter_._closed_wave_plan_rows`: it walks
+    every CLOSED wave under *every* iter of *phase_id* (not one iter) and
+    pairs, per wave, the criteria the planner intended (the plan row) against
+    the criteria the executor delivered. The plan-row count is the wave's
+    :attr:`eawf.kernel.spec.intent.IntentBrief.planned_steps` count when the
+    wave carries a typed intent; a wave with no intent has no recorded plan,
+    so its plan-row count is taken as the delivered count and the wave can
+    never read as thin (the conservative reading -- a missing plan is not
+    evidence of drift). The delivered count is ``len(wave.success_criteria)``
+    and the per-wave EU comes from
+    :func:`eawf.workflow.estimation.buckets.wave_estimate_eu`.
+
+    Args:
+        state: The state holding the iter / wave rows.
+        phase_id: Canonical phase id whose closed waves are scored.
+
+    Returns:
+        One :class:`WavePlanRow` per CLOSED wave under *phase_id*, in id
+        order; an empty list when the phase has no closed wave.
+    """
+    iter_ids_in_phase = _phase_close_iter_ids(state, phase_id=phase_id)
+    closed = sorted(
+        (
+            wave
+            for wave in state.waves.values()
+            if wave.iter_id in iter_ids_in_phase and wave.status is WaveStatus.CLOSED
+        ),
+        key=lambda wave: natural_key(wave.id),
+    )
+    rows: list[WavePlanRow] = []
+    for wave in closed:
+        delivered = len(wave.success_criteria)
+        planned = len(wave.intent.planned_steps) if wave.intent is not None else delivered
+        rows.append(
+            WavePlanRow(
+                wave_id=wave.id,
+                planned_criteria=planned,
+                delivered_criteria=delivered,
+                eu=wave_estimate_eu(wave),
+            )
+        )
+    return rows
+
+
+def _phase_drift_pulse(rows: list[WavePlanRow]) -> DriftPulseReport | None:
+    """Fire the optimistic drift checkpoint over a phase's closed-wave window.
+
+    The phase-wide binding of the I01 optimistic drift checkpoint: it scores
+    the full closed-wave window (every CLOSED wave under the phase) in one
+    ``optimistic`` pulse so the SHIP_GATE audit reconciles criteria-vs-plan
+    drift over the whole phase, not one iter. The pulse is sized so the window
+    always reaches a live budget arm -- the wave-count budget is clamped to the
+    window length so a short window still fires, and the EU budget keeps a live
+    arm when the window is empty -- so the checkpoint is never a silent no-op.
+    The mode is always ``optimistic``: the checkpoint is advisory and records
+    drift as a MINOR verdict rather than refusing the close (phase close has
+    its own structural gates).
+
+    Args:
+        rows: The phase's closed-wave plan rows from
+            :func:`_phase_closed_wave_plan_rows`.
+
+    Returns:
+        The :class:`DriftPulseReport` the pulse fired; ``None`` only when the
+        window is empty (no closed wave to score).
+    """
+    if not rows:
+        return None
+    budget_waves = min(_DEFAULT_PHASE_DRIFT_BUDGET_WAVES, len(rows))
+    return drift_budget_pulse(
+        rows,
+        budget_waves=budget_waves,
+        budget_eu=_DEFAULT_PHASE_DRIFT_BUDGET_EU,
+        checkpoint_mode="optimistic",
+    )
+
+
+def _phase_drift_check_rows(
+    rows: list[WavePlanRow],
+    *,
+    pulse: DriftPulseReport,
+) -> list[dict[str, object]]:
+    """Derive the SHIP_GATE check rows from the phase drift pulse.
+
+    The check coverage is spec-derived, not author-example: one CheckResult
+    row per closed wave (the wave-vs-plan drift lens) plus one aggregate
+    cohesion row, so a phase with ``N`` closed waves yields ``N + 1`` rows.
+    A wave's lens passes iff the wave is not thin
+    (:attr:`eawf.observability.metrics.odr.WavePlanRow.is_thin` is ``False``);
+    the aggregate cohesion row passes iff the pulse detected no drift across
+    the whole window. Each row is the dict shape
+    (``name`` / ``kind`` / ``passed`` / ``details``) that
+    :func:`_audit_row_has_result` accepts as real close evidence.
+
+    Args:
+        rows: The phase's closed-wave plan rows.
+        pulse: The :class:`DriftPulseReport` the phase checkpoint fired.
+
+    Returns:
+        ``len(rows) + 1`` check-result dicts: one per-wave drift lens in id
+        order, then the aggregate cohesion lens.
+    """
+    check_rows: list[dict[str, object]] = []
+    for row in rows:
+        thin = row.is_thin
+        check_rows.append(
+            {
+                "name": f"wave-drift:{row.wave_id}",
+                "kind": _DRIFT_CHECK_KIND,
+                "passed": not thin,
+                "details": (
+                    f"wave={row.wave_id} planned={row.planned_criteria} "
+                    f"delivered={row.delivered_criteria}"
+                ),
+            }
+        )
+    drift = pulse.drift_detected
+    check_rows.append(
+        {
+            "name": _DRIFT_COHESION_CHECK_NAME,
+            "kind": _DRIFT_CHECK_KIND,
+            "passed": not drift,
+            "details": (
+                f"closed_waves={len(rows)} drift_detected={str(drift).lower()} "
+                f"thin={pulse.thin_wave_ids}"
+            ),
+        }
+    )
+    return check_rows
+
+
+def build_ship_gate_drift_audit(
+    state: State,
+    *,
+    phase_id: str,
+    audit_id: str,
+    created_at: datetime | None = None,
+) -> Audit:
+    """Bind the optimistic drift checkpoint into a real SHIP_GATE audit.
+
+    Runs the I01 optimistic drift checkpoint over the phase's full closed-wave
+    window (:func:`_phase_drift_pulse` over :func:`_phase_closed_wave_plan_rows`)
+    and records the verdict as the durable SHIP_GATE audit that
+    :func:`close_phase` consumes. The audit is real, not a stub: its
+    ``check_results`` carry one wave-vs-plan drift lens per closed wave plus the
+    aggregate cohesion lens, each a row :func:`_audit_row_has_result` accepts,
+    so :func:`_audit_has_real_close_evidence` passes. The verdict is
+    :data:`~eawf.kernel.state.enums.AuditVerdict.MINOR` when the pulse detected
+    criteria-vs-plan drift and :data:`~eawf.kernel.state.enums.AuditVerdict.PASS`
+    otherwise -- a planted drift surfaces as MINOR rather than silently passing.
+
+    The audit is built but not persisted here: the daemon (the sole canonical
+    ``state.json`` mutator) inserts the returned row through its close path. The
+    helper is pure over the supplied *state* and never mutates it.
+
+    Args:
+        state: The state holding the phase's iter / wave rows.
+        phase_id: Canonical phase id whose closed waves anchor the checkpoint.
+        audit_id: Id stamped on the returned audit row.
+        created_at: Optional creation timestamp; defaults to ``now`` in UTC.
+
+    Returns:
+        A COMPLETE SHIP_GATE :class:`~eawf.kernel.state.models.Audit` scoped to
+        *phase_id*, with a non-``None`` verdict (PASS or MINOR) and the
+        spec-derived per-wave-drift-lens check rows.
+
+    Raises:
+        LifecycleError: when *phase_id* is unknown, or the phase has no closed
+            wave to anchor the checkpoint (a SHIP_GATE drift audit over an
+            empty window would carry no real evidence).
+    """
+    phase = state.phases.get(phase_id)
+    if phase is None:
+        raise LifecycleError(f"unknown phase {phase_id!r}")
+    rows = _phase_closed_wave_plan_rows(state, phase_id=phase_id)
+    pulse = _phase_drift_pulse(rows)
+    if pulse is None:
+        raise LifecycleError(
+            f"phase {phase_id!r} has no closed waves; cannot build a ship-gate drift audit"
+        )
+    check_rows = _phase_drift_check_rows(rows, pulse=pulse)
+    verdict = AuditVerdict.MINOR if pulse.drift_detected else AuditVerdict.PASS
+    stamp = created_at if created_at is not None else datetime.now(UTC)
+    audit = Audit(
+        id=audit_id,
+        scope_id=phase_id,
+        kind=AuditKind.SHIP_GATE,
+        status=AuditStatus.COMPLETE,
+        check_results=list(check_rows),
+        created_at=stamp,
+        verdict=verdict,
+    )
+    logger.info(
+        f"build_ship_gate_drift_audit phase={phase_id} audit={audit_id} "
+        f"verdict={verdict.value} closed_waves={len(rows)} "
+        f"drift_detected={str(pulse.drift_detected).lower()}"
+    )
+    return audit
 
 
 def _phase_close_release_preflight_warning(
