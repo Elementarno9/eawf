@@ -118,6 +118,17 @@ _LIFECYCLE: dict[Sigil, tuple[str, str]] = {
 #: brand=fisheye (the leading brand mark before the ``E\u00e4`` wordmark, the
 #: terminal-renderable stand-in for the Seal SVG that Textual cannot draw;
 #: ascii fallback ``*`` per ``brand-and-sigils.md`` Decision A).
+#:
+#: The ``criteria`` / ``cost`` / ``history`` roles are the detail-card tab
+#: markers folded in from their former
+#: :mod:`~eawf.surfaces.tui.screens.overlays.detail` locals so the tab chassis
+#: resolves EVERY tab glyph through this single chrome home (no pane invents a
+#: glyph): criteria=black-right-pointing-small-triangle (no lifecycle / bar
+#: collision), cost=generic-currency-sign (the runtime role already owns the
+#: ``$`` mark, so the cost tab carries U+00A4 in unicode and a plain ``$`` in
+#: ascii where the block currency sign may not render), history=anticlockwise
+#: open-circle-arrow (a single-cell rewind / back-in-time timeline mark, ascii
+#: ``<``).
 _CHROME: dict[str, tuple[str, str]] = {
     "dispatch": ("\u276f", ">"),  # heavy right-pointing angle quote
     "gate": ("\u2394", "[]"),  # software-function / lozenge
@@ -128,6 +139,9 @@ _CHROME: dict[str, tuple[str, str]] = {
     "check_on": ("\u25a3", "[x]"),  # square with fill
     "check_off": ("\u25a2", "[ ]"),  # hollow square
     "brand": ("\u25c9", "*"),  # fisheye -- the leading brand mark
+    "criteria": ("\u25b8", ">"),  # black right-pointing small triangle (tab marker)
+    "cost": ("\u00a4", "$"),  # generic currency sign (tab marker; runtime owns $)
+    "history": ("\u21ba", "<"),  # anticlockwise open circle arrow (tab marker)
 }
 
 #: :class:`Sigil` -> the :data:`~eawf.surfaces.tui.widgets.status_tint.STATUS_COLOURS`
@@ -191,7 +205,9 @@ def chrome(role: str, *, mode: str) -> str:
     Args:
         role: The chrome / action role -- one of ``"dispatch"`` /
             ``"gate"`` / ``"attention"`` / ``"harmony"`` / ``"overview"``
-            / ``"runtime"`` / ``"check_on"`` / ``"check_off"``.
+            / ``"runtime"`` / ``"check_on"`` / ``"check_off"`` / ``"brand"``
+            / ``"criteria"`` / ``"cost"`` / ``"history"`` (the last three are
+            the detail-card tab markers folded into this single home).
         mode: The App's resolved render-mode label -- ``"ascii"`` selects
             the ASCII column; any other value (``"unicode"`` or the legacy
             ``"braille"`` alias) selects the unicode column.

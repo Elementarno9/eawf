@@ -114,6 +114,12 @@ _ROLLUP_WORD: dict[HealthStatus, str] = {
     "fail": "unhealthy",
 }
 
+#: The middle-dot (U+00B7) joiner between the check count and the warn count
+#: in the rollup summary -- the reskin's pinned ``N checks · M warn`` form (the
+#: same middle-dot the metrics / events / audit overlays separate inline facts
+#: with), not the bare comma the pre-reskin header carried.
+_SUMMARY_SEP: str = " · "
+
 #: Per-row section assignment for the install / state / drift grouping.
 #: Every signal the pane renders maps to exactly one section so the body
 #: reads top-to-bottom as install health, then state health, then drift.
@@ -526,7 +532,7 @@ def render_health_lines(health: DoctorHealth, *, mode: str = _DEFAULT_RENDER_MOD
     colour = {"ok": "$success", "warn": "$warning", "fail": "$error"}[health.overall]
     check_count = len(health.rows)
     warn_count = sum(1 for row in health.rows if row.status == "warn")
-    summary = f"[$text-muted]{check_count} checks, {warn_count} warn[/]"
+    summary = f"[$text-muted]{check_count} checks{_SUMMARY_SEP}{warn_count} warn[/]"
     lines: list[str] = [f"[$accent]Health:[/] [{colour}]{word}[/]  {summary}", ""]
 
     grouped = _group_rows(health.rows)
@@ -557,7 +563,7 @@ def render_health_rollup(health: DoctorHealth) -> str:
     word = _ROLLUP_WORD[health.overall]
     colour = {"ok": "$success", "warn": "$warning", "fail": "$error"}[health.overall]
     warn_count = sum(1 for row in health.rows if row.status == "warn")
-    summary = f"[$text-muted]{len(health.rows)} checks, {warn_count} warn[/]"
+    summary = f"[$text-muted]{len(health.rows)} checks{_SUMMARY_SEP}{warn_count} warn[/]"
     return f"[$accent]Health:[/] [{colour}]{word}[/]  {summary}"
 
 

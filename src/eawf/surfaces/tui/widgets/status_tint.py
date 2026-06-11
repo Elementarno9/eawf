@@ -30,6 +30,15 @@ from typing import Final
 
 from eawf.surfaces.tui.theme import WONG_VARIABLES
 
+#: The brand-book accent-dim hex the selected / focused row wears as its
+#: highlight rectangle -- the fourth brand accent ("accent / dim", named in the
+#: brand book for "selection, fills, focus rings"). Before this the selectable
+#: panes rode the leftover teal ``$accent 20%`` default, so the highlight never
+#: read as the green accent family; pinning the concrete hex here (the one home
+#: for TUI widget hexes) lets each selectable pane's ``.-selected`` rule resolve
+#: one canonical green-family selection tint.
+SELECTION_TINT: Final[str] = "#0c5a44"
+
 #: Canonical Wong deuteranopia-safe band hexes (``ok`` / ``warn`` / ``err``),
 #: derived from the single :data:`~eawf.surfaces.tui.theme.WONG_VARIABLES`
 #: palette so the fallback tint matches the live theme's dark baseline
@@ -88,6 +97,7 @@ def status_colour(status: object) -> str | None:
 
 __all__ = [
     "BAND_HEX",
+    "SELECTION_TINT",
     "STATUS_COLOURS",
     "status_colour",
 ]

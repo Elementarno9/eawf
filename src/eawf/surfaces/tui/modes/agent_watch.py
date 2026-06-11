@@ -113,6 +113,7 @@ if TYPE_CHECKING:
         Wave,
     )
     from eawf.kernel.store.envelope import Envelope
+    from eawf.runtime.sandbox.policy import SandboxPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +260,12 @@ _LANE_VENDOR_UNKNOWN: str = "?"
 #: recorded yet (a freshly-dispatched lane). Reads as a dash rather than a
 #: fabricated zero spend.
 _LANE_SPEND_UNKNOWN: str = "--"
+
+#: The sandbox-column label a lane wears when no sandbox policy denies it any
+#: tool -- the floor is open for that lane. Reads as a word rather than a bare
+#: ``0`` so the U5 parity column distinguishes "no policy / nothing denied"
+#: from a measured deny count.
+_LANE_SANDBOX_OPEN: str = "open"
 
 #: The watched session's lifecycle status -> the lifecycle :class:`Sigil` its
 #: header mark draws from. An ACTIVE session wears the RUNNING diamond (the
@@ -967,6 +974,12 @@ class LaneGridRow:
             recorded yet.
         tier_badge: The lane's :class:`~eawf.kernel.state.enums.RiskTier` short
             band label (e.g. ``MECH`` / ``HIGH``).
+        sandbox_label: The lane's sandbox-enforcement posture -- the U5
+            cross-vendor parity column. ``N denied`` names how many tools the
+            per-wave / global sandbox policy denied the lane (resolved purely off
+            ``state.sandbox_policies`` via
+            :func:`~eawf.runtime.sandbox.policy.resolve_denied_tools`), or
+            :data:`_LANE_SANDBOX_OPEN` when no policy locks the lane down.
         state: The lane's lifecycle :class:`LaneState` (running / closed /
             failed / fork) driving its sigil + detail word.
     """
@@ -976,6 +989,7 @@ class LaneGridRow:
     elapsed_label: str
     spend_label: str
     tier_badge: str
+    sandbox_label: str
     state: LaneState
 
 
@@ -1091,6 +1105,33 @@ def _lane_tier_badge(wave: Wave | None, forked_tier: str | None) -> str:
     return _LANE_TIER_BADGE.get(tier, tier.upper())
 
 
+def _lane_sandbox_label(policies: dict[str, SandboxPolicy] | None, *, wave_id: str) -> str:
+    """Return the lane's sandbox-column label -- the U5 parity-lens deny count.
+
+    Resolves how locked-down the lane is purely off ``state.sandbox_policies``
+    via the canonical :func:`~eawf.runtime.sandbox.policy.resolve_denied_tools`
+    (the same resolver the dispatcher threads into the spawn argv), so the grid
+    surfaces exactly the deny-list state records rather than recomputing one. A
+    lane whose wave-scoped (or global) policy denies one or more tools reads
+    ``N denied``; a lane no policy locks down reads :data:`_LANE_SANDBOX_OPEN`
+    (the floor is open) -- the parity column the runtime-vs-runtime lens compares
+    side-by-side with the vendor + cost columns.
+
+    Args:
+        policies: The bound state's ``sandbox_policies`` map, or ``None`` when
+            none are registered.
+        wave_id: The lane's wave id, keyed against the policy table.
+
+    Returns:
+        ``N denied`` when the resolved deny-list is non-empty, else
+        :data:`_LANE_SANDBOX_OPEN`.
+    """
+    from eawf.runtime.sandbox.policy import resolve_denied_tools
+
+    denied = resolve_denied_tools(policies, wave_id=wave_id)
+    return f"{len(denied)} denied" if denied else _LANE_SANDBOX_OPEN
+
+
 def _lane_state(wave: Wave | None, *, forked: bool) -> LaneState:
     """Classify a lane's :class:`LaneState` from its wave status + fork flag.
 
@@ -1151,17 +1192,20 @@ def lane_grid_rows(state: State | None, *, now: datetime | None = None) -> tuple
     reference = now if now is not None else datetime.now(UTC)
     waves = state.waves if state is not None else {}
     sessions = state.agent_sessions if state is not None else {}
+    policies = state.sandbox_policies if state is not None else None
     forked_tiers = {fork.wave_id: fork.risk_tier.value for fork in run.forks}
     rows: dict[str, LaneGridRow] = {}
     for lane in run.lanes.values():
         if lane.wave_id in forked_tiers:
             continue
         rows[lane.wave_id] = _build_lane_row(
-            lane, waves.get(lane.wave_id), sessions, reference, forked_tier=None
+            lane, waves.get(lane.wave_id), sessions, reference, policies=policies, forked_tier=None
         )
     for fork in run.forks:
         prior_lane = run.lanes.get(fork.wave_id)
-        rows[fork.wave_id] = _build_fork_row(fork, prior_lane, waves.get(fork.wave_id), sessions)
+        rows[fork.wave_id] = _build_fork_row(
+            fork, prior_lane, waves.get(fork.wave_id), sessions, policies=policies
+        )
     ordered = sorted(rows.values(), key=lambda row: natural_key(row.wave_id))
     logger.debug(
         f"lane_grid_rows lanes={len(run.lanes)} forks={len(run.forks)} rows={len(ordered)}"
@@ -1196,6 +1240,7 @@ def _build_lane_row(
     sessions: dict[str, AgentSession],
     now: datetime,
     *,
+    policies: dict[str, SandboxPolicy] | None,
     forked_tier: str | None,
 ) -> LaneGridRow:
     """Build one running / terminal :class:`LaneGridRow` from an in-flight *lane*."""
@@ -1206,6 +1251,7 @@ def _build_lane_row(
         elapsed_label=_elapsed_label(lane.dispatched_at, end),
         spend_label=_lane_spend_label(wave),
         tier_badge=_lane_tier_badge(wave, forked_tier),
+        sandbox_label=_lane_sandbox_label(policies, wave_id=lane.wave_id),
         state=_lane_state(wave, forked=False),
     )
 
@@ -1215,6 +1261,8 @@ def _build_fork_row(
     lane: FleetLane | None,
     wave: Wave | None,
     sessions: dict[str, AgentSession],
+    *,
+    policies: dict[str, SandboxPolicy] | None,
 ) -> LaneGridRow:
     """Build one forked :class:`LaneGridRow` from a queued fork (+ its prior lane).
 
@@ -1232,6 +1280,7 @@ def _build_fork_row(
         elapsed_label=_elapsed_label(dispatched, fork.forked_at),
         spend_label=_lane_spend_label(wave),
         tier_badge=_lane_tier_badge(wave, fork.risk_tier.value),
+        sandbox_label=_lane_sandbox_label(policies, wave_id=fork.wave_id),
         state=LaneState.FORK,
     )
 
@@ -1267,11 +1316,12 @@ def render_lane_row(row: LaneGridRow, *, selected: bool = False, mode: RenderMod
 
     Lays the row out as the lane's lifecycle sigil
     (:func:`lane_state_sigil_markup`), then the wave id, the vendor, the elapsed
-    window, the tok/$ spend, the risk-tier band badge, and the state-detail word
-    (:data:`_LANE_STATE_DETAIL`) -- so a row reads
-    ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <detail>`` at a glance.
-    The selected row leads with the accent hue so the Enter-zoom target reads as
-    highlighted.
+    window, the tok/$ spend, the risk-tier band badge, the sandbox-enforcement
+    posture (the U5 cross-vendor parity column -- ``N denied`` / ``open``), and
+    the state-detail word (:data:`_LANE_STATE_DETAIL`) -- so a row reads
+    ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <sandbox> <detail>`` at a
+    glance. The selected row leads with the accent hue so the Enter-zoom target
+    reads as highlighted.
 
     Args:
         row: The lane-grid display row.
@@ -1292,6 +1342,7 @@ def render_lane_row(row: LaneGridRow, *, selected: bool = False, mode: RenderMod
         f"[$muted]{escape_markup(row.elapsed_label)}[/] "
         f"[$muted]{escape_markup(row.spend_label)}[/] "
         f"[$accent]{escape_markup(row.tier_badge)}[/] "
+        f"[$muted]{escape_markup(row.sandbox_label)}[/] "
         f"[$muted]{detail}[/]"
     )
 
@@ -1323,7 +1374,10 @@ class LaneGrid(Widget):
         padding: 0 1;
     }
     LaneGrid .watch-lane-row.-selected {
-        background: $accent 20%;
+        /* Brand-book accent-dim selection tint (the one focus-ring green,
+           mirrored as status_tint.SELECTION_TINT) rather than the leftover
+           teal $accent 20% default. */
+        background: #0c5a44;
     }
     LaneGrid #watch-lane-grid-empty {
         height: 1fr;

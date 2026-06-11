@@ -184,7 +184,11 @@ class AttentionFeed(VerticalScroll):
         height: 1;
     }
     AttentionFeed .attention-row.-selected {
-        text-style: bold reverse;
+        /* Brand-book accent-dim selection rectangle (the one focus-ring green,
+           mirrored as status_tint.SELECTION_TINT) behind the highlighted row,
+           plus bold so the active row reads at a glance. */
+        background: #0c5a44;
+        text-style: bold;
     }
     AttentionFeed .attention-empty {
         color: $text-muted;

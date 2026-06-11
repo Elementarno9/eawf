@@ -100,13 +100,14 @@ logger = logging.getLogger(__name__)
 EMPTY_NOTICE: str = "no word spoken yet"
 
 #: Empty-state sub-line under :data:`EMPTY_NOTICE`. Pins the mock's literal copy
-#: -- a campaign begins with a question. The compose affordance moved from a
-#: ``press n`` hint in the sub-line to a real ``[ n new campaign ]`` action chip
-#: rendered by :func:`~eawf.surfaces.tui.widgets.empty_state.render_empty_state`
-#: (the reskin's centered hero), so the sub-line carries only the framing copy.
-#: The ``n`` compose modal itself is still deferred to a later iter -- the chip
-#: renders the affordance, not yet the behaviour.
-EMPTY_SUBLINE: str = "a research campaign begins with a question"
+#: verbatim per the strict-spec pinned-literals strip
+#: (``new-surfaces-mock-handoff.md`` + the designer-reply pinned literals): the
+#: framing copy then the middle-dot-joined ``press n`` compose prompt. The chip
+#: form the reskin briefly carried dropped the pinned ``press n`` literal, so the
+#: sub-line restores it -- the ``[ n new campaign ]`` action chip still renders
+#: the live affordance beneath the hero copy, but the pinned literal is the
+#: strict-spec authority for the sub-line text.
+EMPTY_SUBLINE: str = "a research campaign begins with a question · press n"
 
 #: Per-section sentinel rendered when one pane is empty while the board as a
 #: whole still carries signal elsewhere (e.g. a campaign is staged but no

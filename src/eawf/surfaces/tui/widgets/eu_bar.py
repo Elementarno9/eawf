@@ -1,8 +1,9 @@
-"""``EUBar`` — a 5-cell effort-unit progress bar (widget catalog).
+"""``EUBar`` — a canonical-width effort-unit progress bar (widget catalog).
 
-A fixed-width 5-cell glyph bar that renders ``consumed_eu / total_eu``
-as filled (``#``) vs empty (``-``) cells, colour-coded by the consumed
-fraction:
+A fixed-width glyph bar (:data:`CANONICAL_BAR_CELLS` cells -- the one
+width the EU bar and the roadmap completion bar share) that renders
+``consumed_eu / total_eu`` as filled (``#``) vs empty (``-``) cells,
+colour-coded by the consumed fraction:
 
 * ``ok``   when consumed ≤ 80 % of total,
 * ``warn`` when consumed ≤ 100 % of total,
@@ -53,10 +54,23 @@ RenderMode = Literal["unicode", "ascii"]
 #: (the operator pick) explicitly and propagate the flip.
 DEFAULT_RENDER_MODE: RenderMode = "ascii"
 
-#: Number of glyph cells in the bar. Fixed at 5
-#: (``5-cell glyph bar``); the inline roadmap variant relies on this
+#: The ONE canonical glyph-cell width every Eä progress bar renders at.
+#: Before this the tree carried three drifting widths -- the EU / burn bar
+#: at 5, the roadmap completion bar at 10, and the brand-spec text bar at 8
+#: -- so two bars stacked in the same roadmap row never lined up. The brand
+#: redesign brief §6 (and the I00 roadmap-bar contract) pins the bar at a
+#: fixed-width, ratio-suffixed 8 cells, so this is the single home both the
+#: EU bar (:data:`BAR_CELLS`) and the roadmap completion bar
+#: (:func:`render_completion_bar`'s default width /
+#: :data:`~eawf.surfaces.tui.widgets.roadmap_tree.COMPLETION_BAR_CELLS`)
+#: resolve their width from. A width retune lands here once.
+CANONICAL_BAR_CELLS: int = 8
+
+#: Number of glyph cells in the EU / burn bar. Aliases the single
+#: :data:`CANONICAL_BAR_CELLS` home so the EU bar and the roadmap completion
+#: bar render at one width; the inline roadmap variant relies on this
 #: constant width so tree rows align.
-BAR_CELLS: int = 5
+BAR_CELLS: int = CANONICAL_BAR_CELLS
 
 #: Filled-cell glyph (Nerd-Font-always per the brief glyph set; the
 #: ``--plain`` ASCII fallback uses the same ``#`` so no swap is needed).
@@ -290,7 +304,7 @@ def render_completion_bar(
     done: int,
     total: int,
     *,
-    width: int = 10,
+    width: int = CANONICAL_BAR_CELLS,
     mode: RenderMode = DEFAULT_RENDER_MODE,
 ) -> str:
     """Render a ``done / total`` completion ratio bar with a count suffix.
@@ -310,7 +324,7 @@ def render_completion_bar(
             clamp to ``0``.
         total: Total child count. ``<= 0`` yields :data:`EMPTY_STATE` (an
             entity with no children has no completion to show).
-        width: Bar cell count. Defaults to ``10`` (one cell per 10 %).
+        width: Bar cell count. Defaults to the canonical :data:`CANONICAL_BAR_CELLS`.
         mode: Active render mode (``"unicode"`` or ``"ascii"``).
 
     The unicode fill is a discrete ``█`` (:data:`COMPLETION_FULL`) run over a
@@ -323,7 +337,7 @@ def render_completion_bar(
             clamp to ``0``.
         total: Total child count. ``<= 0`` yields :data:`EMPTY_STATE` (an
             entity with no children has no completion to show).
-        width: Bar cell count. Defaults to ``10`` (one cell per 10 %).
+        width: Bar cell count. Defaults to the canonical :data:`CANONICAL_BAR_CELLS`.
         mode: Active render mode (``"unicode"`` or ``"ascii"``).
 
     Returns:
@@ -510,6 +524,7 @@ class EUBar(Static):
 
 __all__ = [
     "BAR_CELLS",
+    "CANONICAL_BAR_CELLS",
     "COMPLETION_FULL",
     "COMPLETION_REMAINDER",
     "DEFAULT_BAND_PALETTE",

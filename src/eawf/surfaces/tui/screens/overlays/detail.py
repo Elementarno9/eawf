@@ -116,11 +116,11 @@ logger = logging.getLogger(__name__)
 #: section is non-empty.
 #:
 #: The marks are sourced from the single-home sigil vocabulary
-#: (:mod:`~eawf.surfaces.tui.widgets.sigils`): ``overview`` and ``gates``
-#: and ``runtime`` are :func:`~eawf.surfaces.tui.widgets.sigils.chrome`
-#: roles; ``evidence`` reuses the closed lifecycle
-#: :func:`~eawf.surfaces.tui.widgets.sigils.glyph`; ``criteria`` uses a
-#: plain right-pointing marker (no chrome role exists for it).
+#: (:mod:`~eawf.surfaces.tui.widgets.sigils`): every tab marker --
+#: ``overview`` / ``gates`` / ``runtime`` / ``criteria`` / ``cost`` /
+#: ``history`` -- is a :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role,
+#: and ``evidence`` reuses the closed lifecycle
+#: :func:`~eawf.surfaces.tui.widgets.sigils.glyph`.
 _TAB_LABEL_TEXT: dict[str, str] = {
     "overview": "overview",
     "criteria": "criteria",
@@ -131,41 +131,34 @@ _TAB_LABEL_TEXT: dict[str, str] = {
     "history": "history",
 }
 
-#: The unicode / ascii right-pointing marker prefixed to the ``criteria``
-#: tab label (no chrome role exists for it, so it is spelled out here).
-#: The unicode column is written with a ``\uXXXX`` escape so the source
-#: stays ASCII-clean (matching the sigils-module convention); the rendered
-#: mark is a black right-pointing small triangle.
-_CRITERIA_MARKER: tuple[str, str] = ("\u25b8", ">")
-
-#: The unicode / ascii marker prefixed to the ``cost`` tab label. The
-#: runtime chrome role already owns the ``$`` glyph, so the cost tab carries
-#: the generic currency sign (U+00A4) in the unicode column and a plain
-#: ``$`` in the ascii column -- the dollar reads as money where the
-#: block-glyph currency sign may not render. Written ``\uXXXX`` so the
-#: source stays ASCII-clean per the sigils-module convention.
-_COST_MARKER: tuple[str, str] = ("\u00a4", "$")
-
-#: The unicode / ascii marker prefixed to the ``history`` tab label (no
-#: chrome role exists for it, so it is spelled out here). The unicode column
-#: is an anticlockwise open circle arrow (U+21BA) -- a single-cell "rewind /
-#: back-in-time" mark that reads as a timeline -- and the ascii column uses a
-#: plain ``<`` (back in time). Written ``\uXXXX`` so the source stays
-#: ASCII-clean per the sigils-module convention.
-_HISTORY_MARKER: tuple[str, str] = ("\u21ba", "<")
+#: Each chassis tab id -> its
+#: :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role. ``evidence`` is the
+#: one tab that reuses a lifecycle
+#: :func:`~eawf.surfaces.tui.widgets.sigils.glyph` (the closed circle) rather
+#: than a chrome role, so it is handled separately; every other tab marker --
+#: including the ``criteria`` / ``cost`` / ``history`` markers now folded out
+#: of this module into the single-home chrome vocabulary --
+#: resolves through a chrome role so the chassis invents no glyph of its own.
+_TAB_CHROME_ROLE: dict[str, str] = {
+    "overview": "overview",
+    "gates": "gate",
+    "runtime": "runtime",
+    "criteria": "criteria",
+    "cost": "cost",
+    "history": "history",
+}
 
 
 def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
     """Return the chrome / sigil mark prefixed to *tab_id*'s pane label.
 
     Routes each tab to the single-home sigil vocabulary so the chassis
-    never invents a glyph: ``overview`` / ``gates`` / ``runtime`` are
-    :func:`~eawf.surfaces.tui.widgets.sigils.chrome` roles, ``evidence``
-    reuses the closed lifecycle
-    :func:`~eawf.surfaces.tui.widgets.sigils.glyph`, and ``criteria`` /
-    ``cost`` / ``history`` use the local :data:`_CRITERIA_MARKER` /
-    :data:`_COST_MARKER` / :data:`_HISTORY_MARKER` (no chrome role exists
-    for them).
+    never invents a glyph: every tab marker -- ``overview`` / ``gates`` /
+    ``runtime`` and the ``criteria`` / ``cost`` / ``history`` markers folded
+    into :data:`~eawf.surfaces.tui.widgets.sigils._CHROME` -- resolves through
+    a :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role
+    (:data:`_TAB_CHROME_ROLE`); only ``evidence`` reuses the closed lifecycle
+    :func:`~eawf.surfaces.tui.widgets.sigils.glyph`.
 
     Args:
         tab_id: One of the chassis tab ids.
@@ -179,17 +172,7 @@ def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
     """
     if tab_id == "evidence":
         return sigils.glyph(Sigil.CLOSED, mode=mode)
-    if tab_id == "criteria":
-        unicode_marker, ascii_marker = _CRITERIA_MARKER
-        return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
-    if tab_id == "cost":
-        unicode_marker, ascii_marker = _COST_MARKER
-        return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
-    if tab_id == "history":
-        unicode_marker, ascii_marker = _HISTORY_MARKER
-        return ascii_marker if mode == sigils.ASCII_MODE else unicode_marker
-    chrome_role = {"overview": "overview", "gates": "gate", "runtime": "runtime"}[tab_id]
-    return sigils.chrome(chrome_role, mode=mode)
+    return sigils.chrome(_TAB_CHROME_ROLE[tab_id], mode=mode)
 
 
 def tab_label(tab_id: str, *, mode: RenderMode) -> str:

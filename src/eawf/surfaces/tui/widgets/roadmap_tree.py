@@ -71,6 +71,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.surfaces.render.plan_view import build_roadmap_rows
 from eawf.surfaces.tui.widgets.eu_bar import (
+    CANONICAL_BAR_CELLS,
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
     render_bar_plain,
@@ -89,12 +90,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Cell count for the inline completion bar on iter / phase rows. Ten cells
-#: (one cell per 10 %) so a fully-closed iter / phase paints ten full block
-#: cells and the ``done/total`` ratio reads at single-percent resolution.
-#: Matches :func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar`'s
-#: default width so the block-fill maths stay one home.
-COMPLETION_BAR_CELLS: int = 10
+#: Cell count for the inline completion bar on iter / phase rows. Aliases
+#: the single :data:`~eawf.surfaces.tui.widgets.eu_bar.CANONICAL_BAR_CELLS`
+#: home so the completion bar and the EU / burn bar stacked in the same
+#: roadmap row render at one width; the ``done/total`` ratio reads flush-right
+#: after the fixed-width fill. Matches
+#: :func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar`'s default
+#: width so the block-fill maths stay one home.
+COMPLETION_BAR_CELLS: int = CANONICAL_BAR_CELLS
 
 #: Active-wave elapsed burn bands. The row marker uses ``~`` at/above the
 #: warning threshold and ``!`` at/above the error threshold so the status is
