@@ -1,3 +1,19 @@
 name: re
 version: "1.0"
 description: "Reverse-engineering / forensics profile (stub for v0.1.1)."
+
+# Per-kind Track defaults: the re profile's sole declared kind is its default,
+# so a ``track add`` under a reverse-engineering project picks ``target`` when
+# the operator names no explicit kind.
+track:
+  kinds:
+    target:
+      noun: target
+      status_lifecycle:
+        - triage
+        - mapped
+        - exploited
+        - documented
+        - closed
+      outcome_template: ""
+      overview_view: leaderboard

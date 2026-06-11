@@ -26,6 +26,21 @@ render_blocks:
 skills_referenced: []
 hooks_referenced: []
 
+# Per-kind Track defaults: the infra profile's sole declared kind is its
+# default, so a ``track add`` under an infra project picks ``service`` when the
+# operator names no explicit kind.
+track:
+  kinds:
+    service:
+      noun: service
+      status_lifecycle:
+        - design
+        - provisioned
+        - live
+        - retired
+      outcome_template: ""
+      overview_view: leaderboard
+
 verify:
   argv_allowlist:
     - git
