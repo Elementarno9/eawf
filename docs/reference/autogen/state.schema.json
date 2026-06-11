@@ -1195,12 +1195,15 @@
       "type": "object"
     },
     "FleetForkReason": {
-      "description": "Why a fleet lane paused to a blocking fork rather than draining clean -- DL-6.\n\nThe closed set of reasons the loop pauses ONLY the offending lane (the\nsibling lanes keep draining) and enqueues a typed :class:`FleetFork`:\n\n- ``high_risk_close`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.UI`\n  (visual-band) lane reported a clean close, but the visual oracle is the\n  least deterministic, so the close is held for the operator rather than\n  auto-closed.\n- ``uncalibrated_jury`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.HIGH`\n  (jury-gated) lane reported a clean close, but the jury that would gate it\n  holds only :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY`\n  authority, so its advisory verdict cannot auto-close the wave (the\n  LOAD-BEARING DL-5 safety invariant surfaces here as a fork).\n- ``needs_user_split`` -- the lane's wave hit a needs-user split mid-run\n  (a clarification the executor could not resolve), so the lane pauses for\n  operator input.\n- ``repair_exhausted`` -- the lane's grounded repair loop spent its whole\n  attempt budget without the refused criterion passing, so the loop\n  ESCALATES the lane to an operator-resolved fork (\"repair exhausted -- your\n  call\") carrying the last failing check rather than silently dropping the\n  lane or re-dispatching forever (DL-7).",
+      "description": "Why a fleet lane paused to a blocking fork rather than draining clean -- DL-6.\n\nThe closed set of reasons the loop pauses ONLY the offending lane (the\nsibling lanes keep draining) and enqueues a typed :class:`FleetFork`:\n\n- ``high_risk_close`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.UI`\n  (visual-band) lane reported a clean close, but the visual oracle is the\n  least deterministic, so the close is held for the operator rather than\n  auto-closed.\n- ``uncalibrated_jury`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.HIGH`\n  (jury-gated) lane reported a clean close, but the jury that would gate it\n  holds only :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY`\n  authority, so its advisory verdict cannot auto-close the wave (the\n  LOAD-BEARING DL-5 safety invariant surfaces here as a fork).\n- ``needs_user_split`` -- the lane's wave hit a needs-user split mid-run\n  (a clarification the executor could not resolve), so the lane pauses for\n  operator input.\n- ``repair_exhausted`` -- the lane's grounded repair loop spent its whole\n  attempt budget without the refused criterion passing, so the loop\n  ESCALATES the lane to an operator-resolved fork (\"repair exhausted -- your\n  call\") carrying the last failing check rather than silently dropping the\n  lane or re-dispatching forever (DL-7).\n- ``retry_exhausted`` -- the lane's bounded agent-cli spawn-retry loop spent\n  its whole ``max_total_attempts`` budget (RETRY_SAME then SWITCH) without a\n  clean spawn, so the loop HALTS the lane to an operator-resolved fork\n  rather than respawning it forever (DL-11). The fork carries the terminal\n  runtime error class as its failure-class so the operator reads what the\n  last attempt failed on.\n- ``runtime_spawn_error`` -- the lane's spawn raised a hard\n  :class:`~eawf.runtime.runtimes.adapter.RuntimeSpawnError` the retry ladder\n  cannot recover (an ENOENT / permission failure to launch the agent CLI at\n  all): no runtime switch and no retry can fix a missing or unexecutable\n  binary, so the lane terminates cleanly to an operator-resolved fork on the\n  first such failure rather than looping (DL-11).\n- ``subprocess_oom`` -- the lane's spawned subprocess was OOM-killed (the\n  kernel reaped it for exceeding memory), so the lane terminates cleanly to\n  an operator-resolved fork carrying the OOM failure-class rather than\n  respawning a process that will be reaped again (DL-11).",
       "enum": [
         "high_risk_close",
         "uncalibrated_jury",
         "needs_user_split",
-        "repair_exhausted"
+        "repair_exhausted",
+        "retry_exhausted",
+        "runtime_spawn_error",
+        "subprocess_oom"
       ],
       "title": "FleetForkReason",
       "type": "string"
@@ -3386,7 +3389,7 @@
     },
     "Track": {
       "additionalProperties": false,
-      "description": "Durable per-workstream vehicle under a Project.\n\nA Track is the lifecycle vehicle a Project hangs scoped Goals and\nOutcomes off (e.g. a quant-research strategy, an ML model, a\nreverse-engineering target). Its :attr:`kind` is a closed\n:class:`~eawf.kernel.state.enums.TrackKind` so an unknown kind fails as a\n:class:`pydantic.ValidationError` at the ingestion boundary rather than\nflowing downstream as a free string; the kind selects which\n:class:`~eawf.platform.profiles.models.TrackKindSpec` parametrizes the\ntrack's noun, status lifecycle, outcome template, and overview view.\n\n:attr:`status` carries the Track lifecycle as a closed\n:class:`~eawf.kernel.state.enums.TrackStatus`, mirroring how\n:attr:`Phase.status` carries the phase lifecycle: a Track opens\n:attr:`~eawf.kernel.state.enums.TrackStatus.PLANNED`, advances to\n:attr:`~eawf.kernel.state.enums.TrackStatus.ACTIVE` when focused, and\nsettles on a terminal value. The lifecycle is dormant: no lifecycle\nstep (phase / iter / wave open or close) requires a Track, so the\n``track.add`` / ``track.switch`` mutator pair sets :attr:`status` and the\n:attr:`CurrentPointers.track_id` cursor without gating any other\ntransition. :attr:`goal_ids` is the Track end of the ``Track -> Goal``\ncontainment edge (the project end is :attr:`Project.track_ids`).",
+      "description": "Durable per-workstream vehicle under a Project.\n\nA Track is the lifecycle vehicle a Project hangs scoped Goals and\nOutcomes off (e.g. a quant-research strategy, an ML model, a\nreverse-engineering target). Its :attr:`kind` is a closed\n:class:`~eawf.kernel.state.enums.TrackKind` so an unknown kind fails as a\n:class:`pydantic.ValidationError` at the ingestion boundary rather than\nflowing downstream as a free string; the kind selects which\n:class:`~eawf.platform.profiles.models.TrackKindSpec` parametrizes the\ntrack's noun, status lifecycle, outcome template, and overview view.\n\n:attr:`status` carries the Track lifecycle as a closed\n:class:`~eawf.kernel.state.enums.TrackStatus`, mirroring how\n:attr:`Phase.status` carries the phase lifecycle: a Track opens\n:attr:`~eawf.kernel.state.enums.TrackStatus.PLANNED`, advances to\n:attr:`~eawf.kernel.state.enums.TrackStatus.ACTIVE` when focused, and\nsettles on a terminal value. The lifecycle is dormant: no lifecycle\nstep (phase / iter / wave open or close) requires a Track, so the\n``track.add`` / ``track.switch`` mutator pair sets :attr:`status` and the\n:attr:`CurrentPointers.track_id` cursor without gating any other\ntransition. :attr:`goal_ids` is the Track end of the ``Track -> Goal``\ncontainment edge (the project end is :attr:`Project.track_ids`).\n\n:attr:`scope_globs` is the Track's *declared* file scope -- the glob\npatterns (e.g. ``src/strategies/collar/**``) that bound the files a Track's\nwaves are expected to touch. The list lets a wave's :attr:`Wave.file_scopes`\nbe checked for containment so an out-of-scope edit is flagged rather than\nsilently assumed in-scope. It defaults empty (no declared scope, so\ncontainment cannot be enforced) and adding it stays additive under\n``extra=\"forbid\"``.",
       "properties": {
         "code": {
           "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
@@ -3426,6 +3429,13 @@
           ],
           "default": null,
           "title": "Owner"
+        },
+        "scope_globs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scope Globs",
+          "type": "array"
         },
         "slug": {
           "title": "Slug",

@@ -287,6 +287,14 @@ class Track(_StrictModel):
     :attr:`CurrentPointers.track_id` cursor without gating any other
     transition. :attr:`goal_ids` is the Track end of the ``Track -> Goal``
     containment edge (the project end is :attr:`Project.track_ids`).
+
+    :attr:`scope_globs` is the Track's *declared* file scope -- the glob
+    patterns (e.g. ``src/strategies/collar/**``) that bound the files a Track's
+    waves are expected to touch. The list lets a wave's :attr:`Wave.file_scopes`
+    be checked for containment so an out-of-scope edit is flagged rather than
+    silently assumed in-scope. It defaults empty (no declared scope, so
+    containment cannot be enforced) and adding it stays additive under
+    ``extra="forbid"``.
     """
 
     id: ProjectCodeStr
@@ -298,6 +306,7 @@ class Track(_StrictModel):
     status: TrackStatus
     owner: str | None = None
     goal_ids: list[str] = Field(default_factory=list)
+    scope_globs: list[str] = Field(default_factory=list)
 
 
 class Goal(_StrictModel):
