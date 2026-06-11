@@ -253,6 +253,10 @@ class StateBinding:
         self._poll_task: asyncio.Task[None] | None = None
         self._subscribe_task: asyncio.Task[None] | None = None
         self._probe_task: asyncio.Task[None] | None = None
+        #: The DaemonClient owned by the live subscribe thread, exposed so
+        #: disconnect() can close its reader handle and unblock a blocked
+        #: pipe readline() (Windows pipe reads are not task-cancellable).
+        self._active_sub_client: DaemonClient | None = None
         self._client_factory = daemon_client_factory or (
             lambda: DaemonClient(call_timeout_seconds=1.0)
         )
@@ -300,7 +304,11 @@ class StateBinding:
     def _daemon_socket_available(self) -> bool:
         """Return whether a daemon socket exists for a cheap push attempt."""
         if os.name == "nt":
-            return False
+            # Windows uses the named pipe; probe it (non-consuming) so the
+            # subscribe loop is attempted when the daemon is up.
+            from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_probe
+
+            return pipe_probe(default_pipe_name())
         sock_path = runtime_dir() / "eawfd.sock"
         eawf_runtime_dir = os.environ.get("EAWF_RUNTIME_DIR")
         xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
@@ -418,20 +426,24 @@ class StateBinding:
         if self._scope_id is not None:
             params["scope_id"] = self._scope_id
         with self._client_factory() as client:
-            client.call("state.subscribe", params)
-            self._consecutive_failures = 0
-            asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
-            while not self._stopping:
-                reader = getattr(client, "_reader", None)
-                if reader is None:
-                    raise RuntimeError("daemon reader unavailable")
-                try:
-                    line = reader.readline()
-                except TimeoutError:
-                    continue
-                if not line:
-                    raise RuntimeError("daemon subscribe stream ended")
-                self._handle_push_line(loop, line)
+            self._active_sub_client = client
+            try:
+                client.call("state.subscribe", params)
+                self._consecutive_failures = 0
+                asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
+                while not self._stopping:
+                    reader = getattr(client, "_reader", None)
+                    if reader is None:
+                        raise RuntimeError("daemon reader unavailable")
+                    try:
+                        line = reader.readline()
+                    except TimeoutError:
+                        continue
+                    if not line:
+                        raise RuntimeError("daemon subscribe stream ended")
+                    self._handle_push_line(loop, line)
+            finally:
+                self._active_sub_client = None
 
     async def _on_subscription_connected(self) -> None:
         """Clear failures + degraded once push connects; keep the backstop.
@@ -502,6 +514,16 @@ class StateBinding:
     async def disconnect(self) -> None:
         """Cancel background tasks on app teardown."""
         self._stopping = True
+        # The subscribe thread may be parked in a blocking pipe readline() that
+        # task.cancel() cannot interrupt; closing the held reader handle from
+        # here makes that read return EOF so the thread exits cleanly. Harmless
+        # on POSIX too (closing the socket makefile unblocks its readline).
+        sub_client = self._active_sub_client
+        if sub_client is not None:
+            reader = getattr(sub_client, "_reader", None)
+            if reader is not None and hasattr(reader, "close"):
+                with contextlib.suppress(Exception):
+                    reader.close()
         if self._subscribe_task is not None:
             self._subscribe_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

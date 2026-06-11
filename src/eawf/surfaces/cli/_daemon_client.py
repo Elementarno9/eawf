@@ -91,6 +91,11 @@ class DaemonClient:
         self._sock: socket.socket | None = None
         self._reader: Any = None  # makefile("rb") for newline-framed reads
         self._pid: int = 0
+        # Windows uses the per-user named pipe instead of a UDS; each call()
+        # is a fresh pipe round-trip because the daemon's pipe listener serves
+        # exactly one frame per accepted connection.
+        self._is_pipe: bool = False
+        self._pipe_name: str = ""
 
     @property
     def pid(self) -> int:
@@ -105,11 +110,15 @@ class DaemonClient:
     def __enter__(self) -> DaemonClient:
         self._pid = auto_spawn_daemon(self._runtime_dir)
         if sys.platform == "win32":
-            # Windows named-pipe transport — the synchronous helper
-            # is owned by the windows_pipe bridge in a later wave.
-            # W08 ships the POSIX path + the spawn contract; W09
-            # wires the windows-pipe client side.
-            raise NotImplementedError("windows-pipe transport pending W09 wiring")
+            # Windows named-pipe transport: no persistent handle — each
+            # call() opens the per-user pipe for a single frame round-trip
+            # (the daemon listener serves one frame per connection).
+            from eawf.runtime.daemon.windows_pipe import default_pipe_name
+
+            self._is_pipe = True
+            self._pipe_name = default_pipe_name()
+            logger.debug(f"__enter__ pipe-mode pid={self._pid} pipe={self._pipe_name!r}")
+            return self
         sock_path = self._runtime_dir / "eawfd.sock"
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self._call_timeout_seconds)
@@ -163,7 +172,7 @@ class DaemonClient:
             TimeoutError: When the daemon did not respond within
                 ``call_timeout_seconds``.
         """
-        if self._sock is None or self._reader is None:
+        if not self._is_pipe and (self._sock is None or self._reader is None):
             raise RuntimeError("daemon client not connected; use as a context manager")
         payload_params = dict(params) if params is not None else {}
         if idempotency_key is not None and "idempotency_key" not in payload_params:
@@ -176,8 +185,28 @@ class DaemonClient:
         }
         line = orjson.dumps(request) + b"\n"
         deadline = time.monotonic() + self._call_timeout_seconds
-        self._sock.sendall(line)
-        response_line = self._reader.readline()
+        if self._is_pipe:
+            from eawf.runtime.daemon.windows_pipe import (
+                _SUBSCRIBE_METHODS,
+                pipe_client_call,
+                pipe_subscribe,
+            )
+
+            if method in _SUBSCRIBE_METHODS:
+                # Subscribe holds the connection open: keep the handle as a
+                # PipeReader so the caller drains subsequent event.push frames
+                # via ``client._reader.readline()`` (the POSIX-socket contract).
+                self._reader, response_line = pipe_subscribe(
+                    self._pipe_name, line, timeout_ms=int(self._call_timeout_seconds * 1000)
+                )
+            else:
+                response_line = pipe_client_call(
+                    self._pipe_name, line, timeout_ms=int(self._call_timeout_seconds * 1000)
+                )
+        else:
+            assert self._sock is not None and self._reader is not None
+            self._sock.sendall(line)
+            response_line = self._reader.readline()
         if not response_line:
             raise RuntimeError(f"daemon closed connection during call method={method!r}")
         if time.monotonic() > deadline:

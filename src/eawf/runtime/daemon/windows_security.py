@@ -127,7 +127,12 @@ def verify_peer_sid(pipe_handle: Any, expected_sid: Any | None = None) -> None:
     if expected_sid is None:
         expected_sid = _current_user_sid()
 
-    win32pipe.ImpersonateNamedPipeClient(pipe_handle)
+    # ImpersonateNamedPipeClient is exposed by win32security in pywin32
+    # (not win32pipe), so resolve it from whichever module carries it.
+    _impersonate = getattr(win32security, "ImpersonateNamedPipeClient", None) or getattr(
+        win32pipe, "ImpersonateNamedPipeClient"
+    )
+    _impersonate(pipe_handle)
     try:
         thread_token = win32security.OpenThreadToken(
             win32api.GetCurrentThread(),
@@ -144,7 +149,12 @@ def verify_peer_sid(pipe_handle: Any, expected_sid: Any | None = None) -> None:
     finally:
         win32security.RevertToSelf()
 
-    if not win32security.EqualSid(peer_sid, expected_sid):
+    # pywin32 exposes no win32security.EqualSid; PySID supports rich
+    # equality directly (falls back to string-SID compare for safety).
+    sids_equal = peer_sid == expected_sid or win32security.ConvertSidToStringSid(
+        peer_sid
+    ) == win32security.ConvertSidToStringSid(expected_sid)
+    if not sids_equal:
         peer_repr = win32security.ConvertSidToStringSid(peer_sid)
         expected_repr = win32security.ConvertSidToStringSid(expected_sid)
         logger.warning(f"verify_peer_sid reject expected={expected_repr!r} actual={peer_repr!r}")

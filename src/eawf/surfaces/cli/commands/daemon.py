@@ -109,6 +109,30 @@ async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
             await writer.wait_closed()
 
 
+def _run_rpc_windows(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Issue one JSON-RPC call against the daemon's named pipe (Windows).
+
+    asyncio has no Unix-domain-socket transport on Windows, so the
+    control verbs use the synchronous named-pipe round-trip instead of
+    :func:`_rpc_call`. Cold-spawns the daemon when the pipe is not up.
+    """
+    from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
+
+    auto_spawn_daemon(runtime_dir())
+    request: dict[str, Any] = {
+        "jsonrpc": "2.0",
+        "id": str(uuid.uuid4()),
+        "method": method,
+        "params": params,
+        "protocol_version": PROTOCOL_VERSION,
+    }
+    raw = pipe_client_call(default_pipe_name(), orjson.dumps(request) + b"\n")
+    payload = orjson.loads(raw)
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"daemon returned non-object frame: {payload!r}")
+    return payload
+
+
 def _run_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
     """Synchronous wrapper around :func:`_rpc_call` for Typer handlers.
 
@@ -119,6 +143,8 @@ def _run_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
     Returns:
         The parsed response envelope.
     """
+    if sys.platform == "win32":
+        return _run_rpc_windows(method, params)
     return asyncio.run(_rpc_call(method, params))
 
 

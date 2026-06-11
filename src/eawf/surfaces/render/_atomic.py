@@ -54,11 +54,12 @@ def atomic_write_text(target: Path, payload: str) -> None:
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(tmp, target)
-            parent_fd = os.open(target.parent, os.O_DIRECTORY)
-            try:
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
+            if hasattr(os, "O_DIRECTORY"):  # parent-dir fsync is POSIX-only (no-op on Windows)
+                parent_fd = os.open(target.parent, os.O_DIRECTORY)
+                try:
+                    os.fsync(parent_fd)
+                finally:
+                    os.close(parent_fd)
         logger.info(f"render_atomic target={target} bytes={len(encoded)}")
     finally:
         tmp.unlink(missing_ok=True)

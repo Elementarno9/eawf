@@ -328,7 +328,7 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     async def _handler(payload: bytes) -> bytes:
         return await process_frame_bytes(payload, ctx)
 
-    pipe_server = WindowsPipeServer(loop, _handler)
+    pipe_server = WindowsPipeServer(loop, _handler, ctx=ctx)
     pipe_server.start()
     logger.info(f"_run_windows_server bound pipe={pipe_server.pipe_path!r}")
 

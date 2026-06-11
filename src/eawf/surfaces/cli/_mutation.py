@@ -211,6 +211,9 @@ def _proxy_enabled(workspace: Path | None) -> bool:
 
     if os.environ.get("EAWF_DAEMONLESS", "") == "1":
         return False
+    # Windows now has a working named-pipe daemon transport, so mutations are
+    # daemon-routed by default like POSIX (publishes to the bus for live TUI
+    # push). Opt out with EAWF_DAEMONLESS=1 or config daemon.proxy_enabled=false.
     from eawf.kernel.config.layered import merge_config
 
     repo = workspace if workspace is not None else Path.cwd()

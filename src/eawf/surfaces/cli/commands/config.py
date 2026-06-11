@@ -224,11 +224,12 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, target)
-        parent_fd = os.open(target.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
+        if hasattr(os, "O_DIRECTORY"):  # parent-dir fsync is POSIX-only (no-op on Windows)
+            parent_fd = os.open(target.parent, os.O_DIRECTORY)
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
         logger.info(f"_atomic_write_yaml wrote path={target}")
     finally:
         with contextlib.suppress(FileNotFoundError):

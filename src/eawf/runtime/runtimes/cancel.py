@@ -82,18 +82,38 @@ class CancelResult:
     delivered: bool
 
 
+# Windows fallbacks: process-group cancel is POSIX-only (``os.killpg`` /
+# ``os.getpgid`` / ``signal.SIGKILL`` do not exist on Windows). The daemon
+# pulls this module in transitively, so it MUST import on every platform;
+# the group-cancel primitive is only ever exercised on POSIX, where a
+# dispatched runtime is started with ``start_new_session=True`` and is its
+# own pgid leader. On Windows the shims keep import alive and raise only if
+# the primitive is actually invoked.
+def _killpg_unsupported(pgid: int, sig: int) -> None:
+    raise NotImplementedError("process-group cancel is POSIX-only; no os.killpg on this platform")
+
+
+def _getpgid_identity(pid: int) -> int:
+    return pid
+
+
+_SIGKILL: int = getattr(signal, "SIGKILL", signal.SIGTERM)
+_KILLPG: Callable[[int, int], None] = getattr(os, "killpg", _killpg_unsupported)
+_GETPGID: Callable[[int], int] = getattr(os, "getpgid", _getpgid_identity)
+
+
 #: Signal sent for a ``soft`` cancel — request the group terminate.
 _SOFT_SIGNAL: int = signal.SIGTERM
 
 #: Signal sent for a ``hard`` cancel — force-kill the group.
-_HARD_SIGNAL: int = signal.SIGKILL
+_HARD_SIGNAL: int = _SIGKILL
 
 
 def cancel_process_group(
     pgid: int,
     *,
     hard: bool = False,
-    killpg: Callable[[int, int], None] = os.killpg,
+    killpg: Callable[[int, int], None] = _KILLPG,
 ) -> CancelResult:
     """Signal an entire process group by pgid (the pgid-kill primitive).
 
@@ -165,8 +185,8 @@ class _ProcessGroupHandle:
     """
 
     pgid: int
-    killpg: Callable[[int, int], None] = os.killpg
-    getpgid: Callable[[int], int] = os.getpgid
+    killpg: Callable[[int, int], None] = _KILLPG
+    getpgid: Callable[[int], int] = _GETPGID
 
     def poll(self) -> int | None:
         """Return a non-``None`` sentinel once the group leader is gone.
@@ -198,8 +218,8 @@ def cancel_with_grace(
     poll_interval: float = _DEFAULT_POLL_INTERVAL_SECONDS,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
-    killpg: Callable[[int, int], None] = os.killpg,
-    getpgid: Callable[[int], int] = os.getpgid,
+    killpg: Callable[[int, int], None] = _KILLPG,
+    getpgid: Callable[[int], int] = _GETPGID,
 ) -> TerminationResult:
     """Cancel a process group with a soft -> grace -> hard escalation.
 

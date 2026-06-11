@@ -48,6 +48,15 @@ SPAWN_POLL_TIMEOUT_SECONDS: float = 5.0
 #: Backoff between socket-poll attempts during spawn.
 SPAWN_POLL_INTERVAL_SECONDS: float = 0.05
 
+#: Windows daemon cold-start (pythonw + full import graph) routinely exceeds the
+#: 5s POSIX budget, so the spawn-readiness poll waits longer on win32.
+_WIN_SPAWN_READY_TIMEOUT_SECONDS: float = 20.0
+
+
+def _spawn_ready_timeout() -> float:
+    """Return the spawn-readiness wait budget for the current platform."""
+    return _WIN_SPAWN_READY_TIMEOUT_SECONDS if sys.platform == "win32" else SPAWN_POLL_TIMEOUT_SECONDS
+
 
 class DaemonSpawnTimeoutError(RuntimeError):
     """Raised when a freshly spawned daemon never opened its socket.
@@ -197,9 +206,13 @@ def _wait_for_pipe(runtime_dir: Path, deadline: float) -> bool:
     # `runtime_dir` is unused on Windows but kept symmetric for
     # callers that pass it positionally.
     del runtime_dir  # silence unused-variable lint without renaming the arg
-    pipe_path = rf"\\.\pipe\eawfd-{os.environ.get('USERNAME', 'eawf')}"
+    # os.path.exists is unreliable for \\.\pipe\ paths — probe with a real
+    # CreateFile (ERROR_PIPE_BUSY also proves the listener is up).
+    from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_probe
+
+    pipe_path = default_pipe_name()
     while time.monotonic() < deadline:
-        if os.path.exists(pipe_path):
+        if pipe_probe(pipe_path):
             return True
         time.sleep(SPAWN_POLL_INTERVAL_SECONDS)
     return False
@@ -360,13 +373,21 @@ def _spawn_windows(runtime_dir: Path) -> None:
     NOT required here — the standard library carries the constants
     on the win32 build of Python.
     """
-    creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+    # CREATE_NO_WINDOW guarantees no console window flashes for the detached
+    # daemon; prefer pythonw.exe (GUI subsystem — never allocates a console)
+    # over python.exe so a console-subsystem interpreter cannot pop a window.
+    # CREATE_NO_WINDOW and DETACHED_PROCESS are mutually exclusive, so use
+    # CREATE_NO_WINDOW (it already implies no inherited/new console).
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
         subprocess, "CREATE_NEW_PROCESS_GROUP", 0
     )
+    exe = Path(sys.executable)
+    pythonw = exe.with_name("pythonw.exe")
+    interpreter = str(pythonw) if pythonw.exists() else str(exe)
     env = dict(os.environ)
     env["EAWF_RUNTIME_DIR"] = str(runtime_dir)
     subprocess.Popen(
-        [sys.executable, "-m", "eawf.runtime.daemon.main"],
+        [interpreter, "-m", "eawf.runtime.daemon.main"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -395,7 +416,7 @@ def auto_spawn_daemon(runtime_dir: Path) -> int:
     runtime_dir.mkdir(parents=True, exist_ok=True)
     if daemon_singleton_locked(runtime_dir):
         logger.info(f"auto_spawn_daemon startup-in-progress runtime={runtime_dir.name!r}")
-        return wait_for_daemon_ready(runtime_dir)
+        return wait_for_daemon_ready(runtime_dir, timeout_seconds=_spawn_ready_timeout())
 
     try:
         spawn_lock = acquire_spawn_lock(
@@ -416,7 +437,7 @@ def _auto_spawn_daemon_locked(runtime_dir: Path) -> int:
         return ready_pid
     if daemon_singleton_locked(runtime_dir):
         logger.info(f"auto_spawn_daemon startup-in-progress runtime={runtime_dir.name!r}")
-        return wait_for_daemon_ready(runtime_dir)
+        return wait_for_daemon_ready(runtime_dir, timeout_seconds=_spawn_ready_timeout())
 
     # Resolve against the caller-supplied runtime_dir so tests can
     # point the helper at a per-test temporary directory without
@@ -437,7 +458,7 @@ def _auto_spawn_daemon_locked(runtime_dir: Path) -> int:
         _spawn_windows(runtime_dir)
     else:
         _spawn_posix(runtime_dir)
-    spawned = wait_for_daemon_ready(runtime_dir)
+    spawned = wait_for_daemon_ready(runtime_dir, timeout_seconds=_spawn_ready_timeout())
     logger.info(f"auto_spawn_daemon spawned pid={spawned} runtime={runtime_dir.name!r}")
     return spawned
 

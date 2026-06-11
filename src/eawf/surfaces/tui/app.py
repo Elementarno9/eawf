@@ -907,7 +907,11 @@ class EaApp(App[None]):
     def _daemon_socket_available(self) -> bool:
         """Return whether a daemon socket is present for RPC use."""
         if os.name == "nt":
-            return False
+            # Windows uses the named pipe, not a UDS path. Probe it without
+            # consuming a connection; the streaming subscribe rides this pipe.
+            from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_probe
+
+            return pipe_probe(default_pipe_name())
         sock_path = runtime_dir() / "eawfd.sock"
         logger.debug(
             f"_daemon_socket_available probing path={sock_path!s}"

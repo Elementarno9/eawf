@@ -84,11 +84,12 @@ def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, path)
-        parent_fd = os.open(path.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
+        if hasattr(os, "O_DIRECTORY"):  # parent-dir fsync is POSIX-only (no-op on Windows)
+            parent_fd = os.open(path.parent, os.O_DIRECTORY)
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
     finally:
         tmp.unlink(missing_ok=True)
 
