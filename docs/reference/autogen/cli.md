@@ -566,6 +566,7 @@ Track lifecycle (add, switch).
 |---|---|
 | `add` | Add a track under the active project. |
 | `switch` | Set the active track pointer. |
+| `sync` | Recompute a Track's measured outcome statuses from their samples. |
 
 ### `eawf vfl`
 
