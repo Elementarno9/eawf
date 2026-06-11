@@ -897,21 +897,17 @@ def legacy_criterion_count(criteria: list[CriterionSpec]) -> int:
     return sum(1 for criterion in criteria if criterion.kind == GRANDFATHERED_KIND)
 
 
-#: Tiers for registered checkout-scoring kinds that the production close
-#: oracle runs (via :func:`compile_gate` + :func:`run_checks`) but that
-#: the kernel-level ``_GATE_KIND_TIER`` map does not yet name. Listed here
-#: so the close path -- and the BIND-1 wired-on sweep that reads
-#: :func:`wired_audit_dsl_kinds` -- treats them as production-bound rather
-#: than registered-but-idle. ``tui_flow`` is a T2 structural checkout gate
-#: (it drives a key sequence through the live key->Binding path and asserts
-#: a terminal observable state), so it sits with the other T2 structural
-#: kinds. ``journal_chain`` is likewise a T2 structural checkout gate (it
-#: loads a WAL/journal directory and verifies the digest chain is intact),
-#: so it joins the structural tier.
-_SUPPLEMENTAL_GATE_KIND_TIERS: dict[str, str] = {
-    "tui_flow": "T2_STRUCTURAL",
-    "journal_chain": "T2_STRUCTURAL",
-}
+#: Supplemental tier seam for registered checkout-scoring kinds that the
+#: production close oracle runs (via :func:`compile_gate` + :func:`run_checks`)
+#: but that the kernel-level ``_GATE_KIND_TIER`` map does not name. This stays
+#: as a forward seam: when a new checkout gate kind is registered ahead of its
+#: kernel tier assignment, name it here so the close path -- and the BIND-1
+#: wired-on sweep that reads :func:`wired_audit_dsl_kinds` -- treats it as
+#: production-bound rather than registered-but-idle. ``tui_flow`` and
+#: ``journal_chain`` were folded into the canonical ``_GATE_KIND_TIER`` (both
+#: T2 structural) so :func:`assign_oracle_tier` is total over them; the seam is
+#: now empty because every registered kind has a canonical tier.
+_SUPPLEMENTAL_GATE_KIND_TIERS: dict[str, str] = {}
 
 
 def wired_audit_dsl_kinds() -> frozenset[str]:

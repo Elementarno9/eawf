@@ -369,6 +369,8 @@ _GATE_KIND_TIER: dict[str, OracleTier] = {
     "transition_coverage": OracleTier.T2_STRUCTURAL,
     "affordance_parity": OracleTier.T2_STRUCTURAL,
     "svg_well_formed": OracleTier.T2_STRUCTURAL,
+    "tui_flow": OracleTier.T2_STRUCTURAL,
+    "journal_chain": OracleTier.T2_STRUCTURAL,
     "command_exit_zero": OracleTier.T4_CONTRACT,
     "verify_implements": OracleTier.T4_CONTRACT,
     "svg_pixel_diff": OracleTier.T5_GOLDEN,
