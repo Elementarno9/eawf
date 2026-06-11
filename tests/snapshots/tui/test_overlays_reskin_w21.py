@@ -44,6 +44,7 @@ from eawf.surfaces.tui.screens.overlays.audit_running import (
     CheckState,
 )
 from eawf.surfaces.tui.screens.overlays.plan_preview import (
+    DroppedClause,
     PlanIterRow,
     PlanPreviewModal,
     PlanTree,
@@ -96,6 +97,13 @@ _PLAN = PlanTree(
                     deps=("P30-I02-W20",),
                 ),
             ),
+            eu=2.5,
+        ),
+    ),
+    dropped_detail=(
+        DroppedClause(
+            span_id="U-014",
+            reason="brief span dropped with no covering criterion and no deferral",
         ),
     ),
 )

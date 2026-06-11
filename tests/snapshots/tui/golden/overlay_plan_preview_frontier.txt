@@ -6,7 +6,7 @@
             │  plan preview: P30                                                                           │
             │                                                                                              │
             │  ▼ P30 · binding pass                                                                        │
-            │  └── ▼ P30-I02 · tui reskin                                                                  │
+            │  └── ▼ P30-I02 · tui reskin  (2.5 EU)                                                        │
             │      ├── P30-I02-W20 · overlay chassis                                                       │
             │      └── P30-I02-W21 · overlay reskins  ← P30-I02-W20                                        │
             │                                                                                              │
@@ -25,10 +25,10 @@
             │                                                                                              │
             │                                                                                              │
             │                                                                                              │
+            │  effort rollup: P30-I02 2.5 EU · total 2.5 EU                                                │
             │                                                                                              │
-            │                                                                                              │
-            │                                                                                              │
-            │                                                                                              │
+            │  △ dropped detail (1)                                                                        │
+            │    U-014 — brief span dropped with no covering criterion and no deferral                     │
             │                                                                                              │
             │  ❯ approve      edit      reject                                                             │
             │                                                                                              │
