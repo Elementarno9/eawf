@@ -880,9 +880,12 @@ def legacy_criterion_count(criteria: list[CriterionSpec]) -> int:
 #: than registered-but-idle. ``tui_flow`` is a T2 structural checkout gate
 #: (it drives a key sequence through the live key->Binding path and asserts
 #: a terminal observable state), so it sits with the other T2 structural
-#: kinds.
+#: kinds. ``journal_chain`` is likewise a T2 structural checkout gate (it
+#: loads a WAL/journal directory and verifies the digest chain is intact),
+#: so it joins the structural tier.
 _SUPPLEMENTAL_GATE_KIND_TIERS: dict[str, str] = {
     "tui_flow": "T2_STRUCTURAL",
+    "journal_chain": "T2_STRUCTURAL",
 }
 
 

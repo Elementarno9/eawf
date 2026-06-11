@@ -67,6 +67,7 @@ from eawf.platform.lint._conditional import changed_files
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
 from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
+from eawf.workflow.audit_dsl.kinds.journal_chain import check_journal_chain
 from eawf.workflow.audit_dsl.kinds.jury_calibrated import JURY_CALIBRATED_KIND
 from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
@@ -585,6 +586,7 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "svg_well_formed": check_svg_well_formed,
     "svg_pixel_diff": check_svg_pixel_diff,
     "mockup_golden_diff": _check_mockup_golden_diff,
+    "journal_chain": check_journal_chain,
 }
 
 

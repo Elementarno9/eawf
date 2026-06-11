@@ -129,6 +129,7 @@ CheckKind = Literal[
     "svg_well_formed",
     "svg_pixel_diff",
     "mockup_golden_diff",
+    "journal_chain",
 ]
 
 

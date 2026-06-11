@@ -159,6 +159,18 @@ def replay_wal(wal_dir: Path, state_path: Path, event_path: Path) -> ReplayRepor
         except ValueError, OSError:
             wal.mark_poisoned(wal_dir, record_id, reason="wal_record_unreadable")
             continue
+        # Integrity gate: a record whose stored digest no longer matches a
+        # fresh recompute had its body tampered with on disk. Refuse it --
+        # never append its (poisoned) envelope to the durable event log;
+        # move it under poisoned/ for operator inspection instead. Closes
+        # the demonstrated V1 hole where a tampered record replayed clean.
+        if not wal.verify_record_digest(record):
+            wal.mark_poisoned(wal_dir, record_id, reason=wal.WAL_DIGEST_MISMATCH_REASON)
+            logger.warning(
+                f"replay_wal applied->poisoned record={record_id!r} "
+                f"reason={wal.WAL_DIGEST_MISMATCH_REASON}"
+            )
+            continue
         envelope_id = record.envelope.id
         if envelope_id not in known_ids:
             _append_event_fsynced(event_path, record)

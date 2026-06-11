@@ -30,6 +30,7 @@ plain ``os.replace`` calls — atomic on POSIX + Windows.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import secrets
@@ -39,12 +40,25 @@ from enum import StrEnum
 from pathlib import Path
 
 import orjson
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
+
+
+#: Genesis-record sentinel for :attr:`WalRecord.prev_digest`. A record with
+#: no chained predecessor links to this sentinel so the chain has a single,
+#: well-known root and :func:`verify_record_digest` can distinguish "first
+#: record" from "tampered ``prev_digest``".
+WAL_CHAIN_GENESIS: str = "genesis"
+
+#: Poison reason recorded when replay detects a record whose stored
+#: :attr:`WalRecord.digest` does not match the digest recomputed over its
+#: content -- the demonstrated V1 integrity hole. Replay refuses such a
+#: record (no event row appended) and moves it under ``poisoned/``.
+WAL_DIGEST_MISMATCH_REASON: str = "wal_digest_mismatch"
 
 
 _DONE_RETENTION_SECONDS_DEFAULT: int = 3600
@@ -97,6 +111,17 @@ class WalRecord(BaseModel):
             on-disk state against the WAL.
         poison_reason: Reason text injected by :func:`mark_poisoned`
             when the record is moved under ``poisoned/``.
+        prev_digest: :attr:`digest` of the record that precedes this one
+            in the WAL chain, or :data:`WAL_CHAIN_GENESIS` for the first
+            record. Links every record back to its predecessor so a
+            silent deletion or reorder of an earlier record breaks the
+            chain at the next link.
+        digest: SHA-256 over the record's canonical content (every field
+            except :attr:`digest` and :attr:`poison_reason`). Computed at
+            construction time and verified on replay -- a tampered record
+            body recomputes to a different digest than the one stored on
+            disk, which replay refuses (see
+            :func:`eawf.runtime.daemon.recovery.replay_wal`).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -108,6 +133,76 @@ class WalRecord(BaseModel):
     before_state_version: str
     after_state_version: str
     poison_reason: str | None = None
+    prev_digest: str = WAL_CHAIN_GENESIS
+    digest: str | None = None
+
+    @model_validator(mode="after")
+    def _stamp_digest(self) -> WalRecord:
+        """Stamp :attr:`digest` over the record's canonical content when absent.
+
+        The digest is computed once, at construction, over every field
+        except ``digest`` itself and the mutable ``poison_reason`` (which
+        :func:`mark_poisoned` injects after the fact via ``model_copy``,
+        without re-validating). Excluding ``poison_reason`` keeps the
+        digest stable across the poison move so a poisoned record still
+        verifies against its original content.
+
+        A record read back from disk already carries its stamped
+        ``digest``; the validator leaves a non-``None`` value untouched so
+        :func:`verify_record_digest` can compare the stored digest against
+        a fresh recompute and catch a tampered body.
+        """
+        if self.digest is None:
+            object.__setattr__(self, "digest", compute_record_digest(self))
+        return self
+
+
+#: Record fields the digest is computed over. Excludes ``digest`` (the
+#: field being computed) and ``poison_reason`` (injected post-hoc by
+#: :func:`mark_poisoned`, so including it would invalidate the digest of an
+#: otherwise-intact poisoned record).
+_DIGEST_EXCLUDED_FIELDS: set[str] = {"digest", "poison_reason"}
+
+
+def compute_record_digest(record: WalRecord) -> str:
+    """Return the SHA-256 hex digest of *record*'s canonical content.
+
+    The digest covers every field except ``digest`` and ``poison_reason``
+    (see :data:`_DIGEST_EXCLUDED_FIELDS`). Serialisation is the same
+    deterministic ``orjson.OPT_SORT_KEYS`` dump the on-disk record uses,
+    so the digest is stable across processes and re-reads.
+
+    Args:
+        record: The WAL record to hash.
+
+    Returns:
+        The 64-char hex SHA-256 digest over the canonical content bytes.
+    """
+    payload = record.model_dump(mode="json", exclude=_DIGEST_EXCLUDED_FIELDS)
+    canonical = orjson.dumps(payload, option=orjson.OPT_SORT_KEYS)
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def verify_record_digest(record: WalRecord) -> bool:
+    """Return ``True`` iff *record*'s stored digest matches a fresh recompute.
+
+    A record whose on-disk body was tampered with (any digested field
+    edited) recomputes to a different digest than the one persisted in its
+    :attr:`WalRecord.digest`, so this returns ``False`` -- the signal
+    replay uses to refuse the poisoned record. A record with no stored
+    digest (``digest is None``) cannot be verified and returns ``False``
+    so a stripped digest is treated as tampering, not a pass.
+
+    Args:
+        record: The WAL record loaded from disk.
+
+    Returns:
+        ``True`` when the stored digest matches the recomputed digest.
+    """
+    stored = record.digest
+    if stored is None:
+        return False
+    return stored == compute_record_digest(record)
 
 
 def _record_filename(record_id: str, status: WalStatus) -> str:
@@ -515,8 +610,11 @@ def read_record(path: Path) -> WalRecord:
 
 __all__ = [
     "DEFAULT_WAL_GC_INTERVAL_SECONDS",
+    "WAL_CHAIN_GENESIS",
+    "WAL_DIGEST_MISMATCH_REASON",
     "WalRecord",
     "WalStatus",
+    "compute_record_digest",
     "gc_done_records",
     "list_poisoned",
     "list_records",
@@ -527,5 +625,6 @@ __all__ = [
     "resolve_wal_gc_interval_seconds",
     "resolve_wal_retention_seconds",
     "run_wal_gc_loop",
+    "verify_record_digest",
     "write_pending",
 ]

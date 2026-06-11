@@ -265,3 +265,107 @@ def test_replay_wal_report_is_pydantic_model() -> None:
         "poisoned_count": 4,
         "replayed_event_count": 5,
     }
+
+
+# --------------------------------------------------------------------------- #
+# V1 integrity-hole falsifier (P30-I16-W17).
+#
+# The demonstrated hole: a tampered .applied.json record replayed clean --
+# its (poisoned) envelope landed in the durable event log because replay did
+# not verify the per-record digest. These tests are the falsifier, run
+# un-skipped: a tampered record MUST be refused (poisoned, no event row).
+# --------------------------------------------------------------------------- #
+
+
+def _tamper_applied_record(wal_dir: Path, record_id: str, *, field: str, value: str) -> None:
+    """Edit a digested field of an on-disk ``.applied.json`` record in place.
+
+    Leaves the record's stale ``digest`` untouched -- exactly the attack the
+    digest-compare gate must catch (the body no longer recomputes to the
+    stored digest).
+    """
+    path = wal_dir / f"{record_id}.applied.json"
+    body = orjson.loads(path.read_bytes())
+    body[field] = value
+    path.write_bytes(orjson.dumps(body))
+
+
+def test_replay_wal_refuses_tampered_applied_record(tmp_path: Path) -> None:
+    """FALSIFIER: a tampered .applied record is poisoned, not replayed.
+
+    Before the W17 fix this test failed: replay appended the poisoned
+    envelope to event.jsonl because no digest check stood between read and
+    append. With digest-compare-on-replay the record is refused.
+    """
+    wal_dir = tmp_path / "wal"
+    event_path = tmp_path / "event.jsonl"
+    record = _record("rec-tampered", "env-tampered")
+    write_pending(wal_dir, record)
+    mark_applied(wal_dir, record.record_id)
+    # Attacker rewrites the envelope's recorded state version on disk; the
+    # stored digest is now stale.
+    _tamper_applied_record(
+        wal_dir, record.record_id, field="after_state_version", value="sha:ATTACKER"
+    )
+
+    report = replay_wal(wal_dir, state_path=tmp_path / "state.json", event_path=event_path)
+
+    # Refused: the tampered envelope NEVER reached the durable event log.
+    assert _read_event_ids(event_path) == []
+    assert report.replayed_event_count == 0
+    assert report.applied_count == 0
+    # The tampered record is quarantined under poisoned/ with the digest reason.
+    assert report.poisoned_count == 1
+    poisoned = list_poisoned(wal_dir)
+    assert len(poisoned) == 1
+    body = orjson.loads(poisoned[0].read_bytes())
+    assert body["poison_reason"] == "wal_digest_mismatch"
+    # And the live .applied.json no longer exists (it moved to poisoned/).
+    assert not (wal_dir / "rec-tampered.applied.json").exists()
+
+
+def test_replay_wal_replays_intact_applied_record(tmp_path: Path) -> None:
+    """Control: an un-tampered .applied record still replays clean.
+
+    The digest gate must not false-poison an intact record -- only a
+    tampered one is refused.
+    """
+    wal_dir = tmp_path / "wal"
+    event_path = tmp_path / "event.jsonl"
+    record = _record("rec-intact", "env-intact")
+    write_pending(wal_dir, record)
+    mark_applied(wal_dir, record.record_id)
+
+    report = replay_wal(wal_dir, state_path=tmp_path / "state.json", event_path=event_path)
+
+    assert _read_event_ids(event_path) == ["env-intact"]
+    assert report.replayed_event_count == 1
+    assert report.applied_count == 1
+    assert report.poisoned_count == 0
+    assert (wal_dir / "rec-intact.fsynced.json").exists()
+
+
+def test_replay_wal_refuses_tampered_envelope_id(tmp_path: Path) -> None:
+    """Tampering the envelope payload (a nested field) is also refused.
+
+    Demonstrates the digest covers the embedded envelope, not just the
+    top-level record fields.
+    """
+    wal_dir = tmp_path / "wal"
+    event_path = tmp_path / "event.jsonl"
+    record = _record("rec-env-tampered", "env-original")
+    write_pending(wal_dir, record)
+    mark_applied(wal_dir, record.record_id)
+    # Swap the embedded envelope id on disk, keeping the stale record digest.
+    path = wal_dir / "rec-env-tampered.applied.json"
+    body = orjson.loads(path.read_bytes())
+    body["envelope"]["id"] = "env-swapped"
+    path.write_bytes(orjson.dumps(body))
+
+    report = replay_wal(wal_dir, state_path=tmp_path / "state.json", event_path=event_path)
+
+    # Neither the original nor the swapped id reached the event log.
+    assert _read_event_ids(event_path) == []
+    assert report.poisoned_count == 1
+    body = orjson.loads(list_poisoned(wal_dir)[0].read_bytes())
+    assert body["poison_reason"] == "wal_digest_mismatch"

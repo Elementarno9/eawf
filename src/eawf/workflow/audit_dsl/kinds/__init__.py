@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
+from eawf.workflow.audit_dsl.kinds.journal_chain import check_journal_chain
 from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
 from eawf.workflow.audit_dsl.kinds.svg_well_formed import check_svg_well_formed
@@ -29,6 +30,7 @@ from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_impleme
 __all__ = [
     "check_affordance_parity",
     "check_criterion_in_diff",
+    "check_journal_chain",
     "check_schema_validate",
     "check_svg_pixel_diff",
     "check_svg_well_formed",

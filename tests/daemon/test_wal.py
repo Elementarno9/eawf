@@ -323,3 +323,75 @@ def test_write_pending_fsync_touches_parent_dir(tmp_path: Path) -> None:
     assert wal_dir.is_dir()
     # Mtime moved forward since the write happened just now.
     assert wal_dir.stat().st_mtime <= time.time()
+
+
+# --------------------------------------------------------------------------- #
+# Digest chain (P30-I16-W17): per-record digest stamped at construction, the
+# tamper-detection gate the V1 integrity-hole fix leans on.
+# --------------------------------------------------------------------------- #
+
+
+def test_wal_record_stamps_digest_at_construction() -> None:
+    """A freshly built record carries a non-empty stamped digest."""
+    from eawf.runtime.daemon.wal import WAL_CHAIN_GENESIS, compute_record_digest
+
+    record = _build_record()
+    assert record.digest is not None
+    assert len(record.digest) == 64  # sha256 hex
+    assert record.digest == compute_record_digest(record)
+    # No predecessor declared -> genesis sentinel.
+    assert record.prev_digest == WAL_CHAIN_GENESIS
+
+
+def test_verify_record_digest_passes_for_intact_record() -> None:
+    from eawf.runtime.daemon.wal import verify_record_digest
+
+    record = _build_record()
+    assert verify_record_digest(record) is True
+
+
+def test_verify_record_digest_fails_for_tampered_body() -> None:
+    """A record whose digested content changed but kept its old digest fails."""
+    from eawf.runtime.daemon.wal import verify_record_digest
+
+    record = _build_record()
+    # Construct a sibling whose before_state_version differs but force-keep the
+    # original digest (model_copy does NOT re-run the stamping validator).
+    tampered = record.model_copy(update={"before_state_version": "sha:TAMPERED"})
+    assert tampered.digest == record.digest  # stale digest carried over
+    assert verify_record_digest(tampered) is False
+
+
+def test_verify_record_digest_fails_for_stripped_digest() -> None:
+    """A record with no stored digest cannot be verified -> treated as tampering."""
+    from eawf.runtime.daemon.wal import verify_record_digest
+
+    record = _build_record()
+    no_digest = record.model_copy(update={"digest": None})
+    assert verify_record_digest(no_digest) is False
+
+
+def test_digest_is_stable_across_poison_reason_injection() -> None:
+    """poison_reason is excluded from the digest, so poisoning keeps it valid."""
+    from eawf.runtime.daemon.wal import verify_record_digest
+
+    record = _build_record()
+    poisoned = record.model_copy(update={"poison_reason": "some_reason"})
+    assert poisoned.digest == record.digest
+    assert verify_record_digest(poisoned) is True
+
+
+def test_tampered_on_disk_record_fails_verification(tmp_path: Path) -> None:
+    """Editing the persisted JSON body breaks the digest on reload."""
+    from eawf.runtime.daemon.wal import verify_record_digest
+
+    wal_dir = tmp_path / "wal"
+    record = _build_record()
+    path = write_pending(wal_dir, record)
+    # Reloaded-as-written verifies clean.
+    assert verify_record_digest(read_record(path)) is True
+    # Attacker rewrites a digested field, leaving the stale digest in place.
+    body = orjson.loads(path.read_bytes())
+    body["after_state_version"] = "sha:ATTACKER"
+    path.write_bytes(orjson.dumps(body))
+    assert verify_record_digest(read_record(path)) is False
