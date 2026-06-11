@@ -76,6 +76,12 @@ from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES
 from eawf.runtime.daemon.methods import register
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.cancel import CancelResult, cancel_process_group
+from eawf.workflow.dispatch.retry import (
+    RepairExhaustedError,
+    RepairSpawnFn,
+    RepairVerifier,
+    repair_until_resolved,
+)
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.spec import WAVE_TRANSITIONS, validate_transition
@@ -83,7 +89,9 @@ from eawf.workflow.lifecycle.wave import claim_wave, close_wave, compute_runtime
 from eawf.workflow.verify.oracle import classify_risk_tier, risk_tier_auto_closes
 
 if TYPE_CHECKING:
+    from eawf.kernel.spec.common import CriterionSpec
     from eawf.runtime.daemon.methods import MethodContext
+    from eawf.runtime.runtimes.adapter import SpawnResult
 
 logger = logging.getLogger(__name__)
 
@@ -621,6 +629,198 @@ def classify_fork_reason(
     if risk_tier is RiskTier.UI:
         return FleetForkReason.HIGH_RISK_CLOSE
     return FleetForkReason.UNCALIBRATED_JURY
+
+
+#: Max chars the escalation fork's evidence ref carries from the last failing
+#: check, bounded so a long oracle dump cannot blow the
+#: :attr:`~eawf.kernel.state.models.FleetFork.evidence_ref` field.
+_REPAIR_FORK_DETAIL_CAP = 1000
+
+
+def repair_exhausted_fork(
+    exc: RepairExhaustedError,
+    *,
+    wave_id: str,
+    attempt: int,
+    risk_tier: RiskTier,
+) -> FleetFork:
+    """Build the ``REPAIR_EXHAUSTED`` escalation fork from a spent repair loop -- DL-7, pure.
+
+    The grounded repair loop (:func:`~eawf.workflow.dispatch.retry.repair_until_resolved`)
+    raises :class:`~eawf.workflow.dispatch.retry.RepairExhaustedError` when its
+    attempt budget is spent and the refused criterion still fails. Rather than
+    silently dropping the lane or re-dispatching forever, the loop ESCALATES it
+    to an operator-resolved :class:`FleetFork` tagged
+    :attr:`~eawf.kernel.state.models.FleetForkReason.REPAIR_EXHAUSTED` ("repair
+    exhausted -- your call"). The fork carries the LAST failing check (the
+    freshest falsifier the final repair attempt still produced) as its evidence
+    ref, normalised to a single line and bounded, so the operator reads the
+    concrete check they must adjudicate -- never a content-free "it drifted".
+
+    Args:
+        exc: The typed repair exhaustion the spent loop raised; supplies the
+            refused criterion id + the last failing-check payload.
+        wave_id: ``W<NN>`` wave whose repair lane exhausted.
+        attempt: 1-based dispatch attempt -- the second half of the
+            ``(wave_id, attempt)`` fork key.
+        risk_tier: The lane's resolved :class:`RiskTier` at escalation time, so
+            the cockpit renders the band badge on the queued fork.
+
+    Returns:
+        The :class:`FleetFork` to enqueue -- reason ``REPAIR_EXHAUSTED``, evidence
+        ref carrying the last failing check.
+    """
+    # Normalise the last failing check to a single bounded line so the evidence
+    # ref stays a scannable reference rather than a multi-line oracle dump; a
+    # blank payload (defensively) falls back to a stable repair-exhaustion URN.
+    detail = " ".join(exc.last_failing_detail.split())[:_REPAIR_FORK_DETAIL_CAP]
+    evidence_ref = detail or f"urn:eawf:v1:fork:{wave_id}:repair_exhausted"
+    fork = FleetFork(
+        wave_id=wave_id,
+        attempt=attempt,
+        risk_tier=risk_tier,
+        reason=FleetForkReason.REPAIR_EXHAUSTED,
+        evidence_ref=evidence_ref,
+        forked_at=datetime.now(UTC),
+    )
+    logger.info(
+        f"repair_exhausted_fork wave={wave_id} attempt={attempt} "
+        f"criterion={exc.criterion_id!r} risk_tier={risk_tier.value} "
+        f"reason={FleetForkReason.REPAIR_EXHAUSTED.value}"
+    )
+    return fork
+
+
+def _enqueue_fork(ctx: MethodContext, fork: FleetFork) -> None:
+    """Append *fork* to ``FleetRun.forks`` through the daemon canonical writer.
+
+    The escalation half of :func:`repair_lane_or_fork`: under the state
+    portalock, load the armed run, drop the exhausted lane's in-flight slot when
+    it is still registered (so the registry never holds a lane that is now a
+    queued fork), append the typed fork, bump the ``forked`` + ``blocked`` safety
+    tallies, and atomic-write through the canonical writer. The loop never opens
+    ``state.json`` directly.
+
+    Dropping the lane and enqueuing the fork happen under ONE held lock so the
+    lane can never be observed in any intermediate state other than fork: there
+    is no window where the lane is removed but the fork is not yet queued.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path``.
+        fork: The escalation :class:`FleetFork` to enqueue.
+
+    Raises:
+        LifecycleError: When ``ctx.state_path`` is unset or no fleet run is
+            armed -- the escalation has nowhere to enqueue, so it fails loud
+            rather than dropping the fork on the floor.
+    """
+    if ctx.state_path is None:
+        raise LifecycleError("cannot enqueue repair-exhausted fork: state_path not configured")
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        run = state.fleet_run
+        if run is None:
+            raise LifecycleError("cannot enqueue repair-exhausted fork: no fleet run armed")
+        existing = run.lanes.get(fork.wave_id)
+        if existing is not None and existing.attempt == fork.attempt:
+            del run.lanes[fork.wave_id]
+        run.forks.append(fork)
+        run.counters.forked += 1
+        run.counters.blocked += 1
+        state.fleet_run = run
+        state.updated_at = datetime.now(UTC)
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    logger.info(
+        f"_enqueue_fork wave={fork.wave_id} attempt={fork.attempt} "
+        f"reason={fork.reason.value} forks_open={len(run.forks)}"
+    )
+
+
+async def repair_lane_or_fork(
+    ctx: MethodContext,
+    criterion: CriterionSpec,
+    failing_detail: str,
+    *,
+    base_prompt: str,
+    spawn: RepairSpawnFn,
+    verify: RepairVerifier,
+    wave_id: str,
+    attempt: int = 1,
+    risk_tier: RiskTier = RiskTier.MECH,
+    max_attempts: int | None = None,
+) -> SpawnResult:
+    """Drive a lane's grounded repair, ESCALATING budget exhaustion to a fork -- DL-7.
+
+    Runs the bounded grounded repair loop
+    (:func:`~eawf.workflow.dispatch.retry.repair_until_resolved`) for a refused
+    *criterion*. On a resolved repair the re-dispatch result is returned and the
+    lane proceeds. When the repair budget is SPENT without the criterion passing,
+    the loop raises
+    :class:`~eawf.workflow.dispatch.retry.RepairExhaustedError`; this catches it
+    and ESCALATES the lane to an operator-resolved
+    :attr:`~eawf.kernel.state.models.FleetForkReason.REPAIR_EXHAUSTED` fork
+    (carrying the last failing check) through the daemon canonical state writer,
+    then re-raises the typed exhaustion so the caller sees the lane terminated as
+    a fork.
+
+    The no-silent-drop invariant (DL-7, success criterion C2): an exhausted lane
+    is NEVER reset to PENDING and NEVER dropped without a queued fork -- the only
+    terminal this path takes on exhaustion is enqueuing the ``REPAIR_EXHAUSTED``
+    fork. The enqueue + the re-raise are the sole exhaustion exit, so no code path
+    can leave the lane in any state other than fork.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` (the fork-queue
+            write target).
+        criterion: The refused success criterion the repair targets.
+        failing_detail: The concrete failing-check output the close gate refused
+            on -- the grounding payload of the FIRST repair re-dispatch.
+        base_prompt: The original rendered dispatch prompt, preserved verbatim
+            under each repair notice.
+        spawn: Injected async repair re-dispatch callable (the resolved adapter
+            in production, a recording stub under test).
+        verify: Injected re-verifier returning the still-failing payload or
+            ``None`` once the refusal is resolved.
+        wave_id: ``W<NN>`` wave whose repair lane this drives.
+        attempt: 1-based dispatch attempt -- the second half of the fork key.
+        risk_tier: The lane's resolved :class:`RiskTier`, recorded on the
+            escalation fork.
+        max_attempts: Optional repair-attempt ceiling override; ``None`` uses the
+            repair loop's bounded default.
+
+    Returns:
+        The :class:`~eawf.runtime.runtimes.adapter.SpawnResult` of the repair
+        re-dispatch the verifier accepted.
+
+    Raises:
+        RepairExhaustedError: When the repair budget is spent without the
+            criterion passing -- re-raised AFTER the ``REPAIR_EXHAUSTED`` fork is
+            enqueued, so the lane terminates as a fork (never a silent drop).
+        LifecycleError: When the escalation has no armed run to enqueue onto.
+    """
+    repair_kwargs: dict[str, Any] = {}
+    if max_attempts is not None:
+        repair_kwargs["max_attempts"] = max_attempts
+    try:
+        return await repair_until_resolved(
+            criterion,
+            failing_detail,
+            base_prompt=base_prompt,
+            spawn=spawn,
+            verify=verify,
+            **repair_kwargs,
+        )
+    except RepairExhaustedError as exc:
+        fork = repair_exhausted_fork(
+            exc, wave_id=wave_id, attempt=attempt, risk_tier=risk_tier
+        )
+        _enqueue_fork(ctx, fork)
+        logger.warning(
+            f"repair_lane_or_fork wave={wave_id} attempt={attempt} "
+            f"criterion={criterion.id!r} status=escalated-to-fork"
+        )
+        raise
 
 
 @dataclass

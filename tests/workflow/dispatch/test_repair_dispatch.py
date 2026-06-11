@@ -23,6 +23,7 @@ import pytest
 from eawf.kernel.spec.common import CriterionSpec, QualityDimension
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.workflow.dispatch.retry import (
+    RepairExhaustedError,
     RepairWithoutFailureError,
     RetryExhaustedError,
     build_repair_prompt,
@@ -163,6 +164,36 @@ def test_repair_loop_exhausts_when_every_attempt_still_fails() -> None:
     assert len(spawn.prompts) == max_attempts
     assert len(excinfo.value.failures) == max_attempts
     assert excinfo.value.attempts == max_attempts
+
+
+def test_repair_loop_exhaustion_raises_repair_exhausted_carrying_last_check() -> None:
+    """The spent loop raises the DL-7 RepairExhaustedError naming the criterion + last check."""
+    criterion = _criterion()
+    max_attempts = 2
+    spawn = _RecordingSpawn(limit=max_attempts)
+    # The verifier re-grounds on a fresh detail each round; the LAST detail is the
+    # one the escalation fork must carry.
+    last_detail = "freshest falsifier output for the final repair attempt"
+    outcomes: list[str] = ["stale detail for retry 2", last_detail]
+    calls = iter(outcomes)
+
+    with pytest.raises(RepairExhaustedError) as excinfo:
+        asyncio.run(
+            repair_until_resolved(
+                criterion,
+                _FAILING_DETAIL,
+                base_prompt="ORIGINAL DISPATCH PROMPT",
+                spawn=spawn,
+                verify=lambda _result: next(calls),
+                max_attempts=max_attempts,
+            )
+        )
+    exc = excinfo.value
+    # The specialised error is still a RetryExhaustedError (base-type catchers keep working).
+    assert isinstance(exc, RetryExhaustedError)
+    assert exc.criterion_id == criterion.id
+    # C1: it carries the LAST failing check (the freshest falsifier), not the first.
+    assert exc.last_failing_detail == last_detail
 
 
 def test_repair_loop_regrounds_each_retry_on_freshest_detail() -> None:

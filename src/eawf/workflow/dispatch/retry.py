@@ -259,6 +259,49 @@ class RetryExhaustedError(RuntimeError):
         )
 
 
+class RepairExhaustedError(RetryExhaustedError):
+    """Raised when the grounded repair loop spends its budget without resolving -- DL-7.
+
+    A specialisation of :class:`RetryExhaustedError` for the
+    :func:`repair_until_resolved` exhaustion path: the repair budget is spent and
+    the refused criterion still fails, so the lane ESCALATES to an
+    operator-resolved fork ("repair exhausted -- your call") rather than silently
+    dropping the lane or re-dispatching forever. Subclassing
+    :class:`RetryExhaustedError` keeps the existing exhaustion contract (callers
+    that catch the base type still catch this) while adding the two fields the
+    fleet loop reads to build the escalation fork: which criterion exhausted and
+    the last concrete failing check.
+
+    The error carries the LAST failing-check payload (the freshest falsifier the
+    final repair attempt still produced) so the escalation fork names the
+    concrete check the operator must adjudicate -- never a content-free "it
+    drifted, your call".
+
+    Attributes:
+        criterion_id: ``id`` of the refused success criterion the repair loop
+            could not make pass.
+        last_failing_detail: The freshest failing-check output from the final
+            repair attempt -- the concrete falsifier the escalation fork carries.
+        attempts: The repair attempt ceiling that was in force (inherited).
+        failures: Every failed repair attempt, in order (inherited).
+        notice: The tiered :class:`FailureNotice` for the terminal outcome
+            (inherited).
+    """
+
+    def __init__(
+        self,
+        *,
+        criterion_id: str,
+        last_failing_detail: str,
+        attempts: int,
+        failures: list[SpawnAttemptFailure],
+        notice: FailureNotice,
+    ) -> None:
+        self.criterion_id = criterion_id
+        self.last_failing_detail = last_failing_detail
+        super().__init__(attempts=attempts, failures=failures, notice=notice)
+
+
 class RepairWithoutFailureError(ValueError):
     """Raised when a repair prompt is requested without a failing-check payload.
 
@@ -503,8 +546,11 @@ async def repair_until_resolved(
 
     The loop is **bounded** (never more than *max_attempts* re-dispatches) and
     **fail-loud** (a cap reached without resolution raises a typed
-    :class:`RetryExhaustedError` carrying every repair attempt; it never loops
-    forever and never returns an unresolved result). The repair is always
+    :class:`RepairExhaustedError` carrying every repair attempt PLUS the last
+    failing check; it never loops forever and never returns an unresolved
+    result). That typed exhaustion is the DL-7 escalation signal: the fleet loop
+    turns it into an operator-resolved ``REPAIR_EXHAUSTED`` fork rather than
+    silently dropping the lane. The repair is always
     grounded: the first prompt carries *failing_detail* and each retry carries
     the verifier's freshest payload through :func:`build_repair_prompt`, so a
     content-free repair is never dispatched (a :class:`RepairWithoutFailureError`
@@ -535,9 +581,12 @@ async def repair_until_resolved(
         ValueError: when *max_attempts* is less than 1.
         RepairWithoutFailureError: when *failing_detail* (or a later verifier
             payload) is empty -- a content-free repair cannot be built.
-        RetryExhaustedError: when the cap is reached without the verifier
+        RepairExhaustedError: when the cap is reached without the verifier
             accepting any re-dispatch -- the typed exhaustion carrying every
-            repair attempt.
+            repair attempt PLUS the last failing check, which the fleet loop
+            escalates to a ``REPAIR_EXHAUSTED`` fork (DL-7). A subclass of
+            :class:`RetryExhaustedError`, so a caller catching the base type
+            still catches it.
     """
     if max_attempts < 1:
         raise ValueError(f"max_attempts must be >= 1: {max_attempts!r}")
@@ -574,9 +623,20 @@ async def repair_until_resolved(
     notice = _failure_notice(failures=failures, attempts_used=len(failures))
     logger.warning(
         f"repair_until_resolved status=exhausted criterion={criterion.id!r} "
-        f"attempts={len(failures)} tier={notice.tier.value}"
+        f"attempts={len(failures)} tier={notice.tier.value} action=escalate-to-fork"
     )
-    raise RetryExhaustedError(attempts=max_attempts, failures=failures, notice=notice)
+    # The budget is spent and the criterion still fails: ESCALATE to an
+    # operator-resolved fork (DL-7) carrying the last failing check -- never drop
+    # the lane silently and never loop. The fleet loop turns this typed
+    # exhaustion into a REPAIR_EXHAUSTED FleetFork; ``current_detail`` is the
+    # freshest falsifier the final repair attempt still produced.
+    raise RepairExhaustedError(
+        criterion_id=criterion.id,
+        last_failing_detail=current_detail,
+        attempts=max_attempts,
+        failures=failures,
+        notice=notice,
+    )
 
 
 __all__ = [
@@ -585,6 +645,7 @@ __all__ = [
     "ErrorClassifier",
     "FailureNotice",
     "FailureTier",
+    "RepairExhaustedError",
     "RepairSpawnFn",
     "RepairVerifier",
     "RepairWithoutFailureError",

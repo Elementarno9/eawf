@@ -1195,11 +1195,12 @@
       "type": "object"
     },
     "FleetForkReason": {
-      "description": "Why a fleet lane paused to a blocking fork rather than draining clean -- DL-6.\n\nThe closed set of reasons the loop pauses ONLY the offending lane (the\nsibling lanes keep draining) and enqueues a typed :class:`FleetFork`:\n\n- ``high_risk_close`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.UI`\n  (visual-band) lane reported a clean close, but the visual oracle is the\n  least deterministic, so the close is held for the operator rather than\n  auto-closed.\n- ``uncalibrated_jury`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.HIGH`\n  (jury-gated) lane reported a clean close, but the jury that would gate it\n  holds only :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY`\n  authority, so its advisory verdict cannot auto-close the wave (the\n  LOAD-BEARING DL-5 safety invariant surfaces here as a fork).\n- ``needs_user_split`` -- the lane's wave hit a needs-user split mid-run\n  (a clarification the executor could not resolve), so the lane pauses for\n  operator input.",
+      "description": "Why a fleet lane paused to a blocking fork rather than draining clean -- DL-6.\n\nThe closed set of reasons the loop pauses ONLY the offending lane (the\nsibling lanes keep draining) and enqueues a typed :class:`FleetFork`:\n\n- ``high_risk_close`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.UI`\n  (visual-band) lane reported a clean close, but the visual oracle is the\n  least deterministic, so the close is held for the operator rather than\n  auto-closed.\n- ``uncalibrated_jury`` -- a :attr:`~eawf.kernel.state.enums.RiskTier.HIGH`\n  (jury-gated) lane reported a clean close, but the jury that would gate it\n  holds only :attr:`~eawf.observability.eval.jury_validation.BlockAuthority.ADVISORY`\n  authority, so its advisory verdict cannot auto-close the wave (the\n  LOAD-BEARING DL-5 safety invariant surfaces here as a fork).\n- ``needs_user_split`` -- the lane's wave hit a needs-user split mid-run\n  (a clarification the executor could not resolve), so the lane pauses for\n  operator input.\n- ``repair_exhausted`` -- the lane's grounded repair loop spent its whole\n  attempt budget without the refused criterion passing, so the loop\n  ESCALATES the lane to an operator-resolved fork (\"repair exhausted -- your\n  call\") carrying the last failing check rather than silently dropping the\n  lane or re-dispatching forever (DL-7).",
       "enum": [
         "high_risk_close",
         "uncalibrated_jury",
-        "needs_user_split"
+        "needs_user_split",
+        "repair_exhausted"
       ],
       "title": "FleetForkReason",
       "type": "string"

@@ -1195,11 +1195,17 @@ class FleetForkReason(StrEnum):
     - ``needs_user_split`` -- the lane's wave hit a needs-user split mid-run
       (a clarification the executor could not resolve), so the lane pauses for
       operator input.
+    - ``repair_exhausted`` -- the lane's grounded repair loop spent its whole
+      attempt budget without the refused criterion passing, so the loop
+      ESCALATES the lane to an operator-resolved fork ("repair exhausted -- your
+      call") carrying the last failing check rather than silently dropping the
+      lane or re-dispatching forever (DL-7).
     """
 
     HIGH_RISK_CLOSE = "high_risk_close"
     UNCALIBRATED_JURY = "uncalibrated_jury"
     NEEDS_USER_SPLIT = "needs_user_split"
+    REPAIR_EXHAUSTED = "repair_exhausted"
 
 
 class FleetForkResolution(StrEnum):
