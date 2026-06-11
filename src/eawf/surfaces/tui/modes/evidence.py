@@ -629,10 +629,26 @@ def join_evidence_to_criteria(
 #: The per-cell ballot vote vocabulary for the juror x rubric-item grid. A
 #: juror that passed the item reads ``pass``, one that vetoed it ``fail``, and
 #: one that cast no vote on the item ``abstain`` (a non-vote is never a silent
-#: pass). Kept ASCII per the source-glyph convention.
+#: pass). These stay the canonical data words on :class:`BallotGridRow.votes`;
+#: the grid CELL renders the pinned sigil glyph (:func:`vote_sigil`) so the
+#: surface wears the designer pin-strip vote vocabulary (filled circle / cross /
+#: hollow ring) rather than bare words. Kept ASCII per the source-glyph
+#: convention.
 PASS_VOTE: str = "pass"
 FAIL_VOTE: str = "fail"
 ABSTAIN_VOTE: str = "abstain"
+
+#: The vote-word -> lifecycle :class:`Sigil` pin: the designer pin-strip (U2)
+#: pins each ballot vote to a sigil from the ratified alphabet -- ``pass`` to the
+#: CLOSED filled circle, ``fail`` to the FAILED multiplication cross, ``abstain``
+#: to the PENDING hollow ring. The grid cell renders the glyph through this map
+#: so the votes read as the shared lifecycle shapes, not bare words; an unknown
+#: vote falls back to the PENDING ring.
+_VOTE_SIGIL: dict[str, Sigil] = {
+    PASS_VOTE: Sigil.CLOSED,
+    FAIL_VOTE: Sigil.FAILED,
+    ABSTAIN_VOTE: Sigil.PENDING,
+}
 
 #: Row-status word when at least one juror voted ``fail`` on a rubric item:
 #: one credible refutation blocks the row under the refute-first rubric
@@ -643,8 +659,12 @@ ROW_READY: str = "ready"
 
 #: Notice rendered in the ballot sub-pane when no jury ballots are bound -- the
 #: honest-empty path (a wave the close gate never convened a jury for, or whose
-#: ballots were reduced away before they could be drilled into).
-NO_BALLOTS_NOTICE: str = "no jury ballots"
+#: ballots were reduced away before they could be drilled into). Pinned to the
+#: designer pin-strip (U2): the jury-runs clause names WHEN a jury convenes (a
+#: UI-band high-risk close), so the empty surface reads as a deliberate "no jury
+#: was needed here" rather than a missing one. The em-dash is the rendered
+#: U+2014 the pin-strip carries verbatim.
+NO_BALLOTS_NOTICE: str = "no jury ballots yet — jury runs on UI-band high-risk closes"
 
 #: Mark prefixing the oracle tier that scored the criterion in the ladder; a
 #: non-scoring tier is prefixed by spaces of equal width so the ladder stays
@@ -732,17 +752,49 @@ def _juror_vote(ballot: PerItemJurorBallot, item_id: str) -> str:
     return ABSTAIN_VOTE
 
 
-def render_ballot_grid(juror_ids: tuple[str, ...], rows: tuple[BallotGridRow, ...]) -> str:
+def vote_sigil(vote: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Return the pinned sigil glyph for a ballot *vote* word.
+
+    Maps a vote word (:data:`PASS_VOTE` / :data:`FAIL_VOTE` /
+    :data:`ABSTAIN_VOTE`) onto its designer-pinned lifecycle :class:`Sigil`
+    glyph via :data:`_VOTE_SIGIL` -- ``pass`` to the CLOSED filled circle,
+    ``fail`` to the FAILED cross, ``abstain`` to the PENDING hollow ring -- so
+    the ballot grid renders the shared lifecycle vocabulary rather than a bare
+    word. A vote word outside the closed set falls back to the muted PENDING
+    ring rather than raising, so a cell never crashes the grid on an
+    unrecognised vote.
+
+    Args:
+        vote: The ballot vote word to render as a sigil.
+        mode: The App's resolved render-mode label threaded into the sigil
+            helper; defaults to the ASCII column for a bare standalone render.
+
+    Returns:
+        The single-cell sigil glyph for *vote* in the resolved column.
+    """
+    return glyph(_VOTE_SIGIL.get(vote, Sigil.PENDING), mode=mode)
+
+
+def render_ballot_grid(
+    juror_ids: tuple[str, ...],
+    rows: tuple[BallotGridRow, ...],
+    *,
+    mode: RenderMode = DEFAULT_RENDER_MODE,
+) -> str:
     """Render the juror x rubric-item ballot grid as one text block.
 
     Lays out a header row of juror ids followed by one line per rubric item --
-    the item id, each juror's vote in column order, and the rolled-up row
-    status -- so the operator reads the whole grid top-to-bottom. An empty
-    *rows* yields the honest-empty :data:`NO_BALLOTS_NOTICE`.
+    the item id, each juror's vote as the pinned sigil glyph (:func:`vote_sigil`)
+    in column order, and the rolled-up row verdict -- so the operator reads the
+    whole grid top-to-bottom in the shared lifecycle vocabulary. The trailing
+    column header is the designer-pinned ``verdict``. An empty *rows* yields the
+    honest-empty :data:`NO_BALLOTS_NOTICE`.
 
     Args:
         juror_ids: The column-header juror ids, in convene order.
         rows: The ballot grid rows (:func:`build_ballot_grid`).
+        mode: The App's resolved render-mode label threaded into the vote-sigil
+            helper; defaults to the ASCII column for a bare standalone render.
 
     Returns:
         The newline-joined grid block (no trailing newline), or
@@ -750,10 +802,10 @@ def render_ballot_grid(juror_ids: tuple[str, ...], rows: tuple[BallotGridRow, ..
     """
     if not rows:
         return NO_BALLOTS_NOTICE
-    header = "item  " + "  ".join(juror_ids) + "  status"
+    header = "item  " + "  ".join(juror_ids) + "  verdict"
     lines = [header]
     for row in rows:
-        cells = "  ".join(row.votes)
+        cells = "  ".join(vote_sigil(vote, mode=mode) for vote in row.votes)
         lines.append(f"{row.item_id}  {cells}  {row.status}")
     return "\n".join(lines)
 
@@ -1238,7 +1290,7 @@ class EvidenceModeScreen(ScopeScreen):
         grid = grids.first(Static)
         ladder = self.query_one("#evidence-ballot-ladder", Static)
         juror_ids, rows = build_ballot_grid(self._ballots, self._rubric_item_ids)
-        grid.update(render_ballot_grid(juror_ids, rows))
+        grid.update(render_ballot_grid(juror_ids, rows, mode=self._render_mode()))
         ladder.update(render_tier_ladder(self._scored_tier))
 
     def action_drill(self) -> None:
@@ -1333,4 +1385,5 @@ __all__ = [
     "render_tier_ladder",
     "sort_evidence_rows",
     "verdict_sigil",
+    "vote_sigil",
 ]

@@ -44,6 +44,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     RenderMode,
     render_eu_bar_plain,
 )
+from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State, Wave
@@ -63,8 +64,13 @@ COST_ABSENT: str = "—"
 
 #: The inert marker appended to an un-priced attempt's cost cell, so a row
 #: the pricing snapshot could not bill is visibly un-billed rather than
-#: silently zero. Reads as a label, never a measured value.
-UNBILLED_MARKER: str = "unbilled"
+#: silently zero. Pinned to the designer pin-strip (U1): the un-priced cell is
+#: the em-dash sentinel plus this GLYPH (the ABANDONED circled-division-slash
+#: from the ratified sigil alphabet), not the word "unbilled" -- a withheld
+#: shape reads as a label without spelling one out. Sourced from the sigil home
+#: so the alphabet stays single-owned; an ascii render still falls back through
+#: the sigil column.
+UNBILLED_MARKER: str = glyph(Sigil.ABANDONED, mode="unicode")
 
 #: The dollar-figure precision for a per-attempt cost cell. Four decimal
 #: places keep a sub-cent dispatch cost (per-token rates are fractions of a

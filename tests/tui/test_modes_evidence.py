@@ -69,6 +69,7 @@ from eawf.surfaces.tui.modes.evidence import (
     render_followups_block,
     render_tier_ladder,
     sort_evidence_rows,
+    vote_sigil,
 )
 from eawf.surfaces.tui.snapshot import (
     capture_screen_text,
@@ -510,17 +511,29 @@ def test_build_ballot_grid_empty_rubric_yields_no_rows() -> None:
 
 
 def test_render_ballot_grid_shows_votes_and_row_status() -> None:
-    """The rendered grid carries each juror column + the per-row status word."""
+    """The rendered grid carries each juror column + the pinned vote sigils.
+
+    The vote cells render the designer-pinned sigil glyphs (``vote_sigil``),
+    not the bare vote words, and the trailing column header is the pinned
+    ``verdict`` (not ``status``).
+    """
     juror_ids, rows = build_ballot_grid(_ballots(), ("B-01", "B-02"))
     block = render_ballot_grid(juror_ids, rows)
 
     assert "claude-code" in block
     assert "codex" in block
     assert "opencode" in block
-    # B-02: one fail -> the row reads blocked, and the abstain cell shows.
-    assert FAIL_VOTE in block
-    assert ABSTAIN_VOTE in block
-    assert f"B-02  {ABSTAIN_VOTE}  {PASS_VOTE}  {FAIL_VOTE}  {ROW_BLOCKED}" in block
+    # The trailing column header is the designer-pinned ``verdict``.
+    assert block.splitlines()[0].endswith("verdict")
+    # B-02: one fail -> the row reads blocked, with each cell the pinned sigil:
+    # abstain ring, pass circle, fail cross (rendered in the default column).
+    assert vote_sigil(FAIL_VOTE) in block
+    assert vote_sigil(ABSTAIN_VOTE) in block
+    expected = (
+        f"B-02  {vote_sigil(ABSTAIN_VOTE)}  {vote_sigil(PASS_VOTE)}  "
+        f"{vote_sigil(FAIL_VOTE)}  {ROW_BLOCKED}"
+    )
+    assert expected in block
 
 
 def test_render_ballot_grid_empty_is_honest_notice() -> None:
@@ -676,11 +689,12 @@ def test_evidence_pane_renders_seeded_ballot_grid_and_tier_ladder(tmp_path: Path
             )
             await settle_screen(pilot)
             frame = normalize_snapshot(capture_screen_text(app))
-            # The juror x rubric grid: pass / fail / abstain votes + blocked row.
+            # The juror x rubric grid: the pinned vote sigils (abstain ring,
+            # fail cross) render in the app's column + the blocked row word.
             assert "claude-code" in frame
             assert "opencode" in frame
-            assert ABSTAIN_VOTE in frame
-            assert FAIL_VOTE in frame
+            assert vote_sigil(ABSTAIN_VOTE, mode=app.render_mode) in frame
+            assert vote_sigil(FAIL_VOTE, mode=app.render_mode) in frame
             assert ROW_BLOCKED in frame
             # The oracle-tier ladder uses the real tier_label names and marks T7.
             assert "T1 static" in frame
