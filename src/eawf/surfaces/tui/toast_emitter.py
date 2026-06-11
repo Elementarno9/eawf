@@ -6,7 +6,7 @@ dashboard surfaces bottom-right. It is the ``toast_rack`` parallel region of the
 tui-richer-views statechart: an ambient region whose events NEVER steal focus or
 block input.
 
-Three change classes produce a toast:
+Four change classes produce a toast:
 
 * **wave close** — a wave that transitions ``PENDING`` / ``CLAIMED`` /
   ``IN_PROGRESS`` → ``CLOSED`` across the two snapshots.
@@ -14,6 +14,11 @@ Three change classes produce a toast:
   :attr:`~eawf.kernel.state.models.Audit.verdict`.
 * **needs-user** — the count of open needs_user pauses rose since the previous
   snapshot (sourced from the event-store tail, passed in by the app).
+* **failure** — a fleet lane FAILED across the two snapshots: the run's
+  :attr:`~eawf.kernel.state.models.FleetCounters.failed` tally rose, so a
+  gate-fail / agent-error / dispatch-fail forked a lane rather than closing it
+  clean. This is the distinct failure class — it reads ``error`` red and never
+  fires for a normal close (a clean close advances ``closed``, not ``failed``).
 
 Two flood guards keep the rack quiet:
 
@@ -33,7 +38,8 @@ toast, never crashes the app.
 Verbosity is gated by the ``ui.toasts`` config key:
 
 * ``off`` — no toasts at all.
-* ``important`` — wave close / audit verdict / needs-user only (the default).
+* ``important`` — wave close / audit verdict / needs-user / failure only (the
+  default).
 * ``all`` — currently the same change set as ``important``; reserved for the
   more verbose future bands (per-check audit progress, dispatch transitions)
   that ride :data:`ToastCategory` so the gate is already in place.
@@ -56,8 +62,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Verbosity levels for the ``ui.toasts`` config key. ``off`` silences the
-#: rack; ``important`` emits the wave-close / audit-verdict / needs-user set;
-#: ``all`` is reserved for the more verbose future bands.
+#: rack; ``important`` emits the wave-close / audit-verdict / needs-user /
+#: failure set; ``all`` is reserved for the more verbose future bands.
 ToastVerbosity = Literal["off", "important", "all"]
 
 #: Allowed ``ui.toasts`` values, mirrored from the config registry row so a
@@ -69,8 +75,12 @@ DEFAULT_VERBOSITY: ToastVerbosity = "important"
 
 #: Change classes a toast belongs to. ``important``-tier categories emit under
 #: both ``important`` and ``all``; ``verbose``-tier categories emit only under
-#: ``all`` (none yet — the verbose bands land in later waves).
-ToastCategory = Literal["wave_close", "audit_verdict", "needs_user", "summary"]
+#: ``all`` (none yet — the verbose bands land in later waves). ``failure`` is
+#: the distinct fleet-lane-failed class — a gate-fail / agent-error /
+#: dispatch-fail forked a lane, read off the run's rising ``failed`` tally.
+ToastCategory = Literal[
+    "wave_close", "audit_verdict", "needs_user", "failure", "summary"
+]
 
 #: Textual notification severities the rack uses. Wave close / audit pass read
 #: as ``information``; a major / minor audit verdict and the needs-user raise
@@ -86,8 +96,10 @@ FLOOD_THRESHOLD: int = 3
 
 #: Categories surfaced at the ``important`` verbosity tier (and therefore also
 #: at ``all``). ``summary`` is always allowed when any change passes the gate.
+#: The ``failure`` class rides ``important`` so a forked lane is never silenced
+#: below the verbose band.
 _IMPORTANT_CATEGORIES: frozenset[ToastCategory] = frozenset(
-    {"wave_close", "audit_verdict", "needs_user", "summary"}
+    {"wave_close", "audit_verdict", "needs_user", "failure", "summary"}
 )
 
 
@@ -166,6 +178,31 @@ def _audit_severity(verdict: AuditVerdict) -> ToastSeverity:
     if verdict is AuditVerdict.PASS:
         return "information"
     return "warning"
+
+
+def _new_failure_count(prev: State, current: State) -> int:
+    """Return how many fleet lanes newly FAILED between the snapshots.
+
+    Reads the persisted :attr:`~eawf.kernel.state.models.FleetRun.counters`
+    ``failed`` tally off each snapshot's :attr:`~eawf.kernel.state.models.State.fleet_run`
+    and returns the rise. A lane that the watcher reported as a genuine fork
+    (a gate-fail / agent-error / dispatch-fail that did not close clean) bumps
+    ``failed``; a clean close bumps ``closed`` instead, so a normal close never
+    registers here. A run absent from either snapshot, or a falling tally (a
+    fresh run armed over a finished one), reads as zero new failures.
+
+    Args:
+        prev: The previous state snapshot.
+        current: The current state snapshot.
+
+    Returns:
+        The number of lanes that newly failed, clamped at ``0``.
+    """
+    prev_run = prev.fleet_run
+    current_run = current.fleet_run
+    if prev_run is None or current_run is None:
+        return 0
+    return max(0, current_run.counters.failed - prev_run.counters.failed)
 
 
 class ToastEmitter:
@@ -333,6 +370,18 @@ class ToastEmitter:
                     severity="warning",
                 )
             )
+
+        if self._category_allowed("failure"):
+            failed = _new_failure_count(prev, current)
+            if failed > 0:
+                suffix = "s" if failed != 1 else ""
+                notifications.append(
+                    ToastNotification(
+                        message=f"{failed} lane{suffix} failed",
+                        category="failure",
+                        severity="error",
+                    )
+                )
 
         return notifications
 

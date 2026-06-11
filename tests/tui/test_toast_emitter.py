@@ -89,6 +89,24 @@ def _audit_payload(payload: dict[str, Any], *, verdict: str | None) -> dict[str,
     return payload
 
 
+def _fleet_payload(
+    payload: dict[str, Any], *, failed: int = 0, closed: int = 0
+) -> dict[str, Any]:
+    """Attach a fleet run whose counters carry *failed* / *closed* tallies.
+
+    Bumps the on-disk schema version so the additive ``fleet_run`` field
+    validates; the run is otherwise minimal -- only the counters the failure
+    diff reads are seeded.
+    """
+    payload["schema_version"] = "1.10"
+    payload["fleet_run"] = {
+        "run_state": "draining",
+        "armed_at": payload["phases"]["P01"]["opened_at"],
+        "counters": {"failed": failed, "closed": closed},
+    }
+    return payload
+
+
 class _NotifySink:
     """Minimal stand-in capturing ``app.notify`` calls for the emit path."""
 
@@ -297,6 +315,69 @@ def test_negative_pause_count_rejected() -> None:
     emitter = ToastEmitter("important")
     with pytest.raises(ValueError, match="pause counts must be >= 0"):
         emitter.diff(_base_state(), _base_state(), open_pause_count=-1)
+
+
+# --- failure (fleet lane failed) ---------------------------------------------
+
+
+def test_lane_failure_emits_failure_class_toast() -> None:
+    """A rising fleet ``failed`` tally fires the distinct failure-class toast."""
+    emitter = ToastEmitter("important")
+    prev = _state(_fleet_payload(_payload(), failed=0))
+    current = _state(_fleet_payload(_payload(), failed=1))
+    notes = emitter.diff(prev, current)
+    assert len(notes) == 1
+    assert notes[0].category == "failure"
+    assert "1 lane failed" in notes[0].message
+    # The failure class reads error red, distinct from the warning band.
+    assert notes[0].severity == "error"
+
+
+def test_lane_failure_multiple_pluralizes() -> None:
+    """Two lanes failing in one revision pluralizes the failure toast body."""
+    emitter = ToastEmitter("important")
+    prev = _state(_fleet_payload(_payload(), failed=1))
+    current = _state(_fleet_payload(_payload(), failed=3))
+    notes = emitter.diff(prev, current)
+    assert "2 lanes failed" in notes[0].message
+
+
+def test_normal_close_does_not_emit_failure_toast() -> None:
+    """C2 negative path: a clean close bumps ``closed``, never the failure toast.
+
+    The load-bearing C2 assertion -- a normal close advances ``counters.closed``
+    while ``failed`` stays put, so the failure-class toast NEVER fires for a
+    clean close. Only the close-class toast (off the wave transition) would.
+    """
+    emitter = ToastEmitter("important")
+    prev = _state(_fleet_payload(_payload(), failed=2, closed=3))
+    current = _state(_fleet_payload(_payload(), failed=2, closed=4))
+    notes = emitter.diff(prev, current)
+    assert [n.category for n in notes] == []  # no failure toast on a clean close
+
+
+def test_lane_failure_falling_tally_does_not_emit() -> None:
+    """A fresh run armed over a finished one (falling ``failed``) raises nothing."""
+    emitter = ToastEmitter("important")
+    prev = _state(_fleet_payload(_payload(), failed=3))
+    current = _state(_fleet_payload(_payload(), failed=0))
+    assert emitter.diff(prev, current) == []
+
+
+def test_lane_failure_no_run_in_prev_is_noop() -> None:
+    """A run that first appears (no prev run) announces no retroactive failure."""
+    emitter = ToastEmitter("important")
+    prev = _base_state()  # no fleet_run
+    current = _state(_fleet_payload(_payload(), failed=2))
+    assert emitter.diff(prev, current) == []
+
+
+def test_lane_failure_suppressed_when_off() -> None:
+    """The ``off`` verbosity silences the failure class like every other."""
+    emitter = ToastEmitter("off")
+    prev = _state(_fleet_payload(_payload(), failed=0))
+    current = _state(_fleet_payload(_payload(), failed=1))
+    assert emitter.diff(prev, current) == []
 
 
 # --- mixed change set --------------------------------------------------------

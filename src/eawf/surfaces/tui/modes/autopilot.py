@@ -201,6 +201,39 @@ _RUN_STATE_SIGILS: dict[str, sigils.Sigil] = {
 #: is resolved against the active glyph column.
 _FORK_BADGE: tuple[str, str] = sigils._LIFECYCLE[sigils.Sigil.FAILED]
 
+#: Id of the in-flight-lanes section sub-header (the "lanes" band caption).
+LANES_SECTION_ID: str = "autopilot-lanes-section"
+
+#: CSS class on each rendered in-flight lane cell row.
+LANE_CELL_CLASS: str = "autopilot-lane-cell"
+
+#: Caption above the in-flight-lanes band -- the lanes the loop is actively
+#: draining, each showing its repair counter.
+LANES_CAPTION: str = "lanes"
+
+#: Repair-attempt budget the lane cell's ``repair n/<budget>`` counter reads
+#: against -- the bounded grounded-repair loop's attempt ceiling (mirrors
+#: :data:`eawf.workflow.dispatch.retry.DEFAULT_MAX_REPAIR_ATTEMPTS`). Pinned as a
+#: local constant rather than imported so the TUI cold path never pulls the
+#: runtime dispatch stack; the cell only DISPLAYS the budget, it never enforces
+#: it (the daemon loop owns the ceiling).
+REPAIR_BUDGET: int = 3
+
+#: The label the lane cell leads its repair counter with -- ``repair n/<budget>``
+#: so the operator reads how many grounded-repair attempts the lane has burned.
+REPAIR_LABEL: str = "repair"
+
+#: The label the lane cell escalates to when its wave has exhausted repair and
+#: forked (a ``REPAIR_EXHAUSTED`` fork queued for the lane's wave): the cell
+#: reads ``fork`` rather than disappearing, so a forked lane stays visible until
+#: the operator resolves it via the FA5 inbox.
+FORK_ESCALATION_LABEL: str = "fork"
+
+#: The fork-escalation cell badge shape: the FAILED cross, so an exhausted lane
+#: reads as needing attention. The ``(unicode, ascii)`` pair resolves against the
+#: active glyph column.
+_LANE_FORK_BADGE: tuple[str, str] = sigils._LIFECYCLE[sigils.Sigil.FAILED]
+
 #: Id of the dispatch-result line (below the list); honest about whether the
 #: request was issued, accepted, or could not reach the daemon.
 DISPATCH_RESULT_ID: str = "autopilot-result"
@@ -379,6 +412,30 @@ class BlockedWaveRow:
     iter_id: str
     title: str
     blocked_by: str
+
+
+@dataclass(frozen=True)
+class LaneCellRow:
+    """One in-flight (or just-forked) fleet lane projected for the lanes band.
+
+    A display projection of a :class:`~eawf.kernel.state.models.FleetLane` the
+    loop is actively draining, enriched with its repair counter so the operator
+    reads how many grounded-repair attempts the lane has burned. A lane whose
+    wave has exhausted repair and forked carries :attr:`exhausted` so the cell
+    escalates to a fork badge (FA5) rather than disappearing.
+
+    Attributes:
+        wave_id: The lane's wave id (e.g. ``P29-I04-W12``).
+        attempt: The lane's 1-based dispatch attempt -- the ``n`` in the
+            ``repair n/<budget>`` counter.
+        exhausted: Whether the lane's wave has a queued ``REPAIR_EXHAUSTED``
+            fork (its grounded repair budget was spent), so the cell escalates
+            to the fork badge.
+    """
+
+    wave_id: str
+    attempt: int
+    exhausted: bool
 
 
 def build_frontier_items(state: State | None) -> tuple[WaveFrontierItem, ...]:
@@ -673,6 +730,76 @@ def render_ready_row(
     )
 
 
+def lane_cells(run: FleetRun | None) -> tuple[LaneCellRow, ...]:
+    """Project a fleet run's in-flight + just-forked lanes into cell rows.
+
+    Walks the persisted :attr:`~eawf.kernel.state.models.FleetRun.lanes` (the
+    actively-draining slots) and the :attr:`~eawf.kernel.state.models.FleetRun.forks`
+    queue (lanes the loop paused to a blocking fork), so a lane that exhausted
+    its grounded-repair budget and forked stays visible -- it escalates to a
+    fork-badge cell rather than disappearing the moment it leaves ``lanes``. Only
+    a ``REPAIR_EXHAUSTED`` fork escalates a cell here; the other fork reasons
+    (high-risk close, uncalibrated jury, needs-user split) ride the FA5 inbox
+    alone and add no lane cell. Rows are returned in natural claim order. An
+    unarmed run (``None``) yields no cells (the honest-empty lanes path).
+
+    Args:
+        run: The persisted fleet run, or ``None`` when no run is armed.
+
+    Returns:
+        The lane-cell display rows in claim order; empty when no lane is in
+        flight or repair-forked.
+    """
+    if run is None:
+        return ()
+    from eawf.kernel.state.models import FleetForkReason
+
+    cells: dict[str, LaneCellRow] = {}
+    for lane in run.lanes.values():
+        cells[lane.wave_id] = LaneCellRow(
+            wave_id=lane.wave_id, attempt=lane.attempt, exhausted=False
+        )
+    for fork in run.forks:
+        if fork.reason is not FleetForkReason.REPAIR_EXHAUSTED:
+            continue
+        cells[fork.wave_id] = LaneCellRow(
+            wave_id=fork.wave_id, attempt=fork.attempt, exhausted=True
+        )
+    ordered = sorted(cells.values(), key=lambda cell: natural_key(cell.wave_id))
+    logger.debug(f"lane_cells lanes={len(run.lanes)} cells={len(ordered)}")
+    return tuple(ordered)
+
+
+def render_lane_cell(row: LaneCellRow, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+    """Render one in-flight (or just-forked) lane cell with its repair counter.
+
+    A draining lane reads ``<wave> repair n/<budget>`` so the operator sees how
+    many grounded-repair attempts it has burned of the
+    :data:`REPAIR_BUDGET` ceiling. A lane whose wave exhausted repair and forked
+    escalates to ``<badge> <wave> fork`` (:data:`FORK_ESCALATION_LABEL`) -- it
+    reads as needing attention and stays visible until the operator resolves it
+    via the FA5 inbox, rather than vanishing the moment it left the lane slot.
+
+    Args:
+        row: The lane-cell display row.
+        mode: The App's resolved render-mode label -- selects the glyph column
+            for the fork-escalation badge.
+
+    Returns:
+        A content-markup cell string naming the wave + its repair counter / fork
+        escalation.
+    """
+    wave = escape_markup(row.wave_id)
+    if row.exhausted:
+        badge = _LANE_FORK_BADGE[1] if mode == sigils.ASCII_MODE else _LANE_FORK_BADGE[0]
+        glyph = escape_markup(badge)
+        return f"[$err]{glyph} {wave} {FORK_ESCALATION_LABEL}[/]"
+    return (
+        f"[$accent]{wave}[/] "
+        f"[$muted]{REPAIR_LABEL} {row.attempt}/{REPAIR_BUDGET}[/]"
+    )
+
+
 def render_blocked_row(row: BlockedWaveRow) -> str:
     """Render one blocked-wave list row naming the dep holding it off the frontier.
 
@@ -795,6 +922,10 @@ class AutopilotModeScreen(ScopeScreen):
         padding: 0 1;
         color: $muted;
     }
+    AutopilotModeScreen .autopilot-lane-cell {
+        height: auto;
+        padding: 0 1;
+    }
     AutopilotModeScreen .autopilot-section {
         height: auto;
         padding: 0 1;
@@ -842,6 +973,10 @@ class AutopilotModeScreen(ScopeScreen):
         super().__init__()
         self._rows: tuple[ReadyWaveRow, ...] = ()
         self._blocked: tuple[BlockedWaveRow, ...] = ()
+        #: The in-flight (+ just-forked) fleet-lane cells the lanes band renders,
+        #: each carrying its ``repair n/<budget>`` counter and fork-escalation
+        #: flag. Empty until a fleet run is armed and a lane is in flight.
+        self._lanes: tuple[LaneCellRow, ...] = ()
         #: The wave ids the operator last staged through the multi-select shell
         #: (``m`` -> Space-toggle -> Enter). Empty until a batch commits.
         self._claim_batch: tuple[str, ...] = ()
@@ -868,6 +1003,7 @@ class AutopilotModeScreen(ScopeScreen):
         """
         self._rows = self._current_rows()
         self._blocked = self._current_blocked()
+        self._lanes = self._current_lanes()
         mode = self._render_mode()
         with Vertical(id="autopilot-body"):
             yield Static(
@@ -1386,6 +1522,7 @@ class AutopilotModeScreen(ScopeScreen):
         """
         self._rows = self._current_rows()
         self._blocked = self._current_blocked()
+        self._lanes = self._current_lanes()
         self._clamp_selection()
         self._render_rows()
         mode = self._render_mode()
@@ -1402,7 +1539,7 @@ class AutopilotModeScreen(ScopeScreen):
         self._maybe_open_fork_inbox(run)
         logger.info(
             f"autopilot_rebuild ready={len(self._rows)} blocked={len(self._blocked)} "
-            f"selected={self.selected}"
+            f"lanes={len(self._lanes)} selected={self.selected}"
         )
 
     def _maybe_open_run_summary(self, run: FleetRun | None) -> None:
@@ -1512,6 +1649,18 @@ class AutopilotModeScreen(ScopeScreen):
         container = listing.first(VerticalScroll)
         container.remove_children()
         mode = self._render_mode()
+        if self._lanes:
+            container.mount(
+                Static(
+                    render_section_caption(LANES_CAPTION, len(self._lanes)),
+                    id=LANES_SECTION_ID,
+                    classes="autopilot-section",
+                )
+            )
+            for lane_cell in self._lanes:
+                container.mount(
+                    Static(render_lane_cell(lane_cell, mode=mode), classes=LANE_CELL_CLASS)
+                )
         if not self._rows:
             # The honest-empty notice carries no id on a (re)mount: Textual defers
             # the remove_children() above, so re-using a fixed id here would race a
@@ -1613,6 +1762,20 @@ class AutopilotModeScreen(ScopeScreen):
         frontier = compute_ready_frontier(build_frontier_items(state))
         return blocked_rows(frontier, state)
 
+    def _current_lanes(self) -> tuple[LaneCellRow, ...]:
+        """Compute the in-flight (+ just-forked) lane cells for the active run.
+
+        Projects the bound state's persisted fleet run into the lane-cell rows
+        (:func:`lane_cells`) -- each carrying its ``repair n/<budget>`` counter,
+        a just-forked lane escalating to the fork badge. An unarmed run yields
+        no cells (the honest-empty lanes path).
+
+        Returns:
+            The lane-cell display rows in claim order; empty when no run is
+            armed or no lane is in flight / repair-forked.
+        """
+        return lane_cells(self._current_fleet_run())
+
     def _render_mode(self) -> RenderMode:
         """Return the App's active render mode, defaulting when unavailable.
 
@@ -1674,6 +1837,7 @@ __all__ = [
     "DISPATCH_NO_TARGET",
     "DISPATCH_RESULT_ID",
     "EMPTY_NOTICE",
+    "FORK_ESCALATION_LABEL",
     "FORK_INBOX_NO_TARGET",
     "FRONTIER_EMPTY_ID",
     "FRONTIER_HEADER_ID",
@@ -1683,6 +1847,9 @@ __all__ = [
     "HALT_NO_TARGET",
     "KILL_NO_DAEMON",
     "KILL_NO_TARGET",
+    "LANES_CAPTION",
+    "LANES_SECTION_ID",
+    "LANE_CELL_CLASS",
     "MULTI_SELECT_COMMITTED",
     "MULTI_SELECT_EMPTY_COMMIT",
     "MULTI_SELECT_ID",
@@ -1691,18 +1858,23 @@ __all__ = [
     "PAUSE_NO_DAEMON",
     "READY_CAPTION",
     "READY_SECTION_ID",
+    "REPAIR_BUDGET",
+    "REPAIR_LABEL",
     "SELECTED_ROW_CLASS",
     "SKIP_NO_NEXT",
     "SKIP_NO_TARGET",
     "AutopilotModeScreen",
     "BlockedWaveRow",
+    "LaneCellRow",
     "ReadyWaveRow",
     "blocked_rows",
     "build_frontier_items",
+    "lane_cells",
     "ready_rows",
     "render_blocked_row",
     "render_cockpit_vitals",
     "render_frontier_header",
+    "render_lane_cell",
     "render_ready_row",
     "render_section_caption",
 ]

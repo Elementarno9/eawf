@@ -66,23 +66,30 @@ from eawf.surfaces.tui.modes.autopilot import (
     DISPATCH_NO_DAEMON,
     DISPATCH_RESULT_ID,
     EMPTY_NOTICE,
+    FORK_ESCALATION_LABEL,
     FORK_INBOX_NO_TARGET,
     FRONTIER_ROW_CLASS,
     HALT_NO_DAEMON,
     HALT_NO_TARGET,
     KILL_NO_DAEMON,
     KILL_NO_TARGET,
+    LANE_CELL_CLASS,
     MULTI_SELECT_ID,
     MULTI_SELECT_NO_TARGET,
     PAUSE_NO_DAEMON,
+    REPAIR_BUDGET,
+    REPAIR_LABEL,
     SKIP_NO_NEXT,
     SKIP_NO_TARGET,
     AutopilotModeScreen,
+    LaneCellRow,
     ReadyWaveRow,
     build_frontier_items,
+    lane_cells,
     ready_rows,
     render_cockpit_vitals,
     render_frontier_header,
+    render_lane_cell,
     render_ready_row,
 )
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
@@ -472,6 +479,112 @@ def test_render_cockpit_vitals_ascii_mode_uses_ascii_sigil() -> None:
 
 
 # --------------------------------------------------------------------------
+# lane_cells + render_lane_cell -- the FA6 lane cell + repair counter (W06)
+# --------------------------------------------------------------------------
+
+
+def _repair_exhausted_run(*, attempt: int = REPAIR_BUDGET) -> FleetRun:
+    """Build a run whose single lane forked on repair exhaustion (DL-7).
+
+    The lane left ``lanes`` and was appended to ``forks`` with a
+    ``REPAIR_EXHAUSTED`` reason at *attempt*, so the lane cell escalates to a
+    fork badge rather than disappearing.
+    """
+    return FleetRun(
+        run_state=FleetRunState.DRAINING,
+        concurrency=4,
+        frontier=[],
+        forks=[
+            FleetFork(
+                wave_id="P01-I01-W02",
+                attempt=attempt,
+                risk_tier=RiskTier.MECH,
+                reason=FleetForkReason.REPAIR_EXHAUSTED,
+                evidence_ref="urn:eawf:v1:fork:P01-I01-W02:repair_exhausted",
+                forked_at=_T0,
+            )
+        ],
+        counters=FleetCounters(claimed=1, dispatched=1, forked=1, failed=1),
+        armed_at=_T0,
+    )
+
+
+def test_lane_cells_none_run_returns_empty() -> None:
+    """An unarmed run yields no lane cells (the honest-empty lanes path)."""
+    assert lane_cells(None) == ()
+
+
+def test_lane_cells_projects_in_flight_lane_with_attempt() -> None:
+    """Each in-flight lane projects to a non-exhausted cell carrying its attempt."""
+    run = _draining_run(lanes=2)
+    cells = lane_cells(run)
+    assert len(cells) == 2
+    assert all(not cell.exhausted for cell in cells)
+    assert cells[0].attempt == 1
+
+
+def test_lane_cells_escalates_repair_exhausted_fork_to_cell() -> None:
+    """A repair-exhausted fork stays visible as an exhausted lane cell (FA5)."""
+    cells = lane_cells(_repair_exhausted_run())
+    assert len(cells) == 1
+    assert cells[0].wave_id == "P01-I01-W02"
+    assert cells[0].exhausted is True
+
+
+def test_lane_cells_ignores_non_repair_fork_reasons() -> None:
+    """Only a repair-exhausted fork escalates a cell; other reasons ride the inbox."""
+    run = FleetRun(
+        run_state=FleetRunState.DRAINING,
+        concurrency=4,
+        frontier=[],
+        forks=[
+            FleetFork(
+                wave_id="P01-I01-W02",
+                attempt=1,
+                risk_tier=RiskTier.UI,
+                reason=FleetForkReason.HIGH_RISK_CLOSE,
+                evidence_ref="urn:eawf:v1:close:P01-I01-W02",
+                forked_at=_T0,
+            )
+        ],
+        counters=FleetCounters(claimed=1, dispatched=1, forked=1),
+        armed_at=_T0,
+    )
+    assert lane_cells(run) == ()  # high-risk-close fork adds no lane cell
+
+
+def test_render_lane_cell_in_flight_shows_repair_counter() -> None:
+    """An in-flight lane cell renders the ``repair n/<budget>`` counter."""
+    body = render_lane_cell(LaneCellRow(wave_id="P01-I01-W02", attempt=1, exhausted=False))
+    assert "P01-I01-W02" in body
+    assert f"{REPAIR_LABEL} 1/{REPAIR_BUDGET}" in body
+
+
+def test_render_lane_cell_exhausted_escalates_to_fork_badge() -> None:
+    """An exhausted lane cell escalates to the fork badge, not a repair counter."""
+    from eawf.surfaces.tui.widgets import sigils
+
+    body = render_lane_cell(
+        LaneCellRow(wave_id="P01-I01-W02", attempt=REPAIR_BUDGET, exhausted=True),
+        mode="unicode",
+    )
+    assert FORK_ESCALATION_LABEL in body
+    assert REPAIR_LABEL not in body  # the counter gives way to the fork badge
+    assert sigils.glyph(sigils.Sigil.FAILED, mode="unicode") in body
+
+
+def test_render_lane_cell_exhausted_ascii_uses_ascii_badge() -> None:
+    """ASCII render mode resolves the fork-escalation badge in the ASCII column."""
+    from eawf.surfaces.tui.widgets import sigils
+
+    body = render_lane_cell(
+        LaneCellRow(wave_id="P01-I01-W02", attempt=REPAIR_BUDGET, exhausted=True),
+        mode="ascii",
+    )
+    assert sigils.glyph(sigils.Sigil.FAILED, mode="ascii") in body
+
+
+# --------------------------------------------------------------------------
 # Mounted pane -- registration, honest-empty, populated frontier, dispatch
 # --------------------------------------------------------------------------
 
@@ -561,6 +674,63 @@ def test_autopilot_pane_lists_ready_frontier_in_claim_order(tmp_path: Path) -> N
             row_order = [str(row.render()) for row in rows]  # type: ignore[attr-defined]
             assert "P01-I01-W02" in row_order[0]
             assert "P01-I02-W05" in row_order[1]
+
+    asyncio.run(body())
+
+
+def test_autopilot_pane_renders_lane_cells_with_repair_counter(tmp_path: Path) -> None:
+    """C1: a draining run mounts a lane cell per in-flight lane with its repair counter.
+
+    The load-bearing C1 assertion for the mounted pane -- each in-flight lane
+    surfaces a cell carrying ``repair n/<budget>`` (the
+    :data:`LANE_CELL_CLASS` band) so the operator reads how many grounded-repair
+    attempts the lane has burned, read off the persisted run.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_draining_run(lanes=2)))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            cells = pane.query(f".{LANE_CELL_CLASS}")
+            assert len(cells) == 2  # one cell per in-flight lane
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert f"{REPAIR_LABEL} 1/{REPAIR_BUDGET}" in frame  # the repair counter
+
+    asyncio.run(body())
+
+
+def test_autopilot_lane_cell_escalates_to_fork_not_disappears(tmp_path: Path) -> None:
+    """C2: on repair exhaustion the lane cell escalates to a fork (FA5), not vanishes.
+
+    The load-bearing C2 assertion for the mounted pane -- a lane that exhausted
+    its grounded-repair budget forked (left ``lanes`` for ``forks``), and its
+    cell ESCALATES to the fork badge rather than disappearing, so the operator
+    keeps the forked lane in view until it is resolved via the FA5 inbox.
+    """
+    state_path = _write_state(tmp_path, _state(fleet_run=_repair_exhausted_run()))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            # The repair-exhausted fork auto-raises the FA5 inbox; dismiss to the cockpit.
+            if isinstance(app.screen, ForkInboxModal):
+                await pilot.press("escape")
+                await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AutopilotModeScreen)
+            cells = pane.query(f".{LANE_CELL_CLASS}")
+            assert len(cells) == 1  # the forked lane stays visible, did not vanish
+            cell_text = str(cells.first().render())  # type: ignore[attr-defined]
+            assert FORK_ESCALATION_LABEL in cell_text  # escalated to the fork badge
+            assert "P01-I01-W02" in cell_text
 
     asyncio.run(body())
 
