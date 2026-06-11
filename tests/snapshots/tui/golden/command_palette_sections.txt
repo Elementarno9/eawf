@@ -10,7 +10,7 @@
             │  ◆ /audit  —  audit the current scope                                                        │
             │  ◆ /init  —  init wizard                                                                     │
             │  ◆ /roadmap <sub-verb> ...  —  roadmap action (sub-verb)                                     │
-            │  ────────────────────────────────────────────────────────────────────────────────────────▁▁  │
+            │  ────────────────────────────────────────────────────────────────────────────────────────▃▃  │
             │  All                                                                                         │
             │  /agent_watch  —  switch to Watch mode                                                       │
             │  /autopilot  —  switch to Autopilot mode                                                     │

@@ -37,4 +37,4 @@
   │ no data                                                                                                        │
 
  ↑↓ select  ·  K calibration  ·  v verifier  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  /   weekly burn: — no data•
- 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch
+ 1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox

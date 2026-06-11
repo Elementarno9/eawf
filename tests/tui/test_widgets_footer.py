@@ -453,17 +453,18 @@ _F5_HINT = render_hint_label("F5", "refresh")
 
 
 #: Every footer surface class that carries a ``FOOTER_HINTS`` tuple: the three
-#: ``ScopeScreen`` scope subclasses plus the eight mode subclasses. Imported
+#: ``ScopeScreen`` scope subclasses plus the nine mode subclasses. Imported
 #: here so the enumeration test pins the canon across the WHOLE surface set --
 #: a new surface that forgets the chokepoint is caught the moment it lands.
 def _all_surface_classes() -> dict[str, type]:
-    """Import + collect every footer surface class (3 scopes + 8 modes)."""
+    """Import + collect every footer surface class (3 scopes + 9 modes)."""
     from eawf.surfaces.tui.modes.agent_watch import AgentWatchModeScreen
     from eawf.surfaces.tui.modes.autopilot import AutopilotModeScreen
     from eawf.surfaces.tui.modes.doctor import DoctorModeScreen
     from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
     from eawf.surfaces.tui.modes.feed import FeedModeScreen
     from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
+    from eawf.surfaces.tui.modes.sandbox_events import SandboxEventsModeScreen
     from eawf.surfaces.tui.modes.trust import TrustModeScreen
 
     return {
@@ -477,6 +478,7 @@ def _all_surface_classes() -> dict[str, type]:
         "mode:evidence": EvidenceModeScreen,
         "mode:feed": FeedModeScreen,
         "mode:agent_watch": AgentWatchModeScreen,
+        "mode:sandbox_events": SandboxEventsModeScreen,
     }
 
 
