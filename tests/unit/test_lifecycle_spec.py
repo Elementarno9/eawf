@@ -104,3 +104,20 @@ def test_is_terminal_spec_status_archived_only() -> None:
     assert is_terminal_spec_status(SpecStatus.DRAFT) is False
     assert is_terminal_spec_status(SpecStatus.READY) is False
     assert is_terminal_spec_status(SpecStatus.IMPLEMENTED) is False
+
+
+def test_module_docstring_is_not_stale_placeholder() -> None:
+    """CP-8: the header no longer claims to be a C01 'placeholder'.
+
+    The module shipped the full guarded lifecycle FSM (the SPEC / WAVE /
+    PHASE / ITER transition tables + validate_transition) long ago, so the
+    original 'C01-IMPL W03 placeholder' header was a stale lie. This pins the
+    docstring to its true role so it cannot regress to the placeholder text.
+    """
+    import eawf.workflow.lifecycle.spec as spec_mod
+
+    doc = spec_mod.__doc__ or ""
+    assert "placeholder" not in doc.lower()
+    assert "W03" not in doc
+    # The accurate header names what the module IS: the transition tables.
+    assert "transition tables" in doc.lower()

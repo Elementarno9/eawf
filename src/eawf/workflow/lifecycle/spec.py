@@ -1,21 +1,29 @@
-"""Spec entity lifecycle DAG helpers (C01-IMPL W03 placeholder).
+"""Lifecycle transition tables + the guarded transition validator.
 
-C01-IMPL reserves the Spec status vocabulary + canonical transition map
-so C02 daemon writes and C03 spec CLI verbs share one source of truth.
-The full PhaseSpec / IterSpec / WaveSpec Pydantic schemas + filesystem
-storage layout land in C03-IMPL; this module exposes the typed DAG
-helpers callers need before then.
+This module is the single source of truth for which status moves are legal
+across the four lifecycle entities, so the daemon writers and the CLI verbs
+that drive them validate against ONE shared FSM rather than each re-deriving
+the edges:
 
-Per c01-foundations §5.4.15 the lifecycle is strictly forward:
+- :data:`SPEC_TRANSITIONS` -- the strictly-forward spec-entity lifecycle
+  (``DRAFT -> READY -> IMPLEMENTED -> ARCHIVED``; no backward edges, no
+  self-loops). ``ARCHIVED`` is terminal -- the daemon ``git rm``s the spec
+  file and the operator restores from ``git log`` rather than transitioning
+  the entity back.
+- :data:`WAVE_TRANSITIONS`, :data:`PHASE_TRANSITIONS`,
+  :data:`ITER_TRANSITIONS` -- the guarded status tables for the live
+  lifecycle entities. Each edge is a ``(target_status, GuardName)`` pair: the
+  move is structurally legal only when the named :class:`GuardName` predicate
+  is satisfied against the caller-supplied :class:`GuardContext` (e.g. a wave
+  claim requires :attr:`GuardName.DEPS_CLOSED` + :attr:`GuardName.SIBLING_ORDERED`).
 
-    DRAFT -> READY -> IMPLEMENTED -> ARCHIVED
+:func:`validate_transition` is the generic guarded-edge validator the daemon
+runs before any status write; :func:`validate_spec_transition`,
+:func:`next_spec_statuses`, and :func:`is_terminal_spec_status` are the
+spec-entity helpers over :data:`SPEC_TRANSITIONS`.
 
-No backward edges, no idempotent self-loops. ARCHIVED is terminal —
-the daemon ``git rm``s the spec file and the operator restores from
-``git log`` rather than transitioning the entity back.
-
-Library-private. No CLI surface in v0.3; C05 spec CLI verbs land in
-C05-IMPL and dispatch through C02 daemon RPC.
+Library-private. The spec CLI verbs dispatch through the daemon RPC layer,
+which validates every status write against these tables.
 """
 
 from __future__ import annotations
