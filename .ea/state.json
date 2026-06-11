@@ -5628,6 +5628,18 @@
       "status": "done",
       "updated_at": "2026-06-11T04:43:53.349448Z"
     },
+    "P30-I11-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I11-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I11-W07",
+      "scope_id": "P30-I11-W07",
+      "status": "done",
+      "updated_at": "2026-06-11T04:58:45.569485Z"
+    },
     "P30-I11-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5712,6 +5724,18 @@
       "status": "done",
       "updated_at": "2026-06-11T04:32:10.733246Z"
     },
+    "P30-I12-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I12-W07",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I12-W07",
+      "scope_id": "P30-I12-W07",
+      "status": "done",
+      "updated_at": "2026-06-11T04:58:44.860864Z"
+    },
     "P30-I12-W08": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5783,6 +5807,18 @@
       "scope_id": "P30-I13-W04",
       "status": "done",
       "updated_at": "2026-06-11T02:14:08.603242Z"
+    },
+    "P30-I13-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I13-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I13-W05",
+      "scope_id": "P30-I13-W05",
+      "status": "done",
+      "updated_at": "2026-06-11T04:58:44.133949Z"
     },
     "P30-I13-W07": {
       "actual_cost_usd": 0.0,
@@ -9667,7 +9703,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -17677,6 +17713,19 @@
       "scope_id": "P30-I11-W06",
       "updated_at": "2026-06-11T04:32:57.293972Z"
     },
+    "P30-I11-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I11-W07-bucket-20260611T044432Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I11-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I11-W07",
+      "updated_at": "2026-06-11T04:44:32.602657Z"
+    },
     "P30-I11-W09": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I11-W09-bucket-20260611T033749Z",
@@ -17768,6 +17817,19 @@
       "scope_id": "P30-I12-W06",
       "updated_at": "2026-06-11T04:16:30.033700Z"
     },
+    "P30-I12-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I12-W07-bucket-20260611T044432Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I12-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I12-W07",
+      "updated_at": "2026-06-11T04:44:32.128923Z"
+    },
     "P30-I12-W08": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I12-W08-bucket-20260611T021602Z",
@@ -17845,6 +17907,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I13-W04",
       "updated_at": "2026-06-11T00:47:25.922798Z"
+    },
+    "P30-I13-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I13-W05-bucket-20260611T044431Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I13-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I13-W05",
+      "updated_at": "2026-06-11T04:44:31.631338Z"
     },
     "P30-I13-W07": {
       "confidence": "low",
@@ -20973,7 +21048,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T04:43:53.349598Z",
+  "updated_at": "2026-06-11T04:58:45.569641Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -80677,10 +80752,10 @@
       "blocks": [
         "P30-I11-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T04:44:32.602569Z",
+      "closed_at": "2026-06-11T04:58:45.569485Z",
+      "commit": "3662999ce44f6fb62a5423754919c8674f6d3000",
       "deps": [
         "P30-I11-W06"
       ],
@@ -80697,12 +80772,12 @@
       "intent": null,
       "iter_id": "P30-I11",
       "opened_at": "2026-06-09T12:29:17.809141Z",
-      "outcome": null,
+      "outcome": "sync_track_outcomes reducer + wave-close hook + eawf track sync CLI",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -81314,10 +81389,10 @@
         "P30-I12-W11",
         "P30-I13-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T04:44:32.128814Z",
+      "closed_at": "2026-06-11T04:58:44.860864Z",
+      "commit": "14b328dd2738d18498a2c438135dc31db9c9a78a",
       "deps": [
         "P30-I06-W07",
         "P30-I12-W06"
@@ -81334,12 +81409,12 @@
       "intent": null,
       "iter_id": "P30-I12",
       "opened_at": "2026-06-09T12:29:17.828360Z",
-      "outcome": null,
+      "outcome": "Repair-exhaustion escalates to FleetFork (no silent drop/re-pend)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -81920,10 +81995,10 @@
         "P30-I13-W09",
         "P30-I13-W11"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T04:44:31.625832Z",
+      "closed_at": "2026-06-11T04:58:44.133949Z",
+      "commit": "ddba0d13e0103418af477295a6258ad5738900d3",
       "deps": [
         "P30-I12-W06"
       ],
@@ -81939,12 +82014,12 @@
       "intent": null,
       "iter_id": "P30-I13",
       "opened_at": "2026-06-09T12:29:17.829299Z",
-      "outcome": null,
+      "outcome": "FA5 fork-inbox interrupt overlay (4 resolutions via resolve_fork; auto-raise)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
