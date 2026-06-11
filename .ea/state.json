@@ -6287,6 +6287,42 @@
       "scope_id": "P30-I15-W16",
       "status": "done",
       "updated_at": "2026-06-11T12:47:18.675272Z"
+    },
+    "P30-I15-W17": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W17",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W17",
+      "scope_id": "P30-I15-W17",
+      "status": "done",
+      "updated_at": "2026-06-11T14:10:45.745875Z"
+    },
+    "P30-I15-W18": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W18",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W18",
+      "scope_id": "P30-I15-W18",
+      "status": "done",
+      "updated_at": "2026-06-11T14:10:46.472878Z"
+    },
+    "P30-I15-W19": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I15-W19",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I15-W19",
+      "scope_id": "P30-I15-W19",
+      "status": "done",
+      "updated_at": "2026-06-11T14:10:47.186512Z"
     }
   },
   "agent_sessions": {
@@ -9407,7 +9443,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I15-W20"
+    ],
     "iter_id": "P30-I15",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -10004,7 +10042,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -18728,6 +18766,58 @@
       "reference_class": "bucket:XL",
       "scope_id": "P30-I15-W16",
       "updated_at": "2026-06-11T12:07:01.771244Z"
+    },
+    "P30-I15-W17": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W17-bucket-20260611T130438Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I15-W17",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I15-W17",
+      "updated_at": "2026-06-11T13:04:38.570213Z"
+    },
+    "P30-I15-W18": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W18-bucket-20260611T131509Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I15-W18",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I15-W18",
+      "updated_at": "2026-06-11T13:15:09.398645Z"
+    },
+    "P30-I15-W19": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W19-bucket-20260611T132205Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I15-W19",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I15-W19",
+      "updated_at": "2026-06-11T13:22:05.664565Z"
+    },
+    "P30-I15-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I15-W20-bucket-20260611T141141Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I15-W20",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I15-W20",
+      "updated_at": "2026-06-11T14:11:41.522256Z"
     }
   },
   "fleet_run": null,
@@ -21673,7 +21763,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T13:04:18.924448Z",
+  "updated_at": "2026-06-11T14:13:15.154101Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -84869,10 +84959,10 @@
     "P30-I15-W17": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i15-w17",
+      "claimed_at": "2026-06-11T13:04:38.569855Z",
+      "closed_at": "2026-06-11T14:10:45.745875Z",
+      "commit": "87b683afa062ea97fb10f8753aff72010483c41c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -84895,12 +84985,12 @@
       },
       "iter_id": "P30-I15",
       "opened_at": "2026-06-11T13:04:17.309078Z",
-      "outcome": null,
+      "outcome": "All 45 pane borders rounded (solid->round) to match the mockup chrome; goldens regenerated.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -84925,10 +85015,10 @@
     "P30-I15-W18": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i15-w18",
+      "claimed_at": "2026-06-11T13:15:09.398520Z",
+      "closed_at": "2026-06-11T14:10:46.472878Z",
+      "commit": "762c145b62b4a9d4adf794d266e261e353c40745",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -84949,12 +85039,12 @@
       },
       "iter_id": "P30-I15",
       "opened_at": "2026-06-11T13:04:17.842663Z",
-      "outcome": null,
+      "outcome": "Wave-detail overview renders a status pill + dependency-path card (deps->this->blocks) + counts quad above the narrative.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -84979,10 +85069,10 @@
     "P30-I15-W19": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "p30-i15-w19",
+      "claimed_at": "2026-06-11T13:22:05.664456Z",
+      "closed_at": "2026-06-11T14:10:47.186512Z",
+      "commit": "167903bc71430ce103da241b7eaeaeb4c9f92553",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -85004,12 +85094,12 @@
       },
       "iter_id": "P30-I15",
       "opened_at": "2026-06-11T13:04:18.388335Z",
-      "outcome": null,
+      "outcome": "Trust laid out two-column (two packed scroll columns); doctor laid out install|state two-column cards + drift card; goldens regenerated.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -85034,8 +85124,8 @@
     "P30-I15-W20": {
       "agent_role": null,
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "p30-i15-w20",
+      "claimed_at": "2026-06-11T14:11:41.521910Z",
       "closed_at": null,
       "commit": null,
       "deps": [],
@@ -85065,7 +85155,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

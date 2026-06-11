@@ -81,6 +81,7 @@ from eawf.surfaces.tui.widgets.empty_state import render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.seal import seal_image_widget
 from eawf.surfaces.tui.widgets.sigils import Sigil
 
 if TYPE_CHECKING:
@@ -1725,6 +1726,19 @@ class ResearchBoardModeScreen(ScopeScreen):
         text-align: center;
         padding: 1 2;
     }
+    ResearchBoardModeScreen #research-empty-hero {
+        height: 1fr;
+        width: 1fr;
+        align: center middle;
+        padding: 1 2;
+    }
+    ResearchBoardModeScreen #research-empty-hero #research-empty {
+        height: auto;
+    }
+    ResearchBoardModeScreen .research-empty-seal {
+        width: 16;
+        height: 8;
+    }
     ResearchBoardModeScreen .research-center-section {
         height: auto;
         text-style: bold;
@@ -1799,7 +1813,18 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._tree = build_tree_nodes(campaigns, questions, claims=claims)
         with Vertical(id="research-body"):
             if self.empty:
-                yield Static(self._empty_body(), id=EMPTY_ID)
+                seal = seal_image_widget()
+                if seal is None:
+                    # Default / CI path: the unicode brand glyph leads the hero.
+                    yield Static(self._empty_body(), id=EMPTY_ID)
+                else:
+                    # Graphics-terminal path (eawf[seal] installed): the real
+                    # Seal image is the centerpiece, so the glyph sigil is
+                    # dropped from the text to avoid a double brand mark.
+                    seal.add_class("research-empty-seal")
+                    with Vertical(id="research-empty-hero"):
+                        yield seal
+                        yield Static(self._empty_body(with_sigil=False), id=EMPTY_ID)
                 return
             pause = self._current_checkpoint()
             mode = self._render_mode()
@@ -2590,7 +2615,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         """Return the idle peek line (before any node is peeked)."""
         return "[$muted]enter to peek the selected node[/]"
 
-    def _empty_body(self) -> str:
+    def _empty_body(self, *, with_sigil: bool = True) -> str:
         """Return the honest-empty hero body: brand sigil + copy + action chips.
 
         Renders the cosmic-terminal reskin's centered empty-state hero via
@@ -2599,12 +2624,19 @@ class ResearchBoardModeScreen(ScopeScreen):
         :data:`EMPTY_SUBLINE` framing copy, then the ``[ n new campaign ]`` /
         ``[ d brief ]`` action chips (both ``n`` and ``d`` are live bindings).
         The pane centers this hero via the ``#research-empty`` CSS.
+
+        Args:
+            with_sigil: When ``False`` the leading brand glyph is dropped -- the
+                graphics-terminal path renders the real Seal image as the
+                centerpiece instead, so the glyph would be a redundant second
+                brand mark.
         """
         return render_empty_state(
             EMPTY_NOTICE,
             EMPTY_SUBLINE,
             mode=self._render_mode(),
             chips=(("n", "new campaign"), ("d", "brief")),
+            sigil=with_sigil,
         )
 
     def _current_rows(

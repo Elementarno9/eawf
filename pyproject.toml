@@ -35,6 +35,15 @@ Issues = "https://github.com/Elementarno9/eawf/issues"
 Changelog = "https://github.com/Elementarno9/eawf/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# Graphics-terminal brand mark: the Eä Seal rendered as an inline image via the
+# Kitty graphics protocol (Ghostty / Kitty / iTerm2 / WezTerm) or sixel, with a
+# unicode-halfcell fallback. Optional because it pulls Pillow + the renderer and
+# only shows on a graphics-capable terminal; without the extra the TUI falls
+# back to the unicode brand glyph. Install via ``pip install eawf[seal]``.
+seal = [
+    "textual-image>=0.13",
+    "pillow>=10",
+]
 # Windows-only: pywin32 backs the named-pipe transport in
 # ``eawf.runtime.daemon.windows_pipe`` + ``windows_security`` and the
 # pywin32 ServiceFramework wiring landing in P24-W04. The package

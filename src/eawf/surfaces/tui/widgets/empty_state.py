@@ -79,6 +79,7 @@ def render_empty_state(
     mode: str = "unicode",
     headline_tint: str = "$warn",
     chips: Sequence[tuple[str, str]] = (),
+    sigil: bool = True,
 ) -> str:
     """Render the honest-empty hero body: sigil + headline + subline + chips.
 
@@ -103,7 +104,8 @@ def render_empty_state(
     Returns:
         A newline-joined content-markup body for the empty-state ``Static``.
     """
-    lines = [brand_sigil_markup(mode=mode), "", f"[{headline_tint}]{escape_markup(headline)}[/]"]
+    lines: list[str] = [brand_sigil_markup(mode=mode), ""] if sigil else []
+    lines.append(f"[{headline_tint}]{escape_markup(headline)}[/]")
     if subline:
         lines.append(f"[$muted]{escape_markup(subline)}[/]")
     if chips:
