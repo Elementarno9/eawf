@@ -51,7 +51,6 @@ from eawf.kernel.state.models import (
 )
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.autopilot import (
-    ARM_DEFERRED,
     BATCH_NO_DAEMON,
     DISPATCH_IDLE,
     DISPATCH_NO_DAEMON,
@@ -970,16 +969,20 @@ def test_autopilot_skip_no_target_surfaces_honest_line(tmp_path: Path) -> None:
     asyncio.run(body())
 
 
-def test_autopilot_arm_surfaces_deferred_not_faked(
+def test_autopilot_arm_opens_overlay_without_immediate_rpc(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``a`` (arm) surfaces the honest deferred line and fires no RPC.
+    """``a`` (arm) opens the FA1 launch overlay and fires no RPC on open.
 
-    Arm has no cheap real semantics, so it must report the capability is
-    deferred -- NOT a "not yet wired daemon RPC" line and NOT a faked arm. The
-    daemon-client seam is stubbed to record any call; arm must never reach it.
+    Arm now opens the real
+    :class:`~eawf.surfaces.tui.screens.overlays.arm.ArmModal` config form rather
+    than surfacing a deferred stub -- and merely opening it must NOT reach the
+    daemon (the RPC fires only on ``Enter`` submit). The daemon-client seam is
+    stubbed to record any call; opening the overlay must never reach it.
     """
+    from eawf.surfaces.tui.screens.overlays.arm import ArmModal
+
     state_path = _write_state(tmp_path, _frontier_state())
     calls: list[tuple[str, dict[str, object]]] = []
 
@@ -993,18 +996,12 @@ def test_autopilot_arm_surfaces_deferred_not_faked(
             await settle_screen(pilot)
             await pilot.press(_AUTOPILOT_DIGIT)
             await settle_screen(pilot)
-            await pilot.press("a")  # arm -> deferred (no RPC)
+            await pilot.press("a")  # arm -> open the launch overlay (no RPC yet)
             await settle_screen(pilot)
-            pane = app.screen
-            assert isinstance(pane, AutopilotModeScreen)  # no modal opened
-            result = pane.query_one(f"#{DISPATCH_RESULT_ID}")
-            rendered = str(result.render())  # type: ignore[attr-defined]
-            assert ARM_DEFERRED in rendered
-            assert "deferred" in rendered
-            assert "not yet wired" not in rendered  # not the old faked-stub line
+            assert isinstance(app.screen, ArmModal)  # the real launch form opened
 
     asyncio.run(body())
-    assert calls == []  # arm never reached the daemon (no doomed RPC)
+    assert calls == []  # opening the overlay never reached the daemon
 
 
 # --------------------------------------------------------------------------

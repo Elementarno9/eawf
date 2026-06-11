@@ -60,8 +60,11 @@ routed through the same daemon-client seam so the TUI never mutates out of band
   daemon persists and :func:`eawf.workflow.lifecycle.wave.claim_wave` reads.
 * ``S`` (skip) advances the selection past the current ready wave -- a cheap
   local step rather than a doomed "skip this ready wave" daemon round-trip.
-* ``a`` (arm / launch-flow) has **no cheap real semantics yet**, so it surfaces
-  a static, honest ``arm: deferred`` line rather than firing a doomed RPC.
+* ``a`` (arm / launch-flow) opens the FA1
+  :class:`~eawf.surfaces.tui.screens.overlays.arm.ArmModal` launch form (scope /
+  budget / concurrency / risk policy / convergence); ``Enter`` folds the typed
+  spec into a ``fleet.drive`` RPC and flips the cockpit to ``DRAINING``, while a
+  dry frontier surfaces the honest "nothing to drain" banner and refuses to arm.
 
 Ready vs blocked split (the cosmetic-terminal reskin)
 -----------------------------------------------------
@@ -84,7 +87,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -108,8 +111,10 @@ from eawf.surfaces.tui.widgets.markup import escape_markup
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from textual.screen import ModalScreen
+
     from eawf.kernel.state.models import State, Wave
-    from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
+    from eawf.surfaces.tui.screens.overlays.arm import ArmSpec
     from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
     from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
@@ -206,10 +211,6 @@ SKIP_NO_NEXT: str = "skip: no further ready wave to skip to"
 
 #: Result line when ``S`` (skip) has no ready wave selected to step from.
 SKIP_NO_TARGET: str = "skip: no ready wave to skip"
-
-#: Result line when ``a`` (arm) is pressed. Arm has no cheap real daemon
-#: semantics yet, so the control honestly reports the capability is deferred.
-ARM_DEFERRED: str = "arm: deferred (launch-flow not yet available)"
 
 #: Id of the inline multi-select checklist (``m``) hosting the reused
 #: ``MultichoiceChecklist`` whose choices are EXACTLY the ready frontier ids.
@@ -945,15 +946,43 @@ class AutopilotModeScreen(ScopeScreen):
         return f"[$ok]pause: {verb}[/]"
 
     def action_arm_flow(self) -> None:
-        """Arm / launch the flow (honestly deferred -- no faked RPC).
+        """Open the FA1 arm / launch-flow overlay over the ready frontier.
 
-        Arming a flow has no cheap real daemon semantics yet, so rather than
-        firing a doomed RPC, the action surfaces a static, honest
-        ``arm: deferred`` line. The key stays bound for discoverability; its
-        result truthfully reports the capability is deferred.
+        Mounts the
+        :class:`~eawf.surfaces.tui.screens.overlays.arm.ArmModal` launch form
+        (scope / budget / concurrency / risk policy / convergence). The overlay
+        is told whether the frontier is dry (from the computed ready rows) so it
+        can surface the honest "nothing to drain" banner over an empty frontier;
+        :meth:`_on_arm_dismissed` handles its typed dismiss value.
         """
-        self._set_result(f"[$warn]{ARM_DEFERRED}[/]")
-        logger.info("action_arm_flow deferred")
+        from eawf.surfaces.tui.screens.overlays.arm import ArmModal
+
+        frontier_empty = not self._rows
+        self._push_overlay(ArmModal(frontier_empty=frontier_empty), self._on_arm_dismissed)
+        logger.info(f"action_arm_flow opened frontier_empty={frontier_empty}")
+
+    def _on_arm_dismissed(self, spec: ArmSpec | None) -> None:
+        """Arm the fleet drive from the overlay's typed spec, or surface a cancel.
+
+        A ``None`` spec (``Esc`` cancel or a dry-frontier refusal) arms nothing
+        and says so honestly; a returned :class:`ArmSpec` folds the ready
+        frontier + the spec into the ``fleet.drive`` RPC (via
+        :func:`~eawf.surfaces.tui.screens.overlays.arm.issue_drive`), flipping
+        the cockpit to ``DRAINING``.
+
+        Args:
+            spec: The overlay's typed launch config, or ``None`` on cancel.
+        """
+        from eawf.surfaces.tui.screens.overlays.arm import ARM_CANCELLED, issue_drive
+
+        if spec is None:
+            self._set_result(f"[$muted]{ARM_CANCELLED}[/]")
+            logger.info("_on_arm_dismissed cancelled")
+            return
+        frontier = [row.wave_id for row in self._rows]
+        result_line = issue_drive(spec, frontier, daemon_available=self._daemon_available())
+        self._set_result(result_line)
+        logger.info(f"_on_arm_dismissed armed result={result_line!r}")
 
     def action_open_multi_select(self) -> None:
         """Open the multi-select wave-claim shell over the ready frontier (``m``).
@@ -1099,18 +1128,19 @@ class AutopilotModeScreen(ScopeScreen):
                 f"signal={signal!r} result={result_line!r}"
             )
 
-        self._push_confirm(ConfirmModal(prompt), _on_confirm)
+        self._push_overlay(ConfirmModal(prompt), _on_confirm)
 
-    def _push_confirm(self, modal: ConfirmModal, callback: Callable[[bool | None], None]) -> None:
-        """Push a confirm *modal* with *callback*, cap-aware when possible.
+    def _push_overlay(self, modal: ModalScreen[Any], callback: Callable[[Any], None]) -> None:
+        """Push an overlay *modal* with *callback*, cap-aware when possible.
 
-        Routes through the App's depth-capped ``push_modal`` when exposed,
-        falling back to a plain ``push_screen`` under a bare harness so the
-        confirm path never raises.
+        The shared overlay-push seam for this pane (the destructive
+        :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal` and the
+        FA1 :class:`~eawf.surfaces.tui.screens.overlays.arm.ArmModal`): routes
+        through the App's depth-capped ``push_modal`` when exposed, falling back
+        to a plain ``push_screen`` under a bare harness so the push never raises.
 
         Args:
-            modal: The :class:`~eawf.surfaces.tui.screens.overlays.confirm.ConfirmModal`
-                to push.
+            modal: The overlay screen to push.
             callback: Invoked with the modal's dismiss value when it closes.
         """
         push_modal = getattr(self.app, "push_modal", None)
@@ -1356,7 +1386,6 @@ class AutopilotModeScreen(ScopeScreen):
 
 
 __all__ = [
-    "ARM_DEFERRED",
     "BATCH_NO_DAEMON",
     "BLOCKED_BY_MARKER",
     "BLOCKED_CAPTION",

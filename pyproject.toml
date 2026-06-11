@@ -318,6 +318,13 @@ max-loc = 1400
 # sibling module once the live multi-round runner lands; it joins the list as
 # an extract-module follow-up until that seam exists rather than reding the
 # suite mid-surface.
+# autopilot.py is the cohesive Autopilot-mode cockpit surface, already at the
+# cap before P30-I13. The W01 FA1 arm-flow wave wired the launch overlay +
+# fleet.drive submit path (the drive-RPC logic + ArmSpec already live in the
+# sibling arm.py overlay module) while preserving the rest of the pane, pushing
+# it past the cap. The pure frontier-render helpers split into a sibling module
+# once the cockpit surface settles; it joins the list as an extract-module
+# follow-up until that seam exists rather than reding the suite mid-surface.
 exclude = [
     "src/eawf/kernel/config/registry/leaf_catalog.py",
     "src/eawf/runtime/daemon/methods/state.py",
@@ -326,6 +333,7 @@ exclude = [
     "src/eawf/surfaces/render/plan_view.py",
     "src/eawf/surfaces/render/skills/registry.py",
     "src/eawf/surfaces/tui/app.py",
+    "src/eawf/surfaces/tui/modes/autopilot.py",
     "src/eawf/surfaces/tui/modes/research_board.py",
 ]
 
