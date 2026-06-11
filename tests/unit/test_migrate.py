@@ -24,10 +24,14 @@ bare version bump. The eighth edge (v1.7 -> v1.8) adds the typed
 ``Wave.gates`` list (the per-wave ``GateSpec`` close-gate rows) and backfills
 an explicit ``gates: []`` on every wave — additive, replay-safe. The ninth
 edge (v1.8 -> v1.9) adds ``Wave.runtime_baseline`` and backfills
-``runtime_baseline: None`` on every wave — additive, replay-safe. The live
-:class:`eawf.kernel.state.models.State` model accepts ``"1.0"``, ``"1.1"``,
-``"1.2"``, ``"1.3"``, ``"1.4"``, ``"1.5"``, ``"1.6"``, ``"1.7"``, and
-``"1.8"``, and ``"1.9"``, so a migrated state re-loads under the live model. The suite
+``runtime_baseline: None`` on every wave — additive, replay-safe. The tenth
+edge (v1.9 -> v1.10) renames the ``subproject`` keys to ``track``. The
+eleventh edge (v1.10 -> v1.11) adds the optional ``harness`` + ``model``
+attribution fields to ``ActualSummary`` and ``RuntimeBaseline`` (inherited by
+``RuntimeLatest``) and backfills NULL attribution on every actual + runtime
+snapshot — additive, replay-safe. The live
+:class:`eawf.kernel.state.models.State` model accepts ``"1.0"`` through
+``"1.11"``, so a migrated state re-loads under the live model. The suite
 exercises:
 
 * the v1.0 -> v1.1 chain with per-step pre/post Pydantic invariants;
@@ -86,6 +90,7 @@ from eawf.kernel.migrations.v1_3_to_v1_4 import MigrationV13ToV14
 from eawf.kernel.migrations.v1_4_to_v1_5 import MigrationV14ToV15
 from eawf.kernel.migrations.v1_5_to_v1_6 import MigrationV15ToV16
 from eawf.kernel.migrations.v1_9_to_v1_10 import MigrationV19ToV110
+from eawf.kernel.migrations.v1_10_to_v1_11 import MigrationV110ToV111
 from eawf.kernel.state.enums import IterTrigger, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
@@ -748,7 +753,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.10"
+    assert model_supported_max_version() == "1.11"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -804,6 +809,11 @@ def test_guard_target_supported_permits_v1_9_now_model_advanced() -> None:
 def test_guard_target_supported_permits_v1_10_now_model_advanced() -> None:
     """The guard permits 1.10 now the live model accepts it (the track rename bump)."""
     guard_target_supported("1.10")
+
+
+def test_guard_target_supported_permits_v1_11_now_model_advanced() -> None:
+    """The guard permits 1.11 now the live model accepts it (the harness+model bump)."""
+    guard_target_supported("1.11")
 
 
 def test_guard_target_supported_rejects_target_above_max() -> None:
@@ -872,14 +882,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_10(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_11(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.10) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.11) walks the full chain + re-loads.
 
-    The default target advanced to 1.10 with the track rename bump, so a bare
-    migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5 -> 1.6
-    -> 1.7 -> 1.8 -> 1.9 -> 1.10 and lands a re-loadable v1.10 state.
+    The default target advanced to 1.11 with the harness+model attribution bump,
+    so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5
+    -> 1.6 -> 1.7 -> 1.8 -> 1.9 -> 1.10 -> 1.11 and lands a re-loadable v1.11 state.
     """
     from typer.testing import CliRunner
 
@@ -894,7 +904,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_10(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.10"
+    assert reloaded.schema_version == "1.11"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -2345,3 +2355,254 @@ def test_v1_9_to_v1_10_check_pre_rejects_non_v1_9() -> None:
     bad["schema_version"] = "1.8"
     with pytest.raises(ValidationError):
         MigrationV19ToV110().check_pre(bad)
+
+
+# --- v1.10 -> v1.11: harness + model attribution backfill ---------------------
+
+
+def _state_v1_10_without_attribution() -> dict[str, Any]:
+    """Return a v1.10 state whose actuals + runtime snapshots lack attribution.
+
+    The single ``actuals`` row and the wave's ``runtime_baseline`` /
+    ``runtime_latest`` snapshots omit ``harness`` and ``model`` -- exactly the
+    shape a pre-1.11 state carries -- so the 1.10 -> 1.11 backfill has a body to
+    exercise. The phase/iter/wave/estimate/actual chain is referentially
+    complete so the migrated state re-loads under the live model.
+    """
+    ts = "2026-05-08T00:00:00Z"
+    return {
+        "schema_version": "1.10",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:QR",
+        "updated_at": ts,
+        "project": {
+            "code": "QR",
+            "slug": "quant-research",
+            "title": "Quant Research",
+            "description": "",
+            "domains": ["quant"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:QR",
+        },
+        "current": {
+            "project_code": "QR",
+            "track_id": None,
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "phases": {
+            "P00": {
+                "id": "P00",
+                "scope_id": "QR",
+                "track_id": None,
+                "title": "Phase zero",
+                "status": "active",
+                "iter_ids": ["P00-I01"],
+                "outcome_ids": [],
+                "depends_on": [],
+                "source_brief_ids": [],
+                "opened_at": ts,
+                "closed_at": None,
+                "audit_id": None,
+            }
+        },
+        "iters": {
+            "P00-I01": {
+                "id": "P00-I01",
+                "phase_id": "P00",
+                "title": "Iter one",
+                "status": "active",
+                "wave_ids": ["P00-I01-W01"],
+                "estimate_id": None,
+                "audit_id": None,
+                "opened_at": ts,
+                "closed_at": None,
+            }
+        },
+        "waves": {
+            "P00-I01-W01": {
+                "id": "P00-I01-W01",
+                "iter_id": "P00-I01",
+                "title": "Wave one",
+                "status": "closed",
+                "deps": [],
+                "blocks": [],
+                "file_scopes": [],
+                "success_criteria": [],
+                "opened_at": ts,
+                "closed_at": ts,
+                "runtime_baseline": {
+                    "api_duration_ms": 100,
+                    "cost_usd": 0.5,
+                    "captured_at": ts,
+                },
+                "runtime_latest": {
+                    "api_duration_ms": 300,
+                    "cost_usd": 1.5,
+                    "captured_at": ts,
+                },
+            }
+        },
+        "actuals": {
+            "P00-I01-W01": {
+                "id": "P00-I01-W01",
+                "scope_id": "P00-I01-W01",
+                "status": "done",
+                "elapsed_eu": 1.0,
+                "actual_tokens": 1_000,
+                "actual_cost_usd": 1.5,
+                "current_store_record_id": "rec-1",
+                "updated_at": ts,
+            }
+        },
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+
+
+def test_v1_10_to_v1_11_backfills_null_attribution() -> None:
+    """The 1.10 -> 1.11 step writes NULL harness+model on actuals + snapshots."""
+    migrated = MigrationV110ToV111().apply(_state_v1_10_without_attribution())
+
+    assert migrated["schema_version"] == "1.11"
+    actual = migrated["actuals"]["P00-I01-W01"]
+    assert actual["harness"] is None
+    assert actual["model"] is None
+    baseline = migrated["waves"]["P00-I01-W01"]["runtime_baseline"]
+    assert baseline["harness"] is None
+    assert baseline["model"] is None
+    latest = migrated["waves"]["P00-I01-W01"]["runtime_latest"]
+    assert latest["harness"] is None
+    assert latest["model"] is None
+
+
+def test_v1_10_to_v1_11_preserves_present_attribution() -> None:
+    """A row that already carries attribution is passed through untouched."""
+    payload = _state_v1_10_without_attribution()
+    payload["actuals"]["P00-I01-W01"]["harness"] = "claude-code"
+    payload["actuals"]["P00-I01-W01"]["model"] = "claude-opus-4-1"
+
+    migrated = MigrationV110ToV111().apply(payload)
+
+    actual = migrated["actuals"]["P00-I01-W01"]
+    assert actual["harness"] == "claude-code"
+    assert actual["model"] == "claude-opus-4-1"
+
+
+def test_v1_10_to_v1_11_apply_is_idempotent() -> None:
+    """Re-applying the step to an already-backfilled state is a byte-stable no-op."""
+    once = MigrationV110ToV111().apply(_state_v1_10_without_attribution())
+    once["schema_version"] = "1.10"  # rewind only the marker so apply runs again
+    twice = MigrationV110ToV111().apply(once)
+    twice["schema_version"] = "1.11"
+    once["schema_version"] = "1.11"
+    assert twice == once
+
+
+def test_run_chain_v1_10_to_v1_11_round_trips_null_attribution(tmp_path: Path) -> None:
+    """End-to-end: a v1.10 state lacking attribution re-loads clean as v1.11.
+
+    A migration test proving a v1.10 state whose actuals + runtime snapshots
+    omit harness/model migrates to v1.11 with NULL attribution and re-validates
+    against the live ``State`` model.
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps(_state_v1_10_without_attribution(), indent=2), encoding="utf-8"
+    )
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.10", to_version="1.11")
+    run_chain(state_path, chain=chain, from_version="1.10", to_version="1.11")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.11"
+    assert reloaded.actuals is not None
+    actual = reloaded.actuals["P00-I01-W01"]
+    assert actual.harness is None
+    assert actual.model is None
+    wave = reloaded.waves["P00-I01-W01"]
+    assert wave.runtime_baseline is not None
+    assert wave.runtime_baseline.harness is None
+    assert wave.runtime_baseline.model is None
+    assert wave.runtime_latest is not None
+    assert wave.runtime_latest.model is None
+
+
+def test_v1_10_to_v1_11_accepts_new_attribution_fields() -> None:
+    """New ActualSummary / RuntimeBaseline rows accept harness + model directly."""
+    from eawf.kernel.state.models import ActualSummary, RuntimeBaseline, RuntimeLatest
+
+    actual = ActualSummary(
+        id="P00-I01-W01",
+        scope_id="P00-I01-W01",
+        status="done",
+        elapsed_eu=1.0,
+        current_store_record_id="rec-1",
+        updated_at="2026-05-08T00:00:00Z",
+        harness="claude-code",
+        model="claude-opus-4-1",
+    )
+    assert actual.harness == "claude-code"
+    assert actual.model == "claude-opus-4-1"
+
+    baseline = RuntimeBaseline(
+        captured_at="2026-05-08T00:00:00Z",
+        harness="claude-code",
+        model="claude-opus-4-1",
+    )
+    assert baseline.harness == "claude-code"
+    assert baseline.model == "claude-opus-4-1"
+
+    # ``RuntimeLatest`` inherits the rollup attribution from ``RuntimeBaseline``.
+    latest = RuntimeLatest(
+        captured_at="2026-05-08T00:00:00Z",
+        harness="claude-code",
+        model="claude-opus-4-1",
+    )
+    assert latest.harness == "claude-code"
+    assert latest.model == "claude-opus-4-1"
+
+
+def test_actual_summary_rejects_bad_attribution_type() -> None:
+    """``model_validate`` rejects a non-string harness/model on ActualSummary."""
+    from pydantic import ValidationError
+
+    from eawf.kernel.state.models import ActualSummary
+
+    base = {
+        "id": "P00-I01-W01",
+        "scope_id": "P00-I01-W01",
+        "status": "done",
+        "elapsed_eu": 1.0,
+        "current_store_record_id": "rec-1",
+        "updated_at": "2026-05-08T00:00:00Z",
+    }
+    with pytest.raises(ValidationError, match="harness"):
+        ActualSummary.model_validate({**base, "harness": 7})
+    with pytest.raises(ValidationError, match="model"):
+        ActualSummary.model_validate({**base, "model": ["x"]})
+
+
+def test_v1_10_to_v1_11_check_pre_rejects_non_v1_10() -> None:
+    """The pre-condition fails fast when the input is not a v1.10 payload."""
+    from pydantic import ValidationError
+
+    bad = _state_v1_10_without_attribution()
+    bad["schema_version"] = "1.9"
+    with pytest.raises(ValidationError):
+        MigrationV110ToV111().check_pre(bad)
+
+
+def test_build_migration_chain_v1_10_to_v1_11_single_step() -> None:
+    """The registry resolves a single 1.10 -> 1.11 edge."""
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.10", to_version="1.11")
+    assert len(chain) == 1
+    assert chain[0].from_version == "1.10"
+    assert chain[0].to_version == "1.11"

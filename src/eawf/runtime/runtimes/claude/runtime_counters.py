@@ -14,9 +14,21 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+#: Stable harness id stamped on every parsed counter set. This module parses the
+#: Claude Code statusline / SessionEnd payload, so the harness is always Claude
+#: Code; the model id is read per-payload off ``model`` (see :func:`_model_id`).
+_HARNESS_ID = "claude-code"
+
 
 class RuntimeCounters(BaseModel):
-    """Typed runtime counters parsed from a Claude Code payload."""
+    """Typed runtime counters parsed from a Claude Code payload.
+
+    ``harness`` and ``model`` carry the attribution that makes the captured
+    counters calibratable: the agent harness id (``"claude-code"``) and the
+    model id the runtime billed against. Both are optional because a payload
+    without a recognisable ``model`` block omits the model id, and an
+    out-of-band ``model_validate`` may construct counters with no attribution.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -27,6 +39,8 @@ class RuntimeCounters(BaseModel):
     output_tokens: int | None = Field(default=None, ge=0)
     cache_creation_input_tokens: int | None = Field(default=None, ge=0)
     cache_read_input_tokens: int | None = Field(default=None, ge=0)
+    harness: str | None = None
+    model: str | None = None
 
 
 def _coerce_non_negative_int(raw: Any) -> int | None:
@@ -78,6 +92,26 @@ def _current_usage_block(claude_payload: dict[str, Any]) -> dict[str, Any]:
     return current_usage
 
 
+def _model_id(claude_payload: dict[str, Any]) -> str | None:
+    """Return the billed model id from *claude_payload*, or ``None`` when absent.
+
+    Accepts either ``model: "<id>"`` (string) or ``model: {"id":"..."}`` /
+    ``model: {"display_name":"..."}`` (mapping) -- Claude Code has shipped both
+    shapes. The ``id`` key wins over ``display_name`` so calibration keys on the
+    canonical model string rather than the human label. A missing or
+    wrong-typed ``model`` block yields ``None`` so the field stays nullable.
+    """
+    raw = claude_payload.get("model")
+    if isinstance(raw, str) and raw:
+        return raw
+    if isinstance(raw, dict):
+        for key in ("id", "display_name", "name"):
+            value = raw.get(key)
+            if isinstance(value, str) and value:
+                return value
+    return None
+
+
 def parse_runtime_counters(claude_payload: dict[str, Any]) -> RuntimeCounters | None:
     """Parse Claude Code runtime counters, returning ``None`` without a cost block.
 
@@ -86,14 +120,20 @@ def parse_runtime_counters(claude_payload: dict[str, Any]) -> RuntimeCounters | 
 
     Returns:
         Parsed :class:`RuntimeCounters` when ``payload["cost"]`` is a mapping,
-        otherwise ``None``. Wrong-typed fields are omitted, not raised.
+        otherwise ``None``. The ``harness`` attribution is always stamped
+        (``"claude-code"``) and the ``model`` id is read off the payload when
+        present. Wrong-typed fields are omitted, not raised.
     """
     cost = claude_payload.get("cost")
     if not isinstance(cost, dict):
         return None
 
     current_usage = _current_usage_block(claude_payload)
-    data: dict[str, int | Decimal] = {}
+    data: dict[str, int | Decimal | str] = {"harness": _HARNESS_ID}
+
+    model_id = _model_id(claude_payload)
+    if model_id is not None:
+        data["model"] = model_id
 
     api_duration_ms = _first_int(cost, "api_duration_ms", "total_api_duration_ms")
     if api_duration_ms is not None:

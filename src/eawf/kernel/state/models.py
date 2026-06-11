@@ -542,6 +542,12 @@ class RuntimeBaseline(_StrictModel):
     same runtime sidecar. Numeric fields are optional because not every runtime
     reports every counter; ``captured_at`` is required so consumers can order
     and audit the snapshot.
+
+    ``harness`` and ``model`` carry the attribution that makes the captured
+    counters calibratable: the agent harness id (e.g. ``"claude-code"``) and the
+    model id (e.g. ``"claude-opus-4-1"``) the runtime billed against. Both are
+    optional because not every runtime reports them, and a state written before
+    the v1.11 bump re-validates with both defaulted to ``None``.
     """
 
     api_duration_ms: Annotated[int, Field(ge=0)] | None = None
@@ -551,6 +557,8 @@ class RuntimeBaseline(_StrictModel):
     output_tokens: Annotated[int, Field(ge=0)] | None = None
     cache_creation_input_tokens: Annotated[int, Field(ge=0)] | None = None
     cache_read_input_tokens: Annotated[int, Field(ge=0)] | None = None
+    harness: str | None = None
+    model: str | None = None
     captured_at: UtcDatetime
 
 
@@ -843,6 +851,12 @@ class ActualSummary(_StrictModel):
     in (see :func:`eawf.workflow.lifecycle.wave.close_wave`).
     Both fields default to ``0`` / ``0.0`` so existing on-disk rows
     stay valid without a schema bump.
+
+    ``harness`` and ``model`` carry the attribution that makes the recorded
+    actual calibratable by harness+model: the agent harness id (e.g.
+    ``"claude-code"``) and the model id the runtime billed against. Both are
+    optional because not every recorded actual knows them, and a state written
+    before the v1.11 bump re-validates with both defaulted to ``None``.
     """
 
     id: IdStr
@@ -853,6 +867,8 @@ class ActualSummary(_StrictModel):
     agent_runtime_eu: float | None = None
     actual_tokens: Annotated[int, Field(ge=0)] = 0
     actual_cost_usd: Annotated[float, Field(ge=0.0)] = 0.0
+    harness: str | None = None
+    model: str | None = None
     current_store_record_id: str
     updated_at: UtcDatetime
 
@@ -1413,11 +1429,18 @@ class State(_StrictModel):
     ``current.subproject_id`` to :attr:`CurrentPointers.track_id`. An
     un-migrated state carrying the old key names rejects under
     ``extra="forbid"``, so the ``v1_9_to_v1_10`` migrate step rewrites both
-    names before load.
+    names before load. The ``1.11`` edge is purely additive — it adds the
+    optional ``harness`` + ``model`` attribution fields to
+    :class:`ActualSummary` and :class:`RuntimeBaseline` (inherited by
+    :class:`RuntimeLatest`), so EU actuals become calibratable by harness+model.
+    Both default to ``None``; the ``v1_10_to_v1_11`` migrate step backfills NULL
+    attribution on every actual + runtime-baseline / runtime-latest row for an
+    explicit on-disk row, and a state written before the bump re-validates with
+    both defaulted and no historical fact changes.
     """
 
     schema_version: Literal[
-        "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10"
+        "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11"
     ]
     scope_kind: ScopeKind
     urn: UrnStr

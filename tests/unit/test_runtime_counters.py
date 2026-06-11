@@ -56,6 +56,8 @@ def test_parse_runtime_counters_real_status_payload() -> None:
         output_tokens=1_200,
         cache_creation_input_tokens=5_000,
         cache_read_input_tokens=2_000,
+        harness="claude-code",
+        model="claude-opus-4-1",
     )
 
 
@@ -114,4 +116,71 @@ def test_parse_runtime_counters_drops_type_mismatched_fields() -> None:
         total_duration_ms=45_000,
         output_tokens=1_200,
         cache_read_input_tokens=2_000,
+        harness="claude-code",
+        model=None,
     )
+
+
+def test_parse_runtime_counters_stamps_harness_and_model() -> None:
+    """The capture path stamps ``harness="claude-code"`` + the billed model id."""
+    counters = parse_runtime_counters(
+        {
+            "model": {"id": "claude-opus-4-1", "display_name": "Opus"},
+            "cost": {"cost_usd": 1.25},
+        }
+    )
+
+    assert counters is not None
+    # The ``id`` key wins over ``display_name`` so calibration keys on the
+    # canonical model string, not the human label.
+    assert counters.harness == "claude-code"
+    assert counters.model == "claude-opus-4-1"
+
+
+def test_parse_runtime_counters_accepts_string_model_shape() -> None:
+    """Claude has shipped ``model`` as a bare string too -- both shapes parse."""
+    counters = parse_runtime_counters({"model": "claude-sonnet-4-6", "cost": {"cost_usd": 0.5}})
+
+    assert counters is not None
+    assert counters.harness == "claude-code"
+    assert counters.model == "claude-sonnet-4-6"
+
+
+def test_parse_runtime_counters_model_none_when_absent() -> None:
+    """A payload with no ``model`` block stamps harness but leaves model NULL."""
+    counters = parse_runtime_counters({"cost": {"cost_usd": 0.5}})
+
+    assert counters is not None
+    assert counters.harness == "claude-code"
+    assert counters.model is None
+
+
+def test_parse_runtime_counters_model_none_when_wrong_typed() -> None:
+    """A wrong-typed ``model`` block (e.g. an int) leaves the model id NULL."""
+    counters = parse_runtime_counters({"model": 7, "cost": {"cost_usd": 0.5}})
+
+    assert counters is not None
+    assert counters.harness == "claude-code"
+    assert counters.model is None
+
+
+def test_parse_runtime_counters_falls_back_to_display_name() -> None:
+    """A ``model`` mapping lacking ``id`` falls back to ``display_name``."""
+    counters = parse_runtime_counters(
+        {"model": {"display_name": "Opus 4.7"}, "cost": {"cost_usd": 0.5}}
+    )
+
+    assert counters is not None
+    assert counters.model == "Opus 4.7"
+
+
+def test_runtime_counters_model_validate_rejects_bad_harness_type() -> None:
+    """``harness`` must be a string -- a non-string value fails validation."""
+    with pytest.raises(ValidationError, match="harness"):
+        RuntimeCounters.model_validate({"harness": 7})
+
+
+def test_runtime_counters_model_validate_rejects_bad_model_type() -> None:
+    """``model`` must be a string -- a non-string value fails validation."""
+    with pytest.raises(ValidationError, match="model"):
+        RuntimeCounters.model_validate({"model": ["claude-opus-4-1"]})
