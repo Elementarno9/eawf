@@ -56,6 +56,7 @@ from eawf.kernel.state.enums import (
     TrackKind,
     TrackStatus,
     Urgency,
+    UserDecisionKind,
     WaveStatus,
     WorktreeStatus,
 )
@@ -1304,6 +1305,79 @@ class FleetFork(_StrictModel):
     forked_at: UtcDatetime
 
 
+class PauseResolution(_StrictModel):
+    """One resolved operator decision, kind-tagged across both decision surfaces.
+
+    eawf has two operator-decision surfaces today, each with its own ad-hoc
+    resolution shape: a ``needs_user`` pause resolves with a free-string
+    ``choice`` against a
+    :class:`~eawf.workflow.skills.bodies.user_question.UserQuestion`'s option
+    labels, and a fleet auto-drain lane resolves with one of the closed
+    :class:`FleetForkResolution` paths. This is the SHARED typed resolution
+    record both surfaces project onto so a downstream consumer (the attention
+    feed, a calibration sweep over operator decisions) can read every resolved
+    decision through one schema -- :attr:`decision_kind` names which surface it
+    came from, :attr:`choice` carries the chosen label verbatim, and
+    :attr:`urgency` ranks it on the shared :class:`~eawf.kernel.state.enums.Urgency`
+    ladder.
+
+    A :class:`UserDecisionKind.FLEET_FORK` resolution always carries a
+    :attr:`fork_resolution` (the chosen :class:`FleetForkResolution`) and its
+    :attr:`choice` mirrors that resolution's value; a
+    :class:`UserDecisionKind.PAUSE` resolution leaves
+    :attr:`fork_resolution` ``None`` because a pause is answered by a free-form
+    option label rather than the fixed fleet path set. The validator enforces
+    that coupling so a malformed cross-surface row fails at construction rather
+    than silently skewing a calibration sweep.
+
+    Attributes:
+        decision_kind: The :class:`UserDecisionKind` family this resolution
+            belongs to -- ``PAUSE`` or ``FLEET_FORK``.
+        scope_id: The scope the resolved decision belonged to.
+        ref: The decision the resolution answers -- the pause-urn for a
+            ``PAUSE`` decision, the ``(wave_id, attempt)``-keyed fork
+            identifier for a ``FLEET_FORK`` decision.
+        choice: The operator's chosen option label, verbatim. For a
+            ``FLEET_FORK`` decision this equals the chosen
+            :class:`FleetForkResolution` value.
+        fork_resolution: The chosen :class:`FleetForkResolution` on a
+            ``FLEET_FORK`` decision; ``None`` on a ``PAUSE`` decision.
+        urgency: Shared :class:`~eawf.kernel.state.enums.Urgency` ranking of the
+            decision when it was raised, defaulting to
+            :attr:`~eawf.kernel.state.enums.Urgency.NORMAL`.
+        resolved_at: When the operator resolved the decision.
+    """
+
+    decision_kind: UserDecisionKind
+    scope_id: Annotated[str, Field(min_length=1)]
+    ref: Annotated[str, Field(min_length=1)]
+    choice: Annotated[str, Field(min_length=1)]
+    fork_resolution: FleetForkResolution | None = None
+    urgency: Urgency = Urgency.NORMAL
+    resolved_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def _check_kind_coupling(self) -> PauseResolution:
+        """Enforce the decision-kind / fork-resolution coupling.
+
+        Raises:
+            ValueError: When a ``PAUSE`` decision carries a ``fork_resolution``,
+                a ``FLEET_FORK`` decision omits it, or a ``FLEET_FORK`` decision's
+                ``choice`` disagrees with its ``fork_resolution`` value.
+        """
+        if self.decision_kind is UserDecisionKind.PAUSE:
+            if self.fork_resolution is not None:
+                raise ValueError("pause resolution must not carry a fork_resolution")
+        elif self.fork_resolution is None:
+            raise ValueError("fleet-fork resolution requires a fork_resolution")
+        elif self.choice != self.fork_resolution.value:
+            raise ValueError(
+                f"fleet-fork choice {self.choice!r} must equal "
+                f"fork_resolution {self.fork_resolution.value!r}"
+            )
+        return self
+
+
 class FleetRun(_StrictModel):
     """Daemon-owned state of the fleet auto-drain loop.
 
@@ -1437,10 +1511,34 @@ class State(_StrictModel):
     attribution on every actual + runtime-baseline / runtime-latest row for an
     explicit on-disk row, and a state written before the bump re-validates with
     both defaulted and no historical fact changes.
+
+    The ``1.12`` edge is purely additive in the same sense as the ``1.5``
+    enum-registration edge: it registers the
+    :class:`~eawf.kernel.state.enums.UserDecisionKind` enum and the
+    :class:`PauseResolution` typed record (the shared operator-decision shape
+    spanning both the ``needs_user`` pause and the fleet-fork surfaces), neither
+    of which any existing persisted ``State`` field references -- pause / fork
+    resolutions live in the append-only event + evidence stores, not on a
+    top-level ``State`` field. The ``v1_11_to_v1_12`` step therefore rewrites
+    only the version marker, leaving every row untouched, so a state written
+    before the bump re-validates unchanged and the step is a lossless,
+    replay-safe round-trip.
     """
 
     schema_version: Literal[
-        "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10", "1.11"
+        "1.0",
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+        "1.7",
+        "1.8",
+        "1.9",
+        "1.10",
+        "1.11",
+        "1.12",
     ]
     scope_kind: ScopeKind
     urn: UrnStr

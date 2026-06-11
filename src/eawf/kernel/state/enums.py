@@ -242,6 +242,32 @@ class Urgency(StrEnum):
     URGENT = "urgent"
 
 
+class UserDecisionKind(StrEnum):
+    """The closed family an operator decision belongs to.
+
+    One shared vocabulary tags the TWO operator-decision surfaces that
+    today carry their own ad-hoc shapes: a ``needs_user`` pause resolve
+    (a free-string ``choice`` against a
+    :class:`~eawf.workflow.skills.bodies.user_question.UserQuestion`'s
+    option labels) and a fleet-fork resolve (a
+    :class:`~eawf.kernel.state.models.FleetForkResolution`). Naming the
+    family on a persisted :class:`~eawf.kernel.state.models.PauseResolution`
+    lets a downstream consumer (the attention feed, a calibration sweep)
+    GROUP BY decision kind without string-sniffing the surface the
+    decision came from.
+
+    Values:
+        PAUSE: A ``needs_user`` pause the operator answered by picking one
+            of the question's option labels.
+        FLEET_FORK: A fleet auto-drain lane the operator resolved by
+            choosing one of the closed
+            :class:`~eawf.kernel.state.models.FleetForkResolution` paths.
+    """
+
+    PAUSE = "pause"
+    FLEET_FORK = "fleet_fork"
+
+
 class BacklogPriority(StrEnum):
     P0 = "P0"
     P1 = "P1"

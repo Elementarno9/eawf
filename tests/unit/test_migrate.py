@@ -91,6 +91,7 @@ from eawf.kernel.migrations.v1_4_to_v1_5 import MigrationV14ToV15
 from eawf.kernel.migrations.v1_5_to_v1_6 import MigrationV15ToV16
 from eawf.kernel.migrations.v1_9_to_v1_10 import MigrationV19ToV110
 from eawf.kernel.migrations.v1_10_to_v1_11 import MigrationV110ToV111
+from eawf.kernel.migrations.v1_11_to_v1_12 import MigrationV111ToV112
 from eawf.kernel.state.enums import IterTrigger, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
@@ -753,7 +754,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.11"
+    assert model_supported_max_version() == "1.12"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -814,6 +815,11 @@ def test_guard_target_supported_permits_v1_10_now_model_advanced() -> None:
 def test_guard_target_supported_permits_v1_11_now_model_advanced() -> None:
     """The guard permits 1.11 now the live model accepts it (the harness+model bump)."""
     guard_target_supported("1.11")
+
+
+def test_guard_target_supported_permits_v1_12_now_model_advanced() -> None:
+    """The guard permits 1.12 now the live model accepts it (the decision-kind bump)."""
+    guard_target_supported("1.12")
 
 
 def test_guard_target_supported_rejects_target_above_max() -> None:
@@ -882,14 +888,15 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_11(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_12(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.11) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.12) walks the full chain + re-loads.
 
-    The default target advanced to 1.11 with the harness+model attribution bump,
-    so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5
-    -> 1.6 -> 1.7 -> 1.8 -> 1.9 -> 1.10 -> 1.11 and lands a re-loadable v1.11 state.
+    The default target advanced to 1.12 with the UserDecisionKind + PauseResolution
+    bump, so a bare migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 ->
+    1.5 -> 1.6 -> 1.7 -> 1.8 -> 1.9 -> 1.10 -> 1.11 -> 1.12 and lands a re-loadable
+    v1.12 state.
     """
     from typer.testing import CliRunner
 
@@ -904,7 +911,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_11(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.11"
+    assert reloaded.schema_version == "1.12"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -2606,3 +2613,96 @@ def test_build_migration_chain_v1_10_to_v1_11_single_step() -> None:
     assert len(chain) == 1
     assert chain[0].from_version == "1.10"
     assert chain[0].to_version == "1.11"
+
+
+# --- v1.11 -> v1.12: UserDecisionKind + PauseResolution registration ----------
+
+
+def _state_v1_11_minimal() -> dict[str, Any]:
+    """Return a minimal, referentially-complete v1.11 state.
+
+    The v1.12 edge is purely additive (it only registers the
+    ``UserDecisionKind`` enum + the ``PauseResolution`` typed record, neither of
+    which any persisted ``State`` field references), so the fixture carries no
+    decision rows -- the migrate step rewrites only the version marker and the
+    migrated state must re-load unchanged under the live model.
+    """
+    out = _state_v1_10_without_attribution()
+    out["schema_version"] = "1.11"
+    # 1.11 materialises explicit NULL attribution on actuals + runtime snapshots.
+    out["actuals"]["P00-I01-W01"]["harness"] = None
+    out["actuals"]["P00-I01-W01"]["model"] = None
+    out["waves"]["P00-I01-W01"]["runtime_baseline"]["harness"] = None
+    out["waves"]["P00-I01-W01"]["runtime_baseline"]["model"] = None
+    out["waves"]["P00-I01-W01"]["runtime_latest"]["harness"] = None
+    out["waves"]["P00-I01-W01"]["runtime_latest"]["model"] = None
+    return out
+
+
+def test_v1_11_to_v1_12_bumps_marker_only() -> None:
+    """The 1.11 -> 1.12 step rewrites only the version marker (additive edge)."""
+    payload = _state_v1_11_minimal()
+    migrated = MigrationV111ToV112().apply(payload)
+
+    assert migrated["schema_version"] == "1.12"
+    # Every non-marker key is byte-identical -- no row was touched.
+    before = {k: v for k, v in payload.items() if k != "schema_version"}
+    after = {k: v for k, v in migrated.items() if k != "schema_version"}
+    assert before == after
+
+
+def test_v1_11_to_v1_12_does_not_mutate_input() -> None:
+    """The transform deep-copies: the input dict's marker is left at 1.11."""
+    payload = _state_v1_11_minimal()
+    MigrationV111ToV112().apply(payload)
+    assert payload["schema_version"] == "1.11"
+
+
+def test_v1_11_to_v1_12_apply_is_idempotent() -> None:
+    """Re-applying the step to an already-bumped state is a byte-stable no-op."""
+    once = MigrationV111ToV112().apply(_state_v1_11_minimal())
+    once["schema_version"] = "1.11"  # rewind only the marker so apply runs again
+    twice = MigrationV111ToV112().apply(once)
+    twice["schema_version"] = "1.12"
+    once["schema_version"] = "1.12"
+    assert twice == once
+
+
+def test_v1_11_to_v1_12_check_pre_rejects_non_v1_11() -> None:
+    """The pre-condition fails fast when the input is not a v1.11 payload."""
+    from pydantic import ValidationError
+
+    bad = _state_v1_11_minimal()
+    bad["schema_version"] = "1.10"
+    with pytest.raises(ValidationError):
+        MigrationV111ToV112().check_pre(bad)
+
+
+def test_v1_11_to_v1_12_check_post_rejects_non_v1_12() -> None:
+    """The post-condition fails fast when the output is not a v1.12 payload."""
+    from pydantic import ValidationError
+
+    bad = _state_v1_11_minimal()  # still marked 1.11
+    with pytest.raises(ValidationError):
+        MigrationV111ToV112().check_post(bad)
+
+
+def test_build_migration_chain_v1_11_to_v1_12_single_step() -> None:
+    """The registry resolves a single 1.11 -> 1.12 edge."""
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.11", to_version="1.12")
+    assert len(chain) == 1
+    assert chain[0].from_version == "1.11"
+    assert chain[0].to_version == "1.12"
+
+
+def test_run_chain_v1_11_to_v1_12_round_trips_clean(tmp_path: Path) -> None:
+    """End-to-end: a v1.11 state migrates to v1.12 and re-loads under the model."""
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps(_state_v1_11_minimal(), indent=2), encoding="utf-8")
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.11", to_version="1.12")
+    run_chain(state_path, chain=chain, from_version="1.11", to_version="1.12")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.12"

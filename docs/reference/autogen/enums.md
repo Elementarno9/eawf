@@ -50,5 +50,6 @@ that module is listed with its members.
 | `TrackKind` | `strategy`, `model`, `target`, `feature`, `service` |
 | `TrackStatus` | `active`, `planned`, `deferred`, `retired` |
 | `Urgency` | `low`, `normal`, `high`, `urgent` |
+| `UserDecisionKind` | `pause`, `fleet_fork` |
 | `WaveStatus` | `pending`, `claimed`, `in_progress`, `closed`, `failed`, `abandoned` |
 | `WorktreeStatus` | `active`, `conflicted`, `merged`, `abandoned` |
