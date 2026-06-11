@@ -83,6 +83,9 @@ _CHROME_UNICODE: dict[str, str] = {
     "check_on": "\u25a3",
     "check_off": "\u25a2",
     "brand": "\u25c9",
+    "criteria": "\u25b8",
+    "cost": "\u00a4",
+    "history": "\u21ba",
 }
 _CHROME_ASCII: dict[str, str] = {
     "dispatch": ">",
@@ -94,6 +97,9 @@ _CHROME_ASCII: dict[str, str] = {
     "check_on": "[x]",
     "check_off": "[ ]",
     "brand": "*",
+    "criteria": ">",
+    "cost": "$",
+    "history": "<",
 }
 
 

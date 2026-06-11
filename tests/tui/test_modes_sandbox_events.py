@@ -398,7 +398,7 @@ def test_digit_nine_press_switches_to_the_mode() -> None:
 
 
 def test_sandbox_events_binds_navigation_and_reload_keys() -> None:
-    """up / down / Enter / g each resolve to a live Binding (affordance parity)."""
+    """up / down / Enter / r / g each resolve to a live Binding (affordance parity)."""
     keys = {
         binding.key: binding.action
         for binding in SandboxEventsModeScreen.BINDINGS
@@ -406,7 +406,9 @@ def test_sandbox_events_binds_navigation_and_reload_keys() -> None:
     }
     assert keys.get("up") == "scroll_up"
     assert keys.get("down") == "scroll_down"
-    assert keys.get("enter") == "reload"
+    # W03: Enter opens the selected row (matching the "Enter open" footer); reload moved to r.
+    assert keys.get("enter") == "open_selected"
+    assert keys.get("r") == "reload"
     assert keys.get("g") == "scroll_home"
 
 
