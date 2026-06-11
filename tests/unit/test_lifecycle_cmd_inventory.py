@@ -32,7 +32,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
 # verbs to ``wave_app`` on import via ``app.py``; those are NOT owned by this
 # wave, so the wave assertion checks containment (superset), not equality.
 EXPECTED_PROJECT_VERBS = {"init"}
-EXPECTED_TRACK_VERBS = {"add", "switch"}
+EXPECTED_TRACK_VERBS = {"add", "switch", "sync"}
 EXPECTED_PHASE_VERBS = {"open", "close", "activate", "reopen", "prepare-close", "retro"}
 EXPECTED_ITER_VERBS = {"activate", "open", "close", "plan", "candidate-tag"}
 EXPECTED_WAVE_VERBS = {

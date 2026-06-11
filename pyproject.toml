@@ -334,8 +334,14 @@ max-loc = 1400
 # P30-I13-W04 zoom rewrite (raw output tail + confirm-gated per-session keys)
 # pushed it past the cap while preserving behavior. The output-tail wiring +
 # zoom render helpers split into a sibling module once the cockpit settles.
+# models.py is the canonical state-entity model module; P30 added the FleetRun /
+# FleetLane / FleetFork drive-loop models, the Track / Goal / Outcome substrate,
+# and the RiskTier / FleetForkReason enums (each confined to its own region),
+# pushing the declaration-dense module past the cap. It is a typed-model table,
+# not branching logic; split by entity-family once the substrate settles.
 exclude = [
     "src/eawf/kernel/config/registry/leaf_catalog.py",
+    "src/eawf/kernel/state/models.py",
     "src/eawf/observability/eval/jury_validation.py",
     "src/eawf/runtime/daemon/methods/state.py",
     "src/eawf/surfaces/cli/commands/hook.py",
