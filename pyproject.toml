@@ -494,6 +494,80 @@ glob = "src/eawf/runtime/runtimes/*/plugin_install.py"
 line = 95
 branch = 88
 
+# --- P30-I10-W06: previously-ungated load-bearing packages ---
+# These seven packages carried no per-package ratchet before P30-I10 (the
+# ~103k/182k ungated LOC: the verify spine, dispatch, evidence, lifecycle,
+# eval projection, runtime adapters, and the spawn sandbox). Each threshold
+# is set just below the line/branch rate measured on the 2026-06-10
+# coverage.xml (a ~2-point safety margin absorbs cross-OS / test-selection
+# variance + the slight age of that snapshot), so the gate is GREEN on the
+# current tree and ratchets up in a later wave. The TUI is the deliberate
+# omission: its line-cov stays waived (async Textual render misreports) and
+# its quality number is the behavioural ``[tool.eawf.coverage.tui_behavioural]``
+# floor below, not a line/branch ratchet.
+
+[tool.eawf.coverage.gates.verify]
+# The verify spine (GateSpec -> CheckSpec compile + close-readiness rollup).
+path = "src/eawf/workflow/verify/"
+line = 90
+branch = 86
+
+[tool.eawf.coverage.gates.dispatch]
+# Wave-dispatch render + worktree-isolated subagent prompt assembly.
+path = "src/eawf/workflow/dispatch/"
+line = 93
+branch = 85
+
+[tool.eawf.coverage.gates.evidence]
+# EvidenceRecord assembly + the EviBound resolves/entails invariant.
+path = "src/eawf/workflow/evidence/"
+line = 93
+branch = 88
+
+[tool.eawf.coverage.gates.lifecycle]
+# Phase / iter / wave state transitions (PLANNED -> ACTIVE -> CLOSED).
+path = "src/eawf/workflow/lifecycle/"
+line = 91
+branch = 81
+
+[tool.eawf.coverage.gates.eval]
+# Telemetry-to-EU projection + the self-eval experiment harness.
+path = "src/eawf/observability/eval/"
+line = 93
+branch = 80
+
+[tool.eawf.coverage.gates.runtimes]
+# Cross-vendor runtime adapters (claude / codex / opencode spawn + probes).
+# Overlaps the tighter ``plugin_install`` glob gate above by design: this
+# whole-subtree floor backstops the adapter surface, the glob gate enforces
+# the crash-relevant install path more strictly.
+path = "src/eawf/runtime/runtimes/"
+line = 91
+branch = 83
+
+[tool.eawf.coverage.gates.sandbox]
+# Spawn sandbox: the argv deny-list + scrubbed-env jail the spawn path runs
+# subagents under (the safety floor of the cross-vendor spawn surface).
+path = "src/eawf/runtime/sandbox/"
+line = 91
+branch = 87
+
+[tool.eawf.coverage.tui_behavioural]
+# The TUI quality number is NOT line-cov (waived above): Textual widgets
+# render asynchronously and line/branch coverage misreports them. The
+# behavioural surface is enforced by counting the screen-level golden
+# snapshots + the operator-journey ``tui_flow`` specs the suite exercises,
+# a counts-based ratchet that fires the moment a screen snapshot or a flow
+# is deleted without replacement. Floors sit just below the counts measured
+# on 2026-06-10 (69 goldens, 7 G1-G7 flows) so the gate is GREEN today and
+# ratchets up as screens / flows are added. ``affordance_parity`` coverage
+# (every advertised footer key resolves across MODES) is enforced by the
+# affordance-matrix snapshot test, not a count here.
+golden_glob = "tests/snapshots/tui/golden/*.txt"
+min_goldens = 67
+flow_glob = "tests/snapshots/tui/test_tui_flow.py"
+min_flows = 7
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
