@@ -31,6 +31,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from eawf.kernel.state.enums import (
     IterStatus,
     PhaseStatus,
@@ -508,3 +510,99 @@ def test_trust_pane_starved_then_keeps_chassis_brand(tmp_path: Path) -> None:
             assert "Trust" in header_row
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Calibration binding -- the drill surfaces a REAL Brier + ECE (W07)
+# --------------------------------------------------------------------------
+
+
+def _scored_calibration_inputs() -> tuple[Any, dict[str, Any]]:
+    """Build a scored validation cohort + its per-wave ballots.
+
+    Four labelled waves (two good, two bad) each rated unanimously in the
+    direction of their ground truth, so the jury-validation reducer scores a
+    real Fleiss kappa / Brier / ECE the calibration set must mirror.
+    """
+    from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole
+    from eawf.observability.eval.jury import JurorBallot
+    from eawf.observability.eval.jury_validation import (
+        LabeledVerdict,
+        LabelSource,
+        ValidationCohort,
+    )
+    from eawf.observability.eval.reputation import VerdictOutcome
+
+    def _row(wave_id: str, *, good: bool) -> LabeledVerdict:
+        outcome = VerdictOutcome(
+            base_id=wave_id,
+            agent_role=AgentSessionRole.AUDITOR,
+            runtime="claude",
+            verdict=AgentReportVerdict.PASS,
+            confidence=0.9,
+            held=good,
+            outcome_source="clean" if good else "reactive",
+        )
+        return LabeledVerdict(
+            outcome=outcome, ground_truth=good, label_source=LabelSource.SILVER
+        )
+
+    def _ballots(verdict: AgentReportVerdict) -> tuple[JurorBallot, ...]:
+        return tuple(
+            JurorBallot(juror_id=juror, acceptance_style="binary", verdict=verdict)
+            for juror in ("claude-code", "codex", "opencode")
+        )
+
+    rows = [_row(f"P01-I01-W{i:02d}", good=i % 2 == 0) for i in range(4)]
+    ballots = {
+        row.outcome.base_id: (
+            _ballots(AgentReportVerdict.PASS)
+            if row.ground_truth
+            else _ballots(AgentReportVerdict.FAIL)
+        )
+        for row in rows
+    }
+    cohort = ValidationCohort(silver=rows, gold=[])
+    return cohort, ballots
+
+
+def test_current_calibration_matches_validate_jury_ece() -> None:
+    """A scored cohort binds a CalibrationSet whose ECE equals validate_jury's.
+
+    The binding the Trust mode pushes into the drill must carry the SAME Brier +
+    ECE the reducer computed -- never a re-derived or fabricated number.
+    """
+    from eawf.observability.eval.jury_validation import (
+        JuryValidationConfig,
+        validate_jury,
+    )
+    from eawf.surfaces.tui.modals.calibration_drill import calibration_set_from_report
+
+    cohort, ballots = _scored_calibration_inputs()
+    report = validate_jury(cohort, ballots, JuryValidationConfig(min_validation_n=1))
+
+    calibration = calibration_set_from_report(report)
+
+    assert report.ece is not None
+    assert calibration is not None
+    assert calibration.ece == pytest.approx(report.ece)
+    assert calibration.brier_score == pytest.approx(report.brier)
+    assert calibration.sample_count == report.n
+
+
+def test_current_calibration_prefers_pushed_override() -> None:
+    """A pinned override wins over the live compute in ``_current_calibration``."""
+    from eawf.surfaces.tui.modals.calibration_drill import CalibrationSet
+
+    screen = TrustModeScreen()
+    pinned = CalibrationSet(brier_score=0.2, ece=0.1, sample_count=42)
+    screen.set_calibration(pinned)
+
+    assert screen._current_calibration() is pinned
+
+
+def test_current_calibration_no_state_is_none() -> None:
+    """With no host state bound the live compute yields None (honest-empty)."""
+    screen = TrustModeScreen()
+
+    assert screen._current_calibration() is None

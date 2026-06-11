@@ -26,6 +26,13 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
   token accounting in v0.4); the variance gauge reads the empty state
   until a measured actual exists. The old wall-clock auto-record +
   ``backfill-actuals`` derivation were retired in P27-I05-W28.
+- ``eawf metrics jury-validation`` — render the cross-vendor jury validated
+  against its ground-truth cohort (Fleiss kappa / Brier / ECE /
+  unanimous-pass-on-known-bad catch rate) from ``state.json`` plus the
+  append-only gold-label + AUDITOR stores under it, with the derived
+  BlockAuthority tier. Under the cohort floor the reducer refuses to score
+  and the render is the honest "insufficient signal (n=k)" banner -- it reads
+  no telemetry cache, so it is not gated on ``telemetry.enabled``.
 
 CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
 reads the typed config, and routes the heavy lifting into
@@ -39,7 +46,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
@@ -48,11 +55,20 @@ from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
+if TYPE_CHECKING:
+    from eawf.observability.eval.jury_validation import JuryValidationReport
+
 logger = logging.getLogger(__name__)
 
 _TELEMETRY_SUBCOMMANDS = frozenset({"show", "export", "rebuild", "info", "variance"})
 
-_KNOWN_SUBCOMMANDS = _TELEMETRY_SUBCOMMANDS
+#: The jury-validation sub-verb renders the jury validated against its
+#: ground-truth cohort (Fleiss kappa / Brier / ECE / unanimous-pass-on-known-bad
+#: catch rate), with an honest "insufficient signal" banner under the cohort
+#: floor. It reads no telemetry cache, so it is not gated on ``telemetry.enabled``.
+_JURY_VALIDATION_SUBCOMMAND = "jury-validation"
+
+_KNOWN_SUBCOMMANDS = _TELEMETRY_SUBCOMMANDS | {_JURY_VALIDATION_SUBCOMMAND}
 
 _OPT_IN_NUDGE = (
     "telemetry is disabled — no metrics are collected.\n"
@@ -67,7 +83,7 @@ def metrics_cmd(
     subcommand: Annotated[
         str | None,
         typer.Argument(
-            metavar="[show|export|rebuild|info|variance]",
+            metavar="[show|export|rebuild|info|variance|jury-validation]",
             help="Metrics sub-verb. Omit for the rolling workflow-metrics view.",
         ),
     ] = None,
@@ -117,6 +133,8 @@ def metrics_cmd(
         _telemetry_rebuild(flags, full=full, incremental=incremental)
     elif subcommand == "variance":
         _estimate_actual_variance(flags)
+    elif subcommand == _JURY_VALIDATION_SUBCOMMAND:
+        _jury_validation(flags)
     else:  # subcommand == "info"
         _telemetry_info(flags)
 
@@ -189,6 +207,130 @@ def _render_variance(variance_pct: float | None, sample_count: int) -> str:
         return f"estimate-actual variance: no data (samples={sample_count})"
     sign = "+" if variance_pct >= 0 else ""
     return f"estimate-actual variance: {sign}{variance_pct:.1f}% (samples={sample_count})"
+
+
+#: The Wilson lower-bound floor the jury's pass-fraction forecast must clear
+#: before the cross-vendor jury earns BLOCK authority. Mirrors the Trust-mode
+#: ``JURY_WILSON_FLOOR`` so the CLI and the TUI agree on the same bar -- the
+#: jury is held ADVISORY (veto logged, close proceeds) until it scores above it.
+_JURY_WILSON_FLOOR: float = 0.75
+
+#: BlockAuthority tier labels. ``advisory`` is the honest current state: the
+#: jury's veto is logged but the close still proceeds. ``blocking`` is earned
+#: only once the validation cohort scored and its catch-rate cleared the floor.
+_AUTHORITY_ADVISORY: str = "advisory"
+_AUTHORITY_BLOCKING: str = "blocking"
+
+
+def _jury_validation(flags: GlobalFlags) -> None:
+    """Render the jury validated against its ground-truth cohort.
+
+    Read-only -- builds the validation cohort from ``state.json`` + the
+    append-only gold-label / AUDITOR stores under it, scores the jury against
+    it, and renders the Fleiss kappa / Brier / ECE / unanimous-pass-on-known-bad
+    catch rate plus the cohort ``n`` and the derived BlockAuthority tier. Under
+    the cohort floor the reducer refuses to score, and the render is the honest
+    "insufficient signal (n=k)" banner -- never a fabricated number. Failures
+    map to the canonical CLI exit codes: UserError (``kind="NotFound"``,
+    ``exit=1``) when no ``state.json`` resolves, ValidationError (``exit=2``) on
+    a schema mismatch.
+    """
+    from eawf.observability.eval.jury_validation import (
+        build_jury_validation_cohort,
+        validate_jury,
+    )
+    from eawf.workflow.evidence._io import load_state
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    try:
+        state = load_state(state_path)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+
+    cohort = build_jury_validation_cohort(state, state_path)
+    # The per-juror ballot store is not yet persisted (the live jury is idle),
+    # so the cohort reduces honest-empty today and the reducer reports the
+    # insufficient-signal banner. The moment a ballot store lands, the cohort's
+    # labelled waves resolve their ballots here.
+    report = validate_jury(cohort, ballots_by_wave={})
+    payload = report.model_dump(mode="json")
+    payload["block_authority"] = _block_authority(report)
+    text = _render_jury_validation(report)
+    emit_json_or_text(payload, text, flags=flags)
+
+
+def _block_authority(report: JuryValidationReport) -> str:
+    """Derive the jury's BlockAuthority tier from a validation report.
+
+    The jury is held ADVISORY (its veto is logged, the close still proceeds)
+    until the validation cohort both scores AND its known-bad catch rate clears
+    the Wilson floor -- the false-clean rate must stay at or below the
+    complement of :data:`_JURY_WILSON_FLOOR`. A starved (insufficient) cohort,
+    or one whose unanimous-pass-on-known-bad rate is too high, stays ADVISORY;
+    only a scored cohort that caught its known-bad waves earns BLOCKING.
+
+    Args:
+        report: The jury-validation report.
+
+    Returns:
+        :data:`_AUTHORITY_BLOCKING` when the cohort scored and its catch rate
+        cleared the floor, else :data:`_AUTHORITY_ADVISORY`.
+    """
+    from eawf.observability.eval.jury_validation import JuryValidationStatus
+
+    if report.status is not JuryValidationStatus.SCORED:
+        return _AUTHORITY_ADVISORY
+    false_clean = report.unanimous_pass_on_known_bad_rate
+    if false_clean is not None and false_clean > 1.0 - _JURY_WILSON_FLOOR:
+        return _AUTHORITY_ADVISORY
+    return _AUTHORITY_BLOCKING
+
+
+def _fmt_metric(value: float | None, *, suffix: str = "") -> str:
+    """Render one validation metric, or the honest dash when it refused to score."""
+    if value is None:
+        return "--"
+    return f"{value:.3f}{suffix}"
+
+
+def _render_jury_validation(report: JuryValidationReport) -> str:
+    """Render the jury-validation report as a plain multi-line summary.
+
+    A scored cohort renders the Fleiss kappa, Brier, ECE, and
+    unanimous-pass-on-known-bad catch rate, the cohort ``n``, and the derived
+    BlockAuthority tier. A cohort under the floor renders the honest
+    "insufficient signal (n=k)" banner: the metric lines stay dashed and the
+    authority stays advisory, never a fabricated number.
+
+    Args:
+        report: The jury-validation report.
+
+    Returns:
+        The human-readable multi-line body.
+    """
+    from eawf.observability.eval.jury_validation import JuryValidationStatus
+
+    authority = _block_authority(report)
+    lines = [
+        f"jury validation: {report.status.value} (n={report.n})",
+    ]
+    if report.status is JuryValidationStatus.INSUFFICIENT:
+        lines.append(f"insufficient signal (n={report.n}) -- no metric is scored yet")
+    catch_rate = report.unanimous_pass_on_known_bad_rate
+    lines.extend(
+        [
+            f"  fleiss kappa     {_fmt_metric(report.fleiss_kappa)}",
+            f"  brier            {_fmt_metric(report.brier)}",
+            f"  ece              {_fmt_metric(report.ece)}",
+            f"  catch (false-clean) {_fmt_metric(catch_rate)} over {report.known_bad_n} known-bad",
+            f"  block authority  {authority}",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _resolve_state_or_emit(flags: GlobalFlags) -> Path | None:

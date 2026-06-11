@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -32,6 +32,9 @@ from textual.widgets import Static
 
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.sigils import chrome
+
+if TYPE_CHECKING:
+    from eawf.observability.eval.jury_validation import JuryValidationReport
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +62,34 @@ class CalibrationSet:
     brier_score: float
     ece: float
     sample_count: int
+
+
+def calibration_set_from_report(report: JuryValidationReport) -> CalibrationSet | None:
+    """Bind a scored jury-validation report to a real :class:`CalibrationSet`.
+
+    The drill surfaces the Brier score + ECE the jury-validation reducer
+    (:func:`~eawf.observability.eval.jury_validation.validate_jury`) computed,
+    so its calibration set IS that report's metrics -- never a fabricated zero.
+    A report that refused to score (``status is INSUFFICIENT``, every numeric
+    field ``None``) yields ``None`` so the drill renders its honest-empty
+    notice rather than reading a number out of a starved cohort.
+
+    Args:
+        report: The jury-validation report from
+            :func:`~eawf.observability.eval.jury_validation.validate_jury`.
+
+    Returns:
+        A :class:`CalibrationSet` carrying the report's Brier + ECE + cohort
+        ``n`` when the report scored, or ``None`` when the cohort refused to
+        score (insufficient signal).
+    """
+    if report.brier is None or report.ece is None:
+        return None
+    return CalibrationSet(
+        brier_score=report.brier,
+        ece=report.ece,
+        sample_count=report.n,
+    )
 
 
 def render_calibration_lines(calibration: CalibrationSet | None) -> tuple[str, ...]:
@@ -171,5 +202,6 @@ __all__ = [
     "NO_CALIBRATION_NOTICE",
     "CalibrationDrillModal",
     "CalibrationSet",
+    "calibration_set_from_report",
     "render_calibration_lines",
 ]

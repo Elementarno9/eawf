@@ -53,7 +53,10 @@ from textual.widgets import Static
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
-from eawf.surfaces.tui.modals.calibration_drill import CalibrationSet
+from eawf.surfaces.tui.modals.calibration_drill import (
+    CalibrationSet,
+    calibration_set_from_report,
+)
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
@@ -767,10 +770,13 @@ class TrustModeScreen(ScopeScreen):
         #: live gate subprocesses) -- it reads the deterministic evidence
         #: store or the pushed fixture only.
         self._evidence_override: tuple[EvidenceRecord, ...] | None = None
-        #: Externally supplied jury calibration set for the calibration drill.
-        #: ``None`` is the COMMON v0.5 path -- the jury is idle, so no graded
-        #: predictions exist and the drill renders honest-empty. A fixture
-        #: pushes a set via :meth:`set_calibration`.
+        #: Externally pushed override for the jury calibration set. ``None``
+        #: means "compute the calibration from the host state on demand" (the
+        #: live path -- :meth:`_current_calibration` scores the jury-validation
+        #: cohort and binds its real Brier + ECE); a non-``None`` value (pushed
+        #: via :meth:`set_calibration`) drives the drill from a fixture without a
+        #: live state. When the live compute finds a starved cohort it yields
+        #: ``None`` and the drill renders honest-empty.
         self._calibration: CalibrationSet | None = None
         #: Externally supplied calibration-readiness tally for the CALIBRATION
         #: READINESS tile. ``None`` means "compute it from the host state on
@@ -920,32 +926,77 @@ class TrustModeScreen(ScopeScreen):
         self.app.push_screen(modal)
 
     def set_calibration(self, calibration: CalibrationSet | None) -> None:
-        """Bind the jury calibration set for the calibration drill.
+        """Pin an explicit jury calibration set, overriding the live compute.
 
-        The jury is idle in v0.5 (no graded predictions land), so the COMMON
-        path leaves this ``None`` and the drill renders honest-empty. A
-        fixture (under test) or the calibration subsystem (once live) pushes
-        a :class:`~eawf.surfaces.tui.modals.calibration_drill.CalibrationSet`
-        here so the drill surfaces the Brier score + ECE.
+        ``None`` clears the override so the drill computes its calibration from
+        the host state on demand (the live path -- :meth:`_current_calibration`
+        scores the jury-validation cohort); a non-``None`` value drives the drill
+        from a fixture without a live state. The common v0.5 path leaves the
+        override ``None``: the live compute then finds a starved cohort and the
+        drill renders honest-empty.
 
         Args:
-            calibration: The jury calibration set, or ``None`` to clear it
-                back to the honest-empty drill.
+            calibration: The jury calibration set to pin, or ``None`` to fall
+                back to the state-derived live compute.
         """
         self._calibration = calibration
+
+    def _current_calibration(self) -> CalibrationSet | None:
+        """Return the calibration set backing the drill (override or live).
+
+        Prefers the externally pinned override (:meth:`set_calibration`); when
+        none is bound, scores the jury-validation cohort from the host state via
+        :func:`~eawf.observability.eval.jury_validation.build_jury_validation_cohort`
+        + :func:`~eawf.observability.eval.jury_validation.validate_jury` and binds
+        its real Brier + ECE through
+        :func:`~eawf.surfaces.tui.modals.calibration_drill.calibration_set_from_report`.
+        A starved cohort (insufficient signal) -- the common v0.5 path, since the
+        per-juror ballot store is not yet persisted -- yields ``None`` so the
+        drill renders honest-empty rather than a fabricated score. A failed /
+        absent store read degrades to ``None`` likewise.
+
+        Returns:
+            The pinned or computed calibration set, or ``None`` when none is
+            pinned and the cohort refused to score.
+        """
+        if self._calibration is not None:
+            return self._calibration
+        state = self._current_state()
+        state_path = self._resolved_state_path()
+        if state is None or state_path is None:
+            return None
+        from eawf.observability.eval.jury_validation import (
+            build_jury_validation_cohort,
+            validate_jury,
+        )
+
+        try:
+            cohort = build_jury_validation_cohort(state, state_path)
+            # The per-juror ballot store is not yet persisted (the live jury is
+            # idle), so the cohort reduces honest-empty today and the report
+            # refuses to score. The moment a ballot store lands, the cohort's
+            # labelled waves resolve their ballots here and the drill surfaces a
+            # real Brier + ECE.
+            report = validate_jury(cohort, ballots_by_wave={})
+        except (OSError, ValueError, TypeError) as exc:
+            logger.debug(f"_current_calibration cohort_read_failed cause={exc!r}")
+            return None
+        return calibration_set_from_report(report)
 
     def action_calibration_drill(self) -> None:
         """Open the jury-calibration drill modal (Brier + ECE).
 
-        Pushes the modal through the App's cap-aware ``push_modal`` (falling
-        back to ``push_screen`` under a bare harness). The binding always
-        resolves -- even with no calibration set bound (the common v0.5 path,
-        the jury is idle) -- so the advertised ``K calibration`` affordance is
-        never dead; the modal then renders its own honest-empty notice.
+        Builds the drill from the live-computed (or pinned) calibration set
+        (:meth:`_current_calibration`) and pushes the modal through the App's
+        cap-aware ``push_modal`` (falling back to ``push_screen`` under a bare
+        harness). The binding always resolves -- even with a starved cohort (the
+        common v0.5 path, the ballot store is not yet persisted) -- so the
+        advertised ``K calibration`` affordance is never dead; the modal then
+        renders its own honest-empty notice.
         """
         from eawf.surfaces.tui.modals.calibration_drill import CalibrationDrillModal
 
-        modal = CalibrationDrillModal(self._calibration)
+        modal = CalibrationDrillModal(self._current_calibration())
         push_modal = getattr(self.app, "push_modal", None)
         if callable(push_modal):
             push_modal(modal)
