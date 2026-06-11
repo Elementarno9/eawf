@@ -6,7 +6,7 @@
             │  wave P01-I01-W01                                                                            │
             │   ≡ overview  ▸ criteria  ⎔ gates  ● evidence  $ runtime                                     │
             │  ╸━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
-            │   in_progress                                                                                │
+            │   ◆ in_progress                                                                              │
             │                                                                                              │
             │  criteria none    gates none    evidence none    runtime — no data                           │
             │                                                                                              │

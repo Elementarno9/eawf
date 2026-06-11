@@ -27,6 +27,7 @@ from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
+    BacklogStatus,
     Confidence,
     DispatchNote,
     EffortBucket,
@@ -60,7 +61,7 @@ from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.surfaces.tui.widgets.sigils import Sigil
+from eawf.surfaces.tui.widgets.sigils import Sigil, status_sigil
 from eawf.workflow.agent_report.rollup import AgentReportRow
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -2096,5 +2097,133 @@ def test_chassis_overview_status_row_is_sigil_prefixed() -> None:
             )
             # The bare status word is sigil-prefixed in the painted overview.
             assert f"{expected_glyph} {status_value}" in rendered
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Residual status cells route through the canonical status_sigil resolver
+# (P30-I16-W01) -- iter / phase / backlog / incident overview rows + the wave
+# status pill all carry the ratified status_sigil glyph, never a bare word.
+# --------------------------------------------------------------------------
+
+
+def test_resolve_detail_carries_status_enum_member_per_card_kind() -> None:
+    """Every card kind carries its lifecycle-status ENUM member, not the word.
+
+    The render path resolves the overview status glyph via the canonical
+    :func:`status_sigil` resolver, which needs the enum member -- so the card
+    must carry it (a bare ``.value`` string would force an ad-hoc string map).
+    """
+    wave_state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(wave_state.waves))
+    iter_id = next(iter(wave_state.iters))
+    phase_id = next(iter(wave_state.phases))
+    wave_card = resolve_detail(wave_state, wave_id)
+    iter_card = resolve_detail(wave_state, iter_id)
+    phase_card = resolve_detail(wave_state, phase_id)
+    assert wave_card.status_enum is wave_state.waves[wave_id].status
+    assert iter_card.status_enum is wave_state.iters[iter_id].status
+    assert phase_card.status_enum is wave_state.phases[phase_id].status
+
+    backlog_state = _load(_BACKLOG)
+    item_id = next(iter(backlog_state.backlog))
+    backlog_card = resolve_detail(backlog_state, item_id)
+    assert backlog_card.status_enum is backlog_state.backlog[item_id].status
+
+    incident_state = _incident_state()
+    incident_card = resolve_detail(incident_state, "INC-001")
+    assert incident_card.status_enum is incident_state.incidents["INC-001"].status
+
+    # The total fallback card (unknown id) carries no status row, so no enum.
+    assert resolve_detail(wave_state, "DOES-NOT-EXIST").status_enum is None
+
+
+def test_detail_overview_status_rows_route_through_status_sigil() -> None:
+    """Iter / phase / backlog overview status rows carry the status_sigil glyph.
+
+    Each non-wave card renders its ``status:`` row directly (no markdown body),
+    so the ratified :func:`status_sigil` glyph -- the SAME mark the roadmap tree
+    paints -- is paint-visible, never a bare StrEnum ``.value`` word alone.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            state = app.state
+            assert state is not None
+            iter_id = next(iter(state.iters))
+            phase_id = next(iter(state.phases))
+            backlog_state = _load(_BACKLOG)
+            backlog_id = next(iter(backlog_state.backlog))
+            cases = [
+                (resolve_detail(state, iter_id), state.iters[iter_id].status),
+                (resolve_detail(state, phase_id), state.phases[phase_id].status),
+                (
+                    resolve_detail(backlog_state, backlog_id),
+                    backlog_state.backlog[backlog_id].status,
+                ),
+            ]
+            for card, status in cases:
+                modal = DetailModal(card)
+                app.push_screen(modal)
+                await pilot.pause()
+                rendered = capture_screen_text(app)
+                glyph = status_sigil(status).render(mode=app.render_mode)
+                assert f"{glyph} {status.value}" in rendered
+                modal.dismiss(None)
+                await pilot.pause()
+
+    asyncio.run(body())
+
+
+def test_detail_incident_status_row_routes_through_status_sigil() -> None:
+    """The incident overview status row carries a real status_sigil glyph.
+
+    ``IncidentStatus`` is the one detail-card status enum the resolver's table
+    does not cover, so the render path folds it onto its nearest covered
+    lifecycle member and routes THAT through :func:`status_sigil` -- the
+    incident card still renders a real glyph, never a bare word.
+    """
+
+    async def body() -> None:
+        state = _incident_state()
+        card = resolve_detail(state, "INC-001")
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.push_screen(DetailModal(card, state=state, entity_id="INC-001"))
+            await settle_screen(pilot)
+            rendered = capture_screen_text(app)
+            # OPEN folds onto the BacklogStatus.OPEN ring (the not-yet-run sigil).
+            glyph = status_sigil(BacklogStatus.OPEN).render(mode=app.render_mode)
+            assert f"{glyph} open" in rendered
+
+    asyncio.run(body())
+
+
+def test_detail_wave_status_pill_routes_through_status_sigil() -> None:
+    """The wave overview status pill prepends its ratified status_sigil glyph.
+
+    I15-W18 added the pill as a bare reverse-video status word; this pins that
+    the pill now leads with the :func:`status_sigil` glyph for the wave status
+    so it matches the rest of the chassis and is no longer a bare word.
+    """
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            state = app.state
+            assert state is not None
+            wave_id = next(iter(state.waves))
+            card = resolve_detail(state, wave_id)
+            app.push_screen(DetailModal(card, state=state, entity_id=wave_id))
+            await settle_screen(pilot)
+            rendered = capture_screen_text(app)
+            status = state.waves[wave_id].status
+            glyph = status_sigil(status).render(mode=app.render_mode)
+            assert f"{glyph} {status.value}" in rendered
 
     asyncio.run(body())
