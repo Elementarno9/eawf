@@ -48,7 +48,7 @@ _VALID_STATE: dict[str, Any] = {
     },
     "current": {
         "project_code": "QR",
-        "subproject_id": None,
+        "track_id": None,
         "phase_id": "P05",
         "iter_id": "P05-I01",
         "active_wave_ids": [],

@@ -67,7 +67,7 @@ def _state_payload(*, active_wave_ids: list[str]) -> dict[str, Any]:
             phase_id: {
                 "id": phase_id,
                 "scope_id": "ABC",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Runtime capture",
                 "status": "active",
                 "iter_ids": [iter_id],

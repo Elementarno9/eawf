@@ -71,7 +71,7 @@ def _build_state(path: Path) -> None:
             "P26": {
                 "id": "P26",
                 "scope_id": "ABC",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "P26",
                 "status": "active",
                 "iter_ids": ["P26-I01"],

@@ -97,7 +97,7 @@ def _state_payload(
             phase_id: {
                 "id": phase_id,
                 "scope_id": "ABC",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "P28",
                 "status": "active",
                 "iter_ids": [iter_id],

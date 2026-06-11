@@ -52,7 +52,8 @@ from eawf.kernel.state.enums import (
     PluginInstallStatus,
     ProjectStatus,
     ScopeKind,
-    SubprojectStatus,
+    TrackKind,
+    TrackStatus,
     Urgency,
     WaveStatus,
     WorktreeStatus,
@@ -247,29 +248,39 @@ class CurrentPointers(_StrictModel):
     """Active lifecycle pointers for the current state."""
 
     project_code: ProjectCodeStr | None = None
-    subproject_id: str | None = None
+    track_id: str | None = None
     phase_id: PhaseIdStr | None = None
     iter_id: IterIdStr | None = None
     active_wave_ids: list[WaveIdStr] = Field(default_factory=list)
     active_session_ids: list[str] = Field(default_factory=list)
 
 
-class Subproject(_StrictModel):
-    """Sub-workstream under a Project."""
+class Track(_StrictModel):
+    """Durable per-workstream vehicle under a Project.
+
+    A Track is the lifecycle vehicle a Project hangs scoped Goals and
+    Outcomes off (e.g. a quant-research strategy, an ML model, a
+    reverse-engineering target). Its :attr:`kind` is a closed
+    :class:`~eawf.kernel.state.enums.TrackKind` so an unknown kind fails as a
+    :class:`pydantic.ValidationError` at the ingestion boundary rather than
+    flowing downstream as a free string; the kind selects which
+    :class:`~eawf.platform.profiles.models.TrackKindSpec` parametrizes the
+    track's noun, status lifecycle, outcome template, and overview view.
+    """
 
     id: ProjectCodeStr
     code: ProjectCodeStr
     slug: str
     title: str
-    kind: str
+    kind: TrackKind
     domains: list[str]
-    status: SubprojectStatus
+    status: TrackStatus
     owner: str | None = None
     goal_ids: list[str] = Field(default_factory=list)
 
 
 class Goal(_StrictModel):
-    """Goal under a project or subproject."""
+    """Goal under a project or track."""
 
     id: IdStr
     scope_id: str
@@ -312,7 +323,7 @@ class Phase(_DescribedEntity):
 
     id: PhaseIdStr
     scope_id: str
-    subproject_id: str | None = None
+    track_id: str | None = None
     title: Annotated[str, Field(min_length=1, max_length=72)]
     description: Annotated[str, Field(max_length=500)] | None = None
     status: PhaseStatus
@@ -1117,13 +1128,13 @@ class FleetRun(_StrictModel):
 class State(_StrictModel):
     """Top-level eawf state document.
 
-    ``schema_version`` accepts the full ``"1.0"`` through ``"1.9"`` range so
+    ``schema_version`` accepts the full ``"1.0"`` through ``"1.10"`` range so
     an on-disk state written before any bump still re-validates after the
     model advances — the migrate chain rewrites the version string in place,
     but a read of an un-migrated state must never reject. The accepted set
     drives the migrate guard's model-supported max, so the literals move in
     lockstep with the migration steps (``v1_0_to_v1_1`` through
-    ``v1_8_to_v1_9``). The ``1.5`` edge is purely additive — it registers
+    ``v1_9_to_v1_10``). The ``1.5`` edge is purely additive — it registers
     :attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum
     value no existing state row references, so no historical fact changes.
     The ``1.6`` edge is likewise purely additive — it adds the top-level
@@ -1147,9 +1158,18 @@ class State(_StrictModel):
     :attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``
     (no active auto-drain loop), so a state written before the field existed
     re-validates with it defaulted and no historical fact changes.
+
+    The ``1.10`` edge is a rename, not an additive field: it renames the
+    top-level ``subprojects`` key to :attr:`tracks` and the cursor field
+    ``current.subproject_id`` to :attr:`CurrentPointers.track_id`. An
+    un-migrated state carrying the old key names rejects under
+    ``extra="forbid"``, so the ``v1_9_to_v1_10`` migrate step rewrites both
+    names before load.
     """
 
-    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"]
+    schema_version: Literal[
+        "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "1.10"
+    ]
     scope_kind: ScopeKind
     urn: UrnStr
     updated_at: UtcDatetime
@@ -1159,7 +1179,7 @@ class State(_StrictModel):
     health: Health | None = None
     dispatch_paused: bool = False
     fleet_run: FleetRun | None = None
-    subprojects: dict[str, Subproject] | None = None
+    tracks: dict[str, Track] | None = None
     goals: dict[str, Goal] | None = None
     outcomes: dict[str, Outcome] | None = None
     phases: dict[str, Phase]

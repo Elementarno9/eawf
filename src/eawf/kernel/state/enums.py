@@ -15,11 +15,36 @@ class ProjectStatus(StrEnum):
     RETIRED = "retired"
 
 
-class SubprojectStatus(StrEnum):
+class TrackStatus(StrEnum):
     ACTIVE = "active"
     PLANNED = "planned"
     DEFERRED = "deferred"
     RETIRED = "retired"
+
+
+class TrackKind(StrEnum):
+    """Closed kind taxonomy for a :class:`~eawf.kernel.state.models.Track`.
+
+    A Track is the durable per-workstream vehicle under a Project; its
+    ``kind`` selects which :class:`~eawf.platform.profiles.models.TrackKindSpec`
+    parametrizes the noun, status lifecycle, outcome template, and overview
+    view the track surfaces. The closed set fails an unknown kind as a
+    :class:`pydantic.ValidationError` at the ingestion boundary rather than
+    letting a free-string typo flow downstream.
+
+    Values:
+        STRATEGY: A quant-research trading strategy track.
+        MODEL: An ML model-training track.
+        TARGET: A reverse-engineering target track.
+        FEATURE: A product / apps feature track.
+        SERVICE: An infrastructure service track.
+    """
+
+    STRATEGY = "strategy"
+    MODEL = "model"
+    TARGET = "target"
+    FEATURE = "feature"
+    SERVICE = "service"
 
 
 class GoalStatus(StrEnum):

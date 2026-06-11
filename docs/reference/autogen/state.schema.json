@@ -790,7 +790,7 @@
           "default": null,
           "title": "Project Code"
         },
-        "subproject_id": {
+        "track_id": {
           "anyOf": [
             {
               "type": "string"
@@ -800,7 +800,7 @@
             }
           ],
           "default": null,
-          "title": "Subproject Id"
+          "title": "Track Id"
         }
       },
       "title": "CurrentPointers",
@@ -1071,6 +1071,194 @@
       "title": "EstimateSummary",
       "type": "object"
     },
+    "FleetCounters": {
+      "additionalProperties": false,
+      "description": "Running tallies the fleet auto-drain loop accumulates.\n\nAttributes:\n    claimed: Total waves the loop has claimed across the run.\n    dispatched: Total waves the loop has dispatched across the run.\n    closed: Total lanes that closed clean across the run.\n    forked: Total lanes that forked (failed / re-planned) across the run.\n    rounds: Number of frontier-advance rounds the loop has run.\n    clean_rounds: Consecutive rounds with zero forks -- the convergence\n        counter the ``kclean`` criterion reads. Reset to zero on any fork.",
+      "properties": {
+        "claimed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Claimed",
+          "type": "integer"
+        },
+        "clean_rounds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Clean Rounds",
+          "type": "integer"
+        },
+        "closed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Closed",
+          "type": "integer"
+        },
+        "dispatched": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Dispatched",
+          "type": "integer"
+        },
+        "forked": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Forked",
+          "type": "integer"
+        },
+        "rounds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Rounds",
+          "type": "integer"
+        }
+      },
+      "title": "FleetCounters",
+      "type": "object"
+    },
+    "FleetLane": {
+      "additionalProperties": false,
+      "description": "One in-flight dispatch slot in the fleet auto-drain loop.\n\nA lane binds a claimed + dispatched wave to its dispatch session so the\nloop can watch it to completion and free the slot for the next frontier\nwave. The loop holds at most ``concurrency`` lanes at once.\n\nThe ``(wave_id, attempt)`` pair plus ``pgid`` form the live per-lane\nprocess registry that the kill (DL-3) and reattach (DL-8) paths read: a\nlane resolves to a real OS process group rather than a bare label. A lane\nwhose spawn returned no pid carries ``pgid=None`` and is reported\n``killable=False`` -- the registry never holds a pid the OS does not own.\n\nAttributes:\n    wave_id: ``W<NN>`` wave the lane is driving.\n    attempt: 1-based dispatch attempt the lane is driving -- the second\n        half of the ``(wave_id, attempt)`` registry key so a re-dispatch\n        of the same wave registers a distinct lane.\n    session_id: Executor session id the dispatch registered for the\n        wave, or ``None`` on a plan-only / stateless dispatch.\n    pgid: Process-group id of the spawned child (its own group leader,\n        so the pgid equals the child pid), or ``None`` when the spawn\n        produced no subprocess -- a ``None`` pgid marks the lane\n        unkillable rather than recording a fabricated pid.\n    dispatched_at: When the lane's dispatch was issued.",
+      "properties": {
+        "attempt": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "dispatched_at": {
+          "format": "date-time",
+          "title": "Dispatched At",
+          "type": "string"
+        },
+        "pgid": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pgid"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Id"
+        },
+        "wave_id": {
+          "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+          "title": "Wave Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "wave_id",
+        "dispatched_at"
+      ],
+      "title": "FleetLane",
+      "type": "object"
+    },
+    "FleetRun": {
+      "additionalProperties": false,
+      "description": "Daemon-owned state of the fleet auto-drain loop.\n\nPersisted as the optional top-level :attr:`State.fleet_run` field\n(default ``None`` -- no active run) so a state written before this field\nexisted re-validates unchanged. The loop runner\n(:mod:`eawf.runtime.daemon.methods.fleet`) is the only mutator; the daemon\ncanonical state writer persists every run-state transition, so the loop\nnever writes ``state.json`` directly.\n\nAttributes:\n    run_state: The closed :class:`FleetRunState` the loop is in.\n    concurrency: Maximum lanes the loop holds at once (the drain width).\n    frontier: Ready ``W<NN>`` wave ids still queued to claim, in claim\n        order. The loop pops from the head as lanes free.\n    lanes: In-flight dispatch slots, keyed by wave id.\n    counters: Running tallies for the run.\n    convergence: Convergence mode -- ``drain`` (stop only when the\n        frontier empties) or ``kclean`` (stop after K clean rounds).\n    kclean_k: K threshold for the ``kclean`` convergence mode -- the\n        number of consecutive clean rounds that ends the run. Ignored\n        under ``drain``.\n    terminal_reason: Why the run reached ``DONE``; ``None`` until then.\n    armed_at: When the run was armed.",
+      "properties": {
+        "armed_at": {
+          "format": "date-time",
+          "title": "Armed At",
+          "type": "string"
+        },
+        "concurrency": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Concurrency",
+          "type": "integer"
+        },
+        "convergence": {
+          "default": "drain",
+          "enum": [
+            "drain",
+            "kclean"
+          ],
+          "title": "Convergence",
+          "type": "string"
+        },
+        "counters": {
+          "$ref": "#/$defs/FleetCounters"
+        },
+        "frontier": {
+          "items": {
+            "pattern": "^P\\d{2,}-I\\d{2,}-W\\d{2,}$",
+            "type": "string"
+          },
+          "title": "Frontier",
+          "type": "array"
+        },
+        "kclean_k": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Kclean K",
+          "type": "integer"
+        },
+        "lanes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FleetLane"
+          },
+          "title": "Lanes",
+          "type": "object"
+        },
+        "run_state": {
+          "$ref": "#/$defs/FleetRunState",
+          "default": "idle"
+        },
+        "terminal_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FleetTerminalReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "armed_at"
+      ],
+      "title": "FleetRun",
+      "type": "object"
+    },
+    "FleetRunState": {
+      "description": "Run-state of the daemon-owned fleet auto-drain loop.\n\nThe closed state machine the loop advances through:\n\n- ``IDLE`` -- armed but holding (e.g. ``state.dispatch_paused`` is set on\n  arm, so no wave is claimed); the loop has not begun draining.\n- ``DRAINING`` -- actively claiming + dispatching the ready frontier into\n  lanes up to the concurrency cap, advancing as lanes free.\n- ``PAUSED`` -- an operator pause-all stopped further claims; in-flight\n  lanes are left intact and a resume returns the run to ``DRAINING``.\n- ``HALTED`` -- a halt-all blocked new claims but lets in-flight lanes\n  finish; distinct from a kill-all (which reaps in-flight work).\n- ``DONE`` -- a terminal stop (frontier drained empty, or a convergence\n  criterion such as K consecutive clean rounds was met).",
+      "enum": [
+        "idle",
+        "draining",
+        "paused",
+        "halted",
+        "done"
+      ],
+      "title": "FleetRunState",
+      "type": "string"
+    },
+    "FleetTerminalReason": {
+      "description": "Why a :class:`FleetRun` reached :data:`FleetRunState.DONE`.\n\n- ``drained`` -- the ready frontier emptied, so no further wave can be\n  claimed (the drain-to-empty stop).\n- ``converged`` -- a convergence criterion (e.g. ``kclean`` -- K\n  consecutive rounds with zero progress) was met before the frontier\n  emptied, so the loop stopped early.",
+      "enum": [
+        "drained",
+        "converged"
+      ],
+      "title": "FleetTerminalReason",
+      "type": "string"
+    },
     "GateSpec": {
       "additionalProperties": false,
       "description": "One gate row that scores a :class:`CriterionSpec` at some cadence.\n\nThe ``kind`` field names the check family\n(``command_exit_zero``, ``regex_match``, ``schema_validate``, etc.)\nand ``args`` carries the per-kind arguments. The spec layer does\nnot validate the full ``args`` shape — that is the gate-runner\nsubsystem's responsibility (W08 lands per-kind args validators).\nThe one exception is the ``argv`` vector on argv-bearing kinds\n(``command_exit_zero`` today): an\n``@model_validator`` routes ``args[\"argv\"]`` through the L0\nargv-policy at construction time so a malformed or shell-deny\nargv cannot reach the spec layer regardless of which builder\nconstructed the row. The same policy fires again at spec-promote\npersistence via\n:func:`eawf.kernel.spec.promotion.validate_argv_gates` — defense\nin depth across the parse-time and persistence-time seams.\n\n``timeout_s`` is ``None`` by default so a kind that has a class\ndefault (e.g. command_exit_zero defaults to 30s) does not need an\nexplicit override.",
@@ -1147,7 +1335,7 @@
     },
     "Goal": {
       "additionalProperties": false,
-      "description": "Goal under a project or subproject.",
+      "description": "Goal under a project or track.",
       "properties": {
         "closed_at": {
           "anyOf": [
@@ -2266,7 +2454,13 @@
         "status": {
           "$ref": "#/$defs/PhaseStatus"
         },
-        "subproject_id": {
+        "title": {
+          "maxLength": 72,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "track_id": {
           "anyOf": [
             {
               "type": "string"
@@ -2276,13 +2470,7 @@
             }
           ],
           "default": null,
-          "title": "Subproject Id"
-        },
-        "title": {
-          "maxLength": 72,
-          "minLength": 1,
-          "title": "Title",
-          "type": "string"
+          "title": "Track Id"
         }
       },
       "required": [
@@ -2965,9 +3153,9 @@
       "title": "SessionAttempt",
       "type": "object"
     },
-    "Subproject": {
+    "Track": {
       "additionalProperties": false,
-      "description": "Sub-workstream under a Project.",
+      "description": "Durable per-workstream vehicle under a Project.\n\nA Track is the lifecycle vehicle a Project hangs scoped Goals and\nOutcomes off (e.g. a quant-research strategy, an ML model, a\nreverse-engineering target). Its :attr:`kind` is a closed\n:class:`~eawf.kernel.state.enums.TrackKind` so an unknown kind fails as a\n:class:`pydantic.ValidationError` at the ingestion boundary rather than\nflowing downstream as a free string; the kind selects which\n:class:`~eawf.platform.profiles.models.TrackKindSpec` parametrizes the\ntrack's noun, status lifecycle, outcome template, and overview view.",
       "properties": {
         "code": {
           "pattern": "^[A-Z][A-Z0-9_-]{1,15}$",
@@ -2994,8 +3182,7 @@
           "type": "string"
         },
         "kind": {
-          "title": "Kind",
-          "type": "string"
+          "$ref": "#/$defs/TrackKind"
         },
         "owner": {
           "anyOf": [
@@ -3014,7 +3201,7 @@
           "type": "string"
         },
         "status": {
-          "$ref": "#/$defs/SubprojectStatus"
+          "$ref": "#/$defs/TrackStatus"
         },
         "title": {
           "title": "Title",
@@ -3030,17 +3217,29 @@
         "domains",
         "status"
       ],
-      "title": "Subproject",
+      "title": "Track",
       "type": "object"
     },
-    "SubprojectStatus": {
+    "TrackKind": {
+      "description": "Closed kind taxonomy for a :class:`~eawf.kernel.state.models.Track`.\n\nA Track is the durable per-workstream vehicle under a Project; its\n``kind`` selects which :class:`~eawf.platform.profiles.models.TrackKindSpec`\nparametrizes the noun, status lifecycle, outcome template, and overview\nview the track surfaces. The closed set fails an unknown kind as a\n:class:`pydantic.ValidationError` at the ingestion boundary rather than\nletting a free-string typo flow downstream.\n\nValues:\n    STRATEGY: A quant-research trading strategy track.\n    MODEL: An ML model-training track.\n    TARGET: A reverse-engineering target track.\n    FEATURE: A product / apps feature track.\n    SERVICE: An infrastructure service track.",
+      "enum": [
+        "strategy",
+        "model",
+        "target",
+        "feature",
+        "service"
+      ],
+      "title": "TrackKind",
+      "type": "string"
+    },
+    "TrackStatus": {
       "enum": [
         "active",
         "planned",
         "deferred",
         "retired"
       ],
-      "title": "SubprojectStatus",
+      "title": "TrackStatus",
       "type": "string"
     },
     "Urgency": {
@@ -3500,7 +3699,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Top-level eawf state document.\n\n``schema_version`` accepts the full ``\"1.0\"`` through ``\"1.9\"`` range so\nan on-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in place,\nbut a read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so the literals move in\nlockstep with the migration steps (``v1_0_to_v1_1`` through\n``v1_8_to_v1_9``). The ``1.5`` edge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes. The ``1.7`` edge retypes\n:attr:`Wave.success_criteria` from ``list[str]`` to\n``list[CriterionSpec]`` and backfills every legacy string into a\ngrandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an\nun-migrated state with bare strings would reject the typed field — the\nmigrate chain rewrites the rows before load. The ``1.8`` edge is purely\nadditive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a\nstate written before the bump re-validates with the list defaulted and no\nhistorical fact changes; the migrate chain backfills ``gates: []`` on every\nwave for an explicit on-disk row. The ``1.9`` edge adds the optional\n:attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills\n``runtime_baseline: None`` on every wave for an explicit on-disk row.\n``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults\nto ``None`` until the runtime.capture daemon RPC records fresh counters.",
+  "description": "Top-level eawf state document.\n\n``schema_version`` accepts the full ``\"1.0\"`` through ``\"1.10\"`` range so\nan on-disk state written before any bump still re-validates after the\nmodel advances — the migrate chain rewrites the version string in place,\nbut a read of an un-migrated state must never reject. The accepted set\ndrives the migrate guard's model-supported max, so the literals move in\nlockstep with the migration steps (``v1_0_to_v1_1`` through\n``v1_9_to_v1_10``). The ``1.5`` edge is purely additive — it registers\n:attr:`~eawf.kernel.state.enums.ArtifactKind.MATH_EXPLAINER`, an enum\nvalue no existing state row references, so no historical fact changes.\nThe ``1.6`` edge is likewise purely additive — it adds the top-level\n:attr:`dispatch_paused` flag (default ``False``), so a state written\nbefore the bump re-validates with the flag defaulted and no historical\nfact changes. The ``1.7`` edge retypes\n:attr:`Wave.success_criteria` from ``list[str]`` to\n``list[CriterionSpec]`` and backfills every legacy string into a\ngrandfathered :class:`~eawf.kernel.spec.common.CriterionSpec` row, so an\nun-migrated state with bare strings would reject the typed field — the\nmigrate chain rewrites the rows before load. The ``1.8`` edge is purely\nadditive — it adds the typed :attr:`Wave.gates` list (default ``[]``), so a\nstate written before the bump re-validates with the list defaulted and no\nhistorical fact changes; the migrate chain backfills ``gates: []`` on every\nwave for an explicit on-disk row. The ``1.9`` edge adds the optional\n:attr:`Wave.runtime_baseline` claim-time telemetry baseline; it backfills\n``runtime_baseline: None`` on every wave for an explicit on-disk row.\n``Wave.runtime_latest`` is likewise additive on top of ``1.9`` and defaults\nto ``None`` until the runtime.capture daemon RPC records fresh counters.\n\n:attr:`fleet_run` is additive on top of ``1.9`` and defaults to ``None``\n(no active auto-drain loop), so a state written before the field existed\nre-validates with it defaulted and no historical fact changes.\n\nThe ``1.10`` edge is a rename, not an additive field: it renames the\ntop-level ``subprojects`` key to :attr:`tracks` and the cursor field\n``current.subproject_id`` to :attr:`CurrentPointers.track_id`. An\nun-migrated state carrying the old key names rejects under\n``extra=\"forbid\"``, so the ``v1_9_to_v1_10`` migrate step rewrites both\nnames before load.",
   "properties": {
     "actuals": {
       "anyOf": [
@@ -3605,6 +3804,17 @@
       ],
       "default": null,
       "title": "Estimates"
+    },
+    "fleet_run": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FleetRun"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "goals": {
       "anyOf": [
@@ -3799,7 +4009,8 @@
         "1.6",
         "1.7",
         "1.8",
-        "1.9"
+        "1.9",
+        "1.10"
       ],
       "title": "Schema Version",
       "type": "string"
@@ -3807,11 +4018,11 @@
     "scope_kind": {
       "$ref": "#/$defs/ScopeKind"
     },
-    "subprojects": {
+    "tracks": {
       "anyOf": [
         {
           "additionalProperties": {
-            "$ref": "#/$defs/Subproject"
+            "$ref": "#/$defs/Track"
           },
           "type": "object"
         },
@@ -3820,7 +4031,7 @@
         }
       ],
       "default": null,
-      "title": "Subprojects"
+      "title": "Tracks"
     },
     "updated_at": {
       "format": "date-time",

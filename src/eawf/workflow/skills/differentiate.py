@@ -4,7 +4,7 @@ Implements the ``/differentiate`` algorithm per
 ``docs/architecture/workflow.md``:
 
 1. Probe instruments via ``EA_INSTRUMENT_PROBE``.
-2. Resolve scope: workspace, repo, project, subproject, phase, or
+2. Resolve scope: workspace, repo, project, track, phase, or
    explicit user request.
 3. Inspect existing Eä agents, profile agents, runtime agents, languages,
    frameworks, architecture, tests, docs, and recurring work types.

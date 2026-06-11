@@ -30,6 +30,7 @@ from eawf.kernel.migrations import v1_5_to_v1_6 as _v1_5_to_v1_6  # noqa: F401
 from eawf.kernel.migrations import v1_6_to_v1_7 as _v1_6_to_v1_7  # noqa: F401
 from eawf.kernel.migrations import v1_7_to_v1_8 as _v1_7_to_v1_8  # noqa: F401
 from eawf.kernel.migrations import v1_8_to_v1_9 as _v1_8_to_v1_9  # noqa: F401
+from eawf.kernel.migrations import v1_9_to_v1_10 as _v1_9_to_v1_10  # noqa: F401
 from eawf.kernel.migrations._base import (
     DEFAULT_REGISTRY,
     EventAnchoredMigration,

@@ -75,7 +75,7 @@ def test_parse_rejects_malformed(raw: str) -> None:
         "urn:eawf:v1:outcome:QR/O1",
         "urn:eawf:v1:backlog:QR/B1",
         "urn:eawf:v1:flow:QR/F1",
-        "urn:eawf:v1:subproject:QR/SP1",
+        "urn:eawf:v1:track:QR/SP1",
         "urn:eawf:v1:agent_report:QR/executor/W01",
     ],
 )
@@ -84,7 +84,7 @@ def test_parse_rejects_non_urn_kinds(raw: str) -> None:
 
     The 10 supplementary entities (Incident, Goal, Outcome, BacklogItem,
     EstimateSummary, ActualSummary, WorktreeRecord, SandboxPolicy, Flow,
-    Subproject) are addressable via composite key, not via dedicated URN.
+    Track) are addressable via composite key, not via dedicated URN.
     The underscored ``agent_report`` token is also rejected — canonical
     form is single-word ``report`` per operator D1 2026-05-16.
     """

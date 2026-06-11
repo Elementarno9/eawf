@@ -20,6 +20,7 @@ Full schema: [`state.schema.json`](state.schema.json)
 | `decisions` | no |
 | `dispatch_paused` | no |
 | `estimates` | no |
+| `fleet_run` | no |
 | `goals` | no |
 | `health` | no |
 | `hypotheses` | no |
@@ -37,7 +38,7 @@ Full schema: [`state.schema.json`](state.schema.json)
 | `sandbox_policies` | no |
 | `schema_version` | yes |
 | `scope_kind` | yes |
-| `subprojects` | no |
+| `tracks` | no |
 | `updated_at` | yes |
 | `urn` | yes |
 | `waves` | yes |

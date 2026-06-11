@@ -77,7 +77,7 @@ def _state_v1_8(*, include_runtime_baseline: bool = False) -> dict[str, Any]:
         },
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P00",
             "iter_id": "P00-I01",
             "active_wave_ids": [],
@@ -89,7 +89,7 @@ def _state_v1_8(*, include_runtime_baseline: bool = False) -> dict[str, Any]:
             "P00": {
                 "id": "P00",
                 "scope_id": "QR",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Phase zero",
                 "status": "active",
                 "iter_ids": ["P00-I01"],

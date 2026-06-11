@@ -124,7 +124,7 @@ def test_project_init_existing_state_exits_3(workspace: Path) -> None:
     assert "already exists" in res2.stdout
 
 
-# ---- subproject add/switch --------------------------------------------------
+# ---- track add/switch -------------------------------------------------------
 
 
 def _init_project(workspace: Path) -> None:
@@ -135,13 +135,13 @@ def _init_project(workspace: Path) -> None:
     assert res.exit_code == 0
 
 
-def test_subproject_add_then_switch(workspace: Path) -> None:
+def test_track_add_then_switch(workspace: Path) -> None:
     _init_project(workspace)
     res = runner.invoke(
         app,
         [
             "--json",
-            "subproject",
+            "track",
             "add",
             "COLLAR",
             "--kind",
@@ -154,19 +154,29 @@ def test_subproject_add_then_switch(workspace: Path) -> None:
     )
     assert res.exit_code == 0, res.stdout
     payload = json.loads(res.stdout)
-    assert payload["subproject"] == "COLLAR"
+    assert payload["track"] == "COLLAR"
     state = _read_state(workspace)
-    assert "COLLAR" in state["subprojects"]  # type: ignore[index]
+    assert "COLLAR" in state["tracks"]  # type: ignore[index]
 
-    res = runner.invoke(app, ["--json", "subproject", "switch", "COLLAR"])
+    res = runner.invoke(app, ["--json", "track", "switch", "COLLAR"])
     assert res.exit_code == 0, res.stdout
     state = _read_state(workspace)
-    assert state["current"]["subproject_id"] == "COLLAR"  # type: ignore[index]
+    assert state["current"]["track_id"] == "COLLAR"  # type: ignore[index]
 
 
-def test_subproject_switch_unknown_exits_3(workspace: Path) -> None:
+def test_track_add_unknown_kind_exits_nonzero(workspace: Path) -> None:
     _init_project(workspace)
-    res = runner.invoke(app, ["subproject", "switch", "GHOST"])
+    res = runner.invoke(
+        app,
+        ["track", "add", "COLLAR", "--kind", "research-line", "--title", "Collar"],
+    )
+    assert res.exit_code != 0
+    assert "unknown track kind" in res.stdout
+
+
+def test_track_switch_unknown_exits_3(workspace: Path) -> None:
+    _init_project(workspace)
+    res = runner.invoke(app, ["track", "switch", "GHOST"])
     assert res.exit_code == 1
     assert "unknown" in res.stdout
 

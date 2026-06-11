@@ -134,7 +134,7 @@ def _phase(phase_id: str = "P01", *, audit_id: str | None = None) -> Phase:
     return Phase(
         id=phase_id,
         scope_id="QR",
-        subproject_id=None,
+        track_id=None,
         title="Phase",
         status=PhaseStatus.ACTIVE,
         iter_ids=[],
@@ -489,7 +489,7 @@ def test_format_text_includes_project_and_current() -> None:
         "project": {"code": "QR", "title": "Quant Research", "status": "active"},
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P01",
             "iter_id": "P01-I01",
             "active_wave_ids": ["P01-I01-W01"],
@@ -509,7 +509,7 @@ def test_format_text_handles_no_project() -> None:
         "project": None,
         "current": {
             "project_code": None,
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

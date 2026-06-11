@@ -90,9 +90,9 @@ class SideEffectRow:
 COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     # Strict state / envelope validator.
     CommandRow("validate", "eawf.surfaces.cli.commands.validate", "validate", None),
-    # Lifecycle nouns (project / subproject / phase / iter / wave).
+    # Lifecycle nouns (project / track / phase / iter / wave).
     GroupRow("project", "eawf.surfaces.cli.commands.lifecycle", "project_app"),
-    GroupRow("subproject", "eawf.surfaces.cli.commands.lifecycle", "subproject_app"),
+    GroupRow("track", "eawf.surfaces.cli.commands.lifecycle", "track_app"),
     GroupRow("phase", "eawf.surfaces.cli.commands.lifecycle", "phase_app"),
     GroupRow("iter", "eawf.surfaces.cli.commands.lifecycle", "iter_app"),
     GroupRow("wave", "eawf.surfaces.cli.commands.lifecycle", "wave_app"),

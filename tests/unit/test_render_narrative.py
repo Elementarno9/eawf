@@ -35,7 +35,7 @@ def _state_payload() -> dict[str, Any]:
         },
         "current": {
             "project_code": "ZZ",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -46,7 +46,7 @@ def _state_payload() -> dict[str, Any]:
             "P28": {
                 "id": "P28",
                 "scope_id": "ZZ",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Render narrative",
                 "description": "Explain release surfaces.",
                 "status": "closed",

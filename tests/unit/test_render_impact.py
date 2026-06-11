@@ -26,7 +26,7 @@ def _base_state() -> dict[str, Any]:
         },
         "current": {
             "project_code": "ZZ",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -37,7 +37,7 @@ def _base_state() -> dict[str, Any]:
             "P00": {
                 "id": "P00",
                 "scope_id": "ZZ",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "p0",
                 "status": "active",
                 "iter_ids": ["P00-I01"],

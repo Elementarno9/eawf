@@ -82,7 +82,7 @@ def _state() -> State:
             },
             "current": {
                 "project_code": "QR",
-                "subproject_id": None,
+                "track_id": None,
                 "phase_id": "P01",
                 "iter_id": "P01-I01",
                 "active_wave_ids": [],
@@ -93,7 +93,7 @@ def _state() -> State:
                 "P01": {
                     "id": "P01",
                     "scope_id": "QR",
-                    "subproject_id": None,
+                    "track_id": None,
                     "title": "Phase one",
                     "status": "active",
                     "iter_ids": ["P01-I01"],

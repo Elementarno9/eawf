@@ -26,7 +26,7 @@ def _base_state() -> dict[str, Any]:
         },
         "current": {
             "project_code": "ZZ",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -47,7 +47,7 @@ def _phase(phase_id: str, *, status: str = "closed", audit_id: str | None = None
     return {
         "id": phase_id,
         "scope_id": "ZZ",
-        "subproject_id": None,
+        "track_id": None,
         "title": f"phase {phase_id}",
         "status": status,
         "iter_ids": [],

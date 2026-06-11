@@ -41,7 +41,7 @@ def _write_minimal_state(workspace: Path) -> Path:
         },
         "current": {
             "project_code": "ZZ",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -175,7 +175,7 @@ def test_doctor_drift_clean_when_no_closed_waves(
         },
         "current": {
             "project_code": "ZZ",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

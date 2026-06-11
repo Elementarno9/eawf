@@ -84,7 +84,7 @@ def test_format_text_renders_uninitialised_status_when_title_empty() -> None:
         "project": {"code": "REPRO", "title": "", "status": "uninitialised"},
         "current": {
             "project_code": "REPRO",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -102,7 +102,7 @@ def test_format_text_prefers_title_when_present() -> None:
         "project": {"code": "REPRO", "title": "Repro Project", "status": "uninitialised"},
         "current": {
             "project_code": "REPRO",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

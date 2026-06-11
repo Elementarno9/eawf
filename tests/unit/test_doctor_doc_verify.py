@@ -39,7 +39,7 @@ def _make_state(
         },
         "current": {
             "project_code": "ZZ",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -61,7 +61,7 @@ def _phase(phase_id: str, status: str = "closed", audit_id: str | None = "A01") 
     return {
         "id": phase_id,
         "scope_id": "ZZ",
-        "subproject_id": None,
+        "track_id": None,
         "title": f"Phase {phase_id}",
         "status": status,
         "iter_ids": [],
@@ -199,7 +199,7 @@ def test_doc_verify_cli_strict_exits_4_on_drift(tmp_path: Path) -> None:
                 },
                 "current": {
                     "project_code": "ZZ",
-                    "subproject_id": None,
+                    "track_id": None,
                     "phase_id": None,
                     "iter_id": None,
                     "active_wave_ids": [],

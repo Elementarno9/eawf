@@ -6,7 +6,7 @@ modules (``lifecycle_phase`` / ``lifecycle_iter`` / ``lifecycle_wave`` /
 ``lifecycle_wave_read``). These tests pin the exact verb set each lifecycle
 Typer app carries so the split cannot silently drop a command, and assert
 the public re-export surface (``phase_app`` / ``project_app`` /
-``subproject_app`` / ``iter_app`` / ``wave_app`` / ``wave_budget_app`` plus
+``track_app`` / ``iter_app`` / ``wave_app`` / ``wave_budget_app`` plus
 the ``_run_mutation`` / ``_load_state_readonly`` / ``_compute_iter_bump_hints``
 helpers) still resolves from the shim module.
 """
@@ -22,7 +22,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
     iter_app,
     phase_app,
     project_app,
-    subproject_app,
+    track_app,
     wave_app,
     wave_budget_app,
 )
@@ -32,7 +32,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
 # verbs to ``wave_app`` on import via ``app.py``; those are NOT owned by this
 # wave, so the wave assertion checks containment (superset), not equality.
 EXPECTED_PROJECT_VERBS = {"init"}
-EXPECTED_SUBPROJECT_VERBS = {"add", "switch"}
+EXPECTED_TRACK_VERBS = {"add", "switch"}
 EXPECTED_PHASE_VERBS = {"open", "close", "activate", "reopen", "prepare-close", "retro"}
 EXPECTED_ITER_VERBS = {"activate", "open", "close", "plan", "candidate-tag"}
 EXPECTED_WAVE_VERBS = {
@@ -66,8 +66,8 @@ def test_project_app_verb_inventory() -> None:
     assert _verb_names(project_app) == EXPECTED_PROJECT_VERBS
 
 
-def test_subproject_app_verb_inventory() -> None:
-    assert _verb_names(subproject_app) == EXPECTED_SUBPROJECT_VERBS
+def test_track_app_verb_inventory() -> None:
+    assert _verb_names(track_app) == EXPECTED_TRACK_VERBS
 
 
 def test_phase_app_verb_inventory() -> None:

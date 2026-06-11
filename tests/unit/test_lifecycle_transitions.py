@@ -33,6 +33,7 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     ProjectStatus,
     ScopeKind,
+    TrackKind,
     WaveStatus,
 )
 from eawf.kernel.state.models import (
@@ -48,7 +49,7 @@ from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     activate_iter,
     activate_phase,
-    add_subproject,
+    add_track,
     archive_phase,
     claim_wave,
     close_iter,
@@ -66,7 +67,7 @@ from eawf.workflow.lifecycle.transitions import (
     reopen_phase,
     set_wave_deps,
     start_wave,
-    switch_subproject,
+    switch_track,
 )
 from tests.conftest import make_intent
 
@@ -127,43 +128,43 @@ def _add_ship_gate_audit(
     )
 
 
-# ---- Subproject -------------------------------------------------------------
+# ---- Track ------------------------------------------------------------------
 
 
-def test_add_subproject_happy() -> None:
+def test_add_track_happy() -> None:
     state = _empty_state()
-    sub = add_subproject(state, code="COLLAR", kind="strategy", title="Collar")
-    assert sub.code == "COLLAR"
-    assert state.subprojects is not None
-    assert "COLLAR" in state.subprojects
+    track = add_track(state, code="COLLAR", kind=TrackKind.STRATEGY, title="Collar")
+    assert track.code == "COLLAR"
+    assert state.tracks is not None
+    assert "COLLAR" in state.tracks
 
 
-def test_add_subproject_duplicate_raises() -> None:
+def test_add_track_duplicate_raises() -> None:
     state = _empty_state()
-    add_subproject(state, code="COLLAR", kind="strategy", title="Collar")
+    add_track(state, code="COLLAR", kind=TrackKind.STRATEGY, title="Collar")
     with pytest.raises(LifecycleError, match="already exists"):
-        add_subproject(state, code="COLLAR", kind="strategy", title="x")
+        add_track(state, code="COLLAR", kind=TrackKind.STRATEGY, title="x")
 
 
-def test_add_subproject_no_project_raises() -> None:
+def test_add_track_no_project_raises() -> None:
     state = _empty_state()
     state.project = None
     state.scope_kind = ScopeKind.WORKSPACE
     with pytest.raises(LifecycleError, match="no project"):
-        add_subproject(state, code="COLLAR", kind="x", title="y")
+        add_track(state, code="COLLAR", kind=TrackKind.STRATEGY, title="y")
 
 
-def test_switch_subproject_unknown_raises() -> None:
+def test_switch_track_unknown_raises() -> None:
     state = _empty_state()
     with pytest.raises(LifecycleError, match="unknown"):
-        switch_subproject(state, code="X")
+        switch_track(state, code="X")
 
 
-def test_switch_subproject_happy() -> None:
+def test_switch_track_happy() -> None:
     state = _empty_state()
-    add_subproject(state, code="COLLAR", kind="x", title="y")
-    switch_subproject(state, code="COLLAR")
-    assert state.current.subproject_id == "COLLAR"
+    add_track(state, code="COLLAR", kind=TrackKind.STRATEGY, title="y")
+    switch_track(state, code="COLLAR")
+    assert state.current.track_id == "COLLAR"
 
 
 # ---- Phase ------------------------------------------------------------------

@@ -50,7 +50,7 @@ def test_state_schema_validates_minimal_payload() -> None:
         },
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

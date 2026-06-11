@@ -143,7 +143,7 @@ COMMAND_PANELS: dict[str, str] = {
     "roadmap": "planning",
     "session": "planning",
     "spec": "planning",
-    "subproject": "planning",
+    "track": "planning",
     "wave": "planning",
     # runtime: harness adapters, hooks, plugins, skills, MCP, profiles,
     # eawfd daemon.

@@ -7,7 +7,7 @@ Output payload (JSON envelope, all keys always present):
     {
       "project": {"code": "QR", "title": "Quant Research", "status": "active"} | null,
       "scope_kind": "repo" | "workspace",
-      "current": {"project_code", "subproject_id", "phase_id",
+      "current": {"project_code", "track_id", "phase_id",
                   "iter_id", "active_wave_ids", "active_session_ids"},
       "last_phase_audit": {"id", "verdict", "kind"} | null,
       "last_iter_audit":  {"id", "verdict", "kind"} | null,

@@ -88,7 +88,7 @@ def _state(*, weekly_eu_target: float | None, actual_eu: float | None) -> State:
         },
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

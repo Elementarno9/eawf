@@ -110,7 +110,7 @@ def _seed_repo_with_claimed_wave(
         },
         "current": {
             "project_code": "DEMO",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P05",
             "iter_id": "P05-I01",
             "active_wave_ids": [wave_id],
@@ -121,7 +121,7 @@ def _seed_repo_with_claimed_wave(
             "P05": {
                 "id": "P05",
                 "scope_id": "DEMO",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Phase 5",
                 "status": "active",
                 "iter_ids": ["P05-I01"],

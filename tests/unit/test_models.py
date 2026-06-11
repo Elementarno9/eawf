@@ -179,7 +179,7 @@ def test_state_root_with_no_optional_keys() -> None:
             },
             "current": {
                 "project_code": "QR",
-                "subproject_id": None,
+                "track_id": None,
                 "phase_id": None,
                 "iter_id": None,
                 "active_wave_ids": [],
@@ -196,7 +196,7 @@ def test_state_root_with_no_optional_keys() -> None:
         }
     )
     assert state.scope_kind == "repo"
-    assert state.subprojects is None or state.subprojects == {}
+    assert state.tracks is None or state.tracks == {}
 
 
 def test_wave_deps_validation() -> None:
@@ -389,7 +389,7 @@ def test_state_schema_version_literal() -> None:
                 "project": None,
                 "current": {
                     "project_code": "QR",
-                    "subproject_id": None,
+                    "track_id": None,
                     "phase_id": None,
                     "iter_id": None,
                     "active_wave_ids": [],
@@ -501,30 +501,44 @@ def test_actual_summary_status_enum_rejects_unknown() -> None:
 
 
 @pytest.mark.parametrize("bad_id", ["sp-x", "1QR", "qr-x"])
-def test_subproject_id_pattern_rejects_lowercase(bad_id: str) -> None:
+def test_track_id_pattern_rejects_lowercase(bad_id: str) -> None:
     with pytest.raises(ValidationError):
-        models.Subproject(
+        models.Track(
             id=bad_id,
             code="QR",
             slug="quant-research",
             title="Quant Research",
-            kind="research",
+            kind="strategy",
             domains=["quant"],
             status="active",
         )
 
 
-def test_subproject_id_accepts_project_code_shape() -> None:
-    sp = models.Subproject(
+def test_track_id_accepts_project_code_shape() -> None:
+    sp = models.Track(
         id="QR-X",
         code="QR",
         slug="quant-research",
         title="Quant Research",
-        kind="research",
+        kind="strategy",
         domains=["quant"],
         status="active",
     )
     assert sp.id == "QR-X"
+
+
+def test_track_kind_rejects_unknown_value() -> None:
+    """An unknown ``Track.kind`` fails as a ValidationError at the boundary."""
+    with pytest.raises(ValidationError):
+        models.Track(
+            id="QR-X",
+            code="QR",
+            slug="quant-research",
+            title="Quant Research",
+            kind="research-line",
+            domains=["quant"],
+            status="active",
+        )
 
 
 def test_workspace_index_code_pattern() -> None:
@@ -548,12 +562,12 @@ def test_project_description_optional() -> None:
     assert project.description is None
 
 
-def test_phase_subproject_id_optional() -> None:
+def test_phase_track_id_optional() -> None:
     now = datetime.now(UTC)
     phase = models.Phase(
         id="P01",
         scope_id="QR",
-        subproject_id=None,
+        track_id=None,
         title="Bootstrap",
         status="planned",
         iter_ids=[],
@@ -562,7 +576,7 @@ def test_phase_subproject_id_optional() -> None:
         closed_at=None,
         audit_id=None,
     )
-    assert phase.subproject_id is None
+    assert phase.track_id is None
 
 
 def test_decisions_default_factory_dict() -> None:
@@ -575,7 +589,7 @@ def test_decisions_default_factory_dict() -> None:
             "project": None,
             "current": {
                 "project_code": "QR",
-                "subproject_id": None,
+                "track_id": None,
                 "phase_id": None,
                 "iter_id": None,
                 "active_wave_ids": [],
@@ -745,7 +759,7 @@ def _minimal_state_payload(updated_at: str) -> dict[str, object]:
         },
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

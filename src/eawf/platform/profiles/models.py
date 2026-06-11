@@ -47,6 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.audit import AuditCadence
 from eawf.kernel.spec.research_campaign import ResearchProfileBlock
+from eawf.kernel.state.enums import TrackKind
 from eawf.platform.profiles.clarity import DEFAULT_OUTPUT_STYLE, OutputStyle
 from eawf.platform.render_block import (
     DEFAULT_RENDER_BLOCK_TIER,
@@ -364,6 +365,69 @@ class OutputBlock(BaseModel):
     style: OutputStyle = DEFAULT_OUTPUT_STYLE
 
 
+class TrackKindSpec(BaseModel):
+    """Per-kind parametrization for a :class:`~eawf.kernel.state.models.Track`.
+
+    A profile contributes one :class:`TrackKindSpec` per
+    :class:`~eawf.kernel.state.enums.TrackKind` it supports, keyed under
+    :attr:`TrackProfileBlock.kinds`. The spec carries the kind-specific noun,
+    status vocabulary, outcome template, and overview view a Track of that kind
+    surfaces, so the lifecycle + render surfaces parametrize per kind from one
+    typed source rather than branching on a free-string tag.
+
+    ``extra="forbid"`` so a drifted leaf surfaces as a
+    :class:`pydantic.ValidationError` at profile load rather than silently
+    widening the spec.
+
+    Attributes:
+        noun: Operator-facing singular noun for a track of this kind
+            (e.g. ``strategy`` / ``model`` / ``target``). Surfaces in the
+            track overview header and dispatch prose.
+        status_lifecycle: Ordered status vocabulary the kind's tracks move
+            through, most-planned to most-terminal. Each entry is a status
+            token the kind's overview view renders as a lifecycle band.
+        outcome_template: Default outcome metric template the kind seeds a
+            new track's outcomes from (e.g. ``sharpe`` for a strategy,
+            ``val_loss`` for a model). Empty when the kind seeds no default.
+        overview_view: Identifier of the render view the kind's track
+            overview uses (e.g. ``leaderboard``). Picks which projection the
+            standings render selects for the kind.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    noun: str = Field(min_length=1, max_length=72)
+    status_lifecycle: list[str] = Field(default_factory=list)
+    outcome_template: str = ""
+    overview_view: str = ""
+
+
+class TrackProfileBlock(BaseModel):
+    """Profile-fed per-kind Track parametrization.
+
+    Mounted on :attr:`ProfileBody.track`. A profile declares the
+    :class:`~eawf.kernel.state.enums.TrackKind` set it supports under
+    :attr:`kinds`, mapping each kind to the :class:`TrackKindSpec` that
+    parametrizes the kind's noun, status lifecycle, outcome template, and
+    overview view. ``None`` means the profile contributes no track config; a
+    profile that omits ``track:`` declares no kinds.
+
+    The :attr:`kinds` map is keyed by the closed
+    :class:`~eawf.kernel.state.enums.TrackKind` enum, so an unknown kind token
+    in a profile YAML fails the profile load with a
+    :class:`pydantic.ValidationError` at the ingestion boundary.
+
+    Attributes:
+        kinds: Mapping from :class:`~eawf.kernel.state.enums.TrackKind` to the
+            :class:`TrackKindSpec` parametrizing that kind. Empty when the
+            profile declares the block but no kinds.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kinds: dict[TrackKind, TrackKindSpec] = Field(default_factory=dict)
+
+
 class InstrumentReq(BaseModel):
     """A single external-tool requirement declared by a profile.
 
@@ -557,6 +621,13 @@ class ProfileBody(BaseModel):
     install. Defaults to a ``lean`` block via the default factory, so a
     profile that omits ``output:`` resolves to the terse style; an unknown
     ``output.style`` token raises :class:`ValidationError` at load.
+
+    ``track`` mounts the typed :class:`TrackProfileBlock` -- the per-kind Track
+    parametrization a profile contributes (noun, status lifecycle, outcome
+    template, overview view, keyed by the closed
+    :class:`~eawf.kernel.state.enums.TrackKind`). ``None`` means the profile
+    contributes no track config; an unknown kind token in the ``track.kinds``
+    map raises :class:`ValidationError` at the load boundary.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -577,6 +648,7 @@ class ProfileBody(BaseModel):
     verify: VerifyBlock | None = None
     research: ResearchProfileBlock | None = None
     output: OutputBlock = Field(default_factory=OutputBlock)
+    track: TrackProfileBlock | None = None
 
 
 class ComposedProfile(BaseModel):

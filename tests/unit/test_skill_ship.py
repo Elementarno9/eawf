@@ -178,7 +178,7 @@ def _write_state_with_audit(
         },
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": audit_scope,
             "iter_id": None,
             "active_wave_ids": [],
@@ -189,7 +189,7 @@ def _write_state_with_audit(
             phase_key: {
                 "id": phase_key,
                 "scope_id": "QR",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Phase",
                 "description": None,
                 "status": "active",

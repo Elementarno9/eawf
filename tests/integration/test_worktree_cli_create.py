@@ -64,7 +64,7 @@ def _seed_repo_with_state(workdir: Path, *, on_main: bool = False) -> tuple[Path
         },
         "current": {
             "project_code": "DEMO",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P05",
             "iter_id": "P05-I01",
             "active_wave_ids": ["P05-I01-W01"],
@@ -75,7 +75,7 @@ def _seed_repo_with_state(workdir: Path, *, on_main: bool = False) -> tuple[Path
             "P05": {
                 "id": "P05",
                 "scope_id": "DEMO",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Phase 5",
                 "status": "active",
                 "iter_ids": ["P05-I01"],

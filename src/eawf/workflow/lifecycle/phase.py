@@ -95,7 +95,7 @@ def open_phase(
     phase = Phase(
         id=phase_id,
         scope_id=effective_scope,
-        subproject_id=state.current.subproject_id,
+        track_id=state.current.track_id,
         title=title,
         description=description,
         status=PhaseStatus.ACTIVE,
@@ -549,7 +549,7 @@ def plan_phase(
     phase = Phase(
         id=phase_id,
         scope_id=effective_scope,
-        subproject_id=state.current.subproject_id,
+        track_id=state.current.track_id,
         title=title,
         description=description,
         status=PhaseStatus.PLANNED,

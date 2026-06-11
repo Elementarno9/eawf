@@ -58,7 +58,7 @@ def _seed_state(state_path: Path) -> None:
         },
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

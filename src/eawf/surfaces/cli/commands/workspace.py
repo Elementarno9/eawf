@@ -83,7 +83,7 @@ def _empty_workspace_state(*, code: str, title: str) -> dict[str, Any]:
         "project": None,
         "current": {
             "project_code": None,
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

@@ -88,7 +88,7 @@ def test_validate_strict_does_not_affect_invariant_exit_code() -> None:
 
 def test_validate_strict_flags_missing_optional_keys() -> None:
     """Default (lenient) returns 0; ``--strict`` returns 4 for absent optional keys."""
-    # 01-empty-repo.json has no `subprojects`, `goals`, `outcomes`, etc.
+    # 01-empty-repo.json has no `tracks`, `goals`, `outcomes`, etc.
     fixture = FIXTURES / "valid" / "01-empty-repo.json"
     lenient = runner.invoke(app, ["validate", str(fixture)])
     assert lenient.exit_code == 0, lenient.output

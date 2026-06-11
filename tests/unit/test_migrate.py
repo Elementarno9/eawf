@@ -85,6 +85,7 @@ from eawf.kernel.migrations.v1_2_to_v1_3 import MigrationV12ToV13, read_claim_an
 from eawf.kernel.migrations.v1_3_to_v1_4 import MigrationV13ToV14
 from eawf.kernel.migrations.v1_4_to_v1_5 import MigrationV14ToV15
 from eawf.kernel.migrations.v1_5_to_v1_6 import MigrationV15ToV16
+from eawf.kernel.migrations.v1_9_to_v1_10 import MigrationV19ToV110
 from eawf.kernel.state.enums import IterTrigger, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
@@ -142,7 +143,7 @@ def _minimal_state_v1_0() -> dict[str, Any]:
         },
         "current": {
             "project_code": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -174,7 +175,7 @@ def _state_v1_0_with_entities() -> dict[str, Any]:
         "P00": {
             "id": "P00",
             "scope_id": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "title": "Phase zero",
             "status": "active",
             "iter_ids": ["P00-I01"],
@@ -747,7 +748,7 @@ class _IdentityStepV10:
 
 def test_model_supported_max_version_derives_from_live_model() -> None:
     """The supported max is read from the live ``State`` Literal, not hard-coded."""
-    assert model_supported_max_version() == "1.9"
+    assert model_supported_max_version() == "1.10"
 
 
 def test_guard_target_supported_allows_target_equal_to_max() -> None:
@@ -798,6 +799,11 @@ def test_guard_target_supported_permits_v1_8_now_model_advanced() -> None:
 def test_guard_target_supported_permits_v1_9_now_model_advanced() -> None:
     """The guard permits 1.9 now the live model accepts it (the runtime baseline bump)."""
     guard_target_supported("1.9")
+
+
+def test_guard_target_supported_permits_v1_10_now_model_advanced() -> None:
+    """The guard permits 1.10 now the live model accepts it (the track rename bump)."""
+    guard_target_supported("1.10")
 
 
 def test_guard_target_supported_rejects_target_above_max() -> None:
@@ -866,14 +872,14 @@ def test_migrate_cmd_unsupported_target_exits_nonzero_with_no_write(
     assert state_path.read_bytes() == before
 
 
-def test_migrate_cmd_default_target_migrates_v1_0_to_v1_9(
+def test_migrate_cmd_default_target_migrates_v1_0_to_v1_10(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The bare ``eawf migrate`` default target (1.9) walks the full chain + re-loads.
+    """The bare ``eawf migrate`` default target (1.10) walks the full chain + re-loads.
 
-    The default target advanced to 1.9 with the runtime-baseline bump, so a bare
+    The default target advanced to 1.10 with the track rename bump, so a bare
     migrate on a v1.0 state runs 1.0 -> 1.1 -> 1.2 -> 1.3 -> 1.4 -> 1.5 -> 1.6
-    -> 1.7 -> 1.8 -> 1.9 and lands a re-loadable v1.9 state.
+    -> 1.7 -> 1.8 -> 1.9 -> 1.10 and lands a re-loadable v1.10 state.
     """
     from typer.testing import CliRunner
 
@@ -888,7 +894,7 @@ def test_migrate_cmd_default_target_migrates_v1_0_to_v1_9(
 
     assert result.exit_code == 0, result.output
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
-    assert reloaded.schema_version == "1.9"
+    assert reloaded.schema_version == "1.10"
 
 
 def test_migrate_cmd_supported_target_noop_keeps_state_reloadable(
@@ -970,7 +976,7 @@ def _realistic_state_v1_0() -> dict[str, Any]:
         "P00": {
             "id": "P00",
             "scope_id": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "title": _REALISTIC_TITLES["period"],
             "status": "active",
             "iter_ids": ["P00-I01"],
@@ -1352,7 +1358,7 @@ def _state_v1_1_with_iters() -> dict[str, Any]:
         "P00": {
             "id": "P00",
             "scope_id": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "title": "Phase zero",
             "status": "active",
             "iter_ids": ["P00-I01", "P00-I02", "P00-I03"],
@@ -1555,7 +1561,7 @@ def _state_v1_2_with_waves() -> dict[str, Any]:
         "P00": {
             "id": "P00",
             "scope_id": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "title": "Phase zero",
             "status": "active",
             "iter_ids": ["P00-I01"],
@@ -1823,7 +1829,7 @@ def _state_v1_3_with_iters() -> dict[str, Any]:
         "P00": {
             "id": "P00",
             "scope_id": "QR",
-            "subproject_id": None,
+            "track_id": None,
             "title": "Phase zero",
             "status": "active",
             "iter_ids": ["P00-I01", "P00-I02"],
@@ -2210,3 +2216,134 @@ def test_run_chain_full_v1_0_to_v1_6_reloads(tmp_path: Path) -> None:
     reloaded = State.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
     assert reloaded.schema_version == "1.6"
     assert reloaded.dispatch_paused is False
+
+
+# --- v1.9 -> v1.10: Subproject -> Track rename --------------------------------
+
+
+def _state_v1_9_with_subproject() -> dict[str, Any]:
+    """Return a v1.9 state carrying the pre-rename ``subproject`` key names.
+
+    The cursor field ``current.subproject_id``, the phase link
+    ``phases[].subproject_id``, and the top-level ``subprojects`` dict all use
+    the legacy names so the 1.9 -> 1.10 rename has a body to exercise.
+    """
+    return {
+        "schema_version": "1.9",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:QR",
+        "updated_at": "2026-05-08T00:00:00Z",
+        "project": {
+            "code": "QR",
+            "slug": "quant-research",
+            "title": "Quant Research",
+            "description": "",
+            "domains": ["quant"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:QR",
+        },
+        "current": {
+            "project_code": "QR",
+            "subproject_id": "VOL",
+            "phase_id": None,
+            "iter_id": None,
+            "active_wave_ids": [],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "subprojects": {
+            "VOL": {
+                "id": "VOL",
+                "code": "QR-VOL",
+                "slug": "vol-modelling",
+                "title": "Volatility modelling",
+                "kind": "strategy",
+                "domains": ["vol"],
+                "status": "active",
+                "owner": None,
+                "goal_ids": [],
+            }
+        },
+        "phases": {
+            "P00": {
+                "id": "P00",
+                "scope_id": "QR",
+                "subproject_id": "VOL",
+                "title": "Phase zero",
+                "status": "active",
+                "iter_ids": [],
+                "outcome_ids": [],
+                "depends_on": [],
+                "source_brief_ids": [],
+                "opened_at": "2026-05-08T00:00:00Z",
+                "closed_at": None,
+                "audit_id": None,
+            }
+        },
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+
+
+def test_v1_9_to_v1_10_renames_subproject_keys_to_track() -> None:
+    """The 1.9 -> 1.10 step renames every ``subproject`` key name to ``track``."""
+    migrated = MigrationV19ToV110().apply(_state_v1_9_with_subproject())
+
+    assert migrated["schema_version"] == "1.10"
+    # Top-level dict + cursor + phase link all renamed; the old names are gone.
+    assert "subprojects" not in migrated
+    assert "tracks" in migrated
+    assert "subproject_id" not in migrated["current"]
+    assert migrated["current"]["track_id"] == "VOL"
+    assert "subproject_id" not in migrated["phases"]["P00"]
+    assert migrated["phases"]["P00"]["track_id"] == "VOL"
+
+
+def test_v1_9_to_v1_10_apply_is_idempotent_on_already_renamed_state() -> None:
+    """Re-applying the step to an already-renamed state is a byte-stable no-op."""
+    once = MigrationV19ToV110().apply(_state_v1_9_with_subproject())
+    once["schema_version"] = "1.9"  # rewind only the marker so apply runs again
+    twice = MigrationV19ToV110().apply(once)
+    twice["schema_version"] = "1.10"
+    once["schema_version"] = "1.10"
+    assert twice == once
+
+
+def test_run_chain_v1_9_to_v1_10_round_trips_subproject_to_track(tmp_path: Path) -> None:
+    """End-to-end: a 1.9 state with ``subproject_id`` re-loads as a 1.10 ``track_id``.
+
+    A migration test proving a 1.9 state carrying the legacy ``subproject_id``
+    cursor field round-trips through the 1.9 -> 1.10 edge to ``track_id`` under
+    the live ``State`` model.
+    """
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps(_state_v1_9_with_subproject(), indent=2), encoding="utf-8"
+    )
+
+    chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.9", to_version="1.10")
+    run_chain(state_path, chain=chain, from_version="1.9", to_version="1.10")
+
+    on_disk = json.loads(state_path.read_text(encoding="utf-8"))
+    reloaded = State.model_validate(on_disk)
+    assert reloaded.schema_version == "1.10"
+    assert reloaded.current.track_id == "VOL"
+    assert reloaded.tracks is not None
+    assert "VOL" in reloaded.tracks
+    assert reloaded.tracks["VOL"].kind.value == "strategy"
+    assert reloaded.phases["P00"].track_id == "VOL"
+
+
+def test_v1_9_to_v1_10_check_pre_rejects_non_v1_9() -> None:
+    """The pre-condition fails fast when the input is not a v1.9 payload."""
+    from pydantic import ValidationError
+
+    bad = _state_v1_9_with_subproject()
+    bad["schema_version"] = "1.8"
+    with pytest.raises(ValidationError):
+        MigrationV19ToV110().check_pre(bad)

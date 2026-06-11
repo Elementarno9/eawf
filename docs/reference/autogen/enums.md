@@ -41,12 +41,14 @@ that module is listed with its members.
 | `PhaseStatus` | `planned`, `active`, `closed`, `archived` |
 | `PluginInstallStatus` | `installed`, `drifted`, `conflicted`, `disabled` |
 | `ProjectStatus` | `active`, `archived`, `retired` |
+| `RiskTier` | `mech`, `med`, `high`, `ui` |
 | `ScopeKind` | `repo`, `workspace` |
 | `ScopeTier` | `workspace`, `repo`, `phase`, `iter`, `wave` |
 | `SkillEnvelopeStatus` | `ok`, `needs_user`, `blocked`, `failed`, `partial` |
 | `SpecStatus` | `draft`, `ready`, `implemented`, `archived` |
 | `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated`, `research_campaign` |
-| `SubprojectStatus` | `active`, `planned`, `deferred`, `retired` |
+| `TrackKind` | `strategy`, `model`, `target`, `feature`, `service` |
+| `TrackStatus` | `active`, `planned`, `deferred`, `retired` |
 | `Urgency` | `low`, `normal`, `high`, `urgent` |
 | `WaveStatus` | `pending`, `claimed`, `in_progress`, `closed`, `failed`, `abandoned` |
 | `WorktreeStatus` | `active`, `conflicted`, `merged`, `abandoned` |

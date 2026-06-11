@@ -32,7 +32,7 @@ def _seed_state(state_dir: Path) -> Path:
                 },
                 "current": {
                     "project_code": "ZZ",
-                    "subproject_id": None,
+                    "track_id": None,
                     "phase_id": "P00",
                     "iter_id": "P00-I01",
                     "active_wave_ids": [],
@@ -43,7 +43,7 @@ def _seed_state(state_dir: Path) -> Path:
                     "P00": {
                         "id": "P00",
                         "scope_id": "ZZ",
-                        "subproject_id": None,
+                        "track_id": None,
                         "title": "bootstrap",
                         "status": "active",
                         "iter_ids": ["P00-I01"],

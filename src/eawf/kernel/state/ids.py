@@ -4,7 +4,7 @@ Project codes: ``^[A-Z][A-Z0-9_-]{1,15}$``.
 Phase IDs: ``P\\d{2,}`` (e.g., ``P01``, ``P100``).
 Iter IDs: ``P\\d{2,}-I\\d{2,}`` (e.g., ``P13-I04``).
 Wave IDs: ``P\\d{2,}-I\\d{2,}-W\\d{2,}`` (e.g., ``P13-I04-W01``).
-Hypothesis IDs: ``H\\d{2,}-\\d{2,}`` plus an optional subproject prefix.
+Hypothesis IDs: ``H\\d{2,}-\\d{2,}`` plus an optional track prefix.
 Backlog IDs: ``B\\d{3,}`` (e.g., ``B001``, ``B100``).
 
 The ``\\d{2,}`` width matches ``tools/commit_prefix_lint.py`` per AGENTS
@@ -108,7 +108,7 @@ def is_wave_id(s: str) -> bool:
 
 
 def is_hypothesis_id(s: str) -> bool:
-    """Return ``True`` if ``s`` is a valid hypothesis ID, optionally subproject-prefixed."""
+    """Return ``True`` if ``s`` is a valid hypothesis ID, optionally track-prefixed."""
     return bool(RE_HYPOTHESIS.fullmatch(s) or RE_HYPOTHESIS_SCOPED.fullmatch(s))
 
 

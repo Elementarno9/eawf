@@ -268,7 +268,7 @@ def _seed_minimal_state(repo: Path) -> Path:
             "P26": {
                 "id": "P26",
                 "scope_id": "ABC",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "P26",
                 "status": "active",
                 "iter_ids": ["P26-I01"],

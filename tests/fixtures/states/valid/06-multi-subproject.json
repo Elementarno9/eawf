@@ -15,20 +15,20 @@
   },
   "current": {
     "project_code": "QR",
-    "subproject_id": null,
+    "track_id": null,
     "phase_id": null,
     "iter_id": null,
     "active_wave_ids": [],
     "active_session_ids": []
   },
   "workspace": null,
-  "subprojects": {
+  "tracks": {
     "VOL": {
       "id": "VOL",
       "code": "QR-VOL",
       "slug": "vol-modelling",
       "title": "Volatility modelling",
-      "kind": "research-line",
+      "kind": "strategy",
       "domains": ["vol"],
       "status": "active",
       "owner": null,
@@ -39,7 +39,7 @@
       "code": "QR-OLD",
       "slug": "legacy-line",
       "title": "Legacy line",
-      "kind": "research-line",
+      "kind": "strategy",
       "domains": ["legacy"],
       "status": "retired",
       "owner": null,

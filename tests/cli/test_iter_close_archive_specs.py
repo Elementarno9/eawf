@@ -105,7 +105,7 @@ def _state_payload() -> dict[str, Any]:
             _PHASE: {
                 "id": _PHASE,
                 "scope_id": _REPO_CODE,
-                "subproject_id": None,
+                "track_id": None,
                 "title": "P30",
                 "status": "active",
                 "iter_ids": [_ITER],

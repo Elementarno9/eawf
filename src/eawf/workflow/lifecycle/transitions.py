@@ -21,7 +21,7 @@ under the Q25 LOC cap; this module re-exports the full surface so the
 ``eawf.workflow.lifecycle.transitions`` import path keeps working unchanged:
 
 - :class:`LifecycleError` — :mod:`eawf.workflow.lifecycle._errors`
-- project/subproject helpers — :mod:`eawf.workflow.lifecycle.project`
+- project/track helpers — :mod:`eawf.workflow.lifecycle.project`
 - phase helpers — :mod:`eawf.workflow.lifecycle.phase`
 - iter helpers — :mod:`eawf.workflow.lifecycle.iter_`
 - wave helpers — :mod:`eawf.workflow.lifecycle.wave`
@@ -55,8 +55,8 @@ from eawf.workflow.lifecycle.phase import (
     reopen_phase,
 )
 from eawf.workflow.lifecycle.project import (
-    add_subproject,
-    switch_subproject,
+    add_track,
+    switch_track,
 )
 from eawf.workflow.lifecycle.wave import (
     claim_wave,
@@ -166,7 +166,7 @@ __all__ = [
     "PlannedRoadmap",
     "activate_iter",
     "activate_phase",
-    "add_subproject",
+    "add_track",
     "archive_phase",
     "claim_wave",
     "close_iter",
@@ -191,5 +191,5 @@ __all__ = [
     "set_iter_candidate_tag",
     "set_wave_deps",
     "start_wave",
-    "switch_subproject",
+    "switch_track",
 ]

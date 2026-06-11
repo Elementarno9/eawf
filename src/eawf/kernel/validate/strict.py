@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # by schema-layer business logic elsewhere.
 _STRICT_OPTIONAL_KEYS: tuple[str, ...] = (
     "health",
-    "subprojects",
+    "tracks",
     "goals",
     "outcomes",
     "estimates",

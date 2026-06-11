@@ -3,7 +3,7 @@
 Implements the ``/roadmap`` algorithm per ``docs/architecture/workflow.md``:
 
 1. Probe instruments via ``EA_INSTRUMENT_PROBE``.
-2. Resolve scope: workspace, repo, project, subproject, explicit goal
+2. Resolve scope: workspace, repo, project, track, explicit goal
    set, or active state.
 3. Load current state: goals, outcomes, phases, iters, decisions, …
 4. Research context (LLM-fanout — v0.1 stubs).

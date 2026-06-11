@@ -175,7 +175,7 @@ def _state_payload(*, agent_role: str | None, effort_bucket: str | None) -> dict
         },
         "current": {
             "project_code": "EAWF",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P30",
             "iter_id": "P30-I10",
             "active_wave_ids": [_WAVE_ID],

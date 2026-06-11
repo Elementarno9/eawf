@@ -47,7 +47,7 @@ def _base_state_payload() -> dict[str, Any]:
         },
         "current": {
             "project_code": "EAWF",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P18",
             "iter_id": "P18-I01",
             "active_wave_ids": [],

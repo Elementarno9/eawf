@@ -49,18 +49,29 @@ def test_project_status_rejects_unknown() -> None:
         enums.ProjectStatus("unknown")
 
 
-# --- subproject ---
+# --- track ---
 
 
-def test_subproject_status_values() -> None:
+def test_track_status_values() -> None:
     expected = {"active", "planned", "deferred", "retired"}
-    actual = {m.value for m in enums.SubprojectStatus}
+    actual = {m.value for m in enums.TrackStatus}
     assert actual == expected
 
 
-def test_subproject_status_rejects_unknown() -> None:
+def test_track_status_rejects_unknown() -> None:
     with pytest.raises(ValueError):
-        enums.SubprojectStatus("bogus")
+        enums.TrackStatus("bogus")
+
+
+def test_track_kind_values() -> None:
+    expected = {"strategy", "model", "target", "feature", "service"}
+    actual = {m.value for m in enums.TrackKind}
+    assert actual == expected
+
+
+def test_track_kind_rejects_unknown() -> None:
+    with pytest.raises(ValueError):
+        enums.TrackKind("bogus")
 
 
 # --- goal ---

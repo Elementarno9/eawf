@@ -67,7 +67,7 @@ def _phase(state: State, pid: str) -> None:
     state.phases[pid] = Phase(
         id=pid,
         scope_id="QR",
-        subproject_id=None,
+        track_id=None,
         title=f"phase {pid}",
         status=PhaseStatus.ACTIVE,
         iter_ids=[],

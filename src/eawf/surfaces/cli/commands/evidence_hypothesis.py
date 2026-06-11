@@ -50,7 +50,7 @@ def goal_define(
         str | None,
         typer.Option(
             "--scope-id",
-            help="Owning scope (project/subproject id). Defaults to project code.",
+            help="Owning scope (project/track id). Defaults to project code.",
         ),
     ] = None,
 ) -> None:

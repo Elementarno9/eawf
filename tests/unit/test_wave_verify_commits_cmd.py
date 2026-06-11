@@ -82,7 +82,7 @@ def _seed_state(state_dir: Path, *, waves: dict[str, str | None]) -> Path:
                 },
                 "current": {
                     "project_code": "ZZ",
-                    "subproject_id": None,
+                    "track_id": None,
                     "phase_id": "P28",
                     "iter_id": "P28-I01",
                     "active_wave_ids": [],
@@ -93,7 +93,7 @@ def _seed_state(state_dir: Path, *, waves: dict[str, str | None]) -> Path:
                     "P28": {
                         "id": "P28",
                         "scope_id": "ZZ",
-                        "subproject_id": None,
+                        "track_id": None,
                         "title": "bootstrap",
                         "status": "active",
                         "iter_ids": ["P28-I01"],

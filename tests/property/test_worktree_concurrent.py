@@ -113,7 +113,7 @@ def _seed_state(state_path: Path, n: int) -> None:
         },
         "current": {
             "project_code": "DEMO",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P05",
             "iter_id": "P05-I01",
             "active_wave_ids": wave_ids,
@@ -124,7 +124,7 @@ def _seed_state(state_path: Path, n: int) -> None:
             "P05": {
                 "id": "P05",
                 "scope_id": "DEMO",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Phase 5",
                 "status": "active",
                 "iter_ids": ["P05-I01"],

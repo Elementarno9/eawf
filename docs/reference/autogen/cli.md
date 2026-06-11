@@ -155,12 +155,13 @@ Manage layered configuration (built-in / global / workspace / repo / local).
 
 ### `eawf daemon`
 
-Manage the eawfd background daemon (run, ping, status, stop, logs).
+Manage the eawfd background daemon (run, ping, status, stop, logs, reclaim).
 
 | Verb | Summary |
 |---|---|
 | `logs` | Print the trailing window of the daemon log file. |
 | `ping` | Probe daemon liveness and report version + PID. |
+| `reclaim` | Reclaim disk: sweep the WAL once and trim aged state.json backups. |
 | `replay-wal` | Inspect poisoned WAL records or GC the done window. |
 | `run` | Boot the daemon process. |
 | `service-disable` | Stop + uninstall the eawfd service. Idempotent. |
@@ -274,6 +275,7 @@ Dispatch hook events through the Eä hook runner.
 | `eawf017-inline-refs` | Reject inline bare URLs and inline ``path:line`` reference soup. |
 | `eawf018-structure-smell` | Warn on block-bloat structure smells in Markdown and docstrings without blocking. |
 | `eawf019-math-facets` | Reject math-explainer claims missing a facet, an unresolved citation, or a dead gate. |
+| `eawf023-artifact-placement` | Reject misplaced or date-stem-less artifacts under ``.ea/artifacts/``. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
@@ -548,15 +550,6 @@ JSONL store maintenance (compact, ...).
 |---|---|
 | `compact` | Compact the JSONL store for *kind* and emit the dedup report. |
 
-### `eawf subproject`
-
-Subproject lifecycle (add, switch).
-
-| Verb | Summary |
-|---|---|
-| `add` | Add a subproject under the active project. |
-| `switch` | Set the active subproject pointer. |
-
 ### `eawf telemetry`
 
 Telemetry / observability subsystem — pricing currency, projection.
@@ -564,6 +557,15 @@ Telemetry / observability subsystem — pricing currency, projection.
 | Verb | Summary |
 |---|---|
 | `pricing-currency-check` | Validate the embedded pricing snapshot and emit a drift report. |
+
+### `eawf track`
+
+Track lifecycle (add, switch).
+
+| Verb | Summary |
+|---|---|
+| `add` | Add a track under the active project. |
+| `switch` | Set the active track pointer. |
 
 ### `eawf vfl`
 

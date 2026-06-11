@@ -38,7 +38,7 @@ def define_goal(
         goal_id: Project-unique goal id (free-form non-empty string).
         title: Human-readable goal title.
         summary: 1-2 sentence elaboration (stored in ``summary``).
-        scope_id: Owning scope (project/subproject id).
+        scope_id: Owning scope (project/track id).
         outcome_ids: Optional outcome ids to seed (typically empty).
 
     Raises:

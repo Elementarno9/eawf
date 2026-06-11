@@ -123,7 +123,7 @@ def _state_with_archived_phase_pending_waves() -> State:
     payload["phases"]["P09"] = {
         "id": "P09",
         "scope_id": payload["phases"]["P01"]["scope_id"],
-        "subproject_id": None,
+        "track_id": None,
         "title": "dropped",
         "status": "archived",
         "iter_ids": ["P09-I01"],
@@ -459,7 +459,7 @@ def test_summary_counts_scopes_to_current_pointer_phase() -> None:
     payload["phases"]["P02"] = {
         "id": "P02",
         "scope_id": payload["phases"]["P01"]["scope_id"],
-        "subproject_id": None,
+        "track_id": None,
         "title": "other active",
         "status": "active",
         "iter_ids": ["P02-I01"],
@@ -524,7 +524,7 @@ def _state_with_stale_pointer_and_active_phase() -> State:
     payload["phases"]["P02"] = {
         "id": "P02",
         "scope_id": payload["phases"]["P01"]["scope_id"],
-        "subproject_id": None,
+        "track_id": None,
         "title": "active",
         "status": "active",
         "iter_ids": ["P02-I01"],

@@ -1,10 +1,10 @@
-"""Iter + project/subproject lifecycle command handlers.
+"""Iter + project/track lifecycle command handlers.
 
 Split out of :mod:`eawf.surfaces.cli.commands.lifecycle` (P27-W06). The
-``iter_app`` / ``project_app`` / ``subproject_app`` Typer apps and the
+``iter_app`` / ``project_app`` / ``track_app`` Typer apps and the
 shared transaction helpers live in the parent module; this module
 attaches the iter command bodies plus the ``project init`` /
-``subproject add·switch`` setup verbs via ``@<app>.command(...)`` and
+``track add·switch`` setup verbs via ``@<app>.command(...)`` and
 owns the iter-bump-hint heuristic. The phase command bodies live in
 :mod:`eawf.surfaces.cli.commands.lifecycle_phase`.
 """
@@ -22,6 +22,7 @@ from eawf.kernel.state.enums import (
     IterStatus,
     ProjectStatus,
     StoreKind,
+    TrackKind,
     WaveStatus,
 )
 from eawf.kernel.state.ids import is_iter_id, is_phase_id, is_project_code
@@ -38,7 +39,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
     _write_state_unlocked,
     iter_app,
     project_app,
-    subproject_app,
+    track_app,
 )
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -204,43 +205,54 @@ def project_init_cmd(
     )
 
 
-# ---- Subproject handlers ----------------------------------------------------
+# ---- Track handlers ---------------------------------------------------------
 
 
-@subproject_app.command("add")
-def subproject_add_cmd(
+@track_app.command("add")
+def track_add_cmd(
     ctx: typer.Context,
-    code: Annotated[str, typer.Argument(help="Subproject code.")],
-    kind: Annotated[str, typer.Option("--kind", help="Subproject kind tag.")],
-    title: Annotated[str, typer.Option("--title", help="Subproject title.")],
+    code: Annotated[str, typer.Argument(help="Track code.")],
+    kind: Annotated[str, typer.Option("--kind", help="Track kind tag.")],
+    title: Annotated[str, typer.Option("--title", help="Track title.")],
     domains: Annotated[
         str | None,
         typer.Option("--domains", help="Comma-separated domain tags."),
     ] = None,
 ) -> None:
-    """Add a subproject under the active project."""
-    from eawf.workflow.lifecycle.transitions import add_subproject
+    """Add a track under the active project."""
+    from eawf.workflow.lifecycle.transitions import add_track
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.UserError(f"invalid subproject code: {code!r}", kind="InvalidInput"),
+            cli_errors.UserError(f"invalid track code: {code!r}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    try:
+        track_kind = TrackKind(kind)
+    except ValueError:
+        allowed = ", ".join(k.value for k in TrackKind)
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"unknown track kind: {kind!r} (allowed: {allowed})", kind="InvalidInput"
+            ),
             flags=flags,
         )
         return
     domains_list = [d.strip() for d in (domains or "").split(",") if d.strip()]
     _run_mutation(
         ctx,
-        command="subproject add",
-        args={"code": code, "kind": kind, "title": title, "domains": domains_list},
+        command="track add",
+        args={"code": code, "kind": track_kind.value, "title": title, "domains": domains_list},
         scope_id=code,
-        text=f"subproject add {code} title={title!r}",
-        envelope=lambda: {"subproject": code, "title": title, "kind": kind},
+        text=f"track add {code} title={title!r}",
+        envelope=lambda: {"track": code, "title": title, "kind": track_kind.value},
         mutate=lambda state: _wrap_no_return(
-            add_subproject(
+            add_track(
                 state,
                 code=code,
-                kind=kind,
+                kind=track_kind,
                 title=title,
                 domains=domains_list,
             )
@@ -248,29 +260,29 @@ def subproject_add_cmd(
     )
 
 
-@subproject_app.command("switch")
-def subproject_switch_cmd(
+@track_app.command("switch")
+def track_switch_cmd(
     ctx: typer.Context,
-    code: Annotated[str, typer.Argument(help="Subproject code to activate.")],
+    code: Annotated[str, typer.Argument(help="Track code to activate.")],
 ) -> None:
-    """Set the active subproject pointer."""
-    from eawf.workflow.lifecycle.transitions import switch_subproject
+    """Set the active track pointer."""
+    from eawf.workflow.lifecycle.transitions import switch_track
 
     flags: GlobalFlags = ctx.obj
     if not is_project_code(code):
         cli_errors.emit_error(
-            cli_errors.UserError(f"invalid subproject code: {code!r}", kind="InvalidInput"),
+            cli_errors.UserError(f"invalid track code: {code!r}", kind="InvalidInput"),
             flags=flags,
         )
         return
     _run_mutation(
         ctx,
-        command="subproject switch",
+        command="track switch",
         args={"code": code},
         scope_id=code,
-        text=f"subproject switch {code}",
-        envelope=lambda: {"subproject": code, "current": True},
-        mutate=lambda state: switch_subproject(state, code=code),
+        text=f"track switch {code}",
+        envelope=lambda: {"track": code, "current": True},
+        mutate=lambda state: switch_track(state, code=code),
     )
 
 

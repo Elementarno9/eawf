@@ -85,7 +85,7 @@ def _build_state_payload(
             phase_id: {
                 "id": phase_id,
                 "scope_id": "ABC",
-                "subproject_id": None,
+                "track_id": None,
                 "title": "Plan import",
                 "status": "active",
                 "iter_ids": [iter_id],
@@ -163,7 +163,7 @@ def _build_planned_phase_payload(
             phase_id: {
                 "id": phase_id,
                 "scope_id": "ABC",
-                "subproject_id": None,
+                "track_id": None,
                 "title": phase_id,
                 "status": "planned",
                 "iter_ids": [iter_id],

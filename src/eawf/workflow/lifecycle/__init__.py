@@ -1,4 +1,4 @@
-"""Lifecycle helpers (project/subproject/phase/iter/wave).
+"""Lifecycle helpers (project/track/phase/iter/wave).
 
 The lifecycle package houses pure-functional helpers that the
 :mod:`eawf.surfaces.cli.commands.lifecycle` Typer handlers compose under a held
@@ -20,7 +20,7 @@ from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     activate_iter,
     activate_phase,
-    add_subproject,
+    add_track,
     archive_phase,
     claim_wave,
     close_iter,
@@ -38,14 +38,14 @@ from eawf.workflow.lifecycle.transitions import (
     reopen_phase,
     set_iter_candidate_tag,
     set_wave_deps,
-    switch_subproject,
+    switch_track,
 )
 
 __all__ = [
     "LifecycleError",
     "activate_iter",
     "activate_phase",
-    "add_subproject",
+    "add_track",
     "archive_phase",
     "claim_wave",
     "close_iter",
@@ -63,5 +63,5 @@ __all__ = [
     "reopen_phase",
     "set_iter_candidate_tag",
     "set_wave_deps",
-    "switch_subproject",
+    "switch_track",
 ]

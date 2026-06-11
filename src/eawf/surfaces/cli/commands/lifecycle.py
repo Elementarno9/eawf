@@ -1,12 +1,12 @@
 """Lifecycle nouns: shared transaction core + Typer app registry.
 
 This module owns the five lifecycle Typer apps
-(``project_app``/``subproject_app``/``phase_app``/``iter_app``/``wave_app``,
+(``project_app``/``track_app``/``phase_app``/``iter_app``/``wave_app``,
 plus the ``wave budget`` sub-app) and the shared transactional helpers
 every lifecycle handler composes under a held sibling lock. The concrete
 command bodies live in four sibling modules:
 
-- :mod:`eawf.surfaces.cli.commands.lifecycle_phase` — project / subproject / phase.
+- :mod:`eawf.surfaces.cli.commands.lifecycle_phase` — project / track / phase.
 - :mod:`eawf.surfaces.cli.commands.lifecycle_iter` — iter.
 - :mod:`eawf.surfaces.cli.commands.lifecycle_wave` — wave mutators
   (plan / claim / close / show / fail / update).
@@ -106,9 +106,9 @@ project_app = typer.Typer(
     help="Project-level lifecycle (init).",
     no_args_is_help=True,
 )
-subproject_app = typer.Typer(
-    name="subproject",
-    help="Subproject lifecycle (add, switch).",
+track_app = typer.Typer(
+    name="track",
+    help="Track lifecycle (add, switch).",
     no_args_is_help=True,
 )
 phase_app = typer.Typer(
@@ -192,7 +192,7 @@ def _empty_state_dict(*, project_code: str, project_payload: dict[str, Any]) -> 
         "project": project_payload,
         "current": {
             "project_code": project_code,
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],
@@ -520,7 +520,7 @@ def _run_mutation(
     fall back to the in-process WAL-backed write only when the daemon is
     unavailable or predates the kind (the V1 CI/recovery carve-out). Verbs
     whose transition has no :class:`~eawf.kernel.state.mutations.MutationKind`
-    yet (``wave update`` / ``subproject add``·``switch`` / ``iter
+    yet (``wave update`` / ``track add``·``switch`` / ``iter
     activate`` / ``phase reopen`` / ``wave budget set``·``consume``) omit
     *mutation_kind* and run the in-process WAL-backed path directly.
 
@@ -669,7 +669,7 @@ __all__ = [
     "iter_app",
     "phase_app",
     "project_app",
-    "subproject_app",
+    "track_app",
     "wave_app",
     "wave_budget_app",
 ]

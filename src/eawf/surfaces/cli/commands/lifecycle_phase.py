@@ -4,7 +4,7 @@ Split out of :mod:`eawf.surfaces.cli.commands.lifecycle` (P27-W06). The ``phase_
 Typer app and the shared transaction helpers live in the parent module;
 this module attaches the phase command bodies via ``@phase_app.command(...)``
 and owns the phase-activate git gates plus the phase-close checklist. The
-``project init`` / ``subproject add·switch`` setup verbs live in
+``project init`` / ``track add·switch`` setup verbs live in
 :mod:`eawf.surfaces.cli.commands.lifecycle_iter`.
 """
 

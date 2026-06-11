@@ -56,7 +56,7 @@ def _state_payload(*, wave_status: str = "in_progress", tokens_consumed: int = 0
         },
         "current": {
             "project_code": "EAWF",
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": "P27",
             "iter_id": "P27-I04",
             "active_wave_ids": [_WAVE_ID],

@@ -404,7 +404,7 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
         ),
         "current": {
             "project_code": project_code,
-            "subproject_id": None,
+            "track_id": None,
             "phase_id": None,
             "iter_id": None,
             "active_wave_ids": [],

@@ -1,4 +1,4 @@
-"""Pure-functional project/subproject lifecycle transitions.
+"""Pure-functional project/track lifecycle transitions.
 
 Every helper mutates the supplied :class:`State` in place. See
 :mod:`eawf.workflow.lifecycle.transitions` for the shared design rules and the
@@ -10,55 +10,55 @@ from __future__ import annotations
 
 import logging
 
-from eawf.kernel.state.enums import SubprojectStatus
-from eawf.kernel.state.models import State, Subproject
+from eawf.kernel.state.enums import TrackKind, TrackStatus
+from eawf.kernel.state.models import State, Track
 from eawf.workflow.lifecycle._errors import LifecycleError
 
 logger = logging.getLogger(__name__)
 
 
-def add_subproject(
+def add_track(
     state: State,
     *,
     code: str,
-    kind: str,
+    kind: TrackKind,
     title: str,
     domains: list[str] | None = None,
-) -> Subproject:
-    """Add a new subproject.
+) -> Track:
+    """Add a new track.
 
     Raises:
         LifecycleError: State has no project or ``code`` already exists.
     """
     if state.project is None:
-        raise LifecycleError("cannot add subproject: state has no project")
-    if state.subprojects is None:
-        state.subprojects = {}
-    if code in state.subprojects:
-        raise LifecycleError(f"subproject {code!r} already exists")
-    sub = Subproject(
+        raise LifecycleError("cannot add track: state has no project")
+    if state.tracks is None:
+        state.tracks = {}
+    if code in state.tracks:
+        raise LifecycleError(f"track {code!r} already exists")
+    track = Track(
         id=code,
         code=code,
         slug=code.lower(),
         title=title,
         kind=kind,
         domains=list(domains or []),
-        status=SubprojectStatus.ACTIVE,
+        status=TrackStatus.ACTIVE,
         owner=None,
         goal_ids=[],
     )
-    state.subprojects[code] = sub
-    logger.info(f"add_subproject code={code} title={title!r}")
-    return sub
+    state.tracks[code] = track
+    logger.info(f"add_track code={code} title={title!r}")
+    return track
 
 
-def switch_subproject(state: State, *, code: str) -> None:
-    """Set ``current.subproject_id`` to *code*.
+def switch_track(state: State, *, code: str) -> None:
+    """Set ``current.track_id`` to *code*.
 
     Raises:
         LifecycleError: ``code`` is unknown.
     """
-    if state.subprojects is None or code not in state.subprojects:
-        raise LifecycleError(f"unknown subproject {code!r}")
-    state.current.subproject_id = code
-    logger.info(f"switch_subproject code={code}")
+    if state.tracks is None or code not in state.tracks:
+        raise LifecycleError(f"unknown track {code!r}")
+    state.current.track_id = code
+    logger.info(f"switch_track code={code}")
