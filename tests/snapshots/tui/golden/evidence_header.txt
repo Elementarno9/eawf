@@ -28,7 +28,7 @@
  Followups
  no followups
  Jury ballots
- no jury ballots
+ no jury ballots yet — jury runs on UI-band high-risk closes
    T1 static
    T2 structural
    T3 snapshot
