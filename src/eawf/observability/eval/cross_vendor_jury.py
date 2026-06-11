@@ -64,7 +64,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.models import State, Wave
@@ -225,6 +225,40 @@ class PerItemJurorBallot(BaseModel):
 
     juror: str = Field(min_length=1)
     votes: tuple[RubricItemVote, ...]
+
+
+#: Forced-schema adapter for a single juror's per-item ballot. The live spec-jury
+#: ballot fn (:func:`eawf.workflow.dispatch.spec_jury.live_per_item_ballot_fn`)
+#: hands this to the bounded re-ask loop so a spawn that returns a malformed
+#: ballot (wrong keys, a non-bool vote) fails validation and the loop re-asks
+#: rather than admitting an off-schema body.
+_PER_ITEM_BALLOT_ADAPTER: TypeAdapter[PerItemJurorBallot] = TypeAdapter(PerItemJurorBallot)
+
+
+def parse_per_item_ballot(raw: object) -> PerItemJurorBallot:
+    """Validate *raw* as a :class:`PerItemJurorBallot`.
+
+    The forced-schema validator the live spec-jury ballot fn hands its bounded
+    re-ask loop. It validates *raw* directly against
+    :data:`_PER_ITEM_BALLOT_ADAPTER`, so a spawn that returns a ballot shape with
+    the wrong keys (or a non-bool vote) fails the schema and raises
+    :class:`pydantic.ValidationError` -- which the loop catches, classifies as a
+    schema mismatch, and re-asks (then exhausts typed). Raising a
+    ``ValidationError`` (not a plain ``ValueError``) is load-bearing: the loop
+    only catches ``json.JSONDecodeError`` + ``ValidationError``, so a plain
+    ``ValueError`` would escape the bounded retry uncaught.
+
+    Args:
+        raw: The JSON-decoded spawn output.
+
+    Returns:
+        The validated :class:`PerItemJurorBallot`.
+
+    Raises:
+        pydantic.ValidationError: When *raw* is not a valid per-item ballot
+            (wrong keys, a non-bool vote, or a missing field).
+    """
+    return _PER_ITEM_BALLOT_ADAPTER.validate_python(raw)
 
 
 class PerItemVerdict(BaseModel):
@@ -695,5 +729,6 @@ __all__ = [
     "RubricItemVote",
     "SpawnFactory",
     "convene_cross_vendor_jury",
+    "parse_per_item_ballot",
     "reduce_per_item_ballots",
 ]
