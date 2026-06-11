@@ -6335,6 +6335,18 @@
       "scope_id": "P30-I15-W20",
       "status": "done",
       "updated_at": "2026-06-11T14:22:38.887660Z"
+    },
+    "P30-I16-W24": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W24",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I16-W24",
+      "scope_id": "P30-I16-W24",
+      "status": "done",
+      "updated_at": "2026-06-11T15:44:30.244780Z"
     }
   },
   "agent_sessions": {
@@ -9456,7 +9468,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I16",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -10052,7 +10064,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -18828,6 +18840,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I15-W20",
       "updated_at": "2026-06-11T14:11:41.522256Z"
+    },
+    "P30-I16-W24": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W24-bucket-20260611T154315Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I16-W24",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I16-W24",
+      "updated_at": "2026-06-11T15:43:15.561485Z"
     }
   },
   "fleet_run": null,
@@ -20845,7 +20870,7 @@
       "intent": null,
       "opened_at": "2026-06-11T15:16:31.117473Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "UI strict parity, init redesign, seal + visual gates, P30-tail bundles",
       "trigger": "none",
       "wave_ids": [
@@ -20871,7 +20896,8 @@
         "P30-I16-W20",
         "P30-I16-W21",
         "P30-I16-W22",
-        "P30-I16-W23"
+        "P30-I16-W23",
+        "P30-I16-W24"
       ]
     },
     "P30-I17": {
@@ -21990,7 +22016,7 @@
   "schema_version": "1.10",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T15:26:59.016626Z",
+  "updated_at": "2026-06-11T15:44:30.244991Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -87739,6 +87765,68 @@
         }
       ],
       "title": "RB-2 digit-key misroute diagnosis and fix",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I16-W24": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T15:43:15.561154Z",
+      "closed_at": "2026-06-11T15:44:30.244780Z",
+      "commit": "4e8f7e7f02d07a40c4ee8ba56a7d76f290cabd51",
+      "deps": [],
+      "description": "Land the pending ruff 0.15.12 reflow churn (pinned hook version) so the main tree is format-clean before worktree cherry-picks; format-only, no semantic change.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/**",
+        "tests/**",
+        "tools/**"
+      ],
+      "gates": [],
+      "id": "P30-I16-W24",
+      "intent": {
+        "desired_outcome": "Main tree is ruff-format clean under pinned 0.15.12 so I16 worktree waves cherry-pick cleanly",
+        "evidence_refs": [],
+        "planned_steps": [
+          "stage the 46 reflowed files",
+          "commit under the wave prefix",
+          "verify ruff format --check exits 0"
+        ],
+        "priority_rationale": "Preflight gate: must land before any I16 worktree wave cherry-picks to avoid dirty-tree conflicts",
+        "problem": "HEAD has ruff-format drift vs the pinned 0.15.12 hook; a dirty tree blocks worktree cherry-picks",
+        "risks": [
+          "none beyond format-only churn; verified no semantic diff"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I16",
+      "opened_at": "2026-06-11T15:43:00.218289Z",
+      "outcome": "ruff 0.15.12 format sweep landed; ruff format --check over src/tests/tools exits 0; HEAD format-clean (inline operator chore, no agent runtime)",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "uv run ruff format --check over src tests tools exits 0; HEAD carries no ruff-format drift after the sweep commit lands",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "uv run ruff format --check over src tests tools exits 0; HEAD carries no ruff-format drift after the sweep commit lands",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Apply ruff 0.15.12 repo-wide format sweep",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
