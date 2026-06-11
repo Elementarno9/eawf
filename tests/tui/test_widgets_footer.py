@@ -729,15 +729,18 @@ def test_footer_paints_default_hints() -> None:
         async with app.run_test(size=(120, 6)) as pilot:
             await pilot.pause()
             rendered = app.export_screenshot()
-            # The leading affordances paint at 120; the canonical c config +
-            # F5 refresh globals are now present in the default strip.
-            assert "scope" in rendered
+            # W13: fit_hints fits the strip to the allocated width. At 120 with
+            # the burn cell the default strip overflows, so the lowest-priority
+            # global (w/r/u scope) is shed with an ellipsis while the rest of the
+            # global tail stays pinned -- and q quit now survives to the last
+            # cell rather than clipping off the right edge.
             assert "config" in rendered
             assert "refresh" in rendered
             assert "palette" in rendered
-            # ``q quit`` sits at the tail of the (now longer) canonical strip
-            # and clips off the visible 120-col width, so assert it via the
-            # pre-clip source content rather than the screenshot.
+            # ``quit`` (single word -- the SVG screenshot splits "q quit" on the
+            # non-breaking space) now survives at the visible tail rather than
+            # clipping off the right edge.
+            assert "quit" in rendered
             from textual.widgets import Static
 
             footer = app.query_one("#ftr", Footer)

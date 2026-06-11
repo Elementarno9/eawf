@@ -4,8 +4,9 @@ A single :class:`~textual.widgets.Static` composite reused by every
 per-scope screen (``RepoScreen`` / ``WorkspaceScreen`` / ``UserScreen``)
 with **no per-scope duplication**. It renders, left to right:
 
-* the two-tone ``Eä`` wordmark (capital E + a-umlaut) from
-  :func:`~eawf.surfaces.render.brand.render_wordmark_markup` -- the ``E``
+* a leading brand glyph (``◉`` unicode / ``*`` ascii, the terminal stand-in
+  for the Seal SVG) then the two-tone ``Eä`` wordmark (capital E + a-umlaut)
+  from :func:`~eawf.surfaces.render.brand.render_wordmark_markup` -- the ``E``
   plain and the ``ä`` carrying the palette accent, bold-styled and
   positioned **outside-left** of the breadcrumb per the operator branding
   convention;
@@ -281,7 +282,8 @@ def render_header(
     """Render the full header content-markup line from *state*.
 
     Pure render source -- unit-testable without mounting the widget. The
-    brand leads with the two-tone ``Eä`` wordmark from
+    brand leads with the accent brand glyph (``◉`` / ``*``) then the two-tone
+    ``Eä`` wordmark from
     :func:`~eawf.surfaces.render.brand.render_wordmark_markup` (the ``E``
     plain, the ``ä`` carrying the palette accent) wrapped in a ``[b]…[/b]``
     bold span -- the accent is threaded as the theme ``$accent`` var so the
@@ -307,8 +309,12 @@ def render_header(
     """
     crumb = build_breadcrumb(state, scope, mode, mode_name=mode_name, entity=entity, clickable=True)
     runtime = runtime_cell_text(state, mode=render_mode)
+    brand_glyph = chrome("brand", mode=render_mode)
     wordmark = render_wordmark_markup("$accent")
-    return f"[b]{wordmark}[/b]  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
+    return (
+        f"[b][$accent]{brand_glyph}[/] {wordmark}[/b]  {crumb}    "
+        f"[$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
+    )
 
 
 class Header(Static):

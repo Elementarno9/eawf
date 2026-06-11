@@ -35,6 +35,7 @@ from eawf.surfaces.tui.widgets.header import (
     render_header,
     runtime_cell_text,
 )
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 from ._palette_harness import PaletteHarnessApp
 
@@ -440,9 +441,11 @@ def test_render_header_populated_has_brand_left_of_breadcrumb() -> None:
 def test_render_header_uses_two_tone_wordmark_accent_on_umlaut_only() -> None:
     # W03: the header leads with brand.render_wordmark_markup -- the E plain
     # and the umlaut (U+00E4) wrapped in the $accent span -- not the whole
-    # brand in one accent span. Pin both halves of the two-tone split.
+    # brand in one accent span. W13: a leading accent brand glyph precedes the
+    # wordmark inside the same bold span. Pin both halves of the two-tone split.
     rendered = render_header(_load(_PHASE_ITER_WAVE))
-    assert "[b]E[$accent]ä[/][/b]" in rendered
+    brand_glyph = chrome("brand", mode="unicode")
+    assert f"[b][$accent]{brand_glyph}[/] E[$accent]ä[/][/b]" in rendered
     # The accent span opens immediately before the umlaut, never before the E.
     assert "[$accent]ä[/]" in rendered
     assert "[$accent]E" not in rendered

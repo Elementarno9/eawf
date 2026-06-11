@@ -114,7 +114,10 @@ _LIFECYCLE: dict[Sigil, tuple[str, str]] = {
 #: the rendered marks are dispatch=heavy-right-angle-quote,
 #: gate=square-with-rounded-corners-lozenge, attention=up-triangle,
 #: harmony=almost-equal, overview=identical-to (triple bar),
-#: runtime=dollar, check_on=square-with-fill, check_off=hollow-square.
+#: runtime=dollar, check_on=square-with-fill, check_off=hollow-square,
+#: brand=fisheye (the leading brand mark before the ``E\u00e4`` wordmark, the
+#: terminal-renderable stand-in for the Seal SVG that Textual cannot draw;
+#: ascii fallback ``*`` per ``brand-and-sigils.md`` Decision A).
 _CHROME: dict[str, tuple[str, str]] = {
     "dispatch": ("\u276f", ">"),  # heavy right-pointing angle quote
     "gate": ("\u2394", "[]"),  # software-function / lozenge
@@ -124,6 +127,7 @@ _CHROME: dict[str, tuple[str, str]] = {
     "runtime": ("$", "$"),  # dollar (same in both columns)
     "check_on": ("\u25a3", "[x]"),  # square with fill
     "check_off": ("\u25a2", "[ ]"),  # hollow square
+    "brand": ("\u25c9", "*"),  # fisheye -- the leading brand mark
 }
 
 #: :class:`Sigil` -> the :data:`~eawf.surfaces.tui.widgets.status_tint.STATUS_COLOURS`

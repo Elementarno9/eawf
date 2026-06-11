@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, ClassVar, Final
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
+from textual.events import Resize
 from textual.reactive import reactive
 from textual.widgets import Static
 
@@ -381,6 +382,31 @@ def format_needs_user_badge(count: int) -> str:
     return f"{NEEDS_USER_BADGE_LABEL} {safe} "
 
 
+#: The separator :func:`format_hints` and :func:`fit_hints` lay between hint
+#: fragments -- two spaces, a middle dot, two spaces (five cells). Shared so the
+#: width arithmetic in :func:`fit_hints` matches the string the strip renders.
+HINT_SEP: str = "  ·  "
+
+#: The marker :func:`fit_hints` inserts where it sheds mid-priority hints to make
+#: the strip fit a narrow row -- a single-cell horizontal ellipsis, so the
+#: operator sees the strip was trimmed rather than silently shortened.
+HINT_ELLIPSIS: str = "…"
+
+#: The global-affordance tokens :func:`fit_hints` keeps pinned while any width
+#: remains: scope-switch, config, refresh, palette, help, quit -- the tail band
+#: of :data:`HINT_KEY_PRIORITY`. They sit at a fixed offset from the right that
+#: the operator's eye relies on, so a too-narrow row sheds the per-mode middle
+#: band first and keeps these visible to the last cell.
+_GLOBAL_HINT_TOKENS: Final[frozenset[str]] = frozenset({"w/r/u", "c", "F5", "/", "?", "q"})
+
+#: The primary-navigation tokens :func:`fit_hints` keeps pinned at the HEAD of
+#: the strip -- the row cursor + drill affordances the operator uses most. The
+#: leading nav key stays visible at every width (the always-show-nav contract
+#: the footer-width tests pin), so the fitter sheds the per-mode middle band,
+#: then the global tail from the left, before it ever touches the nav head.
+_NAV_HINT_TOKENS: Final[frozenset[str]] = frozenset({"↑↓", "←→", "Enter", "Esc"})
+
+
 def format_hints(hints: tuple[str, ...]) -> str:
     """Join key hints into the footer strip with a separating bullet.
 
@@ -390,7 +416,87 @@ def format_hints(hints: tuple[str, ...]) -> str:
     Returns:
         The joined hint string, e.g. ``↑↓ select · Enter open · q quit``.
     """
-    return "  ·  ".join(hints)
+    return HINT_SEP.join(hints)
+
+
+def _hint_token(label: str) -> str:
+    """Return a hint fragment's leading key token (text before the first space)."""
+    return label.split(" ", 1)[0]
+
+
+def _hints_cell_width(fragments: list[str]) -> int:
+    """Return the rendered cell width of *fragments* joined by :data:`HINT_SEP`.
+
+    The fragments are markup-free ``"<token> <action>"`` labels whose code-point
+    length equals their cell width here (the arrow token ``↑↓`` and the middle
+    dot are each one cell per code point), so ``len`` is an exact cell count.
+
+    Args:
+        fragments: The hint fragments that would be joined and rendered.
+
+    Returns:
+        The total cell width, or ``0`` for an empty list.
+    """
+    if not fragments:
+        return 0
+    return sum(len(fragment) for fragment in fragments) + len(HINT_SEP) * (len(fragments) - 1)
+
+
+def fit_hints(hints: tuple[str, ...], width: int) -> str:
+    """Fit the ordered hint strip into *width* cells, never dropping the globals.
+
+    The footer hint strip is ``width: 1fr`` -- at a narrow terminal the full
+    strip overflows and Textual clips the OVERFLOWING right edge, which is
+    exactly where the global affordances (``c config`` / ``/ palette`` /
+    ``? help`` / ``q quit``) sit, so the operator loses the cross-surface keys
+    first. This fitter inverts that: it keeps the nav head
+    (:data:`_NAV_HINT_TOKENS`) AND the global tail (:data:`_GLOBAL_HINT_TOKENS`)
+    pinned and sheds the per-mode MIDDLE band to fit, marking the cut with
+    :data:`HINT_ELLIPSIS`. Only at an extreme width (head + tail alone overflow)
+    does it shed the tail from the left (lowest-priority global first) and then
+    the head from the right, always keeping the leading nav key and ``q quit``
+    visible. Fragments stay in their canonical :func:`order_hints` order.
+
+    Args:
+        hints: The ordered hint fragments (already through :func:`order_hints`).
+        width: The cell width the strip must fit. ``<= 0`` (pre-layout, the
+            allocated width is not known yet) returns the full strip unchanged;
+            the resize repaint refits once a real width lands.
+
+    Returns:
+        The fitted hint string, joined by :data:`HINT_SEP`.
+    """
+    fragments = list(hints)
+    if width <= 0 or _hints_cell_width(fragments) <= width:
+        return HINT_SEP.join(fragments)
+    head = [fragment for fragment in fragments if _hint_token(fragment) in _NAV_HINT_TOKENS]
+    tail = [fragment for fragment in fragments if _hint_token(fragment) in _GLOBAL_HINT_TOKENS]
+    middle = [
+        fragment
+        for fragment in fragments
+        if _hint_token(fragment) not in _NAV_HINT_TOKENS
+        and _hint_token(fragment) not in _GLOBAL_HINT_TOKENS
+    ]
+    kept: list[str] = []
+    shed = False
+    for index, fragment in enumerate(middle):
+        marker = [HINT_ELLIPSIS] if index < len(middle) - 1 else []
+        if _hints_cell_width([*head, *kept, fragment, *marker, *tail]) <= width:
+            kept.append(fragment)
+        else:
+            shed = True
+            break
+    out = [*head, *kept, *([HINT_ELLIPSIS] if shed else []), *tail]
+    # Extreme-narrow fallbacks: shed the tail from the LEFT (lowest-priority
+    # global first: scope-switch, then config, ...) so ``q quit`` survives, then
+    # the head from the RIGHT so the leading nav key stays visible to the last.
+    while _hints_cell_width(out) > width and len(tail) > 1:
+        tail.pop(0)
+        out = [*head, *kept, HINT_ELLIPSIS, *tail]
+    while _hints_cell_width(out) > width and len(head) > 1:
+        head.pop()
+        out = [*head, HINT_ELLIPSIS, *tail]
+    return HINT_SEP.join(out)
 
 
 def build_mode_row(active_mode: str | None) -> str:
@@ -599,6 +705,10 @@ class Footer(Static):
         self._repaint_burn()
         self._repaint_needs_user()
         self._repaint_modes()
+        # Fit the hint strip once the first layout settles and the strip's
+        # allocated width is known (compose seeded it at the full, unfitted
+        # width); keeps the global affordances pinned from the first paint.
+        self.call_after_refresh(self._repaint_hints)
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this widget's reactive."""
@@ -627,16 +737,15 @@ class Footer(Static):
         """
         self.hints = order_hints(hints)
 
-    def watch_hints(self, hints: tuple[str, ...]) -> None:
-        """Repaint the hint strip when the hints change.
+    def watch_hints(self) -> None:
+        """Re-fit + repaint the hint strip when the hints change.
 
-        Guarded on mount: the child ``Static`` only exists after
-        :meth:`compose`, so a pre-mount reactive assignment is a no-op
-        (``compose`` reads the current value).
+        The strip's allocated width is unchanged by a content swap (it is
+        ``width: 1fr``), so the refit reads the current allocated width
+        directly. Guarded on mount inside :meth:`_repaint_hints`: the child
+        ``Static`` only exists after :meth:`compose`.
         """
-        if not self.is_mounted:
-            return
-        self.query_one(".footer-hints", Static).update(format_hints(hints))
+        self._repaint_hints()
 
     def watch_state(self) -> None:
         """Repaint the weekly-burn line when the bound state changes."""
@@ -660,6 +769,35 @@ class Footer(Static):
         if not self.is_mounted:
             return
         self.query_one(".footer-burn", Static).update(build_weekly_burn_line(self.state))
+        # The burn cell is width: auto on the right; its width change reflows the
+        # 1fr hint strip, so refit the hints once the new layout has settled.
+        self.call_after_refresh(self._repaint_hints)
+
+    def _repaint_hints(self) -> None:
+        """Re-fit the hint strip to its allocated width and repaint it.
+
+        The strip is ``width: 1fr`` so its allocated cell width is the row width
+        minus the right-docked burn / badge / heartbeat cells; fitting to that
+        width (via :func:`fit_hints`) keeps the global affordances pinned rather
+        than letting Textual clip them off the right edge. Guarded on mount: the
+        child ``Static`` only exists after :meth:`compose`. Before the first
+        layout the allocated width is ``0`` and :func:`fit_hints` returns the
+        full strip; the resize / post-refresh repaint refits once a real width
+        lands.
+        """
+        cells = self.query(".footer-hints")
+        if not cells:
+            return
+        cell = cells.first(Static)
+        cell.update(fit_hints(self.hints, cell.size.width))
+
+    def on_resize(self, event: Resize) -> None:
+        """Refit the hint strip after the footer (and its 1fr strip) resizes.
+
+        Deferred to :meth:`~textual.widget.Widget.call_after_refresh` so the
+        child layout has settled and the strip's allocated width is current.
+        """
+        self.call_after_refresh(self._repaint_hints)
 
     def _repaint_needs_user(self) -> None:
         """Re-render the needs_user badge + flip its attention colour.
@@ -678,6 +816,9 @@ class Footer(Static):
         cell = cells.first(Static)
         cell.update(format_needs_user_badge(self.pending_pauses))
         cell.set_class(self.pending_pauses > 0, "-attention")
+        # The badge is width: auto; appearing / disappearing reflows the 1fr
+        # hint strip, so refit the hints once the new layout has settled.
+        self.call_after_refresh(self._repaint_hints)
 
     def _repaint_modes(self) -> None:
         """Re-render the mode row with the active mode highlighted.
@@ -708,6 +849,7 @@ __all__ = [
     "Heartbeat",
     "build_mode_row",
     "build_weekly_burn_line",
+    "fit_hints",
     "format_hints",
     "format_needs_user_badge",
     "order_hints",
