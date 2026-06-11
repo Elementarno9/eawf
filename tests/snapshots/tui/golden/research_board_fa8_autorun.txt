@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ _default    ≈ idle    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ _default    ≈ idle    HH:MM UTC
 
   ┌─ TOPIC TREE ───────────────────────┐┌─ CLAIMS / EVIDENCE ─────────────────┐┌─ PROGRESS / BUDGET ─────────────────┐
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN staged -- live run not yet      │
@@ -36,5 +36,5 @@
 
   enter peek  n new  o ask  t steer  b broadcast  v override  a approve  p park  r follow-up  s snapshot  x cancel
 
- ↑↓ select  ·  Enter open  ·  a approve  ·  d brief  ·  n new  ·  o ask  ·  p park  ·  r        weekly burn: — no data•
+ ↑↓ select  ·  Enter open  ·  …  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox

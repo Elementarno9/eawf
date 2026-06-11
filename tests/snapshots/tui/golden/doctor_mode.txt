@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Doctor    runtime: 1 running    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Doctor    runtime: 1 running    HH:MM UTC
 
   Health: degraded  6 checks, 2 warn
 

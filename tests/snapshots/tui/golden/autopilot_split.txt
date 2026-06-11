@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ Autopilot    ≈ idle    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ Autopilot    ≈ idle    HH:MM UTC
 
   autopilot idle -- press a to arm the fleet drive
 
@@ -36,5 +36,5 @@
 
   press d to dispatch the selected ready wave (speak it into being)
 
- ↑↓ select  ·  a arm  ·  d dispatch  ·  H halt  ·  K kill  ·  S skip  ·  space pause  ·  w/r/u  weekly burn: — no data•
+ ↑↓ select  ·  …  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quitweekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox

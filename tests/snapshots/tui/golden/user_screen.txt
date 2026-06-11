@@ -1,4 +1,4 @@
- Eä  user ❯ QR ❯ Home    ≈ idle    HH:MM UTC
+ ◉ Eä  user ❯ QR ❯ Home    ≈ idle    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
 │ ● nothing needs you                                                                                                  │
@@ -36,5 +36,5 @@
 
 
 
- ↑↓ select  ·  Enter open  ·  Esc back  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / paletteweekly burn: — no data•
+ ↑↓ select  ·  Enter open  ·  Esc back  ·  …  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quit weekly burn: — no data•
 △ state schema 1.0 trails live daemon schema 1.10; showing a migrated read-only view -- run eawf migrate to update the

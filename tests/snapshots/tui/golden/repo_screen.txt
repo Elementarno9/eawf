@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Home    runtime: 1 running    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Home    runtime: 1 running    HH:MM UTC
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ ATTENTION                                                                                                            │
 │ ● nothing needs you                                                                                                  │
@@ -36,5 +36,5 @@
 │                                                          ││                                                          │
 │                                                          ││                                                          │
 └──────────────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────┘
- ↑↓ select  ·  ←→ collapse  ·  Enter open  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  /     weekly burn: — no data•
+ ↑↓ select  ·  ←→ collapse  ·  Enter open  ·  …  ·  / palette  ·  ? help  ·  q quit             weekly burn: — no data•
 △ state schema 1.0 trails live daemon schema 1.10; showing a migrated read-only view -- run eawf migrate to update the

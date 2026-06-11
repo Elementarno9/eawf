@@ -2,5 +2,5 @@
 
 
 
- ↑↓ select  ·  ←→ collapse  ·  Enter open  ·  w/r/u     weekly burn: — no data•
+ ↑↓ select  ·  ←→ collapse  ·  …  ·  q quit             weekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence

@@ -1,4 +1,4 @@
- Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Evidence    runtime: 1 running    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Evidence    runtime: 1 running    HH:MM UTC
  criteria: 3/4 ready
   criterion  gate     produced_by  status
   CR-01      pass     -            pass
@@ -36,5 +36,5 @@
    T5 golden
    T6 approval
    T7 jury
- ↑↓ select  ·  p peek  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  qweekly burn: — no data•
+ ↑↓ select  ·  …  ·  w/r/u scope  ·  c config  ·  F5 refresh  ·  / palette  ·  ? help  ·  q quitweekly burn: — no data•
  1 home  ·  2 autopilot  ·  3 research  ·  4 trust  ·  5 doctor  ·  6 evidence  ·  7 feed  ·  8 watch  ·  9 sandbox
