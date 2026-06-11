@@ -5220,6 +5220,30 @@
       "status": "done",
       "updated_at": "2026-06-10T23:46:29.361216Z"
     },
+    "P30-I08-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I08-W04",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I08-W04",
+      "scope_id": "P30-I08-W04",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:18.830932Z"
+    },
+    "P30-I08-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I08-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I08-W05",
+      "scope_id": "P30-I08-W05",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:19.541245Z"
+    },
     "P30-I09-W01": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5231,6 +5255,30 @@
       "scope_id": "P30-I09-W01",
       "status": "done",
       "updated_at": "2026-06-10T23:46:32.237296Z"
+    },
+    "P30-I09-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I09-W02",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I09-W02",
+      "scope_id": "P30-I09-W02",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:20.331376Z"
+    },
+    "P30-I10-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W01",
+      "scope_id": "P30-I10-W01",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:21.123011Z"
     },
     "P30-I10-W04": {
       "actual_cost_usd": 0.0,
@@ -5244,6 +5292,42 @@
       "status": "done",
       "updated_at": "2026-06-10T23:46:32.956112Z"
     },
+    "P30-I10-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W05",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W05",
+      "scope_id": "P30-I10-W05",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:21.916330Z"
+    },
+    "P30-I10-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W10",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W10",
+      "scope_id": "P30-I10-W10",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:22.688294Z"
+    },
+    "P30-I10-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W11",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W11",
+      "scope_id": "P30-I10-W11",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:23.457205Z"
+    },
     "P30-I10-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -5255,6 +5339,42 @@
       "scope_id": "P30-I10-W12",
       "status": "done",
       "updated_at": "2026-06-10T23:46:33.654612Z"
+    },
+    "P30-I10-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W13",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W13",
+      "scope_id": "P30-I10-W13",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:24.211893Z"
+    },
+    "P30-I10-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I10-W14",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I10-W14",
+      "scope_id": "P30-I10-W14",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:25.713477Z"
+    },
+    "P30-I12-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I12-W01",
+      "elapsed_eu": 0.0,
+      "id": "ACT-P30-I12-W01",
+      "scope_id": "P30-I12-W01",
+      "status": "done",
+      "updated_at": "2026-06-11T00:11:24.985686Z"
     },
     "P30-I14-W01": {
       "actual_cost_usd": 0.0,
@@ -8484,7 +8604,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I10",
+    "iter_id": "P30-I12",
     "phase_id": "P30",
     "project_code": "EAWF",
     "subproject_id": null
@@ -9080,7 +9200,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -16648,6 +16768,32 @@
       "scope_id": "P30-I08-W03",
       "updated_at": "2026-06-10T23:12:07.976588Z"
     },
+    "P30-I08-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I08-W04-bucket-20260610T234803Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I08-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I08-W04",
+      "updated_at": "2026-06-10T23:48:03.207040Z"
+    },
+    "P30-I08-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I08-W05-bucket-20260610T234803Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I08-W05",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I08-W05",
+      "updated_at": "2026-06-10T23:48:03.676500Z"
+    },
     "P30-I09-W01": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I09-W01-bucket-20260610T231210Z",
@@ -16660,6 +16806,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I09-W01",
       "updated_at": "2026-06-10T23:12:10.081398Z"
+    },
+    "P30-I09-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I09-W02-bucket-20260610T234804Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I09-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I09-W02",
+      "updated_at": "2026-06-10T23:48:04.157088Z"
+    },
+    "P30-I10-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W01-bucket-20260610T234804Z",
+      "display": "3.5 EU · exp ~105m · pess ~378m",
+      "expected_eu": 3.5,
+      "expected_minutes": 105.0,
+      "id": "EST-P30-I10-W01",
+      "pessimistic_eu": 12.6,
+      "pessimistic_minutes": 378.0,
+      "reference_class": "bucket:XL",
+      "scope_id": "P30-I10-W01",
+      "updated_at": "2026-06-10T23:48:04.631028Z"
     },
     "P30-I10-W04": {
       "confidence": "low",
@@ -16674,6 +16846,45 @@
       "scope_id": "P30-I10-W04",
       "updated_at": "2026-06-10T23:12:10.636358Z"
     },
+    "P30-I10-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W05-bucket-20260610T234805Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I10-W05",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I10-W05",
+      "updated_at": "2026-06-10T23:48:05.120166Z"
+    },
+    "P30-I10-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W10-bucket-20260610T234805Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I10-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I10-W10",
+      "updated_at": "2026-06-10T23:48:05.592905Z"
+    },
+    "P30-I10-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W11-bucket-20260610T234806Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I10-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I10-W11",
+      "updated_at": "2026-06-10T23:48:06.073978Z"
+    },
     "P30-I10-W12": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I10-W12-bucket-20260610T231211Z",
@@ -16686,6 +16897,45 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I10-W12",
       "updated_at": "2026-06-10T23:12:11.145354Z"
+    },
+    "P30-I10-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W13-bucket-20260610T234806Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I10-W13",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I10-W13",
+      "updated_at": "2026-06-10T23:48:06.551770Z"
+    },
+    "P30-I10-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I10-W14-bucket-20260611T001100Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I10-W14",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I10-W14",
+      "updated_at": "2026-06-11T00:11:00.841645Z"
+    },
+    "P30-I12-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I12-W01-bucket-20260610T234807Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I12-W01",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I12-W01",
+      "updated_at": "2026-06-10T23:48:07.026349Z"
     },
     "P30-I14-W01": {
       "confidence": "low",
@@ -16831,6 +17081,7 @@
       "updated_at": "2026-06-10T23:12:09.557316Z"
     }
   },
+  "fleet_run": null,
   "goals": {
     "G01": {
       "closed_at": null,
@@ -16862,12 +17113,12 @@
       "title": "orchestration waves",
       "trigger": "none",
       "wave_ids": [
+        "P08-I01-W01",
         "P08-I01-W02",
         "P08-I01-W03",
         "P08-I01-W04",
         "P08-I01-W05",
-        "P08-I01-W06",
-        "P08-I01-W01"
+        "P08-I01-W06"
       ]
     },
     "P09-I01": {
@@ -16968,11 +17219,11 @@
       "wave_ids": [
         "P13-I01-W01",
         "P13-I01-W02",
+        "P13-I01-W03",
         "P13-I01-W04",
         "P13-I01-W05",
-        "P13-I01-W07",
-        "P13-I01-W03",
-        "P13-I01-W06"
+        "P13-I01-W06",
+        "P13-I01-W07"
       ]
     },
     "P14-I01": {
@@ -17071,8 +17322,8 @@
       "trigger": "none",
       "wave_ids": [
         "P15-I01-W01",
-        "P15-I01-W03",
         "P15-I01-W02",
+        "P15-I01-W03",
         "P15-I01-W04"
       ]
     },
@@ -17145,10 +17396,10 @@
       "trigger": "none",
       "wave_ids": [
         "P19-I01-W01",
-        "P19-I01-W05",
         "P19-I01-W02",
         "P19-I01-W03",
         "P19-I01-W04",
+        "P19-I01-W05",
         "P19-I01-W06",
         "P19-I01-W07",
         "P19-I01-W08",
@@ -17461,11 +17712,11 @@
         "P26-I01-W28",
         "P26-I01-W29",
         "P26-I01-W30",
-        "P26-I01-W33",
+        "P26-I01-W31",
         "P26-I01-W32",
+        "P26-I01-W33",
         "P26-I01-W34",
         "P26-I01-W35",
-        "P26-I01-W31",
         "P26-I01-W36",
         "P26-I01-W37",
         "P26-I01-W38",
@@ -17504,9 +17755,9 @@
         "P26-I02-W11",
         "P26-I02-W12",
         "P26-I02-W13",
+        "P26-I02-W14",
         "P26-I02-W15",
         "P26-I02-W16",
-        "P26-I02-W14",
         "P26-I02-W17",
         "P26-I02-W18",
         "P26-I02-W19",
@@ -17605,13 +17856,13 @@
         "P27-I02-W29",
         "P27-I02-W30",
         "P27-I02-W31",
+        "P27-I02-W32",
         "P27-I02-W33",
         "P27-I02-W34",
         "P27-I02-W35",
         "P27-I02-W36",
         "P27-I02-W37",
         "P27-I02-W38",
-        "P27-I02-W32",
         "P27-I02-W39",
         "P27-I02-W40"
       ]
@@ -17653,10 +17904,10 @@
         "P27-I03-W21",
         "P27-I03-W22",
         "P27-I03-W23",
-        "P27-I03-W27",
         "P27-I03-W24",
         "P27-I03-W25",
         "P27-I03-W26",
+        "P27-I03-W27",
         "P27-I03-W28"
       ]
     },
@@ -17897,6 +18148,7 @@
         "P28-I03-W24",
         "P28-I03-W25",
         "P28-I03-W26",
+        "P28-I03-W27",
         "P28-I03-W28",
         "P28-I03-W29",
         "P28-I03-W30",
@@ -17907,8 +18159,8 @@
         "P28-I03-W35",
         "P28-I03-W36",
         "P28-I03-W37",
-        "P28-I03-W27",
         "P28-I03-W38",
+        "P28-I03-W39",
         "P28-I03-W40",
         "P28-I03-W41",
         "P28-I03-W42",
@@ -17917,7 +18169,6 @@
         "P28-I03-W45",
         "P28-I03-W46",
         "P28-I03-W47",
-        "P28-I03-W39",
         "P28-I03-W48",
         "P28-I03-W49",
         "P28-I03-W50",
@@ -17954,30 +18205,30 @@
       "wave_ids": [
         "P29-I01-W01",
         "P29-I01-W02",
+        "P29-I01-W03",
         "P29-I01-W04",
+        "P29-I01-W05",
         "P29-I01-W06",
         "P29-I01-W07",
-        "P29-I01-W11",
-        "P29-I01-W19",
-        "P29-I01-W20",
-        "P29-I01-W23",
-        "P29-I01-W26",
-        "P29-I01-W03",
-        "P29-I01-W05",
         "P29-I01-W08",
         "P29-I01-W09",
-        "P29-I01-W12",
-        "P29-I01-W21",
         "P29-I01-W10",
+        "P29-I01-W11",
+        "P29-I01-W12",
         "P29-I01-W13",
         "P29-I01-W14",
-        "P29-I01-W17",
-        "P29-I01-W22",
-        "P29-I01-W24",
-        "P29-I01-W25",
         "P29-I01-W15",
         "P29-I01-W16",
+        "P29-I01-W17",
         "P29-I01-W18",
+        "P29-I01-W19",
+        "P29-I01-W20",
+        "P29-I01-W21",
+        "P29-I01-W22",
+        "P29-I01-W23",
+        "P29-I01-W24",
+        "P29-I01-W25",
+        "P29-I01-W26",
         "P29-I01-W27",
         "P29-I01-W28",
         "P29-I01-W29"
@@ -18013,18 +18264,18 @@
         "P29-I02-W14",
         "P29-I02-W15",
         "P29-I02-W16",
-        "P29-I02-W18",
         "P29-I02-W17",
+        "P29-I02-W18",
         "P29-I02-W19",
         "P29-I02-W20",
         "P29-I02-W21",
         "P29-I02-W22",
         "P29-I02-W23",
         "P29-I02-W24",
+        "P29-I02-W25",
         "P29-I02-W26",
         "P29-I02-W27",
         "P29-I02-W28",
-        "P29-I02-W25",
         "P29-I02-W29",
         "P29-I02-W30",
         "P29-I02-W31",
@@ -18045,11 +18296,11 @@
       "title": "Safety floor: env-scrub, egress proxy, FS jail",
       "trigger": "none",
       "wave_ids": [
-        "P29-I03-W03",
         "P29-I03-W01",
         "P29-I03-W02",
-        "P29-I03-W05",
-        "P29-I03-W04"
+        "P29-I03-W03",
+        "P29-I03-W04",
+        "P29-I03-W05"
       ]
     },
     "P29-I04": {
@@ -18066,19 +18317,19 @@
       "title": "Live spawn, cross-vendor jury, research orchestrator rounds",
       "trigger": "none",
       "wave_ids": [
-        "P29-I04-W04",
-        "P29-I04-W13",
         "P29-I04-W01",
-        "P29-I04-W05",
-        "P29-I04-W06",
         "P29-I04-W02",
         "P29-I04-W03",
+        "P29-I04-W04",
+        "P29-I04-W05",
+        "P29-I04-W06",
         "P29-I04-W07",
+        "P29-I04-W08",
         "P29-I04-W09",
+        "P29-I04-W10",
         "P29-I04-W11",
         "P29-I04-W12",
-        "P29-I04-W08",
-        "P29-I04-W10",
+        "P29-I04-W13",
         "P29-I04-W14",
         "P29-I04-W15"
       ]
@@ -18098,10 +18349,10 @@
       "trigger": "none",
       "wave_ids": [
         "P29-I05-W01",
-        "P29-I05-W05",
         "P29-I05-W02",
         "P29-I05-W03",
         "P29-I05-W04",
+        "P29-I05-W05",
         "P29-I05-W06",
         "P29-I05-W07",
         "P29-I05-W08",
@@ -18127,15 +18378,15 @@
       "title": "Release: plugin packaging, marketplace, CI publish, version-sync",
       "trigger": "none",
       "wave_ids": [
-        "P29-I06-W03",
-        "P29-I06-W04",
-        "P29-I06-W08",
-        "P29-I06-W09",
         "P29-I06-W01",
         "P29-I06-W02",
+        "P29-I06-W03",
+        "P29-I06-W04",
         "P29-I06-W05",
         "P29-I06-W06",
         "P29-I06-W07",
+        "P29-I06-W08",
+        "P29-I06-W09",
         "P29-I06-W10"
       ]
     },
@@ -18156,9 +18407,9 @@
         "P29-I07-W01",
         "P29-I07-W02",
         "P29-I07-W03",
-        "P29-I07-W06",
         "P29-I07-W04",
         "P29-I07-W05",
+        "P29-I07-W06",
         "P29-I07-W07",
         "P29-I07-W08",
         "P29-I07-W09",
@@ -18410,11 +18661,11 @@
         "P30-I01-W03",
         "P30-I01-W04",
         "P30-I01-W05",
-        "P30-I01-W07",
-        "P30-I01-W10",
         "P30-I01-W06",
+        "P30-I01-W07",
         "P30-I01-W08",
         "P30-I01-W09",
+        "P30-I01-W10",
         "P30-I01-W11"
       ]
     },
@@ -18433,12 +18684,10 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I02-W01",
-        "P30-I02-W29",
         "P30-I02-W02",
-        "P30-I02-W05",
-        "P30-I02-W33",
         "P30-I02-W03",
         "P30-I02-W04",
+        "P30-I02-W05",
         "P30-I02-W06",
         "P30-I02-W07",
         "P30-I02-W08",
@@ -18460,11 +18709,13 @@
         "P30-I02-W24",
         "P30-I02-W25",
         "P30-I02-W26",
-        "P30-I02-W28",
-        "P30-I02-W31",
         "P30-I02-W27",
+        "P30-I02-W28",
+        "P30-I02-W29",
         "P30-I02-W30",
+        "P30-I02-W31",
         "P30-I02-W32",
+        "P30-I02-W33",
         "P30-I02-W34"
       ]
     },
@@ -18483,13 +18734,13 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I03-W01",
-        "P30-I03-W04",
-        "P30-I03-W07",
         "P30-I03-W02",
-        "P30-I03-W08",
         "P30-I03-W03",
+        "P30-I03-W04",
         "P30-I03-W05",
         "P30-I03-W06",
+        "P30-I03-W07",
+        "P30-I03-W08",
         "P30-I03-W09"
       ]
     },
@@ -18511,11 +18762,11 @@
         "P30-I04-W02",
         "P30-I04-W03",
         "P30-I04-W04",
-        "P30-I04-W07",
         "P30-I04-W05",
         "P30-I04-W06",
-        "P30-I04-W09",
+        "P30-I04-W07",
         "P30-I04-W08",
+        "P30-I04-W09",
         "P30-I04-W10",
         "P30-I04-W11"
       ]
@@ -18542,8 +18793,8 @@
         "P30-I05-W06",
         "P30-I05-W07",
         "P30-I05-W08",
-        "P30-I05-W10",
         "P30-I05-W09",
+        "P30-I05-W10",
         "P30-I05-W11",
         "P30-I05-W12",
         "P30-I05-W13",
@@ -18567,13 +18818,13 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I06-W01",
-        "P30-I06-W05",
         "P30-I06-W02",
         "P30-I06-W03",
         "P30-I06-W04",
+        "P30-I06-W05",
         "P30-I06-W06",
-        "P30-I06-W08",
         "P30-I06-W07",
+        "P30-I06-W08",
         "P30-I06-W09",
         "P30-I06-W10"
       ]
@@ -18593,22 +18844,22 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I07-W01",
-        "P30-I07-W06",
-        "P30-I07-W10",
         "P30-I07-W02",
         "P30-I07-W03",
         "P30-I07-W04",
         "P30-I07-W05",
+        "P30-I07-W06",
         "P30-I07-W07",
         "P30-I07-W08",
-        "P30-I07-W11",
-        "P30-I07-W16",
         "P30-I07-W09",
-        "P30-I07-W13",
-        "P30-I07-W15",
-        "P30-I07-W17",
+        "P30-I07-W10",
+        "P30-I07-W11",
         "P30-I07-W12",
-        "P30-I07-W14"
+        "P30-I07-W13",
+        "P30-I07-W14",
+        "P30-I07-W15",
+        "P30-I07-W16",
+        "P30-I07-W17"
       ]
     },
     "P30-I08": {
@@ -18651,10 +18902,10 @@
         "P30-I09-W01",
         "P30-I09-W02",
         "P30-I09-W03",
-        "P30-I09-W07",
         "P30-I09-W04",
         "P30-I09-W05",
         "P30-I09-W06",
+        "P30-I09-W07",
         "P30-I09-W08"
       ]
     },
@@ -18673,18 +18924,19 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I10-W01",
-        "P30-I10-W04",
-        "P30-I10-W11",
-        "P30-I10-W12",
-        "P30-I10-W13",
         "P30-I10-W02",
+        "P30-I10-W03",
+        "P30-I10-W04",
         "P30-I10-W05",
         "P30-I10-W06",
-        "P30-I10-W03",
         "P30-I10-W07",
         "P30-I10-W08",
         "P30-I10-W09",
-        "P30-I10-W10"
+        "P30-I10-W10",
+        "P30-I10-W11",
+        "P30-I10-W12",
+        "P30-I10-W13",
+        "P30-I10-W14"
       ]
     },
     "P30-I11": {
@@ -18703,11 +18955,11 @@
       "wave_ids": [
         "P30-I11-W01",
         "P30-I11-W02",
-        "P30-I11-W04",
-        "P30-I11-W06",
         "P30-I11-W03",
-        "P30-I11-W07",
+        "P30-I11-W04",
         "P30-I11-W05",
+        "P30-I11-W06",
+        "P30-I11-W07",
         "P30-I11-W08"
       ]
     },
@@ -18721,20 +18973,20 @@
       "intent": null,
       "opened_at": "2026-06-09T12:29:17.753794Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Autopilot drive-loop substrate plus real kill and budget teeth",
       "trigger": "none",
       "wave_ids": [
         "P30-I12-W01",
         "P30-I12-W02",
+        "P30-I12-W03",
         "P30-I12-W04",
         "P30-I12-W05",
-        "P30-I12-W09",
-        "P30-I12-W03",
         "P30-I12-W06",
-        "P30-I12-W08",
-        "P30-I12-W10",
         "P30-I12-W07",
+        "P30-I12-W08",
+        "P30-I12-W09",
+        "P30-I12-W10",
         "P30-I12-W11"
       ]
     },
@@ -18753,15 +19005,15 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I13-W01",
-        "P30-I13-W08",
-        "P30-I13-W04",
         "P30-I13-W02",
-        "P30-I13-W05",
-        "P30-I13-W07",
         "P30-I13-W03",
+        "P30-I13-W04",
+        "P30-I13-W05",
         "P30-I13-W06",
-        "P30-I13-W10",
+        "P30-I13-W07",
+        "P30-I13-W08",
         "P30-I13-W09",
+        "P30-I13-W10",
         "P30-I13-W11"
       ]
     },
@@ -18780,13 +19032,13 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I14-W01",
-        "P30-I14-W03",
-        "P30-I14-W05",
-        "P30-I14-W08",
         "P30-I14-W02",
+        "P30-I14-W03",
         "P30-I14-W04",
+        "P30-I14-W05",
         "P30-I14-W06",
         "P30-I14-W07",
+        "P30-I14-W08",
         "P30-I14-W09",
         "P30-I14-W10",
         "P30-I14-W11"
@@ -18807,13 +19059,13 @@
       "trigger": "none",
       "wave_ids": [
         "P30-I15-W01",
+        "P30-I15-W02",
+        "P30-I15-W03",
+        "P30-I15-W04",
+        "P30-I15-W05",
         "P30-I15-W06",
         "P30-I15-W07",
-        "P30-I15-W02",
-        "P30-I15-W04",
         "P30-I15-W08",
-        "P30-I15-W03",
-        "P30-I15-W05",
         "P30-I15-W09"
       ]
     }
@@ -19754,7 +20006,7 @@
   "schema_version": "1.9",
   "scope_kind": "repo",
   "subprojects": null,
-  "updated_at": "2026-06-10T23:46:33.654754Z",
+  "updated_at": "2026-06-11T00:11:25.713652Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -77510,10 +77762,10 @@
     "P30-I08-W04": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:03.206933Z",
+      "closed_at": "2026-06-11T00:11:18.830932Z",
+      "commit": "3d5cbc8d3522575cf4f7b6c77d838e4e8aa8ede0",
       "deps": [
         "P30-I08-W03"
       ],
@@ -77528,12 +77780,12 @@
       "intent": null,
       "iter_id": "P30-I08",
       "opened_at": "2026-06-09T12:29:17.816365Z",
-      "outcome": null,
+      "outcome": "Zoom quadrant reskinned to green/sigil + shared accent-dim focus tint, both scopes",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -77558,10 +77810,10 @@
     "P30-I08-W05": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:03.676409Z",
+      "closed_at": "2026-06-11T00:11:19.541245Z",
+      "commit": "398b666a7c84bbe77bede33d7ddd84c9050e07f8",
       "deps": [
         "P30-I08-W03"
       ],
@@ -77577,12 +77829,12 @@
       "intent": null,
       "iter_id": "P30-I08",
       "opened_at": "2026-06-09T12:29:17.816823Z",
-      "outcome": null,
+      "outcome": "Honest-empty no-repos card both scopes; no fabricated repo/totals row",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -77775,10 +78027,10 @@
         "P30-I09-W07",
         "P30-I09-W04"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:04.156990Z",
+      "closed_at": "2026-06-11T00:11:20.331376Z",
+      "commit": "811d7299411fecc4614cdfeca80ee07c4697ca80",
       "deps": [
         "P30-I09-W01"
       ],
@@ -77794,12 +78046,12 @@
       "intent": null,
       "iter_id": "P30-I09",
       "opened_at": "2026-06-09T12:29:17.781820Z",
-      "outcome": null,
+      "outcome": "validate_jury reducer: Fleiss-kappa + Brier/ECE + unanimous-pass-on-known-bad; refuse-to-score under min_n",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78210,10 +78462,10 @@
         "P30-I10-W02",
         "P30-I10-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:04.630938Z",
+      "closed_at": "2026-06-11T00:11:21.123011Z",
+      "commit": "cb332f5a852235aea458f1182e97e01f62c77483",
       "deps": [],
       "description": "Convert the 1392/1434 legacy no-op CriterionSpec rows to real falsifying gates. Build the missing legacy-to-typed converter (seed verb to tier via assign_oracle_tier + the eawf021 verb/locus parser; hand-author the GateSpec bodies). Closes B095.",
       "dispatch_history": [],
@@ -78228,12 +78480,12 @@
       "intent": null,
       "iter_id": "P30-I10",
       "opened_at": "2026-06-09T12:29:17.764029Z",
-      "outcome": null,
+      "outcome": "Legacy-to-typed criterion converter + backfill tool; legacy count 0 on sample (B095)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78429,10 +78681,10 @@
       "blocks": [
         "P30-I12-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:05.120064Z",
+      "closed_at": "2026-06-11T00:11:21.916330Z",
+      "commit": "15e15b2ded3d6334132c641972fd749d55f7bbd7",
       "deps": [
         "P30-I10-W04"
       ],
@@ -78448,12 +78700,12 @@
       "intent": null,
       "iter_id": "P30-I10",
       "opened_at": "2026-06-09T12:29:17.782711Z",
-      "outcome": null,
+      "outcome": "codex+opencode brought to claude sandbox parity; per-call tool-deny (B081)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78705,10 +78957,10 @@
     "P30-I10-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:05.592816Z",
+      "closed_at": "2026-06-11T00:11:22.688294Z",
+      "commit": "ee33f4db20d687a908b5792298115cd1ff379250",
       "deps": [
         "P30-I06-W02"
       ],
@@ -78725,12 +78977,12 @@
       "intent": null,
       "iter_id": "P30-I10",
       "opened_at": "2026-06-09T12:29:17.808203Z",
-      "outcome": null,
+      "outcome": "resolve_routing wired into live dispatch; idle-contract row asserts live caller",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78769,10 +79021,10 @@
     "P30-I10-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:06.073882Z",
+      "closed_at": "2026-06-11T00:11:23.457205Z",
+      "commit": "ef16b3e3ca7d4cc3b74f79b0b07e2a423647fa04",
       "deps": [],
       "description": "The balanced-autonomy interrupt (surface only a genuine fork, not every question) needs an urgency on the pause/UserQuestion schema; it is absent, so the attention feed cannot rank a blocking fork above a routine prompt. Add the typed urgency field + a feed-ordering use.",
       "dispatch_history": [],
@@ -78787,12 +79039,12 @@
       "intent": null,
       "iter_id": "P30-I10",
       "opened_at": "2026-06-09T12:29:17.764841Z",
-      "outcome": null,
+      "outcome": "Urgency enum on pause/UserQuestion; attention feed ranks blocking above routine",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78865,10 +79117,10 @@
     "P30-I10-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:06.551680Z",
+      "closed_at": "2026-06-11T00:11:24.211893Z",
+      "commit": "f73caf663411bcc2f7eb6523802200f038a1c02d",
       "deps": [],
       "description": "The depth vocabulary drifts three ways and research.default_depth is a dark config key nothing reads. Reconcile to the canonical shallow/medium/deep/exhaustive set and make the research stage read research.default_depth, closing a standing idle config contract.",
       "dispatch_history": [],
@@ -78883,12 +79135,12 @@
       "intent": null,
       "iter_id": "P30-I10",
       "opened_at": "2026-06-09T12:29:17.765639Z",
-      "outcome": null,
+      "outcome": "Canonical depth enum + research stage reads research.default_depth",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -78906,6 +79158,64 @@
         }
       ],
       "title": "QUAL-13 reconcile depth vocab and read research.default_depth",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I10-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-11T00:11:00.837833Z",
+      "closed_at": "2026-06-11T00:11:25.713477Z",
+      "commit": "5f27a1ca5b97f69e1b96707b3ca8ee8ce3d38f39",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/runtimes/claude/test_spawn_session.py"
+      ],
+      "gates": [],
+      "id": "P30-I10-W14",
+      "intent": {
+        "desired_outcome": "the claude spawn-session unit suite passes by updating its jail-stub signatures to accept the new kwargs, production code unchanged",
+        "evidence_refs": [],
+        "planned_steps": [
+          "widen the lambda jail stub to accept session and sink",
+          "widen the _recording_jail signature likewise",
+          "rerun the claude spawn-session suite green"
+        ],
+        "priority_rationale": "Red branch tests block iter and phase close; this is a fast reactive repair of W04 fallout surfaced by W05",
+        "problem": "I10-W04 widened _maybe_jail_argv with session/sink kwargs but left the claude spawn-session unit-test jail stub on the old signature, reddening 10 tests",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I10",
+      "opened_at": "2026-06-11T00:09:56.369730Z",
+      "outcome": "Restored claude jail-stub parity with W04 session/sink kwargs; suite 24 green",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "tests/runtimes/claude/test_spawn_session.py passes its 24 tests after the _maybe_jail_argv test stub accepts the session and sink kwargs added by I10-W04",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tests/runtimes/claude/test_spawn_session.py passes its 24 tests after the _maybe_jail_argv test stub accepts the session and sink kwargs added by I10-W04",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Restore claude spawn-session jail-stub parity with W04 sandbox kwargs",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -79377,10 +79687,10 @@
         "P30-I13-W02",
         "P30-I12-W11"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "flow-p30",
+      "claimed_at": "2026-06-10T23:48:07.026258Z",
+      "closed_at": "2026-06-11T00:11:24.985686Z",
+      "commit": "0bae450829b48964e94ecef8705c47e8ea1e993f",
       "deps": [
         "P30-I06-W07",
         "P30-I07-W07"
@@ -79398,12 +79708,12 @@
       "intent": null,
       "iter_id": "P30-I12",
       "opened_at": "2026-06-09T12:29:17.819129Z",
-      "outcome": null,
+      "outcome": "Daemon FleetRun state + fleet.drive auto-drain loop (IDLE/DRAINING/PAUSED/HALTED/DONE; kclean+drain)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
