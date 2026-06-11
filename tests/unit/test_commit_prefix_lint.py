@@ -505,3 +505,86 @@ def test_rejects_malformed_release_annotation(tmp_path: Path, mod) -> None:
     code, diag = mod.lint(msg, [".ea/state.json"])
     assert code == 1
     assert "release annotation rejected" in diag
+
+
+def test_check_release_annotation_accepts_v060_phase_close_subject(mod) -> None:
+    """P30-I15-W09: the v0.6.0 phase-close annotation is accepted (returns None).
+
+    The deterministic close commit that ends P30 carries
+    ``(release=v0.6.0)``; ``_check_release_annotation`` returns ``None`` (no
+    rejection) so the annotation rides the ``[P30] state:`` close subject.
+    """
+    subject = "[P30] state: close iter + phase (audit=A50-P30) (release=v0.6.0)"
+    assert mod._check_release_annotation(subject) is None
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        "(release=0.6.0)",  # missing leading 'v'
+        "(release=v0.6)",  # not MAJOR.MINOR.PATCH
+        "(release=v0.6.0.0)",  # too many segments
+        "(release=v0.6.0-rc1)",  # hyphenated pre-release not accepted
+    ],
+)
+def test_check_release_annotation_rejects_malformed_v060_forms(mod, annotation: str) -> None:
+    """P30-I15-W09: a malformed v0.6.0-shaped annotation is rejected.
+
+    The prefix ``(release=`` is present but the version body does not match
+    ``v<MAJOR>.<MINOR>.<PATCH>[aN|bN|rcN]``, so the linter rejects with the
+    ``release annotation rejected`` diagnostic.
+    """
+    subject = f"[P30] state: close iter + phase (audit=A50-P30) {annotation}"
+    result = mod._check_release_annotation(subject)
+    assert result is not None
+    code, diag = result
+    assert code == 1
+    assert "release annotation rejected" in diag
+
+
+def test_phase_release_workflow_regex_captures_v060_tag_and_version() -> None:
+    """P30-I15-W09: the phase-release.yaml annotation regex captures v0.6.0.
+
+    Pins the workflow's annotation-parse contract: the ``(release=v...)``
+    regex embedded in ``.github/workflows/phase-release.yaml`` captures
+    ``tag=v0.6.0`` and ``version=0.6.0`` from the close-commit subject. The
+    test reads the regex out of the YAML so the workflow and this assertion
+    stay coupled.
+    """
+    import re
+
+    workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
+        encoding="utf-8"
+    )
+    pattern_match = re.search(r'match = re\.search\(r"([^"]+)", subject\)', workflow)
+    assert pattern_match is not None, "annotation regex literal not found in phase-release.yaml"
+    annotation_re = re.compile(pattern_match.group(1))
+
+    subject = "[P30] state: close iter + phase (audit=A50-P30) (release=v0.6.0)"
+    captured = annotation_re.search(subject)
+    assert captured is not None
+    tag = captured.group(1)
+    assert tag == "v0.6.0"
+    assert tag[1:] == "0.6.0"
+
+
+def test_phase_release_workflow_version_source_regex_reads_060() -> None:
+    """P30-I15-W09: the workflow version-source regex reads ``__version__``.
+
+    Pins the version-source-match guard: the regex that reads
+    ``src/eawf/_version.py`` in ``phase-release.yaml`` extracts the version
+    string the step compares against the annotation (``0.6.0`` post-W07).
+    """
+    import re
+
+    workflow = (_REPO_ROOT / ".github" / "workflows" / "phase-release.yaml").read_text(
+        encoding="utf-8"
+    )
+    version_match = re.search(
+        r"match = re\.search\(\s*r'(\^__version__[^']+)'", workflow
+    )
+    assert version_match is not None, "version-source regex literal not found in phase-release.yaml"
+    version_re = re.compile(version_match.group(1), flags=re.MULTILINE)
+    captured = version_re.search('__version__ = "0.6.0"\n')
+    assert captured is not None
+    assert captured.group(1) == "0.6.0"
