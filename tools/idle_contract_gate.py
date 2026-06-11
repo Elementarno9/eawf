@@ -34,6 +34,24 @@ exits non-zero:
   per-role tier table selects the spawn model instead of a hardcoded default.
   If a later refactor drops the direct call, the source no longer matches and
   this gate reds -- un-idling the routing contract.
+- :func:`check_spec_jury_ballot_fn_wired` -- a source-scan probe asserting the
+  daemon close path binds the LIVE per-item spec-jury ballot fn (I09-W05):
+  ``_spec_jury_ballot_fn`` returns ``live_per_item_ballot_fn(...)`` and the gate
+  consults it. A regression that reverts the builder to a bare ``return None``
+  re-idles the producer and reds this row.
+- :func:`check_jury_reliability_map_wired` -- a source-scan probe asserting the
+  live convener threads the reputation reliability map into the jury reducer
+  (I09-W06): ``reliability=reliability`` flows into
+  ``aggregate_jury(..., reliability=...)``. Dropping the kwarg re-idles the
+  reputation-weighting seam and reds this row.
+- :func:`check_jury_block_authority_wired` -- a source-scan probe asserting the
+  ordered-oracle jury branch tests ``block_authority is BlockAuthority.BLOCKING``
+  BEFORE it raises ``LifecycleError`` (I09-W04), so a veto blocks only an EARNED
+  jury. Bypassing the authority gate reds this row.
+- :func:`check_validate_jury_cli_wired` -- a source-scan probe asserting
+  ``validate_jury`` has a live CLI caller (I09-W07): the ``eawf metrics
+  jury-validation`` command binds it directly. Orphaning the reducer reds this
+  row.
 - :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
   pre-commit gate stays enabled so the runtime close gate cannot ship idle.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
@@ -163,6 +181,10 @@ class GateFailure(StrEnum):
     RESOLVE_ROUTING_IDLE = "resolve_routing_idle"
     RUNTIME_GATE_IDLE = "runtime_gate_idle"
     AUDIT_DSL_KIND_IDLE = "audit_dsl_kind_idle"
+    SPEC_JURY_BALLOT_FN_IDLE = "spec_jury_ballot_fn_idle"
+    JURY_RELIABILITY_MAP_IDLE = "jury_reliability_map_idle"
+    JURY_BLOCK_AUTHORITY_IDLE = "jury_block_authority_idle"
+    VALIDATE_JURY_CLI_IDLE = "validate_jury_cli_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -722,6 +744,276 @@ def check_resolve_routing_wired(
             f"{module_path} carries no direct resolve_routing(...) call, so the "
             "per-role tier table never selects the spawn model (the path "
             "regressed to a hardcoded default)"
+        ),
+    )
+
+
+# =========================================================================== #
+# I09 jury-validation bindings: each of the four must stay wired, not idle.
+# =========================================================================== #
+
+#: The daemon close path that binds the per-item spec-jury ballot fn (I09-W05)
+#: and consults the earned block authority (I09-W04). Read off the working tree.
+_SPEC_JURY_GATE_MODULE = "src/eawf/runtime/daemon/methods/state.py"
+
+#: The live convener that threads the reputation reliability map into the jury
+#: reducer (I09-W06). Read off the working tree.
+_CROSS_VENDOR_JURY_MODULE = "src/eawf/observability/eval/cross_vendor_jury.py"
+
+#: The ordered-oracle module whose jury branch consults *block_authority* before
+#: raising (I09-W04). Read off the working tree.
+_ORACLE_MODULE = "src/eawf/workflow/verify/oracle.py"
+
+#: The CLI command that gives ``validate_jury`` a live caller (I09-W07). Read off
+#: the working tree.
+_METRICS_CLI_MODULE = "src/eawf/surfaces/cli/commands/metrics.py"
+
+#: ``_spec_jury_ballot_fn`` returns a LIVE ballot fn by binding
+#: ``live_per_item_ballot_fn(...)``; a regression that reverts the body to a bare
+#: ``return None`` (re-idling the producer) drops this call.
+_LIVE_BALLOT_FN_CALL_RE = re.compile(r"\blive_per_item_ballot_fn\s*\(")
+
+#: The gate consults ``_spec_jury_ballot_fn(...)`` and degrades when it is None.
+#: A regression that stops calling the builder leaves the producer unreachable.
+_BALLOT_FN_CONSULT_RE = re.compile(r"\bballot_fn\s*=\s*_spec_jury_ballot_fn\s*\(")
+
+#: The convener threads ``reliability=`` into the jury reducer; a regression that
+#: drops the kwarg re-idles the reputation-weighting seam.
+_RELIABILITY_THREAD_RE = re.compile(r"\breliability\s*=\s*reliability\b")
+
+#: The reducer forwards the map into ``aggregate_jury(..., reliability=...)``;
+#: this is the production sink that consumes the threaded map.
+_AGGREGATE_RELIABILITY_RE = re.compile(r"\baggregate_jury\s*\([^)]*\breliability\s*=")
+
+#: The oracle jury branch tests blocking authority BEFORE it raises; the gate
+#: keyword and the raise must both be present so the veto is not unconditional.
+_BLOCK_AUTHORITY_GATE_RE = re.compile(r"\bif\s+block_authority\s+is\s+BlockAuthority\.BLOCKING\b")
+
+#: The blocking branch raises a LifecycleError so a calibrated jury's veto blocks
+#: the close.
+_JURY_VETO_RAISE_RE = re.compile(r"\braise\s+LifecycleError\b")
+
+#: The CLI command binds ``validate_jury(...)`` directly, giving it a live caller
+#: (the moment a labelled cohort lands the CLI surfaces a scored report).
+_VALIDATE_JURY_CALL_RE = re.compile(r"\bvalidate_jury\s*\(")
+
+
+def check_spec_jury_ballot_fn_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _SPEC_JURY_GATE_MODULE,
+) -> GateResult:
+    """Assert the spec-jury close gate binds a live per-item ballot fn (I09-W05).
+
+    The TRUST-5 binding: :func:`_spec_jury_ballot_fn` returns a non-``None`` live
+    ballot fn by binding
+    :func:`eawf.workflow.dispatch.spec_jury.live_per_item_ballot_fn` (when a
+    cross-vendor quorum resolves), and :func:`_enforce_spec_jury_gate` consults
+    that builder before routing the close through the producer. If a later
+    refactor reverts the builder body to a bare ``return None`` (re-idling the
+    producer) or stops consulting it, the source no longer matches and this gate
+    fails :attr:`GateFailure.SPEC_JURY_BALLOT_FN_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-idled (``return None``) outcomes.
+
+    Args:
+        module_text: The spec-jury gate module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the spec-jury gate module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        both binds ``live_per_item_ballot_fn(`` and consults
+        ``ballot_fn = _spec_jury_ballot_fn(``; otherwise ``failure`` is
+        :attr:`GateFailure.SPEC_JURY_BALLOT_FN_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    binds_live = _LIVE_BALLOT_FN_CALL_RE.search(text) is not None
+    consults = _BALLOT_FN_CONSULT_RE.search(text) is not None
+    if binds_live and consults:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (spec-jury gate binds the live per-item "
+                "ballot fn -- the producer is reachable, not idle)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.SPEC_JURY_BALLOT_FN_IDLE,
+        message=(
+            "spec-jury per-item ballot fn is idle: "
+            f"{module_path} binds_live={binds_live} consults={consults} (expected "
+            "both True); _spec_jury_ballot_fn must bind live_per_item_ballot_fn(...) "
+            "and the gate must consult it -- the producer regressed to return None"
+        ),
+    )
+
+
+def check_jury_reliability_map_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _CROSS_VENDOR_JURY_MODULE,
+) -> GateResult:
+    """Assert the live convener threads a reliability map into the reducer (I09-W06).
+
+    The TRUST-6 binding: the live convener
+    (:func:`eawf.observability.eval.cross_vendor_jury.convene_cross_vendor_jury`)
+    threads its ``reliability`` map into
+    :func:`eawf.observability.eval.cross_vendor_jury._reduce_jury`, which forwards
+    it into :func:`eawf.observability.eval.jury.aggregate_jury` as
+    ``reliability=...`` -- the first production sink of the built-but-idle
+    reputation-weighting seam. If a later refactor drops the ``reliability=``
+    forward (re-idling the seam so every juror weights neutrally regardless of
+    the reputation map), the source no longer matches and this gate fails
+    :attr:`GateFailure.JURY_RELIABILITY_MAP_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-idled outcomes.
+
+    Args:
+        module_text: The cross-vendor jury module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the convener module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        both threads ``reliability=reliability`` and forwards it into
+        ``aggregate_jury(..., reliability=...)``; otherwise ``failure`` is
+        :attr:`GateFailure.JURY_RELIABILITY_MAP_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    threads = _RELIABILITY_THREAD_RE.search(text) is not None
+    aggregates = _AGGREGATE_RELIABILITY_RE.search(text) is not None
+    if threads and aggregates:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (live convener threads the reliability map "
+                "into aggregate_jury -- the reputation-weighting seam is not idle)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.JURY_RELIABILITY_MAP_IDLE,
+        message=(
+            "jury reliability map is idle: "
+            f"{module_path} threads={threads} aggregates={aggregates} (expected "
+            "both True); the convener must forward reliability=reliability into "
+            "aggregate_jury(..., reliability=...) -- the reputation seam went None"
+        ),
+    )
+
+
+def check_jury_block_authority_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _ORACLE_MODULE,
+) -> GateResult:
+    """Assert the oracle jury branch consults block authority before raising (I09-W04).
+
+    The TRUST-4 binding: the ordered-oracle jury tier
+    (:func:`eawf.workflow.verify.oracle.run_oracle`) tests
+    ``block_authority is BlockAuthority.BLOCKING`` BEFORE it raises
+    :class:`~eawf.workflow.lifecycle.transitions.LifecycleError`, so a
+    non-pass jury outcome blocks the close only once the jury has EARNED blocking
+    authority -- an uncalibrated jury's veto stays advisory. If a later refactor
+    drops the authority gate (making the veto raise unconditionally, or never),
+    the source no longer matches both the gate keyword and the raise, and this
+    gate fails :attr:`GateFailure.JURY_BLOCK_AUTHORITY_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the bypassed (unconditional-raise) outcomes.
+
+    Args:
+        module_text: The oracle module source. ``None`` reads *module_path* off
+            the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the oracle module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        carries both the ``if block_authority is BlockAuthority.BLOCKING`` gate
+        and a ``raise LifecycleError``; otherwise ``failure`` is
+        :attr:`GateFailure.JURY_BLOCK_AUTHORITY_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    gated = _BLOCK_AUTHORITY_GATE_RE.search(text) is not None
+    raises = _JURY_VETO_RAISE_RE.search(text) is not None
+    if gated and raises:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (oracle jury branch consults "
+                "block_authority before raising -- the veto is earned, not idle)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.JURY_BLOCK_AUTHORITY_IDLE,
+        message=(
+            "jury block authority is idle: "
+            f"{module_path} gated={gated} raises={raises} (expected both True); the "
+            "jury branch must test 'block_authority is BlockAuthority.BLOCKING' "
+            "before it raises LifecycleError -- the earned-authority gate was bypassed"
+        ),
+    )
+
+
+def check_validate_jury_cli_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _METRICS_CLI_MODULE,
+) -> GateResult:
+    """Assert ``validate_jury`` has a live CLI caller (I09-W07).
+
+    The TRUST-7 binding: the ``eawf metrics jury-validation`` command
+    (in :data:`_METRICS_CLI_MODULE`) binds
+    :func:`eawf.observability.eval.jury_validation.validate_jury` directly, so the
+    jury-validation reducer is reachable from the operator surface (it renders the
+    honest insufficient-signal banner today and a scored report the moment a
+    labelled cohort lands). If a later refactor drops the CLI caller (orphaning
+    the reducer back to a never-invoked function), the source no longer matches
+    and this gate fails :attr:`GateFailure.VALIDATE_JURY_CLI_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the orphaned outcomes.
+
+    Args:
+        module_text: The metrics CLI module source. ``None`` reads *module_path*
+            off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the metrics CLI module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        carries a direct ``validate_jury(`` call; otherwise ``failure`` is
+        :attr:`GateFailure.VALIDATE_JURY_CLI_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    if _VALIDATE_JURY_CALL_RE.search(text) is not None:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (validate_jury has a live CLI caller -- "
+                "the jury-validation reducer is reachable from the operator surface)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.VALIDATE_JURY_CLI_IDLE,
+        message=(
+            "validate_jury is idle: "
+            f"{module_path} carries no direct validate_jury(...) call, so the "
+            "jury-validation reducer has no CLI caller (the metrics command "
+            "regressed and orphaned the reducer)"
         ),
     )
 
@@ -1318,7 +1610,11 @@ def main(argv: list[str]) -> int:
     first, then the emit-validation binding-proof probe
     (:func:`check_skill_body_binding`), then the I03 contract probes
     (:func:`check_i03_contracts`), then the resolve_routing wiring probe
-    (:func:`check_resolve_routing_wired`), then the runtime-gate binding check
+    (:func:`check_resolve_routing_wired`), then the four I09 jury-validation
+    binding probes (:func:`check_spec_jury_ballot_fn_wired`,
+    :func:`check_jury_reliability_map_wired`,
+    :func:`check_jury_block_authority_wired`,
+    :func:`check_validate_jury_cli_wired`), then the runtime-gate binding check
     (:func:`check_runtime_gate_is_not_idle`), then the registry-wide audit-DSL
     wired-on sweep (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
@@ -1374,6 +1670,23 @@ def main(argv: list[str]) -> int:
     else:
         print(routing_wired.message, file=sys.stderr)
         failed = True
+
+    # The four I09 jury-validation bindings each read their live call-site off
+    # the working tree (immune to the meta-gate's reader stub, like the routing
+    # probe above): the spec-jury ballot fn (W05), the reputation reliability map
+    # (W06), the earned block authority (W04), and the validate_jury CLI caller
+    # (W07). Any re-idle of one fails its row and reds the gate.
+    for i09_check in (
+        check_spec_jury_ballot_fn_wired(),
+        check_jury_reliability_map_wired(),
+        check_jury_block_authority_wired(),
+        check_validate_jury_cli_wired(),
+    ):
+        if i09_check.passed:
+            print(i09_check.message)
+        else:
+            print(i09_check.message, file=sys.stderr)
+            failed = True
 
     runtime_gate = check_runtime_gate_is_not_idle()
     if runtime_gate.passed:
