@@ -72,17 +72,26 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
 from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Grid, Vertical, VerticalScroll
+from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Static
 
-from eawf.kernel.state.enums import AgentReportVerdict, AgentSessionRole, AgentSessionStatus
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    AgentSessionRole,
+    AgentSessionStatus,
+    WaveStatus,
+)
+from eawf.kernel.state.ids import natural_key
 from eawf.observability.eval.reputation import FleetVerdictRow, fleet_verdict_rollup
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
@@ -95,7 +104,13 @@ from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from eawf.kernel.state.models import AgentSession, State
+    from eawf.kernel.state.models import (
+        AgentSession,
+        FleetFork,
+        FleetLane,
+        State,
+        Wave,
+    )
     from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
@@ -201,6 +216,48 @@ WATCH_ROLLUP_ROW_CLASS: str = "watch-rollup-row"
 #: the empty rollup is unmistakable rather than reading as a quiet / fabricated
 #: rollup -- the honest-empty surface the success criterion pins.
 ROLLUP_EMPTY_NOTICE: str = "no verdicts recorded"
+
+#: Id of the FA3 parallel-session lane-grid container -- the one-row-per-lane
+#: surface the lane grid mounts its selectable lane rows into.
+LANE_GRID_ID: str = "watch-lane-grid"
+
+#: Id of the lane grid's honest-empty notice (zero in-flight lanes). The grid
+#: shows this literal in place of any lane row when no lane is in flight --
+#: never a fabricated row (C2).
+LANE_GRID_EMPTY_ID: str = "watch-lane-grid-empty"
+
+#: CSS class on each rendered lane row in the FA3 grid.
+LANE_GRID_ROW_CLASS: str = "watch-lane-row"
+
+#: CSS class flagging the selected lane row (the Enter-zoom target).
+LANE_SELECTED_CLASS: str = "-selected"
+
+#: The honest-empty literal the lane grid renders when no lane is in flight --
+#: pinned in a golden (C2) so the empty surface reads as unmistakably empty,
+#: never as a quiet / fabricated lane row.
+LANE_GRID_EMPTY: str = "no sessions in flight"
+
+#: Risk-tier band badge per tier value -- the short band label the lane row
+#: trails so the operator reads which auto-close band the lane sits in. Keyed by
+#: the :class:`~eawf.kernel.state.enums.RiskTier` string value so the lookup
+#: stays decoupled from importing the enum; a tier past the map reads its raw
+#: value uppercased (the resolver stays total).
+_LANE_TIER_BADGE: dict[str, str] = {
+    "mech": "MECH",
+    "med": "MED",
+    "high": "HIGH",
+    "ui": "UI",
+}
+
+#: The placeholder vendor label a lane wears when no runtime is resolvable yet
+#: (the lane's spawn registered no session row, so its runtime is unknown). The
+#: row stays honest rather than fabricating a vendor name.
+_LANE_VENDOR_UNKNOWN: str = "?"
+
+#: The placeholder tok/$ figure a lane wears when no runtime counters are
+#: recorded yet (a freshly-dispatched lane). Reads as a dash rather than a
+#: fabricated zero spend.
+_LANE_SPEND_UNKNOWN: str = "--"
 
 #: The watched session's lifecycle status -> the lifecycle :class:`Sigil` its
 #: header mark draws from. An ACTIVE session wears the RUNNING diamond (the
@@ -459,6 +516,81 @@ def _log_handle(state: State, *, wave_id: str, attempt: int) -> str | None:
         return None
     row = wave.sessions.get(attempt)
     return row.session_log_handle if row is not None else None
+
+
+def _wave_executor_session(state: State, wave_id: str) -> AgentSession | None:
+    """Return the most-recent executor session scoped to *wave_id*, or ``None``.
+
+    The FA3 -> FA4 zoom resolves a lane's wave to its streaming session by the
+    same wave-id key the live stream filters on (the executor session's
+    ``scope_id``). When two attempts registered two sessions the most-recent (by
+    ``started_at``) is preferred so the zoom streams the live attempt; a wave
+    with no executor session yet yields ``None``.
+
+    Args:
+        state: The bound read-only state.
+        wave_id: The wave whose executor session is resolved.
+
+    Returns:
+        The most-recent executor session for the wave, or ``None``.
+    """
+    scoped = [
+        sess
+        for sess in state.agent_sessions.values()
+        if sess.role is AgentSessionRole.EXECUTOR and sess.scope_id == wave_id
+    ]
+    if not scoped:
+        return None
+    return max(scoped, key=lambda sess: sess.started_at)
+
+
+def _wave_runtime(state: State, wave_id: str) -> str | None:
+    """Return *wave_id*'s runtime, preferring its session then its wave attempt.
+
+    Resolves the runtime the FA4 zoom header names: the wave's executor session
+    runtime when one is registered, else the wave's latest session-attempt
+    runtime. A wave with neither -- unknown to state -- yields ``None`` so the
+    zoom is refused rather than streaming an unknowable session.
+
+    Args:
+        state: The bound read-only state.
+        wave_id: The wave whose runtime is resolved.
+
+    Returns:
+        The wave's runtime adapter spelling, or ``None`` when unknown.
+    """
+    session = _wave_executor_session(state, wave_id)
+    if session is not None:
+        return session.runtime
+    wave = state.waves.get(wave_id)
+    if wave is not None and wave.sessions:
+        return wave.sessions[max(wave.sessions)].runtime
+    return None
+
+
+def _wave_session_id(state: State, wave_id: str) -> str | None:
+    """Return the executor session id scoped to *wave_id*, or ``None``."""
+    session = _wave_executor_session(state, wave_id)
+    return session.id if session is not None else None
+
+
+def _wave_session_status(state: State, wave_id: str) -> AgentSessionStatus:
+    """Return *wave_id*'s executor session status, defaulting to ACTIVE.
+
+    The FA4 zoom header leads with the session's lifecycle sigil; a wave with a
+    registered executor session reads its status, while a wave known only by its
+    session-attempt rows (no live session yet) defaults to ACTIVE so the zoom
+    reads as a live stream rather than a stale one.
+
+    Args:
+        state: The bound read-only state.
+        wave_id: The wave whose session status is resolved.
+
+    Returns:
+        The executor session's status, or ACTIVE when no session is registered.
+    """
+    session = _wave_executor_session(state, wave_id)
+    return session.status if session is not None else AgentSessionStatus.ACTIVE
 
 
 def render_watch_header(
@@ -772,6 +904,532 @@ class WatchGrid(Widget):
         return None
 
 
+class LaneState(Enum):
+    """The four lifecycle states a fleet lane reads as in the FA3 grid.
+
+    A lane is :attr:`RUNNING` while it holds an in-flight dispatch slot, reads
+    :attr:`CLOSED` once its wave closed clean, :attr:`FAILED` when its wave
+    ended FAILED / ABANDONED, and :attr:`FORK` when the loop paused it to a
+    blocking fork (it left the slot for the operator-resolved fork queue). Each
+    state draws a distinct lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+    (the SHAPE) and a short detail word so the grid reads at a glance.
+    """
+
+    RUNNING = "running"
+    CLOSED = "closed"
+    FAILED = "failed"
+    FORK = "fork"
+
+
+#: A :class:`LaneState` -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: its row mark draws from. RUNNING wears the diamond (the lane is draining),
+#: CLOSED the filled circle (clean terminal), FAILED the cross (a genuine
+#: failure), FORK the withheld circled-slash (paused for operator resolution) so
+#: a forked lane never reads as a clean close or a hard fail.
+_LANE_STATE_SIGIL: dict[LaneState, Sigil] = {
+    LaneState.RUNNING: Sigil.RUNNING,
+    LaneState.CLOSED: Sigil.CLOSED,
+    LaneState.FAILED: Sigil.FAILED,
+    LaneState.FORK: Sigil.ABANDONED,
+}
+
+#: A :class:`LaneState` -> the short state-detail word the row trails so the
+#: lane's state reads in words beside its sigil, never the bare enum value.
+_LANE_STATE_DETAIL: dict[LaneState, str] = {
+    LaneState.RUNNING: "draining",
+    LaneState.CLOSED: "closed clean",
+    LaneState.FAILED: "failed",
+    LaneState.FORK: "forked -- awaiting you",
+}
+
+
+@dataclass(frozen=True)
+class LaneGridRow:
+    """One in-flight (or just-terminal) fleet lane projected for the FA3 grid.
+
+    A display projection of a :class:`~eawf.kernel.state.models.FleetLane` (or a
+    lane the loop paused to a blocking fork), enriched with the lane's resolved
+    vendor, elapsed window, tok/$ spend, risk-tier band, and lifecycle state so a
+    row reads ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <detail>`` at a
+    glance. Produced only from the persisted fleet run + the lane's wave row, so
+    every figure is read straight off state rather than recomputed in the UI.
+
+    Attributes:
+        wave_id: The lane's wave id (the FA4 zoom target + the row's lead label).
+        vendor: The runtime adapter the lane ran on (resolved from the lane's
+            session, falling back to the wave's latest session-attempt runtime),
+            or :data:`_LANE_VENDOR_UNKNOWN` when none is recorded yet.
+        elapsed_label: A compact ``Nh Nm`` / ``Nm`` / ``Ns`` elapsed window from
+            the lane's dispatch to now (running) or to its wave close (terminal).
+        spend_label: The lane's ``<tok> tok $<usd>`` spend read off the wave's
+            latest runtime counters, or :data:`_LANE_SPEND_UNKNOWN` when none is
+            recorded yet.
+        tier_badge: The lane's :class:`~eawf.kernel.state.enums.RiskTier` short
+            band label (e.g. ``MECH`` / ``HIGH``).
+        state: The lane's lifecycle :class:`LaneState` (running / closed /
+            failed / fork) driving its sigil + detail word.
+    """
+
+    wave_id: str
+    vendor: str
+    elapsed_label: str
+    spend_label: str
+    tier_badge: str
+    state: LaneState
+
+
+def _elapsed_label(start: datetime, end: datetime) -> str:
+    """Return a compact ``Nh Nm`` / ``Nm`` / ``Ns`` window from *start* to *end*.
+
+    Renders the lane's dispatch-to-now (or dispatch-to-close) window in the
+    coarsest single-or-double unit so the grid column stays narrow: hours+minutes
+    past an hour, minutes alone under an hour, seconds alone under a minute. A
+    negative window (a clock skew) clamps to ``0s`` rather than rendering a
+    nonsense negative elapsed.
+
+    Args:
+        start: When the lane's dispatch was issued.
+        end: The window end (now for a running lane, the wave close for a
+            terminal one).
+
+    Returns:
+        The compact elapsed-window label.
+    """
+    total = int((end - start).total_seconds())
+    if total <= 0:
+        return "0s"
+    hours, rem = divmod(total, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m"
+    return f"{seconds}s"
+
+
+def _lane_vendor(lane: FleetLane, wave: Wave | None, sessions: dict[str, AgentSession]) -> str:
+    """Resolve the runtime adapter the *lane* ran on, or the unknown placeholder.
+
+    Prefers the runtime of the executor session the lane registered (keyed by
+    the lane's ``session_id``), falling back to the wave's latest recorded
+    session-attempt runtime, and finally to :data:`_LANE_VENDOR_UNKNOWN` when no
+    runtime is recorded yet (a freshly-dispatched lane). The vendor is the agent
+    CLI spelling (``claude`` / ``codex`` / ``opencode``).
+
+    Args:
+        lane: The fleet lane whose vendor is resolved.
+        wave: The lane's wave row, or ``None`` when absent from state.
+        sessions: The bound state's agent sessions, keyed by session id.
+
+    Returns:
+        The lane's runtime adapter spelling, or the unknown placeholder.
+    """
+    if lane.session_id is not None:
+        session = sessions.get(lane.session_id)
+        if session is not None:
+            return session.runtime
+    if wave is not None and wave.sessions:
+        latest = wave.sessions[max(wave.sessions)]
+        return latest.runtime
+    return _LANE_VENDOR_UNKNOWN
+
+
+def _lane_spend_label(wave: Wave | None) -> str:
+    """Return the lane's ``<tok> tok $<usd>`` spend, or the unknown placeholder.
+
+    Reads the wave's latest cumulative runtime counters
+    (:attr:`~eawf.kernel.state.models.Wave.runtime_latest`) -- the input +
+    output token total and the USD cost the runtime sidecar reported -- so the
+    grid surfaces what state stored rather than recomputing a tally. A wave with
+    no recorded counters yet reads :data:`_LANE_SPEND_UNKNOWN` rather than a
+    fabricated zero spend.
+
+    Args:
+        wave: The lane's wave row, or ``None`` when absent from state.
+
+    Returns:
+        The lane's spend label, or the unknown placeholder.
+    """
+    if wave is None or wave.runtime_latest is None:
+        return _LANE_SPEND_UNKNOWN
+    latest = wave.runtime_latest
+    tokens = (latest.input_tokens or 0) + (latest.output_tokens or 0)
+    cost = latest.cost_usd
+    if not tokens and cost is None:
+        return _LANE_SPEND_UNKNOWN
+    cost_part = f"${cost:.2f}" if cost is not None else _LANE_SPEND_UNKNOWN
+    return f"{tokens} tok {cost_part}"
+
+
+def _lane_tier_badge(wave: Wave | None, forked_tier: str | None) -> str:
+    """Return the lane's risk-tier band badge (e.g. ``MECH`` / ``HIGH``).
+
+    A forked lane carries its resolved
+    :attr:`~eawf.kernel.state.models.FleetFork.risk_tier` directly (*forked_tier*),
+    so the badge reads off the recorded fork; a running lane classifies its
+    wave's :class:`~eawf.kernel.state.enums.RiskTier` from the wave's gate kinds
+    via the pure :func:`~eawf.workflow.verify.oracle.classify_risk_tier`
+    (lazy-imported so the TUI cold path never pulls the runtime stack at module
+    load). A wave absent from state defaults to the deterministic ``MECH`` band.
+
+    Args:
+        wave: The lane's wave row, or ``None`` when absent from state.
+        forked_tier: The recorded risk-tier value of a forked lane, or ``None``
+            for a running / terminal lane that classifies from its gates.
+
+    Returns:
+        The short risk-tier band label.
+    """
+    if forked_tier is not None:
+        return _LANE_TIER_BADGE.get(forked_tier, forked_tier.upper())
+    if wave is None:
+        return _LANE_TIER_BADGE["mech"]
+    from eawf.workflow.verify.oracle import classify_risk_tier
+
+    tier = classify_risk_tier(wave.gates).value
+    return _LANE_TIER_BADGE.get(tier, tier.upper())
+
+
+def _lane_state(wave: Wave | None, *, forked: bool) -> LaneState:
+    """Classify a lane's :class:`LaneState` from its wave status + fork flag.
+
+    A lane the loop paused to a blocking fork reads :attr:`LaneState.FORK`
+    (it left the in-flight slot for the operator-resolved fork queue), and
+    overrides the wave status -- a forked lane is neither a clean close nor a
+    hard fail. Otherwise the lane's state follows its wave's terminal: a CLOSED
+    wave reads :attr:`LaneState.CLOSED`, a FAILED / ABANDONED wave reads
+    :attr:`LaneState.FAILED`, and any still-live wave (or one absent from state)
+    reads :attr:`LaneState.RUNNING` -- the lane is still draining.
+
+    Args:
+        wave: The lane's wave row, or ``None`` when absent from state.
+        forked: Whether the lane was paused to a blocking fork.
+
+    Returns:
+        The lane's lifecycle state.
+    """
+    if forked:
+        return LaneState.FORK
+    if wave is None:
+        return LaneState.RUNNING
+    if wave.status is WaveStatus.CLOSED:
+        return LaneState.CLOSED
+    if wave.status in (WaveStatus.FAILED, WaveStatus.ABANDONED):
+        return LaneState.FAILED
+    return LaneState.RUNNING
+
+
+def lane_grid_rows(state: State | None, *, now: datetime | None = None) -> tuple[LaneGridRow, ...]:
+    """Project the bound state's fleet lanes into FA3 lane-grid rows.
+
+    Walks the persisted :attr:`~eawf.kernel.state.models.FleetRun.lanes` (the
+    in-flight draining slots) and the
+    :attr:`~eawf.kernel.state.models.FleetRun.forks` queue (lanes the loop
+    paused to a blocking fork), so a forked lane stays visible -- it escalates to
+    a fork-state row rather than disappearing the moment it leaves the slot. Each
+    row is enriched from the lane's wave row + the bound sessions: the vendor, the
+    elapsed window, the tok/$ spend, the risk-tier band, and the lifecycle state.
+    A fork row supersedes an in-flight row for the same wave (a lane that just
+    forked may briefly appear in both), and rows are returned in natural
+    claim order so the grid reads top-to-bottom. An unbound / unarmed state
+    yields an empty tuple -- the honest-empty grid path (C2).
+
+    Args:
+        state: The bound read-only state, or ``None`` (fresh / user scope).
+        now: The reference time the running-lane elapsed window measures to;
+            defaults to :func:`datetime.now` in UTC so callers (tests) can pin
+            it for a deterministic golden.
+
+    Returns:
+        The lane-grid display rows in claim order; empty when no lane is in
+        flight or forked.
+    """
+    run = state.fleet_run if state is not None else None
+    if run is None:
+        return ()
+    reference = now if now is not None else datetime.now(UTC)
+    waves = state.waves if state is not None else {}
+    sessions = state.agent_sessions if state is not None else {}
+    forked_tiers = {fork.wave_id: fork.risk_tier.value for fork in run.forks}
+    rows: dict[str, LaneGridRow] = {}
+    for lane in run.lanes.values():
+        if lane.wave_id in forked_tiers:
+            continue
+        rows[lane.wave_id] = _build_lane_row(
+            lane, waves.get(lane.wave_id), sessions, reference, forked_tier=None
+        )
+    for fork in run.forks:
+        prior_lane = run.lanes.get(fork.wave_id)
+        rows[fork.wave_id] = _build_fork_row(fork, prior_lane, waves.get(fork.wave_id), sessions)
+    ordered = sorted(rows.values(), key=lambda row: natural_key(row.wave_id))
+    logger.debug(
+        f"lane_grid_rows lanes={len(run.lanes)} forks={len(run.forks)} rows={len(ordered)}"
+    )
+    return tuple(ordered)
+
+
+def lane_parity_key(state: State | None) -> tuple[tuple[str, str], ...]:
+    """Return the lane grid's ``(wave_id, state)`` parity key over *state*.
+
+    The poll-backstop key the host screen compares across state revisions to
+    decide whether the lane grid changed: a lane added / removed / transitioned
+    (running -> closed / failed / fork) flips the key, so the body recomposes and
+    the grid re-derives its rows; an unchanged fleet leaves the key equal and the
+    poll tick is a no-op. Keyed off the same :func:`lane_grid_rows` projection so
+    the parity set and the rendered set stay in lockstep. Returns an empty tuple
+    for the honest-empty / unbound path.
+
+    Args:
+        state: The bound read-only state, or ``None`` (fresh / user scope).
+
+    Returns:
+        The ``(wave_id, lane-state)`` pairs in claim order; empty when no lane is
+        in flight.
+    """
+    return tuple((row.wave_id, row.state.value) for row in lane_grid_rows(state))
+
+
+def _build_lane_row(
+    lane: FleetLane,
+    wave: Wave | None,
+    sessions: dict[str, AgentSession],
+    now: datetime,
+    *,
+    forked_tier: str | None,
+) -> LaneGridRow:
+    """Build one running / terminal :class:`LaneGridRow` from an in-flight *lane*."""
+    end = wave.closed_at if (wave is not None and wave.closed_at is not None) else now
+    return LaneGridRow(
+        wave_id=lane.wave_id,
+        vendor=_lane_vendor(lane, wave, sessions),
+        elapsed_label=_elapsed_label(lane.dispatched_at, end),
+        spend_label=_lane_spend_label(wave),
+        tier_badge=_lane_tier_badge(wave, forked_tier),
+        state=_lane_state(wave, forked=False),
+    )
+
+
+def _build_fork_row(
+    fork: FleetFork,
+    lane: FleetLane | None,
+    wave: Wave | None,
+    sessions: dict[str, AgentSession],
+) -> LaneGridRow:
+    """Build one forked :class:`LaneGridRow` from a queued fork (+ its prior lane).
+
+    A forked lane reads its risk-tier band off the recorded fork (the loop
+    captured it at fork time) and its elapsed window off the prior in-flight
+    lane's dispatch when one is still recorded, falling back to the fork's own
+    ``forked_at`` so the row never lacks an elapsed figure.
+    """
+    dispatched = lane.dispatched_at if lane is not None else fork.forked_at
+    return LaneGridRow(
+        wave_id=fork.wave_id,
+        vendor=(
+            _lane_vendor(lane, wave, sessions) if lane is not None else _lane_vendor_from_wave(wave)
+        ),
+        elapsed_label=_elapsed_label(dispatched, fork.forked_at),
+        spend_label=_lane_spend_label(wave),
+        tier_badge=_lane_tier_badge(wave, fork.risk_tier.value),
+        state=LaneState.FORK,
+    )
+
+
+def _lane_vendor_from_wave(wave: Wave | None) -> str:
+    """Resolve a forked lane's vendor off its wave alone (no in-flight lane left)."""
+    if wave is not None and wave.sessions:
+        return wave.sessions[max(wave.sessions)].runtime
+    return _LANE_VENDOR_UNKNOWN
+
+
+def lane_state_sigil_markup(state: LaneState, *, mode: RenderMode) -> str:
+    """Return *state*'s lifecycle-tinted sigil markup for the lane row.
+
+    Maps the lane state onto its lifecycle sigil (:data:`_LANE_STATE_SIGIL`) and
+    renders the tinted shape via :func:`_sigil_markup`, so a running lane wears
+    the RUNNING diamond, a closed lane the CLOSED circle, a failed lane the
+    FAILED cross, and a forked lane the withheld circled-slash -- each a distinct
+    shape so the four states read apart at a glance.
+
+    Args:
+        state: The lane's lifecycle state.
+        mode: The App's resolved render-mode label -- selects the glyph column.
+
+    Returns:
+        A content-markup span: the lane state's tinted lifecycle sigil.
+    """
+    return _sigil_markup(_LANE_STATE_SIGIL[state], mode=mode)
+
+
+def render_lane_row(row: LaneGridRow, *, selected: bool = False, mode: RenderMode) -> str:
+    """Render one FA3 lane-grid row: ``<sigil> <wave> <vendor> <elapsed> ...``.
+
+    Lays the row out as the lane's lifecycle sigil
+    (:func:`lane_state_sigil_markup`), then the wave id, the vendor, the elapsed
+    window, the tok/$ spend, the risk-tier band badge, and the state-detail word
+    (:data:`_LANE_STATE_DETAIL`) -- so a row reads
+    ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <detail>`` at a glance.
+    The selected row leads with the accent hue so the Enter-zoom target reads as
+    highlighted.
+
+    Args:
+        row: The lane-grid display row.
+        selected: Whether this row is the current Enter-zoom target (drives the
+            row's accent / muted lead).
+        mode: The App's resolved render-mode label -- selects the sigil's glyph
+            column.
+
+    Returns:
+        A content-markup lane-row string.
+    """
+    sigil = lane_state_sigil_markup(row.state, mode=mode)
+    wave_hue = "$accent" if selected else "$muted"
+    detail = escape_markup(_LANE_STATE_DETAIL[row.state])
+    return (
+        f"{sigil} [{wave_hue}]{escape_markup(row.wave_id)}[/] "
+        f"[$muted]{escape_markup(row.vendor)}[/] "
+        f"[$muted]{escape_markup(row.elapsed_label)}[/] "
+        f"[$muted]{escape_markup(row.spend_label)}[/] "
+        f"[$accent]{escape_markup(row.tier_badge)}[/] "
+        f"[$muted]{detail}[/]"
+    )
+
+
+class LaneGrid(Widget):
+    """The FA3 parallel-session lane grid: one selectable row per in-flight lane.
+
+    Generalizes the I07-W08 watch grid into the fleet lane lens: it lists one
+    :class:`LaneGridRow` per in-flight (or just-forked) fleet lane, each row
+    reading ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <detail>`` with a
+    distinct lifecycle sigil per running / closed / failed / fork state. Arrows
+    move the selection through the rows; pressing Enter posts a :class:`Zoom`
+    message carrying the selected lane's wave id so the host screen can zoom that
+    lane into the FA4 single-session view. With zero in-flight lanes it shows the
+    honest-empty :data:`LANE_GRID_EMPTY` literal rather than a fabricated row
+    (C2).
+    """
+
+    DEFAULT_CSS: ClassVar[str] = """
+    LaneGrid {
+        height: 1fr;
+    }
+    LaneGrid #watch-lane-grid {
+        height: 1fr;
+        border: solid $accent;
+    }
+    LaneGrid .watch-lane-row {
+        height: auto;
+        padding: 0 1;
+    }
+    LaneGrid .watch-lane-row.-selected {
+        background: $accent 20%;
+    }
+    LaneGrid #watch-lane-grid-empty {
+        height: 1fr;
+        color: $muted;
+        padding: 1 2;
+    }
+    """
+
+    #: ``up`` / ``down`` move the lane selection; ``enter`` zooms the selected
+    #: lane to the FA4 single-session view. Arrows stay primary (no vim aliases).
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("up", "select_prev", "up", show=False),
+        Binding("down", "select_next", "down", show=False),
+        Binding("enter", "zoom_lane", "zoom", show=False),
+    ]
+
+    #: Index of the selected lane row (the Enter-zoom target); clamped to the
+    #: row list, ``0`` when non-empty, ``-1`` when empty.
+    selected: reactive[int] = reactive(0, init=False)
+
+    class Zoom(Message):
+        """Posted when Enter zooms the selected lane to the FA4 session view.
+
+        Attributes:
+            wave_id: The selected lane's wave id -- the FA4 zoom target the host
+                screen pins as its watched session.
+        """
+
+        def __init__(self, wave_id: str) -> None:
+            super().__init__()
+            self.wave_id = wave_id
+
+    def __init__(self, rows: tuple[LaneGridRow, ...], *, mode: RenderMode) -> None:
+        """Build the lane grid over *rows* in render *mode*.
+
+        Args:
+            rows: The lane-grid rows to lay out (:func:`lane_grid_rows`); empty
+                drives the honest-empty :data:`LANE_GRID_EMPTY` literal (C2).
+            mode: The App's resolved render-mode label, threaded into each row's
+                lifecycle sigil.
+        """
+        super().__init__()
+        self._rows = rows
+        self._mode = mode
+
+    def compose(self) -> ComposeResult:
+        """Yield the selectable lane rows, or the honest-empty literal (C2)."""
+        if not self._rows:
+            yield Static(LANE_GRID_EMPTY, id=LANE_GRID_EMPTY_ID)
+            return
+        with VerticalScroll(id=LANE_GRID_ID):
+            for index, row in enumerate(self._rows):
+                selected = index == self.selected
+                classes = (
+                    f"{LANE_GRID_ROW_CLASS} {LANE_SELECTED_CLASS}"
+                    if selected
+                    else LANE_GRID_ROW_CLASS
+                )
+                yield Static(
+                    render_lane_row(row, selected=selected, mode=self._mode), classes=classes
+                )
+
+    def on_mount(self) -> None:
+        """Seed the selection at the first row (or ``-1`` for the empty grid)."""
+        self.set_reactive(type(self).selected, 0 if self._rows else -1)
+
+    def action_select_prev(self) -> None:
+        """Move the selection to the previous lane row (clamped at the top)."""
+        if self._rows:
+            self.selected = max(0, self.selected - 1)
+
+    def action_select_next(self) -> None:
+        """Move the selection to the next lane row (clamped at the bottom)."""
+        if self._rows:
+            self.selected = min(len(self._rows) - 1, self.selected + 1)
+
+    def action_zoom_lane(self) -> None:
+        """Zoom the selected lane to the FA4 session view (Enter).
+
+        Posts a :class:`Zoom` message carrying the selected lane's wave id so the
+        host screen pins it as the FA4 watched session. A no-op when no lane is
+        selected (the honest-empty grid has nothing to zoom).
+        """
+        row = self._selected_row()
+        if row is None:
+            return
+        self.post_message(self.Zoom(row.wave_id))
+        logger.info(f"lane_grid_zoom wave={row.wave_id}")
+
+    def watch_selected(self) -> None:
+        """Repaint the lane rows so the selection accent + tint move."""
+        if not self.is_mounted:
+            return
+        for index, widget in enumerate(self.query(f".{LANE_GRID_ROW_CLASS}").results(Static)):
+            if index >= len(self._rows):
+                continue
+            selected = index == self.selected
+            widget.update(render_lane_row(self._rows[index], selected=selected, mode=self._mode))
+            widget.set_class(selected, LANE_SELECTED_CLASS)
+
+    def _selected_row(self) -> LaneGridRow | None:
+        """Return the selected lane row, or ``None`` when none is selected."""
+        if not self._rows or not 0 <= self.selected < len(self._rows):
+            return None
+        return self._rows[self.selected]
+
+
 class VerdictRollupPane(Widget):
     """The fleet verdict-rollup pane: each wave's latest verdict, outcome-tinted.
 
@@ -927,8 +1585,14 @@ class AgentWatchModeScreen(ScopeScreen):
 
     #: The fleet parity grid, mounted in place of the single-session zoom when
     #: two or more ACTIVE executor sessions are dispatched; ``None`` in the
-    #: single-session / honest-empty path.
+    #: single-session / honest-empty / lane-grid path.
     _grid: WatchGrid | None = None
+
+    #: The FA3 lane grid, mounted as the parallel-session surface when the
+    #: bound fleet run has in-flight (or just-forked) lanes; ``None`` in the
+    #: session-grid / single-session / honest-empty path. When mounted it
+    #: supersedes the session surfaces -- the fleet lanes are the live truth.
+    _lane_grid: LaneGrid | None = None
 
     #: The ACTIVE-executor session-id set the body was last composed for, so
     #: the poll backstop recomposes only when the dispatched fleet actually
@@ -936,38 +1600,114 @@ class AgentWatchModeScreen(ScopeScreen):
     #: pushed event rows untouched on a no-op tick. Seeded on every compose.
     _parity_ids: tuple[str, ...] = ()
 
+    #: The FA3 lane-grid ``(wave_id, state)`` parity key the body was last
+    #: composed for, so the poll backstop recomposes when a lane transitions
+    #: (running -> closed / failed / fork) or is added / removed -- the always-on
+    #: backstop the project's TUI-staleness lesson pins. Seeded on every compose.
+    _lane_parity: tuple[tuple[str, str], ...] = ()
+
     def compose_body(self) -> ComposeResult:
-        """Yield the fleet verdict rollup then the parity grid OR the zoom.
+        """Yield the fleet verdict rollup then the FA3 lane grid, parity grid, OR zoom.
 
         The fleet :class:`VerdictRollupPane` leads the body (each wave's latest
         auditor verdict, outcome-tinted, or the honest-empty rollup line) above
-        the live surface. When two or more ACTIVE executor sessions are
-        dispatched the live surface is the fleet parity :class:`WatchGrid` --
-        every session side-by-side, each streaming its own session's events.
-        Otherwise it is the single-session zoom: a header leading with the
-        watched target's lifecycle sigil (or the honest-empty banner), a typed
-        lifecycle stream column starting with a single live-waiting /
-        honest-empty notice, the raw-output tail (:class:`OutputTail`) showing
-        the agent's own stdout lines, and the cancel result line. The
-        ACTIVE-executor fleet this body is composed for is recorded so the poll
-        backstop (:meth:`_on_app_state`) recomposes only when that fleet changes.
+        the live surface. The live surface is, in precedence order:
+
+        * the FA3 :class:`LaneGrid` -- when the bound fleet run has in-flight (or
+          just-forked) lanes, one selectable row per lane reads
+          ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <detail>`` with a
+          distinct lifecycle sigil per running / closed / failed / fork state;
+          Enter zooms the selected lane to the FA4 single-session view (C1);
+        * the fleet parity :class:`WatchGrid` -- when two or more ACTIVE executor
+          sessions are dispatched but no fleet run lane is in flight, every
+          session side-by-side streaming its own events; or
+        * the single-session zoom (FA4) -- a header leading with the watched
+          target's lifecycle sigil (or the honest-empty banner), the typed
+          lifecycle stream, the raw-output tail, and the cancel result line.
+
+        The ACTIVE-executor fleet this body is composed for is recorded so the
+        poll backstop (:meth:`_on_app_state`) recomposes only when that fleet
+        changes.
         """
-        sessions = active_executor_sessions(self._current_state())
+        state = self._current_state()
+        sessions = active_executor_sessions(state)
         mode = self._render_mode()
         self._parity_ids = tuple(sess.id for sess in sessions)
+        self._lane_parity = lane_parity_key(state)
         self._grid = None
+        self._lane_grid = None
         yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
+        # A pending FA3 -> FA4 zoom forces the single-session zoom for the pinned
+        # target, even while the fleet still reports lanes / multiple sessions
+        # (the operator chose to drill ONE lane out of the parallel surface).
+        if self._zoom_pending:
+            self.target = self.target if self.target is not None else self._pick_target()
+            yield from self._compose_single_session(mode=mode)
+            return
+        lane_rows = lane_grid_rows(state)
+        if lane_rows:
+            self._lane_grid = LaneGrid(lane_rows, mode=mode)
+            yield self._lane_grid
+            return
         if len(sessions) >= 2:
             self._grid = WatchGrid(sessions, degraded=self._degraded(), mode=mode)
             yield self._grid
             return
         self.target = self._pick_target()
+        yield from self._compose_single_session(mode=mode)
+
+    def _compose_single_session(self, *, mode: RenderMode) -> ComposeResult:
+        """Yield the FA4 single-session zoom body for the pinned :attr:`target`."""
         with Vertical(id="watch-body"):
             yield Static(render_watch_header(self.target, mode=mode), id=WATCH_HEADER_ID)
             with VerticalScroll(id=WATCH_LIST_ID):
                 yield Static(self._empty_notice(), id=WATCH_EMPTY_ID, classes="watch-empty")
             yield OutputTail(id=WATCH_OUTPUT_ID)
             yield Static(self._cancel_idle_line(), id=WATCH_RESULT_ID)
+
+    def on_lane_grid_zoom(self, message: LaneGrid.Zoom) -> None:
+        """Zoom the selected lane to the FA4 single-session view (Enter).
+
+        The FA3 -> FA4 drill: a :class:`LaneGrid.Zoom` message names the lane's
+        wave id, which this pins as the watched target (resolving the runtime +
+        attempt + log handle from the bound state) and recomposes the body into
+        the single-session zoom for that lane. A wave with no resolvable target
+        (absent from state) is a no-op so the grid stays put rather than zooming
+        into an empty session.
+
+        Args:
+            message: The lane-grid zoom message carrying the selected wave id.
+        """
+        message.stop()
+        target = self._target_for_wave(message.wave_id)
+        if target is None:
+            logger.debug(f"on_lane_grid_zoom no_target wave={message.wave_id}")
+            return
+        self.target = target
+        self._lane_grid = None
+        self._zoom_pending = True
+        logger.info(f"on_lane_grid_zoom wave={message.wave_id}")
+        self.call_after_refresh(self._zoom_to_target)
+
+    async def _zoom_to_target(self) -> None:
+        """Recompose into the FA4 single-session zoom for the pinned target.
+
+        Run on the event loop via :meth:`call_after_refresh` so the async
+        :meth:`recompose` is awaited rather than left dangling; the pinned
+        :attr:`target` + the :attr:`_zoom_pending` flag carry through the
+        recompose so the body lands on the single-session zoom for the zoomed
+        lane (even while the fleet still reports lanes), then re-seeds its stream.
+        """
+        await self.recompose()
+        self._seed_from_buffer()
+        self._seed_output_from_buffer()
+
+    #: Set once an FA3 -> FA4 zoom drills into a lane, so every later compose /
+    #: recompose lands on the single-session zoom for the pinned target rather
+    #: than the parallel lane grid (the operator chose to watch ONE lane). Left
+    #: set for the screen's lifetime: the operator leaves the zoom via ``Esc``
+    #: (back to the broad feed), not back to the grid.
+    _zoom_pending: bool = False
 
     def on_mount(self) -> None:
         """Register on the live-event seam and seed the watched session's stream.
@@ -1002,6 +1742,10 @@ class AgentWatchModeScreen(ScopeScreen):
         most recent buffered event ends on top. A bare harness without the App
         buffer degrades to an empty surface.
         """
+        if self._lane_grid is not None:
+            # The FA3 lane grid is a static lane projection, not an event
+            # stream -- there is no per-row event column to seed.
+            return
         buffer = getattr(self.app, "live_event_buffer", ())
         if self._grid is not None:
             for envelope in buffer:
@@ -1023,7 +1767,7 @@ class AgentWatchModeScreen(ScopeScreen):
         per-tile output tail), or under a bare harness whose App exposes no
         output buffer -- the tail keeps its pinned waiting notice.
         """
-        if self._grid is not None or self.target is None:
+        if self._grid is not None or self._lane_grid is not None or self.target is None:
             return
         buffer = getattr(self.app, "live_output_buffer", ())
         lines = [line for wave_id, line in buffer if wave_id == self.target.wave_id]
@@ -1054,11 +1798,12 @@ class AgentWatchModeScreen(ScopeScreen):
         from eawf.kernel.state.models import State
 
         resolved = new_state if isinstance(new_state, State) else None
-        if parity_session_ids(resolved) == self._parity_ids:
+        lane_changed = lane_parity_key(resolved) != self._lane_parity
+        if parity_session_ids(resolved) == self._parity_ids and not lane_changed:
             return
         logger.info(
             f"agent_watch_parity_recompose was={list(self._parity_ids)} "
-            f"now={list(parity_session_ids(resolved))}"
+            f"now={list(parity_session_ids(resolved))} lane_changed={lane_changed}"
         )
         self.call_after_refresh(self._recompose_and_reseed)
 
@@ -1088,6 +1833,12 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         if not self.is_mounted:
             return
+        if self._lane_grid is not None:
+            # The FA3 lane grid bakes the mode into each row's sigil at build
+            # time; a mode flip recomposes the body so the grid re-derives its
+            # rows in the new glyph column.
+            self.call_after_refresh(self._recompose_and_reseed)
+            return
         mode = self._render_mode()
         header = self.query(f"#{WATCH_HEADER_ID}")
         if header:
@@ -1116,7 +1867,7 @@ class AgentWatchModeScreen(ScopeScreen):
         Args:
             envelope: The live event envelope from the App fan-out.
         """
-        if not self.is_mounted:
+        if not self.is_mounted or self._lane_grid is not None:
             return
         if self._grid is not None:
             self._grid.append_event(envelope)
@@ -1140,7 +1891,12 @@ class AgentWatchModeScreen(ScopeScreen):
                 session's ``scope_id``).
             line: The raw stdout line the spawned agent emitted.
         """
-        if not self.is_mounted or self._grid is not None or self.target is None:
+        if (
+            not self.is_mounted
+            or self._grid is not None
+            or self._lane_grid is not None
+            or self.target is None
+        ):
             return
         if wave_id != self.target.wave_id:
             return
@@ -1452,6 +2208,40 @@ class AgentWatchModeScreen(ScopeScreen):
         """Resolve the default watch target from the bound read-only state."""
         return pick_watch_target(self._current_state())
 
+    def _target_for_wave(self, wave_id: str) -> WatchTarget | None:
+        """Build the FA4 watch target for a specific *wave_id* (the FA3 zoom).
+
+        Resolves the lane's wave to a :class:`WatchTarget` so the FA3 -> FA4
+        drill streams that lane's session: it reads the wave's runtime from the
+        most-recent executor session scoped to the wave (falling back to the
+        wave's latest session-attempt runtime), the highest recorded attempt, and
+        the attempt's session-log handle. A wave the bound state does not know --
+        no session and no wave row -- yields ``None`` so the zoom is a no-op
+        rather than streaming an empty session.
+
+        Args:
+            wave_id: The lane's wave id the operator chose to zoom.
+
+        Returns:
+            The :class:`WatchTarget` for *wave_id*, or ``None`` when the wave is
+            unknown to the bound state.
+        """
+        state = self._current_state()
+        if state is None:
+            return None
+        runtime = _wave_runtime(state, wave_id)
+        if runtime is None:
+            return None
+        attempt = _latest_attempt(state, wave_id=wave_id)
+        return WatchTarget(
+            session_id=_wave_session_id(state, wave_id) or wave_id,
+            wave_id=wave_id,
+            runtime=runtime,
+            status=_wave_session_status(state, wave_id),
+            attempt=attempt,
+            log_handle=_log_handle(state, wave_id=wave_id, attempt=attempt),
+        )
+
     def _current_state(self) -> State | None:
         """Return the bound read-only state, if loaded."""
         from eawf.kernel.state.models import State
@@ -1519,6 +2309,11 @@ __all__ = [
     "CANCEL_NO_DAEMON",
     "CANCEL_NO_TARGET",
     "EMPTY_NOTICE",
+    "LANE_GRID_EMPTY",
+    "LANE_GRID_EMPTY_ID",
+    "LANE_GRID_ID",
+    "LANE_GRID_ROW_CLASS",
+    "LANE_SELECTED_CLASS",
     "LOG_NO_HANDLE",
     "LOG_NO_TARGET",
     "PAUSE_NO_DAEMON",
@@ -1540,6 +2335,9 @@ __all__ = [
     "WATCH_TILE_LIST_CLASS",
     "WATCH_TILE_ROW_CLASS",
     "AgentWatchModeScreen",
+    "LaneGrid",
+    "LaneGridRow",
+    "LaneState",
     "VerdictRollupPane",
     "WatchGrid",
     "WatchTarget",
@@ -1547,8 +2345,12 @@ __all__ = [
     "active_executor_sessions",
     "cancel_mark",
     "is_watched_event",
+    "lane_grid_rows",
+    "lane_parity_key",
+    "lane_state_sigil_markup",
     "parity_session_ids",
     "pick_watch_target",
+    "render_lane_row",
     "render_verdict_rollup_row",
     "render_watch_header",
     "session_routes_event",
