@@ -59,7 +59,13 @@ from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
-from eawf.surfaces.tui.widgets.empty_state import HONEST_EMPTY_CSS, render_empty_state
+from eawf.surfaces.tui.widgets.empty_state import (
+    HONEST_EMPTY_CSS,
+    SEAL_HERO_ID,
+    render_empty_state,
+    seal_empty_hero,
+    seal_hero_css,
+)
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
@@ -311,6 +317,7 @@ class FeedModeScreen(ScopeScreen):
     #: research board + sandbox timeline already render.
     DEFAULT_CSS: ClassVar[str] = f"""
     FeedModeScreen #{FEED_EMPTY_ID} {{ {HONEST_EMPTY_CSS} }}
+    {seal_hero_css("FeedModeScreen")}
     """
 
     def compose_body(self) -> ComposeResult:
@@ -327,7 +334,17 @@ class FeedModeScreen(ScopeScreen):
             # and an app-tier rule outranks this screen's ``DEFAULT_CSS`` even
             # at lower specificity, so the class would shadow the centered-hero
             # ``#feed-empty`` id rule. The id alone styles + identifies it.
-            yield Static(self._empty_hero(), id=FEED_EMPTY_ID)
+            mode = self._render_mode()
+            # Unicode path leads the honest-empty feed with the centered
+            # ASCII-art Seal (the research-board brand-mark pattern); the body
+            # drops its glyph sigil so the art is the single brand mark. ASCII
+            # path keeps the small brand glyph (the half-block art needs
+            # block-glyph coverage).
+            body = Static(self._empty_hero(with_sigil=mode != "unicode"), id=FEED_EMPTY_ID)
+            if mode == "unicode":
+                yield seal_empty_hero(body)
+            else:
+                yield body
 
     def on_mount(self) -> None:
         """Register as a live-feed listener and seed from the App buffer.
@@ -386,9 +403,16 @@ class FeedModeScreen(ScopeScreen):
             envelope: The event envelope to render at the top.
         """
         listing = self.query_one(f"#{FEED_LIST_ID}", VerticalScroll)
-        empty = listing.query(f"#{FEED_EMPTY_ID}")
-        if empty:
-            empty.first().remove()
+        # Remove the seal-hero wrapper (unicode path) when present so the art
+        # seal does not linger above the first feed row; else remove the bare
+        # body notice (ascii path).
+        hero = listing.query(f"#{SEAL_HERO_ID}")
+        if hero:
+            hero.first().remove()
+        else:
+            empty = listing.query(f"#{FEED_EMPTY_ID}")
+            if empty:
+                empty.first().remove()
         mode = self._render_mode()
         row = Static(format_event_markup(envelope, mode=mode), classes=FEED_ROW_CLASS)
         # Stash the source envelope on the row so a render-mode flip can
@@ -439,7 +463,10 @@ class FeedModeScreen(ScopeScreen):
             return
         notice = self.query(f"#{FEED_EMPTY_ID}")
         if notice:
-            notice.first(Static).update(self._empty_hero())
+            # Preserve with_sigil=False when the ASCII-art Seal leads the hero
+            # so a live/degraded flip never re-adds the glyph beside the art.
+            seal_mounted = bool(self.query(f"#{SEAL_HERO_ID}"))
+            notice.first(Static).update(self._empty_hero(with_sigil=not seal_mounted))
 
     def _empty_notice(self) -> str:
         """Return the honest-empty notice headline for the current daemon state.
@@ -450,7 +477,7 @@ class FeedModeScreen(ScopeScreen):
         """
         return FEED_EMPTY_DEGRADED if getattr(self.app, "degraded", False) else FEED_EMPTY_LIVE
 
-    def _empty_hero(self) -> str:
+    def _empty_hero(self, *, with_sigil: bool = True) -> str:
         """Return the centered honest-empty hero body for the feed list.
 
         Routes the current :meth:`_empty_notice` headline (live-waiting or
@@ -462,9 +489,17 @@ class FeedModeScreen(ScopeScreen):
         alarm), so the headline wears ``$muted``; the feed has no
         operator-facing action to take while it waits, so the hero carries no
         action chips.
+
+        Args:
+            with_sigil: When ``False`` the leading brand glyph is dropped -- the
+                unicode path leads the hero with the ASCII-art Seal instead, so
+                the glyph would be a redundant second brand mark.
         """
         return render_empty_state(
-            self._empty_notice(), mode=self._render_mode(), headline_tint="$muted"
+            self._empty_notice(),
+            mode=self._render_mode(),
+            headline_tint="$muted",
+            sigil=with_sigil,
         )
 
 

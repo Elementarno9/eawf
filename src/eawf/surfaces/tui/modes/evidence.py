@@ -21,6 +21,9 @@ module functions (:func:`build_evidence_rows`, :func:`evidence_summary_line`,
 :func:`render_followups_block`) so the rollup view is unit-testable without
 mounting Textual, mirroring the widget-catalog convention.
 """
+# noqa: EAWF010 god-module split deferred; was at the 1394-line cap before the
+# W30 seal-hero gate landed -- the readiness/ledger/ballot/rollup concerns are
+# the real split seam, tracked for a dedicated refactor wave.
 
 from __future__ import annotations
 
@@ -42,9 +45,14 @@ from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.ids import natural_key
 from eawf.platform.scrub import scan_text
 from eawf.surfaces.tui.scopes import ScopeScreen
-from eawf.surfaces.tui.widgets.empty_state import HONEST_EMPTY_CSS, render_empty_state
+from eawf.surfaces.tui.widgets.empty_state import (
+    HONEST_EMPTY_CSS,
+    render_empty_state,
+    seal_hero_css,
+)
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
+from eawf.surfaces.tui.widgets.seal import SEAL_ART_ID, seal_art_widget
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
 from eawf.workflow.estimation.buckets import wave_estimate_eu
@@ -64,7 +72,7 @@ logger = logging.getLogger(__name__)
 EMPTY_NOTICE: str = "no agent reports yet"
 
 
-def frame_empty_notice(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
+def frame_empty_notice(*, mode: RenderMode = DEFAULT_RENDER_MODE, with_sigil: bool = True) -> str:
     """Return the no-reports honest-empty hero body, centered + calm.
 
     Routes the honest :data:`EMPTY_NOTICE` through the shared
@@ -83,11 +91,14 @@ def frame_empty_notice(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
         mode: The App's resolved render-mode label threaded into the brand
             sigil's glyph column; defaults to the ASCII column for a bare
             standalone render.
+        with_sigil: When ``False`` the leading brand glyph is dropped -- the
+            unicode path leads the hero with the ASCII-art Seal instead, so the
+            glyph would be a redundant second brand mark.
 
     Returns:
         The centered honest-empty hero body for the ``#evidence-empty`` Static.
     """
-    return render_empty_state(EMPTY_NOTICE, mode=mode, headline_tint="$muted")
+    return render_empty_state(EMPTY_NOTICE, mode=mode, headline_tint="$muted", sigil=with_sigil)
 
 
 #: The criterion statuses that count as "ready" toward the close-readiness
@@ -1032,6 +1043,7 @@ class EvidenceModeScreen(ScopeScreen):
     EvidenceModeScreen .evidence-empty {
         HONEST_EMPTY_CSS
     }
+    SEAL_HERO_CSS
     EvidenceModeScreen .evidence-followups-title {
         height: 1;
         color: $accent;
@@ -1057,7 +1069,9 @@ class EvidenceModeScreen(ScopeScreen):
         max-height: 8;
         color: $text;
     }
-    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS)
+    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS).replace(
+        "SEAL_HERO_CSS", seal_hero_css("EvidenceModeScreen")
+    )
 
     #: Bound state, watched so a fresh revision rebuilds the rollup rows.
     state: reactive[State | None] = reactive(None)
@@ -1089,6 +1103,7 @@ class EvidenceModeScreen(ScopeScreen):
 
     def compose_body(self) -> ComposeResult:
         """Yield the evidence pane body (readiness header + ledger + rollup)."""
+        mode = self._render_mode()
         with Vertical(id="evidence-body"):
             yield Static(NO_CRITERIA_NOTICE, id="evidence-readiness", classes="evidence-readiness")
             yield Static(
@@ -1096,7 +1111,18 @@ class EvidenceModeScreen(ScopeScreen):
             )
             yield DataTable(id="evidence-ledger", cursor_type="row", zebra_stripes=True)
             yield Static(EMPTY_NOTICE, id="evidence-summary", classes="evidence-summary")
-            yield Static(EMPTY_NOTICE, id="evidence-empty", classes="evidence-empty")
+            # Unicode path leads the no-reports rollup with the centered ASCII
+            # Seal (the research-board brand mark) as a STANDALONE sibling above
+            # the notice -- not a wrapper -- so the dense evidence body keeps its
+            # layout; its display is gated to the fully-empty pane via
+            # :meth:`_toggle_seal_art`. Ascii path mounts no art (keeps the glyph).
+            if mode == "unicode":
+                yield seal_art_widget()
+            yield Static(
+                frame_empty_notice(mode=mode, with_sigil=mode != "unicode"),
+                id="evidence-empty",
+                classes="evidence-empty",
+            )
             yield DataTable(id="evidence-table", cursor_type="row", zebra_stripes=True)
             yield Static("Followups", classes="evidence-followups-title")
             yield Static("no followups", id="evidence-followups", classes="evidence-followups")
@@ -1171,7 +1197,6 @@ class EvidenceModeScreen(ScopeScreen):
         followups = self.query_one("#evidence-followups", Static)
         summary.update(evidence_summary_line(rows))
         followups.update(render_followups_block(rows))
-        empty.update(frame_empty_notice(mode=mode))
         table.clear()
         for row in rows:
             table.add_row(
@@ -1183,9 +1208,41 @@ class EvidenceModeScreen(ScopeScreen):
         has_rows = bool(rows)
         table.display = has_rows
         empty.display = not has_rows
+        self._toggle_seal_art(has_rows=has_rows, mode=mode)
         self._paint_readiness()
         self._paint_ballots()
         logger.info(f"evidence_rebuild rows={len(rows)} has_rows={has_rows}")
+
+    def _toggle_seal_art(
+        self, *, has_rows: bool | None = None, mode: RenderMode | None = None
+    ) -> None:
+        """Show the 19-row ASCII-art Seal only while the WHOLE pane is empty.
+
+        The seal leads only with no reports AND no ballots AND no readiness
+        criteria; otherwise the tall art would push the ledger / ballot-grid /
+        tier-ladder rows off a short screen. It is a standalone sibling beside
+        the empty notice, so this toggles the ART's display (the notice stays
+        visible) and drops the notice's glyph only while the art leads. Called
+        from :meth:`_rebuild` / :meth:`_paint_readiness` / :meth:`_paint_ballots`
+        so a late push re-gates it; a no-op on the ascii path / before mount.
+
+        Args:
+            has_rows: Whether the rollup has rows; read off the table's display
+                state when ``None`` (a ballot / readiness call site).
+            mode: The render-mode label; via :meth:`_render_mode` when ``None``.
+        """
+        arts = self.query(f"#{SEAL_ART_ID}")
+        if not arts:
+            return
+        if has_rows is None:
+            has_rows = bool(self.query_one("#evidence-table", DataTable).display)
+        if mode is None:
+            mode = self._render_mode()
+        fully_empty = not has_rows and not self._ballots and self._readiness is None
+        arts.first().display = fully_empty
+        self.query_one("#evidence-empty", Static).update(
+            frame_empty_notice(mode=mode, with_sigil=not fully_empty)
+        )
 
     def set_readiness(
         self,
@@ -1247,6 +1304,8 @@ class EvidenceModeScreen(ScopeScreen):
         has_rows = bool(ledger_rows)
         ledger.display = has_rows
         empty.display = not has_rows
+        # A readiness push adds criteria content below the seal: re-gate the art.
+        self._toggle_seal_art()
 
     def set_ballots(
         self,
@@ -1297,6 +1356,8 @@ class EvidenceModeScreen(ScopeScreen):
         juror_ids, rows = build_ballot_grid(self._ballots, self._rubric_item_ids)
         grid.update(render_ballot_grid(juror_ids, rows, mode=self._render_mode()))
         ladder.update(render_tier_ladder(self._scored_tier))
+        # A ballot push adds grid content below the seal: re-gate the art.
+        self._toggle_seal_art()
 
     def action_drill(self) -> None:
         """Open the why-peek drill modal for the selected ledger criterion.

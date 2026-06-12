@@ -62,15 +62,22 @@ from eawf.surfaces.tui.modes.agent_watch import (
     CANCEL_IDLE,
     CANCEL_NO_DAEMON,
     EMPTY_NOTICE,
+    WATCH_EMPTY_ID,
     WATCH_HEADER_ID,
     WATCH_RESULT_ID,
     AgentWatchModeScreen,
     cancel_mark,
     session_sigil_markup,
 )
-from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
+from eawf.surfaces.tui.snapshot import (
+    assert_screen_snapshot,
+    capture_screen_text,
+    settle_screen,
+)
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
+from eawf.surfaces.tui.widgets.empty_state import SEAL_HERO_ID
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
+from eawf.surfaces.tui.widgets.seal import SEAL_ART_LINES
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 _THEME = Path(__file__).resolve().parents[3] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
@@ -259,7 +266,13 @@ def test_agent_watch_reskin_running_snapshot(tmp_path: Path) -> None:
 
 
 def test_agent_watch_reskin_empty_snapshot(tmp_path: Path) -> None:
-    """The empty pane renders the honest no-active-session sentinel."""
+    """The empty pane leads with the centered ASCII-art Seal hero.
+
+    With no dispatched session (``target`` is ``None``) the unicode honest-empty
+    body is the centered ASCII-art Seal hero (the research-board brand-mark
+    pattern, spread across the honest-empty surfaces) over the no-session
+    headline -- not the small stream scaffold that would clip the 19-row seal.
+    """
     state = _state()
     state_path = _write_state(tmp_path, state)
 
@@ -270,12 +283,47 @@ def test_agent_watch_reskin_empty_snapshot(tmp_path: Path) -> None:
             screen = app.screen
             assert isinstance(screen, AgentWatchModeScreen)
             assert screen.target is None
-            header = str(screen.query_one(f"#{WATCH_HEADER_ID}", Static).render())
-            # The honest-empty sentinel renders rather than implying a stream.
-            assert EMPTY_NOTICE in header
+            # The seal hero leads the honest-empty body (the brand mark), with
+            # the no-session headline below -- the small stream scaffold (and
+            # its #watch-header) is reserved for an actual watched session.
+            assert screen.query(f"#{SEAL_HERO_ID}")
+            empty_body = str(screen.query_one(f"#{WATCH_EMPTY_ID}", Static).render())
+            assert EMPTY_NOTICE in empty_body
+            # The seal art renders in the frame AND is horizontally centered.
+            frame = capture_screen_text(app)
+            _assert_seal_art_centered(frame, width=_SIZE[0])
             assert_screen_snapshot(app, _GOLDEN / "agent_watch_reskin_empty.txt")
 
     asyncio.run(body())
+
+
+def _assert_seal_art_centered(frame: str, *, width: int) -> None:
+    """Assert the ASCII-art Seal renders in *frame* and centers on the midline.
+
+    Finds the seal's full-width rows (the rows carrying the central star band,
+    which span the full 42 art columns) and asserts each one's visible block
+    centers on the screen midline -- ``lead + len(content) / 2 == width / 2`` --
+    so a regression that left-anchors the seal (a fixed ``width: 42`` instead of
+    the load-bearing ``width: 1fr; text-align: center``) fails here, not only on
+    the byte-for-byte golden.
+
+    Args:
+        frame: The captured screen text (one row per line, trailing space
+            trimmed per row by :func:`capture_screen_text`).
+        width: The screen width the seal centers within.
+    """
+    # The widest art rows carry the central ``████`` star band; pick one as the
+    # full-42 row whose leading whitespace pins the block's left edge.
+    widest = SEAL_ART_LINES[9].strip()  # "██   ██████████    ████    ██████████   ██"
+    matches = [line for line in frame.splitlines() if widest in line]
+    assert matches, f"seal art row {widest!r} not found in frame"
+    for line in matches:
+        lead = len(line) - len(line.lstrip(" "))
+        content = line.rstrip()
+        center = lead + (len(content) - lead) / 2
+        assert abs(center - width / 2) <= 1.0, (
+            f"seal not centered: block center {center} vs screen midline {width / 2}"
+        )
 
 
 # --------------------------------------------------------------------------

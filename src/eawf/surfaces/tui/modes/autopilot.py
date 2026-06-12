@@ -126,7 +126,12 @@ from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets import sigils
-from eawf.surfaces.tui.widgets.empty_state import HONEST_EMPTY_CSS, render_empty_state
+from eawf.surfaces.tui.widgets.empty_state import (
+    HONEST_EMPTY_CSS,
+    render_empty_state,
+    seal_empty_hero,
+    seal_hero_css,
+)
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, render_bar_markup
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
@@ -944,7 +949,10 @@ class AutopilotModeScreen(ScopeScreen):
     AutopilotModeScreen .autopilot-empty {
         HONEST_EMPTY_CSS
     }
-    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS)
+    SEAL_HERO_CSS
+    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS).replace(
+        "SEAL_HERO_CSS", seal_hero_css("AutopilotModeScreen")
+    )
 
     #: ``up`` / ``down`` move the selection; ``d`` dispatches; ``m`` opens the
     #: multi-select batch. The intervention keys (``H`` halt, ``S`` skip, ``K``
@@ -1747,7 +1755,21 @@ class AutopilotModeScreen(ScopeScreen):
                     Static(render_lane_cell(lane_cell, mode=mode), classes=LANE_CELL_CLASS)
                 )
         if not self._rows:
-            container.mount(Static(self._frontier_empty_hero(mode=mode), classes="autopilot-empty"))
+            # Unicode path leads the dry-frontier hero with the centered
+            # ASCII-art Seal (the research-board brand-mark pattern); the body
+            # drops its glyph sigil so the art is the single brand mark. ASCII
+            # path keeps the small brand glyph (the half-block art needs
+            # block-glyph coverage).
+            body = Static(
+                self._frontier_empty_hero(mode=mode, with_sigil=mode != "unicode"),
+                classes="autopilot-empty",
+            )
+            # hero_id=None: the list re-mounts on every rebuild and Textual
+            # defers remove_children(), so a fixed id would collide with the
+            # not-yet-torn-down prior hero (the same DuplicateIds race the
+            # section captions above dodge by carrying no id). The hero class
+            # carries the centering.
+            container.mount(seal_empty_hero(body, hero_id=None) if mode == "unicode" else body)
         else:
             container.mount(
                 Static(
@@ -1773,7 +1795,7 @@ class AutopilotModeScreen(ScopeScreen):
             for blocked_row in self._blocked:
                 container.mount(Static(render_blocked_row(blocked_row), classes=BLOCKED_ROW_CLASS))
 
-    def _frontier_empty_hero(self, *, mode: RenderMode) -> str:
+    def _frontier_empty_hero(self, *, mode: RenderMode, with_sigil: bool = True) -> str:
         """Return the centered honest-empty hero for a dry ready frontier.
 
         Routes the :data:`EMPTY_NOTICE` "no ready waves" copy through the
@@ -1787,12 +1809,16 @@ class AutopilotModeScreen(ScopeScreen):
         Args:
             mode: The App's resolved render-mode label, threaded to the brand
                 sigil's glyph column.
+            with_sigil: When ``False`` the leading brand glyph is dropped -- the
+                unicode path leads the hero with the ASCII-art Seal instead, so
+                the glyph would be a redundant second brand mark.
         """
         return render_empty_state(
             EMPTY_NOTICE,
             "no claim-ready wave on the frontier",
             mode=mode,
             chips=(("a", "arm fleet"),),
+            sigil=with_sigil,
         )
 
     def _repaint_selection(self) -> None:

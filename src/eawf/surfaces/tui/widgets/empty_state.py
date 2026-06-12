@@ -19,10 +19,22 @@ single terminal-renderable brand mark (:func:`~eawf.surfaces.tui.widgets.sigils.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+from textual.containers import Vertical
 
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.seal import (
+    SEAL_ART_CLASS,
+    SEAL_ART_LINES,
+    seal_art_widget,
+)
 from eawf.surfaces.tui.widgets.sigils import chrome
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from textual.widgets import Static
 
 #: Structural CSS body every honest-empty ``Static`` includes so the hero
 #: centers in its pane (content centered on both axes, each line centered) and
@@ -30,6 +42,61 @@ from eawf.surfaces.tui.widgets.sigils import chrome
 #: alert box. A host pane drops this into its empty rule, e.g.
 #: ``MyScreen #my-empty {{ {HONEST_EMPTY_CSS} }}``.
 HONEST_EMPTY_CSS: str = "height: 1fr; width: 1fr; content-align: center middle; text-align: center;"
+
+#: Number of art rows in the half-block Seal -- the fixed height the seal-art
+#: :class:`~textual.widgets.Static` is sized to so the disc never clips.
+SEAL_ART_HEIGHT: int = len(SEAL_ART_LINES)
+
+#: Stable id of the centered seal-hero wrapper a mode mounts when it leads its
+#: honest-empty surface with the ASCII-art Seal (the research-board pattern,
+#: spread to the autopilot / feed / agent-watch / evidence empty heroes so the
+#: brand mark reads consistently across the honest-empty surfaces). Optional on
+#: the wrapper -- a host that re-mounts the hero on a deferred ``remove_children``
+#: (the autopilot dynamic-rebuild race) omits the id and queries by the class so
+#: a rapid second rebuild never collides on a duplicate id.
+SEAL_HERO_ID: str = "seal-empty-hero"
+
+#: CSS class the centered seal-hero wrapper always carries (the centering hook).
+#: A class -- not the id -- carries the centering rule so the wrapper can mount
+#: id-less on a host that re-mounts it dynamically (autopilot) without a
+#: duplicate-id collision.
+SEAL_HERO_CLASS: str = "seal-empty-hero"
+
+
+def seal_hero_css(screen_selector: str) -> str:
+    """Return the seal-hero centering CSS scoped to *screen_selector*.
+
+    Emits the two rules a host screen drops into its ``DEFAULT_CSS`` so the seal
+    hero centers, BOTH prefixed with the screen selector so the rules never leak
+    across screens:
+
+    * the wrapper (:data:`SEAL_HERO_CLASS`) ``align: center middle`` stacks the
+      seal + the body block and centers the stack in the pane;
+    * the seal ``Static`` (carrying
+      :data:`~eawf.surfaces.tui.widgets.seal.SEAL_ART_CLASS`) takes the full
+      pane width (``width: 1fr``) and centers each of its lines (``text-align:
+      center``).
+
+    The ``width: 1fr; text-align: center`` pair is load-bearing: a fixed
+    ``width: 42`` left-anchors the symmetric block, while the full-width +
+    centered-text pair centers the 42-wide art on the screen midline (the
+    operator-approved research-board centering).
+
+    Args:
+        screen_selector: The host screen's CSS type selector (e.g.
+            ``"AutopilotModeScreen"``) both rules are prefixed with.
+
+    Returns:
+        The two scoped CSS rules, space-joined, ready to drop into a screen's
+        ``DEFAULT_CSS``.
+    """
+    return (
+        f"{screen_selector} .{SEAL_HERO_CLASS} "
+        "{ height: 1fr; width: 1fr; align: center middle; } "
+        f"{screen_selector} .{SEAL_ART_CLASS} "
+        f"{{ width: 1fr; height: {SEAL_ART_HEIGHT}; "
+        "content-align: center middle; text-align: center; color: $accent; }"
+    )
 
 
 def brand_sigil_markup(*, mode: str = "unicode", tint: str = "$muted") -> str:
@@ -117,9 +184,49 @@ def render_empty_state(
     return "\n".join(lines)
 
 
+def seal_empty_hero(body: Static, *, hero_id: str | None = SEAL_HERO_ID) -> Vertical:
+    """Wrap the ASCII-art Seal over the honest-empty *body* in a centered hero.
+
+    Mirrors the research-board honest-empty hero so the four other empty-state
+    surfaces (autopilot / feed / agent-watch / evidence) lead with the same
+    brand mark: a centered :class:`~textual.containers.Vertical` carrying
+    :data:`SEAL_HERO_CLASS` and stacking the
+    :func:`~eawf.surfaces.tui.widgets.seal.seal_art_widget` art over *body*. The
+    host screen drops :func:`seal_hero_css` into its ``DEFAULT_CSS`` so the
+    wrapper's ``align: center middle`` + the seal Static's ``width: 1fr;
+    text-align: center`` center the symmetric 42-wide art block on the screen
+    midline (a fixed-width seal would left-anchor). The *body* Static keeps
+    whatever id / classes the caller already styles it with, so its own
+    centering rule still applies under the seal.
+
+    The body should NOT carry its own brand sigil when led by the art seal --
+    pass ``sigil=False`` to :func:`render_empty_state` so the art is the single
+    brand mark rather than a redundant glyph beside it.
+
+    Args:
+        body: The honest-empty body ``Static`` (headline + subline + chips) the
+            seal art leads.
+        hero_id: The wrapper's widget id. Defaults to :data:`SEAL_HERO_ID` for
+            a compose-once host that queries the hero by id; pass ``None`` on a
+            host that re-mounts the hero on a deferred ``remove_children`` (the
+            autopilot dynamic-rebuild race), where a fixed id collides with the
+            not-yet-torn-down prior hero -- the :data:`SEAL_HERO_CLASS` carries
+            the centering regardless.
+
+    Returns:
+        The centered seal hero wrapper, ready to ``yield`` or ``mount``.
+    """
+    return Vertical(seal_art_widget(), body, id=hero_id, classes=SEAL_HERO_CLASS)
+
+
 __all__ = [
     "HONEST_EMPTY_CSS",
+    "SEAL_ART_HEIGHT",
+    "SEAL_HERO_CLASS",
+    "SEAL_HERO_ID",
     "brand_sigil_markup",
     "render_chip",
     "render_empty_state",
+    "seal_empty_hero",
+    "seal_hero_css",
 ]

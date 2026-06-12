@@ -95,7 +95,13 @@ from eawf.kernel.state.ids import natural_key
 from eawf.observability.eval.reputation import FleetVerdictRow, fleet_verdict_rollup
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
-from eawf.surfaces.tui.widgets.empty_state import HONEST_EMPTY_CSS, render_empty_state
+from eawf.surfaces.tui.widgets.empty_state import (
+    HONEST_EMPTY_CSS,
+    SEAL_HERO_ID,
+    render_empty_state,
+    seal_empty_hero,
+    seal_hero_css,
+)
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
@@ -1582,6 +1588,7 @@ class AgentWatchModeScreen(ScopeScreen):
     AgentWatchModeScreen .watch-empty {
         HONEST_EMPTY_CSS
     }
+    SEAL_HERO_CSS
     AgentWatchModeScreen #watch-output {
         height: 1fr;
         margin-top: 1;
@@ -1591,7 +1598,9 @@ class AgentWatchModeScreen(ScopeScreen):
         margin-top: 1;
         color: $muted;
     }
-    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS)
+    """.replace("HONEST_EMPTY_CSS", HONEST_EMPTY_CSS).replace(
+        "SEAL_HERO_CSS", seal_hero_css("AgentWatchModeScreen")
+    )
 
     #: ``up`` / ``down`` scroll the stream; the FA4 session keys ``k`` (kill
     #: this lane, confirm-gated, with ``x`` as a cancel-verb alias), ``space``
@@ -1718,7 +1727,30 @@ class AgentWatchModeScreen(ScopeScreen):
         yield from self._compose_single_session(mode=mode)
 
     def _compose_single_session(self, *, mode: RenderMode) -> ComposeResult:
-        """Yield the FA4 single-session zoom body for the pinned :attr:`target`."""
+        """Yield the FA4 single-session zoom body for the pinned :attr:`target`.
+
+        With NO target (the honest-empty path -- nothing is dispatched to
+        stream) the unicode body is the centered ASCII-art Seal hero filling the
+        pane (the research-board brand-mark pattern), so the brand mark reads
+        consistently with the other honest-empty surfaces; the small stream
+        scaffold (header / list / output / result) is reserved for an actual
+        watched session, which would clip the 19-row seal in its short scroll.
+        With a target pinned the existing scaffold streams its (possibly
+        still-empty) output, and the ascii path keeps the small brand glyph
+        regardless (the half-block art needs block-glyph coverage).
+        """
+        if self.target is None and mode == "unicode":
+            with Vertical(id="watch-body"):
+                body = Static(
+                    self._empty_hero(with_sigil=False),
+                    id=WATCH_EMPTY_ID,
+                    classes="watch-empty",
+                )
+                yield seal_empty_hero(body)
+                # Keep the action-result line so the cancel / pause keys still
+                # surface their honest "no session" lines on the empty pane.
+                yield Static(self._cancel_idle_line(), id=WATCH_RESULT_ID)
+            return
         with Vertical(id="watch-body"):
             yield Static(render_watch_header(self.target, mode=mode), id=WATCH_HEADER_ID)
             with VerticalScroll(id=WATCH_LIST_ID):
@@ -1976,7 +2008,10 @@ class AgentWatchModeScreen(ScopeScreen):
             return
         notice = self.query(f"#{WATCH_EMPTY_ID}")
         if notice:
-            notice.first(Static).update(self._empty_hero())
+            # Preserve with_sigil=False when the ASCII-art Seal leads the hero
+            # so a degraded/live flip never re-adds the glyph beside the art.
+            seal_mounted = bool(self.query(f"#{SEAL_HERO_ID}"))
+            notice.first(Static).update(self._empty_hero(with_sigil=not seal_mounted))
 
     def action_cancel_session(self) -> None:
         """Confirm-gate, then ask the daemon to kill the watched session (``k``).
@@ -2228,7 +2263,7 @@ class AgentWatchModeScreen(ScopeScreen):
             return WATCH_DEGRADED
         return f"watching {self.target.label} -- waiting for session events..."
 
-    def _empty_hero(self) -> str:
+    def _empty_hero(self, *, with_sigil: bool = True) -> str:
         """Return the centered honest-empty hero body for the session stream.
 
         Routes the current :meth:`_empty_notice` headline (nothing watched /
@@ -2239,9 +2274,17 @@ class AgentWatchModeScreen(ScopeScreen):
         wording is calm (a waiting / nothing-dispatched state, not an alarm),
         so the headline wears ``$muted``; nothing is dispatched to act on, so
         the hero carries no action chips.
+
+        Args:
+            with_sigil: When ``False`` the leading brand glyph is dropped -- the
+                unicode path leads the hero with the ASCII-art Seal instead, so
+                the glyph would be a redundant second brand mark.
         """
         return render_empty_state(
-            self._empty_notice(), mode=self._render_mode(), headline_tint="$muted"
+            self._empty_notice(),
+            mode=self._render_mode(),
+            headline_tint="$muted",
+            sigil=with_sigil,
         )
 
     def _cancel_idle_line(self) -> str:
