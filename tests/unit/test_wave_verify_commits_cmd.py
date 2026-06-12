@@ -191,6 +191,30 @@ def test_verify_commits_drift_exits_validation_error_and_reports(
     assert _read_commit(state_path, W1) == "a" * 40
 
 
+def test_verify_commits_acknowledged_residue_exits_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_available: None
+) -> None:
+    """Acked unrepairable rows are accepted residue, so the gate exits clean."""
+    (tmp_path / ".git").mkdir()
+    _seed_state(tmp_path / ".ea", waves={W1: "a" * 40})
+    ack_dir = tmp_path / ".eawf"
+    ack_dir.mkdir()
+    (ack_dir / "drift-acks.json").write_text(
+        json.dumps({"acked_wave_ids": [W1]}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("EA_STATE", raising=False)
+    _patch_derive(monkeypatch, {})  # pinned_but_missing, then filtered by ack
+
+    from eawf.surfaces.cli.app import app
+
+    res = CliRunner().invoke(app, ["--json", "-w", str(tmp_path), "wave", "verify-commits"])
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.stdout)
+    assert payload["drift_count"] == 0
+    assert payload["drifts"] == []
+
+
 def test_verify_commits_detects_every_kind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_available: None
 ) -> None:

@@ -19,6 +19,7 @@ isolated from a real git repo -- mirroring
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -28,6 +29,7 @@ from eawf.workflow.lifecycle.wave_sha import (
     CommitPinIssue,
     RepairAction,
     repair_commit_pins,
+    save_drift_acks,
     scan_commit_pins,
 )
 
@@ -199,6 +201,39 @@ def test_scan_commit_pins_pinned_but_missing_is_unrepairable(
     assert issue.state_commit == "a" * 40
     assert issue.git_commit is None
     assert issue.repairable is False
+
+
+def test_scan_commit_pins_loads_repo_ack_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Acknowledged hard drift is omitted from the verify-commits issue scan."""
+    _git_on_path(monkeypatch)
+    _patch_derive(monkeypatch, {})  # derive returns None
+    state = _state_with_waves(
+        [
+            _wave_payload("P28-I01-W01", commit="a" * 40),
+            _wave_payload("P28-I01-W02", commit="b" * 40),
+        ]
+    )
+    save_drift_acks({"P28-I01-W01"}, tmp_path)
+
+    issues = scan_commit_pins(state, repo_root=tmp_path)
+
+    assert [issue.wave_id for issue in issues] == ["P28-I01-W02"]
+
+
+def test_scan_commit_pins_explicit_ack_set_overrides_repo_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An explicit empty set lets callers scan all rows despite a repo ack file."""
+    _git_on_path(monkeypatch)
+    _patch_derive(monkeypatch, {})  # derive returns None
+    state = _state_with_waves([_wave_payload("P28-I01-W01", commit="a" * 40)])
+    save_drift_acks({"P28-I01-W01"}, tmp_path)
+
+    issues = scan_commit_pins(state, repo_root=tmp_path, acked_wave_ids=set())
+
+    assert [issue.wave_id for issue in issues] == ["P28-I01-W01"]
 
 
 def test_scan_commit_pins_closed_no_pin_is_unrepairable(

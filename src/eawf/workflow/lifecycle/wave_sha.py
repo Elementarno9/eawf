@@ -207,6 +207,15 @@ def save_drift_acks(acked_wave_ids: set[str], repo_root: Path | None = None) -> 
     return path
 
 
+def _resolve_acked_wave_ids(*, repo_root: Path | None, acked_wave_ids: set[str] | None) -> set[str]:
+    """Return the explicit ack set or load the repo ack file when available."""
+    if acked_wave_ids is not None:
+        return acked_wave_ids
+    if repo_root is not None:
+        return load_drift_acks(repo_root)
+    return set()
+
+
 def _phase_and_wave(wave_id: str) -> tuple[str, str] | None:
     """Split ``P##-I##-W##`` into ``("P##", "W##")``; return ``None`` on mismatch."""
     parts = wave_id.split("-")
@@ -603,9 +612,13 @@ def detect_git_state_drift(
 
     Acknowledged historical drifts (squashed / cherry-pick-twin / lost
     commits that the operator has reviewed and accepted via
-    ``eawf wave ack-drift``) are filtered out: any wave id present in
-    *acked_wave_ids* is skipped so ``eawf doctor`` stops warning on a
-    known, accepted backlog.
+    ``eawf wave ack-drift``) are filtered out. When *acked_wave_ids* is
+    supplied, that set is the explicit filter. When it is ``None`` and
+    *repo_root* is supplied, the filter is loaded from
+    ``<repo_root>/.eawf/drift-acks.json`` so read-only projections such
+    as ``eawf status`` and the TUI doctor share the same ack path as
+    ``eawf doctor``. With no *repo_root*, no implicit ack file is read;
+    unit callers that do not model a repo stay hermetic.
 
     Args:
         state: The validated :class:`State` to walk.
@@ -613,8 +626,8 @@ def detect_git_state_drift(
             process cwd via the subprocess machinery in
             :func:`derive_wave_sha`.
         acked_wave_ids: Wave ids whose drift the operator has already
-            acknowledged; ``None`` means "no acks" (every drift is
-            surfaced).
+            acknowledged; ``None`` means load the repo ack file when
+            *repo_root* is supplied, otherwise use no acks.
 
     Returns:
         List of :class:`Drift` rows, ordered by ``wave_id`` so render
@@ -623,7 +636,7 @@ def detect_git_state_drift(
     """
     from eawf.kernel.state.enums import WaveStatus
 
-    acked = acked_wave_ids or set()
+    acked = _resolve_acked_wave_ids(repo_root=repo_root, acked_wave_ids=acked_wave_ids)
     git_available = shutil.which("git") is not None
     index = build_wave_sha_index(repo_root) if git_available else {}
 
@@ -738,7 +751,12 @@ class CommitPinIssue:
     repairable: bool = False
 
 
-def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[CommitPinIssue]:
+def scan_commit_pins(
+    state: State,
+    *,
+    repo_root: Path | None = None,
+    acked_wave_ids: set[str] | None = None,
+) -> list[CommitPinIssue]:
     """Scan every CLOSED wave's commit pin for drift OR a harden-able gap.
 
     A superset of :func:`detect_git_state_drift`: the four hard-drift
@@ -748,6 +766,10 @@ def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[Com
     commit subject. ``detect_git_state_drift`` treats that case as clean
     (the ``wave show`` derive fallback covers it); this scan surfaces it
     so ``eawf wave verify-commits --repair`` can pin the derivable SHA.
+    Acknowledged historical rows are skipped using the same policy as
+    :func:`detect_git_state_drift`: an explicit *acked_wave_ids* set wins;
+    otherwise ``<repo_root>/.eawf/drift-acks.json`` is loaded when
+    *repo_root* is supplied.
 
     Repair policy encoded on each row's ``repairable`` flag:
 
@@ -763,6 +785,9 @@ def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[Com
         state: The validated :class:`State` to walk.
         repo_root: Repository working directory; defaults to the process
             cwd via the subprocess machinery in :func:`derive_wave_sha`.
+        acked_wave_ids: Wave ids whose commit-pin issue the operator has
+            already acknowledged; ``None`` means load the repo ack file
+            when *repo_root* is supplied, otherwise use no acks.
 
     Returns:
         List of :class:`CommitPinIssue` rows ordered by ``wave_id`` so
@@ -771,6 +796,7 @@ def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[Com
     """
     from eawf.kernel.state.enums import WaveStatus
 
+    acked = _resolve_acked_wave_ids(repo_root=repo_root, acked_wave_ids=acked_wave_ids)
     git_available = shutil.which("git") is not None
     index = build_wave_sha_index(repo_root) if git_available else {}
 
@@ -778,6 +804,8 @@ def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[Com
     for wave_id in sorted(state.waves):
         wave = state.waves[wave_id]
         if wave.status != WaveStatus.CLOSED:
+            continue
+        if wave_id in acked:
             continue
         derived = (
             derive_wave_sha(wave_id, repo_root=repo_root, index=index) if git_available else None
@@ -839,7 +867,7 @@ def scan_commit_pins(state: State, *, repo_root: Path | None = None) -> list[Com
             )
     logger.info(
         f"scan_commit_pins waves={len(state.waves)} issues={len(issues)} "
-        f"git_available={git_available}"
+        f"acked={len(acked)} git_available={git_available}"
     )
     return issues
 

@@ -235,6 +235,45 @@ def test_status_lists_last_closed_waves(
     assert "P01-I01-W00" in payload["last_closed_waves"]
 
 
+def test_status_drift_summary_honors_repo_ack_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``eawf status`` uses ``.eawf/drift-acks.json`` before counting drift."""
+    state = json.loads(json.dumps(_VALID_STATE))  # deep copy
+    state["waves"]["P01-I01-W00"] = {
+        "id": "P01-I01-W00",
+        "iter_id": "P01-I01",
+        "title": "W0",
+        "status": "closed",
+        "deps": [],
+        "file_scopes": [],
+        "claim_session_id": None,
+        "worktree_id": None,
+        "outcome": "ok",
+        "commit": "a" * 40,
+        "opened_at": "2026-05-07T00:00:00Z",
+        "closed_at": "2026-05-07T01:00:00Z",
+    }
+    state["iters"]["P01-I01"]["wave_ids"].append("P01-I01-W00")
+    (tmp_path / ".git").mkdir()
+    state_path = _seed(tmp_path, state)
+    ack_dir = tmp_path / ".eawf"
+    ack_dir.mkdir()
+    (ack_dir / "drift-acks.json").write_text(
+        json.dumps({"acked_wave_ids": ["P01-I01-W00"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+
+    result = runner.invoke(app, ["--json", "status"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["drift"] == {"count": 0, "tier": "ok"}
+
+
 def test_status_payload_keys_documented_set(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

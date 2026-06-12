@@ -7,7 +7,8 @@ known, accepted historical-drift backlog:
    :func:`~eawf.workflow.lifecycle.wave_sha.save_drift_acks` round-trip and
    degrade gracefully on a missing / malformed ack file.
 2. :func:`eawf.workflow.lifecycle.wave_sha.detect_git_state_drift` filters out
-   acknowledged wave ids via the ``acked_wave_ids`` argument.
+   acknowledged wave ids via the repo ack file or the explicit
+   ``acked_wave_ids`` argument.
 """
 
 from __future__ import annotations
@@ -175,6 +176,53 @@ def test_detect_git_state_drift_filters_acked_wave(monkeypatch: pytest.MonkeyPat
     assert [d.wave_id for d in drifts] == ["P28-I01-W02"]
 
 
+def test_detect_git_state_drift_loads_repo_ack_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When ``repo_root`` is supplied, the detector reads ``.eawf/drift-acks.json``."""
+    monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",
+        lambda repo_root=None: {},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
+        lambda wid, repo_root=None, index=None: None,
+    )
+    state = _state_with_waves(
+        [
+            _wave_payload("P28-I01-W01", commit="a" * 40),
+            _wave_payload("P28-I01-W02", commit="b" * 40),
+        ]
+    )
+    save_drift_acks({"P28-I01-W01"}, tmp_path)
+
+    drifts = detect_git_state_drift(state, repo_root=tmp_path)
+
+    assert [d.wave_id for d in drifts] == ["P28-I01-W02"]
+
+
+def test_detect_git_state_drift_explicit_ack_set_overrides_repo_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passing an explicit set keeps ``ack-drift --all`` in control of filtering."""
+    monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",
+        lambda repo_root=None: {},
+    )
+    monkeypatch.setattr(
+        "eawf.workflow.lifecycle.wave_sha.derive_wave_sha",
+        lambda wid, repo_root=None, index=None: None,
+    )
+    state = _state_with_waves([_wave_payload("P28-I01-W01", commit="a" * 40)])
+    save_drift_acks({"P28-I01-W01"}, tmp_path)
+
+    drifts = detect_git_state_drift(state, repo_root=tmp_path, acked_wave_ids=set())
+
+    assert [d.wave_id for d in drifts] == ["P28-I01-W01"]
+
+
 def test_detect_git_state_drift_all_acked_is_clean(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
     monkeypatch.setattr(
@@ -192,7 +240,7 @@ def test_detect_git_state_drift_all_acked_is_clean(monkeypatch: pytest.MonkeyPat
 def test_detect_git_state_drift_none_acks_surfaces_everything(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``acked_wave_ids=None`` behaves identically to the no-ack default."""
+    """Without ``repo_root``, ``acked_wave_ids=None`` stays hermetic and reads no file."""
     monkeypatch.setattr("eawf.workflow.lifecycle.wave_sha.shutil.which", lambda _: "/usr/bin/git")
     monkeypatch.setattr(
         "eawf.workflow.lifecycle.wave_sha.build_wave_sha_index",

@@ -84311,7 +84311,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:02:19.437537Z",
       "closed_at": "2026-06-11T04:02:20.191435Z",
-      "commit": "1f8085cffa945f5d522c96ed3f9c6f02b5552d0c",
+      "commit": "265a003a15fd0c46e6a4a4a749e4ac57e932b960",
       "deps": [
         "P30-I10-W02"
       ],
@@ -85349,7 +85349,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:00:06.065857Z",
       "closed_at": "2026-06-11T05:00:07.430166Z",
-      "commit": "6f1a78e12438ad63c2b135ff14671f3c0f300e5e",
+      "commit": "e155e187013c6888d1297b4d1920742fad052508",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88350,7 +88350,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:31:52.525743Z",
       "closed_at": "2026-06-11T06:31:53.948039Z",
-      "commit": "cbbce16742438ec119ca733d76fd4ca0375d6fef",
+      "commit": "0e1ab3e7f5c2907fea15c0bf5b55cb3d50846fec",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88609,7 +88609,7 @@
       "claim_session_id": "p30-i15-w16-uiparity",
       "claimed_at": "2026-06-11T12:07:01.770765Z",
       "closed_at": "2026-06-11T12:47:18.675272Z",
-      "commit": "7028dd06c6cf33dc09add8325d0192e6e88b597b",
+      "commit": "85f329a50eb037847c55138b15def29975c81d3b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88780,7 +88780,7 @@
       "claim_session_id": "p30-i15-w19",
       "claimed_at": "2026-06-11T13:22:05.664456Z",
       "closed_at": "2026-06-11T14:10:47.186512Z",
-      "commit": "167903bc71430ce103da241b7eaeaeb4c9f92553",
+      "commit": "02bd2bbd92575c85e57fac230acff5bcd3e784c5",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89091,7 +89091,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T22:58:51.666004Z",
       "closed_at": "2026-06-12T00:43:33.364546Z",
-      "commit": "5595bf204ec6c5fb9cbabf171329dcd0103abc49",
+      "commit": "c37e6526832392eb86499c5d12c3d588cc6dcac5",
       "deps": [],
       "description": "sandbox_events has no snapshot golden despite the designer \"pin now\" directive; Enter is bound to reload not the row affordance; the chrome-role count test asserts a test-local fixture so additive drift is invisible.",
       "dispatch_history": [],
@@ -90910,7 +90910,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T21:45:29.294038Z",
       "closed_at": "2026-06-11T23:50:22.525751Z",
-      "commit": "2d8c24a5341609b59d0de375f7b650f444f99c85",
+      "commit": "dafa2c247aa1deaf009d4da1d41dd970b60ce421",
       "deps": [
         "P30-I16-W19"
       ],
@@ -91130,7 +91130,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T01:17:19.351008Z",
       "closed_at": "2026-06-12T02:00:35.952292Z",
-      "commit": "cf99a17bdb070bd89c95e39b4a587d3b6483cb09",
+      "commit": "81b0d36f4590ef135a5b97911214d1966b44cf25",
       "deps": [
         "P30-I16-W13"
       ],
@@ -91358,7 +91358,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T02:04:36.881401Z",
       "closed_at": "2026-06-12T02:39:43.381098Z",
-      "commit": "efd4ee36487714a09da39149cd6ff7278b525ffd",
+      "commit": "20ccf4a72611c9cf68d7b793c72b2e5183461663",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -91489,7 +91489,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T03:08:53.750217Z",
       "closed_at": "2026-06-12T03:56:50.138098Z",
-      "commit": "7538ed9305f7af442589bbcee1c30da04bae248e",
+      "commit": "85cd04193fa93f58a6c5cec82bca5c2102dc7a85",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -93406,7 +93406,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:09:29.806068Z",
       "closed_at": "2026-06-12T10:09:31.059952Z",
-      "commit": "edfd9c09f96626928fdc8eea3fc01d626f748591",
+      "commit": "7331ed0d1310eeca60c47ca342e63731152185fa",
       "deps": [
         "P30-I18-W03"
       ],
@@ -94151,7 +94151,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:34:14.675739Z",
       "closed_at": "2026-06-12T12:34:15.551136Z",
-      "commit": "9ec00cf1301b1457be78a00d416b10a1e6081034",
+      "commit": "76223b10c8ed616d7c1a5f0f948c4050d7bfc880",
       "deps": [
         "P30-I19-W02"
       ],
