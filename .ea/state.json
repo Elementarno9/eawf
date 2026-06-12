@@ -8133,6 +8133,104 @@
       "scope_id": "P30-I18-W12",
       "status": "done",
       "updated_at": "2026-06-12T11:25:51.657289Z"
+    },
+    "P30-I19-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W01",
+      "model": null,
+      "scope_id": "P30-I19-W01",
+      "status": "done",
+      "updated_at": "2026-06-12T12:33:51.962757Z"
+    },
+    "P30-I19-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W02",
+      "model": null,
+      "scope_id": "P30-I19-W02",
+      "status": "done",
+      "updated_at": "2026-06-12T12:34:01.482597Z"
+    },
+    "P30-I19-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W03",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W03",
+      "model": null,
+      "scope_id": "P30-I19-W03",
+      "status": "done",
+      "updated_at": "2026-06-12T12:34:03.275841Z"
+    },
+    "P30-I19-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W04",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W04",
+      "model": null,
+      "scope_id": "P30-I19-W04",
+      "status": "done",
+      "updated_at": "2026-06-12T12:34:13.280636Z"
+    },
+    "P30-I19-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W05",
+      "model": null,
+      "scope_id": "P30-I19-W05",
+      "status": "done",
+      "updated_at": "2026-06-12T12:34:15.551136Z"
+    },
+    "P30-I19-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W06",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W06",
+      "model": null,
+      "scope_id": "P30-I19-W06",
+      "status": "done",
+      "updated_at": "2026-06-12T12:34:17.720721Z"
+    },
+    "P30-I19-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W07",
+      "model": null,
+      "scope_id": "P30-I19-W07",
+      "status": "done",
+      "updated_at": "2026-06-12T12:34:19.934061Z"
     }
   },
   "agent_sessions": {
@@ -11317,7 +11415,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I19",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -11463,6 +11561,22 @@
       "status": "active",
       "superseded_by": null,
       "title": "TUI adopts Textual MODES chassis (digit-keyed full-screen modes)"
+    },
+    "D-WINPIPE-01": {
+      "alternatives": [
+        "verify-before-read (rejected: makes ImpersonateNamedPipeClient unreliable, weakening the second gate)",
+        "sub-chunk pre-verify read (deferred: adds a reassembly seam for no change to the bounded-discarded-behind-a-DACL threat surface)"
+      ],
+      "consequences": [],
+      "created_at": "2026-06-12T12:33:50.826694Z",
+      "description": null,
+      "id": "D-WINPIPE-01",
+      "obsoleted_at": null,
+      "rationale": "The Windows named-pipe transport reads one bounded 64KB chunk before the post-connect SID verify because ImpersonateNamedPipeClient requires a prior read to establish the client security context. The owner-only pipe DACL is the primary gate (the kernel refuses a non-owner CreateFile before any read), so the pre-verify read is reachable only by a process the kernel already attributes to the owning user; the bytes are bounded and discarded on rejection, nothing is parsed or dispatched pre-verify. Accept the residual rather than reorder (which makes the SID verify unreliable).",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Accept one bounded 64KB pre-verify pipe read; DACL is the gate"
     },
     "D01": {
       "alternatives": [
@@ -11944,7 +12058,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -21409,6 +21523,97 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I18-W12",
       "updated_at": "2026-06-12T10:53:46.459239Z"
+    },
+    "P30-I19-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W01-bucket-20260612T113141Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I19-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I19-W01",
+      "updated_at": "2026-06-12T11:31:41.957698Z"
+    },
+    "P30-I19-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W02-bucket-20260612T123400Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I19-W02",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I19-W02",
+      "updated_at": "2026-06-12T12:34:00.774814Z"
+    },
+    "P30-I19-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W03-bucket-20260612T123402Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I19-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I19-W03",
+      "updated_at": "2026-06-12T12:34:02.565662Z"
+    },
+    "P30-I19-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W04-bucket-20260612T123412Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I19-W04",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I19-W04",
+      "updated_at": "2026-06-12T12:34:12.395070Z"
+    },
+    "P30-I19-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W05-bucket-20260612T123414Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I19-W05",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I19-W05",
+      "updated_at": "2026-06-12T12:34:14.675931Z"
+    },
+    "P30-I19-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W06-bucket-20260612T123416Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I19-W06",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I19-W06",
+      "updated_at": "2026-06-12T12:34:16.861329Z"
+    },
+    "P30-I19-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W07-bucket-20260612T123419Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I19-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I19-W07",
+      "updated_at": "2026-06-12T12:34:19.065220Z"
     }
   },
   "fleet_run": null,
@@ -23527,7 +23732,7 @@
       "intent": null,
       "opened_at": "2026-06-11T15:24:01.039345Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Windows support and ship",
       "trigger": "none",
       "wave_ids": [
@@ -24615,7 +24820,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T11:30:38.406451Z",
+  "updated_at": "2026-06-12T12:34:19.934282Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -92901,10 +93106,10 @@
       "blocks": [
         "P30-I19-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T11:31:41.957583Z",
+      "closed_at": "2026-06-12T12:33:51.962757Z",
+      "commit": "80c786d49d63ef191b52c96defdbc405678a535c",
       "deps": [],
       "description": "cancel.py SIGKILL/killpg/getpgid guards plus the nine O_DIRECTORY parent-dir fsync guards so the module graph imports and atomic writes work on Windows.",
       "dispatch_history": [],
@@ -92963,12 +93168,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:42.243554Z",
-      "outcome": null,
+      "outcome": "WIN-P1: guarded every POSIX-only os/signal/socket attr behind the daemon import graph (new fsync_parent_dir helper routes 9 atomic-write sites); POSIX suite byte-identical green; win32 import+atomic-write test.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -93007,10 +93212,10 @@
         "P30-I19-W04",
         "P30-I19-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:34:00.774679Z",
+      "closed_at": "2026-06-12T12:34:01.482597Z",
+      "commit": "d307258fd7f60dec9d7c3c5e99a76cf93838651d",
       "deps": [
         "P30-I19-W01"
       ],
@@ -93057,12 +93262,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:44.289865Z",
-      "outcome": null,
+      "outcome": "WIN-P2: named-pipe RPC client (pipe_client_call/PipeReader) + ERROR_MORE_DATA large-frame reassembly both directions; wired into DaemonClient (replaced the W09 NotImplementedError); windowless cold-spawn + non-consuming WaitNamedPipe readiness.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -93099,10 +93304,10 @@
       "blocks": [
         "P30-I19-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:34:02.565522Z",
+      "closed_at": "2026-06-12T12:34:03.275841Z",
+      "commit": "6d3700602a1a398f1ef8b5fe4f71398db3e76a88",
       "deps": [
         "P30-I19-W02"
       ],
@@ -93160,12 +93365,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:46.220303Z",
-      "outcome": null,
+      "outcome": "WIN-P3: pipe subscription streaming (subscribe_router + bus bridge + PeekNamedPipe idle reap); cancel_pending_read via CancelIoEx (argtypes set once); state_binding streams on the real scope_id + cancels the blocked read on disconnect.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -93202,10 +93407,10 @@
       "blocks": [
         "P30-I19-W06"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:34:12.394895Z",
+      "closed_at": "2026-06-12T12:34:13.280636Z",
+      "commit": "53a9b972d3c6305c7cd67972c5fc9f426f6eaab2",
       "deps": [
         "P30-I19-W02"
       ],
@@ -93250,12 +93455,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:48.117522Z",
-      "outcome": null,
+      "outcome": "WIN-P4: dropped the daemon-run win32 refusal; mutations route through the daemon by default on Windows via the platform-agnostic _proxy_enabled (composes with I16-W18 waiver); phase open stays in-process (regression pinned); UTF-8 console reconfigure on win32.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -93292,10 +93497,10 @@
       "blocks": [
         "P30-I19-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:34:14.675739Z",
+      "closed_at": "2026-06-12T12:34:15.551136Z",
+      "commit": "9ec00cf1301b1457be78a00d416b10a1e6081034",
       "deps": [
         "P30-I19-W02"
       ],
@@ -93339,12 +93544,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:50.439212Z",
-      "outcome": null,
+      "outcome": "Windows packaging: [windows] extra pins pywin32>=306, winerror dep-map, CancelIoEx.argtypes once at load, .gitattributes LF; POSIX mypy+ruff green with win32 import-guarded.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -93381,10 +93586,10 @@
       "blocks": [
         "P30-I19-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:34:16.861150Z",
+      "closed_at": "2026-06-12T12:34:17.720721Z",
+      "commit": "9f60e8c0085e2c4a54a05f15733b8eab2cb2e085",
       "deps": [
         "P30-I19-W03",
         "P30-I19-W04"
@@ -93428,12 +93633,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:52.814580Z",
-      "outcome": null,
+      "outcome": "win32 PoC scenario set (5 scenarios, isolated pipe name per test, 20s cold-start budget); skips cleanly on POSIX.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -93470,10 +93675,10 @@
       "blocks": [
         "P30-I19-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:34:19.065055Z",
+      "closed_at": "2026-06-12T12:34:19.934061Z",
+      "commit": "f3d529895379e5c6f9f554bc34d029267fff1661",
       "deps": [
         "P30-I19-W06"
       ],
@@ -93517,12 +93722,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:55.038146Z",
-      "outcome": null,
+      "outcome": "windows-latest CI job runs the win32 test set; named-pipe threat-model note + Decision D-WINPIPE-01 (accept one bounded 64KB pre-verify read; DACL is the gate).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
