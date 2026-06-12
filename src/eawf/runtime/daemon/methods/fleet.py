@@ -47,7 +47,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -58,7 +60,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.schema import EuBasis
-from eawf.kernel.state.enums import RiskTier, WaveStatus
+from eawf.kernel.state.enums import RiskTier, StoreKind, WaveStatus
 from eawf.kernel.state.models import (
     FleetCounters,
     FleetFork,
@@ -71,6 +73,8 @@ from eawf.kernel.state.models import (
     State,
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES
 from eawf.runtime.daemon.dispatch_runner import (
@@ -105,6 +109,69 @@ if TYPE_CHECKING:
     from eawf.runtime.runtimes.adapter import SpawnResult
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ActiveDrive:
+    """The single in-flight background drive thread + its captured loop -- W01.
+
+    The fleet drain runs SYNCHRONOUSLY (claim -> dispatch -> blocking watch ->
+    advance), so it would block the async ``fleet.drive`` RPC handler -- and
+    every other RPC on the daemon event loop -- if it ran inside the awaited
+    handler. The handler instead starts the drain on this worker thread and
+    returns a run handle in under a second; the thread drains in the background
+    while the daemon answers concurrent RPCs (``daemon.ping``).
+
+    The captured *loop* is the daemon event loop the RPC handler was running on;
+    a bus publish from the drive thread marshals onto it through
+    ``loop.call_soon_threadsafe`` (set on the loop thread) so the bus'
+    ``asyncio.Event`` is never set from off the loop thread. *cancel* is raised
+    by :func:`shutdown_drive` so the loop checks it between rounds and stops
+    claiming, letting daemon shutdown join the thread cleanly.
+
+    Attributes:
+        thread: The worker thread running the synchronous drain.
+        loop: The daemon event loop the bus publish marshals onto.
+        cancel: Set on daemon shutdown so the loop stops claiming + joins.
+        handle_id: The run handle id the RPC returned for this drive.
+    """
+
+    thread: threading.Thread
+    loop: asyncio.AbstractEventLoop | None
+    cancel: threading.Event
+    handle_id: str
+
+
+#: The single active background drive (W01). At most one drive runs at a time:
+#: a second ``fleet.drive`` while one is in flight is rejected. Guarded by
+#: :data:`_DRIVE_LOCK` so the start / clear races stay consistent across the RPC
+#: thread + the drive thread's own terminal clear.
+_ACTIVE_DRIVE: list[_ActiveDrive | None] = [None]
+
+#: The daemon event-loop thread, recorded when a drive is started so a publish
+#: from that same thread (an arm-time IDLE persist) publishes directly while a
+#: publish from the worker drive thread marshals through ``call_soon_threadsafe``.
+#: A list cell so the module-level value is mutable without a ``global``.
+_LOOP_THREAD: list[threading.Thread | None] = [None]
+
+#: Serialises the start / clear of :data:`_ACTIVE_DRIVE` so the RPC thread and
+#: the drive thread's terminal clear never race the single-active-run guard.
+_DRIVE_LOCK = threading.Lock()
+
+
+def _active_drive_loop() -> asyncio.AbstractEventLoop | None:
+    """Return the captured event loop of the active background drive, or ``None``.
+
+    The bus-publish marshal seam consults this so a publish from the drive
+    thread can hop back onto the daemon event loop; ``None`` (no active drive,
+    or an arm-time persist before the drive thread started) means the publish
+    runs on the current thread directly.
+
+    Returns:
+        The active drive's captured loop, or ``None`` when no drive is in flight.
+    """
+    active = _ACTIVE_DRIVE[0]
+    return active.loop if active is not None else None
 
 
 #: Terminal outcome of watching one in-flight lane to completion. The watcher
@@ -353,6 +420,33 @@ class DriveResult(BaseModel):
     counters: FleetCounters
 
 
+class FleetDriveHandle(BaseModel):
+    """Run handle the backgrounded ``fleet.drive`` RPC returns in under a second -- W01.
+
+    The drain runs on a worker thread off the daemon event loop, so the RPC no
+    longer blocks until the run reaches a terminal state. It returns this handle
+    the instant the thread is started: the cockpit reads the run-state off it
+    (``draining`` when the drain is underway, or ``idle`` when dispatch was paused
+    so the arm staged the frontier but claimed nothing) and reads live vitals off
+    the persisted ``state.fleet_run`` the thread advances.
+
+    Attributes:
+        handle_id: Opaque id for this drive, so a later RPC (status / reattach)
+            can correlate against the started run.
+        run_state: The run state at the moment the handle was returned --
+            ``draining`` once the worker thread is claiming, or ``idle`` when
+            dispatch was paused on arm (the frontier is staged, nothing claimed).
+        backgrounded: ``True`` when the drain is running on a worker thread (the
+            normal path); ``False`` when the arm stayed ``idle`` (dispatch
+            paused) so no thread was started.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    handle_id: str
+    run_state: FleetRunState
+    backgrounded: bool
+
+
 class ResolveForkParams(BaseModel):
     """Params for the ``fleet.resolve_fork`` RPC -- DL-6.
 
@@ -378,6 +472,14 @@ def _persist_fleet_run(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
     ``updated_at``, then ``atomic_write_json_locked`` under the held lock. The
     loop never opens ``state.json`` directly.
 
+    After the disk write the run transition is published to the subscription
+    bus (:func:`_publish_run_transition`) so live subscribers (the TUI cockpit)
+    see the run-state move without a poll tick. The drive loop runs on a worker
+    thread (W01), so the publish marshals onto the daemon event loop through
+    ``loop.call_soon_threadsafe`` rather than touching the ``asyncio.Event`` the
+    bus sets from off the loop thread; a same-thread (event-loop) call publishes
+    directly. The marshal seam is single-sourced in :func:`_publish_run_transition`.
+
     A bus-less / stateless context (``ctx.state_path`` unset) is a no-op so
     unit tests can drive the in-memory loop without an on-disk state.
 
@@ -394,7 +496,66 @@ def _persist_fleet_run(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
         state.updated_at = datetime.now(UTC)
         atomic_write_json_locked(state_path, state.model_dump(mode="json"))
     run_state = fleet_run.run_state.value if fleet_run is not None else None
+    _publish_run_transition(ctx, fleet_run)
     logger.info(f"_persist_fleet_run run_state={run_state!r}")
+
+
+def _publish_run_transition(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
+    """Publish a ``fleet_run`` transition envelope on the subscription bus.
+
+    The drive loop persists the run on every transition; this wakes live
+    subscribers (the TUI cockpit vitals header) immediately with a
+    ``state_mutated`` event envelope carrying the run state, mirroring the
+    envelope :func:`eawf.runtime.daemon.dispatch_runner._publish_state_revision`
+    publishes so a fleet-run transition is indistinguishable from any other
+    state mutation on the wire.
+
+    The W01 background-run thread drives the drain off the daemon event loop, so
+    a publish from that thread MUST NOT touch the bus' ``asyncio.Event`` directly
+    (an ``Event.set`` off the loop thread is a data race). When a captured loop
+    is recorded for the active run (:func:`_active_drive_loop`) the publish is
+    marshalled onto that loop through ``loop.call_soon_threadsafe``; an arm-time
+    persist that already runs on the event-loop thread (no captured loop, or the
+    current thread IS the loop thread) publishes directly. A bus-less context is
+    a no-op.
+
+    Args:
+        ctx: Daemon method context -- supplies ``bus``.
+        fleet_run: The persisted run snapshot, or ``None`` when cleared.
+    """
+    if ctx.bus is None or not hasattr(ctx.bus, "publish"):
+        return
+    run_state = fleet_run.run_state.value if fleet_run is not None else "cleared"
+    now = datetime.now(UTC)
+    summary = f"fleet_run run_state={run_state}"
+    payload = EventPayload(
+        timestamp=now,
+        event_type="state.mutate.fleet_run_transition",
+        event_kind="state_mutated",
+        actor="daemon",
+        command="fleet.drive",
+        args_hash="",
+        status="ok",
+        message=summary,
+    ).model_dump(mode="json")
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=None,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    loop = _active_drive_loop()
+    if loop is not None and loop.is_running() and threading.current_thread() is not _LOOP_THREAD[0]:
+        loop.call_soon_threadsafe(ctx.bus.publish, envelope)
+    else:
+        ctx.bus.publish(envelope)
+    ctx.last_event_id = envelope.id
 
 
 def _dispatch_paused(ctx: MethodContext) -> bool:
@@ -1218,6 +1379,7 @@ class _Loop:
     risk_tiers: dict[str, RiskTier] = field(default_factory=dict)
     spend: LaneSpendReader = _default_lane_spend
     fork_evidence: ForkEvidenceReader = _default_fork_evidence
+    cancel: threading.Event | None = None
 
     def _persist(self) -> None:
         """Persist the current run snapshot through the daemon canonical writer."""
@@ -1488,6 +1650,19 @@ class _Loop:
         )
         return self.run
 
+    def _cancelled(self) -> bool:
+        """Return whether daemon shutdown has signalled this run to stop -- W01.
+
+        The background drive thread checks this between rounds: a set cancel
+        event (raised by :func:`shutdown_drive` on daemon shutdown) stops the
+        loop claiming new waves so the thread can join cleanly. The in-flight
+        lanes are left for a later reattach to recover (the run stays DRAINING
+        on disk rather than transitioning DONE), so shutdown never reaps live
+        work. ``False`` when no cancel event is wired (the synchronous in-process
+        callers).
+        """
+        return self.cancel is not None and self.cancel.is_set()
+
     def run_to_terminal(self) -> FleetRun:
         """Drive the loop until it reaches a terminal or held state.
 
@@ -1500,10 +1675,21 @@ class _Loop:
         and with ``DONE`` + ``terminal_reason=drained`` when the frontier AND
         every lane have emptied. Each transition re-persists the run.
 
+        A set cancel event (daemon shutdown -- W01) stops the loop BEFORE the
+        next round's claim so the run is left DRAINING on disk for a later
+        reattach to recover, rather than transitioning DONE; the in-flight lanes
+        are never reaped on shutdown.
+
         Returns:
             The terminal :class:`FleetRun` snapshot.
         """
         while True:
+            if self._cancelled():
+                # Daemon shutdown: stop claiming, leave the run DRAINING on disk
+                # for a reattach to recover the in-flight lanes.
+                self._persist()
+                logger.info("run_to_terminal cancelled run_state=draining")
+                return self.run
             self._fill_lanes()
             self._persist()
             if not self.run.lanes:
@@ -1541,6 +1727,7 @@ def arm_drive(
     spend: LaneSpendReader | None = None,
     fork_evidence: ForkEvidenceReader | None = None,
     block_authority: BlockAuthority = BlockAuthority.ADVISORY,
+    cancel: threading.Event | None = None,
 ) -> FleetRun:
     """Arm + run the fleet auto-drain loop over *frontier*.
 
@@ -1588,6 +1775,10 @@ def arm_drive(
             whether a high / ui lane may auto-close or must fork. Defaults to
             :attr:`BlockAuthority.ADVISORY` (an uncalibrated jury), so a
             high / ui lane forks rather than silently auto-closing.
+        cancel: Optional shutdown event the loop checks between rounds (W01).
+            When set the loop stops claiming + returns the run still DRAINING
+            for a later reattach to recover; ``None`` (the synchronous callers)
+            runs uninterrupted.
 
     Returns:
         The :class:`FleetRun` snapshot after the loop returns -- ``DONE`` on a
@@ -1632,6 +1823,7 @@ def arm_drive(
         block_authority=block_authority,
         spend=spend if spend is not None else _default_lane_spend,
         fork_evidence=fork_evidence if fork_evidence is not None else _default_fork_evidence,
+        cancel=cancel,
     )
     terminal = loop.run_to_terminal()
     logger.info(
@@ -2380,17 +2572,161 @@ async def reattach_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     return result.model_dump(mode="json")
 
 
+def drive_in_flight() -> bool:
+    """Return whether a background drive is currently in flight -- W01.
+
+    A second ``fleet.drive`` while one is DRAINING is rejected (the registry
+    holds at most one active run), so the RPC consults this before starting a
+    thread. ``True`` while the worker drive thread is alive; ``False`` once it
+    has reached a terminal state and cleared the registry.
+
+    Returns:
+        ``True`` when a drive thread is running, else ``False``.
+    """
+    with _DRIVE_LOCK:
+        active = _ACTIVE_DRIVE[0]
+        return active is not None and active.thread.is_alive()
+
+
+def shutdown_drive(*, timeout: float = 5.0) -> None:
+    """Signal + join the active background drive thread on daemon shutdown -- W01.
+
+    Daemon shutdown raises the active drive's cancel event so the loop stops
+    claiming new waves between rounds, then joins the worker thread so the
+    process does not exit while a drain is mid-write. The in-flight lanes are
+    left for a later reattach to recover (the FleetRun is daemon-owned + durable
+    on ``state.json``); shutdown never reaps them. A no-op when no drive is in
+    flight, so an idle daemon shuts down immediately.
+
+    Args:
+        timeout: Seconds to wait for the drive thread to join before giving up
+            (a still-blocked watcher cannot be force-killed from here).
+    """
+    with _DRIVE_LOCK:
+        active = _ACTIVE_DRIVE[0]
+    if active is None:
+        return
+    active.cancel.set()
+    active.thread.join(timeout=timeout)
+    logger.info(f"shutdown_drive handle={active.handle_id!r} joined={not active.thread.is_alive()}")
+
+
+def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveHandle:
+    """Arm a drive + run its drain on a worker thread, returning a handle -- W01.
+
+    The drain is SYNCHRONOUS (claim -> dispatch -> blocking watch -> advance),
+    so running it inside the awaited ``fleet.drive`` RPC handler blocks the
+    whole daemon event loop and times out the TUI arm. This arms the run on the
+    calling (event-loop) thread -- a fast IDLE / DRAINING transition + one
+    canonical-writer persist -- then hands the blocking drain to a worker thread
+    and returns a :class:`FleetDriveHandle` immediately, so the RPC answers in
+    well under a second while the drain continues in the background.
+
+    The handle's run state reflects the arm: a run armed while
+    ``state.dispatch_paused`` is set stays ``idle`` (the frontier is staged but
+    nothing claimed -- no worker thread is started), and a normal arm is
+    ``draining`` (the worker thread is claiming). A second call while a drive is
+    already in flight raises rather than starting a concurrent run.
+
+    The worker thread captures the daemon event loop so a bus publish from the
+    drain marshals onto it through ``loop.call_soon_threadsafe`` (W01), persists
+    every transition through the daemon canonical writer exactly as the
+    synchronous form did, and clears the active-drive registry on terminal so a
+    later drive can start.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` + ``bus``.
+        args: The validated drive params (frontier + caps + toggles).
+
+    Returns:
+        The :class:`FleetDriveHandle` for the started drive.
+
+    Raises:
+        LifecycleError: When a drive is already in flight (single-active-run
+            guard), or the resolved frontier is empty.
+    """
+    if drive_in_flight():
+        raise LifecycleError("a fleet drive is already in flight; halt or wait for it to drain")
+    if not args.frontier:
+        raise LifecycleError("cannot arm fleet drive: ready frontier is empty")
+    handle_id = f"fleet-run-{uuid.uuid4().hex[:12]}"
+    # Paused arm: stage the frontier IDLE on the calling thread + return; no
+    # worker thread is started (a paused state claims nothing).
+    if _dispatch_paused(ctx):
+        run = arm_drive(
+            ctx,
+            frontier=args.frontier,
+            concurrency=args.concurrency,
+            convergence=args.convergence,
+            kclean_k=args.kclean_k,
+            eu_cap=args.eu_cap,
+            usd_cap=args.usd_cap,
+            waves_cap=args.waves_cap,
+            hard_halt=args.hard_halt,
+        )
+        logger.info(
+            f"start_background_drive paused handle={handle_id!r} run_state={run.run_state.value}"
+        )
+        return FleetDriveHandle(handle_id=handle_id, run_state=run.run_state, backgrounded=False)
+    try:
+        loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop (a synchronous test caller): publishes run directly.
+        loop = None
+    cancel = threading.Event()
+
+    def _drain() -> None:
+        try:
+            arm_drive(
+                ctx,
+                frontier=args.frontier,
+                concurrency=args.concurrency,
+                convergence=args.convergence,
+                kclean_k=args.kclean_k,
+                eu_cap=args.eu_cap,
+                usd_cap=args.usd_cap,
+                waves_cap=args.waves_cap,
+                hard_halt=args.hard_halt,
+                cancel=cancel,
+            )
+        except Exception:  # pragma: no cover - defensive: never leak from the thread
+            logger.exception(f"start_background_drive drain failed handle={handle_id!r}")
+        finally:
+            with _DRIVE_LOCK:
+                if _ACTIVE_DRIVE[0] is not None and _ACTIVE_DRIVE[0].handle_id == handle_id:
+                    _ACTIVE_DRIVE[0] = None
+            logger.info(f"start_background_drive drain done handle={handle_id!r}")
+
+    thread = threading.Thread(target=_drain, name=f"fleet-drive-{handle_id}", daemon=True)
+    with _DRIVE_LOCK:
+        _LOOP_THREAD[0] = threading.current_thread()
+        _ACTIVE_DRIVE[0] = _ActiveDrive(
+            thread=thread, loop=loop, cancel=cancel, handle_id=handle_id
+        )
+    thread.start()
+    logger.info(
+        f"start_background_drive started handle={handle_id!r} frontier={len(args.frontier)}"
+    )
+    return FleetDriveHandle(
+        handle_id=handle_id, run_state=FleetRunState.DRAINING, backgrounded=True
+    )
+
+
 @register("fleet.drive")
 async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Arm + run the fleet auto-drain loop over the supplied ready frontier.
+    """Arm the fleet auto-drain loop + background its drain, returning a handle -- W01.
 
-    Validates params per :class:`DriveParams`, arms the loop via
-    :func:`arm_drive`, and returns the terminal :class:`FleetRun` snapshot. The
-    loop claims, dispatches spawn=True, watches, closes-or-forks, and advances
-    the frontier unattended until it empties / converges / hits a spend cap,
-    honouring ``state.dispatch_paused`` (a paused state stays IDLE + claims
-    nothing). The run is persisted only through the daemon canonical state
-    writer.
+    Validates params per :class:`DriveParams`, then starts the drain on a worker
+    thread (:func:`start_background_drive`) so the RPC returns a
+    :class:`FleetDriveHandle` in under a second while the drain continues in the
+    background -- the synchronous drain no longer blocks the daemon event loop,
+    so a concurrent ``daemon.ping`` answers mid-run. The loop claims, dispatches
+    spawn=True, watches, closes-or-forks, and advances the frontier unattended
+    until it empties / converges / hits a spend cap, honouring
+    ``state.dispatch_paused`` (a paused state stays IDLE + claims nothing). Every
+    transition is persisted only through the daemon canonical state writer, and
+    the run transition is published on the bus (marshalled onto the loop thread
+    from the drive thread). A second drive while one is DRAINING is rejected.
 
     Args:
         ctx: Daemon method context. Needs ``state_path`` (+ ``event_path`` for
@@ -2400,36 +2736,21 @@ async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ``hard_halt`` drain-vs-kill toggle).
 
     Returns:
-        Dict matching :class:`DriveResult`.
+        Dict matching :class:`FleetDriveHandle`.
 
     Raises:
         ValueError: When *params* fails :class:`DriveParams` validation (an
             empty frontier is rejected by the ``min_length=1`` constraint).
-        LifecycleError: When the resolved frontier is empty (defence in depth
-            beyond the param constraint).
+        LifecycleError: When a drive is already in flight, or the resolved
+            frontier is empty (defence in depth beyond the param constraint).
     """
     args = DriveParams.model_validate(params)
-    run = arm_drive(
-        ctx,
-        frontier=args.frontier,
-        concurrency=args.concurrency,
-        convergence=args.convergence,
-        kclean_k=args.kclean_k,
-        eu_cap=args.eu_cap,
-        usd_cap=args.usd_cap,
-        waves_cap=args.waves_cap,
-        hard_halt=args.hard_halt,
-    )
-    result = DriveResult(
-        run_state=run.run_state,
-        terminal_reason=run.terminal_reason,
-        counters=run.counters,
-    )
+    handle = start_background_drive(ctx, args)
     logger.info(
-        f"drive run_state={run.run_state.value} "
-        f"reason={run.terminal_reason.value if run.terminal_reason else None}"
+        f"drive handle={handle.handle_id!r} run_state={handle.run_state.value} "
+        f"backgrounded={handle.backgrounded}"
     )
-    return result.model_dump(mode="json")
+    return handle.model_dump(mode="json")
 
 
 @register("fleet.resolve_fork")
