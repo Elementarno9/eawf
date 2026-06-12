@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from eawf._winproc import no_window_kwargs
 from eawf.surfaces.render.statusline import StatuslineSegment
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ def _run_git(args: list[str], cwd: Path) -> str | None:
             capture_output=True,
             text=True,
             timeout=_GIT_TIMEOUT,
+            **no_window_kwargs(),
         )
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
         logger.debug(f"_run_git git-command-failed args={' '.join(args)!r} error={exc}")

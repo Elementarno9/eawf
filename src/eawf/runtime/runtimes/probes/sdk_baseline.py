@@ -48,6 +48,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
+from eawf._winproc import no_window_kwargs
+
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION: Final[str] = "1.0"
@@ -200,6 +202,7 @@ def _run(argv: list[str], *, timeout: float = _DEFAULT_TIMEOUT_S) -> tuple[int, 
             text=True,
             timeout=timeout,
             check=False,
+            **no_window_kwargs(),
         )
     except subprocess.TimeoutExpired:
         logger.warning(f"probe_run timeout argv={argv!r}")

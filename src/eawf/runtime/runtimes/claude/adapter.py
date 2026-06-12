@@ -22,6 +22,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from eawf._winproc import no_window_kwargs
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.runtime.runtimes.adapter import (
     ErrorClass,
@@ -451,6 +452,7 @@ class ClaudeAdapter:
             start_new_session=True,
             cwd=cwd,
             env=build_child_env(self.id),
+            **no_window_kwargs(),
         )
         pid = proc.pid
         logger.info(f"spawn_session runtime={self.id!r} pid={pid} model={model!r}")

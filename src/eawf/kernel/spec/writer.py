@@ -27,6 +27,7 @@ import subprocess
 from pathlib import Path
 from typing import Literal
 
+from eawf._winproc import no_window_kwargs
 from eawf.kernel.spec.cache import (
     SpecCacheEntry,
     SpecCachePhase,
@@ -190,6 +191,7 @@ def git_rm_spec(
             capture_output=True,
             text=True,
             check=False,
+            **no_window_kwargs(),
         )
     except OSError as exc:
         raise ValueError(f"git rm failed: {exc}") from exc
