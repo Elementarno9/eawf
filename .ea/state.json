@@ -7994,6 +7994,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-12-A-P30-i16-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P30-I16/A-P30-i16-report"
     },
+    "A-P30-i17-report": {
+      "created_at": "2026-06-12T08:41:53.316984Z",
+      "id": "A-P30-i17-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-12-A-P30-i17-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I17/A-P30-i17-report"
+    },
     "A33-P26-tui-fixes-report": {
       "created_at": "2026-05-21T10:26:56.308705Z",
       "id": "A33-P26-tui-fixes-report",
@@ -8774,6 +8784,17 @@
       "kind": "evaluation",
       "report_artifact_id": "A-P30-i16-report",
       "scope_id": "P30-I16",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A-P30-i17": {
+      "check_results": [],
+      "created_at": "2026-06-12T08:41:53.910306Z",
+      "id": "A-P30-i17",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A-P30-i17-report",
+      "scope_id": "P30-I17",
       "status": "complete",
       "verdict": "minor"
     },
@@ -11107,7 +11128,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I17",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -23097,16 +23118,16 @@
       ]
     },
     "P30-I17": {
-      "audit_id": null,
+      "audit_id": "A-P30-i17",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-12T08:41:54.429411Z",
       "description": "Wire the dead autopilot circuits: background drive, transmitted arm caps, dynamic frontier, bounded spawn/repair ladders, watcher liveness, mid-run pause/halt, reattach, FA4 output producer. Keystone first; rest is call-site plumbing over tested functions.",
       "estimate_id": null,
       "id": "P30-I17",
       "intent": null,
       "opened_at": "2026-06-11T15:23:59.976459Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Autopilot full-wire",
       "trigger": "none",
       "wave_ids": [
@@ -23515,6 +23536,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I16-close-A-P30-i16",
       "summary": "iter P30-I16 closed with audit A-P30-i16; waves closed=30; outcomes P30-I16-W01: Routed detail-card iter/phase/backlog/incident status cells through status_sigil; goldens reg... | P30-I16-W02: Re-pinned U2/U1 cost+ballot literals to designer pin-strip; evidence goldens regenerated for ... | P30-I16-W03: Pinned U6 sandbox empty+populated goldens, Enter-opens-selected-row peek (reload->r + selecti...",
+      "tier": "working"
+    },
+    "MEM-P30-I17-close-A-P30-i17": {
+      "confidence": "high",
+      "id": "MEM-P30-I17-close-A-P30-i17",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-12T08:41:54.429411Z",
+      "scope_id": "P30-I17",
+      "status": "active",
+      "store_record_id": "MEM-P30-I17-close-A-P30-i17",
+      "summary": "iter P30-I17 closed with audit A-P30-i17; waves closed=11; outcomes P30-I17-W01: Background-run fleet.drive: RPC returns a FleetDriveHandle <1s, drain on a worker thread, con... | P30-I17-W02: Full arm spec (eu/usd/waves caps, hard_halt, kclean_k, scope) reaches DriveParams; budget cap... | P30-I17-W03: _fill_lanes routes through spawn_lane_or_fork (DL-11, fork on spawn error) + repair_lane_or_f...",
       "tier": "working"
     }
   },
@@ -24224,7 +24256,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T08:41:10.018524Z",
+  "updated_at": "2026-06-12T08:41:54.429788Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
