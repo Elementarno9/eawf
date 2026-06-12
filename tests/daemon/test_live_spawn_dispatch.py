@@ -34,6 +34,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -48,8 +49,9 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_EVENT_TYPE
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.agent import LiveSpawnError, dispatch
+from eawf.runtime.daemon.methods.agent import LiveSpawnError, dispatch, kill
 from eawf.runtime.runtimes.adapter import SpawnResult
+from eawf.runtime.runtimes.cancel import CancelResult
 from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.integration
@@ -143,7 +145,12 @@ class _StubAdapter:
         return f"urn:eawf:v1:session-log:{self.id}:{session_id}"
 
 
-def _state_payload(*, agent_role: str = "executor", effort_bucket: str = "L") -> dict[str, Any]:
+def _state_payload(
+    *,
+    agent_role: str = "executor",
+    effort_bucket: str = "L",
+    token_budget: int | None = None,
+) -> dict[str, Any]:
     """A minimal valid State with the full phase -> iter -> wave chain.
 
     The chain is required because the live path renders the dispatch
@@ -226,7 +233,7 @@ def _state_payload(*, agent_role: str = "executor", effort_bucket: str = "L") ->
                 "effort_bucket": effort_bucket,
                 "claim_session_id": None,
                 "worktree_id": None,
-                "token_budget": None,
+                "token_budget": token_budget,
                 "tokens_consumed": 0,
                 "outcome": None,
                 "opened_at": "2026-06-01T00:00:00Z",
@@ -396,6 +403,47 @@ def test_dispatch_spawn_plan_carries_captured_pid(
     assert result["pid"] != 0
 
 
+def test_dispatch_spawn_persists_session_attempt_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live dispatch persists the captured pid on Wave.sessions."""
+    state_path = _write_state(tmp_path)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    _patch_adapter(monkeypatch, _StubAdapter())
+    ctx = _ctx(state_path, event_path=event_path)
+
+    result: dict[str, Any] = _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    wave = load_state(state_path).waves[_WAVE_ID]
+    attempt = wave.sessions[result["attempt"]]
+    assert attempt.subprocess_pid == _STUB_PID
+    assert result["session_attempt"]["subprocess_pid"] == _STUB_PID
+    assert wave.dispatch_history[-1].attempt == result["attempt"]
+
+
+def test_dispatch_then_kill_uses_persisted_session_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-fleet live dispatch can be killed through its SessionAttempt pid."""
+    state_path = _write_state(tmp_path)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    _patch_adapter(monkeypatch, _StubAdapter())
+    ctx = _ctx(state_path, event_path=event_path)
+    sent: list[tuple[int, bool]] = []
+
+    def _fake_cancel(pgid: int, *, hard: bool = False) -> CancelResult:
+        sent.append((pgid, hard))
+        return CancelResult(pgid=pgid, signal_sent=9 if hard else 15, delivered=True)
+
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+    monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.cancel_process_group", _fake_cancel)
+
+    result: dict[str, Any] = _run(kill(ctx, {"wave_id": _WAVE_ID, "attempt": 1, "signal": "kill"}))
+
+    assert result == {"killed": True, "signal": "kill", "reason": None}
+    assert sent == [(_STUB_PID, True)]
+
+
 def test_dispatch_spawn_priced_cost_flows_into_dispatch_cost_event(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -427,6 +475,39 @@ def test_dispatch_spawn_priced_cost_flows_into_dispatch_cost_event(
     assert Decimal(costs[0]["cost_usd"]) > Decimal("0")
     assert costs[0]["runtime"] == "claude"
     assert costs[0]["wave_id"] == _WAVE_ID
+
+
+def test_dispatch_spawn_threads_pgid_and_config_enforce_to_budget_interlock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A hard over-budget live spawn reaches the interlock with the live pgid."""
+    state_path = _write_state(tmp_path, token_budget=1)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    config_path = tmp_path / ".ea" / "config.yaml"
+    config_path.write_text(
+        "schema_version: '1.0'\nflow:\n  budget:\n    enforce: hard\n",
+        encoding="utf-8",
+    )
+    _patch_adapter(monkeypatch, _StubAdapter())
+    ctx = _ctx(state_path, event_path=event_path)
+    calls: list[dict[str, Any]] = []
+
+    def _fake_enforce_token_cap(**kwargs: Any) -> SimpleNamespace:
+        calls.append(kwargs)
+        return SimpleNamespace(terminated=True)
+
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.dispatch_runner.enforce_token_cap",
+        _fake_enforce_token_cap,
+    )
+
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    assert len(calls) == 1
+    assert calls[0]["pgid"] == _STUB_PID
+    assert calls[0]["enforce"] == "hard"
+    assert calls[0]["base_budget"] == 1
+    assert calls[0]["consumed"] > calls[0]["base_budget"]
 
 
 def test_dispatch_spawn_event_ids_reflect_runner_emissions(

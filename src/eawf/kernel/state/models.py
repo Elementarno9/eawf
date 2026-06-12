@@ -484,8 +484,8 @@ class SessionAttempt(_StrictModel):
         started_at: When the subprocess started.
         ended_at: When the subprocess exited; ``None`` while running.
         exit_status: Subprocess exit code; ``None`` while running.
-        subprocess_pid: PID at spawn time; ``None`` before W09 wires
-            the actual spawn.
+        subprocess_pid: PID at spawn time; ``None`` when no subprocess
+            is addressable for this attempt.
         cache_creation_input_tokens: Anthropic prompt-cache write
             tokens charged on this attempt (optional).
         cache_read_input_tokens: Anthropic prompt-cache read tokens
@@ -501,7 +501,7 @@ class SessionAttempt(_StrictModel):
     started_at: UtcDatetime
     ended_at: UtcDatetime | None = None
     exit_status: int | None = None
-    subprocess_pid: int | None = None
+    subprocess_pid: Annotated[int, Field(ge=1)] | None = None
     cache_creation_input_tokens: int | None = None
     cache_read_input_tokens: int | None = None
     input_tokens: int | None = None

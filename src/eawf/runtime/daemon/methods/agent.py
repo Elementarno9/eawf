@@ -54,10 +54,11 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.config.layered import merge_config
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -71,6 +72,7 @@ from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
+from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
 from eawf.runtime.daemon.dispatch_runner import DispatchResult, DispatchTokens, run_dispatch
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.fleet import kill_lane
@@ -635,6 +637,84 @@ def _resolve_spawn_model(
     return model
 
 
+def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
+    """Resolve ``flow.budget.enforce`` for the repo that owns ``state_path``."""
+    repo = state_path.parent.parent
+    merged, _sources = merge_config(workspace=repo, repo=repo)
+    flow = merged.get("flow")
+    budget = flow.get("budget") if isinstance(flow, dict) else None
+    value = budget.get("enforce", DEFAULT_ENFORCE) if isinstance(budget, dict) else DEFAULT_ENFORCE
+    if value not in ("soft", "hard"):
+        raise ValueError(f"invalid flow.budget.enforce: {value!r}")
+    return cast(EnforceMode, value)
+
+
+def _persist_live_session_attempt(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    requested_runtime: str,
+    serving_runtime: str,
+    session_id: str,
+    session_log_handle: str,
+    spawn_result: SpawnResult,
+    pid: int,
+) -> tuple[int, DispatchAnnotation, SessionAttempt]:
+    """Persist the live spawn attempt, including the pid used for kill/budget."""
+    if ctx.state_path is None:
+        raise LiveSpawnError(f"live spawn requires state_path for wave: {wave_id!r}")
+    state_path = Path(ctx.state_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        wave = state.waves.get(wave_id)
+        if wave is None:
+            raise ValueError(f"unknown wave: {wave_id!r}")
+        previous_attempt = max(wave.sessions) if wave.sessions else None
+        previous = wave.sessions[previous_attempt] if previous_attempt is not None else None
+        attempt = (previous_attempt or 0) + 1
+        switched = serving_runtime != requested_runtime
+        if switched:
+            note = DispatchNote.SWITCH_ON_ERROR
+            runtime_from = requested_runtime
+        elif previous is not None and previous.runtime != serving_runtime:
+            note = DispatchNote.SWITCH_MANUAL
+            runtime_from = previous.runtime
+        else:
+            note = DispatchNote.FRESH_DISPATCH
+            runtime_from = None
+        now = datetime.now(UTC)
+        annotation = DispatchAnnotation(
+            attempt=attempt,
+            note=note,
+            runtime_from=runtime_from,
+            runtime_to=serving_runtime,
+            occurred_at=now,
+        )
+        session_attempt = SessionAttempt(
+            attempt=attempt,
+            runtime=serving_runtime,
+            session_id=session_id,
+            session_log_handle=session_log_handle,
+            started_at=spawn_result.started_at,
+            ended_at=spawn_result.ended_at,
+            exit_status=spawn_result.exit_status,
+            subprocess_pid=pid,
+            cache_creation_input_tokens=spawn_result.cache_creation_input_tokens,
+            cache_read_input_tokens=spawn_result.cache_read_input_tokens,
+            input_tokens=spawn_result.input_tokens,
+            output_tokens=spawn_result.output_tokens,
+        )
+        wave.sessions[attempt] = session_attempt
+        wave.dispatch_history.append(annotation)
+        state.updated_at = now
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    logger.info(
+        f"_persist_live_session_attempt wave={wave_id} attempt={attempt} "
+        f"runtime={serving_runtime!r} pid={pid}"
+    )
+    return attempt, annotation, session_attempt
+
+
 def _register_executor_session(
     ctx: MethodContext,
     *,
@@ -819,39 +899,11 @@ async def _spawn_and_dispatch(
 ) -> DispatchPlan:
     """Run the live-spawn dispatch path and return the resulting plan.
 
-    The ordered steps, each a single-responsibility seam:
-
-    1. Register an executor :class:`~eawf.kernel.state.models.AgentSession`
-       through the canonical state writer
-       (:func:`_register_executor_session`).
-    2. Render the dispatch prompt
-       (:func:`eawf.workflow.dispatch.renderer.render_dispatch_envelope`).
-    3. Resolve the per-wave sandbox deny-list
-       (:func:`eawf.runtime.sandbox.policy.resolve_denied_tools`) so the
-       spawned child is launched with those tools disabled.
-    4. Resolve the per-wave runtime preference ladder so the bounded retry
-       loop's V5 reactive switch has a fall-through target.
-    5. Spawn for real behind the floor through
-       :func:`eawf.workflow.dispatch.retry.spawn_with_retry` (jailed argv +
-       scrubbed env + the deny-list -- the safety floor), capturing the
-       child pid via the ``on_spawn`` callback. The loop retries the same
-       runtime on a rate limit, switches to the next preference runtime on
-       an availability error, and halts on auth.
-    6. Price the spawn via
-       :func:`eawf.runtime.runtimes.metering.price_spawn_result`.
-    7. Bind the spawned agent's OWN output to a validated
-       :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody`
-       through the bounded re-ask loop (:func:`_bind_executor_report`):
-       the first assist iteration validates the already-completed spawn,
-       each re-ask spawns fresh with a correction notice, and
-       ceiling-exhaustion raises
-       :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError` (no
-       synthetic body is persisted on a parse failure).
-    8. Drive :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch`
-       with the registered session id AND the validated body so the
-       ``agent_end`` report persists the agent's words (keyed on the
-       serving runtime, which a V5 switch may have moved past the
-       originally-resolved one).
+    Registers the executor session, renders the prompt, resolves sandbox policy
+    and retry preferences, spawns behind the runtime floor, validates the
+    executor's own output into a report body, persists the wave-local attempt
+    row, then drives :func:`run_dispatch` with the live pid/pgid and config
+    enforcement mode.
 
     Args:
         ctx: Daemon method context — supplies ``state_path``, ``event_path``,
@@ -870,15 +922,11 @@ async def _spawn_and_dispatch(
         ``event_ids`` (including the report-driven events).
 
     Raises:
-        LiveSpawnError: When ``ctx.state_path`` or ``ctx.event_path`` is
-            unset (asserted defensively after the dispatch-level guard).
-        eawf.workflow.dispatch.retry.RetryExhaustedError: When the bounded
-            retry loop terminated without a usable result (an auth halt, a
-            switch ladder run out of runtimes, or the attempt ceiling hit).
-        eawf.workflow.dispatch.llm_assist.LLMAssistError: When the spawned
-            agent's output never validated against the executor report-body
-            schema across the schema-assist re-ask ceiling (no synthetic
-            body is persisted on this path).
+        LiveSpawnError: When required stores are not configured.
+        eawf.workflow.dispatch.retry.RetryExhaustedError: When retry cannot
+            produce a usable spawn.
+        eawf.workflow.dispatch.llm_assist.LLMAssistError: When output never
+            validates against the executor report schema.
     """
     if ctx.state_path is None or ctx.event_path is None:
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
@@ -999,6 +1047,17 @@ async def _spawn_and_dispatch(
         serving_runtime=serving_runtime,
         spawn_once=_spawn_correction,
     )
+    attempt, annotation, session_attempt = _persist_live_session_attempt(
+        ctx,
+        wave_id=wave_id,
+        requested_runtime=runtime,
+        serving_runtime=serving_runtime,
+        session_id=session_id,
+        session_log_handle=adapter.session_log_handle(spawn_result.session_id),
+        spawn_result=spawn_result,
+        pid=pid,
+    )
+    enforce = _resolve_budget_enforce(state_path)
 
     # 8. Drive the runner with the registered session id + the validated body
     # so the ``agent_end`` executor-report emit persists the agent's own
@@ -1018,41 +1077,26 @@ async def _spawn_and_dispatch(
         trace_request_id=trace_request_id,
         session_id=session_id,
         report_body=report_body,
+        pgid=pid,
+        enforce=enforce,
         # The spawned agent's OWN captured answer text feeds the W08 stdout
         # producer so the live spawn emits an ``agent.output`` event the
         # agent-watch tail renders -- without this the producer is wired into
         # run_dispatch but no live caller supplies it, so the tail stays empty.
         output_text=spawn_result.text,
     )
-    # A V5 reactive switch moved the serving runtime past the originally-
-    # resolved one, so the attempt records the swap as a SWITCH_ON_ERROR;
-    # an unswitched spawn stays a plain FRESH_DISPATCH.
-    switched = serving_runtime != runtime
-    note = DispatchNote.SWITCH_ON_ERROR if switched else DispatchNote.FRESH_DISPATCH
-    runtime_from = runtime if switched else None
     logger.info(
         f"_spawn_and_dispatch wave={wave_id} runtime={serving_runtime!r} pid={pid} "
-        f"session={session_id!r} cost_usd={metered.cost_usd} report_id={result.report_id!r}"
+        f"session={session_id!r} attempt={attempt} enforce={enforce} "
+        f"cost_usd={metered.cost_usd} report_id={result.report_id!r} terminated={result.terminated}"
     )
     return DispatchPlan(
         session_id=session_id,
-        attempt=1,
+        attempt=attempt,
         pid=pid,
         runtime=serving_runtime,
-        annotation=DispatchAnnotation(
-            attempt=1,
-            note=note,
-            runtime_from=runtime_from,
-            runtime_to=serving_runtime,
-            occurred_at=datetime.now(UTC),
-        ),
-        session_attempt=SessionAttempt(
-            attempt=1,
-            runtime=serving_runtime,
-            session_id=session_id,
-            session_log_handle=adapter.session_log_handle(spawn_result.session_id),
-            started_at=spawn_result.started_at,
-        ),
+        annotation=annotation,
+        session_attempt=session_attempt,
         event_ids=result.event_ids,
     )
 
