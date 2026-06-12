@@ -23870,7 +23870,10 @@
         "P30-I19-W09",
         "P30-I19-W10",
         "P30-I19-W11",
-        "P30-I19-W12"
+        "P30-I19-W12",
+        "P30-I19-W13",
+        "P30-I19-W14",
+        "P30-I19-W15"
       ]
     }
   },
@@ -24947,7 +24950,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T14:24:16.165560Z",
+  "updated_at": "2026-06-12T14:48:18.281286Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -94211,6 +94214,186 @@
         }
       ],
       "title": "Retire the raster seal stack; init wizard uses the ASCII seal",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I19-W13": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/unit/test_doctor_mcp_drift.py"
+      ],
+      "gates": [],
+      "id": "P30-I19-W13",
+      "intent": {
+        "desired_outcome": "the assertion matches the seven live doctor checks so the unit test passes and the phase suite is green",
+        "evidence_refs": [],
+        "planned_steps": [
+          "update the stale assertion from 8 to 7; run the test in isolation to confirm green"
+        ],
+        "priority_rationale": "phase-audit J1 surfaced this as the only real correctness defect reddening the full suite; must be green before the phase PR",
+        "problem": "test_doctor_mcp_drift asserts run_all returns 8 checks but the seal-capability row removal left 7 live checks; full suite reds",
+        "risks": [
+          "another sibling test could carry the same stale count (checked: test_doctor_checks already asserts 7)"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I19",
+      "opened_at": "2026-06-12T14:47:59.359007Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "test_run_all_includes_mcp_drift asserts len(results)==7 and passes in isolation; full suite green modulo known config-validate flakes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_run_all_includes_mcp_drift asserts len(results)==7 and passes in isolation; full suite green modulo known config-validate flakes",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix stale doctor run_all check-count assertion",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I19-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/lifecycle_iter.py",
+        "src/eawf/surfaces/cli/commands/track.py",
+        "tools/idle_contract_gate.py",
+        "tests/unit/test_idle_contract_gate.py",
+        "tests/integration/test_cli_track.py"
+      ],
+      "gates": [],
+      "id": "P30-I19-W14",
+      "intent": {
+        "desired_outcome": "the CLI track add/switch verbs route through the canonical daemon RPC (rule 4) so the contract is live and the idle gate guards the live caller",
+        "evidence_refs": [],
+        "planned_steps": [
+          "extract a daemon-proxy helper mirroring _sync_track; route track_add_cmd/track_switch_cmd through client.call; strengthen check_track_rpc_wired to assert the CLI caller; add tests"
+        ],
+        "priority_rationale": "phase-audit J2 (minor) found the only idle contract that escaped the gate; binding it is the literal P30 thesis (never ship an idle contract)",
+        "problem": "track.add and track.switch daemon RPCs are registered but the CLI shims run the in-process WAL path so the RPCs are idle and their docstrings claim a routing that does not happen",
+        "risks": [
+          "track add/switch become daemon-only (reject --daemonless) like track sync; mitigated by auto-spawn so setup-time use still works"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I19",
+      "opened_at": "2026-06-12T14:48:17.717770Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "eawf track add and track switch dispatch client.call to the daemon RPC mirroring track sync (escalate_mutation + auto-spawn) so the RPC binding is live not in-process; check_track_rpc_wired asserts a live CLI caller for both track.add and track.switch; idle-contract gate + mypy + targeted tests gree",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf track add and track switch dispatch client.call to the daemon RPC mirroring track sync (escalate_mutation + auto-spawn) so the RPC binding is live not in-process; check_track_rpc_wired asserts a live CLI caller for both track.add and track.switch; idle-contract gate + mypy + targeted tests green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Route track add/switch CLI through the daemon RPC",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I19-W15": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "docs/architecture/state-model.md",
+        "src/eawf/kernel/config/defaults.py"
+      ],
+      "gates": [],
+      "id": "P30-I19-W15",
+      "intent": {
+        "desired_outcome": "P30-touched modules and docs read consistently against AGENTS naming/docstring/phrasing conventions with no stale post-reskin comments",
+        "evidence_refs": [],
+        "planned_steps": [
+          "refresh the stale tui/app.py seal-Image comments; update state-model.md Subproject->Track and schema literal; sweep P30 modules for naming/docstring/error-phrasing nits"
+        ],
+        "priority_rationale": "consistency-only polish folded into the phase-co-closing iter per ship-process before the PR; no behavior change",
+        "problem": "phase-audit J4/J5 surfaced stale seal-Image comments and a stale Subproject/1.0 reference in the architecture doc plus minor naming drift across P30 modules",
+        "risks": [
+          "config subproject->track rename could break a consumer; mitigated by renaming only if zero external references else report to backlog"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I19",
+      "opened_at": "2026-06-12T14:48:18.281096Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "stale seal-Image transmit comments in tui/app.py refreshed to the ASCII-text seal reality; state-model.md Subproject/schema-literal references updated to Track and current schema; naming/docstring/error-phrasing conventions hold across P30-touched modules; pre-commit + suite green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "stale seal-Image transmit comments in tui/app.py refreshed to the ASCII-text seal reality; state-model.md Subproject/schema-literal references updated to Track and current schema; naming/docstring/error-phrasing conventions hold across P30-touched modules; pre-commit + suite green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Phase-audit polish sweep: naming, docstrings, stale comments",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
