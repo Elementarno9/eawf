@@ -60,6 +60,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.schema import EuBasis
+from eawf.kernel.spec.auq_bridge import WaveFrontierItem, compute_ready_frontier
 from eawf.kernel.state.enums import RiskTier, StoreKind, WaveStatus
 from eawf.kernel.state.models import (
     FleetCounters,
@@ -1457,6 +1458,16 @@ class _Loop:
             dispatch attempt advances so the cockpit repair counter reflects the
             real attempts. ``None`` (the default) keeps the pre-W03 terminal-fork
             behaviour.
+        recompute_frontier: When ``True`` (the default, W04) the loop recomputes
+            the ready frontier from ``state.json`` each round and merges
+            newly-unblocked waves onto the run frontier, so a dep chain drains to
+            empty in one run as each layer closes. ``False`` freezes the frontier
+            at arm time (the pre-W04 fixed-frontier behaviour) -- used where the
+            on-disk wave graph is not the claim source (e.g. a synthetic-frontier
+            test that does not flip wave status).
+        claimed_ids: The wave ids the loop has already claimed in THIS run; the
+            recompute excludes them so an already-dispatched wave never re-joins
+            the frontier.
     """
 
     ctx: MethodContext
@@ -1472,10 +1483,80 @@ class _Loop:
     runtime_preference: list[str] = field(default_factory=list)
     max_total_attempts: int = DEFAULT_MAX_TOTAL_ATTEMPTS
     repair: LaneRepairHook | None = None
+    recompute_frontier: bool = True
+    #: Wave ids the loop has already claimed in THIS run (W04). The per-round
+    #: frontier recompute excludes these so a wave the loop already dispatched is
+    #: never re-claimed -- robust whether or not the spawner advanced the wave's
+    #: ``state.json`` status (a fake spawner that leaves the wave PENDING would
+    #: otherwise re-appear as ready every round).
+    claimed_ids: set[str] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        """Seed ``claimed_ids`` from any lane already in flight at construction.
+
+        A run handed to the loop with lanes already registered (a resume or a
+        reattach of a run that was mid-drain) has already claimed those waves;
+        seed them so the W04 per-round recompute never re-adds an in-flight wave
+        to the frontier (the live watcher flips a closed wave's status, but a
+        resumed run's lane must be excluded from the recompute regardless).
+        """
+        self.claimed_ids |= set(self.run.lanes)
 
     def _persist(self) -> None:
         """Persist the current run snapshot through the daemon canonical writer."""
         _persist_fleet_run(self.ctx, self.run)
+
+    def _recompute_frontier(self) -> None:
+        """Recompute the ready frontier from state + merge newly-unblocked waves -- W04.
+
+        The frontier is no longer frozen at arm time: each round the loop reloads
+        the live wave graph off ``state.json`` (free read access), projects it
+        into the shared :func:`~eawf.kernel.spec.auq_bridge.compute_ready_frontier`
+        view (the SAME claim-time gate the autopilot pane + the claim transition
+        use), and merges any newly-ready wave that is not already tracked onto the
+        run frontier. So a dep chain armed at its first layer drains to empty in
+        one run: as each layer's waves close, their dependents become ready and
+        join the frontier on the next round.
+
+        The merge is purely ADDITIVE + idempotent. A candidate is appended only
+        when it is not already (a) in flight (:attr:`FleetRun.lanes`), (b) queued
+        on the frontier, (c) already claimed this run (:attr:`claimed_ids` --
+        robust even when the spawner does not flip the wave's on-disk status), or
+        (d) carrying a queued fork (a forked wave is the operator's to resolve,
+        never silently re-claimed). Newly-ready waves are appended in claim order
+        (natural id order) so the frontier stays deterministic.
+
+        A no-op when :attr:`recompute_frontier` is ``False`` or no ``state_path``
+        is configured (a synthetic-frontier driver) -- the frontier then stays
+        frozen at the armed list.
+        """
+        if not self.recompute_frontier or self.ctx.state_path is None:
+            return
+        state = load_state(Path(self.ctx.state_path))
+        items = tuple(
+            WaveFrontierItem(
+                wave_id=wave.id,
+                iter_id=wave.iter_id,
+                status=wave.status,
+                deps=tuple(wave.deps),
+            )
+            for wave in state.waves.values()
+        )
+        if not items:
+            return
+        ready = compute_ready_frontier(items)
+        tracked = (
+            set(self.run.lanes)
+            | set(self.run.frontier)
+            | self.claimed_ids
+            | {fork.wave_id for fork in self.run.forks}
+        )
+        added = [wid for wid in ready.ready_ids if wid not in tracked]
+        if added:
+            self.run.frontier.extend(added)
+            logger.info(
+                f"_recompute_frontier added={added} frontier_depth={len(self.run.frontier)}"
+            )
 
     def _fill_lanes(self) -> None:
         """Claim + dispatch frontier waves into every free lane.
@@ -1501,6 +1582,10 @@ class _Loop:
                 # lanes are resolved by the drain / hard-halt branch).
                 break
             wave_id = self.run.frontier.pop(0)
+            # Record the claim so the per-round frontier recompute (W04) never
+            # re-adds a wave this run already dispatched (robust even when the
+            # spawner does not flip the wave's on-disk status).
+            self.claimed_ids.add(wave_id)
             # Resolve the lane's RiskTier badge up front so a spawn that FORKS
             # (a HARD spawn failure / a retry-exhausted ladder) records the band
             # on the queued fork too.
@@ -1957,6 +2042,10 @@ class _Loop:
                 self._persist()
                 logger.info("run_to_terminal cancelled run_state=draining")
                 return self.run
+            # W04: recompute the ready frontier off live state BEFORE filling, so
+            # a wave newly unblocked by a just-closed dep joins the frontier this
+            # round rather than being stranded off the armed list.
+            self._recompute_frontier()
             self._fill_lanes()
             self._persist()
             if not self.run.lanes:
@@ -1999,6 +2088,7 @@ def arm_drive(
     runtime_preference: list[str] | None = None,
     max_total_attempts: int = DEFAULT_MAX_TOTAL_ATTEMPTS,
     repair: LaneRepairHook | None = None,
+    recompute_frontier: bool = True,
 ) -> FleetRun:
     """Arm + run the fleet auto-drain loop over *frontier*.
 
@@ -2062,6 +2152,10 @@ def arm_drive(
         repair: Optional :class:`LaneRepairHook` enabling the bounded grounded
             repair ladder (W03). When set, a failing-check fork re-dispatches up
             the ladder; ``None`` keeps the terminal-fork behaviour.
+        recompute_frontier: When ``True`` (the default, W04) the loop recomputes
+            the ready frontier off ``state.json`` each round so dep-unblocked
+            waves join as their deps close; ``False`` freezes the frontier at the
+            armed list (the pre-W04 behaviour).
 
     Returns:
         The :class:`FleetRun` snapshot after the loop returns -- ``DONE`` on a
@@ -2111,6 +2205,7 @@ def arm_drive(
         runtime_preference=list(runtime_preference) if runtime_preference else [],
         max_total_attempts=max_total_attempts,
         repair=repair,
+        recompute_frontier=recompute_frontier,
     )
     terminal = loop.run_to_terminal()
     logger.info(
