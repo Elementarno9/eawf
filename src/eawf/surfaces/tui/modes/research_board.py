@@ -1878,6 +1878,7 @@ class ResearchBoardModeScreen(ScopeScreen):
     }
     ResearchBoardModeScreen #research-empty-hero #research-empty {
         height: auto;
+        margin-top: 1;
     }
     ResearchBoardModeScreen .research-empty-seal {
         width: 1fr;

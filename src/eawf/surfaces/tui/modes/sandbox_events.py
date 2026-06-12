@@ -58,7 +58,12 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.surfaces.tui.scopes import ScopeScreen
-from eawf.surfaces.tui.widgets.empty_state import render_empty_state
+from eawf.surfaces.tui.widgets.empty_state import (
+    SEAL_HERO_ID,
+    render_empty_state,
+    seal_empty_hero,
+    seal_hero_css,
+)
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
@@ -431,28 +436,29 @@ class SandboxEventsModeScreen(ScopeScreen):
     a denial recorded after mount surfaces without a restart.
     """
 
-    DEFAULT_CSS: ClassVar[str] = """
-    SandboxEventsModeScreen #sandbox-events-body {
+    DEFAULT_CSS: ClassVar[str] = f"""
+    SandboxEventsModeScreen #sandbox-events-body {{
         height: 1fr;
         padding: 1 2;
-    }
-    SandboxEventsModeScreen #sandbox-events-list {
+    }}
+    SandboxEventsModeScreen #sandbox-events-list {{
         height: 1fr;
         border: round $accent;
-    }
-    SandboxEventsModeScreen .sandbox-events-empty {
+    }}
+    SandboxEventsModeScreen .sandbox-events-empty {{
         color: $text-muted;
         height: auto;
         width: 1fr;
         text-align: center;
-    }
-    SandboxEventsModeScreen .sandbox-events-row {
+    }}
+    SandboxEventsModeScreen .sandbox-events-row {{
         height: auto;
-    }
-    SandboxEventsModeScreen .sandbox-events-selected {
+    }}
+    SandboxEventsModeScreen .sandbox-events-selected {{
         background: $boost;
         text-style: bold;
-    }
+    }}
+    {seal_hero_css("SandboxEventsModeScreen")}
     """
 
     #: ``up`` / ``down`` move the selection cursor (and scroll it into view);
@@ -500,12 +506,16 @@ class SandboxEventsModeScreen(ScopeScreen):
     def compose_body(self) -> ComposeResult:
         """Yield the scrollable timeline body (honest-empty until denials land).
 
-        The list starts with a single honest-empty notice; :meth:`on_mount`
-        seeds the persisted enforcement rows, removing the notice once the
-        first row lands.
+        The list starts with a single honest-empty notice -- in the unicode
+        render mode the pinned :data:`EMPTY_NOTICE` headline leads with the
+        centered ASCII-art Seal (the research-board / W30 brand-mark pattern),
+        so the safety pane's happy-path empty reads as the same calm centered
+        hero the other modes render rather than a bare small brand glyph;
+        :meth:`on_mount` seeds the persisted enforcement rows, removing the
+        notice once the first row lands.
         """
         with Vertical(id="sandbox-events-body"), VerticalScroll(id=TIMELINE_LIST_ID):
-            yield Static(self._empty_hero(), id=TIMELINE_EMPTY_ID, classes="sandbox-events-empty")
+            yield self._empty_widget(hero_id=TIMELINE_EMPTY_ID)
 
     def on_mount(self) -> None:
         """Seed the timeline from the on-disk event store, newest-first.
@@ -590,11 +600,11 @@ class SandboxEventsModeScreen(ScopeScreen):
         self._rows = rows
         self.set_reactive(type(self).selected, 0 if rows else -1)
         if not rows:
-            # The honest-empty notice carries no id on a rebuild: the initial
-            # compose's notice (which DOES carry the id) was just removed, but
+            # The honest-empty hero carries no id on a rebuild: the initial
+            # compose's hero (which DOES carry the id) was just removed, but
             # Textual defers that removal, so re-using the id here would race a
             # DuplicateIds. The class is enough for styling + the test probe.
-            listing.mount(Static(self._empty_hero(), classes="sandbox-events-empty"))
+            listing.mount(self._empty_widget(hero_id=None))
             return
         mode = self._render_mode()
         widgets = [self._build_row(row, index=index, mode=mode) for index, row in enumerate(rows)]
@@ -680,7 +690,52 @@ class SandboxEventsModeScreen(ScopeScreen):
         """
         return getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
 
-    def _empty_hero(self) -> str:
+    def _empty_widget(self, *, hero_id: str | None) -> Static | Vertical:
+        """Build the honest-empty widget: a seal-led hero (unicode) or bare body.
+
+        In the unicode render mode the pinned :data:`EMPTY_NOTICE` good-state
+        copy leads with the centered ASCII-art Seal (the research-board / W30
+        brand-mark pattern), so the sandbox happy-path empty reads as the same
+        calm centered hero the autopilot / feed / agent-watch / evidence modes
+        render. The body Static drops its own brand glyph in that path (the seal
+        art is the single brand mark) and keeps the ``sandbox-events-empty``
+        class + the timeline-empty id the mode test + the rebuild path probe; the
+        :func:`~eawf.surfaces.tui.widgets.empty_state.seal_empty_hero` wrapper
+        opens the operator-flagged blank gap between the seal and the headline
+        and centers the seal + gap + copy block vertically.
+
+        The ASCII render mode keeps the bare body Static (the small unicode /
+        ascii brand glyph leads it) because the half-block art needs block-glyph
+        coverage the ascii column does not carry.
+
+        Args:
+            hero_id: The id stamped on the body Static (and threaded to the seal
+                wrapper). :data:`TIMELINE_EMPTY_ID` on the initial compose so the
+                first row's seed can remove it; ``None`` on a ``r``-reload
+                rebuild, where Textual's deferred removal of the prior id'd hero
+                would race a ``DuplicateIds`` if this one re-used the id.
+
+        Returns:
+            The seal-led hero ``Vertical`` (unicode) or the bare body ``Static``
+            (ascii), ready to ``yield`` or ``mount``.
+        """
+        mode = self._render_mode()
+        unicode = mode != "ascii"
+        body = Static(
+            self._empty_hero(with_sigil=not unicode),
+            id=hero_id,
+            classes="sandbox-events-empty",
+        )
+        if unicode:
+            # The seal wrapper carries its own id (distinct from the body id the
+            # mode test queries by class) so it tears down cleanly on a rebuild;
+            # `hero_id=None` (the reload path) leaves it id-less to dodge the
+            # deferred-removal DuplicateIds race the timeline list hits.
+            wrapper_id = SEAL_HERO_ID if hero_id is not None else None
+            return seal_empty_hero(body, hero_id=wrapper_id)
+        return body
+
+    def _empty_hero(self, *, with_sigil: bool = True) -> str:
         """Return the centered honest-empty hero body for the timeline.
 
         Routes the :data:`EMPTY_NOTICE` "nothing was denied" copy through the
@@ -688,8 +743,19 @@ class SandboxEventsModeScreen(ScopeScreen):
         hero so the safety pane reads as a calm, centered good-state (a muted
         brand sigil over a ``$muted`` headline -- *not* a ``$warn`` alert, since
         no denial is the desired state) rather than a top-left one-liner.
+
+        Args:
+            with_sigil: When ``True`` the body leads with the small muted brand
+                glyph (the ascii honest-empty path); ``False`` drops it so the
+                ASCII-art Seal the hero wrapper mounts is the single brand mark
+                (the unicode seal-led path).
+
+        Returns:
+            The newline-joined content-markup body for the empty-state Static.
         """
-        return render_empty_state(EMPTY_NOTICE, mode=self._render_mode(), headline_tint="$muted")
+        return render_empty_state(
+            EMPTY_NOTICE, mode=self._render_mode(), headline_tint="$muted", sigil=with_sigil
+        )
 
     def _event_path(self) -> Path | None:
         """Resolve the host App's read-only ``event.jsonl`` path, if configured.

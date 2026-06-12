@@ -74,13 +74,28 @@ SEAL_HERO_CLASS: str = "seal-empty-hero"
 #: research-board centered-hero look (its ``#research-empty-hero #research-empty
 #: { height: auto; }`` override is the same fix, applied id-scoped).
 #:
-#: The CANONICAL override is the INLINE ``height: auto`` :func:`seal_empty_hero`
-#: sets on the body (inline styles win over every stylesheet rule, including a
-#: host that styles its body by *id* such as feed's ``#feed-empty``, whose id
-#: rule out-ranks any class). This class is the stylesheet BACKSTOP / styling
-#: hook -- :func:`seal_hero_css` emits the matching ``height: auto`` class rule
-#: so the hero's intent is visible in the screen's ``DEFAULT_CSS`` too.
+#: The body also carries a top margin (:data:`SEAL_HERO_BODY_GAP`) so the
+#: headline sits a clear blank row or two BELOW the seal art rather than flush
+#: under its bottom edge -- the operator-flagged breathing room between the brand
+#: mark and the hero copy.
+#:
+#: The CANONICAL overrides are the INLINE ``height: auto`` + ``margin-top``
+#: :func:`seal_empty_hero` sets on the body (inline styles win over every
+#: stylesheet rule, including a host that styles its body by *id* such as feed's
+#: ``#feed-empty``, whose id rule out-ranks any class). This class is the
+#: stylesheet BACKSTOP / styling hook -- :func:`seal_hero_css` emits the matching
+#: ``height: auto`` + ``margin-top`` class rule so the hero's intent is visible
+#: in the screen's ``DEFAULT_CSS`` too.
 SEAL_HERO_BODY_CLASS: str = "seal-empty-hero-body"
+
+#: Blank rows of vertical gap between the bottom of the seal art and the hero
+#: headline. The seal art Static and the body Static stack flush in the wrapper,
+#: so without this gap the headline (e.g. "no word spoken yet") sits directly
+#: under the seal's last art row with no breathing room. A one-row top margin on
+#: the body opens a clear blank gap below the seal while the whole block stays
+#: centered (the wrapper's ``align: center middle`` re-centers the seal + gap +
+#: copy as one taller block).
+SEAL_HERO_BODY_GAP: int = 1
 
 
 def seal_hero_css(screen_selector: str) -> str:
@@ -101,7 +116,9 @@ def seal_hero_css(screen_selector: str) -> str:
       :func:`seal_empty_hero`) is pinned to ``height: auto`` so it never eats
       the wrapper's leftover space and shove the seal to the top -- the body's
       own :data:`HONEST_EMPTY_CSS` carries ``height: 1fr`` for the bare-mount
-      (ascii) path, which must be overridden under the art seal.
+      (ascii) path, which must be overridden under the art seal -- AND a
+      ``margin-top: SEAL_HERO_BODY_GAP`` so the headline sits a clear blank row
+      below the seal art rather than flush under its bottom edge.
 
     The ``width: 1fr; text-align: center`` pair is load-bearing: a fixed
     ``width: 42`` left-anchors the symmetric block, while the full-width +
@@ -128,7 +145,7 @@ def seal_hero_css(screen_selector: str) -> str:
         f"{{ width: 1fr; height: {SEAL_ART_HEIGHT}; "
         "content-align: center middle; text-align: center; color: $accent; } "
         f"{screen_selector} .{SEAL_HERO_BODY_CLASS} "
-        "{ height: auto; }"
+        f"{{ height: auto; margin-top: {SEAL_HERO_BODY_GAP}; }}"
     )
 
 
@@ -246,6 +263,13 @@ def seal_empty_hero(body: Static, *, hero_id: str | None = SEAL_HERO_ID) -> Vert
     body at ``auto``, the two form ONE compact block the wrapper's ``align:
     center middle`` centers vertically -- the research-board centered-hero look.
 
+    The body also carries an INLINE ``margin-top`` of :data:`SEAL_HERO_BODY_GAP`
+    (set here for the same id-rule-beating reason as the height) so the headline
+    sits a clear blank row below the seal art rather than flush under its bottom
+    edge -- the operator-flagged breathing room between the brand mark and the
+    copy. The wrapper's ``align: center middle`` re-centers the seal + gap + copy
+    as one taller block, so the gap does not break the vertical centering.
+
     The body should NOT carry its own brand sigil when led by the art seal --
     pass ``sigil=False`` to :func:`render_empty_state` so the art is the single
     brand mark rather than a redundant glyph beside it.
@@ -264,10 +288,12 @@ def seal_empty_hero(body: Static, *, hero_id: str | None = SEAL_HERO_ID) -> Vert
         The centered seal hero wrapper, ready to ``yield`` or ``mount``.
     """
     body.add_class(SEAL_HERO_BODY_CLASS)
-    # Inline height wins over the body's own id/class height rule (e.g. feed's
+    # Inline height + margin win over the body's own id/class rules (e.g. feed's
     # `#feed-empty { height: 1fr }`), so the body never eats the wrapper's
-    # leftover space and the seal + copy block centers vertically.
+    # leftover space and the seal + gap + copy block centers vertically with a
+    # clear blank row between the seal art and the headline.
     body.styles.height = "auto"
+    body.styles.margin = (SEAL_HERO_BODY_GAP, 0, 0, 0)
     return Vertical(seal_art_widget(), body, id=hero_id, classes=SEAL_HERO_CLASS)
 
 
@@ -275,6 +301,7 @@ __all__ = [
     "HONEST_EMPTY_CSS",
     "SEAL_ART_HEIGHT",
     "SEAL_HERO_BODY_CLASS",
+    "SEAL_HERO_BODY_GAP",
     "SEAL_HERO_CLASS",
     "SEAL_HERO_ID",
     "brand_sigil_markup",

@@ -27,8 +27,8 @@
                                               ▀██▄▄   ▀▀▀▀████▀▀▀▀   ▄▄██▀
                                                 ▀▀███▄▄▄▄      ▄▄▄▄███▀▀
                                                      ▀▀▀▀██████▀▀▀▀
-                                              no active dispatched session
 
+                                              no active dispatched session
 
 
 

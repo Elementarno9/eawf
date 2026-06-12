@@ -26,8 +26,8 @@
                                               ▀██▄▄   ▀▀▀▀████▀▀▀▀   ▄▄██▀
                                                 ▀▀███▄▄▄▄      ▄▄▄▄███▀▀
                                                      ▀▀▀▀██████▀▀▀▀
-                                           Live feed -- waiting for events...
 
+                                           Live feed -- waiting for events...
 
 
 
