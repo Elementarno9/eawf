@@ -36,7 +36,13 @@ from eawf.kernel.spec.research_campaign import (
     StagedCampaign,
     stage_campaign,
 )
-from eawf.kernel.state.enums import CampaignStatus, StoreKind
+from eawf.kernel.state.enums import (
+    CampaignStatus,
+    ClaimStatus,
+    OpenQuestionStatus,
+    StoreKind,
+    Urgency,
+)
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import (
@@ -47,8 +53,10 @@ from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.methods import MethodContext, register
 
 if TYPE_CHECKING:
+    from eawf.kernel.spec.campaign_driver import RoundFindings
     from eawf.kernel.spec.research_campaign import StagedDispatch
     from eawf.kernel.spec.round_loop import RoundOutcome
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -438,7 +446,241 @@ async def cancel_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     ).model_dump(mode="json")
 
 
+# --------------------------------------------------------------------------
+# OpenQuestion writer -- the o-key channel + the campaign question ledger
+# --------------------------------------------------------------------------
+
+
+def _resolve_research_scope(state: State, scope_id: str | None) -> str:
+    """Resolve the scope a research claim / question is bound to.
+
+    An explicit *scope_id* wins; otherwise the active project's code anchors
+    the row (the campaign is scoped to the project, like every other research
+    entity). A scope-less state (no project) falls back to the literal
+    ``"research"`` so the row still validates.
+
+    Args:
+        state: The loaded state the row is being added to.
+        scope_id: An explicit caller-supplied scope id, or ``None``.
+
+    Returns:
+        The resolved non-empty scope id.
+    """
+    if scope_id:
+        return scope_id
+    if state.project is not None:
+        return state.project.code
+    return "research"
+
+
+class AddQuestionParams(BaseModel):
+    """Params for :func:`add_question`.
+
+    The campaign control-plane ``add_question`` channel: the operator (via the
+    TUI ``o`` key or the headless ``eawf research question add`` verb) injects a
+    new :class:`~eawf.kernel.state.models.OpenQuestion` into the campaign ledger
+    mid-run. The TUI sends only ``title``; the other fields default so the row
+    lands as an ordinary advisory open question unless the operator escalates
+    it.
+
+    Attributes:
+        title: The question text, an imperative noun-phrase bounded to 1..72
+            chars to match the :class:`~eawf.kernel.state.models.OpenQuestion`
+            model's title bound. An over-cap / empty title is rejected fail-fast
+            at the params boundary (``-32602 invalid params``) before any side
+            effect.
+        description: Optional long-form framing for the question.
+        blocking: Whether the question gates further campaign work (the
+            balanced-autonomy interrupt). Defaults ``False`` (advisory).
+        urgency: The shared :class:`~eawf.kernel.state.enums.Urgency` rung the
+            question inherits. Defaults to ``NORMAL``.
+        scope_id: Explicit scope the question binds to; ``None`` resolves to
+            the active project's code.
+        question_id: Optional caller-allocated id; ``None`` allocates a fresh
+            ``OQ-<hex>`` id.
+        repo_root: Optional per-request repo anchor for the worktree-aware
+            state writer; ``None`` uses the daemon's boot-time state path.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=72)
+    description: str | None = Field(default=None, max_length=500)
+    blocking: bool = False
+    urgency: Urgency = Urgency.NORMAL
+    scope_id: str | None = None
+    question_id: str | None = Field(default=None, min_length=1)
+    repo_root: str | None = None
+
+
+class AddQuestionResult(BaseModel):
+    """Result of :func:`add_question`.
+
+    Attributes:
+        question_id: The id of the open question just written.
+        status: The question's lifecycle status (``"open"`` /
+            ``"blocked"`` when the operator marked it blocking).
+        scope_id: The resolved scope the question was bound to.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    question_id: str
+    status: str
+    scope_id: str
+
+
+def _apply_add_question(
+    state: State, args: AddQuestionParams, *, question_id: str
+) -> dict[str, Any]:
+    """Write one :class:`OpenQuestion` row onto ``state.open_questions``.
+
+    A blocking question lands ``BLOCKED`` (the interrupt status); an advisory
+    one lands ``OPEN``. The row is constructed through the typed model, so an
+    over-cap / empty title raises :class:`pydantic.ValidationError` -- the
+    canonical writer maps it to ``-32002 validation_failed``.
+
+    Args:
+        state: Loaded :class:`State`. Mutated in place.
+        args: Validated :class:`AddQuestionParams`.
+        question_id: The resolved (caller or freshly allocated) question id.
+
+    Returns:
+        Result dict matching :class:`AddQuestionResult`.
+    """
+    from eawf.kernel.state.models import OpenQuestion
+
+    status = OpenQuestionStatus.BLOCKED if args.blocking else OpenQuestionStatus.OPEN
+    scope_id = _resolve_research_scope(state, args.scope_id)
+    questions = dict(state.open_questions or {})
+    questions[question_id] = OpenQuestion(
+        id=question_id,
+        scope_id=scope_id,
+        title=args.title,
+        description=args.description,
+        status=status,
+        blocking=args.blocking,
+        urgency=args.urgency,
+        created_at=datetime.now(UTC),
+    )
+    state.open_questions = questions
+    logger.info(
+        f"_apply_add_question question={question_id!r} scope={scope_id!r} "
+        f"blocking={args.blocking} status={status.value}"
+    )
+    return AddQuestionResult(
+        question_id=question_id,
+        status=status.value,
+        scope_id=scope_id,
+    ).model_dump(mode="json")
+
+
+@register("research.add_question")
+async def add_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Write an :class:`OpenQuestion` row through the canonical state writer.
+
+    The daemon-canonical mutator for ``state.open_questions`` (AGENTS rule 4);
+    the TUI ``o`` key + the headless ``eawf research question add`` verb proxy
+    here. The row lands through the same per-file portalock + WAL + event-append
+    path every state mutator uses (:func:`_commit_worktree_state`), so the
+    single-writer invariant holds and the board re-renders the new question on
+    its next refresh.
+
+    Args:
+        ctx: Server context -- must carry ``state_path`` (+ ``event_path`` /
+            ``wal_dir`` for the canonical write).
+        params: JSON-RPC params per :class:`AddQuestionParams`.
+
+    Returns:
+        Dict matching :class:`AddQuestionResult`.
+
+    Raises:
+        ValueError: When *params* does not validate against
+            :class:`AddQuestionParams` (an unknown key, an empty / over-cap
+            title). Mapped to ``-32602 invalid params``.
+    """
+    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+
+    args = AddQuestionParams.model_validate(params)
+    repo_root = Path(args.repo_root) if args.repo_root else None
+    question_id = args.question_id if args.question_id is not None else f"OQ-{uuid.uuid4().hex[:8]}"
+    return _commit_worktree_state(
+        ctx=ctx,
+        repo_root=repo_root,
+        params=params,
+        command="research.add_question",
+        scope_id=args.scope_id,
+        apply_func=lambda state: _apply_add_question(state, args, question_id=question_id),
+    )
+
+
+# --------------------------------------------------------------------------
+# Round-end claim reconcile -- fold a round's findings into Claim rows
+# --------------------------------------------------------------------------
+
+
+def reconcile_round_claims(
+    state: State,
+    findings: RoundFindings,
+    *,
+    scope_id: str | None,
+    now: datetime,
+) -> list[str]:
+    """Fold one round's parsed findings into ``state.open`` Claim rows.
+
+    The round-end reconcile: every finding line a round's spawned researchers
+    returned (:attr:`~eawf.kernel.spec.campaign_driver.RoundFindings.finding_lines`)
+    becomes one ``OPEN`` :class:`~eawf.kernel.state.models.Claim` row carrying
+    the body's ``evidence_refs`` as the claim's evidence (so the EviBound
+    resolver + the saturation reducer score real rows). The claim id is
+    ``CLM-r<round>-<domain>-<n>`` so a re-run round does not collide. A finding
+    line over the title bound is truncated to the 72-char title cap with its
+    full text preserved in the description.
+
+    Pure with respect to its inputs aside from mutating *state* in place (the
+    caller owns the canonical persist). Returns the ids of the claims written so
+    the caller can record the per-round claim count.
+
+    Args:
+        state: Loaded :class:`State`. ``state.claims`` is mutated in place.
+        findings: The round's parsed findings.
+        scope_id: Explicit scope for the claims; ``None`` resolves to the
+            project code.
+        now: The instant the claims are logged at.
+
+    Returns:
+        The ids of the Claim rows written this round, in finding order.
+    """
+    from eawf.kernel.state.models import Claim
+
+    resolved_scope = _resolve_research_scope(state, scope_id)
+    claims = dict(state.claims or {})
+    written: list[str] = []
+    for domain, body in zip(findings.domains, findings.bodies, strict=True):
+        evidence = [ref.ref for ref in body.evidence_refs]
+        for index, line in enumerate(body.findings):
+            claim_id = f"CLM-r{findings.round_number}-{domain}-{index}"
+            title = line if len(line) <= 72 else f"{line[:69]}..."
+            description = None if len(line) <= 72 else line[:500]
+            claims[claim_id] = Claim(
+                id=claim_id,
+                scope_id=resolved_scope,
+                title=title,
+                description=description,
+                status=ClaimStatus.OPEN,
+                evidence_refs=evidence,
+                created_at=now,
+            )
+            written.append(claim_id)
+    state.claims = claims
+    logger.info(
+        f"reconcile_round_claims round={findings.round_number} scope={resolved_scope!r} "
+        f"claims={len(written)}"
+    )
+    return written
+
+
 __all__ = [
+    "AddQuestionParams",
+    "AddQuestionResult",
     "AgentEndProducer",
     "CancelCampaignParams",
     "CancelCampaignResult",
@@ -446,11 +688,13 @@ __all__ = [
     "CreateCampaignResult",
     "StageCampaignParams",
     "StageCampaignResult",
+    "add_question",
     "build_bound_round_runner",
     "build_live_dispatch_spawner",
     "cancel_campaign",
     "create_campaign",
     "persist_campaign",
     "read_latest_campaign",
+    "reconcile_round_claims",
     "stage_campaign_method",
 ]

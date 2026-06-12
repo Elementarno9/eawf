@@ -220,3 +220,89 @@ def test_research_skill_registered_with_canonical_name() -> None:
 
     cls = registry.lookup("/research")
     assert cls is ResearchSkill
+
+
+def _write_state_with_open_questions(state_dir: Path) -> None:
+    """Write a valid state.json carrying two live questions + one dropped."""
+    payload = {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:QR",
+        "updated_at": "2026-06-11T12:00:00+00:00",
+        "project": {
+            "code": "QR",
+            "slug": "qr",
+            "title": "QR",
+            "description": None,
+            "domains": ["quant"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:QR",
+        },
+        "current": {"project_code": "QR"},
+        "workspace": None,
+        "phases": {},
+        "iters": {},
+        "waves": {},
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+        "open_questions": {
+            "OQ-1": {
+                "id": "OQ-1",
+                "scope_id": "QR",
+                "title": "which curve model fits the short tenor",
+                "status": "open",
+                "blocking": False,
+                "urgency": "normal",
+                "created_at": "2026-06-11T12:00:00+00:00",
+            },
+            "OQ-2": {
+                "id": "OQ-2",
+                "scope_id": "QR",
+                "title": "is the venue feed authoritative",
+                "status": "blocked",
+                "blocking": True,
+                "urgency": "urgent",
+                "created_at": "2026-06-11T12:00:00+00:00",
+            },
+            "OQ-3": {
+                "id": "OQ-3",
+                "scope_id": "QR",
+                "title": "should we drop the stale source",
+                "status": "dropped",
+                "blocking": False,
+                "urgency": "low",
+                "created_at": "2026-06-11T12:00:00+00:00",
+            },
+        },
+    }
+    (state_dir / "state.json").write_bytes(orjson.dumps(payload))
+
+
+def test_research_surfaces_live_open_questions_over_placeholders(
+    state_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A populated OpenQuestion ledger surfaces real rows, not placeholder slots."""
+    from eawf.workflow.skills import research as research_module
+
+    def _ok_probe(self: object, ctx: SkillContext) -> ProbeOutcome:
+        return ProbeOutcome(
+            ok=True, instrument_probe={"git": "ok"}, repair_commands=[], warnings=[]
+        )
+
+    monkeypatch.setattr(research_module.ResearchSkill, "probe", _ok_probe)
+    _write_state_with_open_questions(state_dir)
+    env = run_skill(ResearchSkill(), _ctx())
+    body = ResearchBody.model_validate(cast(dict, env.body))
+    # Only the two live (open / blocked) questions surface; the dropped one
+    # and the depth-scaled placeholder slots are absent.
+    titles = [q.q for q in body.questions]
+    assert titles == [
+        "which curve model fits the short tenor",
+        "is the venue feed authoritative",
+    ]
+    blocking = next(q for q in body.questions if q.q == "is the venue feed authoritative")
+    assert blocking.answer == "(blocking)"
+    assert not any(q.q.startswith("Open question #") for q in body.questions)

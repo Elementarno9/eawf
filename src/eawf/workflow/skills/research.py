@@ -283,6 +283,19 @@ class ResearchSkill(SkillAction):
         return work
 
     def _build_questions(self, run: ActionRun, depth: ResearchDepth) -> list[ResearchQuestion]:
+        live = self._live_open_questions(run)
+        if live:
+            # The campaign control plane has populated the OpenQuestion ledger
+            # (the o-key channel / round-end reconcile writes real rows), so
+            # surface those instead of fabricating placeholder slots -- the
+            # idle-slot path is reserved for a scope that has logged none yet.
+            self._trace(
+                run,
+                "research.define_questions",
+                f"research: surfaced {len(live)} open question(s) from the ledger",
+                {"count": len(live), "depth": depth, "source": "ledger"},
+            )
+            return live
         question_count = research_depth_question_slots(depth)
         questions = [
             ResearchQuestion(
@@ -297,9 +310,55 @@ class ResearchSkill(SkillAction):
             run,
             "research.define_questions",
             f"research: defined {len(questions)} question(s)",
-            {"count": len(questions), "depth": depth},
+            {"count": len(questions), "depth": depth, "source": "placeholder"},
         )
         return questions
+
+    @staticmethod
+    def _live_open_questions(run: ActionRun) -> list[ResearchQuestion]:
+        """Read the scope's :class:`OpenQuestion` ledger into question slots.
+
+        Loads the active ``state.json`` and folds every still-open
+        (``OPEN`` / ``BLOCKED``) :class:`~eawf.kernel.state.models.OpenQuestion`
+        row into a :class:`ResearchQuestion` so the brief surfaces the real
+        campaign questions rather than placeholder slots. A scope with no
+        loadable state, no question ledger, or no open question yields an empty
+        list so the caller falls back to the placeholder path.
+
+        Args:
+            run: The active skill run (carries the resolved ``state_path``).
+
+        Returns:
+            The live open questions as research-question slots, in natural-id
+            order; empty when the ledger carries none.
+        """
+        from eawf.kernel.state.enums import OpenQuestionStatus
+        from eawf.kernel.state.ids import natural_key
+        from eawf.workflow.evidence._io import load_state
+
+        if not run.state_path.exists():
+            return []
+        try:
+            state = load_state(run.state_path)
+        except Exception as exc:  # pragma: no cover - defensive only
+            logger.debug(f"_live_open_questions load_error={exc!r}")
+            return []
+        rows = state.open_questions or {}
+        live_statuses = {OpenQuestionStatus.OPEN, OpenQuestionStatus.BLOCKED}
+        slots: list[ResearchQuestion] = []
+        for key in sorted(rows, key=natural_key):
+            question = rows[key]
+            if question.status not in live_statuses:
+                continue
+            slots.append(
+                ResearchQuestion(
+                    q=question.title,
+                    answer="(blocking)" if question.blocking else "(awaiting agent fanout)",
+                    confidence="low",
+                    sources=[],
+                )
+            )
+        return slots
 
     def _build_options(self, run: ActionRun) -> list[ResearchOption]:
         options = [
