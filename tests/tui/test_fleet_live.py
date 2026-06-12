@@ -624,3 +624,126 @@ def test_cockpit_halt_over_live_run_drives_fleet_halt(
     asyncio.run(body())
     # Filter the on-mount fleet.reattach (W07): H over a live run drives fleet.halt.
     assert [m for m in calls if m != "fleet.reattach"] == ["fleet.halt"]
+
+
+# --------------------------------------------------------------------------
+# W10 (CR-01) -- the cockpit vitals UPDATE LIVE throughout a draining run
+# --------------------------------------------------------------------------
+
+
+def _drain_snapshot(
+    *,
+    frontier_left: int,
+    closed: int,
+    spent_usd: float,
+    throughput: float | None,
+) -> FleetRun:
+    """Build a DRAINING run snapshot at a point along a two-wave drain.
+
+    The autopilot-acceptance capstone (W10) pins that the cockpit reads its
+    vitals STRAIGHT off the daemon-written ``fleet_run`` mid-drain -- so a run
+    that advances (the frontier shrinks, the USD spend rises toward the cap, the
+    throughput appears once a lane closes) re-renders the cockpit vitals without
+    an app restart. This builds the run at one such point so the test can push a
+    sequence of advancing snapshots and assert the vitals follow each one.
+
+    Args:
+        frontier_left: Ready waves still queued (the ``frontier N left`` figure).
+        closed: Lanes closed so far (the drain progress).
+        spent_usd: Cumulative USD spend (the ``$ used/cap`` figure, under the cap).
+        throughput: The daemon-computed wv/hr, or ``None`` before the first close.
+
+    Returns:
+        The :class:`FleetRun` snapshot at that drain point.
+    """
+    frontier = ["P01-I01-W02", "P01-I01-W03"][:frontier_left]
+    lanes = {
+        wid: FleetLane(wave_id=wid, attempt=1, pgid=1000, dispatched_at=_T0) for wid in frontier
+    }
+    return FleetRun(
+        run_state=FleetRunState.DRAINING,
+        concurrency=2,
+        frontier=frontier,
+        lanes=lanes,
+        forks=[],
+        counters=FleetCounters(
+            claimed=2,
+            dispatched=len(lanes),
+            closed=closed,
+            spent_eu=spent_usd,  # EU tracks USD here; both rise toward their caps.
+            spent_usd=spent_usd,
+        ),
+        eu_cap=10.0,
+        usd_cap=8.0,
+        throughput=throughput,
+        armed_at=_T0,
+    )
+
+
+def test_cockpit_vitals_update_live_throughout_a_two_wave_drain(tmp_path: Path) -> None:
+    """W10/CR-01: the cockpit vitals follow a two-wave drain LIVE, mid-run.
+
+    Mounts the cockpit ARMED to a DRAINING run (the on-mount reattach binds it),
+    then pushes a SEQUENCE of advancing run snapshots through the live push seam
+    -- the same coroutine the binder marshals every daemon push + poll refresh
+    through -- modelling the daemon writing successive ``fleet_run`` revisions as
+    the two-wave frontier drains:
+
+    1. armed: both waves queued, nothing closed yet, no throughput -- the
+       ``frontier 2 left`` row with a ``$ 0.50/8.00`` early spend;
+    2. first lane closes: the frontier drops to ``frontier 1 left``, the spend
+       rises, and the daemon-computed throughput APPEARS (``2.0 wv/hr``);
+    3. drain complete: ``frontier 0 left``, both lanes closed, the spend near the
+       cap, the throughput risen.
+
+    Each push re-renders the cockpit vitals off the daemon-written run, so the
+    test asserts the live figures change at each step -- proving the cockpit reads
+    the bus / persisted ``fleet_run`` mid-drain rather than freezing on a one-shot
+    mount snapshot. A stale cockpit would still show step 1's vitals after step 3.
+    """
+    armed = _drain_snapshot(frontier_left=2, closed=0, spent_usd=0.5, throughput=None)
+    state_path = _write_state(tmp_path, _state(waves=_frontier_waves(), fleet_run=armed))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            screen = await _enter_cockpit(pilot, app)
+            vitals = screen.query_one(f"#{COCKPIT_VITALS_ID}")
+
+            # Step 1: armed -- both waves queued, no throughput yet.
+            frame0 = str(vitals.render())  # type: ignore[attr-defined]
+            assert "frontier 2 left" in frame0
+            assert "draining" in frame0
+            assert "$ 0.50/8.00" in frame0
+            assert "-- wv/hr" in frame0  # no close yet -> no throughput
+
+            # Step 2: the first lane closes -- the daemon writes the next revision.
+            mid = _drain_snapshot(frontier_left=1, closed=1, spent_usd=4.0, throughput=2.0)
+            await push_state_revision(
+                pilot,  # type: ignore[arg-type]
+                _state(waves=_frontier_waves(), fleet_run=mid),
+            )
+            frame1 = str(vitals.render())  # type: ignore[attr-defined]
+            # The vitals followed the push: the frontier shrank, the spend rose,
+            # the throughput appeared -- all read straight off the new run.
+            assert frame1 != frame0  # the cockpit re-rendered, not frozen
+            assert "frontier 1 left" in frame1
+            assert "$ 4.00/8.00" in frame1
+            assert "2.0 wv/hr" in frame1
+            assert "-- wv/hr" not in frame1
+
+            # Step 3: the drain completes -- the frontier empties, both lanes closed.
+            done = _drain_snapshot(frontier_left=0, closed=2, spent_usd=7.5, throughput=3.0)
+            await push_state_revision(
+                pilot,  # type: ignore[arg-type]
+                _state(waves=_frontier_waves(), fleet_run=done),
+            )
+            frame2 = str(vitals.render())  # type: ignore[attr-defined]
+            assert frame2 != frame1  # the cockpit re-rendered again, live
+            assert "frontier 0 left" in frame2
+            assert "$ 7.50/8.00" in frame2  # spend climbed under the cap
+            assert "3.0 wv/hr" in frame2
+            # No lane cell lingers once both lanes drained.
+            assert not screen.query(f".{LANE_CELL_CLASS}")
+
+    asyncio.run(body())

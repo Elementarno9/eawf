@@ -18,10 +18,11 @@ of ``tui_flow`` spec ``args`` dicts, the same shape the G1-G7
 dispatched through the production
 :data:`~eawf.workflow.audit_dsl.registry.CHECK_REGISTRY` ``"tui_flow"`` entry --
 the live ``check_tui_flow`` call-site the audit runner uses -- and a count guard
-pins the registry at exactly eleven flows (the S1-S12 G8-G17 journeys plus the
-W07 G18 cockpit reattach-on-mount). So a DROPPED journey reds the audit two
-ways: the count guard fails, and its parametrized gate case disappears. The
-journeys are bound to the flow-gate kind, never a green-by-omission claim.
+pins the registry at exactly thirteen flows (the S1-S12 G8-G17 journeys, the
+W07 G18 cockpit reattach-on-mount, and the W10 CR-01 G19 live-update + pause /
+G20 pause -> resume journeys). So a DROPPED journey reds the audit two ways: the
+count guard fails, and its parametrized gate case disappears. The journeys are
+bound to the flow-gate kind, never a green-by-omission claim.
 
 The fleet state each journey needs (the committed-fixture-free path)
 -------------------------------------------------------------------
@@ -392,6 +393,41 @@ FLEET_FLOW_SPECS: tuple[dict[str, object], ...] = (
             "modal_depth": 0,
         },
     },
+    {
+        # G19 (W10, CR-01 live-update + pause) -- arming the cockpit over a live
+        # DRAINING run and pressing ``space`` drives the FLEET pause (W06): the
+        # cockpit holds the running drive loop without aborting it and stays on
+        # the cockpit (no modal). With no live daemon socket in the flow harness
+        # the pause RPC is a silent no-op, so the journey's observable terminal is
+        # the cockpit still rendering the draining vitals -- the pause binding is
+        # wired, not idle. The mid-drain vitals-UPDATE half of CR-01 is pinned by
+        # the dedicated live Pilot test in tests/tui/test_fleet_live.py
+        # (test_cockpit_vitals_update_live_throughout_a_two_wave_drain); this flow
+        # gates the pause journey's terminal cockpit state.
+        "flow": "G19-arm-vitals-pause",
+        "run_kind": "draining",
+        "key_sequence": ["2", "space"],
+        "terminal_state": {
+            "current_mode": "autopilot",
+            "top_screen": "AutopilotModeScreen",
+            "modal_depth": 0,
+        },
+    },
+    {
+        # G20 (W10, CR-01 pause -> resume) -- the pause / resume round-trip over a
+        # live run: ``space`` pauses, a second ``space`` resumes the SAME drive
+        # loop (W06), and the cockpit stays put throughout (no modal, no mode
+        # switch). The journey lands back on the cockpit, proving the resume
+        # continues the run in place rather than aborting it or opening an overlay.
+        "flow": "G20-pause-then-resume",
+        "run_kind": "draining",
+        "key_sequence": ["2", "space", "space"],
+        "terminal_state": {
+            "current_mode": "autopilot",
+            "top_screen": "AutopilotModeScreen",
+            "modal_depth": 0,
+        },
+    },
 )
 
 
@@ -428,18 +464,19 @@ def _spec_with_state(spec_args: dict[str, object], tmp_path: Path) -> CheckSpec:
 # --------------------------------------------------------------------------
 
 
-def test_fleet_flow_specs_count_is_eleven() -> None:
+def test_fleet_flow_specs_count_is_thirteen() -> None:
     # The S1-S12 fleet journeys fold into G8-G17, plus the W07 G18 session-resume
-    # (cockpit reattach-on-mount) journey -- eleven rows. The count guard reds the
-    # audit if a journey is dropped from the registry.
-    assert len(FLEET_FLOW_SPECS) == 11
+    # (cockpit reattach-on-mount) journey, plus the W10 CR-01 live-update + pause
+    # (G19) and pause -> resume (G20) journeys -- thirteen rows. The count guard
+    # reds the audit if a journey is dropped from the registry.
+    assert len(FLEET_FLOW_SPECS) == 13
 
 
-def test_fleet_flow_ids_are_g8_through_g18() -> None:
-    # The eleven rows carry the G8..G18 ids in order, so a renamed / reordered
+def test_fleet_flow_ids_are_g8_through_g20() -> None:
+    # The thirteen rows carry the G8..G20 ids in order, so a renamed / reordered
     # journey is caught (the registry is the canonical journey list).
     prefixes = [str(spec["flow"]).split("-", 1)[0] for spec in FLEET_FLOW_SPECS]
-    assert prefixes == [f"G{n}" for n in range(8, 19)]
+    assert prefixes == [f"G{n}" for n in range(8, 21)]
 
 
 def test_fleet_flow_specs_only_pin_known_observable_fields() -> None:
@@ -558,6 +595,42 @@ def test_g17_names_the_converged_terminal_stop(tmp_path: Path) -> None:
     # the campaign-stop journey lands the run-summary card (the daemon recorded a
     # convergence stop, distinct from a drain stop).
     spec_args = next(s for s in FLEET_FLOW_SPECS if s["flow"] == "G17-campaign-auto-run-terminal")
+    spec = _spec_with_state(spec_args, tmp_path)
+    result = check_tui_flow(spec, _REPO_ROOT)
+    assert result.status == "pass", result.details
+
+
+# --------------------------------------------------------------------------
+# W10 (CR-01): the live-update + pause / resume journeys are registered + bound
+# --------------------------------------------------------------------------
+
+
+def test_g19_g20_live_update_pause_resume_are_registered() -> None:
+    # The W10 CR-01 pause (G19) + pause -> resume (G20) journeys are carried as
+    # their own registered gates -- a dropped pause / resume journey reds the
+    # audit (count guard + missing parametrized case).
+    flows = {str(spec["flow"]) for spec in FLEET_FLOW_SPECS}
+    assert "G19-arm-vitals-pause" in flows
+    assert "G20-pause-then-resume" in flows
+
+
+def test_g19_pause_journey_stays_on_the_cockpit(tmp_path: Path) -> None:
+    # G19 arms the cockpit over a live DRAINING run and pauses (``space`` drives
+    # the W06 fleet.pause). With no live daemon socket in the flow harness the
+    # pause RPC is a silent no-op, so the journey's terminal is the cockpit still
+    # rendering the draining vitals (no modal) -- the pause binding is wired, the
+    # run is held in place rather than aborted into a modal / mode switch.
+    spec_args = next(s for s in FLEET_FLOW_SPECS if s["flow"] == "G19-arm-vitals-pause")
+    spec = _spec_with_state(spec_args, tmp_path)
+    result = check_tui_flow(spec, _REPO_ROOT)
+    assert result.status == "pass", result.details
+
+
+def test_g20_pause_resume_round_trip_lands_back_on_the_cockpit(tmp_path: Path) -> None:
+    # G20 drives the pause -> resume round-trip (``space`` then ``space``) over a
+    # live run and lands BACK on the cockpit, proving the resume continues the
+    # run in place -- not an abort into a modal or a mode switch.
+    spec_args = next(s for s in FLEET_FLOW_SPECS if s["flow"] == "G20-pause-then-resume")
     spec = _spec_with_state(spec_args, tmp_path)
     result = check_tui_flow(spec, _REPO_ROOT)
     assert result.status == "pass", result.details
