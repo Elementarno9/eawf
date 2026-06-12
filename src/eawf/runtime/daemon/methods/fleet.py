@@ -661,16 +661,121 @@ def _run_dispatch_threaded(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
 #: Seconds the default watcher sleeps between on-disk status polls.
 _WATCH_POLL_SECONDS = 1.0
 
+#: Grace window (seconds) the watcher waits AFTER a lane's process group first
+#: reads dead before it resolves a stalled lane to a fork (W05). A clean agent
+#: exit closes the wave a moment after the process dies, so the deadline gives
+#: that close-write time to land before declaring the lane wedged -- a healthy
+#: lane that closes within the grace never forks on the liveness probe. Tuned
+#: well above the 1s poll so a single slow status write never trips it.
+_WATCH_STALL_DEADLINE_SECONDS = 30.0
+
+
+def build_liveness_watcher(
+    *,
+    is_alive: LivenessProbe | None = None,
+    stall_deadline: float = _WATCH_STALL_DEADLINE_SECONDS,
+    poll_seconds: float = _WATCH_POLL_SECONDS,
+    clock: Callable[[], float] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> LaneWatcher:
+    """Build the live status-poll watcher with a pgid liveness probe + stall deadline -- W05.
+
+    The pre-W05 watcher polled the lane's on-disk wave status FOREVER, so a dead
+    agent (its process group reaped without the wave ever flipping terminal)
+    wedged the lane and stalled the whole drain. This builds a watcher that, on
+    each poll, also probes the lane's process-group liveness
+    (:func:`_default_liveness`) and resolves a DEAD-but-unflipped lane to a fork
+    once a bounded *stall_deadline* elapses -- so a dead lane resolves to a
+    watcher fork within the deadline instead of wedging.
+
+    The liveness probe never kills a HEALTHY slow lane: while the pgid reads
+    alive (or the lane carries no addressable pgid, so there is nothing to
+    probe) the watcher keeps polling the status, exactly as before. Only a lane
+    whose group has been reaped AND whose wave has NOT reached a terminal status
+    within the grace window forks. A clean agent exit closes the wave a moment
+    after the process dies, so the deadline gives that close-write time to land
+    before the lane is declared wedged.
+
+    The probe / clock / sleep are injectable so a test exercises the deadline
+    deterministically without a real process or a real wall-clock wait; the
+    daemon wires the live :func:`_default_liveness` + :func:`time.monotonic` +
+    :func:`time.sleep`.
+
+    Args:
+        is_alive: Liveness probe (``pgid -> bool``); ``None`` uses
+            :func:`_default_liveness`.
+        stall_deadline: Grace seconds after the pgid first reads dead before the
+            lane forks.
+        poll_seconds: Seconds slept between status polls.
+        clock: Monotonic clock (``() -> float``); ``None`` uses
+            :func:`time.monotonic`.
+        sleep: Sleep callable (``float -> None``); ``None`` uses
+            :func:`time.sleep`.
+
+    Returns:
+        A :class:`LaneWatcher` resolving each lane to its terminal outcome.
+    """
+    probe = is_alive if is_alive is not None else _default_liveness
+    now = clock if clock is not None else time.monotonic
+    rest = sleep if sleep is not None else time.sleep
+
+    def _watch(ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
+        if ctx.state_path is None:
+            # Stateless context cannot poll a status -- treat the lane as forked
+            # so the loop frees the slot rather than spinning.
+            return "forked"
+        state_path = Path(ctx.state_path)
+        # Wall-clock of the FIRST poll that observed the pgid dead; ``None`` while
+        # the group is still alive (or the lane carries no addressable pgid).
+        dead_since: float | None = None
+        while True:
+            wave = load_state(state_path).waves.get(lane.wave_id)
+            if wave is None:
+                return "forked"
+            if wave.status is WaveStatus.CLOSED:
+                return "closed"
+            if wave.status in {WaveStatus.FAILED, WaveStatus.ABANDONED}:
+                return "forked"
+            # The wave is still in flight. Probe the lane's process-group
+            # liveness; a lane with no addressable pgid has nothing to probe, so
+            # it keeps the pre-W05 status-poll-forever behaviour.
+            if lane.pgid is not None and not probe(lane.pgid):
+                if dead_since is None:
+                    dead_since = now()
+                    logger.info(
+                        f"liveness_watcher wave={lane.wave_id} pgid={lane.pgid} status=dead "
+                        f"deadline={stall_deadline}"
+                    )
+                elif now() - dead_since >= stall_deadline:
+                    # The group is gone AND the wave did not flip terminal within
+                    # the grace window: resolve the wedged lane to a fork.
+                    logger.warning(
+                        f"liveness_watcher wave={lane.wave_id} pgid={lane.pgid} "
+                        f"status=stalled-dead outcome=forked"
+                    )
+                    return "forked"
+            else:
+                # Alive (or unaddressable): reset any prior dead observation -- a
+                # transiently-unreadable group that recovered is not stalled.
+                dead_since = None
+            rest(poll_seconds)
+
+    return _watch
+
 
 def _default_watcher(ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
-    """Block-poll one lane to its terminal outcome via the on-disk wave status.
+    """Block-poll one lane to its terminal outcome via the on-disk wave status -- W05.
 
     The daemon-wired default: poll the lane's wave status from ``state.json``
     until it reaches a terminal status, mapping ``CLOSED`` -> a clean close and
-    ``FAILED`` / ``ABANDONED`` (or a vanished wave) -> a fork. The poll sleeps
-    between reads so the loop never busy-spins. Tests inject a
-    :class:`LaneWatcher` fake instead, so this blocking poll never runs under
-    test.
+    ``FAILED`` / ``ABANDONED`` (or a vanished wave) -> a fork. On each poll it
+    ALSO probes the lane's process-group liveness and resolves a dead-but-
+    unflipped lane to a fork once the stall deadline elapses (W05), so a dead
+    agent no longer wedges the lane forever; a healthy slow lane is NOT killed by
+    the probe. The poll sleeps between reads so the loop never busy-spins. Tests
+    inject a :class:`LaneWatcher` fake instead (or build one via
+    :func:`build_liveness_watcher` with injectable probe / clock / sleep), so
+    this blocking poll never runs under test.
 
     Args:
         ctx: Daemon method context -- supplies ``state_path``.
@@ -679,20 +784,7 @@ def _default_watcher(ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
     Returns:
         The lane's terminal :data:`LaneOutcome` (``"closed"`` or ``"forked"``).
     """
-    if ctx.state_path is None:
-        # Stateless context cannot poll a status -- treat the lane as forked so
-        # the loop frees the slot rather than spinning.
-        return "forked"
-    state_path = Path(ctx.state_path)
-    while True:
-        wave = load_state(state_path).waves.get(lane.wave_id)
-        if wave is None:
-            return "forked"
-        if wave.status is WaveStatus.CLOSED:
-            return "closed"
-        if wave.status in {WaveStatus.FAILED, WaveStatus.ABANDONED}:
-            return "forked"
-        time.sleep(_WATCH_POLL_SECONDS)
+    return build_liveness_watcher()(ctx, lane)
 
 
 def _lane_risk_tier(ctx: MethodContext, wave_id: str) -> RiskTier:
