@@ -8105,6 +8105,34 @@
       "scope_id": "P30-I18-W10",
       "status": "done",
       "updated_at": "2026-06-12T10:52:08.332289Z"
+    },
+    "P30-I18-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W11",
+      "model": null,
+      "scope_id": "P30-I18-W11",
+      "status": "done",
+      "updated_at": "2026-06-12T11:25:50.858619Z"
+    },
+    "P30-I18-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W12",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W12",
+      "model": null,
+      "scope_id": "P30-I18-W12",
+      "status": "done",
+      "updated_at": "2026-06-12T11:25:51.657289Z"
     }
   },
   "agent_sessions": {
@@ -11895,7 +11923,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -21334,6 +21362,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I18-W10",
       "updated_at": "2026-06-12T10:27:03.284752Z"
+    },
+    "P30-I18-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W11-bucket-20260612T105345Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I18-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I18-W11",
+      "updated_at": "2026-06-12T10:53:45.932593Z"
+    },
+    "P30-I18-W12": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W12-bucket-20260612T105346Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I18-W12",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I18-W12",
+      "updated_at": "2026-06-12T10:53:46.459239Z"
     }
   },
   "fleet_run": null,
@@ -24529,7 +24583,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T10:53:27.683610Z",
+  "updated_at": "2026-06-12T11:25:51.657561Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -92689,10 +92743,10 @@
     "P30-I18-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:53:45.931538Z",
+      "closed_at": "2026-06-12T11:25:50.858619Z",
+      "commit": "d95fb8c9447bf6d69d5918b7d63c2546ae26268a",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -92720,12 +92774,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-12T10:53:27.117983Z",
-      "outcome": null,
+      "outcome": "Fixed doctor-mode TUI crash (OSError Errno 9): removed the process-global fd-0 redirect (detached_tty_stdin) that corrupted Textual's live stdin reader; replaced with per-subprocess stdin=DEVNULL at the 4 probe sites (instrument_probe + wave_sha git scans). Pilot no-crash test + DEVNULL asserts; W29 tests rewritten; idle-gate green. 69 tests pass.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -92750,10 +92804,10 @@
     "P30-I18-W12": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:53:46.459136Z",
+      "closed_at": "2026-06-12T11:25:51.657289Z",
+      "commit": "4b75e3607edaf86189db2b97e362cd6ed9485ada",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -92783,12 +92837,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-12T10:53:27.683412Z",
-      "outcome": null,
+      "outcome": "Vertically centered the seal across autopilot/feed/agent_watch/evidence empties: root cause was the empty-body height:1fr absorbing slack (seal top-pinned); fix sets body height:auto so the seal+copy block centers via the hero's align:center middle. 4 goldens regenerated + confirmed centered; vertical-centering test proven load-bearing. 423 tests pass.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
