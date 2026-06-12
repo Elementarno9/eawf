@@ -494,9 +494,9 @@ def test_resolve_surface_hex_headless_falls_back_to_constant() -> None:
 _ART_GLYPHS = frozenset("▀▄█ ")
 
 
-def test_seal_art_lines_are_fourteen_rows() -> None:
-    # The art is exactly the 14 rows of the operator-approved seal_art.txt.
-    assert len(SEAL_ART_LINES) == 14
+def test_seal_art_lines_are_nineteen_rows() -> None:
+    # The art is exactly the 19 rows of the operator-approved 42-wide seal.
+    assert len(SEAL_ART_LINES) == 19
 
 
 def test_seal_art_lines_only_carry_half_block_glyphs() -> None:
@@ -507,9 +507,11 @@ def test_seal_art_lines_only_carry_half_block_glyphs() -> None:
         assert not stray, f"row {row!r} carries non-art glyphs {stray!r}"
 
 
-def test_seal_art_max_width_is_thirty_one() -> None:
-    # The widest row is 31 cells -- the box the hero CSS sizes around.
-    assert max(len(row) for row in SEAL_ART_LINES) == 31
+def test_seal_art_max_width_is_forty_two() -> None:
+    # Every row is padded to the full 42 cells (symmetric block) -- the box the
+    # hero CSS sizes around, so the disc centres within the Static.
+    assert max(len(row) for row in SEAL_ART_LINES) == 42
+    assert all(len(row) == 42 for row in SEAL_ART_LINES)
 
 
 def test_seal_art_center_row_is_non_empty() -> None:

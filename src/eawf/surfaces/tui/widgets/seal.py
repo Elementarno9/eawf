@@ -59,9 +59,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: The hand-tuned half-block ASCII-art Seal -- 14 rows of ``▀▄█`` + spaces,
-#: max width 31 -- copied verbatim from the operator-approved
-#: ``.ea/local/dispatch/seal_art.txt``. It is the deterministic TEXT brand mark
+#: The hand-tuned half-block ASCII-art Seal -- 19 rows x 42 cols of ``▀▄█`` +
+#: spaces, 4-fold symmetric with a continuous outer green ring + a continuous
+#: white separator ring, copied verbatim from the operator-approved
+#: ``.ea/local/dispatch/seal42_lines.txt`` (each row padded to the full 42 so
+#: the disc centers within the block). It is the deterministic TEXT brand mark
 #: the hero surfaces render in place of the raster image: drawn with the
 #: half-block glyphs in the accent colour and the empty halves / spaces left
 #: UNstyled, the cell's own ``$surface`` background shows through. That makes it
@@ -69,20 +71,25 @@ logger = logging.getLogger(__name__)
 #: (``$accent``) with no graphics protocol -- no Kitty transmit lag, no terminal
 #: probe-reply leak, no alpha matte, and it centers like any other text.
 SEAL_ART_LINES: tuple[str, ...] = (
-    "          ▄▄▄▄▄██▄▄▄▄▄",
-    "      ▄▄█▀▀█▄▄▄▄▄▄▄▄█▀▀█▄▄",
-    "    ▄█▀▄▄██████▀▀██████▄▄▀█▄",
-    "  ▄█▀▄█████████  █████████▄▀█▄",
-    " ▄█▀▄██▀██████▀  ▀██████▀██▄▀█▄",
-    " █▀▄████▄    ▀    ▀    ▄████▄▀█",
-    " █ ███████▄   ▄██▄   ▄███████ █",
-    " █ ███████▀   ▀██▀   ▀███████ █",
-    " █▄▀████▀    ▄    ▄    ▀████▀▄█",
-    " ▀█▄▀██▄▄█████▄  ▄█████▄▄██▀▄█▀",
-    "  ▀█▄▀█████████  █████████▀▄█▀",
-    "    ▀█▄▀▀██████▄▄██████▀▀▄█▀",
-    "      ▀▀█▄▄█▀▀▀▀▀▀▀▀█▄▄█▀▀",
-    "          ▀▀▀▀▀██▀▀▀▀▀",
+    "              ▄▄▄▄██████▄▄▄▄              ",
+    "         ▄▄███▀▀▀▀      ▀▀▀▀███▄▄         ",
+    "       ▄██▀▀   ▄▄▄▄████▄▄▄▄   ▀▀██▄       ",
+    "     ▄██▀  ▄▄███████▀▀███████▄▄  ▀██▄     ",
+    "   ▄██▀  ▄██████████  ██████████▄  ▀██▄   ",
+    "  ▄█▀  ▄███████████▀  ▀███████████▄  ▀█▄  ",
+    " ▄█▀  ▄███▀▀▀▀█████    █████▀▀▀▀███▄  ▀█▄ ",
+    " ██  ▄█████▄                  ▄█████▄  ██ ",
+    "▄██  ████████▄     ▄▄▄▄     ▄████████  ██▄",
+    "██   ██████████    ████    ██████████   ██",
+    "▀██  ████████▀     ▀▀▀▀     ▀████████  ██▀",
+    " ██  ▀█████▀                  ▀█████▀  ██ ",
+    " ▀█▄  ▀███▄▄▄▄█████    █████▄▄▄▄███▀  ▄█▀ ",
+    "  ▀█▄  ▀███████████▄  ▄███████████▀  ▄█▀  ",
+    "   ▀██▄  ▀██████████  ██████████▀  ▄██▀   ",
+    "     ▀██▄  ▀▀███████▄▄███████▀▀  ▄██▀     ",
+    "       ▀██▄▄   ▀▀▀▀████▀▀▀▀   ▄▄██▀       ",
+    "         ▀▀███▄▄▄▄      ▄▄▄▄███▀▀         ",
+    "              ▀▀▀▀██████▀▀▀▀              ",
 )
 
 #: Stable id for the art-seal :class:`~textual.widgets.Static` so a hero
@@ -91,7 +98,7 @@ SEAL_ART_ID: str = "seal-art"
 
 #: Stable class on the art-seal Static, shared with the legacy
 #: ``.research-empty-seal`` hero CSS hook so the art's box keeps the centered
-#: ~width-31 / height-14 layout the heroes rely on.
+#: ~width-42 / height-19 layout the heroes rely on.
 SEAL_ART_CLASS: str = "research-empty-seal"
 
 #: The Seal SVG asset (``currentColor`` fill, so it inherits the text colour).
@@ -413,7 +420,7 @@ def seal_art_markup() -> str:
     accent span this function adds.
 
     Returns:
-        The accent-wrapped 14-row art block as a Textual content-markup string.
+        The accent-wrapped 19-row art block as a Textual content-markup string.
     """
     block = "\n".join(SEAL_ART_LINES)
     return f"[$accent]{block}[/]"

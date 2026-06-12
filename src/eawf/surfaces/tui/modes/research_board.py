@@ -1737,9 +1737,10 @@ class ResearchBoardModeScreen(ScopeScreen):
         height: auto;
     }
     ResearchBoardModeScreen .research-empty-seal {
-        width: 31;
-        height: 14;
+        width: 1fr;
+        height: 19;
         content-align: center middle;
+        text-align: center;
         color: $accent;
     }
     ResearchBoardModeScreen .research-center-section {
