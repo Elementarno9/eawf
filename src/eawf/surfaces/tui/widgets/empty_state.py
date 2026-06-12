@@ -62,32 +62,63 @@ SEAL_HERO_ID: str = "seal-empty-hero"
 #: duplicate-id collision.
 SEAL_HERO_CLASS: str = "seal-empty-hero"
 
+#: CSS class :func:`seal_empty_hero` stamps onto the honest-empty *body* Static
+#: it wraps under the seal art. The body normally carries
+#: :data:`HONEST_EMPTY_CSS` (``height: 1fr``) so it FILLS + centers its pane when
+#: mounted bare (the ascii fallback path); but under the seal art that
+#: full-height body would eat the wrapper's leftover space and pin the seal to
+#: the TOP of the pane (the W30 top-anchored defect). The fix is to pin the body
+#: back to ``height: auto`` inside the hero so the seal art (fixed
+#: :data:`SEAL_ART_HEIGHT`) + the auto-height body form ONE compact block the
+#: wrapper's ``align: center middle`` then centers vertically -- the
+#: research-board centered-hero look (its ``#research-empty-hero #research-empty
+#: { height: auto; }`` override is the same fix, applied id-scoped).
+#:
+#: The CANONICAL override is the INLINE ``height: auto`` :func:`seal_empty_hero`
+#: sets on the body (inline styles win over every stylesheet rule, including a
+#: host that styles its body by *id* such as feed's ``#feed-empty``, whose id
+#: rule out-ranks any class). This class is the stylesheet BACKSTOP / styling
+#: hook -- :func:`seal_hero_css` emits the matching ``height: auto`` class rule
+#: so the hero's intent is visible in the screen's ``DEFAULT_CSS`` too.
+SEAL_HERO_BODY_CLASS: str = "seal-empty-hero-body"
+
 
 def seal_hero_css(screen_selector: str) -> str:
     """Return the seal-hero centering CSS scoped to *screen_selector*.
 
-    Emits the two rules a host screen drops into its ``DEFAULT_CSS`` so the seal
-    hero centers, BOTH prefixed with the screen selector so the rules never leak
-    across screens:
+    Emits the three rules a host screen drops into its ``DEFAULT_CSS`` so the
+    seal hero centers, ALL prefixed with the screen selector so the rules never
+    leak across screens:
 
-    * the wrapper (:data:`SEAL_HERO_CLASS`) ``align: center middle`` stacks the
-      seal + the body block and centers the stack in the pane;
+    * the wrapper (:data:`SEAL_HERO_CLASS`) is a FULL-HEIGHT region
+      (``height: 1fr``) whose ``align: center middle`` stacks the seal + the
+      body block and centers that stack on BOTH axes in the pane;
     * the seal ``Static`` (carrying
       :data:`~eawf.surfaces.tui.widgets.seal.SEAL_ART_CLASS`) takes the full
       pane width (``width: 1fr``) and centers each of its lines (``text-align:
-      center``).
+      center``);
+    * the body ``Static`` (carrying :data:`SEAL_HERO_BODY_CLASS`, stamped on by
+      :func:`seal_empty_hero`) is pinned to ``height: auto`` so it never eats
+      the wrapper's leftover space and shove the seal to the top -- the body's
+      own :data:`HONEST_EMPTY_CSS` carries ``height: 1fr`` for the bare-mount
+      (ascii) path, which must be overridden under the art seal.
 
     The ``width: 1fr; text-align: center`` pair is load-bearing: a fixed
     ``width: 42`` left-anchors the symmetric block, while the full-width +
     centered-text pair centers the 42-wide art on the screen midline (the
-    operator-approved research-board centering).
+    operator-approved research-board centering). The body ``height: auto``
+    override is the load-bearing VERTICAL fix: with the seal at a fixed
+    :data:`SEAL_ART_HEIGHT` and the body at ``auto``, the two form one compact
+    block the wrapper's ``align: center middle`` centers, so equal blank space
+    sits above and below the seal + copy -- matching the research board's
+    ``#research-empty-hero #research-empty { height: auto; }`` override.
 
     Args:
         screen_selector: The host screen's CSS type selector (e.g.
-            ``"AutopilotModeScreen"``) both rules are prefixed with.
+            ``"AutopilotModeScreen"``) every rule is prefixed with.
 
     Returns:
-        The two scoped CSS rules, space-joined, ready to drop into a screen's
+        The three scoped CSS rules, space-joined, ready to drop into a screen's
         ``DEFAULT_CSS``.
     """
     return (
@@ -95,7 +126,9 @@ def seal_hero_css(screen_selector: str) -> str:
         "{ height: 1fr; width: 1fr; align: center middle; } "
         f"{screen_selector} .{SEAL_ART_CLASS} "
         f"{{ width: 1fr; height: {SEAL_ART_HEIGHT}; "
-        "content-align: center middle; text-align: center; color: $accent; }"
+        "content-align: center middle; text-align: center; color: $accent; } "
+        f"{screen_selector} .{SEAL_HERO_BODY_CLASS} "
+        "{ height: auto; }"
     )
 
 
@@ -193,11 +226,25 @@ def seal_empty_hero(body: Static, *, hero_id: str | None = SEAL_HERO_ID) -> Vert
     :data:`SEAL_HERO_CLASS` and stacking the
     :func:`~eawf.surfaces.tui.widgets.seal.seal_art_widget` art over *body*. The
     host screen drops :func:`seal_hero_css` into its ``DEFAULT_CSS`` so the
-    wrapper's ``align: center middle`` + the seal Static's ``width: 1fr;
-    text-align: center`` center the symmetric 42-wide art block on the screen
-    midline (a fixed-width seal would left-anchor). The *body* Static keeps
-    whatever id / classes the caller already styles it with, so its own
-    centering rule still applies under the seal.
+    wrapper is a full-height ``align: center middle`` region: the seal Static's
+    ``width: 1fr; text-align: center`` centers the symmetric 42-wide art block on
+    the screen midline (a fixed-width seal would left-anchor), and the wrapper
+    centers the seal + body block VERTICALLY in the pane. The *body* Static keeps
+    whatever id / classes the caller already styles it with, plus the
+    :data:`SEAL_HERO_BODY_CLASS` this helper stamps on, AND a load-bearing inline
+    ``height: auto`` this helper sets directly on the body.
+
+    The inline height is what actually centers the block: the body normally
+    carries :data:`HONEST_EMPTY_CSS` (``height: 1fr``) so it FILLS + centers when
+    mounted bare (the ascii fallback path), but under the seal art that
+    full-height body would eat the wrapper's leftover space and pin the seal to
+    the TOP (the W30 top-anchored defect). A stylesheet class override loses the
+    specificity race against a host that styles its body by *id* (e.g. feed's
+    ``#feed-empty``, whose id rule out-ranks any class), so the override is set
+    INLINE here -- inline styles win over every stylesheet rule regardless of the
+    body's id / class. With the seal at a fixed :data:`SEAL_ART_HEIGHT` and the
+    body at ``auto``, the two form ONE compact block the wrapper's ``align:
+    center middle`` centers vertically -- the research-board centered-hero look.
 
     The body should NOT carry its own brand sigil when led by the art seal --
     pass ``sigil=False`` to :func:`render_empty_state` so the art is the single
@@ -216,12 +263,18 @@ def seal_empty_hero(body: Static, *, hero_id: str | None = SEAL_HERO_ID) -> Vert
     Returns:
         The centered seal hero wrapper, ready to ``yield`` or ``mount``.
     """
+    body.add_class(SEAL_HERO_BODY_CLASS)
+    # Inline height wins over the body's own id/class height rule (e.g. feed's
+    # `#feed-empty { height: 1fr }`), so the body never eats the wrapper's
+    # leftover space and the seal + copy block centers vertically.
+    body.styles.height = "auto"
     return Vertical(seal_art_widget(), body, id=hero_id, classes=SEAL_HERO_CLASS)
 
 
 __all__ = [
     "HONEST_EMPTY_CSS",
     "SEAL_ART_HEIGHT",
+    "SEAL_HERO_BODY_CLASS",
     "SEAL_HERO_CLASS",
     "SEAL_HERO_ID",
     "brand_sigil_markup",

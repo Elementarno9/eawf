@@ -9,7 +9,11 @@ muted brand glyph. These tests pin the two shared helpers (the wrapper id /
 class / children, the load-bearing ``width: 1fr; text-align: center`` centering
 CSS) and assert each of the four modes' unicode honest-empty pane renders the
 seal art HORIZONTALLY CENTERED on the screen midline -- the operator-approved
-research-board centering, not a left-anchored block.
+research-board centering, not a left-anchored block -- AND VERTICALLY CENTERED
+as one block in the pane body: blank space sits above the seal (it is not
+flush-pinned to the top status line) and the block's vertical midpoint lands in
+the central band of the frame, matching the research-board hero rather than the
+W30 top-anchored seal the per-mode mounts left behind.
 """
 
 from __future__ import annotations
@@ -39,9 +43,18 @@ _EMPTY_REPO = (
 #: Screen width the seal centers within (the standard mode-snapshot size).
 _WIDTH = 120
 
+#: Screen height the seal centers within (the standard mode-snapshot size).
+_HEIGHT = 40
+
 #: The seal's widest art row (the central star band spans the full 42 columns);
 #: its leading whitespace in the captured frame pins the block's left edge.
 _WIDEST_ROW = SEAL_ART_LINES[9].strip()  # "██   ██████████    ████    ██████████   ██"
+
+#: The seal's top + bottom art rows -- their captured row indices bound the
+#: 19-row art block vertically so a vertical-centering check can measure the
+#: blank space above the block + the block's vertical midpoint.
+_TOP_ART_ROW = SEAL_ART_LINES[0].strip()
+_BOTTOM_ART_ROW = SEAL_ART_LINES[-1].strip()
 
 
 # --------------------------------------------------------------------------
@@ -139,8 +152,74 @@ def _seal_centered_in_frame(frame: str) -> bool:
     return True
 
 
+def _is_blank_row(line: str) -> bool:
+    """Return whether *line* carries no content -- empty or border-only.
+
+    A row inside a bordered pane (autopilot's frontier list) is ``│   ...   │``;
+    stripping the box-drawing + space characters leaves an empty core, so such a
+    row counts as blank for the vertical-centering measurement (it is visually
+    empty space above / below the seal block, not content).
+
+    Args:
+        line: One captured frame row.
+
+    Returns:
+        ``True`` when the row is empty or only box-drawing chrome + spaces.
+    """
+    return line.strip().strip("│╭╮╰╯─ ") == ""
+
+
+def _seal_vertically_centered_in_frame(frame: str) -> bool:
+    """Return whether the seal block centers vertically in the pane body.
+
+    Bounds the 19-row art block by the captured indices of its top + bottom art
+    rows, then asserts BOTH:
+
+    * there is blank space directly above the block (at least one empty /
+      border-only row) -- a top-anchored seal sits flush under a status / border
+      line with zero blank above (the W30 defect), so this fails it;
+    * the block's vertical midpoint lands in the central band of the frame
+      (between 25%% and 70%% of the frame height) -- a top-anchored block's
+      midpoint sits high in the top quartile.
+
+    The 25-70%% band (rather than a tight midline) accommodates the four panes'
+    differing fixed top lines + bottom scaffolds (research's calm centering, the
+    bordered autopilot list, the watch rollup box, the dense evidence body)
+    while still rejecting a block pinned to the top.
+
+    Args:
+        frame: The captured screen text (one row per line).
+
+    Returns:
+        ``True`` when the seal renders AND its block is vertically centered.
+    """
+    lines = frame.splitlines()
+    first_art = next(
+        (i for i, line in enumerate(lines) if _TOP_ART_ROW in line and "█" in line), None
+    )
+    last_art = next(
+        (
+            i
+            for i in range(len(lines) - 1, -1, -1)
+            if _BOTTOM_ART_ROW in lines[i] and "█" in lines[i]
+        ),
+        None,
+    )
+    if first_art is None or last_art is None:
+        return False
+    # Blank space directly above the block -- not flush under a top status line.
+    if first_art == 0 or not _is_blank_row(lines[first_art - 1]):
+        return False
+    midpoint = (first_art + last_art) / 2
+    return 0.25 * _HEIGHT <= midpoint <= 0.70 * _HEIGHT
+
+
 def _assert_mode_empty_seal_centered(digit: str) -> None:
     """Switch to the *digit* mode on the empty repo and assert a centered seal.
+
+    Asserts the seal renders and is centered on BOTH axes: horizontally on the
+    screen midline (:func:`_seal_centered_in_frame`) and vertically as one block
+    in the pane body (:func:`_seal_vertically_centered_in_frame`).
 
     Args:
         digit: The mode-row digit key that switches into the mode under test.
@@ -148,7 +227,7 @@ def _assert_mode_empty_seal_centered(digit: str) -> None:
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_EMPTY_REPO)
-        async with app.run_test(size=(_WIDTH, 40)) as pilot:
+        async with app.run_test(size=(_WIDTH, _HEIGHT)) as pilot:
             await settle_screen(pilot)
             await pilot.press(digit)
             await settle_screen(pilot)
@@ -156,7 +235,8 @@ def _assert_mode_empty_seal_centered(digit: str) -> None:
             # The seal art Static is mounted on the unicode honest-empty pane.
             assert screen.query(f"#{SEAL_ART_ID}"), f"no seal art on mode {digit}"
             frame = capture_screen_text(app)
-            assert _seal_centered_in_frame(frame), f"seal not centered on mode {digit}"
+            assert _seal_centered_in_frame(frame), f"seal not h-centered on mode {digit}"
+            assert _seal_vertically_centered_in_frame(frame), f"seal not v-centered on mode {digit}"
 
     asyncio.run(body())
 

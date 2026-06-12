@@ -48,11 +48,12 @@ from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
     render_empty_state,
+    seal_empty_hero,
     seal_hero_css,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
-from eawf.surfaces.tui.widgets.seal import SEAL_ART_ID, seal_art_widget
+from eawf.surfaces.tui.widgets.seal import SEAL_ART_ID
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
 from eawf.workflow.estimation.buckets import wave_estimate_eu
@@ -70,6 +71,15 @@ logger = logging.getLogger(__name__)
 #: common path on a scope whose waves emitted no reports (no report store
 #: on disk). Phrased honestly so the empty surface is unmistakable.
 EMPTY_NOTICE: str = "no agent reports yet"
+
+#: Id of the centered seal hero wrapper that holds the ASCII-art Seal over the
+#: no-reports notice (unicode path). The wrapper is a full-height
+#: ``align: center middle`` region so the seal + notice block centers vertically
+#: in the flex space between the fixed top status lines and the bottom
+#: followups / ballots scaffold -- the research-board centered-hero look, not a
+#: top-anchored seal. Toggled with the rollup table so it consumes the pane's
+#: flex space only on the honest-empty path.
+EMPTY_HERO_ID: str = "evidence-empty-hero"
 
 
 def frame_empty_notice(*, mode: RenderMode = DEFAULT_RENDER_MODE, with_sigil: bool = True) -> str:
@@ -1014,6 +1024,7 @@ class EvidenceModeScreen(ScopeScreen):
 
     DEFAULT_CSS: ClassVar[str] = """
     EvidenceModeScreen #evidence-body {
+        height: 1fr;
         padding: 0 1;
     }
     EvidenceModeScreen .evidence-readiness {
@@ -1112,17 +1123,24 @@ class EvidenceModeScreen(ScopeScreen):
             yield DataTable(id="evidence-ledger", cursor_type="row", zebra_stripes=True)
             yield Static(EMPTY_NOTICE, id="evidence-summary", classes="evidence-summary")
             # Unicode path leads the no-reports rollup with the centered ASCII
-            # Seal (the research-board brand mark) as a STANDALONE sibling above
-            # the notice -- not a wrapper -- so the dense evidence body keeps its
-            # layout; its display is gated to the fully-empty pane via
-            # :meth:`_toggle_seal_art`. Ascii path mounts no art (keeps the glyph).
-            if mode == "unicode":
-                yield seal_art_widget()
-            yield Static(
+            # Seal (the research-board brand mark) over the notice, wrapped in a
+            # full-height ``align: center middle`` hero so the seal + copy block
+            # centers VERTICALLY in the flex space between the fixed top status
+            # lines and the bottom followups / ballots scaffold (not pinned to the
+            # top). The seal's display is gated to the fully-empty pane via
+            # :meth:`_toggle_seal_art`, and the hero wrapper's display is gated
+            # against the rollup table so it consumes the flex space only while
+            # the pane is empty. Ascii path mounts no art (keeps the glyph) and no
+            # hero wrapper -- the bare notice keeps its single-line layout.
+            empty_body = Static(
                 frame_empty_notice(mode=mode, with_sigil=mode != "unicode"),
                 id="evidence-empty",
                 classes="evidence-empty",
             )
+            if mode == "unicode":
+                yield seal_empty_hero(empty_body, hero_id=EMPTY_HERO_ID)
+            else:
+                yield empty_body
             yield DataTable(id="evidence-table", cursor_type="row", zebra_stripes=True)
             yield Static("Followups", classes="evidence-followups-title")
             yield Static("no followups", id="evidence-followups", classes="evidence-followups")
@@ -1220,11 +1238,19 @@ class EvidenceModeScreen(ScopeScreen):
 
         The seal leads only with no reports AND no ballots AND no readiness
         criteria; otherwise the tall art would push the ledger / ballot-grid /
-        tier-ladder rows off a short screen. It is a standalone sibling beside
-        the empty notice, so this toggles the ART's display (the notice stays
-        visible) and drops the notice's glyph only while the art leads. Called
-        from :meth:`_rebuild` / :meth:`_paint_readiness` / :meth:`_paint_ballots`
-        so a late push re-gates it; a no-op on the ascii path / before mount.
+        tier-ladder rows off a short screen. The seal + notice live in a
+        full-height ``align: center middle`` hero (the unicode path), so this:
+
+        * toggles the SEAL ART's display to the fully-empty pane, and drops the
+          notice's glyph only while the art leads (the art is the brand mark);
+        * toggles the HERO WRAPPER's display against the rollup rows so the
+          full-height centered region consumes the pane's flex space only while
+          the no-reports notice shows -- when the table has rows the hero
+          collapses so the table reclaims the flex space (no empty centered gap).
+
+        Called from :meth:`_rebuild` / :meth:`_paint_readiness` /
+        :meth:`_paint_ballots` so a late push re-gates it; a no-op on the ascii
+        path (no seal art / hero) / before mount.
 
         Args:
             has_rows: Whether the rollup has rows; read off the table's display
@@ -1240,6 +1266,12 @@ class EvidenceModeScreen(ScopeScreen):
             mode = self._render_mode()
         fully_empty = not has_rows and not self._ballots and self._readiness is None
         arts.first().display = fully_empty
+        # The full-height centered hero takes the pane's flex space only while the
+        # no-reports notice shows; with rows it collapses so the table reclaims
+        # the space rather than leaving an empty centered gap above it.
+        hero = self.query(f"#{EMPTY_HERO_ID}")
+        if hero:
+            hero.first().display = not has_rows
         self.query_one("#evidence-empty", Static).update(
             frame_empty_notice(mode=mode, with_sigil=not fully_empty)
         )
