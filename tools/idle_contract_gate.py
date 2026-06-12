@@ -135,6 +135,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -147,6 +148,7 @@ import pydantic
 from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
 from eawf.kernel.state.enums import EffortBucket, ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Project, State, Wave
+from eawf.platform.lint.eawf023_artifact_placement import check_artifact_path
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
 from eawf.runtime.daemon.methods import DaemonValidationError
@@ -215,6 +217,9 @@ class GateFailure(StrEnum):
     LIVE_OUTPUT_TEXT_IDLE = "live_output_text_idle"
     CAMPAIGN_CLAIM_FOLD_IDLE = "campaign_claim_fold_idle"
     CAMPAIGN_CARRYOVER_PRUNE_IDLE = "campaign_carryover_prune_idle"
+    EAWF023_ARTIFACT_PLACEMENT_IDLE = "eawf023_artifact_placement_idle"
+    COVERAGE_GATE_IDLE = "coverage_gate_idle"
+    CAMPAIGN_PRODUCER_STUB_IDLE = "campaign_producer_stub_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1173,6 +1178,157 @@ _CAMPAIGN_RECONCILE_FOLD_RE = re.compile(r"\breconcile_round_claims\s*\(\s*state
 #: the call leaves the reducer with zero production callers (its prior state).
 _CAMPAIGN_CARRYOVER_CALL_RE = re.compile(r"\bprune_round_carryover\s*\(")
 
+# ===========================================================================
+# P30-I20 honest-close binding checks: new gate/helpers must be live.
+# ===========================================================================
+
+#: Synthetic canonical artifact path used to prove the EAWF023 single-path
+#: helper runs under this always-on gate. The file need not exist; the lint is
+#: path-shape only.
+_EAWF023_GOOD_PATH = ".ea/artifacts/audits/2026-06-12-idle-contract.md"
+
+#: Synthetic bad artifact path used as the negative control for
+#: :func:`check_artifact_path`.
+_EAWF023_BAD_PATH = ".ea/artifacts/notakind/2026-06-12-idle-contract.md"
+
+#: The daemon research module that will carry the live campaign producer class
+#: when P30-I20-W06 lands. W05's guard is class-scoped so it can ship before W06:
+#: no class means there is no class seam to judge yet; once a class lands, a
+#: ``NotImplementedError`` / ``pass`` / ellipsis body reds immediately.
+_CAMPAIGN_PRODUCER_MODULE = "src/eawf/runtime/daemon/methods/research.py"
+
+#: Campaign producer classes are named with both ``Campaign`` and ``Producer``
+#: in the class symbol, e.g. ``LiveCampaignAgentEndProducer``.
+_CAMPAIGN_PRODUCER_CLASS_RE = re.compile(
+    r"^class\s+(?P<name>[A-Za-z0-9_]*Campaign[A-Za-z0-9_]*Producer[A-Za-z0-9_]*)\b"
+    r"(?P<body>.*?)(?=^class\s|^def\s|\Z)",
+    flags=re.MULTILINE | re.DOTALL,
+)
+
+#: Stub markers forbidden inside a campaign producer class seam.
+_PRODUCER_STUB_RE = re.compile(
+    r"\bNotImplementedError\b|^\s*(?:pass|\.\.\.)\s*(?:#.*)?$",
+    flags=re.MULTILINE,
+)
+
+
+def check_eawf023_artifact_placement_wired(
+    *,
+    check_path_fn: Callable[[str], object | None] = check_artifact_path,
+) -> GateResult:
+    """Assert the EAWF023 single-path helper is live under the idle gate.
+
+    The EAWF023 hook calls the batch helper, but the meta-gate tracks the newly
+    added single-path contract too. This row calls :func:`check_artifact_path`
+    directly against a conforming path and a bad-kind path, proving the helper
+    has a live non-test call-site and a negative control.
+
+    Args:
+        check_path_fn: Single-path placement checker. Defaults to the live
+            :func:`check_artifact_path`.
+
+    Returns:
+        A :class:`GateResult` that passes only when the canonical path is clean
+        and the bad-kind path yields a violation.
+    """
+    good = check_path_fn(_EAWF023_GOOD_PATH)
+    bad = check_path_fn(_EAWF023_BAD_PATH)
+    if good is None and bad is not None:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (EAWF023 check_artifact_path has a live "
+                "gate call-site and flags a bad artifact kind)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.EAWF023_ARTIFACT_PLACEMENT_IDLE,
+        message=(
+            "EAWF023 artifact-placement helper is idle or toothless: "
+            f"good={good!r} bad={bad!r}; check_artifact_path must be called by "
+            "the always-on idle gate and must reject a non-canonical kind"
+        ),
+    )
+
+
+def check_coverage_gate_helpers_wired() -> GateResult:
+    """Assert coverage-gate private matcher + top-level runner stay reachable.
+
+    The coverage ratchet lives in ``tools/coverage_gate.py``. This row imports
+    the same module pre-commit/CI execute, calls its ``_classes_for_gate`` helper
+    with a synthetic Cobertura class, and asserts ``run_gate`` remains callable.
+    That gives both newly-added contracts a live, range-checked call-site.
+
+    Returns:
+        A :class:`GateResult` that passes only when the helper selects exactly
+        the matching class and the top-level runner is callable.
+    """
+    from coverage_gate import _classes_for_gate, run_gate
+
+    cls = ET.Element("class", {"filename": "src/eawf/runtime/daemon/methods/agent.py"})
+    picked = _classes_for_gate([cls], {"path": "src/eawf/runtime/"})
+    if picked == [cls] and callable(run_gate):
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (coverage_gate._classes_for_gate and "
+                "coverage_gate.run_gate are importable and live)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.COVERAGE_GATE_IDLE,
+        message=(
+            "coverage gate helper/runner is idle: _classes_for_gate did not select "
+            "the synthetic runtime class or run_gate is not callable"
+        ),
+    )
+
+
+def check_campaign_producer_class_non_stub(
+    *,
+    module_text: str | None = None,
+    module_path: str = _CAMPAIGN_PRODUCER_MODULE,
+) -> GateResult:
+    """Assert campaign producer classes do not ship stubbed.
+
+    P30-I20-W06 owns wiring the live campaign producer. This W05 guard is scoped
+    to the producer *class* seam: if the class is absent (current pre-W06 tree),
+    there is nothing to judge; once a ``*Campaign*Producer*`` class lands, any
+    ``NotImplementedError`` / ``pass`` / ellipsis marker inside its class body
+    fails this always-on gate before the stub can close a phase.
+
+    Args:
+        module_text: Optional injected research module source.
+        module_path: Repo-relative research module path to scan.
+
+    Returns:
+        A :class:`GateResult` that fails only when a campaign producer class
+        contains an obvious stub marker.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    stubbed: list[str] = []
+    for match in _CAMPAIGN_PRODUCER_CLASS_RE.finditer(text):
+        if _PRODUCER_STUB_RE.search(match.group("body")) is not None:
+            stubbed.append(match.group("name"))
+    if stubbed:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.CAMPAIGN_PRODUCER_STUB_IDLE,
+            message=(
+                "campaign producer class seam is stubbed: "
+                f"{', '.join(stubbed)} contains pass/ellipsis/NotImplementedError"
+            ),
+        )
+    return GateResult(
+        passed=True,
+        failure=None,
+        message=("idle-contract gate: ok (campaign producer class seams carry no stub markers)"),
+    )
+
 
 def check_campaign_claim_fold_wired(
     *,
@@ -1412,7 +1568,7 @@ def check_runtime_gate_is_not_idle(
     text = precommit_text if precommit_text is not None else path.read_text()
     required = (
         "id: idle-contract-gate",
-        "entry: uv run python tools/idle_contract_gate.py",
+        "entry: uv run python tools/idle_contract_gate.py --cached",
         "pass_filenames: false",
         "always_run: true",
         "stages: [pre-commit]",
@@ -2009,6 +2165,31 @@ def _report_result(result: GateResult) -> bool:
     return True
 
 
+def _resolve_diff_range(argv: list[str]) -> str:
+    """Return the meta-gate diff range from either script-style or direct argv.
+
+    ``main`` historically received ``sys.argv`` (script path at index 0), while
+    unit tests and PR-range callers naturally pass argparse-style args (no
+    script path). Accept both so the pre-commit hook (``--cached``) and PR range
+    invocation (``BASE..HEAD``) drive the same range-aware code path.
+
+    Args:
+        argv: Either ``sys.argv`` or an argument list excluding the program.
+
+    Returns:
+        ``--cached`` when no explicit range is supplied; otherwise the first
+        non-script argument.
+    """
+    if not argv:
+        return "--cached"
+    if len(argv) == 1:
+        only = argv[0]
+        if only.endswith(".py") or only.endswith("idle_contract_gate"):
+            return "--cached"
+        return only
+    return argv[1]
+
+
 def main(argv: list[str]) -> int:
     """Run all idle-contract gates over the staged diff and current tree.
 
@@ -2033,14 +2214,14 @@ def main(argv: list[str]) -> int:
     exit code is non-zero when any fails.
 
     Args:
-        argv: Process argv. ``argv[1]``, when present, overrides the default
-            ``--cached`` diff range fed to the meta-gate (e.g. ``HEAD~1..HEAD``
-            for a CI range check).
+        argv: Process argv (with or without the script path). The first
+            non-script argument overrides the default ``--cached`` diff range
+            fed to the meta-gate (e.g. ``HEAD~1..HEAD`` for a CI range check).
 
     Returns:
         ``0`` when all gates pass; ``1`` when any fails.
     """
-    diff_range = argv[1] if len(argv) > 1 else "--cached"
+    diff_range = _resolve_diff_range(argv)
 
     failed = False
     failed |= _report_result(check_idle_contract())
@@ -2082,6 +2263,9 @@ def main(argv: list[str]) -> int:
     # tree the same way: run_campaign's state.claims fold via the canonical writer
     # (W05/W06) and its L1 carryover prune call between rounds (W06). Either
     # re-idle fails its row.
+    #
+    # The P30-I20 campaign producer class seam is checked opportunistically: W06
+    # owns adding the class, and this row reds it if it lands as a stub.
     for source_scan_check in (
         check_spec_jury_ballot_fn_wired(),
         check_jury_reliability_map_wired(),
@@ -2092,8 +2276,14 @@ def main(argv: list[str]) -> int:
         check_live_output_text_wired(),
         check_campaign_claim_fold_wired(),
         check_campaign_carryover_prune_wired(),
+        check_campaign_producer_class_non_stub(),
     ):
         failed |= _report_result(source_scan_check)
+
+    # P30-I20 honest-close rows: close the meta-gate holes for EAWF023's
+    # single-path helper and the coverage-gate private matcher/runner.
+    failed |= _report_result(check_eawf023_artifact_placement_wired())
+    failed |= _report_result(check_coverage_gate_helpers_wired())
 
     failed |= _report_result(check_runtime_gate_is_not_idle())
 

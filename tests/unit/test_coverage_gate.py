@@ -165,6 +165,52 @@ def test_package_gate_glob_matching() -> None:
     assert failures == []
 
 
+def test_classes_for_gate_matches_path_and_glob() -> None:
+    classes = [
+        _class("src/eawf/runtime/runtimes/claude/plugin_install.py", [(1, None)]),
+        _class("src/eawf/runtime/runtimes/claude/other.py", [(1, None)]),
+    ]
+    by_path = _GATE._classes_for_gate(classes, {"path": "src/eawf/runtime/"})
+    by_glob = _GATE._classes_for_gate(
+        classes,
+        {"glob": "src/eawf/runtime/runtimes/*/plugin_install.py"},
+    )
+    assert by_path == classes
+    assert by_glob == [classes[0]]
+
+
+def test_run_gate_returns_failures_from_package_and_tui_floors(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """
+[tool.eawf.coverage.gates.pkg]
+path = "src/pkg/"
+line = 90
+branch = 0
+
+[tool.eawf.coverage.tui_behavioural]
+golden_glob = "tests/snapshots/tui/golden/*.txt"
+min_goldens = 1
+flow_glob = "tests/snapshots/tui/test_tui_flow.py"
+min_flows = 1
+""".lstrip(),
+        encoding="utf-8",
+    )
+    coverage_xml = tmp_path / "coverage.xml"
+    root = ET.Element("coverage")
+    packages = ET.SubElement(root, "packages")
+    package = ET.SubElement(packages, "package")
+    classes = ET.SubElement(package, "classes")
+    classes.append(_class("src/pkg/a.py", [(1, None), (0, None)]))
+    ET.ElementTree(root).write(coverage_xml, encoding="utf-8", xml_declaration=True)
+
+    outcome = _GATE.run_gate(coverage_xml, pyproject, tmp_path)
+    assert not outcome.passed
+    assert any(entry.startswith("pkg: line") for entry in outcome.failures)
+    assert any(entry.startswith("tui.goldens") for entry in outcome.failures)
+    assert any(entry.startswith("tui.flows") for entry in outcome.failures)
+
+
 def test_tui_behavioural_passes_when_counts_meet_floor(tmp_path: Path) -> None:
     golden_dir = tmp_path / "tests" / "snapshots" / "tui" / "golden"
     golden_dir.mkdir(parents=True)

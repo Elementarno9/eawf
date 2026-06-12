@@ -257,6 +257,61 @@ def test_runtime_gate_is_not_idle(mod) -> None:
     assert "always_run: true" in result.message
 
 
+def test_eawf023_artifact_placement_gate_calls_single_path_helper(mod) -> None:
+    calls: list[str] = []
+
+    def _check(path: str) -> object | None:
+        calls.append(path)
+        if "notakind" in path:
+            return object()
+        return None
+
+    result = mod.check_eawf023_artifact_placement_wired(check_path_fn=_check)
+    assert result.passed is True
+    assert calls == [mod._EAWF023_GOOD_PATH, mod._EAWF023_BAD_PATH]
+
+
+def test_eawf023_artifact_placement_gate_reds_when_helper_toothless(mod) -> None:
+    result = mod.check_eawf023_artifact_placement_wired(check_path_fn=lambda _path: None)
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.EAWF023_ARTIFACT_PLACEMENT_IDLE
+
+
+def test_coverage_gate_helpers_wired_passes(mod) -> None:
+    result = mod.check_coverage_gate_helpers_wired()
+    assert result.passed is True
+
+
+def test_campaign_producer_class_guard_reds_stub_class(mod) -> None:
+    text = """
+class LiveCampaignAgentEndProducer:
+    def produce(self, dispatch):
+        raise NotImplementedError("stub")
+"""
+    result = mod.check_campaign_producer_class_non_stub(module_text=text)
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.CAMPAIGN_PRODUCER_STUB_IDLE
+    assert "LiveCampaignAgentEndProducer" in result.message
+
+
+def test_campaign_producer_class_guard_allows_real_class(mod) -> None:
+    text = """
+class LiveCampaignAgentEndProducer:
+    def produce(self, dispatch):
+        return self._spawn(dispatch)
+"""
+    result = mod.check_campaign_producer_class_non_stub(module_text=text)
+    assert result.passed is True
+
+
+def test_resolve_diff_range_accepts_script_and_direct_argv(mod) -> None:
+    assert mod._resolve_diff_range([]) == "--cached"
+    assert mod._resolve_diff_range(["idle_contract_gate.py"]) == "--cached"
+    assert mod._resolve_diff_range(["--cached"]) == "--cached"
+    assert mod._resolve_diff_range(["BASE..HEAD"]) == "BASE..HEAD"
+    assert mod._resolve_diff_range(["idle_contract_gate.py", "BASE..HEAD"]) == "BASE..HEAD"
+
+
 # --------------------------------------------------------------------------- #
 # Wired-on sweep: every registered audit-DSL kind must have a production binding.
 # --------------------------------------------------------------------------- #

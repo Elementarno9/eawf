@@ -257,7 +257,7 @@ repos:
         verbose: true
       - id: idle-contract-gate
         name: idle-contract-gate
-        entry: uv run python tools/idle_contract_gate.py
+        entry: uv run python tools/idle_contract_gate.py --cached
         language: system
         # Guards the B091 idle-verifier regression: fails when the spec-jury
         # producer (produce_spec_jury_verdict) is wired but no shipped profile
