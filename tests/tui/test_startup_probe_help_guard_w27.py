@@ -43,12 +43,10 @@ from pathlib import Path
 import pytest
 from textual import events
 
-import eawf.surfaces.tui.widgets.header as header_mod
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.help import HelpScreen
 from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.header import HEADER_SEAL_ID, Header
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -85,19 +83,16 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def _seal_mounted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the header to mount a (faithful, non-focusable) seal image.
+def _seal_mounted() -> None:
+    """No-op precondition: the startup guard is seal-independent.
 
-    The real :class:`textual_image.widget.Image` is ``can_focus=False`` and
-    needs a graphics-capable terminal + resvg, neither of which exists under
-    ``run_test``. The stub mirrors the real widget's NON-focusable shape so the
-    test exercises the seal-mounted path the operator hit without depending on
-    a live terminal. Mirrors the W23 fixture.
+    The W26 header reverted to the crisp brand glyph and W28 made the hero a
+    text ASCII-art seal, so no raster seal Image is mounted anywhere by default.
+    The guard (swallow a stray ``?`` before the first paint) does not depend on
+    any seal, so these tests exercise it directly; the fixture is kept as a
+    documented seam for the originally-reported seal-mounted scenario.
     """
-    from textual.widgets import Static
-
-    monkeypatch.setattr(header_mod, "seal_capable", lambda: True)
-    monkeypatch.setattr(header_mod, "seal_image_widget", lambda px=96: Static("seal"))
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -167,9 +162,6 @@ def test_stray_question_mark_pre_ready_opens_no_help_seal_mounted(
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            # Confirm the seal-mounted precondition the operator hit.
-            header = app.query(Header).first()
-            assert header.query(f"#{HEADER_SEAL_ID}"), "the seal image must be mounted"
             # Reassert the pre-ready window the live probe leak arrives in, then
             # deliver the stray ``?`` straight through the key chokepoint.
             app._interactive_ready = False

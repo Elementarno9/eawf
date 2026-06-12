@@ -41,14 +41,15 @@ def test_bare_invocation_prints_banner() -> None:
     """``eawf`` with no subcommand routes to the TUI surface (P14-W10).
 
     Off-TTY (CliRunner has no real terminal) the TUI falls back to the
-    deterministic status text — its first byte is the ``Eä`` brand per
-    the W10 contract. The reskinned wordmark is two-tone: the brand accent
-    SGR sits between the ``E`` and the ``ä``, so the assert pins the exact
-    ``E<accent-sgr>ä`` byte run the brand renderer emits.
+    deterministic status text. Per D-BRAND-MARK the brand mark leads the
+    header: the ``◉`` accent glyph, a space, then the two-tone ``Eä``
+    wordmark (the brand accent SGR sits between the ``E`` and the ``ä``).
+    The assert pins the exact ``◉ E<accent-sgr>ä`` byte run the brand
+    renderer emits.
     """
     result = runner.invoke(app, [])
     assert result.exit_code == 0
-    assert result.stdout.startswith(f"E{accent_sgr(ACCENT_HEX)}ä")
+    assert result.stdout.startswith(f"◉ E{accent_sgr(ACCENT_HEX)}ä")
 
 
 def test_version_text_envelope() -> None:
