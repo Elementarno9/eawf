@@ -46,6 +46,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
+from textual import events
 from textual.app import App
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
@@ -61,6 +62,7 @@ from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.render.link_wrap import REFERENCE_KINDS
 from eawf.surfaces.tui.modes import (
     DEFAULT_MODE,
+    MODE_REGISTRY,
     NavPosition,
     NavState,
     build_modes,
@@ -372,6 +374,13 @@ LIVE_EVENT_BUFFER_MAX: int = 200
 #: resurrecting an evicted entry. The cap is generous (a deep drill-through is
 #: rare) yet finite so the session footprint stays bounded.
 REFERENCE_HISTORY_MAX: int = 32
+
+#: The digit keys the mode registry binds to ``switch_mode`` accelerators.
+#: Held as a frozenset (off the single registry source) so the
+#: :meth:`EaApp.on_key` trace hook can recognise a digit accelerator press
+#: without re-deriving the set on every keystroke. The trace fires ONLY for
+#: these keys, so the diagnostic stays silent on ordinary navigation.
+_MODE_DIGIT_KEYS: frozenset[str] = frozenset(spec.digit for spec in MODE_REGISTRY)
 
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
 #: mirror :class:`eawf.kernel.state.enums.ScopeKind`; ``user`` is the registry-
@@ -1425,6 +1434,78 @@ class EaApp(App[None]):
         logger.info(f"watch_render_mode mode={mode!r}")
         for bar in self.query(EUBar):
             bar.render_mode = mode
+
+    def trace_digit_binding(self, key: str) -> str | None:
+        """Return a one-line trace of how digit *key* resolves, or ``None``.
+
+        The key-trace diagnostic for the RB-2 misroute (operator report: ``3``
+        opened help instead of switching to Research). For a registered mode
+        digit it walks the *same* binding chain Textual's dispatcher reads
+        (``self.screen._binding_chain``, focused-up-to-App) and reports, in
+        order: the focused widget, the mode the digit is REGISTERED to, and --
+        the load-bearing datum -- whether any namespace **closer to focus than
+        the App** also binds the digit. A non-App owner is the interceptor that
+        would win the focused-up pass and steer the digit away from the mode
+        switch (e.g. a scope screen's ``question_mark`` neighbour reached after
+        a focus-capturing widget swallows the digit). With the mode bindings
+        now marked ``priority=True`` (see
+        :func:`~eawf.surfaces.tui.modes.registry.mode_bindings`) the App pass
+        runs first and wins regardless, so a non-App owner here is benign --
+        the trace surfaces it so a future regression that drops the priority
+        flag is diagnosable from the log rather than only from a live terminal.
+
+        Pure + side-effect-free apart from reading the live binding chain, so
+        :meth:`on_key` can call it on every digit press and a test can assert
+        the trace text without mounting a fake terminal.
+
+        Args:
+            key: The pressed key name (Textual key form, e.g. ``"3"``).
+
+        Returns:
+            A ``digit-trace key=... focused=... mode=... owners=[...]`` line
+            for a registered mode digit, or ``None`` when *key* is not a mode
+            accelerator (the common case -- the trace stays silent).
+        """
+        if key not in _MODE_DIGIT_KEYS:
+            return None
+        spec = next((s for s in MODE_REGISTRY if s.digit == key), None)
+        target_mode = spec.name if spec is not None else "<unregistered>"
+        focused = self.focused
+        focused_name = type(focused).__name__ if focused is not None else "<none>"
+        # Walk the focused-up-to-App chain and name every namespace BEFORE the
+        # App that also binds this digit -- the would-be interceptors on the
+        # non-priority (focused-up) pass.
+        owners: list[str] = []
+        for namespace, bindings in self.screen._binding_chain:
+            if namespace is self:
+                break
+            if key in bindings.key_to_bindings:
+                actions = ",".join(b.action for b in bindings.key_to_bindings[key])
+                owners.append(f"{type(namespace).__name__}->{actions}")
+        return (
+            f"digit-trace key={key!r} focused={focused_name} "
+            f"mode={target_mode!r} pre_app_owners={owners!r}"
+        )
+
+    async def on_key(self, event: events.Key) -> None:
+        """Trace digit-accelerator binding resolution (RB-2 diagnostic).
+
+        Logs how a mode-digit key resolves through the live binding chain via
+        :meth:`trace_digit_binding`, then lets the event continue untouched --
+        the hook NEVER calls ``event.stop()`` / ``event.prevent_default()``, so
+        routing is unchanged and the digit still flips the mode through its
+        ``priority=True`` App binding. The trace fires only for registered mode
+        digits (silent on ordinary keys), so it is cheap to leave armed; it is
+        the persistent key-trace hook the RB-2 wave required so a future digit
+        misroute is diagnosable from the daemon log rather than only from a
+        live terminal.
+
+        Args:
+            event: The key event Textual posted before binding dispatch.
+        """
+        trace = self.trace_digit_binding(event.key)
+        if trace is not None:
+            logger.info(trace)
 
     def switch_mode(self, mode: str) -> AwaitMount:
         """Switch the active content mode, gated by the nav state machine.

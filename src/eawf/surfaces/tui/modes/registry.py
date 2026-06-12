@@ -356,16 +356,30 @@ def build_modes(app: EaApp) -> dict[str, Callable[[], Screen[None] | str]]:
 def mode_bindings() -> list[Binding]:
     """Build the digit-key mode-switch bindings from the registry.
 
-    One ``Binding(digit, "switch_mode('<name>')", "<title>")`` per mode,
-    in registry (digit) order. ``switch_mode`` no-ops when already in the
-    target mode, so a repeated digit press is harmless. Appended onto
+    One ``Binding(digit, "switch_mode('<name>')", "<title>", priority=True)``
+    per mode, in registry (digit) order. ``switch_mode`` no-ops when already
+    in the target mode, so a repeated digit press is harmless. Appended onto
     ``EaApp.BINDINGS`` so the digits resolve app-wide regardless of focus.
 
+    The ``priority=True`` flag is load-bearing, not cosmetic: Textual's key
+    dispatch runs the priority pass FIRST -- from the App down through the
+    binding chain (``App._check_bindings(key, priority=True)``) -- BEFORE the
+    raw key event is ever forwarded to the focused widget / active screen
+    (``App.on_event``). A non-priority digit binding only resolves on that
+    later focused-up pass, so any widget that grabs focus and carries a
+    same-digit binding (or whose binding chain resolves the digit to another
+    action) intercepts the digit first. That is the RB-2 misroute the operator
+    hit: a focus-capturing widget swallowed ``3`` and the fall-through reached
+    the scope screen's ``question_mark`` -> ``open_help`` neighbour, so ``3``
+    opened help instead of switching to Research. Marking the mode switch
+    priority makes the digit -> mode switch win at App priority regardless of
+    what is focused, so the accelerator is unconditionally the mode axis.
+
     Returns:
-        The list of digit-key mode-switch bindings.
+        The list of priority digit-key mode-switch bindings.
     """
     return [
-        Binding(spec.digit, f"switch_mode({spec.name!r})", spec.title, show=False)
+        Binding(spec.digit, f"switch_mode({spec.name!r})", spec.title, show=False, priority=True)
         for spec in MODE_REGISTRY
     ]
 
