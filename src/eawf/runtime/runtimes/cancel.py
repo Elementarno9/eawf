@@ -62,6 +62,45 @@ _DEFAULT_POLL_INTERVAL_SECONDS: float = 0.1
 logger = logging.getLogger(__name__)
 
 
+def _unsupported_killpg(pgid: int, sig: int) -> None:
+    """Reject a process-group signal on a platform without ``os.killpg``.
+
+    Process groups are a POSIX construct: ``os.killpg`` / ``os.getpgid``
+    do not exist on Windows, where the spawn seam terminates a runaway
+    tree through the named-pipe-side ``CREATE_NEW_PROCESS_GROUP`` +
+    ``TerminateProcess`` path instead. Binding this stub as the default
+    ``killpg`` argument lets the module IMPORT on Windows (the default
+    is evaluated at def time) while a real call fails fast with a clear
+    message rather than an opaque ``AttributeError``.
+
+    Raises:
+        NotImplementedError: Always, on a platform without ``os.killpg``.
+    """
+    raise NotImplementedError("process-group cancel (os.killpg) is POSIX-only")
+
+
+def _unsupported_getpgid(pid: int) -> int:
+    """Reject a process-group lookup on a platform without ``os.getpgid``.
+
+    The Windows counterpart of :func:`_unsupported_killpg` for the
+    group-liveness probe. See that function for the import-time rationale.
+
+    Raises:
+        NotImplementedError: Always, on a platform without ``os.getpgid``.
+    """
+    raise NotImplementedError("process-group lookup (os.getpgid) is POSIX-only")
+
+
+#: Module-bound group-signal syscall. ``os.killpg`` on POSIX; a fail-fast
+#: stub on Windows so the module imports there (the default-argument
+#: bindings below read this at def time).
+_KILLPG: Callable[[int, int], None] = getattr(os, "killpg", _unsupported_killpg)
+
+#: Module-bound group-liveness probe. ``os.getpgid`` on POSIX; a fail-fast
+#: stub on Windows for the same import-time reason as :data:`_KILLPG`.
+_GETPGID: Callable[[int], int] = getattr(os, "getpgid", _unsupported_getpgid)
+
+
 @dataclass(frozen=True, slots=True)
 class CancelResult:
     """Outcome of a one-shot :func:`cancel_process_group` call.
@@ -85,15 +124,18 @@ class CancelResult:
 #: Signal sent for a ``soft`` cancel — request the group terminate.
 _SOFT_SIGNAL: int = signal.SIGTERM
 
-#: Signal sent for a ``hard`` cancel — force-kill the group.
-_HARD_SIGNAL: int = signal.SIGKILL
+#: Signal sent for a ``hard`` cancel — force-kill the group. ``SIGKILL``
+#: is POSIX-only; on Windows it is absent, so this falls back to
+#: ``SIGTERM`` purely to let the module import (the group-signal stub
+#: rejects any actual call on that platform before the value is used).
+_HARD_SIGNAL: int = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 def cancel_process_group(
     pgid: int,
     *,
     hard: bool = False,
-    killpg: Callable[[int, int], None] = os.killpg,
+    killpg: Callable[[int, int], None] = _KILLPG,
 ) -> CancelResult:
     """Signal an entire process group by pgid (the pgid-kill primitive).
 
@@ -165,8 +207,8 @@ class _ProcessGroupHandle:
     """
 
     pgid: int
-    killpg: Callable[[int, int], None] = os.killpg
-    getpgid: Callable[[int], int] = os.getpgid
+    killpg: Callable[[int, int], None] = _KILLPG
+    getpgid: Callable[[int], int] = _GETPGID
 
     def poll(self) -> int | None:
         """Return a non-``None`` sentinel once the group leader is gone.
@@ -198,8 +240,8 @@ def cancel_with_grace(
     poll_interval: float = _DEFAULT_POLL_INTERVAL_SECONDS,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
-    killpg: Callable[[int, int], None] = os.killpg,
-    getpgid: Callable[[int], int] = os.getpgid,
+    killpg: Callable[[int, int], None] = _KILLPG,
+    getpgid: Callable[[int], int] = _GETPGID,
 ) -> TerminationResult:
     """Cancel a process group with a soft -> grace -> hard escalation.
 

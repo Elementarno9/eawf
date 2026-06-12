@@ -44,6 +44,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.fsync import fsync_parent_dir
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
@@ -149,11 +150,7 @@ def save_atomic(path: Path, manifest: Manifest) -> None:
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(tmp, path)
-            parent_fd = os.open(path.parent, os.O_DIRECTORY)
-            try:
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
+            fsync_parent_dir(path)
             logger.info(f"render_manifest path={path} bytes={len(payload)}")
         finally:
             tmp.unlink(missing_ok=True)

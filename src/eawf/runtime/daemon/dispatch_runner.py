@@ -212,7 +212,11 @@ class SpawnFailureClass(StrEnum):
 #: (``128 + signal``). The kernel OOM-killer delivers SIGKILL, so a child the
 #: OOM-killer reaped surfaces this exit code when the parent reports the signal
 #: as ``128 + signum`` rather than the negative ``-signum`` convention.
-_SIGKILL_EXIT_STATUS = 128 + int(signal.SIGKILL)
+#: ``signal.SIGKILL`` is POSIX-only (absent on Windows), so the value is read
+#: through ``getattr`` with the fixed POSIX signal number 9 as the fallback --
+#: this keeps the constant identical (137) on every platform while letting the
+#: daemon module graph import on Windows where the OOM-killer convention is moot.
+_SIGKILL_EXIT_STATUS = 128 + int(getattr(signal, "SIGKILL", 9))
 
 #: OSError errno values that mark a HARD launch failure -- the agent CLI binary
 #: is missing (``ENOENT``) or not executable / not permitted (``EACCES`` /

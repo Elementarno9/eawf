@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any
 
 import orjson
 
+from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.state.enums import StoreKind
 
 if TYPE_CHECKING:
@@ -92,11 +93,7 @@ def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, path)
-        parent_fd = os.open(path.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
+        fsync_parent_dir(path)
     finally:
         tmp.unlink(missing_ok=True)
 

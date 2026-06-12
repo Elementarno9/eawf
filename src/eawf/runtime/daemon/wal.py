@@ -42,6 +42,7 @@ from pathlib import Path
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.envelope import Envelope
 
@@ -236,11 +237,7 @@ def _atomic_write_bytes(target: Path, payload: bytes) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, target)
-        parent_fd = os.open(target.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
+        fsync_parent_dir(target)
     finally:
         tmp.unlink(missing_ok=True)
 

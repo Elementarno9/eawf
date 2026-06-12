@@ -24,6 +24,7 @@ from typing import Any
 
 import orjson
 
+from eawf.kernel.fsync import fsync_parent_dir
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
@@ -40,11 +41,7 @@ def _write_payload(target: Path, payload: bytes) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, target)
-        parent_fd = os.open(target.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
+        fsync_parent_dir(target)
         logger.info(f"atomic_write_json wrote target={target} bytes={len(payload)}")
     finally:
         tmp.unlink(missing_ok=True)

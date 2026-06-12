@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eawf.kernel.fsync import fsync_parent_dir
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
@@ -174,11 +175,7 @@ def _atomic_write_bytes(target: Path, payload: bytes) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, target)
-        parent_fd = os.open(target.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
+        fsync_parent_dir(target)
     finally:
         tmp.unlink(missing_ok=True)
 

@@ -54,6 +54,7 @@ from eawf.kernel.config.layered import (
 )
 from eawf.kernel.config.loader import load_yaml_layer
 from eawf.kernel.config.registry import leaf_key_lookup
+from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.methods import MethodContext, register
@@ -382,11 +383,7 @@ def _atomic_write_yaml(target: Path, payload: dict[str, Any]) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, target)
-        parent_fd = os.open(target.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(parent_fd)
-        finally:
-            os.close(parent_fd)
+        fsync_parent_dir(target)
         logger.info(f"_atomic_write_yaml wrote target={target}")
     finally:
         with contextlib.suppress(FileNotFoundError):
