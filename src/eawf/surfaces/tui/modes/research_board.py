@@ -212,13 +212,13 @@ _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 #: the scope, ``t`` (steer) pushes an operator steer note into the running
 #: campaign, ``b`` (broadcast) fans a notice to every running round of the
 #: campaign, and ``v`` (override) forces an operator verdict onto the blocking
-#: fork. None of the four RPCs exist yet (full registry checked) -- the daemon
-#: answers method-not-found -- so each key collects its text through a modal and
-#: routes the committed note off the UI thread, surfacing the daemon's honest
-#: rejection / not-yet-wired result rather than fabricating a row, a steer, a
-#: broadcast, or an override. They go live for free once the matching RPC lands
-#: (the idle-contract pattern), the same way the ``n`` compose path went live
-#: with its stager.
+#: fork. All four RPCs are live (P30-I18-W02 add-question + W04 steer /
+#: broadcast / override): each key collects its text through a modal and routes
+#: the committed note off the UI thread, surfacing the daemon's honest sent /
+#: rejected result rather than fabricating a row, a steer, a broadcast, or an
+#: override. The steer / broadcast / override channels thread the selected
+#: campaign id so the daemon lands the operator input against the running
+#: campaign; the scope-wide add-question carries none.
 _ADD_QUESTION_METHOD: str = "research.add_question"
 _STEER_METHOD: str = "research.steer"
 _BROADCAST_METHOD: str = "research.broadcast"
@@ -265,11 +265,6 @@ _CHANNEL_PENDING_TEMPLATE: str = "{verb}: sending..."
 #: Action-result line when an operator-channel commit could not reach the daemon
 #: so nothing was sent. Formatted with the verb.
 _CHANNEL_NO_DAEMON_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
-
-#: Action-result line when the operator-channel RPC does not exist yet (the
-#: daemon answers method-not-found) so the channel is honest-unavailable.
-#: Formatted with the verb + the intended method.
-_CHANNEL_NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- no {method} RPC"
 
 #: Honest "not yet wired" line for the keys whose engine runner does not exist
 #: yet (follow-up / snapshot). Formatted with the verb so each reads clearly.
@@ -2171,6 +2166,7 @@ class ResearchBoardModeScreen(ScopeScreen):
             verb="steer",
             method=_STEER_METHOD,
             params_key="text",
+            campaign_id=self._channel_campaign_id(),
         )
 
     def action_broadcast(self) -> None:
@@ -2207,6 +2203,7 @@ class ResearchBoardModeScreen(ScopeScreen):
             verb="broadcast",
             method=_BROADCAST_METHOD,
             params_key="notice",
+            campaign_id=self._channel_campaign_id(),
         )
 
     def action_override(self) -> None:
@@ -2243,74 +2240,114 @@ class ResearchBoardModeScreen(ScopeScreen):
             verb="override",
             method=_OVERRIDE_METHOD,
             params_key="verdict",
+            campaign_id=self._channel_campaign_id(),
         )
 
     def _dispatch_channel(
-        self, *, note: str | None, verb: str, method: str, params_key: str
+        self,
+        *,
+        note: str | None,
+        verb: str,
+        method: str,
+        params_key: str,
+        campaign_id: str | None = None,
     ) -> None:
         """Dispatch an operator-channel *note* off the UI thread, honestly.
 
-        The shared dispatch for the ``o`` (add-question) and ``t`` (steer)
-        channels: a ``None`` *note* (``Esc`` cancel) issues no RPC at all. A
-        committed note seeds the in-flight pending line and dispatches the
-        channel worker so the daemon round-trip never blocks the UI thread; the
-        worker flips the line to the honest outcome once the call returns.
+        The shared dispatch for the ``o`` (add-question), ``t`` (steer), ``b``
+        (broadcast), and ``v`` (override) channels: a ``None`` *note* (``Esc``
+        cancel) issues no RPC at all. A committed note seeds the in-flight
+        pending line and dispatches the channel worker so the daemon round-trip
+        never blocks the UI thread; the worker flips the line to the honest
+        outcome once the call returns. The steer / broadcast / override channels
+        thread the selected campaign id so the daemon lands the input against the
+        running campaign.
 
         Args:
             note: The committed channel note, or ``None`` when cancelled.
-            verb: The channel verb (``"ask"`` / ``"steer"``) for the result
-                line + logs.
-            method: The intended daemon JSON-RPC method name.
+            verb: The channel verb (``"ask"`` / ``"steer"`` / ...) for the
+                result line + logs.
+            method: The daemon JSON-RPC method name.
             params_key: The params key the note rides under in the RPC call.
+            campaign_id: The campaign the input targets (steer / broadcast /
+                override); ``None`` for the scope-wide add-question channel.
         """
         if note is None:
             return
         self._set_action(f"[$muted]{_CHANNEL_PENDING_TEMPLATE.format(verb=verb)}[/]")
         self.run_worker(
-            self._channel_worker(note=note, verb=verb, method=method, params_key=params_key),
+            self._channel_worker(
+                note=note,
+                verb=verb,
+                method=method,
+                params_key=params_key,
+                campaign_id=campaign_id,
+            ),
             group="research-channel",
             exclusive=True,
         )
 
-    async def _channel_worker(self, *, note: str, verb: str, method: str, params_key: str) -> None:
+    async def _channel_worker(
+        self,
+        *,
+        note: str,
+        verb: str,
+        method: str,
+        params_key: str,
+        campaign_id: str | None = None,
+    ) -> None:
         """Issue the operator-channel RPC for *note* off the event loop.
 
         Runs the blocking daemon round-trip in a thread (so the UI thread never
         stalls), then -- back on the event loop -- flips the action line to the
-        honest outcome. A method-not-found (the RPC does not exist yet), a typed
-        rejection, or an unreachable daemon each surfaces honestly; none
-        fabricates a sent note.
+        honest outcome. A typed rejection (a missing / inactive campaign) or an
+        unreachable daemon each surfaces honestly; none fabricates a sent note.
 
         Args:
             note: The committed channel note to send.
             verb: The channel verb for the result line + logs.
-            method: The intended daemon JSON-RPC method name.
+            method: The daemon JSON-RPC method name.
             params_key: The params key the note rides under in the RPC call.
+            campaign_id: The target campaign id, or ``None`` for the scope-wide
+                add-question channel.
         """
         result_line = await asyncio.to_thread(
-            self._issue_channel, note=note, verb=verb, method=method, params_key=params_key
+            self._issue_channel,
+            note=note,
+            verb=verb,
+            method=method,
+            params_key=params_key,
+            campaign_id=campaign_id,
         )
         self._set_action(result_line)
         logger.info(f"_channel_worker verb={verb} method={method!r} result={result_line!r}")
 
-    def _issue_channel(self, *, note: str, verb: str, method: str, params_key: str) -> str:
+    def _issue_channel(
+        self,
+        *,
+        note: str,
+        verb: str,
+        method: str,
+        params_key: str,
+        campaign_id: str | None = None,
+    ) -> str:
         """Issue the operator-channel RPC for *note* and return a result line.
 
         Calls *method* through the same
         :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
-        the TUI mutates through, when a daemon socket is available. The
-        add-question / steer RPCs do not exist yet, so a real daemon answers
-        method-not-found, which surfaces as the honest "not yet wired" line; a
-        typed rejection surfaces the daemon's message, and an unreachable daemon
-        surfaces the honest unavailable line. None fabricates a sent note -- the
-        success line is reachable only once the RPC lands (the idle-contract
-        pattern).
+        the TUI mutates through, when a daemon socket is available. The channel
+        RPCs are live, so a successful call reports the input sent; a typed
+        rejection (a missing / inactive campaign, an over-cap title) surfaces the
+        daemon's message and an unreachable daemon surfaces the honest
+        unavailable line. None fabricates a sent note.
 
         Args:
             note: The committed channel note.
             verb: The channel verb for the result line.
-            method: The intended daemon JSON-RPC method name.
+            method: The daemon JSON-RPC method name.
             params_key: The params key the note rides under in the RPC call.
+            campaign_id: The target campaign id threaded into the params for the
+                steer / broadcast / override channels; omitted for add-question.
 
         Returns:
             A content-markup result line describing the channel outcome.
@@ -2319,20 +2356,22 @@ class ResearchBoardModeScreen(ScopeScreen):
             return f"[$warn]{_CHANNEL_NO_DAEMON_TEMPLATE.format(verb=verb)}[/]"
         from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
+        call_params: dict[str, object] = {params_key: note}
+        if campaign_id is not None:
+            call_params["campaign_id"] = campaign_id
         try:
             with DaemonClient(call_timeout_seconds=1.0) as client:
-                client.call(method, {params_key: note})
+                client.call(method, call_params)
         except DaemonRpcError as exc:
-            # The add-question / steer RPCs do not exist yet, so a real daemon
-            # answers method-not-found; surface that (and any other RPC error
-            # for the as-yet-absent method) honestly as "not yet wired".
-            logger.debug(f"_issue_channel method_absent verb={verb} code={exc.code}")
-            return f"[$warn]{_CHANNEL_NOT_WIRED_TEMPLATE.format(verb=verb, method=method)}[/]"
+            # A live channel RPC rejects a missing / inactive campaign with a
+            # typed message; surface it honestly rather than implying a send.
+            logger.debug(f"_issue_channel daemon_rejected verb={verb} code={exc.code}")
+            return (
+                f"[$warn]{verb}: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+            )
         except (OSError, RuntimeError, TimeoutError) as exc:
             logger.debug(f"_issue_channel daemon_fallback verb={verb} cause={exc!r}")
             return f"[$warn]{_CHANNEL_NO_DAEMON_TEMPLATE.format(verb=verb)}[/]"
-        # Reachable only once the RPC lands; report it sent so the honest path
-        # inverts the moment the daemon implements the channel.
         return f"[$ok]{verb}: sent[/]"
 
     def action_cancel_campaign(self) -> None:
@@ -2613,6 +2652,25 @@ class ResearchBoardModeScreen(ScopeScreen):
         if node is None:
             return None
         return node.campaign_id
+
+    def _channel_campaign_id(self) -> str | None:
+        """Resolve the campaign an operator-channel input (steer / b / v) targets.
+
+        The selected node's campaign id when a campaign sub-tree node is
+        selected, else the first staged campaign on the board (the operator
+        channels address the running campaign, and a single-campaign board needs
+        no explicit selection). ``None`` when the scope has staged no campaign --
+        the daemon then rejects the input honestly (the channel requires a
+        running campaign).
+
+        Returns:
+            The target campaign id, or ``None`` when no campaign is staged.
+        """
+        selected = self._selected_campaign_id()
+        if selected is not None:
+            return selected
+        campaigns, _claims, _questions = self._current_rows()
+        return campaigns[0].campaign_id if campaigns else None
 
     def _set_peek(self, line: str) -> None:
         """Update the peek-result line under the tree, if mounted."""

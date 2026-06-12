@@ -2010,38 +2010,36 @@ def test_research_board_o_commit_routes_add_question_rpc_honestly(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pressing ``o``, filling the question, and committing routes the RPC.
+    """Pressing ``o``, filling the question, and committing routes the live RPC.
 
-    The add-question RPC does not exist yet, so a daemon that answers
-    method-not-found surfaces the honest "not yet wired" line -- never a faked
-    question. The call must reach ``research.add_question`` with the question
-    title under the ``title`` params key.
+    The add-question RPC is live (P30-I18-W02), so a succeeding daemon answer
+    surfaces the honest "sent" line -- never a faked question. The call must
+    reach ``research.add_question`` with the question title under the ``title``
+    params key.
     """
     state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
     calls: list[tuple[str, dict[str, object]]] = []
 
-    class _MethodNotFoundClient:
+    class _OkClient:
         def __init__(self, *_a: object, **_k: object) -> None:
             return None
 
-        def __enter__(self) -> _MethodNotFoundClient:
+        def __enter__(self) -> _OkClient:
             return self
 
         def __exit__(self, *_args: object) -> None:
             return None
 
         def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
-            from eawf.surfaces.cli._daemon_client import DaemonRpcError
-
             calls.append((method, params))
-            raise DaemonRpcError(code=-32601, message="method not found")
+            return {"question_id": "OQ-1", "status": "open", "scope_id": "QR"}
 
     async def body() -> None:
         from eawf.surfaces.cli import _daemon_client as dc
 
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
-        monkeypatch.setattr(dc, "DaemonClient", _MethodNotFoundClient)
+        monkeypatch.setattr(dc, "DaemonClient", _OkClient)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press("3")
@@ -2058,13 +2056,13 @@ def test_research_board_o_commit_routes_add_question_rpc_honestly(
             assert isinstance(board, ResearchBoardModeScreen)
             result = board.query_one(f"#{ACTION_RESULT_ID}")
             rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "not yet wired" in rendered
-            assert "research.add_question" in rendered
+            assert "ask: sent" in rendered
 
     asyncio.run(body())
     assert len(calls) == 1
     method, params = calls[0]
     assert method == "research.add_question"
+    # The scope-wide add-question channel carries no campaign_id.
     assert params == {"title": "which model fits"}
 
 
@@ -2072,37 +2070,41 @@ def test_research_board_t_commit_routes_steer_rpc_honestly(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pressing ``t``, filling the steer note, and committing routes the RPC.
+    """Pressing ``t``, filling the steer note, and committing routes the live RPC.
 
-    The steer RPC does not exist yet, so the method-not-found daemon answer
-    surfaces the honest "not yet wired" line. The call must reach
-    ``research.steer`` with the note under the ``text`` params key.
+    The steer RPC is live (P30-I18-W04), so a succeeding daemon answer surfaces
+    the honest "sent" line. The call must reach ``research.steer`` with the note
+    under the ``text`` params key + the selected campaign id.
     """
     state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    _append_campaign(state_path, _campaign_payload(campaign_id="RC-0001"))
     calls: list[tuple[str, dict[str, object]]] = []
 
-    class _MethodNotFoundClient:
+    class _OkClient:
         def __init__(self, *_a: object, **_k: object) -> None:
             return None
 
-        def __enter__(self) -> _MethodNotFoundClient:
+        def __enter__(self) -> _OkClient:
             return self
 
         def __exit__(self, *_args: object) -> None:
             return None
 
         def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
-            from eawf.surfaces.cli._daemon_client import DaemonRpcError
-
             calls.append((method, params))
-            raise DaemonRpcError(code=-32601, message="method not found")
+            return {
+                "campaign_id": "RC-0001",
+                "kind": "steer",
+                "input_id": "RC-0001-oi-1",
+                "blocking": False,
+            }
 
     async def body() -> None:
         from eawf.surfaces.cli import _daemon_client as dc
 
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
-        monkeypatch.setattr(dc, "DaemonClient", _MethodNotFoundClient)
+        monkeypatch.setattr(dc, "DaemonClient", _OkClient)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press("3")
@@ -2119,14 +2121,13 @@ def test_research_board_t_commit_routes_steer_rpc_honestly(
             assert isinstance(board, ResearchBoardModeScreen)
             result = board.query_one(f"#{ACTION_RESULT_ID}")
             rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "not yet wired" in rendered
-            assert "research.steer" in rendered
+            assert "steer: sent" in rendered
 
     asyncio.run(body())
     assert len(calls) == 1
     method, params = calls[0]
     assert method == "research.steer"
-    assert params == {"text": "prioritise flow"}
+    assert params == {"text": "prioritise flow", "campaign_id": "RC-0001"}
 
 
 def test_research_board_operator_channel_cancel_issues_zero_rpcs(
@@ -2423,42 +2424,40 @@ def test_campaign_fork_operator_input(
     method: str,
     params_key: str,
 ) -> None:
-    """Each W08 operator-input action resolves a campaign fork through the daemon.
+    """Each FA8 operator-input action resolves a campaign fork through the daemon.
 
     The four FA8 operator-input channels (steer / broadcast / add-question /
     override) each collect a free-text line through the operator-note modal and
-    route the committed note off the UI thread to its intended daemon method.
-    None of the four RPCs exists yet, so a method-not-found daemon answer surfaces
-    the honest "not yet wired" line -- the channel never fabricates a resolved
-    fork -- and the call reaches the daemon with the note under the channel's
-    params key. The four keys are the rebound operator-input keys, NOT the
-    pre-rebind s / a keys.
+    route the committed note off the UI thread to its live daemon method. The
+    RPCs are live (P30-I18-W02 + W04), so a succeeding daemon answer surfaces
+    the honest "sent" line, and the call reaches the daemon with the note under
+    the channel's params key -- plus the selected campaign id for the steer /
+    broadcast / override channels (the scope-wide add-question carries none).
     """
     state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    _append_campaign(state_path, _campaign_payload(campaign_id="RC-0001"))
     calls: list[tuple[str, dict[str, object]]] = []
 
-    class _MethodNotFoundClient:
+    class _OkClient:
         def __init__(self, *_a: object, **_k: object) -> None:
             return None
 
-        def __enter__(self) -> _MethodNotFoundClient:
+        def __enter__(self) -> _OkClient:
             return self
 
         def __exit__(self, *_args: object) -> None:
             return None
 
         def call(self, called_method: str, params: dict[str, object]) -> dict[str, object]:
-            from eawf.surfaces.cli._daemon_client import DaemonRpcError
-
             calls.append((called_method, params))
-            raise DaemonRpcError(code=-32601, message="method not found")
+            return {"ok": True}
 
     async def body() -> None:
         from eawf.surfaces.cli import _daemon_client as dc
 
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
-        monkeypatch.setattr(dc, "DaemonClient", _MethodNotFoundClient)
+        monkeypatch.setattr(dc, "DaemonClient", _OkClient)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press("3")
@@ -2474,14 +2473,18 @@ def test_campaign_fork_operator_input(
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
             rendered = str(board.query_one(f"#{ACTION_RESULT_ID}").render())  # type: ignore[attr-defined]
-            assert "not yet wired" in rendered
-            assert method in rendered
+            assert f"{verb}: sent" in rendered
 
     asyncio.run(body())
     assert len(calls) == 1
     called_method, params = calls[0]
     assert called_method == method
-    assert params == {params_key: "resolve fork"}
+    expected = {params_key: "resolve fork"}
+    if key != "o":
+        # The campaign channels (steer / broadcast / override) thread the
+        # selected campaign id; the scope-wide add-question channel does not.
+        expected["campaign_id"] = "RC-0001"
+    assert params == expected
 
 
 def test_idle_campaign_board_renders_honest_empty_start_hint(tmp_path: Path) -> None:

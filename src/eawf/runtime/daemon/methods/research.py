@@ -14,6 +14,9 @@ same as event / audit / evidence appends. Downstream consumers (the Research
 board topic tree) re-validate the row by reading the envelope back and running
 ``ResearchCampaignPayload.model_validate(envelope.payload)``.
 """
+# noqa: EAWF010 cohesive research-campaign command surface (stage / run / round
+# persist / operator channel); the read-only payload + helper split is deferred
+# to a follow-up once the control plane stops accreting per binding wave.
 
 from __future__ import annotations
 
@@ -34,6 +37,16 @@ from eawf.kernel.spec.campaign_driver import (
     drive_campaign,
 )
 from eawf.kernel.spec.live_rounds import CockpitLevel
+from eawf.kernel.spec.operator_input import (
+    AddQuestionPayload,
+    ChannelFold,
+    OperatorInput,
+    OperatorInputChannel,
+    OperatorInputKind,
+    OverridePayload,
+    SteerAction,
+    SteerPayload,
+)
 from eawf.kernel.spec.research_campaign import (
     ResearchProfileBlock,
     StagedCampaign,
@@ -706,6 +719,11 @@ class ResearchRoundPayload(BaseModel):
             campaign dry.
         checkpoint: Whether the round coincided with an operator-review
             checkpoint (per the run's checkpoint policy).
+        steer_notes: The operator steer / override notes folded in *before*
+            this round ran (the active channel inputs that shaped the round's
+            dispatch set). Empty when the operator pushed nothing -- a mid-run
+            steer surfaces here on the next round, so a steer visibly changes
+            the round it lands before.
         recorded_at: When the round record was persisted (UTC).
     """
 
@@ -717,6 +735,7 @@ class ResearchRoundPayload(BaseModel):
     finding_lines: list[str] = Field(default_factory=list)
     claim_ids: list[str] = Field(default_factory=list)
     saturated: bool = False
+    steer_notes: list[str] = Field(default_factory=list)
     checkpoint: bool = False
     recorded_at: datetime
 
@@ -917,8 +936,26 @@ def run_campaign(
     claim_ids: list[str] = []
     round_payloads: list[ResearchRoundPayload] = []
 
-    def _reconcile(findings: RoundFindings) -> None:
+    def _channel_notes() -> tuple[list[str], bool]:
+        """Fold the operator channel: return the active steer notes + paused bit.
+
+        Read before each round so a mid-run steer / override lands on the NEXT
+        round's record -- the active queued steers + the effective locked
+        overrides shape the round's dispatch set (D-3), and a blocking input
+        soft-pauses the round (D-2, surfaced as the ``paused`` bit).
+        """
+        fold = fold_operator_channel(state_path, args.campaign_id)
+        notes: list[str] = [
+            inp.note
+            for inp in fold.queued
+            if inp.kind in (OperatorInputKind.STEER, OperatorInputKind.NOTICE_BROADCAST)
+        ]
+        notes.extend(f"override[{eo.scope}]={eo.value}" for eo in fold.effective_overrides)
+        return notes, fold.paused
+
+    def _reconcile(findings: RoundFindings) -> tuple[list[str], bool]:
         now = datetime.now(UTC)
+        steer_notes, paused = _channel_notes()
         shadow = State.model_construct(claims={}, open_questions={}, project=None)
         written = reconcile_round_claims(shadow, findings, scope_id=args.scope_id, now=now)
         claim_ids.extend(written)
@@ -930,20 +967,23 @@ def run_campaign(
             claim_ids=written,
             saturated=False,
             checkpoint=False,
+            steer_notes=steer_notes,
             recorded_at=now,
         )
         round_payloads.append(payload)
+        return steer_notes, paused
 
     def _saturation(findings: RoundFindings) -> Any:
         from eawf.kernel.spec.saturation import SaturationReport
 
-        _reconcile(findings)
-        # Score the round's accumulated findings as OPEN claims with evidence:
-        # a round that returned at least one finding line is treated as not yet
-        # dry so the loop runs to the budget unless the runner injects a
-        # converging reducer. The real ledger fold lands with W05/W06.
+        _steer_notes, paused = _reconcile(findings)
+        # A blocking operator input (D-2) soft-pauses the round: the loop halts
+        # as if saturated so the run yields to the operator. Otherwise a round
+        # with findings stays not-dry so the loop runs to the budget (the real
+        # ledger fold lands with W05/W06).
+        dry = paused or not findings.finding_lines
         return SaturationReport(
-            saturated=not findings.finding_lines,
+            saturated=dry,
             gates=(),
             live_claim_count=len(findings.finding_lines),
             empty_ledger=not findings.finding_lines,
@@ -1178,16 +1218,384 @@ async def snapshot(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
     ).model_dump(mode="json")
 
 
+# --------------------------------------------------------------------------
+# Operator-channel RPCs -- steer / broadcast / override over an append-log
+# --------------------------------------------------------------------------
+
+
+def persist_operator_input(state_path: Path, op_input: OperatorInput) -> str:
+    """Append one :class:`OperatorInput` to the ``operator_input`` store.
+
+    The daemon-owned blackboard the hub-and-spoke control plane lands on (AGENTS
+    rule 4 + the a2a verdict): every operator-initiated mid-run input is a
+    single typed, append-only row the orchestrator folds. Returns the appended
+    envelope id (``<campaign_id>-oi-<hex>``).
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        op_input: The validated operator input to persist.
+
+    Returns:
+        The appended envelope id.
+    """
+    envelope_id = f"{op_input.campaign_id}-oi-{uuid.uuid4().hex[:8]}"
+    envelope = Envelope(
+        id=envelope_id,
+        kind=StoreKind.OPERATOR_INPUT,
+        scope_id=None,
+        created_at=op_input.at,
+        summary=f"{op_input.kind.value} on {op_input.campaign_id}",
+        payload=op_input.model_dump(mode="json"),
+    )
+    append_envelope(store_path(state_path, StoreKind.OPERATOR_INPUT), envelope)
+    return envelope_id
+
+
+def read_operator_inputs(state_path: Path, campaign_id: str) -> list[OperatorInput]:
+    """Return the operator-input append-log for *campaign_id*, in append order.
+
+    Walks the append-only ``operator_input`` store under *state_path*,
+    validating each envelope + payload, and returns the rows matching
+    *campaign_id* in append (chronological) order -- the order
+    :meth:`~eawf.kernel.spec.operator_input.OperatorInputChannel.fold` expects.
+    Empty when the store is absent or carries no row for the id.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        campaign_id: The campaign whose inputs to read.
+
+    Returns:
+        The campaign's operator inputs in append order.
+    """
+    path = store_path(state_path, StoreKind.OPERATOR_INPUT)
+    if not path.exists():
+        return []
+    inputs: list[OperatorInput] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        envelope = Envelope.model_validate_json(raw_line)
+        op_input = OperatorInput.model_validate(envelope.payload)
+        if op_input.campaign_id == campaign_id:
+            inputs.append(op_input)
+    return inputs
+
+
+def fold_operator_channel(state_path: Path, campaign_id: str) -> ChannelFold:
+    """Fold a campaign's operator-input append-log into the round-loop decisions.
+
+    The :func:`run`-side consumer: it reads the campaign's append-log
+    (:func:`read_operator_inputs`) and folds it through the pure
+    :meth:`~eawf.kernel.spec.operator_input.OperatorInputChannel.fold` reducer so
+    the loop sees which inputs soft-pause the round (D-2: blocking-only) and
+    which locked overrides are effective (D-3: persist-locked until a later
+    override on the same scope clears the lock). Pure aside from the store read.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        campaign_id: The campaign whose channel to fold.
+
+    Returns:
+        The :class:`~eawf.kernel.spec.operator_input.ChannelFold` for the loop.
+    """
+    fold = OperatorInputChannel.fold(read_operator_inputs(state_path, campaign_id))
+    logger.info(
+        f"fold_operator_channel campaign={campaign_id!r} blocking={len(fold.blocking)} "
+        f"queued={len(fold.queued)} effective_overrides={len(fold.effective_overrides)}"
+    )
+    return fold
+
+
+class SteerParams(BaseModel):
+    """Params for :func:`steer`.
+
+    Attributes:
+        text: The steer direction note the operator typed (the board ``t``
+            key sends only this).
+        campaign_id: The campaign the steer targets; ``None`` records the
+            steer against the most-recent ACTIVE campaign.
+        action: The steer direction. Defaults to NARROW (the default the
+            board's between-rounds steer carries).
+        scope: The blackboard scope the steer addresses; defaults to the
+            whole campaign.
+        urgency: The steer's urgency rung. Defaults to NORMAL (a steer is
+            between-rounds feedback, not a blocking interrupt).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1)
+    campaign_id: str | None = None
+    action: SteerAction = SteerAction.NARROW
+    scope: str = "campaign"
+    urgency: Urgency = Urgency.NORMAL
+    repo_root: str | None = None
+
+
+class BroadcastParams(BaseModel):
+    """Params for :func:`broadcast`.
+
+    Attributes:
+        notice: The free-text notice fanned to every running round (the board
+            ``b`` key sends only this).
+        campaign_id: The campaign the broadcast targets; ``None`` uses the
+            most-recent ACTIVE campaign.
+        scope: The blackboard scope addressed; defaults to the whole campaign.
+        urgency: The broadcast's urgency rung. Defaults to NORMAL.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    notice: str = Field(min_length=1)
+    campaign_id: str | None = None
+    scope: str = "campaign"
+    urgency: Urgency = Urgency.NORMAL
+    repo_root: str | None = None
+
+
+class OverrideParams(BaseModel):
+    """Params for :func:`override`.
+
+    Attributes:
+        verdict: The forced operator verdict value (the board ``v`` key sends
+            only this).
+        campaign_id: The campaign the override targets; ``None`` uses the
+            most-recent ACTIVE campaign.
+        scope: The blackboard scope the override pins; defaults to the whole
+            campaign.
+        locked: Whether the override persists-locked across rounds (D-3).
+            Defaults ``True`` -- an operator override of a blocking fork is a
+            fixed decision that survives subsequent rounds until cleared.
+        urgency: The override's urgency rung. Defaults to URGENT so an override
+            of a blocking fork blocks the round until folded (D-2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    verdict: str = Field(min_length=1)
+    campaign_id: str | None = None
+    scope: str = "campaign"
+    locked: bool = True
+    urgency: Urgency = Urgency.URGENT
+    repo_root: str | None = None
+
+
+class OperatorInputResult(BaseModel):
+    """Result of the three operator-channel RPCs.
+
+    Attributes:
+        campaign_id: The campaign the input targeted.
+        kind: The :class:`OperatorInputKind` value the input carried.
+        input_id: The appended operator-input envelope id.
+        blocking: Whether the input soft-pauses the round (D-2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    campaign_id: str
+    kind: str
+    input_id: str
+    blocking: bool
+
+
+def _resolve_active_campaign_id(state_path: Path, campaign_id: str | None) -> str:
+    """Resolve the campaign an operator input targets.
+
+    An explicit *campaign_id* is required to name an ACTIVE campaign; ``None``
+    is rejected because an operator channel always targets a running campaign
+    (the board sends the selected campaign id). A campaign id that names no
+    ACTIVE campaign is rejected so a steer / broadcast / override never lands
+    against a dead or absent run.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        campaign_id: The caller-supplied campaign id.
+
+    Returns:
+        The resolved campaign id.
+
+    Raises:
+        ValueError: When *campaign_id* is missing or names no ACTIVE campaign.
+    """
+    if not campaign_id:
+        raise ValueError("operator channel requires a campaign_id")
+    campaign = read_latest_campaign(state_path, campaign_id)
+    if campaign is None:
+        raise ValueError(f"unknown campaign: {campaign_id!r}")
+    if campaign.status is not CampaignStatus.ACTIVE:
+        raise ValueError(f"campaign not active: {campaign_id!r} is {campaign.status.value!r}")
+    return campaign_id
+
+
+def _append_operator_input(
+    ctx: MethodContext,
+    *,
+    campaign_id: str | None,
+    kind: OperatorInputKind,
+    scope: str,
+    note: str,
+    urgency: Urgency,
+    payload: OverridePayload | AddQuestionPayload | SteerPayload | None,
+) -> dict[str, Any]:
+    """Build + persist one :class:`OperatorInput` and return the typed result.
+
+    Shared by the steer / broadcast / override RPC handlers: resolve the target
+    campaign, build the typed input (the model validator rejects a payload that
+    does not match the kind), and append it to the operator-input store.
+
+    Args:
+        ctx: Daemon context (needs ``state_path``).
+        campaign_id: The target campaign id (resolved against the store).
+        kind: The :class:`OperatorInputKind` this input carries.
+        scope: The blackboard scope the input addresses.
+        note: The operator's free-text WHY / the input text.
+        urgency: The input's urgency rung.
+        payload: The kind-specific payload (``None`` for a broadcast).
+
+    Returns:
+        Dict matching :class:`OperatorInputResult`.
+
+    Raises:
+        RuntimeError: When ``ctx.state_path`` is unset.
+        ValueError: When the campaign is missing / not active.
+    """
+    if ctx.state_path is None:
+        raise RuntimeError("state_path not configured on daemon context")
+    state_path = Path(ctx.state_path)
+    resolved = _resolve_active_campaign_id(state_path, campaign_id)
+    op_input = OperatorInput(
+        campaign_id=resolved,
+        kind=kind,
+        scope=scope,
+        note=note,
+        urgency=urgency,
+        payload=payload,
+        at=datetime.now(UTC),
+    )
+    input_id = persist_operator_input(state_path, op_input)
+    logger.info(
+        f"_append_operator_input campaign={resolved!r} kind={kind.value} "
+        f"blocking={op_input.is_blocking} id={input_id!r}"
+    )
+    return OperatorInputResult(
+        campaign_id=resolved,
+        kind=kind.value,
+        input_id=input_id,
+        blocking=op_input.is_blocking,
+    ).model_dump(mode="json")
+
+
+@register("research.steer")
+async def steer(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Push an operator steer note onto a running campaign's channel.
+
+    The honest steer surface the board's ``t`` key routes to: it appends a
+    typed ``steer`` :class:`OperatorInput` to the daemon-owned append-log so the
+    next round's fold sees it (a steer is between-rounds feedback, not a
+    blocking interrupt). The board's ``t`` key now lands a real row.
+
+    Args:
+        ctx: Server context -- needs ``state_path``.
+        params: JSON-RPC params per :class:`SteerParams`.
+
+    Returns:
+        Dict matching :class:`OperatorInputResult`.
+
+    Raises:
+        ValueError: When *params* does not validate or the campaign is
+            missing / not active. Mapped to ``-32602 invalid params``.
+        RuntimeError: When ``ctx.state_path`` is unset.
+    """
+    args = SteerParams.model_validate(params)
+    return _append_operator_input(
+        ctx,
+        campaign_id=args.campaign_id,
+        kind=OperatorInputKind.STEER,
+        scope=args.scope,
+        note=args.text,
+        urgency=args.urgency,
+        payload=SteerPayload(action=args.action),
+    )
+
+
+@register("research.broadcast")
+async def broadcast(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Fan an operator notice to every running round of a campaign.
+
+    The honest broadcast surface the board's ``b`` key routes to: it appends a
+    typed ``notice-broadcast`` :class:`OperatorInput` (no payload -- the note
+    carries the broadcast) to the daemon-owned append-log so the orchestrator
+    distributes it on the next task. The board's ``b`` key now lands a real row.
+
+    Args:
+        ctx: Server context -- needs ``state_path``.
+        params: JSON-RPC params per :class:`BroadcastParams`.
+
+    Returns:
+        Dict matching :class:`OperatorInputResult`.
+
+    Raises:
+        ValueError: When *params* does not validate or the campaign is
+            missing / not active.
+        RuntimeError: When ``ctx.state_path`` is unset.
+    """
+    args = BroadcastParams.model_validate(params)
+    return _append_operator_input(
+        ctx,
+        campaign_id=args.campaign_id,
+        kind=OperatorInputKind.NOTICE_BROADCAST,
+        scope=args.scope,
+        note=args.notice,
+        urgency=args.urgency,
+        payload=None,
+    )
+
+
+@register("research.override")
+async def override(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Force an operator verdict onto a campaign's blocking fork.
+
+    The honest override surface the board's ``v`` key routes to: it appends a
+    typed ``override`` :class:`OperatorInput` carrying an
+    :class:`~eawf.kernel.spec.operator_input.OverridePayload` to the
+    daemon-owned append-log. A locked override persists across rounds (D-3)
+    until a later override on the same scope clears the lock; it lands at
+    ``URGENT`` by default so it soft-pauses the round until folded (D-2). The
+    board's ``v`` key now lands a real row.
+
+    Args:
+        ctx: Server context -- needs ``state_path``.
+        params: JSON-RPC params per :class:`OverrideParams`.
+
+    Returns:
+        Dict matching :class:`OperatorInputResult`.
+
+    Raises:
+        ValueError: When *params* does not validate or the campaign is
+            missing / not active.
+        RuntimeError: When ``ctx.state_path`` is unset.
+    """
+    args = OverrideParams.model_validate(params)
+    return _append_operator_input(
+        ctx,
+        campaign_id=args.campaign_id,
+        kind=OperatorInputKind.OVERRIDE,
+        scope=args.scope,
+        note=args.verdict,
+        urgency=args.urgency,
+        payload=OverridePayload(value=args.verdict, locked=args.locked),
+    )
+
+
 __all__ = [
     "AddQuestionParams",
     "AddQuestionResult",
     "AgentEndProducer",
+    "BroadcastParams",
     "CancelCampaignParams",
     "CancelCampaignResult",
     "CreateCampaignParams",
     "CreateCampaignResult",
     "FollowupParams",
     "FollowupResult",
+    "OperatorInputResult",
+    "OverrideParams",
     "ResearchRoundPayload",
     "RunCampaignParams",
     "RunCampaignResult",
@@ -1195,18 +1603,25 @@ __all__ = [
     "SnapshotResult",
     "StageCampaignParams",
     "StageCampaignResult",
+    "SteerParams",
     "add_question",
+    "broadcast",
     "build_bound_round_runner",
     "build_live_dispatch_spawner",
     "cancel_campaign",
     "create_campaign",
+    "fold_operator_channel",
     "followup",
+    "override",
     "persist_campaign",
+    "persist_operator_input",
     "read_campaign_rounds",
     "read_latest_campaign",
+    "read_operator_inputs",
     "reconcile_round_claims",
     "run",
     "run_campaign",
     "snapshot",
     "stage_campaign_method",
+    "steer",
 ]

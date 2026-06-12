@@ -585,6 +585,7 @@ class StoreKind(StrEnum):
     SPEC_UPDATED = "spec_updated"
     RESEARCH_CAMPAIGN = "research_campaign"
     RESEARCH_ROUND = "research_round"
+    OPERATOR_INPUT = "operator_input"
 
 
 class ArtifactKind(StrEnum):
