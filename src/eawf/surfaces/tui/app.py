@@ -655,6 +655,18 @@ class EaApp(App[None]):
         self._needs_user_open = False
         self._init_wizard_open = False
         self._init_wizard_auto_opened = False
+        # ``False`` until the App has finished its first paint -- the
+        # interactive-ready gate :meth:`on_key` consults. A graphics terminal
+        # (Ghostty / Kitty protocol) answers the seal Image widget's transmit
+        # with a capability / Device-Attributes probe REPLY (e.g. the literal
+        # ``\x1b[?62;...c`` DA1 response carries a ``?``); a partially-parsed
+        # reply can leak a stray key event into stdin during the startup window
+        # before any human has touched the keyboard. Such a key arrives BEFORE
+        # this flag flips, so the gate swallows it -- no modal (notably the
+        # ``?`` -> help overlay) opens with zero real keypresses. Flipped True
+        # by :meth:`_mark_interactive_ready`, scheduled ``call_after_refresh``
+        # from ``on_mount`` so the genuine first-keypress path is unaffected.
+        self._interactive_ready = False
         self._toast_emitter = ToastEmitter()
         # Live event ring buffer fed by the daemon ``event.subscribe`` push
         # stream (via the read-only binding's ``on_event`` hook). The Feed
@@ -811,6 +823,17 @@ class EaApp(App[None]):
         # setting off-thread (no stdin contention). First probe is deferred a
         # full interval, so it never competes with first paint.
         self.set_interval(THEME_POLL_INTERVAL_S, self._poll_os_appearance)
+        # Open the interactive-ready gate AFTER first paint. ``call_after_refresh``
+        # runs the callback once the next refresh has flushed to the terminal --
+        # i.e. once the first frame (carrying the seal Image transmit) is painted.
+        # A terminal capability / Device-Attributes probe reply provoked by that
+        # transmit can leak a stray key (the DA1 ``\x1b[?...c`` form carries a
+        # ``?``) into stdin DURING this startup window; the gate in
+        # :meth:`on_key` swallows any key that lands before this flips, so the
+        # leak never reaches the ``?`` -> help binding. A genuine keypress only
+        # happens after the operator sees the painted frame, so it always lands
+        # after the gate has opened.
+        self.call_after_refresh(self._mark_interactive_ready)
 
     async def _on_state(self, new_state: State) -> None:
         """Receive a fresh state revision from the binder.
@@ -1487,22 +1510,56 @@ class EaApp(App[None]):
             f"mode={target_mode!r} pre_app_owners={owners!r}"
         )
 
-    async def on_key(self, event: events.Key) -> None:
-        """Trace digit-accelerator binding resolution (RB-2 diagnostic).
+    def _mark_interactive_ready(self) -> None:
+        """Open the interactive-ready gate once the first frame has painted.
 
-        Logs how a mode-digit key resolves through the live binding chain via
-        :meth:`trace_digit_binding`, then lets the event continue untouched --
-        the hook NEVER calls ``event.stop()`` / ``event.prevent_default()``, so
-        routing is unchanged and the digit still flips the mode through its
-        ``priority=True`` App binding. The trace fires only for registered mode
-        digits (silent on ordinary keys), so it is cheap to leave armed; it is
-        the persistent key-trace hook the RB-2 wave required so a future digit
-        misroute is diagnosable from the daemon log rather than only from a
-        live terminal.
+        Scheduled ``call_after_refresh`` from :meth:`on_mount`, so it runs
+        after the first refresh has flushed the launch frame (the one that
+        transmits the seal Image) to the terminal. Flipping the gate here --
+        rather than in ``on_mount`` directly -- keeps the startup window during
+        which a graphics-terminal probe reply can leak a stray key (see
+        :attr:`_interactive_ready`) on the swallow side of the gate, while every
+        genuine keypress (which can only follow the painted frame) lands after
+        it opens. Idempotent: a second call is harmless.
+        """
+        self._interactive_ready = True
+
+    async def on_key(self, event: events.Key) -> None:
+        """Gate pre-interactive keys; trace digit-accelerator resolution.
+
+        Two jobs ride this single key chokepoint (every key event reaches the
+        App's ``on_key`` before binding dispatch):
+
+        * **Interactive-ready gate.** A graphics terminal (Ghostty / Kitty
+          protocol) answers the seal Image widget's transmit with a capability
+          / Device-Attributes probe REPLY -- the DA1 form ``\\x1b[?62;...c``
+          carries a literal ``?``. A partially-parsed reply can leak a stray
+          key (notably ``?``) into stdin during the startup window, BEFORE the
+          operator has touched the keyboard; left untouched it would resolve
+          through the scope screen's ``question_mark`` -> ``open_help`` binding
+          and pop the help overlay with zero real keypresses (operator report
+          2026-06-11). The gate swallows ANY key that arrives before
+          :attr:`_interactive_ready` flips (``event.stop()`` +
+          ``event.prevent_default()`` so it never reaches binding dispatch),
+          which closes the whole class of pre-paint synthetic-key modals, not
+          just help. A genuine keypress only happens after the operator sees
+          the painted frame, so it always lands after the gate has opened and
+          routes normally.
+        * **Digit-accelerator trace (RB-2 diagnostic).** For a non-swallowed
+          mode digit the hook logs how the key resolves through the live
+          binding chain via :meth:`trace_digit_binding`, then lets the event
+          continue untouched -- it never stops a post-ready key, so routing is
+          unchanged and the digit still flips the mode through its
+          ``priority=True`` App binding.
 
         Args:
             event: The key event Textual posted before binding dispatch.
         """
+        if not self._interactive_ready:
+            logger.info(f"on_key swallowed_pre_ready key={event.key!r}")
+            event.stop()
+            event.prevent_default()
+            return
         trace = self.trace_digit_binding(event.key)
         if trace is not None:
             logger.info(trace)
@@ -2012,9 +2069,19 @@ class EaApp(App[None]):
         open is a no-op — the :attr:`_help_open` guard suppresses
         the duplicate push so the operator cannot exhaust the stack cap by
         holding ``?``. The guard clears when the overlay dismisses.
+
+        A pre-interactive ``?`` is also a no-op: the
+        :attr:`_interactive_ready` gate (the same one :meth:`on_key`
+        consults) defends the action directly, so a startup probe-reply leak
+        that reaches the help action by a path other than raw key dispatch
+        (e.g. a focused widget that delegates ``open_help`` to the App)
+        still cannot pop the overlay before first paint.
         """
         from eawf.surfaces.tui.screens.help import HelpScreen
 
+        if not self._interactive_ready:
+            logger.info("action_open_help suppressed_pre_ready")
+            return
         if self._help_open:
             return
         if self.push_modal(HelpScreen()):
