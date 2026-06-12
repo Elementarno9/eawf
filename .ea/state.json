@@ -23743,7 +23743,9 @@
         "P30-I19-W05",
         "P30-I19-W06",
         "P30-I19-W07",
-        "P30-I19-W08"
+        "P30-I19-W08",
+        "P30-I19-W09",
+        "P30-I19-W10"
       ]
     }
   },
@@ -24820,7 +24822,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T12:34:19.934282Z",
+  "updated_at": "2026-06-12T12:35:54.225177Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -93843,6 +93845,128 @@
         }
       ],
       "title": "SHIP re-run and v0.6.0 pre-flight",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I19-W09": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/empty_state.py",
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/modes/sandbox_events.py"
+      ],
+      "gates": [],
+      "id": "P30-I19-W09",
+      "intent": {
+        "desired_outcome": "A clear blank-line gap between the seal and the headline across the hero modes; the sandbox empty renders the centered ASCII-art seal like the others.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add margin/blank-line between the seal art and the headline in seal_empty_hero + research hero; route sandbox_events empty through seal_empty_hero; regen goldens."
+        ],
+        "priority_rationale": "Cosmetic consistency on the empty heroes the operator is reviewing pre-ship.",
+        "problem": "The seal sits too close to the hero text on research + autopilot (operator wants more vertical gap); and the sandbox empty has only the small glyph, no ASCII-art seal.",
+        "risks": [
+          "Layout slack on short panes; keep centered."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I19",
+      "opened_at": "2026-06-12T12:35:26.892369Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Hero seals (research/autopilot/feed/agent_watch/evidence) show a clear gap between the seal and the headline; the sandbox empty renders the centered ASCII-art seal; goldens regenerated; tests pass.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Hero seals (research/autopilot/feed/agent_watch/evidence) show a clear gap between the seal and the headline; the sandbox empty renders the centered ASCII-art seal; goldens regenerated; tests pass.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add logo-to-text gap on hero seals and add the sandbox seal",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I19-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/observability/doctor/checks.py",
+        "src/eawf/platform/install/instrument_probe.py",
+        "src/eawf/workflow/lifecycle/wave_sha.py",
+        "src/eawf/runtime/daemon/spawn.py"
+      ],
+      "gates": [],
+      "id": "P30-I19-W10",
+      "intent": {
+        "desired_outcome": "Every TUI-spawned subprocess runs detached from the controlling terminal + on a worker, so no escape-reply leaks as a keypress.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add start_new_session (POSIX) / DETACHED+CREATE_NO_WINDOW (win32) to the doctor probe + daemon-spawn subprocess sites; regression test."
+        ],
+        "priority_rationale": "Operator: TUI daemon/CLI calls must always be background + not touch the terminal; the doctor leak persists.",
+        "problem": "Entering doctor still triggers hotkeys 7 & 9: a terminal probe-reply leaks into the key parser because TUI-spawned subprocesses share the controlling TTY; stdin=DEVNULL alone did not stop it.",
+        "risks": [
+          "Live race not headlessly reproducible; land detach + test",
+          "operator re-verifies."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I19",
+      "opened_at": "2026-06-12T12:35:54.224924Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "TUI-spawned probe + daemon-spawn subprocesses pass start_new_session/detached flags (no controlling TTY); a regression asserts the kwargs per site; gather stays on a worker.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "TUI-spawned probe + daemon-spawn subprocesses pass start_new_session/detached flags (no controlling TTY); a regression asserts the kwargs per site; gather stays on a worker.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Detach TUI-spawned subprocesses from the controlling terminal",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
