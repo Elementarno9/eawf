@@ -271,8 +271,14 @@ def test_confirm_affordance_parity_keys_fire() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_init_wizard_title_wears_dispatch_sigil_and_hint() -> None:
-    """The init title leads with the dispatch sigil; the shared key-hint footer renders."""
+def test_init_wizard_header_wears_brand_sigil_and_footer_hint() -> None:
+    """The stepped wizard header wears the brand sigil; the footer carries the chord vocab.
+
+    Updated for the W09 stepped wizard (the W08 redesign replaced the
+    three-action chooser): the dispatch / brand sigil now leads the header +
+    path rows rather than a ``.init-title`` row, and the per-step footer (not a
+    fixed ``.init-hint``) carries the key-hint chord vocab.
+    """
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -283,39 +289,40 @@ def test_init_wizard_title_wears_dispatch_sigil_and_hint() -> None:
             )
             app.push_screen(modal)
             await pilot.pause()
-            title = str(modal.query_one(".init-title", Static).render())
-            assert _DISPATCH in title
-            assert "Initialize EAWF" in title
-            hint = str(modal.query_one(".init-hint", Static).render())
-            assert "Enter choose" in hint
-            assert "Esc close" in hint
+            header = str(modal.query_one("#init-header", Static).render())
+            assert chrome("brand", mode="unicode") in header
+            assert "Eä" in header
+            foot = str(modal.query_one("#init-foot", Static).render())
+            assert "Enter preview" in foot
+            assert "Esc cancel" in foot
 
     asyncio.run(body())
 
 
 def test_init_wizard_affordance_parity_keys_fire() -> None:
-    """affordance_parity: the wizard keys resolve to live Bindings + Enter returns a plan."""
+    """affordance_parity: the stepped-wizard keys resolve to live Binding actions."""
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        sink: list[object] = []
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
             modal = InitWizardModal(
                 InitWizardContext(scope="repo", target_dir=Path("/abs/path/repo"))
             )
-            app.push_screen(modal, callback=sink.append)
+            app.push_screen(modal)
             await pilot.pause()
-            assert _binding_for(modal, "enter").action == "confirm"
+            assert _binding_for(modal, "enter").action == "advance"
             assert _binding_for(modal, "escape").action == "cancel"
-            for action in ("action_move", "action_confirm", "action_cancel"):
+            assert _binding_for(modal, "space").action == "toggle_chip"
+            for action in (
+                "action_move",
+                "action_advance",
+                "action_cancel",
+                "action_toggle_chip",
+                "action_select_all",
+                "action_path",
+            ):
                 assert callable(getattr(modal, action))
-
-            await pilot.press("enter")  # confirm the default (quick-init)
-            await pilot.pause()
-        assert sink
-        assert sink[0] is not None
-        assert sink[0].action == "quick-init"  # type: ignore[attr-defined]
 
     asyncio.run(body())
 
@@ -508,20 +515,13 @@ def test_confirm_overlay_reskin_snapshot() -> None:
     asyncio.run(body())
 
 
-def test_init_wizard_overlay_reskin_snapshot() -> None:
-    """The init-wizard frame pins the dispatch title sigil + key-hint vocab."""
-
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await settle_screen(pilot)
-            app.push_screen(
-                InitWizardModal(InitWizardContext(scope="repo", target_dir=Path("/abs/path/repo")))
-            )
-            await settle_screen(pilot)
-            assert_screen_snapshot(app, _GOLDEN / "init_wizard_overlay_reskin.txt")
-
-    asyncio.run(body())
+# The init-wizard frame snapshot moved to the dedicated W09 suite
+# ``tests/tui/test_init_wizard_snapshots.py`` when the stepped wizard replaced
+# the W22-era three-action chooser: that suite pins every journey state
+# (J1 hero / J2 configure-preview-execute-error / J3 select / J4 done) +
+# the 80-column narrow variants in isolation (no full-app daemon banner). The
+# brand-sigil + footer-vocab assertions for the wizard live in
+# ``test_init_wizard_header_wears_brand_sigil_and_footer_hint`` above.
 
 
 def test_pr_list_grid_snapshot() -> None:

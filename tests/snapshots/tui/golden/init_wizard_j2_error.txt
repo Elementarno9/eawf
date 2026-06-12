@@ -1,0 +1,41 @@
+
+
+
+             ╭───────────────────────────────────────────────────────────────────────────────────────────╮
+             │                                                                                           │
+             │  ◉ Eä repo ❯ init  failed                                                                 │
+             │  ● detect › ● choose › ● configure › ● preview › ◐ execute › ◌ done                       │
+             │                                                                                           │
+             │   ✕ init halted — step 3 of 5 · render AGENTS.md + plugin                                 │
+             │                                                                                           │
+             │  ╭─────────────────────────────────────────────────────────────────────────────────────╮  │
+             │  │ What happened                                                                       │  │
+             │  │ ●  write .ea/state.json  done                                                       │  │
+             │  │ ●  render profile.yaml  done                                                        │  │
+             │  │ ✕  render AGENTS.md + plugin  failed                                                │  │
+             │  │ ◌  install .claude/ plugin preview  queued                                          │  │
+             │  │ ◌  first daemon handshake  queued                                                   │  │
+             │  │ stderr · profile 'research' template missing key 'roundtable'                       │  │
+             │  ╰─────────────────────────────────────────────────────────────────────────────────────╯  │
+             │                                                                                           │
+             │  .ea/state.json was written · safe to retry or roll back the partial init                 │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │  [ ❯ r retry · b back to configure · v full log · Esc abandon ]                           │
+             │                                                                                           │
+             ╰───────────────────────────────────────────────────────────────────────────────────────────╯

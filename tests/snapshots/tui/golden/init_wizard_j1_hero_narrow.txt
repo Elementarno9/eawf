@@ -1,0 +1,37 @@
+
+
+         ╭────────────────────────────────────────────────────────────╮
+         │                                                            │
+         │  ◉ Eä user ❯ welcome  first run                            │
+         │  ● detect › ◐ choose › ◌ configure › ◌ preview › ◌         │
+         │                                                            │
+         │                                                            │
+         │                             ◉                              │
+         │                             Eä                             │
+         │  the workflow that speaks projects into being. nothing is  │
+         │                  here yet — let us begin.                  │
+         │                                                            │
+         │  ❯ i init this repo  git root found                        │
+         │    r register an existing repo                             │
+         │    w bootstrap a workspace                                 │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │  [ ↑/↓ select · Enter choose · ❯ i init here · ? help ·    │
+         │                                                            │
+         ╰────────────────────────────────────────────────────────────╯

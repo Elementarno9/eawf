@@ -1,0 +1,37 @@
+
+
+         ╭────────────────────────────────────────────────────────────╮
+         │                                                            │
+         │  ◉ Eä repo ❯ init                                          │
+         │  ● detect › ● choose › ● configure › ● preview › ●         │
+         │                                                            │
+         │                       ◉ ABC is real.                       │
+         │                 spoken into being in 1.4s                  │
+         │                                                            │
+         │  ╭──────────────────────────────────────────────────────╮  │
+         │  │ Created                                              │  │
+         │  │ ● .ea/state.json  project ABC                        │  │
+         │  │ ● .ea/profile.yaml  core · python                    │  │
+         │  │ ● AGENTS.md  rendered                                │  │
+         │  │ ● .claude/ plugin  preview                           │  │
+         │  ╰──────────────────────────────────────────────────────╯  │
+         │                                                            │
+         │  ╭──────────────────────────────────────────────────────╮  │
+         │  │ Doctor · 4 checks · 0 warn                           │  │
+         │  │ ● state                                              │  │
+         │  │ ● daemon                                             │  │
+         │  │ ● profile                                            │  │
+         │  │ ● plugin                                             │  │
+         │  ╰──────────────────────────────────────────────────────╯  │
+         │                                                            │
+         │         t tour   R roadmap   p prep   Esc dismiss          │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │                                                            │
+         │  [ t tour · R roadmap · p prep · Esc dismiss ]             │
+         │                                                            │
+         ╰────────────────────────────────────────────────────────────╯

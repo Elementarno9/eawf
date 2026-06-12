@@ -1,0 +1,41 @@
+
+
+
+             ╭───────────────────────────────────────────────────────────────────────────────────────────╮
+             │                                                                                           │
+             │  ◉ Eä repo ❯ init                                                                         │
+             │  ● detect › ● choose › ● configure › ● preview › ● execute › ◐ done                       │
+             │                                                                                           │
+             │   △ created · 1 check warns — .claude/ preview missing — run eawf doctor --fix            │
+             │                                                                                           │
+             │                                      ◉ ABC is real.                                       │
+             │                                 spoken into being in 1.4s                                 │
+             │                                                                                           │
+             │  ╭─────────────────────────────────────────────────────────────────────────────────────╮  │
+             │  │ Created                                                                             │  │
+             │  │ ● .ea/state.json  project ABC                                                       │  │
+             │  │ ● .ea/profile.yaml  core · python                                                   │  │
+             │  │ ● AGENTS.md  rendered                                                               │  │
+             │  │ ● .claude/ plugin  preview                                                          │  │
+             │  ╰─────────────────────────────────────────────────────────────────────────────────────╯  │
+             │                                                                                           │
+             │  ╭─────────────────────────────────────────────────────────────────────────────────────╮  │
+             │  │ Doctor · 4 checks · 1 warn                                                          │  │
+             │  │ ● state                                                                             │  │
+             │  │ ● daemon                                                                            │  │
+             │  │ ● profile                                                                           │  │
+             │  │ △ plugin  .claude/ preview missing — run eawf doctor --fix                          │  │
+             │  ╰─────────────────────────────────────────────────────────────────────────────────────╯  │
+             │                                                                                           │
+             │                         d doctor   t tour   p prep   Esc dismiss                          │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │                                                                                           │
+             │  [ t tour · R roadmap · p prep · Esc dismiss ]                                            │
+             │                                                                                           │
+             ╰───────────────────────────────────────────────────────────────────────────────────────────╯
