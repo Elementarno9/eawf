@@ -735,6 +735,45 @@ class OpenQuestion(_StrictModel):
     resolved_at: UtcDatetime | None = None
 
 
+class Round(_StrictModel):
+    """One executed research-campaign round, projected from its store record.
+
+    A :class:`Round` is the typed view the Research board's tree + RUN band and
+    ``eawf status`` render: one row per round the campaign run actually executed
+    (the daemon persists each round to the append-only ``research_round`` store).
+    It is the real entity that retires the board's earlier *synthetic* round
+    node -- the board derived a single placeholder round from the question
+    ledger because the multi-round runner was idle, but a run now persists one
+    record per round, so the board renders the real rounds instead.
+
+    This is a projection model, not a persisted ``State`` field: a round lives
+    in the append-only round store (like a Claim's evidence lives in the store),
+    so adding it needs no ``State`` schema bump. The board / status load the
+    store records and re-validate them into this typed view.
+
+    Attributes:
+        campaign_id: The campaign the round belongs to.
+        round_number: The 1-based round index (the order it executed in).
+        finding_count: How many findings lines the round's researchers
+            returned (the round's productivity figure).
+        claim_count: How many Claim rows the round-end reconcile wrote.
+        saturated: Whether this round was the one the loop halted on because
+            the campaign converged.
+        checkpoint: Whether the round coincided with an operator-review
+            checkpoint (per the run's checkpoint policy).
+        steer_notes: The operator steer / override notes folded into the round
+            -- the between-rounds feedback that shaped its dispatch set.
+    """
+
+    campaign_id: str = Field(min_length=1)
+    round_number: Annotated[int, Field(ge=1)]
+    finding_count: Annotated[int, Field(ge=0)] = 0
+    claim_count: Annotated[int, Field(ge=0)] = 0
+    saturated: bool = False
+    checkpoint: bool = False
+    steer_notes: list[str] = Field(default_factory=list)
+
+
 class Audit(_StrictModel):
     """Audit record (evaluation, ship-gate, incident, review)."""
 

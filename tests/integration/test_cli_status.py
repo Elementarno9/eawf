@@ -259,8 +259,11 @@ def test_status_payload_keys_documented_set(
         "git",
         "drift",
         "blockers",
+        "research_campaign",
     }
     assert set(payload.keys()) == expected_keys
+    # No campaign is staged on the base fixture, so the fold is None.
+    assert payload["research_campaign"] is None
 
 
 def _state_with_decisions_and_backlog() -> dict[str, Any]:
@@ -388,3 +391,65 @@ def test_status_text_branch_surfaces_decisions_and_backlog(
     assert result.exit_code == 0, result.output
     assert "recent decisions: D02, D01" in result.stdout
     assert "open backlog: 2 (B02, B01)" in result.stdout
+
+
+def test_status_research_campaign_fold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A staged + run campaign folds a research_campaign summary into status (W05)."""
+    from datetime import UTC, datetime
+
+    from eawf.kernel.spec.research import ResearchDepth
+    from eawf.kernel.spec.research_campaign import (
+        ResearchDomainConfig,
+        ResearchProfileBlock,
+        stage_campaign,
+    )
+    from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+    from eawf.runtime.daemon.methods.research import (
+        ResearchRoundPayload,
+        persist_campaign,
+        persist_round,
+    )
+
+    state_path = _seed(tmp_path)
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    _stub_no_git(monkeypatch)
+    block = ResearchProfileBlock(
+        default_depth=ResearchDepth.MEDIUM,
+        domains={"market-structure": ResearchDomainConfig(focus="venues")},
+    )
+    persist_campaign(
+        state_path,
+        ResearchCampaignPayload(
+            campaign_id="campaign-s",
+            config=block,
+            campaign=stage_campaign("options-pricing landscape", block),
+        ),
+    )
+    persist_round(
+        state_path,
+        ResearchRoundPayload(
+            campaign_id="campaign-s",
+            round_number=1,
+            domains=["market-structure"],
+            finding_lines=["a claim"],
+            claim_ids=["CLM-r1-market-structure-0"],
+            saturated=False,
+            checkpoint=True,
+            recorded_at=datetime(2026, 6, 11, 12, tzinfo=UTC),
+        ),
+    )
+
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    campaign = payload["research_campaign"]
+    assert campaign is not None
+    assert campaign["campaigns"] == 1
+    assert campaign["rounds_run"] == 1
+    assert campaign["kind"] == "runnable"
+    # The text branch surfaces a compact research line.
+    text = runner.invoke(app, ["status"])
+    assert "research: runnable (rounds=1" in text.stdout

@@ -277,6 +277,95 @@ def _open_backlog(state: State, limit: int = 10) -> list[dict[str, str]]:
     ]
 
 
+def _research_campaign_summary(state: State, state_path: Path) -> dict[str, Any] | None:
+    """Fold the active research campaign's progress into a status summary.
+
+    Reads the executed rounds + staged campaigns off the scope's append-only
+    stores (no Textual import -- the CLI stays off the TUI cold path) and folds
+    the campaign-wide :class:`~eawf.kernel.spec.operator_input.CampaignProgressState`
+    answer to "can the campaign proceed". Returns ``None`` -- the common path --
+    when the scope has staged no campaign, so a non-research repo's status is
+    unchanged.
+
+    Args:
+        state: The loaded state (for the claim / question ledgers).
+        state_path: Path to the scope's ``state.json`` (for the campaign +
+            round stores).
+
+    Returns:
+        A summary dict (``kind`` / ``rounds_run`` / ``campaigns`` /
+        ``open_questions`` / ``saturated``), or ``None`` when no campaign is
+        staged.
+    """
+    from eawf.kernel.spec.operator_input import (
+        CampaignProgressKind,
+        CampaignProgressState,
+        DomainProgress,
+        DomainProgressStatus,
+    )
+    from eawf.kernel.state.enums import OpenQuestionStatus, StoreKind
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+    from eawf.kernel.store.paths import store_path
+
+    campaign_path = store_path(state_path, StoreKind.RESEARCH_CAMPAIGN)
+    if not campaign_path.exists():
+        return None
+    latest: dict[str, ResearchCampaignPayload] = {}
+    for line in campaign_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            envelope = Envelope.model_validate_json(line)
+            payload = ResearchCampaignPayload.model_validate(envelope.payload)
+            latest[payload.campaign_id] = payload
+    active = [p for p in latest.values() if p.status.value == "active"]
+    if not active:
+        return None
+    questions = list((state.open_questions or {}).values())
+    open_count = sum(
+        1 for q in questions if q.status in (OpenQuestionStatus.OPEN, OpenQuestionStatus.BLOCKED)
+    )
+    blocking = sum(1 for q in questions if q.blocking)
+
+    # Read the round store directly (no Textual import) for the rounds-run +
+    # saturated terminal.
+    round_path = store_path(state_path, StoreKind.RESEARCH_ROUND)
+    rounds_run = 0
+    saturated_terminal = False
+    if round_path.exists():
+        for line in round_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            envelope = Envelope.model_validate_json(line)
+            rounds_run += 1
+            if envelope.payload.get("saturated", False):
+                saturated_terminal = True
+
+    # SATURATED is a *derived* state (the all-converged table), not an
+    # operator-pinned terminal kind, so a converged run marks every domain
+    # SATURATED rather than passing terminal=SATURATED (which the projection
+    # rejects).
+    domain_status = (
+        DomainProgressStatus.SATURATED if saturated_terminal else DomainProgressStatus.READY
+    )
+    domains = tuple(
+        DomainProgress(domain=dispatch.domain, status=domain_status)
+        for payload in active
+        for dispatch in payload.campaign.dispatches
+    )
+    progress = CampaignProgressState.project(
+        round_index=rounds_run,
+        domains=domains,
+        blocking_count=blocking,
+    )
+    return {
+        "kind": progress.kind.value,
+        "rounds_run": rounds_run,
+        "campaigns": len(active),
+        "open_questions": open_count,
+        "saturated": progress.kind is CampaignProgressKind.SATURATED,
+    }
+
+
 def _blockers(state: State) -> list[str]:
     """Surface short human-readable blockers from the loaded state.
 
@@ -391,6 +480,7 @@ def status(
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
         "drift": _drift_summary(state, repo_root=_find_git_root(state_path.parent)),
         "blockers": _blockers(state),
+        "research_campaign": _research_campaign_summary(state, state_path),
     }
 
     text = _format_text(payload)
@@ -452,6 +542,19 @@ def _format_text(payload: dict[str, Any]) -> str:
     )
     blockers = payload["blockers"]
     blockers_line = f"blockers: {', '.join(blockers) if blockers else 'none'}"
-    return "\n".join(
-        [proj_line, cur_line, git_line, drift_line, decisions_line, backlog_line, blockers_line]
-    )
+    lines = [
+        proj_line,
+        cur_line,
+        git_line,
+        drift_line,
+        decisions_line,
+        backlog_line,
+        blockers_line,
+    ]
+    campaign = payload.get("research_campaign")
+    if campaign:
+        lines.append(
+            f"research: {campaign['kind']} (rounds={campaign['rounds_run']}, "
+            f"campaigns={campaign['campaigns']}, open_questions={campaign['open_questions']})"
+        )
+    return "\n".join(lines)

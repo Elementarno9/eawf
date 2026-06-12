@@ -72,6 +72,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.ids import natural_key
+from eawf.kernel.state.models import Round
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
@@ -85,6 +86,7 @@ from eawf.surfaces.tui.widgets.seal import seal_art_widget
 from eawf.surfaces.tui.widgets.sigils import Sigil
 
 if TYPE_CHECKING:
+    from eawf.kernel.spec.operator_input import CampaignProgressState
     from eawf.kernel.state.models import Claim, OpenQuestion, State
     from eawf.surfaces.tui.widgets.eu_bar import RenderMode
     from eawf.workflow.skills.needs_user import OpenPause
@@ -483,6 +485,105 @@ def compute_round_progress(
         answered_count=answered_count,
         pruned_count=dropped_questions + pruned_claims,
         spent_topics=spent_topics,
+    )
+
+
+def read_round_rows(state_path: Path | None) -> tuple[Round, ...]:
+    """Read the executed research rounds off the scope's round store.
+
+    Reads every record in the append-only ``research_round`` JSONL store under
+    *state_path* (``<state_dir>/store/research_round.jsonl``), validating each
+    :class:`~eawf.kernel.store.envelope.Envelope` and projecting its payload into
+    a typed :class:`~eawf.kernel.state.models.Round`. The rows are the real
+    rounds a campaign run executed -- the entity that retires the board's
+    synthetic single round node. Returns an empty tuple (the COMMON pre-run
+    path) when *state_path* is ``None`` or the store does not exist, so a staged-
+    but-not-run scope renders the honest pre-run surface rather than crashing.
+
+    Args:
+        state_path: Path to the scope's ``state.json``; the round store resolves
+            under its sibling ``store/`` directory. ``None`` yields no rows.
+
+    Returns:
+        The executed rounds in ascending round order across every campaign.
+    """
+    if state_path is None:
+        return ()
+    path = store_path(state_path, StoreKind.RESEARCH_ROUND)
+    if not path.exists():
+        return ()
+    rounds: list[Round] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        envelope = Envelope.model_validate_json(raw_line)
+        payload = envelope.payload
+        rounds.append(
+            Round(
+                campaign_id=str(payload["campaign_id"]),
+                round_number=int(payload["round_number"]),
+                finding_count=len(payload.get("finding_lines", [])),
+                claim_count=len(payload.get("claim_ids", [])),
+                saturated=bool(payload.get("saturated", False)),
+                checkpoint=bool(payload.get("checkpoint", False)),
+                steer_notes=list(payload.get("steer_notes", [])),
+            )
+        )
+    rounds.sort(key=lambda r: (r.campaign_id, r.round_number))
+    logger.info(f"read_round_rows rounds={len(rounds)} path={path.name!r}")
+    return tuple(rounds)
+
+
+def project_campaign_progress(
+    campaigns: tuple[CampaignRow, ...],
+    claims: tuple[Claim, ...],
+    questions: tuple[OpenQuestion, ...],
+    rounds: tuple[Round, ...],
+) -> CampaignProgressState:
+    """Fold the campaign ledgers + executed rounds into a CampaignProgressState.
+
+    The single shared projection the board RUN band + ``eawf status`` both
+    render: it answers "can the campaign proceed, or is it blocked?" by reducing
+    the per-domain progress (derived from the staged domains + the claim /
+    question ledgers) through the pure
+    :meth:`~eawf.kernel.spec.operator_input.CampaignProgressState.project`. A
+    blocking open question forces ``BLOCKED_AWAIT_USER`` (D-2); a saturated
+    terminal round pins the ``SATURATED`` good-stop; otherwise the ready domains
+    drive ``RUNNABLE``.
+
+    Args:
+        campaigns: The staged campaign rows for the scope.
+        claims: The state-resident claim ledger rows.
+        questions: The state-resident open-question rows.
+        rounds: The executed rounds read from the round store.
+
+    Returns:
+        The folded :class:`~eawf.kernel.spec.operator_input.CampaignProgressState`.
+    """
+    from eawf.kernel.spec.operator_input import (
+        CampaignProgressState,
+        DomainProgress,
+        DomainProgressStatus,
+    )
+
+    blocking = sum(1 for question in questions if question.blocking)
+    round_index = max((r.round_number for r in rounds), default=0)
+    converged = any(r.saturated for r in rounds)
+    # One per-domain row per staged domain. A converged campaign marks every
+    # domain SATURATED so the projection's all-converged precedence resolves
+    # SATURATED (the good terminal is *derived*, not pinned -- SATURATED is not
+    # an operator-pinned terminal kind); otherwise the domains are READY so the
+    # frontier reads RUNNABLE.
+    domain_status = DomainProgressStatus.SATURATED if converged else DomainProgressStatus.READY
+    domains = tuple(
+        DomainProgress(domain=domain, status=domain_status)
+        for campaign in campaigns
+        for domain in campaign.domains
+    )
+    return CampaignProgressState.project(
+        round_index=round_index,
+        domains=domains,
+        blocking_count=blocking,
     )
 
 
@@ -1546,16 +1647,19 @@ def render_progress(
     questions: tuple[OpenQuestion, ...],
     *,
     checkpoints: int,
+    rounds: tuple[Round, ...] = (),
 ) -> str:
     """Render the right-pane progress / budget bands.
 
     The bands -- RUN / ROUND / ACTIVE / WAITING / PAUSED / BUDGET / RISKS --
-    are derived honestly from the staged campaign + the ledgers + the open
-    checkpoints. The FA8 auto-run state of the round (running / saturated /
-    pruned, via :func:`compute_round_progress`) drives the ROUND band, and the
-    BUDGET band reads the staged-topic spend + the saturated / pruned tallies
-    rather than a live token spend -- the honest pre-spawn surface, since the
-    live multi-round runner is spawn-gated with no TUI-callable seam yet.
+    are derived from the staged campaign + the ledgers + the open checkpoints +
+    the executed rounds. The RUN band surfaces the
+    :class:`~eawf.kernel.spec.operator_input.CampaignProgressState` answer to
+    "can the campaign proceed" (runnable / blocked / saturated) folded over the
+    real executed rounds (:func:`project_campaign_progress`); the ROUND band
+    counts the rounds the run actually executed (``N/N``), retiring the synthetic
+    ``1/1`` placeholder once a run has persisted rounds. The BUDGET band reads
+    the staged-topic spend + the saturated / pruned tallies.
 
     Args:
         campaigns: The staged campaign rows for the scope.
@@ -1563,17 +1667,20 @@ def render_progress(
         questions: The state-resident open-question rows.
         checkpoints: The count of open ``needs_user`` checkpoints for the
             scope (the PAUSED band).
+        rounds: The executed rounds read from the round store; empty for a
+            staged-but-not-run campaign (the ROUND band then reads ``0`` run).
 
     Returns:
         A content-markup string of one band per line.
     """
     progress = compute_round_progress(campaigns, claims, questions)
     blocking = sum(1 for question in questions if question.blocking)
-    run_state = "staged" if campaigns else "idle"
-    round_phrase = _ROUND_BAND_PHRASE[progress.state]
+    campaign_progress = project_campaign_progress(campaigns, claims, questions, rounds)
+    rounds_run = max((r.round_number for r in rounds), default=0)
+    run_phrase = "idle" if not campaigns else campaign_progress.kind.value
     lines = [
-        f"[$accent]RUN[/] [$muted]{run_state} -- live run not yet wired[/]",
-        f"[$accent]ROUND[/] [$muted]1/1 {round_phrase}[/]",
+        f"[$accent]RUN[/] [$muted]{run_phrase}[/]",
+        f"[$accent]ROUND[/] [$muted]{rounds_run} run[/]",
         f"[$accent]ACTIVE[/] [$muted]{len(claims)} claim(s)[/]",
         f"[$accent]WAITING[/] [$muted]{progress.open_count} open question(s)[/]",
         f"[$accent]PAUSED[/] [$muted]{checkpoints} checkpoint(s)[/]",
@@ -1859,7 +1966,11 @@ class ResearchBoardModeScreen(ScopeScreen):
                     progress.border_title = "PROGRESS / BUDGET"
                     yield Static(
                         render_progress(
-                            campaigns, claims, questions, checkpoints=1 if pause else 0
+                            campaigns,
+                            claims,
+                            questions,
+                            checkpoints=1 if pause else 0,
+                            rounds=self._current_round_rows(),
                         ),
                         id="research-progress-body",
                     )
@@ -2583,7 +2694,13 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._update_one(UNRESOLVED_BODY_ID, render_unresolved(questions, mode=mode))
         self._update_one(
             "research-progress-body",
-            render_progress(campaigns, claims, questions, checkpoints=1 if pause else 0),
+            render_progress(
+                campaigns,
+                claims,
+                questions,
+                checkpoints=1 if pause else 0,
+                rounds=self._current_round_rows(),
+            ),
         )
         self._update_one(DRAWER_ID, render_checkpoint(pause))
         logger.info(
@@ -2733,6 +2850,24 @@ class ResearchBoardModeScreen(ScopeScreen):
             campaigns = ()
         return campaigns, claims, questions
 
+    def _current_round_rows(self) -> tuple[Round, ...]:
+        """Return the executed research rounds for the active scope.
+
+        Reads the append-only ``research_round`` store under the resolved
+        ``state.json`` (:func:`read_round_rows`). A read failure (a malformed
+        row) degrades to empty rather than crashing the mode, so a bad store row
+        never takes the board down. Empty for a staged-but-not-run scope.
+
+        Returns:
+            The executed rounds in round order; empty when no run has persisted
+            one yet.
+        """
+        try:
+            return read_round_rows(self._resolved_state_path())
+        except Exception as exc:
+            logger.debug(f"_current_round_rows read_failed cause={exc!r}")
+            return ()
+
     def _current_checkpoint(self) -> OpenPause | None:
         """Return the active ``needs_user`` checkpoint for the scope, or ``None``.
 
@@ -2842,8 +2977,10 @@ __all__ = [
     "has_research_signal",
     "index_claims_by_question",
     "parse_domains",
+    "project_campaign_progress",
     "question_sigil_markup",
     "read_campaign_rows",
+    "read_round_rows",
     "render_center_tabs",
     "render_checkpoint",
     "render_claims",

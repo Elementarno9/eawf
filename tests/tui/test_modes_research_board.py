@@ -515,8 +515,12 @@ def test_render_progress_surfaces_run_round_and_budget_bands() -> None:
     assert "RUN" in body
     assert "ROUND" in body
     assert "BUDGET" in body
-    # Live running is spawn-gated, so RUN reads staged (not running).
-    assert "not yet wired" in body
+    # The RUN band reflects the CampaignProgressState answer (runnable when a
+    # ready domain has frontier work), not the retired not-yet-wired literal.
+    assert "not yet wired" not in body
+    assert "runnable" in body
+    # No run has persisted a round yet, so the ROUND band reads 0 run.
+    assert "0 run" in body
     assert "1 checkpoint(s)" in body  # PAUSED band tracks the checkpoint count
 
 
@@ -2354,10 +2358,10 @@ def test_build_tree_nodes_saturated_round_carries_saturated_state() -> None:
 
 
 def test_render_progress_budget_band_surfaces_pruned_and_running() -> None:
-    """The progress pane reads the running round + the pruned budget tally.
+    """The progress pane reads the run count + the pruned budget tally.
 
-    The ROUND band reads the FA8 auto-run phrase (running) and the BUDGET band
-    folds the staged-topic spend + answered + pruned tallies.
+    The ROUND band counts the rounds the run executed (0 pre-run) and the BUDGET
+    band folds the staged-topic spend + answered + pruned tallies.
     """
     campaigns = (_campaign_row(),)
     claims = (_claim("CL-0001", status=ClaimStatus.REFUTED),)
@@ -2368,7 +2372,7 @@ def test_render_progress_budget_band_surfaces_pruned_and_running() -> None:
     )
     body = render_progress(campaigns, claims, questions, checkpoints=0)
     assert "ROUND" in body
-    assert "running" in body  # the auto-run round phrase
+    assert "0 run" in body  # no run has persisted a round yet
     assert "BUDGET" in body
     assert "2 staged topic(s)" in body  # the spent-topic budget figure
     assert "1 answered" in body
