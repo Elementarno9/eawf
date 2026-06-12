@@ -118,7 +118,7 @@ from eawf.surfaces.tui.screens.overlays.init_wizard_render import (
     workspace_transparency_line,
 )
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.seal import seal_capable
+from eawf.surfaces.tui.widgets.seal import seal_art_widget
 from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
@@ -163,10 +163,12 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         height: 1;
         margin-bottom: 1;
     }
-    InitWizardModal .init-seal-image {
-        width: 8;
-        height: 4;
+    InitWizardModal .research-empty-seal {
+        width: 1fr;
+        height: auto;
         content-align: center middle;
+        text-align: center;
+        color: $accent;
     }
     InitWizardModal .init-hero {
         height: auto;
@@ -502,16 +504,13 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         return ""
 
     def _hero_text(self, *, mode: str) -> str:
-        """Render the J1 hero text block (seal glyph fallback + wordmark + purpose)."""
-        return hero_markup(mode=mode, seal_ready=self._seal_ready())
+        """Render the J1 hero text block (wordmark + purpose, below the seal art).
 
-    def _seal_ready(self) -> bool:
-        """Return whether the seal image path is available for the hero."""
-        try:
-            return seal_capable()
-        except Exception as exc:  # pragma: no cover - defensive capability guard
-            logger.debug(f"_seal_ready capability_unavailable err={exc!r}")
-            return False
+        The ASCII-art Seal is the present brand mark, mounted as a separate
+        widget above this block by :meth:`_mount_seal_art`, so ``seal_ready`` is
+        ``True`` to suppress the small glyph and avoid a double brand mark.
+        """
+        return hero_markup(mode=mode, seal_ready=True)
 
     def _footer_text(self) -> str:
         """Return the key-hint footer for the current step."""
@@ -535,30 +534,26 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
     # -- lifecycle ------------------------------------------------------------
 
     def on_mount(self) -> None:
-        """Paint the rail + footer and seed the seal image when capable."""
+        """Paint the rail + footer and seed the J1 hero seal art."""
         self._repaint_chrome()
-        self._mount_seal_if_capable()
+        self._mount_seal_art()
 
-    def _mount_seal_if_capable(self) -> None:
-        """Mount the seal image widget above the hero when seal-capable.
+    def _mount_seal_art(self) -> None:
+        """Mount the ASCII-art Seal above the J1 hero.
 
-        On a non-graphics terminal (CI / snapshot harness) :func:`seal_capable`
-        is ``False`` so the hero's glyph fallback is the present mark and no
-        image is mounted — keeping the goldens glyph-based.
+        The deterministic accent-on-surface TEXT brand mark the other hero
+        surfaces (research board, autopilot, …) render. Unlike the retired
+        raster path it carries no graphics-protocol dependency, so it renders
+        identically in CI, a pipe, and a live terminal — the goldens stay
+        stable. Mounted only on the J1 CHOOSE step (the welcome hero).
         """
-        if self.model.step is not Step.CHOOSE or not self._seal_ready():
+        if self.model.step is not Step.CHOOSE:
             return
-        from eawf.surfaces.tui.widgets.seal import seal_image_widget
-
-        widget = seal_image_widget(px=96)
-        if widget is None:
-            return
-        widget.add_class("init-seal-image")
         try:
             hero = self.query_one("#init-hero", Static)
-            self.query_one("#init-body", VerticalScroll).mount(widget, before=hero)
+            self.query_one("#init-body", VerticalScroll).mount(seal_art_widget(), before=hero)
         except Exception as exc:  # pragma: no cover - mount race guard
-            logger.debug(f"_mount_seal_if_capable mount_failed err={exc!r}")
+            logger.debug(f"_mount_seal_art mount_failed err={exc!r}")
 
     def _mode(self) -> str:
         """Resolve the active render-mode label from the host app."""
@@ -583,7 +578,7 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         await body.remove_children()
         await body.mount(*self._build_body(mode=mode))
         self._repaint_chrome()
-        self._mount_seal_if_capable()
+        self._mount_seal_art()
 
     def _goto(self, step: Step) -> None:
         """Transition to *step* and rebuild the body (off a worker callback)."""

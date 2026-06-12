@@ -572,26 +572,6 @@ def _append_project_record_check(
     return payload, f"{text}\n{check.as_text()}"
 
 
-def _ensure_seal_capability_row(payload: dict[str, Any], text: str) -> tuple[dict[str, Any], str]:
-    """Guarantee the seal-capability row is in the doctor envelope.
-
-    The row is produced by
-    :func:`~eawf.observability.doctor.checks.check_seal_capable` inside
-    ``run_all``; this defence-in-depth re-add ensures the operator always sees
-    the brand-mark capability state (image-capable, or which precondition is
-    missing) even if the aggregator ordering changes. The row is purely
-    informational -- it is appended at ``ok`` and never flips the overall
-    verdict, so a headless / non-graphics box stays green.
-    """
-    from eawf.observability.doctor.checks import check_seal_capable
-
-    if any(c.get("name") == "seal_capable" for c in payload["checks"]):
-        return payload, text
-    result = check_seal_capable()
-    payload["checks"].append(result.model_dump(mode="json"))
-    return payload, f"{text}\n{result.status.upper():<4}  {result.name:<24}  {result.detail or ''}"
-
-
 doctor_app = typer.Typer(
     name="doctor",
     help="Run install-readiness checks (tools, state, config).",
@@ -768,10 +748,6 @@ def doctor(
 
     payload = to_payload(results)
     text = to_text(results, plain=effective_flags.plain_output)
-
-    # The seal-capability row rides ``run_all``; re-assert it so the brand-mark
-    # capability state always surfaces in the envelope (P30-I16-W12).
-    payload, text = _ensure_seal_capability_row(payload, text)
 
     if user_scope:
         payload, text = _append_user_scope_check(payload, text)
