@@ -9,6 +9,8 @@ schema, Claude Code adapter.
 git clone <repo> && cd eawf && uv sync
 # or, install as a tool from the local checkout:
 uv tool install --from . eawf
+# on Windows, pull the named-pipe daemon transport:
+uv tool install --from . "eawf[windows]"
 ```
 
 ## Quickstart (new project)
