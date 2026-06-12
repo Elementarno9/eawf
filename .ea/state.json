@@ -7769,6 +7769,34 @@
       "scope_id": "P30-I16-W28",
       "status": "done",
       "updated_at": "2026-06-12T03:56:50.138098Z"
+    },
+    "P30-I16-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W29",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W29",
+      "model": null,
+      "scope_id": "P30-I16-W29",
+      "status": "done",
+      "updated_at": "2026-06-12T05:26:31.085066Z"
+    },
+    "P30-I16-W30": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W30",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W30",
+      "model": null,
+      "scope_id": "P30-I16-W30",
+      "status": "done",
+      "updated_at": "2026-06-12T05:26:31.825008Z"
     }
   },
   "agent_sessions": {
@@ -20644,6 +20672,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I16-W28",
       "updated_at": "2026-06-12T03:08:53.750766Z"
+    },
+    "P30-I16-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W29-bucket-20260612T043118Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W29",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W29",
+      "updated_at": "2026-06-12T04:31:18.380594Z"
+    },
+    "P30-I16-W30": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W30-bucket-20260612T043118Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I16-W30",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I16-W30",
+      "updated_at": "2026-06-12T04:31:18.883190Z"
     }
   },
   "fleet_run": null,
@@ -23813,7 +23867,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T04:30:59.556355Z",
+  "updated_at": "2026-06-12T05:26:31.825219Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -89930,10 +89984,10 @@
     "P30-I16-W29": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T04:31:18.380190Z",
+      "closed_at": "2026-06-12T05:26:31.085066Z",
+      "commit": "269536aa85c383827773150e167e5a1d2c609ecb",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89961,12 +90015,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-12T04:30:59.000796Z",
-      "outcome": null,
+      "outcome": "Doctor config/help pane root-caused: health-gather subprocess probes inherited the TTY (fd 0), so a terminal escape-reply leaked c/? into the key stream on doctor-mode entry. Fix: detached_tty_stdin() re-points fd 0 to /dev/null for the gather + on_key backstop drops c/? while a probe is in flight. 25 tests (incl W23/W27) green. Needs Ghostty re-verify.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -89991,10 +90045,10 @@
     "P30-I16-W30": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T04:31:18.883071Z",
+      "closed_at": "2026-06-12T05:26:31.825008Z",
+      "commit": "298ba602fd3d92257d16e6b01dffdae691785e2c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -90023,12 +90077,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-12T04:30:59.556170Z",
-      "outcome": null,
+      "outcome": "Spread the centered 42-wide ASCII-art seal to autopilot/feed/agent_watch/evidence empty heroes via shared seal_empty_hero() (width:1fr + text-align center; theme-portable; no raster). 4 goldens regenerated, all centered (block center col 60 = screen midline). 2706 tests pass.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
