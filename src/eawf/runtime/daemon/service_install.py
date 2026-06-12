@@ -26,7 +26,6 @@ from __future__ import annotations
 import importlib
 import logging
 import os
-import pwd
 import shutil
 import subprocess
 import sys
@@ -42,6 +41,11 @@ from eawf.runtime.daemon.runtime_dir import pid_path, runtime_dir
 from eawf.runtime.daemon.spawn import DaemonSpawnTimeoutError, wait_for_daemon_ready
 
 logger = logging.getLogger(__name__)
+
+if sys.platform != "win32":  # pragma: no cover - platform import guard
+    import pwd
+else:  # pragma: no cover - win32-only branch
+    pwd: Any = None
 
 
 # Service-template directories, in resolution order. ``__file__``
@@ -248,6 +252,8 @@ def _launchd_plist_path() -> Path:
             (delegated to :func:`_invoking_uid`).
     """
     uid = _invoking_uid()
+    if pwd is None:  # pragma: no cover - guarded by darwin dispatch
+        raise ServiceInstallError("pwd module unavailable on this platform")
     base = Path(pwd.getpwuid(uid).pw_dir) / "Library" / "LaunchAgents"
     return base / f"{_LAUNCHD_LABEL}.plist"
 

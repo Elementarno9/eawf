@@ -7,8 +7,8 @@ to the runtime dir. Procedure:
    to answer ``daemon.ping`` and return that PID.
 2. Otherwise acquire the short-lived spawn lock, re-check RPC
    readiness, and fork only if the runtime is still cold.
-3. The parent CLI then polls ``daemon.ping`` for up to 5 s before
-   returning a PID.
+3. The parent CLI then polls ``daemon.ping`` for up to the platform
+   default (5 s POSIX, 20 s Windows) before returning a PID.
 
 The cold-spawn is **silent** — no stdout/stderr noise unless the
 operator opts in with ``EAWF_VERBOSE=1``. The :mod:`eawf.surfaces.cli`
@@ -43,7 +43,14 @@ logger = logging.getLogger(__name__)
 
 #: How long the CLI waits for the freshly spawned daemon to expose its
 #: socket / pipe before bailing out with :class:`DaemonSpawnTimeout`.
-SPAWN_POLL_TIMEOUT_SECONDS: float = 5.0
+def _default_spawn_poll_timeout_seconds(platform: str = sys.platform) -> float:
+    """Return the default spawn readiness wait for *platform*."""
+    if platform == "win32":
+        return 20.0
+    return 5.0
+
+
+SPAWN_POLL_TIMEOUT_SECONDS: float = _default_spawn_poll_timeout_seconds()
 
 #: Backoff between socket-poll attempts during spawn.
 SPAWN_POLL_INTERVAL_SECONDS: float = 0.05

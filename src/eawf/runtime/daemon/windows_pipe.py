@@ -201,8 +201,7 @@ def _read_first_chunk(pipe: Any) -> tuple[bytes, bool]:
         hr, segment = win32file.ReadFile(pipe, _PIPE_BUFFER_BYTES)
     except pywintypes.error as exc:
         if exc.winerror == winerror.ERROR_MORE_DATA:
-            tail = exc.strerror if isinstance(exc.strerror, bytes) else b""
-            return tail, True
+            return b"", True
         raise
     return bytes(segment), hr == winerror.ERROR_MORE_DATA
 
@@ -234,11 +233,6 @@ def _read_full_message(pipe: Any) -> bytes:
             hr, segment = win32file.ReadFile(pipe, _PIPE_BUFFER_BYTES)
         except pywintypes.error as exc:
             if exc.winerror == winerror.ERROR_MORE_DATA:
-                # pywin32 surfaces the partial buffer on the exception in
-                # some builds; defensively append it before continuing.
-                tail = exc.strerror if isinstance(exc.strerror, bytes) else b""
-                if tail:
-                    chunks.append(tail)
                 continue
             raise
         chunks.append(bytes(segment))

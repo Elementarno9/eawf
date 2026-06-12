@@ -24,6 +24,9 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity, StoreKind
 from eawf.kernel.store.envelope import Envelope
@@ -36,6 +39,7 @@ from eawf.observability.telemetry.pricing import PRICING
 from eawf.observability.telemetry.projector import (
     RebuildMode,
     SourceSpec,
+    _iter_rows_from,
     rebuild,
 )
 from eawf.observability.telemetry.store import SqliteMetricsStore
@@ -642,6 +646,65 @@ def test_incremental_line_independent_source_still_tail_slices(tmp_path: Path) -
     assert incidents["EV-1"].summary == "head-untouched"
     assert "EV-2" in incidents
     store.close()
+
+
+def test_tail_slice_temp_file_is_closed_before_source_reopens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows can reopen the tail temp file because projector closes it first."""
+
+    path = tmp_path / "events.jsonl"
+    path.write_bytes(b"head\nTAIL\n")
+    tmp_objects: list[Any] = []
+
+    class _FakeNamedTemporaryFile:
+        def __init__(self, *, suffix: str, delete: bool, **_kwargs: object) -> None:
+            self.name = str(tmp_path / f"tail{suffix}")
+            self.closed = False
+            self._buffer = bytearray()
+            self._delete = delete
+            tmp_objects.append(self)
+
+        def __enter__(self) -> _FakeNamedTemporaryFile:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            self.close()
+
+        def write(self, data: bytes) -> int:
+            self._buffer.extend(data)
+            return len(data)
+
+        def flush(self) -> None:
+            Path(self.name).write_bytes(bytes(self._buffer))
+
+        def close(self) -> None:
+            if not self.closed:
+                Path(self.name).write_bytes(bytes(self._buffer))
+                self.closed = True
+                if self._delete:
+                    Path(self.name).unlink()
+
+    class _TailSource:
+        source_name = "event_jsonl"
+
+        def iter_rows(self, temp_path: Path) -> Iterator[str]:
+            (tmp,) = tmp_objects
+            assert tmp.closed is True
+            assert temp_path.exists()
+            yield temp_path.read_text(encoding="utf-8")
+
+    monkeypatch.setattr(
+        "eawf.observability.telemetry.projector.tempfile.NamedTemporaryFile",
+        _FakeNamedTemporaryFile,
+    )
+
+    rows = list(_iter_rows_from(_TailSource(), path, start_offset=len(b"head\n")))
+
+    assert rows == ["TAIL\n"]
+    assert tmp_objects[0].closed is True
+    assert not Path(tmp_objects[0].name).exists()
 
 
 # --------------------------------------------------------------------------- #

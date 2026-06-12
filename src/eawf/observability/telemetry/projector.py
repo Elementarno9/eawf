@@ -50,6 +50,7 @@ bounded working set (C09 §5.9.4 bounded-memory invariant).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import tempfile
 from collections.abc import Iterable, Iterator
@@ -361,12 +362,19 @@ def _iter_rows_from(
         tail = handle.read()
     if not tail:
         return
-    with tempfile.NamedTemporaryFile(
-        prefix="eawf-telemetry-tail-", suffix=path.suffix, delete=True
-    ) as tmp:
-        tmp.write(tail)
-        tmp.flush()
-        yield from source.iter_rows(Path(tmp.name))
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            prefix="eawf-telemetry-tail-", suffix=path.suffix, delete=False
+        ) as tmp:
+            tmp.write(tail)
+            tmp.flush()
+            tmp_path = Path(tmp.name)
+        yield from source.iter_rows(tmp_path)
+    finally:
+        if tmp_path is not None:
+            with contextlib.suppress(FileNotFoundError):
+                tmp_path.unlink()
 
 
 def _upsert_row_safe(

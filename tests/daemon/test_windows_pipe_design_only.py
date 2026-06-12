@@ -22,8 +22,12 @@ The live round-trip + DACL rejection cases live in the sibling
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import sys
 import threading
+import types
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -152,3 +156,92 @@ def test_windows_pipe_server_start_twice_rejected() -> None:
             server.start()
 
     asyncio.run(runner())
+
+
+def _load_windows_pipe_with_fakes(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Load ``windows_pipe`` under fake pywin32 modules on any host."""
+
+    class _PyWinError(Exception):
+        def __init__(self, winerror: int, strerror: object) -> None:
+            super().__init__(strerror)
+            self.winerror = winerror
+            self.strerror = strerror
+
+    class _CancelIoEx:
+        def __call__(self, *_args: object) -> bool:
+            return True
+
+    class _Kernel32:
+        CancelIoEx = _CancelIoEx()
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(
+        "ctypes.windll",
+        types.SimpleNamespace(kernel32=_Kernel32()),
+        raising=False,
+    )
+    monkeypatch.setitem(sys.modules, "pywintypes", types.SimpleNamespace(error=_PyWinError))
+    monkeypatch.setitem(
+        sys.modules,
+        "win32file",
+        types.SimpleNamespace(
+            GENERIC_READ=1,
+            GENERIC_WRITE=2,
+            OPEN_EXISTING=3,
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "win32pipe",
+        types.SimpleNamespace(
+            PIPE_READMODE_MESSAGE=4,
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "winerror", types.SimpleNamespace(ERROR_MORE_DATA=234))
+
+    module_path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "eawf"
+        / "runtime"
+        / "daemon"
+        / "windows_pipe.py"
+    )
+    spec = importlib.util.spec_from_file_location("_eawf_test_windows_pipe", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_more_data_exception_strerror_is_not_treated_as_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``ERROR_MORE_DATA`` exception text is not response/request bytes."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    calls = 0
+
+    def _read_file(_pipe: object, _size: int) -> tuple[int, bytes]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise module.pywintypes.error(module.winerror.ERROR_MORE_DATA, b"not-payload")
+        return 0, b"actual-payload"
+
+    module.win32file.ReadFile = _read_file
+
+    assert module._read_full_message(object()) == b"actual-payload"
+
+
+def test_first_chunk_more_data_exception_does_not_emit_strerror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pre-verify read never treats exception strerror as client bytes."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+
+    def _read_file(_pipe: object, _size: int) -> tuple[int, bytes]:
+        raise module.pywintypes.error(module.winerror.ERROR_MORE_DATA, b"not-payload")
+
+    module.win32file.ReadFile = _read_file
+
+    assert module._read_first_chunk(object()) == (b"", True)

@@ -272,3 +272,9 @@ def test_read_pid_file_handles_garbage(tmp_path: Path) -> None:
     pid_file = tmp_path / "eawfd.pid"
     pid_file.write_text("not-an-int\n", encoding="utf-8")
     assert spawn_mod._read_pid_file(pid_file) is None
+
+
+def test_default_spawn_poll_timeout_is_20s_on_win32() -> None:
+    """Windows service cold-starts get a wider readiness window."""
+    assert spawn_mod._default_spawn_poll_timeout_seconds("win32") == 20.0
+    assert spawn_mod._default_spawn_poll_timeout_seconds("linux") == 5.0
