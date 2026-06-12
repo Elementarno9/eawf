@@ -6,11 +6,11 @@ scope as the ratified three-pane orchestrator over the campaign engine:
 * **Left pane -- the topic tree.** A campaign > round > topic > unresolved-
   question outline built from the staged
   :class:`~eawf.kernel.store.kinds.research_campaign.ResearchCampaignPayload`
-  rows (one campaign node, a synthetic round node, one topic node per staged
-  domain) plus the state-resident
-  :class:`~eawf.kernel.state.models.OpenQuestion` rows (the unresolved-question
-  leaves). ``up`` / ``down`` move a flat selection cursor over the tree nodes;
-  ``enter`` peeks the selected node's findings read-only.
+  rows (one campaign node, a round node whose FA8 auto-run state derives from
+  the real executed-round records, one topic node per staged domain) plus the
+  state-resident :class:`~eawf.kernel.state.models.OpenQuestion` rows (the
+  unresolved-question leaves). ``up`` / ``down`` move a flat selection cursor
+  over the tree nodes; ``enter`` peeks the selected node's findings read-only.
 * **Center pane -- claims / evidence.** A tab bar
   (``[Claims][Options][Conflicts][Unresolved][Reports][Brief-preview]``) over
   the claim ledger, leading with the live Claims tab: one row per
@@ -22,23 +22,23 @@ scope as the ratified three-pane orchestrator over the campaign engine:
 * **Bottom drawer -- the checkpoint.** The active ``needs_user`` pause for the
   scope (its prompt + resolution options), or the honest no-checkpoint line.
 
-The TUI owns the SHELL + the live read/peek + the honest-wired actions; it does
-NOT own the campaign engine. The live multi-round runner / synthesis is spawn-
-gated and has no TUI-callable seam yet, so the action keys split into two
-honest halves (the idle-contract pattern):
+The TUI owns the SHELL + the live read/peek + the live actions; it does NOT own
+the campaign engine. Every action key now routes to a live daemon RPC (the
+P30-I18 binding pass wired the campaign run, the operator channels, and the
+follow-up / snapshot queries), so each surfaces the daemon's honest result and
+never fakes an outcome:
 
-* **Live now (read / peek + checkpoint resolution).** ``enter`` peeks the
-  selected node read-only. ``a`` (approve) routes through the real
-  ``needs_user.resolve`` RPC and ``p`` (park) through the real
-  ``needs_user.park`` RPC when a checkpoint maps to an open pause -- the daemon
-  is the canonical mutator for the pause store -- surfacing the honest result;
-  with no checkpoint selected each surfaces the honest no-checkpoint line and
-  issues no RPC.
-* **Honest-unavailable (no live runner yet).** ``r`` (follow-up) and ``s``
-  (snapshot) route through the daemon-client seam to their intended method
-  names, but no such RPC exists yet, so each surfaces the honest "not yet
-  wired" line and never fakes the action. They go live for free once their
-  RPCs land.
+* **Checkpoint resolution.** ``enter`` peeks the selected node read-only. ``a``
+  (approve) routes through the real ``needs_user.resolve`` RPC and ``p`` (park)
+  through the real ``needs_user.park`` RPC when a checkpoint maps to an open
+  pause -- the daemon is the canonical mutator for the pause store -- surfacing
+  the honest result; with no checkpoint selected each surfaces the honest
+  no-checkpoint line and issues no RPC.
+* **Run queries + operator channels.** ``r`` (follow-up) / ``s`` (snapshot)
+  query the live ``research.followup`` / ``research.snapshot`` RPCs for the
+  selected campaign; ``o`` / ``t`` / ``b`` / ``v`` push the add-question / steer
+  / broadcast / override operator inputs through their live RPCs. Each surfaces
+  the daemon's sent / rejected result.
 
 Honest-empty is the COMMON path, not an edge case: a scope that has staged no
 campaign and logged no claim / open question renders the muted
@@ -187,11 +187,9 @@ _RESOLVE_METHOD: str = "needs_user.resolve"
 #: needs_user open-pause lister (parking leaves the pause open for later).
 _PARK_METHOD: str = "needs_user.park"
 
-#: Intended daemon methods the not-yet-wired action keys route through. No such
-#: RPC exists yet (full registry checked) -- the daemon answers
-#: method-not-found, so the action surfaces the honest "not yet wired" line.
-#: Wiring the keys to the real method names now is the idle-contract pattern:
-#: they go live for free once the matching RPC lands.
+#: Live daemon methods the follow-up / snapshot action keys route through
+#: (P30-I18-W03): ``r`` queries the campaign's next round, ``s`` snapshots the
+#: run state. Both answer with a typed body the board surfaces honestly.
 _FOLLOWUP_METHOD: str = "research.followup"
 _SNAPSHOT_METHOD: str = "research.snapshot"
 
@@ -268,11 +266,7 @@ _CHANNEL_PENDING_TEMPLATE: str = "{verb}: sending..."
 #: so nothing was sent. Formatted with the verb.
 _CHANNEL_NO_DAEMON_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 
-#: Honest "not yet wired" line for the keys whose engine runner does not exist
-#: yet (follow-up / snapshot). Formatted with the verb so each reads clearly.
-_NOT_WIRED_TEMPLATE: str = "{verb}: not yet wired -- no {method} RPC"
-
-#: Honest line when a not-yet-wired action cannot even reach the daemon.
+#: Honest line when a follow-up / snapshot run query cannot reach the daemon.
 _UNAVAILABLE_TEMPLATE: str = "{verb}: daemon unavailable -- request not issued"
 
 #: Footer hints for the Research pane (arrows primary). The action keys ride
@@ -448,22 +442,62 @@ def classify_round_state(questions: tuple[OpenQuestion, ...]) -> RoundState:
     return RoundState.PRUNED
 
 
+def classify_round_state_from_records(
+    rounds: tuple[Round, ...],
+    questions: tuple[OpenQuestion, ...],
+) -> RoundState:
+    """Classify the FA8 auto-run state from the REAL run records (W08 live-wire).
+
+    The live-wired FA8 grammar: once a campaign run has persisted round records
+    the auto-run state derives from the real run, not the question ledger --
+
+    * the terminal round was :attr:`~eawf.kernel.state.models.Round.saturated`
+      -> :attr:`RoundState.SATURATED` (the loop halted because the campaign
+      converged);
+    * a run executed rounds but none saturated -> :attr:`RoundState.RUNNING`
+      (the run is in flight / halted on budget, still working);
+    * no run has persisted a round yet -> fall back to the question-ledger
+      classification (:func:`classify_round_state`), the honest pre-run surface.
+
+    A :attr:`RoundState.PRUNED` round still derives from the question ledger
+    (the records carry no pruned-round terminal), so the fallback covers it.
+
+    Args:
+        rounds: The executed round records read from the round store.
+        questions: The state-resident open-question rows (the pre-run fallback).
+
+    Returns:
+        The classified round state, derived from real run records when present.
+    """
+    if not rounds:
+        return classify_round_state(questions)
+    if any(rnd.saturated for rnd in rounds):
+        return RoundState.SATURATED
+    return RoundState.RUNNING
+
+
 def compute_round_progress(
     campaigns: tuple[CampaignRow, ...],
     claims: tuple[Claim, ...],
     questions: tuple[OpenQuestion, ...],
+    rounds: tuple[Round, ...] = (),
 ) -> RoundProgress:
-    """Project the campaign ledgers onto the auto-run round progress.
+    """Project the campaign ledgers + run records onto the auto-run round progress.
 
     Counts the open / answered questions, the pruned candidates (dropped
     questions + refuted / superseded claims set aside this round), and the
-    staged-topic budget figure, then classifies the round state via
-    :func:`classify_round_state`. A pure function of the rows on hand.
+    staged-topic budget figure, then classifies the round state. When real run
+    records are present the state derives from them
+    (:func:`classify_round_state_from_records`, the W08 live-wire); otherwise it
+    falls back to the question-ledger classification. A pure function of the
+    rows on hand.
 
     Args:
         campaigns: The staged campaign rows for the scope.
         claims: The state-resident claim ledger rows.
         questions: The state-resident open-question rows.
+        rounds: The executed round records; empty pre-run (the state then
+            falls back to the question-ledger classification).
 
     Returns:
         The derived :class:`RoundProgress`.
@@ -480,7 +514,7 @@ def compute_round_progress(
     )
     spent_topics = sum(campaign.domain_count for campaign in campaigns)
     return RoundProgress(
-        state=classify_round_state(questions),
+        state=classify_round_state_from_records(rounds, questions),
         open_count=open_count,
         answered_count=answered_count,
         pruned_count=dropped_questions + pruned_claims,
@@ -1213,16 +1247,17 @@ def index_claims_by_question(
 
 
 #: :class:`RoundState` -> the round node's auto-run label + peek detail. The
-#: label leads the round row (``round 1 running`` / ``saturated`` / ``pruned``)
+#: label leads the round row (``round running`` / ``saturated`` / ``pruned``)
 #: so the auto-run state reads off the row beside its sigil; the detail is the
-#: honest peek line surfaced when the round node is peeked. Live multi-round
-#: progress lands free once the runner emits a per-round status -- these are the
-#: honest pre-spawn lines.
+#: honest peek line surfaced when the round node is peeked. Once a campaign run
+#: has persisted round records the state derives from the real run
+#: (:func:`classify_round_state_from_records`); the IDLE line is the honest
+#: pre-run surface for a campaign that has staged but not yet run.
 _ROUND_COPY: dict[RoundState, tuple[str, str]] = {
-    RoundState.RUNNING: ("round 1 running", "live round -- open questions still being answered"),
-    RoundState.SATURATED: ("round 1 saturated", "round saturated -- every question resolved"),
-    RoundState.PRUNED: ("round 1 pruned", "round pruned -- candidates dropped, none kept"),
-    RoundState.IDLE: ("round 1", "campaign staged -- live multi-round run not yet wired"),
+    RoundState.RUNNING: ("round running", "live round -- run in flight, gathering findings"),
+    RoundState.SATURATED: ("round saturated", "run saturated -- the campaign converged"),
+    RoundState.PRUNED: ("round pruned", "round pruned -- candidates dropped, none kept"),
+    RoundState.IDLE: ("round idle", "campaign staged -- no round has run yet"),
 }
 
 
@@ -1247,16 +1282,19 @@ def build_tree_nodes(
     questions: tuple[OpenQuestion, ...],
     *,
     claims: tuple[Claim, ...] = (),
+    rounds: tuple[Round, ...] = (),
 ) -> tuple[TreeNode, ...]:
     """Flatten the campaign + question + claim rows into the topic-tree node list.
 
     Builds the campaign > round > topic outline plus the round > questions >
     claims spine as a flat tuple of :class:`TreeNode` rows in render order:
 
-    * per campaign -- the campaign node, then a synthetic round-1 node, then one
-      topic node per staged domain (capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`);
-    * then, when the scope carries open questions, a single synthetic
-      ``round 1 -- questions`` round node grouping every
+    * per campaign -- the campaign node, then a round node (its FA8 auto-run
+      state derived from the real run records when present, else the pre-run
+      question-ledger classification), then one topic node per staged domain
+      (capped at :data:`_MAX_TOPICS_PER_CAMPAIGN`);
+    * then, when the scope carries open questions, a single
+      ``round -- questions`` round node grouping every
       :class:`~eawf.kernel.state.models.OpenQuestion` as a question node (each
       carrying its open / answered / dropped status for the per-status sigil),
       with the claims that answer a question
@@ -1272,11 +1310,13 @@ def build_tree_nodes(
         questions: The state-resident open-question rows for the scope.
         claims: The state-resident claim rows; the ones that back-link a
             question nest under it (free-standing claims are not tree leaves).
+        rounds: The executed round records; when present the round node's FA8
+            auto-run state derives from the real run (the W08 live-wire).
 
     Returns:
         The flattened tree nodes in render order; empty when nothing to show.
     """
-    progress = compute_round_progress(campaigns, claims, questions)
+    progress = compute_round_progress(campaigns, claims, questions, rounds)
     round_label, round_detail = _round_label_detail(progress)
     nodes: list[TreeNode] = []
     for campaign in campaigns:
@@ -1673,7 +1713,7 @@ def render_progress(
     Returns:
         A content-markup string of one band per line.
     """
-    progress = compute_round_progress(campaigns, claims, questions)
+    progress = compute_round_progress(campaigns, claims, questions, rounds)
     blocking = sum(1 for question in questions if question.blocking)
     campaign_progress = project_campaign_progress(campaigns, claims, questions, rounds)
     rounds_run = max((r.round_number for r in rounds), default=0)
@@ -1769,15 +1809,16 @@ class ResearchBoardModeScreen(ScopeScreen):
     read-only. ``a`` (approve) routes through the real ``needs_user.resolve``
     RPC and ``p`` (park) through ``needs_user.park`` when a checkpoint maps to
     an open pause, surfacing the honest result; ``r`` (follow-up) / ``s``
-    (snapshot) route through the daemon-client seam to their not-yet-existing
-    methods and surface the honest "not yet wired" line (the idle-contract
-    pattern). ``o`` (add-question), ``t`` (steer), ``b`` (broadcast), and ``v``
-    (override) are the four FA8 operator-input campaign-fork channels: each
-    collects a free-text line through a one-field :class:`OperatorNoteModal` and
-    routes it off the UI thread to its intended ``research.add_question`` /
-    ``research.steer`` / ``research.broadcast`` / ``research.override`` RPC,
-    surfacing the daemon's honest not-yet-wired / rejection result. No action
-    ever fakes an outcome that did not happen.
+    (snapshot) route through the daemon-client seam to the live
+    ``research.followup`` / ``research.snapshot`` RPCs for the selected
+    campaign, surfacing the honest next-round / run-summary result. ``o``
+    (add-question), ``t`` (steer), ``b`` (broadcast), and ``v`` (override) are
+    the four FA8 operator-input campaign-fork channels: each collects a
+    free-text line through a one-field :class:`OperatorNoteModal` and routes it
+    off the UI thread to its live ``research.add_question`` / ``research.steer``
+    / ``research.broadcast`` / ``research.override`` RPC, surfacing the daemon's
+    honest sent / rejection result. No action ever fakes an outcome that did
+    not happen.
 
     The screen self-binds to the host
     :class:`~eawf.surfaces.tui.app.EaApp` reactive ``state``: it seeds from
@@ -1916,7 +1957,9 @@ class ResearchBoardModeScreen(ScopeScreen):
         """
         campaigns, claims, questions = self._current_rows()
         self.empty = not has_research_signal(campaigns, claims, questions)
-        self._tree = build_tree_nodes(campaigns, questions, claims=claims)
+        self._tree = build_tree_nodes(
+            campaigns, questions, claims=claims, rounds=self._current_round_rows()
+        )
         with Vertical(id="research-body"):
             if self.empty:
                 if self._render_mode() == "unicode":
@@ -2103,27 +2146,39 @@ class ResearchBoardModeScreen(ScopeScreen):
         logger.info(f"action_park_checkpoint pause={pause.pause_urn!r} result={result_line!r}")
 
     def action_followup(self) -> None:
-        """Queue a follow-up task (no engine runner yet -- honest-unavailable).
+        """Query a follow-up over the campaign's persisted rounds (live RPC).
 
-        Routes through the daemon-client seam to the intended
-        ``research.followup`` method. The live multi-round runner is spawn-
-        gated with no TUI-callable seam yet, so the daemon answers method-not-
-        found and the action surfaces the honest "not yet wired" line -- it
-        never implies a follow-up was queued. It goes live for free once the
-        runner RPC lands (the idle-contract pattern).
+        Routes through the daemon-client seam to the live ``research.followup``
+        RPC for the selected campaign, surfacing the honest next-round figure
+        (the round a follow-up run would start at). With no campaign selected
+        there is nothing to follow up; when the daemon is unreachable the result
+        says so rather than implying a follow-up was queued.
         """
-        self._issue_unwired(verb="follow-up", method=_FOLLOWUP_METHOD)
+        campaign_id = self._channel_campaign_id()
+        if campaign_id is None:
+            self._set_action("[$warn]follow-up: no campaign selected[/]")
+            return
+        result_line = self._issue_run_query(
+            verb="follow-up", method=_FOLLOWUP_METHOD, campaign_id=campaign_id
+        )
+        self._set_action(result_line)
 
     def action_snapshot(self) -> None:
-        """Snapshot the campaign (no engine runner yet -- honest-unavailable).
+        """Snapshot the campaign's run state (live RPC).
 
-        Routes through the daemon-client seam to the intended
-        ``research.snapshot`` method. No such RPC exists yet, so the daemon
-        answers method-not-found and the action surfaces the honest "not yet
-        wired" line -- it never implies a snapshot was taken. It goes live for
-        free once the runner RPC lands (the idle-contract pattern).
+        Routes through the daemon-client seam to the live ``research.snapshot``
+        RPC for the selected campaign, surfacing the honest run summary (rounds
+        run + saturation). With no campaign selected there is nothing to
+        snapshot; an unreachable daemon surfaces the honest unavailable line.
         """
-        self._issue_unwired(verb="snapshot", method=_SNAPSHOT_METHOD)
+        campaign_id = self._channel_campaign_id()
+        if campaign_id is None:
+            self._set_action("[$warn]snapshot: no campaign selected[/]")
+            return
+        result_line = self._issue_run_query(
+            verb="snapshot", method=_SNAPSHOT_METHOD, campaign_id=campaign_id
+        )
+        self._set_action(result_line)
 
     def action_new_campaign(self) -> None:
         """Open the campaign compose-form modal; commit stages a new campaign.
@@ -2251,11 +2306,9 @@ class ResearchBoardModeScreen(ScopeScreen):
         campaign (the balanced-autonomy operator-input channel). Pushes a one-
         field :class:`OperatorNoteModal` collecting the steer text; ``Esc``
         cancels (the callback receives ``None`` and issues zero RPCs). A
-        committed note routes off the UI thread to the ``research.steer`` RPC --
-        which does not exist yet, so the daemon answers method-not-found and the
-        channel surfaces the honest "not yet wired" line rather than implying a
-        steer landed (the idle-contract pattern; it goes live for free once the
-        RPC lands).
+        committed note routes off the UI thread to the live ``research.steer``
+        RPC (P30-I18-W04) against the selected campaign, surfacing the daemon's
+        honest sent / rejected result rather than implying a steer landed.
         """
         modal = OperatorNoteModal(
             title="steer the campaign",
@@ -2288,11 +2341,9 @@ class ResearchBoardModeScreen(ScopeScreen):
         the campaign cockpit shares with the wave cockpit). Pushes a one-field
         :class:`OperatorNoteModal` collecting the notice; ``Esc`` cancels (the
         callback receives ``None`` and issues zero RPCs). A committed notice
-        routes off the UI thread to the ``research.broadcast`` RPC -- which does
-        not exist yet, so the daemon answers method-not-found and the channel
-        surfaces the honest "not yet wired" line rather than implying a broadcast
-        landed (the idle-contract pattern; it goes live for free once the RPC
-        lands).
+        routes off the UI thread to the live ``research.broadcast`` RPC
+        (P30-I18-W04) against the selected campaign, surfacing the daemon's
+        honest sent / rejected result rather than implying a broadcast landed.
         """
         modal = OperatorNoteModal(
             title="broadcast a notice",
@@ -2325,11 +2376,9 @@ class ResearchBoardModeScreen(ScopeScreen):
         override persists locked until the operator clears it). Pushes a one-
         field :class:`OperatorNoteModal` collecting the verdict; ``Esc`` cancels
         (the callback receives ``None`` and issues zero RPCs). A committed
-        verdict routes off the UI thread to the ``research.override`` RPC --
-        which does not exist yet, so the daemon answers method-not-found and the
-        channel surfaces the honest "not yet wired" line rather than implying an
-        override landed (the idle-contract pattern; it goes live for free once
-        the RPC lands).
+        verdict routes off the UI thread to the live ``research.override`` RPC
+        (P30-I18-W04) against the selected campaign, surfacing the daemon's
+        honest sent / rejected result rather than implying an override landed.
         """
         modal = OperatorNoteModal(
             title="override the fork",
@@ -2604,40 +2653,25 @@ class ResearchBoardModeScreen(ScopeScreen):
             return f"[$warn]{CANCEL_NO_DAEMON}[/]"
         return f"[$ok]cancel: tombstoned[/] [$muted]campaign={escape_markup(campaign_id)}[/]"
 
-    def _issue_unwired(self, *, verb: str, method: str) -> None:
-        """Route a not-yet-wired action through the seam, honestly.
+    def _issue_run_query(self, *, verb: str, method: str, campaign_id: str) -> str:
+        """Issue a live run-query RPC for *campaign_id* and return a result line.
 
-        Issues *method* through the daemon-client seam for muscle-memory +
-        discoverability. No such RPC exists yet (follow-up / snapshot), so the
-        daemon answers method-not-found, which the action surfaces as the honest
-        "not yet wired" line; a daemon that is simply unreachable surfaces the
-        honest unavailable line instead. Either way the action never fakes the
-        outcome -- it goes live for free once the matching RPC lands (the
-        idle-contract pattern).
+        The follow-up / snapshot keys route here: they call the live
+        ``research.followup`` / ``research.snapshot`` RPC through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI reads through. A successful call surfaces the honest run figure
+        (next round / rounds run); a typed rejection (an unknown campaign) or an
+        unreachable daemon surfaces honestly. None fabricates a result.
 
         Args:
             verb: The action verb (``"follow-up"`` / ``"snapshot"``) for the
                 result line + logs.
-            method: The intended daemon JSON-RPC method name.
-        """
-        result_line = self._call_unwired(verb=verb, method=method)
-        self._set_action(result_line)
-        logger.info(f"_issue_unwired verb={verb} method={method!r} result={result_line!r}")
-
-    def _call_unwired(self, *, verb: str, method: str) -> str:
-        """Call a not-yet-existing *method* and return the honest result line.
-
-        Args:
-            verb: The action verb for the result line.
-            method: The intended daemon JSON-RPC method name (does not exist
-                yet).
+            method: The live daemon JSON-RPC method name.
+            campaign_id: The campaign the query targets.
 
         Returns:
-            A content-markup line: the honest "not yet wired" line when the
-            daemon answers method-not-found, or the honest unavailable line when
-            the daemon cannot be reached.
+            A content-markup result line describing the query outcome.
         """
-        not_wired = _NOT_WIRED_TEMPLATE.format(verb=verb, method=method)
         unavailable = _UNAVAILABLE_TEMPLATE.format(verb=verb)
         if not self._daemon_available():
             return f"[$warn]{unavailable}[/]"
@@ -2645,20 +2679,18 @@ class ResearchBoardModeScreen(ScopeScreen):
 
         try:
             with DaemonClient(call_timeout_seconds=1.0) as client:
-                client.call(method, {})
+                result = client.call(method, {"campaign_id": campaign_id})
         except DaemonRpcError as exc:
-            # A real daemon answers method-not-found for these as-yet-unwired
-            # methods; surface that honestly as "not yet wired". Any other RPC
-            # error is also surfaced as not-wired -- the method does not exist.
-            logger.debug(f"_call_unwired method_absent verb={verb} code={exc.code}")
-            return f"[$warn]{not_wired}[/]"
+            logger.debug(f"_issue_run_query daemon_rejected verb={verb} code={exc.code}")
+            return (
+                f"[$warn]{verb}: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+            )
         except (OSError, RuntimeError, TimeoutError) as exc:
-            logger.debug(f"_call_unwired daemon_fallback verb={verb} cause={exc!r}")
+            logger.debug(f"_issue_run_query daemon_fallback verb={verb} cause={exc!r}")
             return f"[$warn]{unavailable}[/]"
-        # A success result is impossible today (no such RPC). If a future daemon
-        # implements the method, report it landed so the honest path inverts the
-        # moment the RPC exists.
-        return f"[$ok]{verb}: issued[/]"
+        if verb == "follow-up":
+            return f"[$ok]follow-up: next round {result.get('next_round', '?')}[/]"
+        return f"[$ok]snapshot: {result.get('rounds_run', 0)} round(s) run[/]"
 
     def _rebuild(self) -> None:
         """Recompute every pane from state + the campaign / pause stores.
@@ -2670,7 +2702,9 @@ class ResearchBoardModeScreen(ScopeScreen):
         campaigns, claims, questions = self._current_rows()
         was_empty = self.empty
         self.empty = not has_research_signal(campaigns, claims, questions)
-        self._tree = build_tree_nodes(campaigns, questions, claims=claims)
+        self._tree = build_tree_nodes(
+            campaigns, questions, claims=claims, rounds=self._current_round_rows()
+        )
         self._clamp_selection()
         if self.empty != was_empty:
             self._recompose_body()
@@ -2972,6 +3006,7 @@ __all__ = [
     "build_tree_nodes",
     "claim_sigil_markup",
     "classify_round_state",
+    "classify_round_state_from_records",
     "compute_round_progress",
     "group_claims_by_evidence",
     "has_research_signal",

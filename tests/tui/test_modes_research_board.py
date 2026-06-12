@@ -426,7 +426,7 @@ def test_build_tree_nodes_open_question_groups_under_a_questions_round() -> None
     assert nodes[0].kind is NodeKind.ROUND
     # The default question is OPEN, so the round classifies as running (the FA8
     # auto-run state infixes the round label).
-    assert nodes[0].label == "round 1 running -- questions"
+    assert nodes[0].label == "round running -- questions"
     assert nodes[1].kind is NodeKind.QUESTION
     assert nodes[1].depth == 2
     assert nodes[1].label == "Which curve model fits the short tenor"
@@ -1328,50 +1328,50 @@ def test_research_board_park_issues_needs_user_park_rpc(
 
 
 # --------------------------------------------------------------------------
-# Honest-unavailable -- r / s surface "not yet wired" (idle-contract)
+# Live run-query keys -- r / s call the live followup / snapshot RPCs (W08)
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    ("key", "verb", "method"),
+    ("key", "verb"),
     [
-        ("r", "follow-up", "research.followup"),
-        ("s", "snapshot", "research.snapshot"),
+        ("r", "follow-up"),
+        ("s", "snapshot"),
     ],
 )
-def test_research_board_unwired_keys_surface_not_yet_wired(
+def test_research_board_run_query_keys_surface_live_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     key: str,
     verb: str,
-    method: str,
 ) -> None:
-    """follow-up / snapshot surface the honest "not yet wired" line.
+    """follow-up / snapshot call the live RPC for the selected campaign (W08).
 
-    Their engine-runner RPCs do not exist, so with a reachable daemon stubbed
-    to answer method-not-found the action surfaces that the method is not wired
-    and never fakes the action (the idle-contract pattern).
+    The RPCs are live (P30-I18-W03), so with a reachable daemon stubbed to
+    answer the run query the action surfaces the honest run figure (next round /
+    rounds run) -- never a faked or not-yet-wired line.
     """
     state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    _append_campaign(state_path, _campaign_payload(campaign_id="RC-0001"))
+    calls: list[tuple[str, dict[str, object]]] = []
 
-    class _MethodNotFoundClient:
-        def __enter__(self) -> _MethodNotFoundClient:
+    class _OkClient:
+        def __enter__(self) -> _OkClient:
             return self
 
         def __exit__(self, *_args: object) -> None:
             return None
 
-        def call(self, _method: str, _params: dict[str, object]) -> dict[str, object]:
-            from eawf.surfaces.cli._daemon_client import DaemonRpcError
-
-            raise DaemonRpcError(code=-32601, message="method not found")
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {"next_round": 2, "rounds_run": 1}
 
     async def body() -> None:
         from eawf.surfaces.cli import _daemon_client as dc
 
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
-        monkeypatch.setattr(dc, "DaemonClient", lambda *a, **k: _MethodNotFoundClient())
+        monkeypatch.setattr(dc, "DaemonClient", lambda *a, **k: _OkClient())
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press("3")
@@ -1382,21 +1382,24 @@ def test_research_board_unwired_keys_surface_not_yet_wired(
             assert isinstance(pane, ResearchBoardModeScreen)
             result = pane.query_one(f"#{ACTION_RESULT_ID}")
             rendered = str(result.render())  # type: ignore[attr-defined]
-            assert "not yet wired" in rendered
-            assert method in rendered
+            assert "not yet wired" not in rendered
             assert verb in rendered
 
     asyncio.run(body())
+    assert len(calls) == 1
+    _method, params = calls[0]
+    assert params == {"campaign_id": "RC-0001"}
 
 
 @pytest.mark.parametrize("key", ["r", "s"])
-def test_research_board_unwired_keys_no_daemon_surface_unavailable(
+def test_research_board_run_query_keys_no_daemon_surface_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     key: str,
 ) -> None:
     """With no daemon, follow-up / snapshot surface the honest unavailable line."""
     state_path = _write_state(tmp_path, _project_state(claims={"CL-0001": _claim()}))
+    _append_campaign(state_path, _campaign_payload(campaign_id="RC-0001"))
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=state_path)
@@ -1797,12 +1800,12 @@ def test_build_tree_nodes_campaign_and_questions_emit_both_rounds() -> None:
     rounds = [node for node in nodes if node.kind is NodeKind.ROUND]
     # The default question is OPEN, so both rounds classify as running.
     assert {node.label for node in rounds} == {
-        "round 1 running",
-        "round 1 running -- questions",
+        "round running",
+        "round running -- questions",
     }
     # The campaign-owned round carries the campaign id; the questions round does not.
-    campaign_round = next(node for node in rounds if node.label == "round 1 running")
-    questions_round = next(node for node in rounds if node.label == "round 1 running -- questions")
+    campaign_round = next(node for node in rounds if node.label == "round running")
+    questions_round = next(node for node in rounds if node.label == "round running -- questions")
     assert campaign_round.campaign_id == "RC-0001"
     assert questions_round.campaign_id is None
 
@@ -1870,7 +1873,7 @@ def test_research_board_renders_question_tree_with_nested_claims(tmp_path: Path)
             tree_body = str(pane.query_one("#research-tree-body").render())  # type: ignore[attr-defined]
             lines = tree_body.splitlines()
             # The only question is ANSWERED, so the round classifies as saturated.
-            round_label = "round 1 saturated -- questions"
+            round_label = "round saturated -- questions"
             question_label = "Which curve model fits the short tenor"
             claim_label = "Implied vol surface is downward sloping in strike"
             round_line = next(line for line in lines if round_label in line)

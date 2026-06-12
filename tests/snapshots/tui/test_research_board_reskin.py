@@ -65,9 +65,7 @@ from eawf.surfaces.tui.modes.research_board import (
     EMPTY_NOTICE,
     EMPTY_SUBLINE,
     ResearchBoardModeScreen,
-    RoundState,
     claim_sigil_markup,
-    classify_round_state,
     question_sigil_markup,
 )
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
@@ -266,6 +264,30 @@ def _write_seeded_scope(
     return state_path
 
 
+def _write_round_record(state_path: Path, *, round_number: int, saturated: bool) -> None:
+    """Append one executed-round record to the scope's research_round store.
+
+    Seeds the real run record the W08 FA8 auto-run state derives from -- the
+    board reads it back to classify the round (saturated -> the closed sigil)
+    rather than inferring from the question ledger.
+    """
+    from eawf.runtime.daemon.methods.research import ResearchRoundPayload, persist_round
+
+    persist_round(
+        state_path,
+        ResearchRoundPayload(
+            campaign_id=_campaign_payload().campaign_id,
+            round_number=round_number,
+            domains=["market-structure"],
+            finding_lines=["Implied vol surface is downward sloping in strike"],
+            claim_ids=["CL-0001"],
+            saturated=saturated,
+            checkpoint=True,
+            recorded_at=_T0,
+        ),
+    )
+
+
 # --------------------------------------------------------------------------
 # Empty-state copy -- the literal mock headline + press-n sub-line
 # --------------------------------------------------------------------------
@@ -394,12 +416,12 @@ def _autorun_questions() -> tuple[OpenQuestion, ...]:
 
 
 def test_research_board_fa8_autorun_round_tree_snapshot(tmp_path: Path) -> None:
-    """The auto-run round tree pins the running sigil + the saturated / pruned budget.
+    """The auto-run round tree derives its FA8 state from the real run records.
 
-    The W08 contract: an auto-running campaign renders a running-round sigil
-    (the live diamond), the saturation / pruned progress (the BUDGET band's
-    answered + pruned tallies), and the budget band -- never a fabricated runner
-    state, only the honest projection of the ledgers on hand.
+    The W08 contract: a campaign whose run persisted a *saturated* round record
+    renders the saturated-round sigil (the closed circle) + the live run state
+    in the RUN band -- the FA8 auto-run state reads off the real executed-round
+    records, never a fabricated runner state nor the retired not-yet-wired line.
     """
     claims = (
         _claim(
@@ -414,10 +436,11 @@ def test_research_board_fa8_autorun_round_tree_snapshot(tmp_path: Path) -> None:
         ),
     )
     questions = _autorun_questions()
-    # An open question is present, so the round classifies as running.
-    assert classify_round_state(questions) is RoundState.RUNNING
     state = _seeded_state(claims, questions)
     state_path = _write_seeded_scope(tmp_path, claims, questions)
+    # Seed a real saturated round record: the FA8 state now derives from the
+    # run, not the question ledger (which would still read running).
+    _write_round_record(state_path, round_number=1, saturated=True)
 
     async def body() -> None:
         app = _HostApp(state=state, state_path=state_path)
@@ -427,13 +450,15 @@ def test_research_board_fa8_autorun_round_tree_snapshot(tmp_path: Path) -> None:
 
             screen = app.screen
             tree_body = str(screen.query_one("#research-tree-body", Static).render())
-            # The running round leads with the live diamond + the running label.
-            assert glyph(Sigil.RUNNING, mode=app.render_mode) in tree_body
-            assert "round 1 running" in tree_body
+            # The saturated round (from the real record) leads with the closed
+            # sigil + the saturated label -- not the question-ledger running state.
+            assert glyph(Sigil.CLOSED, mode=app.render_mode) in tree_body
+            assert "round saturated" in tree_body
+            assert "not yet wired" not in tree_body
             progress_body = str(screen.query_one("#research-progress-body", Static).render())
-            # The budget band reads the saturation (answered) + pruned tallies.
-            assert "1 answered" in progress_body
-            assert "pruned" in progress_body
+            # The RUN band reflects the real run state; the ROUND band counts it.
+            assert "not yet wired" not in progress_body
+            assert "1 run" in progress_body
             assert_screen_snapshot(app, _GOLDEN / "research_board_fa8_autorun.txt")
 
     asyncio.run(body())
