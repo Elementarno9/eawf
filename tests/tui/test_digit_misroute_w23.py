@@ -17,11 +17,11 @@ switch wins at App priority regardless of what is focused. These tests pin:
   :attr:`~eawf.surfaces.tui.app.EaApp.BINDINGS` as priority;
 * the key-trace diagnostic (:meth:`EaApp.trace_digit_binding`) names the
   focus-capturing interceptor that owned the digit before the fix;
-* the full Pilot digit sweep -- with the seal image mounted -- presses EVERY
-  registered digit FROM EVERY mode and asserts each routes to its mapped mode
-  and never opens help (modal closed AND with an adversarial focus-capturing
-  widget that binds ``3`` -> help, the faithful shape of the reported
-  misroute).
+* the full Pilot digit sweep -- with an extra widget mounted on the header --
+  presses EVERY registered digit FROM EVERY mode and asserts each routes to its
+  mapped mode and never opens help (modal closed AND with an adversarial
+  focus-capturing widget that binds ``3`` -> help, the faithful shape of the
+  reported misroute).
 
 Determinism follows the project Pilot-worker rule: each Pilot body drains
 workers via :func:`~eawf.surfaces.tui.snapshot.settle_screen` before asserting.
@@ -37,13 +37,16 @@ import pytest
 from textual.binding import Binding, BindingType
 from textual.widgets import Static
 
-import eawf.surfaces.tui.widgets.header as header_mod
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.modes.registry import MODE_REGISTRY, mode_bindings
 from eawf.surfaces.tui.screens.help import HelpScreen
 from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.header import HEADER_SEAL_ID, Header
+from eawf.surfaces.tui.widgets.header import Header
+
+#: Id of the faithful non-focusable header stand-in the digit sweep mounts to
+#: reproduce the operator's live layout (an extra widget docked on the header).
+_HEADER_EXTRA_ID: str = "w23-header-extra"
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -107,18 +110,17 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@pytest.fixture
-def _seal_mounted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the header to mount a (faithful, non-focusable) seal image.
+async def _mount_header_extra(app: EaApp) -> None:
+    """Mount a faithful non-focusable stand-in widget onto the header.
 
-    The real :class:`textual_image.widget.Image` is ``can_focus=False`` and
-    needs a graphics-capable terminal + resvg, neither of which exists under
-    ``run_test``. The stub mirrors the real widget's NON-focusable shape so the
-    sweep exercises the seal-mounted path the operator hit without depending on
-    a live terminal.
+    Reproduces the operator's live layout (an extra widget docked on the header
+    beside the brand mark) without depending on the header's own chrome. The
+    stand-in is ``can_focus=False`` like the real graphics widgets the operator
+    had on screen, so the digit sweep exercises the same "extra header widget
+    present" path that the misroute surfaced under.
     """
-    monkeypatch.setattr(header_mod, "seal_capable", lambda: True)
-    monkeypatch.setattr(header_mod, "seal_image_widget", lambda px=96: Static("seal"))
+    header = app.query(Header).first()
+    await header.mount(Static("x", id=_HEADER_EXTRA_ID))
 
 
 # --------------------------------------------------------------------------
@@ -192,25 +194,26 @@ def test_trace_digit_binding_names_focus_capturing_interceptor() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_digit_sweep_every_digit_from_every_mode_seal_mounted(
-    _seal_mounted: None,
-) -> None:
+def test_digit_sweep_every_digit_from_every_mode_seal_mounted() -> None:
     """Press EVERY digit FROM EVERY mode; each routes to its map, never help.
 
-    The core RB-2 guard: with the seal image mounted (the operator's live
-    condition), start the sweep from each of the registered modes and press
-    every registered digit, asserting the resulting active mode matches the
-    digit map and the help overlay never opened. The cross-product covers the
-    ``3 -> research`` case the operator reported alongside every sibling digit.
+    The core RB-2 guard: with an extra widget mounted on the header (the
+    operator's live condition), start the sweep from each of the registered
+    modes and press every registered digit, asserting the resulting active mode
+    matches the digit map and the help overlay never opened. The cross-product
+    covers the ``3 -> research`` case the operator reported alongside every
+    sibling digit.
     """
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
-            # Confirm the seal-mounted precondition the operator hit.
+            # Reproduce the operator's live layout (an extra header widget).
+            await _mount_header_extra(app)
+            await settle_screen(pilot)
             header = app.query(Header).first()
-            assert header.query(f"#{HEADER_SEAL_ID}"), "the seal image must be mounted"
+            assert header.query(f"#{_HEADER_EXTRA_ID}"), "the header extra must be mounted"
             for start_spec in MODE_REGISTRY:
                 # Land in the starting mode first.
                 await pilot.press(start_spec.digit)
@@ -231,13 +234,11 @@ def test_digit_sweep_every_digit_from_every_mode_seal_mounted(
     asyncio.run(body())
 
 
-def test_digit_three_routes_to_research_under_focus_capture(
-    _seal_mounted: None,
-) -> None:
+def test_digit_three_routes_to_research_under_focus_capture() -> None:
     """``3`` switches to Research even when a focus-capturing widget binds it.
 
-    The direct reproduction-and-fix assertion: with the seal mounted AND a
-    focus-capturing widget that binds ``3`` -> help focused (the faithful
+    The direct reproduction-and-fix assertion: with an extra header widget AND
+    a focus-capturing widget that binds ``3`` -> help focused (the faithful
     misroute shape), pressing ``3`` must route to Research, not help. This is
     the case that failed before the ``priority=True`` fix.
     """
@@ -246,6 +247,7 @@ def test_digit_three_routes_to_research_under_focus_capture(
         app = EaApp(scope="repo", state_path=_REPO)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
+            await _mount_header_extra(app)
             grabby = _GrabbySeal("x", id="grabby")
             await app.screen.mount(grabby)
             grabby.focus()
@@ -260,7 +262,7 @@ def test_digit_three_routes_to_research_under_focus_capture(
     asyncio.run(body())
 
 
-def test_help_still_opens_on_its_own_key(_seal_mounted: None) -> None:
+def test_help_still_opens_on_its_own_key() -> None:
     """The priority digit fix does not break the genuine ``?`` -> help path.
 
     A regression guard: making the digits priority must not steal the

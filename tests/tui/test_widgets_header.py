@@ -29,7 +29,6 @@ from eawf.surfaces.tui.widgets.header import (
     BRAND,
     CRUMB_SEP,
     DEFAULT_PROJECT_CODE,
-    HEADER_SEAL_ID,
     RUNTIME_IDLE,
     Header,
     active_runtime_id,
@@ -453,33 +452,24 @@ def test_render_header_uses_two_tone_wordmark_accent_on_umlaut_only() -> None:
     assert "[$accent]E" not in rendered
 
 
-def test_render_header_with_seal_image_drops_leading_glyph() -> None:
-    # CR-03: when the Header has mounted the 1-cell Seal image at header-left,
-    # render_header drops the leading brand glyph from the TEXT so the glyph is
-    # not painted as a redundant second mark beside the image. The wordmark still
-    # leads the text line.
-    rendered = render_header(_load(_PHASE_ITER_WAVE), with_seal_image=True)
-    brand_glyph = chrome("brand", mode="unicode")
-    # No leading accent-glyph span -- the image takes its place.
-    assert f"[b][$accent]{brand_glyph}[/]" not in rendered
-    assert brand_glyph not in rendered
-    # The wordmark still leads the bold brand span.
-    assert "[b]E[$accent]ä[/][/b]" in rendered
-
-
-def test_render_header_without_seal_image_keeps_leading_glyph() -> None:
-    # The default (and every non-graphics terminal): the glyph leads the
-    # wordmark inside the bold span -- the deterministic fallback the goldens use.
-    rendered = render_header(_load(_PHASE_ITER_WAVE), with_seal_image=False)
+def test_render_header_always_leads_with_crisp_glyph() -> None:
+    # W26: the header brand mark is ALWAYS the crisp accent glyph -- the
+    # rasterised Seal image is reserved for the large hero surfaces (a 1-cell
+    # raster reads as an unreadable square). render_header carries no seal-image
+    # branch any more: the glyph leads the bold wordmark span on every call.
+    rendered = render_header(_load(_PHASE_ITER_WAVE))
     brand_glyph = chrome("brand", mode="unicode")
     assert f"[b][$accent]{brand_glyph}[/] E[$accent]ä[/][/b]" in rendered
+    # The glyph leads the wordmark -- it is present, not dropped for an image.
+    assert brand_glyph in rendered
 
 
-def test_render_header_seal_image_default_is_glyph_path() -> None:
-    # The default call (no flag) is byte-identical to the explicit glyph path --
-    # so every existing caller keeps the glyph unless it opts into the image.
-    state = _load(_PHASE_ITER_WAVE)
-    assert render_header(state) == render_header(state, with_seal_image=False)
+def test_render_header_glyph_path_in_ascii_render_mode() -> None:
+    # The ASCII render mode swaps the unicode brand glyph for the ASCII mark,
+    # but the structure is the same crisp-glyph-then-wordmark brand span.
+    rendered = render_header(_load(_PHASE_ITER_WAVE), render_mode="ascii")
+    brand_glyph = chrome("brand", mode="ascii")
+    assert f"[b][$accent]{brand_glyph}[/] E[$accent]ä[/][/b]" in rendered
 
 
 def test_render_header_breadcrumb_unchanged_by_wordmark() -> None:
@@ -584,62 +574,36 @@ def test_header_render_returns_brand_after_assignment() -> None:
 
 
 # --------------------------------------------------------------------------
-# CR-03: 1-cell Seal image mounts in place of the brand glyph when capable
+# W26: header brand mark is ALWAYS the crisp glyph -- never the 1-cell seal image
 # --------------------------------------------------------------------------
 
 
-def test_header_mounts_seal_image_and_drops_glyph_when_capable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # When seal_capable(), the Header mounts the 1-cell Seal image at header-left
-    # AND the rendered text drops the leading brand glyph (no redundant double
-    # mark). The image factory is stubbed so the test never depends on a real
-    # graphics terminal / resvg.
-    from textual.widgets import Static as _Static
-
-    monkeypatch.setattr(header_mod, "seal_capable", lambda: True)
-    monkeypatch.setattr(header_mod, "seal_image_widget", lambda px=96: _Static("seal"))
+def test_header_renders_crisp_glyph_and_mounts_no_seal_image() -> None:
+    # W26 revert: the header brand mark is the crisp accent glyph on every
+    # terminal -- a 1-cell raster cannot show the seal's fisheye detail and
+    # reads as an unreadable square, so the header mounts no Image widget and
+    # always renders the brand glyph in the text. header_mod no longer imports
+    # seal_capable / seal_image_widget at all.
+    assert not hasattr(header_mod, "seal_capable")
+    assert not hasattr(header_mod, "seal_image_widget")
 
     async def body() -> tuple[bool, bool]:
+        from textual_image.widget import Image  # type: ignore[import-untyped]
+
         app = _Harness()
         async with app.run_test(size=(80, 6)) as pilot:
             await pilot.pause()
             header = app.query_one("#hdr", Header)
             header.state = _load(_EMPTY_REPO)
             await pilot.pause()
-            image_mounted = bool(header.query(f"#{HEADER_SEAL_ID}"))
+            image_mounted = bool(header.query(Image))
             glyph = chrome("brand", mode="unicode")
             text = str(header.render())
             return image_mounted, glyph in text
 
     image_mounted, glyph_in_text = asyncio.run(body())
-    assert image_mounted is True, "the 1-cell seal image must mount when capable"
-    assert glyph_in_text is False, "the glyph must NOT also render beside the image"
-
-
-def test_header_keeps_glyph_no_image_when_not_capable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # The fallback (and every CI / snapshot run, where the kill switch forces
-    # the capability False): no image mounts and the unicode brand glyph leads
-    # the text -- the deterministic glyph fallback the goldens depend on.
-    monkeypatch.setattr(header_mod, "seal_capable", lambda: False)
-
-    async def body() -> tuple[bool, bool]:
-        app = _Harness()
-        async with app.run_test(size=(80, 6)) as pilot:
-            await pilot.pause()
-            header = app.query_one("#hdr", Header)
-            header.state = _load(_EMPTY_REPO)
-            await pilot.pause()
-            image_mounted = bool(header.query(f"#{HEADER_SEAL_ID}"))
-            glyph = chrome("brand", mode="unicode")
-            text = str(header.render())
-            return image_mounted, glyph in text
-
-    image_mounted, glyph_in_text = asyncio.run(body())
-    assert image_mounted is False, "no image mounts on a non-graphics terminal"
-    assert glyph_in_text is True, "the unicode brand glyph leads the fallback text"
+    assert image_mounted is False, "the header mounts no seal Image widget"
+    assert glyph_in_text is True, "the crisp brand glyph leads the header text"
 
 
 # --------------------------------------------------------------------------

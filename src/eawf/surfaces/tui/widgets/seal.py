@@ -13,8 +13,19 @@ colour in a live document, but ``resvg`` rasterises with no document context
 and so resolves ``currentColor`` to **black** -- the seal would render as a
 black blob on a dark theme. The rasterise path therefore substitutes the
 resolved theme accent hex into the SVG text BEFORE invoking ``resvg``, and the
-PNG cache keys on ``(px, accent_hex)`` (overwriting any stale PNG) so a
+PNG cache keys on ``(px, accent_hex, bg_hex)`` (overwriting any stale PNG) so a
 pre-existing black PNG from before the fix can never survive into the render.
+
+The asset is also a fisheye disc with a star *punched out* (an ``evenodd``
+knockout), so the corners around the disc and the star cut-out are
+**transparent**. A terminal graphics protocol composites those transparent
+regions onto the cell's own background -- on Ghostty that paints **black**, so
+the seal reads as a green disc inside a black square. The rasterise therefore
+mattes the PNG onto the resolved theme surface hex via ``resvg --background``:
+the transparent regions are filled with the surface colour, so they blend into
+the live TUI surface the seal sits on (``Screen { background: $surface }``)
+rather than rendering black. The surface hex is part of the cache key alongside
+the accent so a stale fully-transparent PNG cannot survive into the render.
 
 The capability **degrades cleanly**. ``textual-image`` + Pillow now ship in the
 default dependency set, so the import is no longer an invisible-extra trap: a
@@ -62,6 +73,15 @@ _CURRENT_COLOR: str = "currentColor"
 #: The ``resvg`` CLI binary name (the same renderer the ``svg_pixel_diff`` audit
 #: kind pins). Absent on most machines -- :func:`resvg_present` checks for it.
 _RESVG: str = "resvg"
+
+#: The main content surface background hex the seal is matted onto. It is the
+#: Wong dark theme's ``$surface`` (the light surface behind the hero seal, which
+#: ``Screen { background: $surface }`` paints), so the seal's transparent
+#: corners + star knockout blend into the live TUI surface instead of the black
+#: a graphics terminal composites a transparent region onto. Single-homed here
+#: the same way :func:`resolve_surface_hex` mirrors :func:`resolve_accent_hex`:
+#: a future per-theme surface only has to feed the one resolver.
+SURFACE_HEX: str = "#1E1E1E"
 
 #: Kill switch. When set to any non-empty value, :func:`seal_capable` returns
 #: ``False`` unconditionally so the image path is never taken. The snapshot
@@ -167,6 +187,23 @@ def resolve_accent_hex() -> str:
     return ACCENT_HEX
 
 
+def resolve_surface_hex() -> str:
+    """Return the resolved theme surface hex the seal is matted onto.
+
+    The seal's transparent corners + star knockout matte onto the main content
+    surface (:data:`SURFACE_HEX`, the Wong dark theme's ``$surface``), the same
+    surface ``Screen { background: $surface }`` paints behind the hero seal, so
+    the matted PNG blends into the live TUI surface rather than the black a
+    graphics terminal composites a transparent region onto. Centralising the
+    lookup keeps the surface single-homed: a future per-theme surface only has
+    to feed this one resolver -- the mirror of :func:`resolve_accent_hex`.
+
+    Returns:
+        The ``#rrggbb`` surface hex the seal is matted onto.
+    """
+    return SURFACE_HEX
+
+
 def _substitute_current_color(svg_text: str, accent_hex: str) -> str:
     """Return *svg_text* with every ``currentColor`` token replaced by *accent_hex*.
 
@@ -186,47 +223,59 @@ def _substitute_current_color(svg_text: str, accent_hex: str) -> str:
     return svg_text.replace(_CURRENT_COLOR, accent_hex)
 
 
-def _seal_png_path(px: int, accent_hex: str) -> Path:
-    """Return the per-user cache path for the ``px``/``accent_hex`` seal PNG.
+def _seal_png_path(px: int, accent_hex: str, bg_hex: str) -> Path:
+    """Return the per-user cache path for the ``px``/``accent_hex``/``bg_hex`` PNG.
 
-    The filename keys on BOTH the pixel size and the accent hex so a re-theme
-    (or the black-to-accent fix itself) writes a fresh PNG rather than reusing a
-    stale one. The directory is namespaced by the current user so two operators
-    sharing a host never collide on (or read) each other's tmp PNG.
+    The filename keys on the pixel size, the accent hex, AND the matte
+    background hex so a re-theme (or the transparent-to-matted fix itself)
+    writes a fresh PNG rather than reusing a stale one -- a pre-existing
+    fully-transparent PNG from before the matte fix cannot survive on a path
+    that now carries the bg hex. The directory is namespaced by the current
+    user so two operators sharing a host never collide on (or read) each
+    other's tmp PNG.
 
     Args:
         px: The square pixel size the PNG was rendered at.
         accent_hex: The ``#rrggbb`` accent the PNG was rendered in.
+        bg_hex: The ``#rrggbb`` surface the PNG's transparent regions were
+            matted onto.
 
     Returns:
-        The per-user, per-(px, accent) cache path.
+        The per-user, per-(px, accent, bg) cache path.
     """
     try:
         user = getpass.getuser()
     except KeyError, OSError:
         user = str(os.getuid()) if hasattr(os, "getuid") else "user"
     cache_dir = Path(tempfile.gettempdir()) / f"eawf-seal-{user}"
-    # The accent hex leads with ``#``, which is filename-safe but reads cleaner
-    # stripped; keep it in the stem so the cache key is visible on disk.
+    # The accent + bg hexes lead with ``#``, which is filename-safe but reads
+    # cleaner stripped; keep both in the stem so the cache key is visible on disk.
     accent_key = accent_hex.lstrip("#")
-    return cache_dir / f"ea-seal-{px}-{accent_key}.png"
+    bg_key = bg_hex.lstrip("#")
+    return cache_dir / f"ea-seal-{px}-{accent_key}-bg{bg_key}.png"
 
 
 @lru_cache(maxsize=8)
-def _rasterised_seal(px: int, accent_hex: str) -> Path | None:
-    """Rasterise the accent-substituted Seal SVG to a ``px``-square PNG; cache it.
+def _rasterised_seal(px: int, accent_hex: str, bg_hex: str) -> Path | None:
+    """Rasterise the accent-substituted Seal SVG to a matted ``px``-square PNG.
 
     Substitutes *accent_hex* for the SVG's ``currentColor`` token (so ``resvg``
     cannot render it black), then rasterises the substituted SVG to a per-user
-    PNG keyed on ``(px, accent_hex)``. A stale PNG at the same path is
-    OVERWRITTEN, so a pre-existing black PNG from before this fix can never
+    PNG keyed on ``(px, accent_hex, bg_hex)`` with ``resvg --background
+    <bg_hex>`` so the seal's transparent corners + star knockout are matted onto
+    the surface hex (the live-render defect a graphics terminal otherwise
+    composites onto black). A stale PNG at the same path is OVERWRITTEN, so a
+    pre-existing black / fully-transparent PNG from before this fix can never
     survive into the render -- correctness wins over the read-cache shortcut.
     The in-process :func:`functools.lru_cache` still elides the ``resvg``
-    round-trip on a repeat call for the same ``(px, accent_hex)`` within the run.
+    round-trip on a repeat call for the same ``(px, accent_hex, bg_hex)`` within
+    the run.
 
     Args:
         px: The square pixel size to render the seal at.
         accent_hex: The ``#rrggbb`` accent to substitute for ``currentColor``.
+        bg_hex: The ``#rrggbb`` surface to matte the transparent regions onto
+            via ``resvg --background``.
 
     Returns:
         The cached PNG path, or ``None`` when ``resvg`` is absent / the asset is
@@ -234,7 +283,7 @@ def _rasterised_seal(px: int, accent_hex: str) -> Path | None:
     """
     if shutil.which(_RESVG) is None or not _SEAL_SVG.exists():
         return None
-    out = _seal_png_path(px, accent_hex)
+    out = _seal_png_path(px, accent_hex, bg_hex)
     out.parent.mkdir(parents=True, exist_ok=True)
     svg_text = _SEAL_SVG.read_text(encoding="utf-8")
     coloured = _substitute_current_color(svg_text, accent_hex)
@@ -242,17 +291,29 @@ def _rasterised_seal(px: int, accent_hex: str) -> Path | None:
     try:
         coloured_svg.write_text(coloured, encoding="utf-8")
         subprocess.run(
-            [_RESVG, "-w", str(px), "-h", str(px), str(coloured_svg), str(out)],
+            [
+                _RESVG,
+                "-w",
+                str(px),
+                "-h",
+                str(px),
+                "--background",
+                bg_hex,
+                str(coloured_svg),
+                str(out),
+            ],
             check=True,
             capture_output=True,
         )
     except (subprocess.CalledProcessError, OSError) as exc:
-        logger.info(f"_rasterised_seal failed px={px} accent={accent_hex!r} err={exc!r}")
+        logger.info(
+            f"_rasterised_seal failed px={px} accent={accent_hex!r} bg={bg_hex!r} err={exc!r}"
+        )
         return None
     return out
 
 
-def seal_image_widget(px: int = 96) -> Widget | None:
+def seal_image_widget(px: int = 96, *, bg_hex: str | None = None) -> Widget | None:
     """Return a :class:`textual_image.widget.Image` of the Seal, or ``None``.
 
     Returns ``None`` (the caller renders the unicode glyph instead) whenever the
@@ -260,18 +321,25 @@ def seal_image_widget(px: int = 96) -> Widget | None:
     ``widget = seal_image_widget() or fallback`` and never crash on a terminal
     or install that cannot show the image. The seal rasterises in the resolved
     theme accent (:func:`resolve_accent_hex`) so the mark carries the brand
-    green rather than ``resvg``'s black default.
+    green rather than ``resvg``'s black default, and is matted onto *bg_hex*
+    (defaulting to the resolved theme surface, :func:`resolve_surface_hex`) so
+    its transparent regions blend into the live TUI surface rather than the
+    black a graphics terminal composites a transparent region onto.
 
     Args:
         px: The square pixel size to rasterise the seal at; the widget scales it
             to its CSS cell box.
+        bg_hex: The ``#rrggbb`` surface to matte the transparent regions onto,
+            or ``None`` to use the resolved theme surface
+            (:func:`resolve_surface_hex`).
 
     Returns:
         The image widget when capable, else ``None``.
     """
     if not seal_capable():
         return None
-    png = _rasterised_seal(px, resolve_accent_hex())
+    matte = bg_hex if bg_hex is not None else resolve_surface_hex()
+    png = _rasterised_seal(px, resolve_accent_hex(), matte)
     if png is None:
         return None
     from textual_image.widget import Image
@@ -281,8 +349,10 @@ def seal_image_widget(px: int = 96) -> Widget | None:
 
 __all__ = [
     "SEAL_DISABLE_ENV",
+    "SURFACE_HEX",
     "deps_present",
     "resolve_accent_hex",
+    "resolve_surface_hex",
     "resvg_present",
     "seal_capable",
     "seal_image_widget",
