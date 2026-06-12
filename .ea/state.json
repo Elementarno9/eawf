@@ -22692,7 +22692,9 @@
         "P30-I16-W25",
         "P30-I16-W26",
         "P30-I16-W27",
-        "P30-I16-W28"
+        "P30-I16-W28",
+        "P30-I16-W29",
+        "P30-I16-W30"
       ]
     },
     "P30-I17": {
@@ -23811,7 +23813,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T03:56:50.138383Z",
+  "updated_at": "2026-06-12T04:30:59.556355Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -89921,6 +89923,185 @@
         }
       ],
       "title": "Replace hero raster seal with approved half-block ASCII-art mark",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I16-W29": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/doctor.py",
+        "src/eawf/observability/doctor/checks.py",
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "gates": [],
+      "id": "P30-I16-W29",
+      "intent": {
+        "desired_outcome": "Entering doctor never opens a config/help modal on its own; probes run detached from the TTY so no escape/response leaks into the key stream.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Reproduce via Pilot; trace the leak; run probes with stdin=DEVNULL/detached and/or extend the app key guard; add a regression test."
+        ],
+        "priority_rationale": "Doctor is the operator health surface; auto-popping a modal on entry makes it unusable.",
+        "problem": "Live review: switching to doctor mode (5) unexpectedly opens a config/help pane with no such keypress; the health-gather runs eawf subprocess probes on entry whose TTY interaction can leak a c/? key.",
+        "risks": [
+          "Live race not fully headless-reproducible; land the deterministic guard + test",
+          "operator re-verifies."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I16",
+      "opened_at": "2026-06-12T04:30:59.000796Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Switching to doctor opens no config/help modal without a real keypress; probes run detached from the TTY and/or the input guard drops the leak; a Pilot regression drains the doctor worker and asserts no modal; doctor still renders its rollup.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Switching to doctor opens no config/help modal without a real keypress; probes run detached from the TTY and/or the input guard drops the leak; a Pilot regression drains the doctor worker and asserts no modal; doctor still renders its rollup.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop doctor mode opening a config or help pane on entry",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I16-W30": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/empty_state.py",
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "src/eawf/surfaces/tui/modes/feed.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/modes/evidence.py"
+      ],
+      "gates": [],
+      "id": "P30-I16-W30",
+      "intent": {
+        "desired_outcome": "The other empty-state heroes render the same centered ASCII-art seal as research for a consistent brand moment.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a seal option to render_empty_state or mount seal_art_widget per mode mirroring research (width:1fr + text-align center); route the four modes through it; regen empty goldens."
+        ],
+        "priority_rationale": "Operator wants the seal consistent across empty-state modes, not just research.",
+        "problem": "Only the research hero shows the ASCII-art seal; autopilot/evidence/feed/agent_watch empties still show the small muted brand glyph, so the brand mark is inconsistent.",
+        "risks": [
+          "42x19 art is large on compact empties; keep centered + theme-portable; operator re-verifies."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I16",
+      "opened_at": "2026-06-12T04:30:59.556170Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The autopilot/evidence/feed/agent_watch empty heroes render the centered 42-wide ASCII-art seal (same seal_art mechanism as research",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The autopilot/evidence/feed/agent_watch empty heroes render the centered 42-wide ASCII-art seal (same seal_art mechanism as research",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "theme-portable",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no raster)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "regenerated empty goldens show it",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "regenerated empty goldens show it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-05",
+          "kind": "legacy",
+          "measurable_signal": "and targeted + snapshot tests pass.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "and targeted + snapshot tests pass.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Spread the ASCII-art seal to the other empty-state mode heroes",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
