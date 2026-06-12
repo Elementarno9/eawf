@@ -1242,9 +1242,15 @@ def test_autopilot_fork_inbox_resolution_routes_resolve_fork(
             await settle_screen(pilot)
 
     asyncio.run(body())
-    assert calls and calls[0][0] == "fleet.resolve_fork"
-    assert calls[0][1]["wave_id"] == "P01-I01-W02"
-    assert calls[0][1]["resolution"] == "approve_close"
+    # Cockpit mount reattaches a persisted DRAINING run FIRST (W07), so the
+    # approve-close resolve_fork is the call AFTER the mount-time reattach -- find
+    # it by method rather than pinning index 0 so the reattach prefix is tolerated.
+    methods = [method for method, _params in calls]
+    assert methods[0] == "fleet.reattach"
+    resolve_calls = [params for method, params in calls if method == "fleet.resolve_fork"]
+    assert len(resolve_calls) == 1
+    assert resolve_calls[0]["wave_id"] == "P01-I01-W02"
+    assert resolve_calls[0]["resolution"] == "approve_close"
 
 
 # --------------------------------------------------------------------------

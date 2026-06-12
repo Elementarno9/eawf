@@ -61,6 +61,17 @@ exits non-zero:
   ``open_phase`` silently stamps each phase with ``track_id=state.current.track_id``
   (I11-W03), so phases tag their owning Track. Dropping the stamp re-idles the
   silent phase-tag binding and reds this row.
+- :func:`check_drive_ladders_wired` -- a source-scan probe asserting the live
+  drive (``start_background_drive``) arms ``arm_drive`` with both
+  ``classify=_live_lane_error_classifier`` and ``repair=repair_hook`` (I17-W11),
+  so the bounded spawn ladder (DL-11) and the grounded repair ladder (DL-7) fire
+  on a real autopilot run instead of staying dormant until a test injects them.
+  Dropping either kwarg reds this row.
+- :func:`check_live_output_text_wired` -- a source-scan probe asserting the live
+  wave spawn (``_spawn_and_dispatch``) threads ``output_text=spawn_result.text``
+  into ``run_dispatch`` (I17-W11), so the W08 stdout producer fires on a real
+  spawn and the agent-watch live tail is not empty. Dropping the thread reds this
+  row.
 - :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
   pre-commit gate stays enabled so the runtime close gate cannot ship idle.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
@@ -196,6 +207,8 @@ class GateFailure(StrEnum):
     VALIDATE_JURY_CLI_IDLE = "validate_jury_cli_idle"
     TRACK_RPC_IDLE = "track_rpc_idle"
     PHASE_TRACK_TAG_IDLE = "phase_track_tag_idle"
+    DRIVE_LADDERS_IDLE = "drive_ladders_idle"
+    LIVE_OUTPUT_TEXT_IDLE = "live_output_text_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1167,6 +1180,152 @@ def check_phase_track_tag_wired(
     )
 
 
+# =========================================================================== #
+# P30-I17 live-autopilot bindings: the drive ladders + the live stdout fan.
+# =========================================================================== #
+
+#: The daemon fleet module whose ``start_background_drive`` arms the LIVE drive
+#: (I17-W11). Read off the working tree; the two production ``arm_drive`` calls
+#: must each pass ``classify`` + ``repair`` so the bounded spawn ladder (DL-11)
+#: and the grounded repair ladder (DL-7) fire on a real autopilot run -- without
+#: the kwargs ``classify is None`` / ``repair is None`` and both ladders stay
+#: dormant (they only fire when a test injects the hooks).
+_LIVE_DRIVE_MODULE = "src/eawf/runtime/daemon/methods/fleet.py"
+
+#: The live wave-spawn dispatch module whose ``_spawn_and_dispatch`` threads the
+#: captured agent answer into the W08 stdout producer (I17-W11). Read off the
+#: working tree; without ``output_text=spawn_result.text`` the producer is wired
+#: into ``run_dispatch`` but no live caller supplies it, so the agent-watch live
+#: tail stays empty on a real spawn.
+_LIVE_OUTPUT_MODULE = "src/eawf/runtime/daemon/methods/agent.py"
+
+#: The live drive arms ``arm_drive`` with the production error classifier so the
+#: bounded spawn ladder fires; a regression that drops the kwarg re-dormants it.
+_DRIVE_CLASSIFY_RE = re.compile(r"\bclassify\s*=\s*_live_lane_error_classifier\b")
+
+#: The live drive arms ``arm_drive`` with the live grounded-repair hook so the
+#: bounded repair ladder fires; a regression that drops the kwarg re-dormants it.
+_DRIVE_REPAIR_RE = re.compile(r"\brepair\s*=\s*repair_hook\b")
+
+#: The live spawn threads its captured answer text into the stdout producer.
+_LIVE_OUTPUT_TEXT_RE = re.compile(r"\boutput_text\s*=\s*spawn_result\.text\b")
+
+
+def check_drive_ladders_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _LIVE_DRIVE_MODULE,
+) -> GateResult:
+    """Assert the LIVE drive enables the spawn + repair ladders (I17-W11).
+
+    The W11 binding: :func:`eawf.runtime.daemon.methods.fleet.start_background_drive`
+    arms ``arm_drive`` with the production
+    :func:`~eawf.runtime.daemon.methods.fleet._live_lane_error_classifier`
+    (``classify=``) and the live
+    :func:`~eawf.runtime.daemon.methods.fleet._build_live_lane_repair_hook` hook
+    (``repair=``), so the bounded spawn ladder (DL-11, :func:`spawn_lane_or_fork`)
+    and the bounded grounded repair ladder (DL-7, :func:`repair_lane_or_fork`)
+    FIRE on a real autopilot run. With either kwarg dropped the loop takes the
+    direct-spawn / terminal-fork path -- the ladders ship built-but-dormant on
+    the live path (they fire only when a test injects the hooks). If a later
+    refactor drops either binding the source no longer matches and this gate
+    fails :attr:`GateFailure.DRIVE_LADDERS_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-dormant outcomes.
+
+    Args:
+        module_text: The fleet module source. ``None`` reads *module_path* off
+            the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the fleet module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        arms the drive with BOTH ``classify=_live_lane_error_classifier`` and
+        ``repair=repair_hook``; otherwise ``failure`` is
+        :attr:`GateFailure.DRIVE_LADDERS_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    wires_classify = _DRIVE_CLASSIFY_RE.search(text) is not None
+    wires_repair = _DRIVE_REPAIR_RE.search(text) is not None
+    if wires_classify and wires_repair:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (live drive arms classify + repair -- the "
+                "bounded spawn ladder (DL-11) + grounded repair ladder (DL-7) fire "
+                "on a real run, not just under test)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.DRIVE_LADDERS_IDLE,
+        message=(
+            "live drive ladders are idle: "
+            f"{module_path} wires_classify={wires_classify} wires_repair={wires_repair} "
+            "(expected both True); start_background_drive must arm arm_drive with "
+            "classify=_live_lane_error_classifier AND repair=repair_hook -- a dropped "
+            "kwarg re-dormants the spawn / repair ladder on the live autopilot run"
+        ),
+    )
+
+
+def check_live_output_text_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _LIVE_OUTPUT_MODULE,
+) -> GateResult:
+    """Assert the live wave spawn supplies ``output_text`` to the stdout producer (I17-W11).
+
+    The W11 binding: the live wave-spawn dispatch
+    (:func:`eawf.runtime.daemon.methods.agent._spawn_and_dispatch`) threads the
+    spawned agent's OWN captured answer (``spawn_result.text``) into
+    :func:`~eawf.runtime.daemon.dispatch_runner.run_dispatch` as
+    ``output_text=``, so the W08 stdout producer emits an ``agent.output`` event
+    the agent-watch live tail renders. Without the thread the producer is wired
+    into ``run_dispatch`` but no live caller supplies it, so ``emit_agent_output``
+    never fires on a real spawn and the tail stays empty. If a later refactor
+    drops the binding the source no longer matches and this gate fails
+    :attr:`GateFailure.LIVE_OUTPUT_TEXT_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-dormant outcomes.
+
+    Args:
+        module_text: The live dispatch module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the live dispatch module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        threads ``output_text=spawn_result.text`` into the live dispatch;
+        otherwise ``failure`` is :attr:`GateFailure.LIVE_OUTPUT_TEXT_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    if _LIVE_OUTPUT_TEXT_RE.search(text) is not None:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (live spawn threads output_text=spawn_result.text "
+                "-- the stdout producer fires on a real spawn, the live tail is not empty)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.LIVE_OUTPUT_TEXT_IDLE,
+        message=(
+            "live output_text fan is idle: "
+            f"{module_path} carries no 'output_text=spawn_result.text' thread into "
+            "run_dispatch, so the W08 stdout producer never fires on a real spawn "
+            "(the agent-watch live tail stays empty -- the producer is wired but unfed)"
+        ),
+    )
+
+
 def check_runtime_gate_is_not_idle(
     *,
     precommit_text: str | None = None,
@@ -1787,6 +1946,8 @@ def main(argv: list[str]) -> int:
     :func:`check_jury_block_authority_wired`,
     :func:`check_validate_jury_cli_wired`), then the two I11 Track binding probes
     (:func:`check_track_rpc_wired`, :func:`check_phase_track_tag_wired`), then the
+    two I17 live-autopilot binding probes (:func:`check_drive_ladders_wired`,
+    :func:`check_live_output_text_wired`), then the
     runtime-gate binding check (:func:`check_runtime_gate_is_not_idle`), then the
     registry-wide audit-DSL wired-on sweep
     (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
@@ -1835,6 +1996,10 @@ def main(argv: list[str]) -> int:
     # The two I11 Track bindings read their live source off the working tree the
     # same way: the daemon-registered track.add / track.switch RPCs (W02) and the
     # silent open_phase track-tag stamp (W03). Either re-idle fails its row.
+    #
+    # The two I17 live-autopilot bindings read their live source off the working
+    # tree the same way: the drive-arming classify + repair kwargs (W11) and the
+    # live-spawn output_text fan (W11). Either re-dormant fails its row.
     for source_scan_check in (
         check_spec_jury_ballot_fn_wired(),
         check_jury_reliability_map_wired(),
@@ -1842,6 +2007,8 @@ def main(argv: list[str]) -> int:
         check_validate_jury_cli_wired(),
         check_track_rpc_wired(),
         check_phase_track_tag_wired(),
+        check_drive_ladders_wired(),
+        check_live_output_text_wired(),
     ):
         failed |= _report_result(source_scan_check)
 

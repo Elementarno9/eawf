@@ -84,13 +84,14 @@ from eawf.runtime.daemon.dispatch_runner import (
 )
 from eawf.runtime.daemon.methods import register
 from eawf.runtime.lock import portalock
-from eawf.runtime.runtimes.adapter import RuntimeSpawnError
+from eawf.runtime.runtimes.adapter import ErrorClass, RuntimeSpawnError
 from eawf.runtime.runtimes.cancel import CancelResult, cancel_process_group
 from eawf.runtime.runtimes.fallback import (
     FallbackAction,
     fallback_action,
     next_runtime_on_error,
 )
+from eawf.runtime.runtimes.selector import select_adapter
 from eawf.workflow.dispatch.retry import (
     ErrorClassifier,
     RepairExhaustedError,
@@ -656,6 +657,212 @@ def _run_dispatch_threaded(ctx: MethodContext, wave_id: str) -> dict[str, Any]:
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(_run).result()
+
+
+#: Runtime id -> the short ``RuntimeTriple`` spelling
+#: :func:`~eawf.workflow.dispatch.routing.model_for_runtime` expects (it routes
+#: on the short token, not the CLI-facing id). Mirrors the canonical map the
+#: jury spawn factory uses so the live repair re-spawn resolves the runtime's own
+#: vendor model.
+_REPAIR_RUNTIME_TRIPLE: dict[str, str] = {
+    "claude-code": "claude",
+    "claude-agent-sdk": "claude",
+    "codex": "codex",
+    "opencode": "opencode",
+}
+
+
+def _live_lane_error_classifier(exc: RuntimeSpawnError, runtime: str) -> ErrorClass:
+    """Classify a live lane-spawn failure via the resolved adapter -- W03 / DL-11.
+
+    The production :class:`~eawf.workflow.dispatch.retry.ErrorClassifier` the
+    bounded spawn ladder (:func:`spawn_lane_or_fork`) consults on a RECOVERABLE
+    failure to pick the V5 ladder action: it resolves the runtime the spawn
+    failed on and asks that adapter's
+    :meth:`~eawf.runtime.runtimes.adapter.RuntimeAdapter.parse_error` to map the
+    failure to a canonical :class:`~eawf.runtime.runtimes.adapter.ErrorClass`.
+    This is the SAME binding the single-wave dispatch path uses
+    (:func:`eawf.runtime.daemon.methods.agent._spawn_and_dispatch`'s ``_classify``
+    closure), lifted to a module-level callable so the live drive can wire it
+    into :func:`arm_drive` -- without it ``classify is None`` and the spawn
+    ladder never fires on a real autopilot run.
+
+    Args:
+        exc: The :class:`RuntimeSpawnError` the live spawn raised.
+        runtime: Runtime id the spawn failed on (the loop may have switched).
+
+    Returns:
+        The canonical :class:`~eawf.runtime.runtimes.adapter.ErrorClass` the
+        resolved adapter classifies the failure to. A parse-level failure with
+        no exit context coerces the status to ``-1``, which falls through to the
+        conservative ``RUNTIME_API_ERROR`` (a switch signal).
+    """
+    exit_status = exc.exit_status if exc.exit_status is not None else -1
+    return select_adapter(runtime).parse_error(exit_status, exc.stderr)
+
+
+def _build_live_lane_repair_hook(ctx: MethodContext) -> LaneRepairHook:
+    """Build the production repair hook the live drive wires into the loop -- W03 / DL-7.
+
+    The grounded repair ladder (:func:`repair_lane_or_fork`) was built + tested
+    with ZERO production callers: the live drive never passed ``repair=``, so a
+    failing-check fork on a real autopilot run skipped the ladder entirely. This
+    returns the live :class:`LaneRepairHook` the drive wires in, so a genuine
+    failing-check lane is re-dispatched up the bounded grounded repair ladder
+    rather than counted a terminal failure on the first refusal.
+
+    The hook drives the BUILT pieces, inventing no new policy:
+
+    1. Resolve the forked lane's wave + its FIRST refused success criterion off
+       ``state.json`` (free read), grounding the repair on the wave's recorded
+       ``outcome`` (the concrete failing-check detail the agent left). When the
+       wave / criterion / grounding detail cannot be resolved off disk, the hook
+       returns ``resolved=False`` WITHOUT enqueuing a fork, so the lane keeps its
+       pre-W03 terminal-fork behaviour (the ladder is a re-dispatch, never a
+       silent drop).
+    2. Build the verbatim base prompt for the re-dispatch via
+       :func:`~eawf.workflow.dispatch.renderer.render_dispatch_envelope`.
+    3. Bind the LIVE adapter re-spawn + the LIVE close-gate oracle re-verify
+       (:func:`~eawf.workflow.verify.oracle.run_oracle`) and drive
+       :func:`repair_lane_or_fork`: a resolved repair returns the re-dispatched
+       :class:`LaneDispatch` under its INCREMENTED attempt (the cockpit repair
+       counter), and an exhausted ladder has already enqueued the
+       ``REPAIR_EXHAUSTED`` fork through the canonical writer.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` + ``event_path``
+            for the live re-spawn + re-verify.
+
+    Returns:
+        A :class:`LaneRepairHook` closing over *ctx*. Tests inject a
+        deterministic fake instead so the loop exercises the repair path without
+        a real adapter.
+    """
+
+    def _hook(hook_ctx: MethodContext, lane: FleetLane) -> LaneRepairOutcome:
+        outcome: LaneRepairOutcome = _drive_coro(_live_repair_lane(hook_ctx, lane))
+        return outcome
+
+    return _hook
+
+
+async def _live_repair_lane(ctx: MethodContext, lane: FleetLane) -> LaneRepairOutcome:
+    """Drive one failing live lane through the grounded repair ladder -- W03 / DL-7.
+
+    The async body of the live :class:`LaneRepairHook` (see
+    :func:`_build_live_lane_repair_hook`). Resolves the refused criterion +
+    grounding detail off ``state.json``, binds the live adapter re-spawn + the
+    live close-gate re-verify, and drives :func:`repair_lane_or_fork`. A resolved
+    repair yields a :class:`LaneRepairOutcome` carrying the re-dispatched lane
+    under its incremented attempt; an exhausted ladder yields ``resolved=False``
+    (the ``REPAIR_EXHAUSTED`` fork already enqueued by :func:`repair_lane_or_fork`).
+    A lane whose grounding cannot be resolved off disk yields ``resolved=False``
+    with no fork enqueued, so the loop keeps the pre-W03 terminal-fork behaviour.
+
+    Args:
+        ctx: Daemon method context.
+        lane: The forked lane to repair (carrying its pre-repair attempt).
+
+    Returns:
+        The :class:`LaneRepairOutcome` of the repair drive.
+    """
+    from eawf.kernel.state.enums import AgentSessionRole as _Role
+    from eawf.kernel.state.enums import EffortBucket as _Effort
+    from eawf.runtime.sandbox.policy import resolve_denied_tools
+    from eawf.workflow.dispatch.renderer import render_dispatch_envelope
+    from eawf.workflow.dispatch.routing import model_for_runtime
+    from eawf.workflow.verify.oracle import run_oracle
+
+    wave_id = lane.wave_id
+    if ctx.state_path is None or ctx.event_path is None:
+        return LaneRepairOutcome(resolved=False, attempts_used=1, dispatch=None)
+    state_path = Path(ctx.state_path)
+    repo_root = state_path.parent.parent
+    state = load_state(state_path)
+    wave = state.waves.get(wave_id)
+    # The grounding the repair re-dispatch needs: a refused criterion to target +
+    # the concrete failing-check detail to ground the FIRST re-dispatch on. The
+    # wave's recorded outcome IS that falsifier payload; with no criterion or no
+    # grounding detail there is nothing to ground a repair on, so the lane keeps
+    # its terminal-fork behaviour rather than dispatching a content-free repair.
+    if wave is None or not wave.success_criteria:
+        return LaneRepairOutcome(resolved=False, attempts_used=1, dispatch=None)
+    criterion = wave.success_criteria[0]
+    failing_detail = " ".join((wave.outcome or "").split())
+    if not failing_detail:
+        return LaneRepairOutcome(resolved=False, attempts_used=1, dispatch=None)
+
+    # The lane carries no runtime; resolve it from the wave's preference ladder
+    # (the first entry is the highest-preference runtime) so the re-spawn runs on
+    # the runtime the wave pinned, falling back to claude-code when unset.
+    runtime = wave.runtime_preference[0] if wave.runtime_preference else "claude-code"
+    role = wave.agent_role if wave.agent_role is not None else _Role.EXECUTOR
+    effort = wave.effort_bucket if wave.effort_bucket is not None else _Effort.M
+    base_prompt = render_dispatch_envelope(state, wave_id, runtime, repo_root=repo_root).prompt
+    denied = sorted(resolve_denied_tools(state.sandbox_policies, wave_id=wave_id))
+    cwd = str(repo_root)
+
+    def _spawn_on(spawn_runtime: str) -> RepairSpawnFn:
+        adapter = select_adapter(spawn_runtime)
+        model = model_for_runtime(role, effort, _REPAIR_RUNTIME_TRIPLE.get(spawn_runtime, "claude"))
+
+        async def _spawn(prompt: str) -> SpawnResult:
+            return await adapter.spawn_session(prompt, model=model, cwd=cwd, denied_tools=denied)
+
+        return _spawn
+
+    _repair_spawn = _spawn_on(runtime)
+
+    async def _verify(result: SpawnResult) -> str | None:
+        oracle = await run_oracle(
+            criterion,
+            list(wave.gates),
+            wave=wave,
+            state=state,
+            state_path=state_path,
+            events_path=Path(ctx.event_path),
+            repo_root=repo_root,
+            spawn_factory=_spawn_on,
+        )
+        # ``None`` signals the refusal is resolved; a still-failing oracle returns
+        # the producing-gate detail so the next re-dispatch re-grounds on it.
+        if oracle.status == "pass":
+            return None
+        return oracle.failing_detail()
+
+    def _verify_sync(result: SpawnResult) -> str | None:
+        still_failing: str | None = _drive_coro(_verify(result))
+        return still_failing
+
+    try:
+        repaired = await repair_lane_or_fork(
+            ctx,
+            criterion,
+            failing_detail,
+            base_prompt=base_prompt,
+            spawn=_repair_spawn,
+            verify=_verify_sync,
+            wave_id=wave_id,
+            attempt=lane.attempt,
+        )
+    except RepairExhaustedError as exc:
+        # repair_lane_or_fork already enqueued the REPAIR_EXHAUSTED fork through
+        # the canonical writer; signal exhaustion so the loop absorbs that
+        # disk-side fork (it does NOT re-dispatch forever).
+        return LaneRepairOutcome(resolved=False, attempts_used=max(exc.attempts, 1), dispatch=None)
+    # The repair re-dispatch resolved the refusal: re-register the lane in flight
+    # under its INCREMENTED attempt (the cockpit repair counter). The child is
+    # its own group leader, so its pid IS the pgid for the kill / reattach
+    # registry.
+    return LaneRepairOutcome(
+        resolved=True,
+        attempts_used=1,
+        dispatch=LaneDispatch(
+            session_id=repaired.session_id,
+            pgid=repaired.subprocess_pid,
+            attempt=lane.attempt + 1,
+        ),
+    )
 
 
 #: Seconds the default watcher sleeps between on-disk status polls.
@@ -3465,6 +3672,14 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
     block_authority = _resolve_run_block_authority(ctx)
     # Paused arm: stage the frontier IDLE on the calling thread + return; no
     # worker thread is started (a paused state claims nothing).
+    # The live drive enables the bounded spawn ladder (DL-11) + the grounded
+    # repair ladder (DL-7) by injecting the production classifier + repair hook,
+    # so a real autopilot run FORKS a failed spawn (rather than aborting the
+    # whole run) and RE-DISPATCHES a failing check up the bounded repair ladder
+    # (rather than counting it a terminal failure on the first refusal). Without
+    # these the ladders are built-but-dormant on the live path (they only fire
+    # when a test injects the hooks).
+    repair_hook = _build_live_lane_repair_hook(ctx)
     if _dispatch_paused(ctx):
         run = arm_drive(
             ctx,
@@ -3477,6 +3692,8 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
             waves_cap=args.waves_cap,
             hard_halt=args.hard_halt,
             block_authority=block_authority,
+            classify=_live_lane_error_classifier,
+            repair=repair_hook,
         )
         logger.info(
             f"start_background_drive paused handle={handle_id!r} run_state={run.run_state.value}"
@@ -3503,6 +3720,8 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
                 hard_halt=args.hard_halt,
                 cancel=cancel,
                 block_authority=block_authority,
+                classify=_live_lane_error_classifier,
+                repair=repair_hook,
             )
         except Exception:  # pragma: no cover - defensive: never leak from the thread
             logger.exception(f"start_background_drive drain failed handle={handle_id!r}")

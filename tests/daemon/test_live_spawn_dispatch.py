@@ -46,6 +46,7 @@ from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.pricing import lookup_pricing
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_EVENT_TYPE
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.agent import LiveSpawnError, dispatch
 from eawf.runtime.runtimes.adapter import SpawnResult
@@ -439,14 +440,22 @@ def test_dispatch_spawn_event_ids_reflect_runner_emissions(
 
     result: dict[str, Any] = _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
 
-    # No fallback in the live W01 path -> exactly one C09 event (dispatch_cost).
-    assert len(result["event_ids"]) == 1
+    # No fallback in the live W01 path -> two events: the C09 dispatch_cost AND
+    # the W08 agent.output fan (the live spawn now threads its captured answer
+    # text into run_dispatch(output_text=...), so the stdout producer fires).
+    assert len(result["event_ids"]) == 2
+    envelopes = _read_envelopes(event_path)
     cost_envelope_ids = [
-        env.id
-        for env in _read_envelopes(event_path)
-        if env.payload.get("event_type") == "dispatch_cost"
+        env.id for env in envelopes if env.payload.get("event_type") == "dispatch_cost"
     ]
-    assert list(result["event_ids"]) == cost_envelope_ids
+    output_envelope_ids = [
+        env.id for env in envelopes if env.payload.get("event_type") == AGENT_OUTPUT_EVENT_TYPE
+    ]
+    assert len(cost_envelope_ids) == 1
+    assert len(output_envelope_ids) == 1
+    # The plan's event_ids ARE the runner's emitted ids: the dispatch_cost then
+    # the agent.output (emitted in that order).
+    assert list(result["event_ids"]) == cost_envelope_ids + output_envelope_ids
 
 
 def test_dispatch_spawn_model_override_prices_against_override(

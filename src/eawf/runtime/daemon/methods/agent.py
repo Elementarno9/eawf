@@ -1018,6 +1018,11 @@ async def _spawn_and_dispatch(
         trace_request_id=trace_request_id,
         session_id=session_id,
         report_body=report_body,
+        # The spawned agent's OWN captured answer text feeds the W08 stdout
+        # producer so the live spawn emits an ``agent.output`` event the
+        # agent-watch tail renders -- without this the producer is wired into
+        # run_dispatch but no live caller supplies it, so the tail stays empty.
+        output_text=spawn_result.text,
     )
     # A V5 reactive switch moved the serving runtime past the originally-
     # resolved one, so the attempt records the swap as a SWITCH_ON_ERROR;

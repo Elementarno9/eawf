@@ -34,11 +34,15 @@ from eawf.kernel.state.models import (
     State,
 )
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import fleet as fleet_mod
 from eawf.runtime.daemon.methods.fleet import (
+    DriveParams,
+    FleetDriveHandle,
     LaneDispatch,
     LaneOutcome,
     LaneRepairOutcome,
     arm_drive,
+    start_background_drive,
 )
 from eawf.runtime.runtimes.adapter import (
     RUNTIME_API_ERROR,
@@ -391,3 +395,138 @@ def test_no_repair_hook_keeps_terminal_fork_behaviour(tmp_path: Path) -> None:
     )
     assert run.counters.failed == 1
     assert run.counters.closed == 2
+
+
+# ---- C4: the LIVE drive enables the spawn + repair ladders (W11) -------------
+
+
+def _write_paused_state(tmp_path: Path) -> Path:
+    """Write the W03 fixture state with ``dispatch_paused`` set.
+
+    A paused state makes :func:`start_background_drive` take the paused-arm
+    branch -- it arms on the CALLING thread (a deterministic IDLE / DRAINING
+    persist + return, no worker thread), so the live ``arm_drive`` call's wiring
+    can be captured without a background drain to race.
+    """
+    payload = _state_payload()
+    payload["dispatch_paused"] = True
+    state = State.model_validate(payload)
+    state_dir = tmp_path / ".ea"
+    state_dir.mkdir()
+    path = state_dir / "state.json"
+    path.write_text(state.model_dump_json(), encoding="utf-8")
+    return path
+
+
+def test_live_drive_enables_spawn_and_repair_ladders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W11: the LIVE drive injects a non-None classify + repair into arm_drive.
+
+    ``spawn_lane_or_fork`` (DL-11) and ``repair_lane_or_fork`` (DL-7) fire ONLY
+    when ``arm_drive`` is armed with a wired ``classify`` + ``repair`` -- the loop
+    takes the direct-spawn / terminal-fork path when either is ``None``. This
+    pins that the production caller (:func:`start_background_drive`) wires BOTH on
+    a real run: it passes the production
+    :func:`~eawf.runtime.daemon.methods.fleet._live_lane_error_classifier` (the
+    bounded spawn ladder) and the live
+    :func:`~eawf.runtime.daemon.methods.fleet._build_live_lane_repair_hook` hook
+    (the bounded grounded repair ladder). A regression that drops either kwarg
+    re-dormants the ladder on the live path and reds this row.
+    """
+    state_path = _write_paused_state(tmp_path)
+    ctx = _ctx(state_path)
+    captured: dict[str, Any] = {}
+
+    def _capture_arm_drive(c: MethodContext, **kwargs: Any) -> Any:
+        captured.update(kwargs)
+        # Mirror the paused-arm return shape so start_background_drive proceeds.
+        return arm_drive(c, **kwargs)
+
+    monkeypatch.setattr(fleet_mod, "arm_drive", _capture_arm_drive)
+
+    handle = start_background_drive(ctx, DriveParams(frontier=list(_WAVE_IDS), concurrency=1))
+
+    assert isinstance(handle, FleetDriveHandle)
+    # The paused arm stayed IDLE (claimed nothing) but STILL wired both ladders.
+    assert handle.run_state is FleetRunState.IDLE
+    assert captured["classify"] is fleet_mod._live_lane_error_classifier
+    # The repair hook is the live grounded-repair hook the factory built (a
+    # bound callable, not None) -- the loop routes a failing-check fork through it.
+    assert captured["repair"] is not None
+    assert callable(captured["repair"])
+
+
+# ---- W11: the idle-contract gate catches a re-dormant live binding -----------
+
+
+def _load_idle_gate() -> Any:
+    """Load ``tools/idle_contract_gate.py`` by path (``tools/`` is not a package).
+
+    Mirrors the loader in ``tests/unit/test_idle_contract_gate.py`` so the new
+    W11 source-scan checks (``check_drive_ladders_wired`` /
+    ``check_live_output_text_wired``) carry an asserting test -- the idle-contract
+    meta-gate requires every newly-defined ``check_*`` contract to be referenced
+    by a test, and this is that reference.
+    """
+    import importlib.util
+    import sys
+
+    repo_root = Path(__file__).resolve().parents[2]
+    gate_path = repo_root / "tools" / "idle_contract_gate.py"
+    if str(gate_path.parent) not in sys.path:
+        sys.path.insert(0, str(gate_path.parent))
+    spec = importlib.util.spec_from_file_location("idle_contract_gate", gate_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["idle_contract_gate"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_drive_ladders_gate_passes_on_wired_source() -> None:
+    """W11: the drive-ladders idle gate passes on the live wired source.
+
+    The gate scans ``start_background_drive`` for the ``classify=`` + ``repair=``
+    kwargs that enable the spawn / repair ladders on a real run; the live source
+    carries both, so the gate is green.
+    """
+    mod = _load_idle_gate()
+    assert mod.check_drive_ladders_wired().passed
+
+
+def test_drive_ladders_gate_reds_when_kwargs_dropped() -> None:
+    """W11: the drive-ladders idle gate reds when a re-dormant source drops the kwargs.
+
+    A source that arms ``arm_drive`` without ``classify=_live_lane_error_classifier``
+    + ``repair=repair_hook`` re-dormants the ladders on the live path; the gate
+    catches that regression.
+    """
+    mod = _load_idle_gate()
+    regressed = "    arm_drive(ctx, frontier=args.frontier, block_authority=block_authority)\n"
+    result = mod.check_drive_ladders_wired(module_text=regressed)
+    assert not result.passed
+    assert result.failure is mod.GateFailure.DRIVE_LADDERS_IDLE
+
+
+def test_live_output_text_gate_passes_on_wired_source() -> None:
+    """W11: the live-output-text idle gate passes on the live wired source.
+
+    The gate scans ``_spawn_and_dispatch`` for the ``output_text=spawn_result.text``
+    thread that feeds the W08 stdout producer; the live source carries it.
+    """
+    mod = _load_idle_gate()
+    assert mod.check_live_output_text_wired().passed
+
+
+def test_live_output_text_gate_reds_when_thread_dropped() -> None:
+    """W11: the live-output-text idle gate reds when the producer thread is dropped.
+
+    A source that calls ``run_dispatch`` without ``output_text=spawn_result.text``
+    leaves the stdout producer unfed on a real spawn; the gate catches it.
+    """
+    mod = _load_idle_gate()
+    regressed = "    result = run_dispatch(ctx, wave_id=wave_id, report_body=report_body)\n"
+    result = mod.check_live_output_text_wired(module_text=regressed)
+    assert not result.passed
+    assert result.failure is mod.GateFailure.LIVE_OUTPUT_TEXT_IDLE
