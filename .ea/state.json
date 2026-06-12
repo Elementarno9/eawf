@@ -22664,7 +22664,8 @@
         "P30-I16-W24",
         "P30-I16-W25",
         "P30-I16-W26",
-        "P30-I16-W27"
+        "P30-I16-W27",
+        "P30-I16-W28"
       ]
     },
     "P30-I17": {
@@ -23783,7 +23784,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T02:39:44.129905Z",
+  "updated_at": "2026-06-12T03:08:30.268043Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -89791,6 +89792,108 @@
         }
       ],
       "title": "Stop zero-click help on startup from terminal probe-response leak",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I16-W28": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/seal.py",
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "src/eawf/surfaces/tui/offline.py"
+      ],
+      "gates": [],
+      "id": "P30-I16-W28",
+      "intent": {
+        "desired_outcome": "Hero surfaces render the approved ASCII-art seal as pure text (theme-portable, centered), no raster Image, so no Kitty transmit/lag/probe-leak/alpha issue.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add the approved 14-row art + seal_art_widget(accent) to seal.py; swap the seal_image_widget hero mount in research_board/offline (ascii mode keeps the * glyph); size+center CSS; regen hero goldens; record the Decision."
+        ],
+        "priority_rationale": "Seal is the reskin brand keystone; the raster path failed live across four review rounds; operator personally approved the ASCII-art replacement.",
+        "problem": "Operator rejected the raster seal Image (lag + zero-click help + misalignment) and approved a half-block ASCII-art seal (32-wide, hard contrast, strict ring) rendered as accent-green text.",
+        "risks": [
+          "Live-only render fidelity; verified against the operator-approved PNG; operator does final re-verify."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I16",
+      "opened_at": "2026-06-12T03:08:30.267857Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Research/offline hero renders the approved accent-green half-block ASCII-art seal as text (no raster Image",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Research/offline hero renders the approved accent-green half-block ASCII-art seal as text (no raster Image",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "no seal_capable gate)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no seal_capable gate)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "centered above the copy",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "centered above the copy",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "theme-portable on light+dark; ascii mode falls back to the * glyph; hero goldens regenerated; targeted+snapshot tests pass.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "theme-portable on light+dark; ascii mode falls back to the * glyph; hero goldens regenerated; targeted+snapshot tests pass.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Replace hero raster seal with approved half-block ASCII-art mark",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
