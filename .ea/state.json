@@ -7965,6 +7965,118 @@
       "scope_id": "P30-I17-W11",
       "status": "done",
       "updated_at": "2026-06-12T08:41:10.018236Z"
+    },
+    "P30-I18-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W01",
+      "model": null,
+      "scope_id": "P30-I18-W01",
+      "status": "done",
+      "updated_at": "2026-06-12T10:08:53.833784Z"
+    },
+    "P30-I18-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W02",
+      "model": null,
+      "scope_id": "P30-I18-W02",
+      "status": "done",
+      "updated_at": "2026-06-12T10:08:56.331900Z"
+    },
+    "P30-I18-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W03",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W03",
+      "model": null,
+      "scope_id": "P30-I18-W03",
+      "status": "done",
+      "updated_at": "2026-06-12T10:08:58.656100Z"
+    },
+    "P30-I18-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W04",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W04",
+      "model": null,
+      "scope_id": "P30-I18-W04",
+      "status": "done",
+      "updated_at": "2026-06-12T10:09:00.961815Z"
+    },
+    "P30-I18-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W05",
+      "model": null,
+      "scope_id": "P30-I18-W05",
+      "status": "done",
+      "updated_at": "2026-06-12T10:09:13.343241Z"
+    },
+    "P30-I18-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W06",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W06",
+      "model": null,
+      "scope_id": "P30-I18-W06",
+      "status": "done",
+      "updated_at": "2026-06-12T10:09:25.849237Z"
+    },
+    "P30-I18-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W07",
+      "model": null,
+      "scope_id": "P30-I18-W07",
+      "status": "done",
+      "updated_at": "2026-06-12T10:09:28.286712Z"
+    },
+    "P30-I18-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W08",
+      "model": null,
+      "scope_id": "P30-I18-W08",
+      "status": "done",
+      "updated_at": "2026-06-12T10:09:31.059952Z"
     }
   },
   "agent_sessions": {
@@ -11128,7 +11240,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I18",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -21064,6 +21176,110 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I17-W11",
       "updated_at": "2026-06-12T08:16:47.662544Z"
+    },
+    "P30-I18-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W01-bucket-20260612T084329Z",
+      "display": "2.0 EU · exp ~60m · pess ~216m",
+      "expected_eu": 2.0,
+      "expected_minutes": 60.0,
+      "id": "EST-P30-I18-W01",
+      "pessimistic_eu": 7.2,
+      "pessimistic_minutes": 216.0,
+      "reference_class": "bucket:L",
+      "scope_id": "P30-I18-W01",
+      "updated_at": "2026-06-12T08:43:29.997933Z"
+    },
+    "P30-I18-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W02-bucket-20260612T100855Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I18-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I18-W02",
+      "updated_at": "2026-06-12T10:08:55.370212Z"
+    },
+    "P30-I18-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W03-bucket-20260612T100857Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I18-W03",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I18-W03",
+      "updated_at": "2026-06-12T10:08:57.756444Z"
+    },
+    "P30-I18-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W04-bucket-20260612T100900Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I18-W04",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I18-W04",
+      "updated_at": "2026-06-12T10:09:00.074594Z"
+    },
+    "P30-I18-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W05-bucket-20260612T100912Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I18-W05",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I18-W05",
+      "updated_at": "2026-06-12T10:09:12.407209Z"
+    },
+    "P30-I18-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W06-bucket-20260612T100924Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I18-W06",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I18-W06",
+      "updated_at": "2026-06-12T10:09:24.940852Z"
+    },
+    "P30-I18-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W07-bucket-20260612T100927Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I18-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I18-W07",
+      "updated_at": "2026-06-12T10:09:27.373526Z"
+    },
+    "P30-I18-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W08-bucket-20260612T100929Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I18-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I18-W08",
+      "updated_at": "2026-06-12T10:09:29.806257Z"
     }
   },
   "fleet_run": null,
@@ -23154,7 +23370,7 @@
       "intent": null,
       "opened_at": "2026-06-11T15:24:00.510452Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Research campaign live",
       "trigger": "none",
       "wave_ids": [
@@ -24256,7 +24472,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T08:41:54.429788Z",
+  "updated_at": "2026-06-12T10:09:31.060300Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -91540,10 +91756,10 @@
         "P30-I18-W02",
         "P30-I18-W03"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T08:43:29.997393Z",
+      "closed_at": "2026-06-12T10:08:53.833784Z",
+      "commit": "2f66f8ebf03e89da509d0d990265bee6e828f86b",
       "deps": [],
       "description": "The critical seam: convert each StagedDispatch into a real spawned researcher session via the live agent.dispatch spawn path and parse the researcher agent_end body into typed rows.",
       "dispatch_history": [],
@@ -91585,12 +91801,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:25:31.432694Z",
-      "outcome": null,
+      "outcome": "round_runner binding: drive_campaign spawns each StagedDispatch via the live agent.dispatch path + parses agent_end into typed findings; failed parse raises typed ResearcherDispatchError. 8 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -91628,10 +91844,10 @@
         "P30-I18-W06",
         "P30-I18-W07"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:08:55.370005Z",
+      "closed_at": "2026-06-12T10:08:56.331900Z",
+      "commit": "0908d5ea4dd5cd8d206ccd53fc3a54c938ddce11",
       "deps": [
         "P30-I18-W01"
       ],
@@ -91675,12 +91891,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:25:33.320340Z",
-      "outcome": null,
+      "outcome": "Claim + OpenQuestion daemon writers: research.add_question + round-end claim reconcile through canonical writer; skill consumes live rows; TUI o key end-to-end. 8 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -91719,10 +91935,10 @@
         "P30-I18-W05",
         "P30-I18-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:08:57.756168Z",
+      "closed_at": "2026-06-12T10:08:58.656100Z",
+      "commit": "b324212448bd684a292a98cd0d93eb7334b8deee",
       "deps": [
         "P30-I18-W01"
       ],
@@ -91765,12 +91981,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:25:35.208619Z",
-      "outcome": null,
+      "outcome": "research.run RPC over drive_campaign + per-round/checkpoint persistence (research_round store); research.followup/snapshot typed RPCs; bounded budget. 9 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -91807,10 +92023,10 @@
       "blocks": [
         "P30-I18-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:09:00.074405Z",
+      "closed_at": "2026-06-12T10:09:00.961815Z",
+      "commit": "cc67ac0cb3857e4765c85ddf3da0eaa270112b97",
       "deps": [
         "P30-I18-W03"
       ],
@@ -91866,12 +92082,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:25:37.130297Z",
-      "outcome": null,
+      "outcome": "Operator-channel steer/broadcast/override RPCs over a daemon append-log; ChannelFold per D-2 blocking-only + D-3 persist-locked; TUI t/b/v land rows; mid-run steer changes next round. 8 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -91908,10 +92124,10 @@
       "blocks": [
         "P30-I18-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:09:12.407064Z",
+      "closed_at": "2026-06-12T10:09:13.343241Z",
+      "commit": "503423903c4cbf973cc5c0b7ee0cd0294ad00eef",
       "deps": [
         "P30-I18-W03"
       ],
@@ -91968,12 +92184,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:25:39.006333Z",
-      "outcome": null,
+      "outcome": "Round projection entity replaces the synthetic board node; CampaignProgressState folds into eawf status + the board RUN band. No schema bump (projection). 23 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -92010,10 +92226,10 @@
       "blocks": [
         "P30-I18-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:09:24.940684Z",
+      "closed_at": "2026-06-12T10:09:25.849237Z",
+      "commit": "05940b2cbbea0377424829638de44706c0e6f325",
       "deps": [
         "P30-I18-W02"
       ],
@@ -92057,12 +92273,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:25:40.908621Z",
-      "outcome": null,
+      "outcome": "EviBound feed: synthesize_campaign_brief -> promote_draft gates rung-1 (unresolved refs rejected, referenced promotes); L1 pruning reducer wired into the round loop. 7 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -92099,10 +92315,10 @@
       "blocks": [
         "P30-I18-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:09:27.373300Z",
+      "closed_at": "2026-06-12T10:09:28.286712Z",
+      "commit": "f6a5a84a68c1816f135da1ad3b5b99af0e771af0",
       "deps": [
         "P30-I18-W02"
       ],
@@ -92146,12 +92362,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:25:42.814020Z",
-      "outcome": null,
+      "outcome": "eawf research question add/list (headless exit 0) + research status fold + research-campaigns how-to docs. 7 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -92188,10 +92404,10 @@
       "blocks": [
         "P30-I18-W09"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:09:29.806068Z",
+      "closed_at": "2026-06-12T10:09:31.059952Z",
+      "commit": "edfd9c09f96626928fdc8eea3fc01d626f748591",
       "deps": [
         "P30-I18-W03"
       ],
@@ -92247,12 +92463,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-11T15:26:37.568516Z",
-      "outcome": null,
+      "outcome": "FA8 board autorun states derive from real run records; r/s call live followup/snapshot RPCs; no not-yet-wired literal remains; 3 goldens regenerated. 101 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
