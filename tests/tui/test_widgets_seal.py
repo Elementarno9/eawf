@@ -558,3 +558,28 @@ def test_seal_art_widget_independent_of_kill_switch(monkeypatch: pytest.MonkeyPa
     widget = seal_art_widget()  # art path is unaffected
     assert isinstance(widget, Static)
     assert widget.id == SEAL_ART_ID
+
+
+# --------------------------------------------------------------------------
+# W11 (I19): deps_present must NOT probe the terminal -- importing
+# textual_image.widget pulls textual_image._terminal which queries the live
+# terminal; on the doctor gather thread that reply leaks as keypresses. The
+# check uses find_spec so it never executes the probing module.
+# --------------------------------------------------------------------------
+
+
+def test_deps_present_does_not_import_terminal_probe() -> None:
+    """deps_present detects the package without importing its _terminal probe."""
+    import sys
+
+    from eawf.surfaces.tui.widgets.seal import deps_present
+
+    sys.modules.pop("textual_image._terminal", None)
+    sys.modules.pop("textual_image.widget", None)
+    assert deps_present() is True  # textual-image ships in the default deps
+    assert "textual_image._terminal" not in sys.modules, (
+        "deps_present must not import textual_image._terminal (it probes the terminal)"
+    )
+    assert "textual_image.widget" not in sys.modules, (
+        "deps_present must not import textual_image.widget"
+    )

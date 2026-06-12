@@ -40,6 +40,7 @@ autouse so the goldens stay glyph-based and deterministic.
 from __future__ import annotations
 
 import getpass
+import importlib.util
 import logging
 import os
 import shutil
@@ -141,19 +142,29 @@ _GRAPHICS_TERM_PROGRAMS: frozenset[str] = frozenset(
 
 
 def deps_present() -> bool:
-    """Return whether the ``textual_image`` import (and thus Pillow) resolves.
+    """Return whether ``textual_image`` and Pillow are installed.
 
     ``textual-image`` + Pillow ship in the default dependency set, so this is
     normally ``True``; it only fails on a broken / partial install.
 
+    Detection uses :func:`importlib.util.find_spec` rather than a real
+    ``import textual_image.widget`` ON PURPOSE: importing the widget module
+    pulls in ``textual_image._terminal``, which probes the live terminal for
+    graphics-protocol support. When this runs on the doctor health-gather
+    thread (the ``seal_capable`` doctor row), that probe's escape-reply leaks
+    into the running TUI's stdin reader and is mis-parsed as keypresses
+    (spurious mode switches / overlays). ``find_spec`` on the top-level package
+    locates it WITHOUT executing any module, so the capability check never
+    queries the terminal.
+
     Returns:
-        ``True`` when ``textual_image.widget`` imports, else ``False``.
+        ``True`` when both ``textual_image`` and ``PIL`` are importable, else
+        ``False``.
     """
-    try:
-        import textual_image.widget  # noqa: F401  (capability probe only)
-    except ImportError:
-        return False
-    return True
+    return (
+        importlib.util.find_spec("textual_image") is not None
+        and importlib.util.find_spec("PIL") is not None
+    )
 
 
 def resvg_present() -> bool:
