@@ -19,12 +19,18 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.spec.campaign_driver import (
+    DispatchSpawner,
+    RoundSaturationReducer,
+    build_round_runner,
+)
 from eawf.kernel.spec.research_campaign import (
     ResearchProfileBlock,
     StagedCampaign,
@@ -40,7 +46,82 @@ from eawf.kernel.store.kinds.research_campaign import (
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.methods import MethodContext, register
 
+if TYPE_CHECKING:
+    from eawf.kernel.spec.research_campaign import StagedDispatch
+    from eawf.kernel.spec.round_loop import RoundOutcome
+
 logger = logging.getLogger(__name__)
+
+#: Type of the per-dispatch agent-end producer the live dispatch spawner
+#: wraps. Production binds a closure that drives the daemon ``agent.dispatch``
+#: spawn=True path for a researcher dispatch and returns the spawned agent's
+#: decoded ``agent_end`` body; a test binds a stub returning a fixture body.
+#: Keeping the producer injected means the binding (StagedDispatch ->
+#: agent.dispatch -> agent_end parse) is exercised under a stubbed spawner +
+#: fixture bodies without spawning a real subprocess.
+AgentEndProducer = Callable[["StagedDispatch"], Mapping[str, object]]
+
+
+def build_live_dispatch_spawner(produce_agent_end: AgentEndProducer) -> DispatchSpawner:
+    """Build the production per-dispatch spawn seam for the round runner.
+
+    The seam :func:`~eawf.kernel.spec.campaign_driver.build_round_runner` drives
+    once per :class:`~eawf.kernel.spec.research_campaign.StagedDispatch`: it
+    converts the staged read-only researcher dispatch into a real spawned
+    researcher session and returns the spawned agent's decoded ``agent_end``
+    body, which the round runner parses into typed findings rows
+    (:func:`~eawf.kernel.spec.campaign_driver.parse_researcher_findings`).
+
+    The actual spawn is injected as *produce_agent_end* so this daemon-side
+    binding is exercised with a stubbed spawner + fixture ``agent_end`` bodies
+    in tests rather than spawning a real subprocess. Production wires
+    *produce_agent_end* to a closure over the ``agent.dispatch`` spawn=True path
+    (which registers an executor / researcher session behind the safety floor
+    and binds the spawned agent's own output to a typed report body).
+
+    Args:
+        produce_agent_end: The per-dispatch agent-end producer (production:
+            the live ``agent.dispatch`` spawn; a test: a fixture stub).
+
+    Returns:
+        A :class:`~eawf.kernel.spec.campaign_driver.DispatchSpawner` the round
+        runner drives once per staged dispatch.
+    """
+
+    def _spawn(dispatch: StagedDispatch) -> Mapping[str, object]:
+        logger.info(
+            f"build_live_dispatch_spawner domain={dispatch.domain!r} role={dispatch.agent_role!r}"
+        )
+        return produce_agent_end(dispatch)
+
+    return _spawn
+
+
+def build_bound_round_runner(
+    campaign: StagedCampaign,
+    produce_agent_end: AgentEndProducer,
+    saturation: RoundSaturationReducer,
+) -> tuple[Callable[[int], RoundOutcome], list[Any]]:
+    """Bind a campaign's round runner over the live ``agent.dispatch`` spawn.
+
+    Composes :func:`build_live_dispatch_spawner` with
+    :func:`~eawf.kernel.spec.campaign_driver.build_round_runner` so the
+    ``drive_campaign`` dispatcher receives a runner whose every round spawns a
+    real researcher session per staged dispatch and parses each ``agent_end``
+    body into findings rows. The spawn itself is injected (*produce_agent_end*)
+    so the binding is unit-testable under a stub.
+
+    Args:
+        campaign: The staged campaign whose dispatches the runner spawns.
+        produce_agent_end: The per-dispatch agent-end producer (the live
+            spawn in production; a fixture stub in tests).
+        saturation: The per-round saturation reducer the runner consults.
+
+    Returns:
+        The ``(round_runner, rounds)`` pair the campaign driver consumes.
+    """
+    spawner = build_live_dispatch_spawner(produce_agent_end)
+    return build_round_runner(campaign, spawner, saturation)
 
 
 class CreateCampaignParams(BaseModel):
@@ -358,12 +439,15 @@ async def cancel_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
 
 
 __all__ = [
+    "AgentEndProducer",
     "CancelCampaignParams",
     "CancelCampaignResult",
     "CreateCampaignParams",
     "CreateCampaignResult",
     "StageCampaignParams",
     "StageCampaignResult",
+    "build_bound_round_runner",
+    "build_live_dispatch_spawner",
     "cancel_campaign",
     "create_campaign",
     "persist_campaign",

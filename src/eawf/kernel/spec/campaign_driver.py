@@ -47,13 +47,17 @@ unit-testable without a runtime.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from pydantic import ValidationError
 
 from eawf.kernel.spec.live_rounds import CockpitLevel, run_live_rounds
 from eawf.kernel.spec.research_campaign import (
     ResearchProfileBlock,
     StagedCampaign,
+    StagedDispatch,
     stage_campaign,
 )
 from eawf.kernel.spec.round_loop import (
@@ -64,8 +68,230 @@ from eawf.kernel.spec.round_loop import (
     RoundOutcome,
     run_round_loop,
 )
+from eawf.kernel.spec.saturation import SaturationReport
+from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from eawf.kernel.state.models import Claim, OpenQuestion
 
 logger = logging.getLogger(__name__)
+
+#: Type of the injected per-dispatch spawn seam the production round runner
+#: drives. Production binds a closure that spawns a real researcher session via
+#: the daemon ``agent.dispatch`` path and returns the spawned agent's decoded
+#: ``agent_end`` body; a test binds a recording stub returning a fixture body.
+#: The seam is the dispatcher's only contact with the runtime -- the driver
+#: itself spawns nothing, so the whole binding is unit-testable behind a stub.
+DispatchSpawner = Callable[[StagedDispatch], Mapping[str, object]]
+
+
+class ResearcherDispatchError(ValueError):
+    """Raised when a spawned researcher's ``agent_end`` body fails to parse.
+
+    The production round runner converts each
+    :class:`~eawf.kernel.spec.research_campaign.StagedDispatch` into a real
+    spawned researcher session and validates the returned ``agent_end`` body
+    into a typed :class:`~eawf.kernel.store.kinds.agent_report.ResearcherReportBody`.
+    A body that does not validate (a non-researcher role, a missing required
+    field, an extra key) is a hard error -- the campaign cannot fold a
+    malformed round into findings -- so the runner surfaces this typed error
+    rather than silently dropping the dispatch and producing an empty round
+    (which would read as a converged campaign). The message names which
+    dispatch domain failed.
+    """
+
+
+@dataclass(frozen=True)
+class RoundFindings:
+    """Typed findings parsed from one round's spawned researcher dispatches.
+
+    The production round runner produces one of these per round: it spawns a
+    researcher session per :class:`StagedDispatch`, parses each returned
+    ``agent_end`` body into a :class:`ResearcherReportBody`, and folds the
+    per-domain bodies into this record. The driver reads :attr:`saturation`
+    (via the injected reducer) to decide whether to halt; a downstream pass
+    (W02 +) reconciles the findings into the state-resident Claim /
+    OpenQuestion ledgers.
+
+    Attributes:
+        round_number: The 1-based round index these findings were gathered
+            in (matches the ``round_runner`` callback argument).
+        bodies: The validated per-domain researcher bodies, in dispatch
+            (sorted-domain) order -- one per :class:`StagedDispatch` that was
+            spawned this round.
+        domains: The domain names spawned this round, parallel to
+            :attr:`bodies`.
+    """
+
+    round_number: int
+    bodies: tuple[ResearcherReportBody, ...] = ()
+    domains: tuple[str, ...] = ()
+
+    @property
+    def finding_lines(self) -> tuple[str, ...]:
+        """Every findings line across the round's bodies, in dispatch order."""
+        return tuple(line for body in self.bodies for line in body.findings)
+
+
+def parse_researcher_findings(domain: str, raw: Mapping[str, object]) -> ResearcherReportBody:
+    """Validate a spawned researcher's ``agent_end`` body, or raise typed.
+
+    The seam between the live spawn path and the typed findings ledger: the
+    spawned researcher's decoded ``agent_end`` body is forced through
+    :class:`~eawf.kernel.store.kinds.agent_report.ResearcherReportBody`
+    (the narrow researcher schema, not the whole report union) so a body that
+    is not a researcher report -- or omits the required ``question`` /
+    ``recommendation`` -- is rejected rather than folded into the round as
+    empty findings.
+
+    Args:
+        domain: The research domain the dispatch covered (named in the error
+            so a malformed round attributes to the failing dispatch).
+        raw: The spawned agent's decoded ``agent_end`` body.
+
+    Returns:
+        The validated :class:`ResearcherReportBody`.
+
+    Raises:
+        ResearcherDispatchError: When *raw* does not validate against the
+            researcher report-body schema. A failed parse is a hard error,
+            not a silent empty round.
+    """
+    try:
+        return ResearcherReportBody.model_validate(raw)
+    except ValidationError as exc:
+        raise ResearcherDispatchError(
+            f"researcher dispatch for domain {domain!r} returned an unparseable "
+            f"agent_end body: {exc.error_count()} error(s)"
+        ) from exc
+
+
+#: Type of the injected per-round saturation reducer the production round
+#: runner consults. Production binds a closure that reduces the live Claim /
+#: OpenQuestion ledgers (after the round's findings reconcile) into a
+#: :class:`~eawf.kernel.spec.saturation.SaturationReport`; a test binds a stub
+#: returning a fixed report so the loop's halt arithmetic stays unit-testable.
+RoundSaturationReducer = Callable[[RoundFindings], SaturationReport]
+
+
+@dataclass
+class _RoundRecorder:
+    """Mutable per-campaign record of the rounds the production runner drove.
+
+    The production :func:`build_round_runner` appends one :class:`RoundFindings`
+    per round so a caller (the ``research.run`` RPC) can persist the per-round
+    findings after :func:`run_round_loop` returns the terminal result. Kept
+    package-private: callers reach the rounds via the
+    :func:`build_round_runner` return tuple, not this type directly.
+    """
+
+    rounds: list[RoundFindings] = field(default_factory=list)
+
+
+def build_round_runner(
+    staged: StagedCampaign,
+    spawn: DispatchSpawner,
+    saturation: RoundSaturationReducer,
+) -> tuple[Callable[[int], RoundOutcome], list[RoundFindings]]:
+    """Build the production round runner that spawns + parses one round.
+
+    Returns the per-round :class:`RoundOutcome` callback the bounded loop
+    (:func:`~eawf.kernel.spec.round_loop.run_round_loop`) drives, plus the
+    growing list of :class:`RoundFindings` the runner records as it goes. Each
+    round the callback:
+
+    1. converts every :class:`StagedDispatch` in *staged* into a real spawned
+       researcher session via the injected *spawn* seam (production binds the
+       daemon ``agent.dispatch`` path; a test binds a stub), and
+    2. parses each returned ``agent_end`` body into a typed
+       :class:`ResearcherReportBody` via :func:`parse_researcher_findings` --
+       a body that fails to parse raises :class:`ResearcherDispatchError`
+       rather than producing a silent empty round, and
+    3. folds the parsed bodies into a :class:`RoundFindings` record, appends it
+       to the returned list, and reduces it to the round's
+       :class:`~eawf.kernel.spec.saturation.SaturationReport` via the injected
+       *saturation* reducer.
+
+    The runner spawns nothing itself: *spawn* is the only contact with the
+    runtime, so the whole binding is unit-testable behind a recording stub --
+    the same injected-callback discipline the staged stager and the bounded
+    loop already follow.
+
+    Args:
+        staged: The Level-1 staged campaign whose per-domain dispatches the
+            runner spawns each round.
+        spawn: The per-dispatch spawn seam (production: ``agent.dispatch``; a
+            test: a recording stub returning a fixture ``agent_end`` body).
+        saturation: The per-round reducer that scores whether the campaign is
+            dry after this round's findings.
+
+    Returns:
+        A ``(round_runner, rounds)`` pair: the per-round callback for
+        :func:`run_round_loop`, and the list of :class:`RoundFindings` the
+        runner appends to as the loop drives it.
+
+    Raises:
+        ResearcherDispatchError: Propagated from the callback when any of the
+            round's spawned researcher bodies fails to parse.
+    """
+    recorder = _RoundRecorder()
+
+    def _round_runner(round_number: int) -> RoundOutcome:
+        bodies: list[ResearcherReportBody] = []
+        domains: list[str] = []
+        for dispatch in staged.dispatches:
+            raw = spawn(dispatch)
+            bodies.append(parse_researcher_findings(dispatch.domain, raw))
+            domains.append(dispatch.domain)
+        findings = RoundFindings(
+            round_number=round_number,
+            bodies=tuple(bodies),
+            domains=tuple(domains),
+        )
+        recorder.rounds.append(findings)
+        report = saturation(findings)
+        logger.info(
+            f"build_round_runner round={round_number} dispatches={len(bodies)} "
+            f"findings={len(findings.finding_lines)} saturated={report.saturated}"
+        )
+        return RoundOutcome(saturation=report)
+
+    return _round_runner, recorder.rounds
+
+
+def ledger_saturation_reducer(
+    claims_for_round: Callable[[RoundFindings], Sequence[Claim]],
+    questions_for_round: Callable[[RoundFindings], Sequence[OpenQuestion]],
+    *,
+    now_for_round: Callable[[RoundFindings], datetime],
+) -> RoundSaturationReducer:
+    """Build a saturation reducer over the post-round Claim / question ledgers.
+
+    Composes the four-gate :meth:`SaturationReport.reduce` over the live
+    ledgers as they stand after a round's findings reconcile. The callbacks
+    inject the ledgers + clock so the reducer stays pure with respect to its
+    own body (the round runner owns the reconcile; this only reads the result).
+
+    Args:
+        claims_for_round: Returns the Claim ledger to score for a given round.
+        questions_for_round: Returns the OpenQuestion ledger to score.
+        now_for_round: Returns the reference instant the novelty window is
+            measured back from for the round.
+
+    Returns:
+        A :class:`RoundSaturationReducer` the production round runner consults.
+    """
+
+    def _reduce(findings: RoundFindings) -> SaturationReport:
+        return SaturationReport.reduce(
+            claims_for_round(findings),
+            questions_for_round(findings),
+            now=now_for_round(findings),
+        )
+
+    return _reduce
 
 
 class MissingRoundRunnerError(ValueError):
@@ -219,6 +445,13 @@ def drive_campaign(
 
 __all__ = [
     "CampaignDriveResult",
+    "DispatchSpawner",
     "MissingRoundRunnerError",
+    "ResearcherDispatchError",
+    "RoundFindings",
+    "RoundSaturationReducer",
+    "build_round_runner",
     "drive_campaign",
+    "ledger_saturation_reducer",
+    "parse_researcher_findings",
 ]
