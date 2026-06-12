@@ -38,6 +38,12 @@ from eawf.surfaces.render.brand import (
     render_wordmark_ansi,
 )
 from eawf.surfaces.tui.offline import build_status_text, offline_render
+from eawf.surfaces.tui.widgets.sigils import chrome
+
+#: The leading brand glyph (UX-19) + single space the offline frame now heads
+#: with, before the two-tone wordmark -- the brand mark the live header leads
+#: with. The frame heads ``◉ E<accent>ä<reset>  <breadcrumb>``.
+_GLYPH_HEAD = f"{chrome('brand', mode='unicode')} "
 
 #: A representative pre-reskin teal accent. The offline frame must NOT carry
 #: this hex's SGR -- a teal-headed frame fails the token-parity assert, which
@@ -146,17 +152,19 @@ def test_offline_brand_head_is_two_tone_umlaut_accented_e_plain() -> None:
     """The ``ä`` carries the accent SGR; the ``E`` is plain (two-tone).
 
     The accent SGR opens immediately before the umlaut and the foreground is
-    reset immediately after, so the leading ``E`` is never inside the accent
-    span -- the same two-tone shape the markup channel gives the header.
+    reset immediately after, so the ``E`` is never inside the accent span --
+    the same two-tone shape the markup channel gives the header. UX-19 prepends
+    the ``◉`` brand glyph + a space before the wordmark, so the two-tone span
+    begins right after that glyph head rather than at byte 0.
     """
     frame = build_status_text(None)
     sgr = accent_sgr(ACCENT_HEX)
-    # The wordmark leads the frame: E, then the accent-open, then the umlaut.
-    assert frame.startswith("E")
+    # The brand glyph leads, then the wordmark: ◉ space E accent-open umlaut.
+    assert frame.startswith(_GLYPH_HEAD)
     # The accent span opens right after the bare E and wraps only the umlaut.
-    assert frame.startswith(f"E{sgr}ä")
+    assert frame.startswith(f"{_GLYPH_HEAD}E{sgr}ä")
     # The E is NOT preceded by the accent SGR -- it stays in the base fg.
-    assert not frame.startswith(sgr)
+    assert f"{_GLYPH_HEAD}{sgr}" not in frame[: len(_GLYPH_HEAD) + len(sgr)]
 
 
 def test_offline_brand_head_equals_header_wordmark_channel() -> None:
@@ -168,27 +176,27 @@ def test_offline_brand_head_equals_header_wordmark_channel() -> None:
     frame threads the SAME ``ACCENT_HEX`` through the ANSI sibling
     :func:`~eawf.surfaces.render.brand.render_wordmark_ansi`. Both channels
     therefore carry one accent token, so the splash and the live header are
-    the same green -- proven by the offline head leading with the canonical
-    ANSI wordmark verbatim.
+    the same green -- proven by the offline head leading with the ``◉`` brand
+    glyph (UX-19) then the canonical ANSI wordmark verbatim.
     """
-    wordmark = render_wordmark_ansi(ACCENT_HEX)
-    assert build_status_text(None).startswith(wordmark)
-    assert _absent_registry_frame().startswith(wordmark)
+    head = f"{_GLYPH_HEAD}{render_wordmark_ansi(ACCENT_HEX)}"
+    assert build_status_text(None).startswith(head)
+    assert _absent_registry_frame().startswith(head)
 
 
 def test_offline_status_and_dashboard_share_one_brand_head() -> None:
-    """Both offline renderers head with the identical two-tone wordmark.
+    """Both offline renderers head with the identical glyph + two-tone wordmark.
 
     Neither path re-derives the brand head independently, so a future reskin
     cannot leave one frame green and the other teal.
     """
-    wordmark = render_wordmark_ansi(ACCENT_HEX)
+    head = f"{_GLYPH_HEAD}{render_wordmark_ansi(ACCENT_HEX)}"
     status_head = build_status_text(None).split("\n", 1)[0]
     dashboard_head = _absent_registry_frame().split("\n", 1)[0]
-    assert status_head.startswith(wordmark)
-    assert dashboard_head.startswith(wordmark)
-    # Both heads carry byte-identical wordmark + gap before the breadcrumb.
-    assert status_head[: len(wordmark)] == dashboard_head[: len(wordmark)]
+    assert status_head.startswith(head)
+    assert dashboard_head.startswith(head)
+    # Both heads carry byte-identical glyph + wordmark + gap before the breadcrumb.
+    assert status_head[: len(head)] == dashboard_head[: len(head)]
 
 
 # --------------------------------------------------------------------------

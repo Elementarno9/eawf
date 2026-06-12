@@ -19,12 +19,18 @@ import orjson
 from eawf.kernel.state.models import State
 from eawf.surfaces.render.brand import render_wordmark_ansi
 from eawf.surfaces.tui.offline import build_status_text, emit_status, offline_render
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 #: The two-tone green brand head every offline frame now leads with. Asserting
 #: the full wordmark (not the bare ``Eä`` literal) keeps these contracts in
 #: lockstep with the W32 reskin -- the bare literal is no longer contiguous
 #: because the ANSI accent escape sits between the ``E`` and the ``ä``.
 _WORDMARK = render_wordmark_ansi()
+
+#: The leading brand glyph (UX-19): the offline frame now gains the ``◉`` brand
+#: mark the live header leads with, a single space before the wordmark. The
+#: frame heads ``◉ E<accent>ä<reset>  <breadcrumb>``.
+_BRAND_HEAD = f"{chrome('brand', mode='unicode')} {_WORDMARK}"
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -41,7 +47,7 @@ def _load(path: Path) -> State:
 
 def test_build_status_text_none_state_carries_brand_and_keymap() -> None:
     text = build_status_text(None)
-    assert text.startswith(_WORDMARK)
+    assert text.startswith(_BRAND_HEAD)
     assert "keymap:" in text
     # Fresh-workspace placeholder code + all-zero counts.
     assert "project=EAWF" in text
@@ -51,7 +57,7 @@ def test_build_status_text_none_state_carries_brand_and_keymap() -> None:
 
 def test_build_status_text_active_fixture_counts() -> None:
     text = build_status_text(_load(_PHASE_ITER_WAVE))
-    assert text.startswith(_WORDMARK)
+    assert text.startswith(_BRAND_HEAD)
     assert "project=QR" in text
     assert "phases_open=1" in text
     assert "iters_open=1" in text
@@ -64,7 +70,7 @@ def test_build_status_text_active_fixture_counts() -> None:
 def test_build_status_text_has_three_lines() -> None:
     lines = build_status_text(None).split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith(_WORDMARK)
+    assert lines[0].startswith(_BRAND_HEAD)
     assert lines[2].startswith("keymap:")
 
 
@@ -145,3 +151,22 @@ def test_offline_render_width_changes_output(tmp_path: Path) -> None:
 def test_offline_render_ends_with_newline(tmp_path: Path) -> None:
     rendered = offline_render(registry_path=tmp_path / "absent.json")
     assert rendered.endswith("\n")
+
+
+# --------------------------------------------------------------------------
+# UX-19: the offline frame GAINS the header brand glyph
+# --------------------------------------------------------------------------
+
+
+def test_status_frame_gains_header_brand_glyph() -> None:
+    # UX-19: the headless status frame leads with the ◉ brand glyph the live
+    # header carries, a space before the wordmark -- glyph parity with the app.
+    text = build_status_text(None)
+    assert text.startswith(_BRAND_HEAD)
+    assert text.startswith(chrome("brand", mode="unicode"))
+
+
+def test_dashboard_frame_gains_header_brand_glyph(tmp_path: Path) -> None:
+    rendered = offline_render(registry_path=tmp_path / "absent.json")
+    assert rendered.startswith(_BRAND_HEAD)
+    assert rendered.startswith(chrome("brand", mode="unicode"))

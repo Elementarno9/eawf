@@ -1,4 +1,4 @@
-E[38;2;22;179;132mä[39m  EAWF
+◉ E[38;2;22;179;132mä[39m  EAWF
 
 workspace
 registry unavailable (read failed)
