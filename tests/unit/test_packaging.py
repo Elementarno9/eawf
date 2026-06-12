@@ -322,7 +322,11 @@ def test_wheel_metadata_declares_windows_extra(tmp_path: Path) -> None:
     requires = [line for line in metadata.splitlines() if line.startswith("Requires-Dist:")]
     pywin32_lines = [line for line in requires if "pywin32" in line]
     assert pywin32_lines, requires
-    assert any('extra == "windows"' in line for line in pywin32_lines), pywin32_lines
+    # PEP 508 allows either quote style for the marker; uv's build backend emits
+    # single quotes (`extra == 'windows'`), so accept both rather than pinning one.
+    assert any(
+        'extra == "windows"' in line or "extra == 'windows'" in line for line in pywin32_lines
+    ), pywin32_lines
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="win32-only ctypes binding")

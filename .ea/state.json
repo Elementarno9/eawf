@@ -8259,6 +8259,20 @@
       "scope_id": "P30-I19-W10",
       "status": "done",
       "updated_at": "2026-06-12T13:39:18.709633Z"
+    },
+    "P30-I19-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W11",
+      "model": null,
+      "scope_id": "P30-I19-W11",
+      "status": "done",
+      "updated_at": "2026-06-12T13:49:11.791449Z"
     }
   },
   "agent_sessions": {
@@ -11442,7 +11456,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I19-W08"
+    ],
     "iter_id": "P30-I19",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -21643,6 +21659,19 @@
       "scope_id": "P30-I19-W07",
       "updated_at": "2026-06-12T12:34:19.065220Z"
     },
+    "P30-I19-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W08-bucket-20260612T134034Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I19-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I19-W08",
+      "updated_at": "2026-06-12T13:40:34.200123Z"
+    },
     "P30-I19-W09": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I19-W09-bucket-20260612T123616Z",
@@ -21668,6 +21697,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I19-W10",
       "updated_at": "2026-06-12T12:36:16.957521Z"
+    },
+    "P30-I19-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W11-bucket-20260612T134721Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I19-W11",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I19-W11",
+      "updated_at": "2026-06-12T13:47:21.739872Z"
     }
   },
   "fleet_run": null,
@@ -23799,7 +23841,8 @@
         "P30-I19-W07",
         "P30-I19-W08",
         "P30-I19-W09",
-        "P30-I19-W10"
+        "P30-I19-W10",
+        "P30-I19-W11"
       ]
     }
   },
@@ -24876,7 +24919,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T13:39:18.709900Z",
+  "updated_at": "2026-06-12T13:49:27.825670Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -93818,8 +93861,8 @@
     "P30-I19-W08": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T13:40:34.199903Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -93871,7 +93914,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -94021,6 +94064,64 @@
         }
       ],
       "title": "Detach TUI-spawned subprocesses from the controlling terminal",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I19-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T13:47:21.739614Z",
+      "closed_at": "2026-06-12T13:49:11.791449Z",
+      "commit": "45e1875fe935ea30dca5ef5e95031f059600877c",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/seal.py"
+      ],
+      "gates": [],
+      "id": "P30-I19-W11",
+      "intent": {
+        "desired_outcome": "deps_present detects the package without executing its terminal-probing module.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Use importlib.util.find_spec instead of import; add a no-probe test."
+        ],
+        "priority_rationale": "Root cause of the persistent doctor key-leak; only doctor runs this check.",
+        "problem": "deps_present imports textual_image.widget which probes the live terminal; the escape-reply leaks as keys, opening spurious doctor panes.",
+        "risks": [
+          "find_spec on the top package does not execute __init__."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I19",
+      "opened_at": "2026-06-12T13:47:21.012449Z",
+      "outcome": "ROOT-CAUSED + fixed the persistent doctor key-leak: deps_present() imported textual_image.widget -> textual_image._terminal which probes the live terminal IN-PROCESS on the doctor gather thread; the escape-reply leaked as keys (config/help/7/9/inbox). Switched to importlib.util.find_spec (no module execution -> no probe); regression test asserts _terminal stays unimported. 67 tests pass.",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "deps_present uses find_spec; a test asserts textual_image._terminal stays unimported after deps_present().",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "deps_present uses find_spec; a test asserts textual_image._terminal stays unimported after deps_present().",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop the doctor seal-capability check probing the terminal",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
