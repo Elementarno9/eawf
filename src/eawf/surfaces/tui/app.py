@@ -382,6 +382,14 @@ REFERENCE_HISTORY_MAX: int = 32
 #: these keys, so the diagnostic stays silent on ordinary navigation.
 _MODE_DIGIT_KEYS: frozenset[str] = frozenset(spec.digit for spec in MODE_REGISTRY)
 
+#: The bare keys a graphics-terminal escape-reply can leak from a TTY-touching
+#: subprocess (the Doctor-mode health probes): ``c`` resolves through the repo
+#: scope screen's ``open_config`` binding, ``?`` through ``open_help``. While a
+#: health gather is in flight (:attr:`EaApp._health_probe_in_flight`)
+#: :meth:`EaApp.on_key` drops one of these so a probe-reply leak opens no
+#: overlay; outside that window they route normally.
+_PROBE_LEAK_KEYS: frozenset[str] = frozenset({"c", "question_mark"})
+
 #: Literal scope kinds the App can launch into. ``repo`` / ``workspace``
 #: mirror :class:`eawf.kernel.state.enums.ScopeKind`; ``user`` is the registry-
 #: scoped portfolio view that has no ``state.json`` ``scope_kind`` of its
@@ -655,6 +663,19 @@ class EaApp(App[None]):
         self._needs_user_open = False
         self._init_wizard_open = False
         self._init_wizard_auto_opened = False
+        # ``True`` only while a Doctor-mode health gather worker is in flight.
+        # That gather fans out to blocking subprocesses (the instrument
+        # version-probes + a per-wave ``git log`` drift scan); on a graphics
+        # terminal a probe child can trigger a TTY escape-reply that leaks back
+        # into stdin as a synthetic ``c`` (config) / ``?`` (help) key the
+        # instant the operator enters Doctor mode. The deterministic root fix
+        # detaches the probe children's stdin (see
+        # :func:`eawf.observability.doctor.checks.detached_tty_stdin`); this
+        # flag is the belt-and-suspenders backstop -- :meth:`on_key` drops a
+        # bare ``c`` / ``?`` while it is set so a leak that still slips through
+        # opens no overlay, without ever suppressing a genuine post-gather
+        # keypress (the window is the sub-second gather, not the whole mode).
+        self._health_probe_in_flight = False
         # ``False`` until the App has finished its first paint -- the
         # interactive-ready gate :meth:`on_key` consults. A graphics terminal
         # (Ghostty / Kitty protocol) answers the seal Image widget's transmit
@@ -1557,6 +1578,16 @@ class EaApp(App[None]):
         """
         if not self._interactive_ready:
             logger.info(f"on_key swallowed_pre_ready key={event.key!r}")
+            event.stop()
+            event.prevent_default()
+            return
+        if self._health_probe_in_flight and event.key in _PROBE_LEAK_KEYS:
+            # A Doctor-mode health gather is fanning out to TTY-touching
+            # subprocesses; drop a bare ``c`` / ``?`` that may be a leaked
+            # probe escape-reply rather than a real keypress. The window is
+            # the sub-second gather only, so a genuine ``c`` / ``?`` outside
+            # it still routes normally.
+            logger.info(f"on_key swallowed_probe_leak key={event.key!r}")
             event.stop()
             event.prevent_default()
             return
