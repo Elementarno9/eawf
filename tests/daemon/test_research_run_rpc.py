@@ -19,11 +19,14 @@ no live campaign is run.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import orjson
 import pytest
 
 from eawf import __version__
@@ -34,18 +37,30 @@ from eawf.kernel.spec.research_campaign import (
     StagedDispatch,
     stage_campaign,
 )
+from eawf.kernel.state.enums import AgentSessionRole, StoreKind
+from eawf.kernel.state.models import State
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import AgentReportPayload, ResearcherReportBody
+from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.research import (
     RunCampaignParams,
     create_campaign,
     followup,
     read_campaign_rounds,
+    run,
     run_campaign,
     snapshot,
 )
+from eawf.runtime.runtimes.adapter import SpawnResult
 
 pytestmark = pytest.mark.unit
+
+_LIVE_WAVE_ID = "P30-I20-W06"
+_T0 = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+_T1 = datetime(2026, 6, 12, 12, 1, tzinfo=UTC)
 
 
 def _build_ctx(state_path: Path) -> MethodContext:
@@ -56,6 +71,160 @@ def _build_ctx(state_path: Path) -> MethodContext:
         version=__version__,
         state_path=state_path,
     )
+
+
+def _build_live_ctx(tmp_path: Path) -> tuple[MethodContext, Path]:
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state = State.model_validate(_live_state_payload())
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    wal_dir = tmp_path / "wal"
+    wal_dir.mkdir()
+    ctx = MethodContext(
+        started_at="2026-06-12T00:00:00+00:00",
+        pid=os.getpid(),
+        protocol_version=PROTOCOL_VERSION,
+        version=__version__,
+        shutdown_event=asyncio.Event(),
+        bus=EventBus(),
+        event_path=store_path(state_path, StoreKind.EVENT),
+        state_path=state_path,
+        wal_dir=wal_dir,
+        idempotency_cache={},
+    )
+    return ctx, state_path
+
+
+def _live_state_payload() -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "scope_kind": "repo",
+        "urn": "urn:eawf:v1:state:EAWF",
+        "updated_at": "2026-06-12T00:00:00Z",
+        "project": {
+            "code": "EAWF",
+            "slug": "eawf",
+            "title": "Eawf",
+            "description": "",
+            "domains": ["workflow"],
+            "default_branch": "main",
+            "status": "active",
+            "repo_urn": "urn:eawf:v1:repo:EAWF",
+        },
+        "current": {
+            "project_code": "EAWF",
+            "track_id": None,
+            "phase_id": "P30",
+            "iter_id": "P30-I20",
+            "active_wave_ids": [_LIVE_WAVE_ID],
+            "active_session_ids": [],
+        },
+        "workspace": None,
+        "phases": {
+            "P30": {
+                "id": "P30",
+                "scope_id": "EAWF",
+                "title": "Live research campaign",
+                "status": "active",
+                "iter_ids": ["P30-I20"],
+                "outcome_ids": [],
+                "opened_at": "2026-06-12T00:00:00Z",
+                "closed_at": None,
+                "audit_id": None,
+            }
+        },
+        "iters": {
+            "P30-I20": {
+                "id": "P30-I20",
+                "phase_id": "P30",
+                "title": "Research campaign live spawn",
+                "status": "active",
+                "wave_ids": [_LIVE_WAVE_ID],
+                "estimate_id": None,
+                "audit_id": None,
+                "opened_at": "2026-06-12T00:00:00Z",
+                "closed_at": None,
+            }
+        },
+        "waves": {
+            _LIVE_WAVE_ID: {
+                "id": _LIVE_WAVE_ID,
+                "iter_id": "P30-I20",
+                "title": "Wire live campaign producer",
+                "status": "claimed",
+                "deps": [],
+                "blocks": [],
+                "file_scopes": ["src/eawf/runtime/daemon/methods/research.py"],
+                "success_criteria": [],
+                "agent_role": "researcher",
+                "effort_bucket": "M",
+                "claim_session_id": None,
+                "worktree_id": None,
+                "token_budget": None,
+                "tokens_consumed": 0,
+                "outcome": None,
+                "opened_at": "2026-06-12T00:00:00Z",
+                "claimed_at": "2026-06-12T00:00:00Z",
+                "closed_at": None,
+                "runtime_preference": ["claude-code"],
+            }
+        },
+        "artifacts": {},
+        "agent_sessions": {},
+        "plugins": {},
+        "indexes": {},
+    }
+
+
+class _ResearchSpawnAdapter:
+    id = "claude-code"
+    cli_binary = "claude"
+
+    def __init__(self) -> None:
+        self.spawn_calls = 0
+        self.prompts: list[str] = []
+
+    async def spawn_session(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        cwd: str | None = None,
+        **kwargs: Any,
+    ) -> SpawnResult:
+        self.spawn_calls += 1
+        self.prompts.append(prompt)
+        on_spawn = kwargs.get("on_spawn")
+        if callable(on_spawn):
+            on_spawn(43210 + self.spawn_calls)
+        domain = "market-structure" if "market-structure" in prompt else "pricing-models"
+        return SpawnResult(
+            session_id=f"research-{self.spawn_calls}",
+            runtime="claude-code",
+            model=model,
+            resolved_model=model,
+            subprocess_pid=43210 + self.spawn_calls,
+            exit_status=0,
+            text=json.dumps(_agent_end_body(domain, findings=[f"{domain}-live-claim"])),
+            input_tokens=100,
+            output_tokens=25,
+            cache_creation_input_tokens=0,
+            cache_creation_5m_input_tokens=0,
+            cache_creation_1h_input_tokens=0,
+            cache_read_input_tokens=0,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+
+
+def _read_envelopes(path: Path) -> list[Envelope]:
+    if not path.exists():
+        return []
+    return [
+        Envelope.model_validate_json(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 def _run(body: Callable[[], Awaitable[None]]) -> None:
@@ -154,6 +323,43 @@ def test_run_campaign_halts_on_saturation(tmp_path: Path) -> None:
         assert rounds[0].saturated is True
 
     _run(body)
+
+
+def test_research_run_rpc_uses_live_producer_without_stub(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The RPC entrypoint wires the live producer and records smoke evidence."""
+    ctx, state_path = _build_live_ctx(tmp_path)
+    adapter = _ResearchSpawnAdapter()
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.research.select_adapter",
+        lambda _runtime: adapter,
+    )
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-live"))
+        result = await run(ctx, {"campaign_id": "campaign-live", "round_budget": 1})
+        assert result["rounds_run"] == 1
+        assert result["halt_reason"] == "round_budget"
+        assert len(result["claim_ids"]) == 2
+
+    _run(body)
+
+    assert adapter.spawn_calls == 2
+    schema_hint = "Return only a JSON object matching this agent_end schema"
+    assert all(schema_hint in p for p in adapter.prompts)
+
+    reports = _read_envelopes(store_path(state_path, StoreKind.RESEARCHER_REPORT))
+    assert len(reports) == 2
+    payloads = [AgentReportPayload.model_validate(row.payload) for row in reports]
+    assert all(payload.header.role is AgentSessionRole.RESEARCHER for payload in payloads)
+    assert all(isinstance(payload.body, ResearcherReportBody) for payload in payloads)
+
+    events = _read_envelopes(store_path(state_path, StoreKind.EVENT))
+    event_types = [row.payload.get("event_type") for row in events]
+    assert "research.run.round" in event_types
+    assert "dispatch_cost" in event_types
 
 
 def test_run_campaign_rejects_unknown_campaign(tmp_path: Path) -> None:

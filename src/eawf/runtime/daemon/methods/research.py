@@ -25,10 +25,11 @@ import uuid
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.config.layered import merge_config
 from eawf.kernel.spec.campaign_driver import (
     DispatchSpawner,
     RoundFindings,
@@ -55,21 +56,36 @@ from eawf.kernel.spec.research_campaign import (
 )
 from eawf.kernel.spec.round_loop import DEFAULT_ROUND_BUDGET, CheckpointPolicy, CheckpointTier
 from eawf.kernel.state.enums import (
+    AgentSessionRole,
     CampaignStatus,
     ClaimStatus,
+    EffortBucket,
     OpenQuestionStatus,
     StoreKind,
     Urgency,
 )
+from eawf.kernel.state.io import state_version
+from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
+from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.kernel.store.kinds.research_campaign import (
     CampaignTombstone,
     ResearchCampaignPayload,
 )
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
+from eawf.runtime.daemon.dispatch_runner import DispatchTokens, run_dispatch
 from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.runtime.lock import portalock
+from eawf.runtime.runtimes.metering import price_spawn_result
+from eawf.runtime.runtimes.selector import select_adapter
+from eawf.runtime.session.store import SessionConflict, append_event, start_session
+from eawf.workflow.dispatch.llm_assist import assist_with_schema
+from eawf.workflow.dispatch.routing import model_for_runtime
+from eawf.workflow.evidence._io import load_state
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.research_campaign import StagedDispatch
@@ -86,6 +102,19 @@ logger = logging.getLogger(__name__)
 #: agent.dispatch -> agent_end parse) is exercised under a stubbed spawner +
 #: fixture bodies without spawning a real subprocess.
 AgentEndProducer = Callable[["StagedDispatch"], Mapping[str, object]]
+
+_RUNTIME_ALIASES: dict[str, str] = {
+    "claude": "claude-code",
+    "claude-code": "claude-code",
+    "codex": "codex",
+    "opencode": "opencode",
+}
+
+_RUNTIME_TRIPLES: dict[str, RuntimeTriple] = {
+    "claude-code": "claude",
+    "codex": "codex",
+    "opencode": "opencode",
+}
 
 
 def build_live_dispatch_spawner(produce_agent_end: AgentEndProducer) -> DispatchSpawner:
@@ -829,17 +858,267 @@ def _live_agent_end_producer(ctx: MethodContext, runtime: str) -> AgentEndProduc
         An :data:`AgentEndProducer` that spawns one researcher per dispatch.
     """
 
-    def _produce(dispatch: StagedDispatch) -> Mapping[str, object]:  # pragma: no cover - live spawn
-        # The live spawn is forbidden in the binding-pass test harness; the
-        # production path drives agent.dispatch spawn=True and reads back the
-        # researcher report body. Tests inject a stub producer, so this closure
-        # is never exercised under test (no subprocess spawned).
-        raise NotImplementedError(
-            "live campaign spawn is wired through agent.dispatch in production; "
-            f"runtime={runtime!r} domain={dispatch.domain!r}"
-        )
+    def _produce(dispatch: StagedDispatch) -> Mapping[str, object]:
+        return _run_research_spawn_threaded(ctx, runtime=runtime, dispatch=dispatch)
 
     return _produce
+
+
+def _run_research_spawn_threaded(
+    ctx: MethodContext,
+    *,
+    runtime: str,
+    dispatch: StagedDispatch,
+) -> Mapping[str, object]:
+    """Run one live researcher spawn from the synchronous round-runner seam."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    async def _spawn() -> Mapping[str, object]:
+        return await _spawn_researcher_agent_end(ctx, runtime=runtime, dispatch=dispatch)
+
+    def _run() -> Mapping[str, object]:
+        return asyncio.run(_spawn())
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_run).result()
+
+
+async def _spawn_researcher_agent_end(
+    ctx: MethodContext,
+    *,
+    runtime: str,
+    dispatch: StagedDispatch,
+) -> Mapping[str, object]:
+    """Spawn one researcher and return its validated ``agent_end`` body.
+
+    This is the research-campaign analogue of the live ``agent.dispatch``
+    spawn path: it registers a role-typed session, spawns through the selected
+    runtime adapter, validates the spawned output through the same bounded
+    schema-assist loop, prices the spawn, and drives the dispatch runner so
+    dispatch-cost / agent-output / role-specific ``agent_end`` evidence lands
+    in the stores.
+    """
+    if ctx.state_path is None or ctx.event_path is None:
+        raise RuntimeError("research.run live spawn requires state_path + event_path")
+    state_path = Path(ctx.state_path)
+    serving_runtime = _canonical_runtime(runtime)
+    runtime_triple = _runtime_triple(serving_runtime)
+    wave_id = _active_research_wave_id(state_path)
+    scope_id = f"{wave_id}-research-{uuid.uuid4().hex[:8]}"
+    session_id = _register_researcher_session(
+        ctx,
+        scope_id=scope_id,
+        runtime=serving_runtime,
+    )
+    prompt = _researcher_prompt(dispatch)
+    model = model_for_runtime(
+        AgentSessionRole.RESEARCHER,
+        _effort_for_depth(dispatch.depth.value),
+        runtime_triple,
+    )
+    adapter = select_adapter(serving_runtime)
+    repo_root = state_path.parent.parent
+    captured_pid: list[int] = []
+    spawn_result = await adapter.spawn_session(
+        prompt,
+        model=model,
+        cwd=str(repo_root),
+        on_spawn=captured_pid.append,
+    )
+
+    spawns = 0
+
+    async def _assist_spawn(reask_prompt: str) -> Any:
+        nonlocal spawns
+        spawns += 1
+        if spawns == 1:
+            return spawn_result
+        return await adapter.spawn_session(
+            reask_prompt,
+            model=spawn_result.model,
+            cwd=str(repo_root),
+            on_spawn=captured_pid.append,
+        )
+
+    assist = await assist_with_schema(
+        prompt,
+        spawn=_assist_spawn,
+        validator=ResearcherReportBody.model_validate,
+    )
+    body = assist.body
+    if not isinstance(body, ResearcherReportBody):  # pragma: no cover - validator narrows
+        raise TypeError(f"assist returned non-researcher body: {body.role!r}")
+
+    metered = price_spawn_result(spawn_result)
+    tokens = DispatchTokens(
+        input_tokens=metered.input_tokens,
+        output_tokens=metered.output_tokens,
+        cache_creation_input_tokens=metered.cache_creation_input_tokens,
+        cache_read_input_tokens=metered.cache_read_input_tokens,
+    )
+    pid = captured_pid[-1] if captured_pid else spawn_result.subprocess_pid
+    run_dispatch(
+        ctx,
+        wave_id=wave_id,
+        primary_runtime=runtime_triple,
+        fallback_runtime=runtime_triple,
+        model=metered.model,
+        pricing_version=metered.pricing_version,
+        primary_error=None,
+        tokens=tokens,
+        cost_usd=metered.cost_usd,
+        session_id=session_id,
+        report_body=body,
+        pgid=pid,
+        enforce=_resolve_budget_enforce(state_path),
+        output_text=spawn_result.text,
+    )
+    logger.info(
+        f"_spawn_researcher_agent_end wave={wave_id} domain={dispatch.domain!r} "
+        f"runtime={serving_runtime!r} session={session_id!r} findings={len(body.findings)}"
+    )
+    return body.model_dump(mode="json")
+
+
+def _canonical_runtime(runtime: str) -> str:
+    """Return the canonical runtime id accepted by runtime selectors."""
+    try:
+        return _RUNTIME_ALIASES[runtime]
+    except KeyError as exc:
+        known = ", ".join(sorted(_RUNTIME_ALIASES))
+        raise ValueError(f"unknown runtime: {runtime!r} (known: {known})") from exc
+
+
+def _runtime_triple(runtime: str) -> RuntimeTriple:
+    """Return the event-surface runtime spelling for *runtime*."""
+    try:
+        return _RUNTIME_TRIPLES[runtime]
+    except KeyError as exc:
+        known = ", ".join(sorted(_RUNTIME_TRIPLES))
+        raise ValueError(f"unknown runtime: {runtime!r} (known: {known})") from exc
+
+
+def _effort_for_depth(depth: str) -> EffortBucket:
+    """Map campaign survey depth onto the runtime routing effort bucket."""
+    if depth == "shallow":
+        return EffortBucket.S
+    if depth == "deep":
+        return EffortBucket.L
+    if depth == "exhaustive":
+        return EffortBucket.XL
+    return EffortBucket.M
+
+
+def _active_research_wave_id(state_path: Path) -> str:
+    """Resolve the active wave that should accrue a live campaign's cost."""
+    state = load_state(state_path)
+    for wave_id in reversed(state.current.active_wave_ids):
+        if wave_id in state.waves:
+            return wave_id
+    if state.current.iter_id is not None:
+        it = state.iters.get(state.current.iter_id)
+        if it is not None:
+            for wave_id in reversed(it.wave_ids):
+                if wave_id in state.waves:
+                    return wave_id
+    raise RuntimeError("research.run live spawn requires an active wave")
+
+
+def _researcher_prompt(dispatch: StagedDispatch) -> str:
+    """Render the researcher prompt with a strict ``agent_end`` JSON contract."""
+    return (
+        f"{dispatch.prompt}\n\n"
+        f"Research domain: {dispatch.domain}\n"
+        f"Depth: {dispatch.depth.value}\n\n"
+        "Return only a JSON object matching this agent_end schema:\n"
+        '{"role":"researcher","verdict":"pass|pass-with-followups|fail|blocked",'
+        '"confidence":"low|medium|high","summary":"...","question":"...",'
+        '"findings":["..."],"recommendation":"...",'
+        '"evidence_refs":[{"kind":"store_record","ref":"repo-relative ref"}]}\n'
+        "Use repo-relative or external evidence refs only."
+    )
+
+
+def _register_researcher_session(
+    ctx: MethodContext,
+    *,
+    scope_id: str,
+    runtime: str,
+) -> str:
+    """Register an ACTIVE researcher session through the canonical state writer."""
+    if ctx.state_path is None or ctx.event_path is None:
+        raise RuntimeError("research.run live spawn requires state_path + event_path")
+    state_path = Path(ctx.state_path)
+    events_path = Path(ctx.event_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        before_version = state_version(state.model_dump(mode="json"))
+        try:
+            result = start_session(
+                state=state,
+                events_path=events_path,
+                role=AgentSessionRole.RESEARCHER,
+                scope_id=scope_id,
+                runtime=runtime,
+            )
+        except SessionConflict as exc:
+            raise RuntimeError(f"researcher session collision: {scope_id!r}") from exc
+        session_id = result.session.id
+        state.updated_at = datetime.now(UTC)
+        new_payload = state.model_dump(mode="json")
+        after_version = state_version(new_payload)
+        atomic_write_json_locked(state_path, new_payload)
+    logger.info(
+        f"_register_researcher_session scope_id={scope_id!r} runtime={runtime!r} "
+        f"session={session_id!r} before={before_version} after={after_version}"
+    )
+    return session_id
+
+
+def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
+    """Resolve ``flow.budget.enforce`` for the repo that owns ``state_path``."""
+    repo = state_path.parent.parent
+    merged, _sources = merge_config(workspace=repo, repo=repo)
+    flow = merged.get("flow")
+    budget = flow.get("budget") if isinstance(flow, dict) else None
+    value = budget.get("enforce", DEFAULT_ENFORCE) if isinstance(budget, dict) else DEFAULT_ENFORCE
+    if value not in ("soft", "hard"):
+        raise ValueError(f"invalid flow.budget.enforce: {value!r}")
+    return cast(EnforceMode, value)
+
+
+def _emit_research_run_round_event(
+    ctx: MethodContext,
+    *,
+    campaign_id: str,
+    round_number: int,
+    claim_ids: list[str],
+    saturated: bool,
+    checkpoint: bool,
+) -> None:
+    """Append a smoke evidence event for a persisted ``research.run`` round."""
+    if ctx.event_path is None:
+        return
+    now = datetime.now(UTC)
+    event = append_event(
+        events_path=Path(ctx.event_path),
+        event_id=f"EV-research-run-{uuid.uuid4().hex[:12]}",
+        event_type="research.run.round",
+        actor="daemon",
+        command="research.run",
+        args_hash="",
+        status="ok",
+        message=(
+            f"research.run round={round_number} campaign={campaign_id} "
+            f"claims={len(claim_ids)} saturated={saturated} checkpoint={checkpoint}"
+        ),
+        scope_id=campaign_id,
+        occurred_at=now,
+    )
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(event)
+    ctx.last_event_id = event.id
 
 
 def _reconcile_round_claims_for(
@@ -1096,6 +1375,14 @@ def run_campaign(
             }
         )
         persist_round(state_path, stamped)
+        _emit_research_run_round_event(
+            ctx,
+            campaign_id=args.campaign_id,
+            round_number=stamped.round_number,
+            claim_ids=list(stamped.claim_ids),
+            saturated=stamped.saturated,
+            checkpoint=stamped.checkpoint,
+        )
     logger.info(
         f"run_campaign campaign={args.campaign_id!r} rounds={loop.rounds_run} "
         f"halt={loop.halt_reason.value} checkpoints={len(loop.checkpoints)} "
