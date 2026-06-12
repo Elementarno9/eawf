@@ -7951,6 +7951,20 @@
       "scope_id": "P30-I17-W10",
       "status": "done",
       "updated_at": "2026-06-12T08:07:33.681028Z"
+    },
+    "P30-I17-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W11",
+      "model": null,
+      "scope_id": "P30-I17-W11",
+      "status": "done",
+      "updated_at": "2026-06-12T08:41:10.018236Z"
     }
   },
   "agent_sessions": {
@@ -11720,7 +11734,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -21016,6 +21030,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I17-W10",
       "updated_at": "2026-06-12T07:54:12.639057Z"
+    },
+    "P30-I17-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W11-bucket-20260612T081647Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W11",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W11",
+      "updated_at": "2026-06-12T08:16:47.662544Z"
     }
   },
   "fleet_run": null,
@@ -24197,7 +24224,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T08:16:27.403784Z",
+  "updated_at": "2026-06-12T08:41:10.018524Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -91417,10 +91444,10 @@
     "P30-I17-W11": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T08:16:47.662426Z",
+      "closed_at": "2026-06-12T08:41:10.018236Z",
+      "commit": "7d770d8560f11e6f79948e2d0c86e0821b3e88b9",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -91448,12 +91475,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-12T08:16:27.403591Z",
-      "outcome": null,
+      "outcome": "Completed the live autopilot binding the I17 audit flagged: start_background_drive now arms classify=_live_lane_error_classifier + repair (DL-11/DL-7 ladders fire on a real run); live spawn threads output_text=spawn_result.text (W08 producer fires live); idle_contract_gate guards both bindings; stale W07-reattach autopilot fork-inbox test fixed. 148+634 tests pass, idle gate exit 0.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
