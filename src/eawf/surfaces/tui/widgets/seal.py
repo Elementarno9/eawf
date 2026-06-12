@@ -191,17 +191,31 @@ def resolve_surface_hex() -> str:
     """Return the resolved theme surface hex the seal is matted onto.
 
     The seal's transparent corners + star knockout matte onto the main content
-    surface (:data:`SURFACE_HEX`, the Wong dark theme's ``$surface``), the same
-    surface ``Screen { background: $surface }`` paints behind the hero seal, so
-    the matted PNG blends into the live TUI surface rather than the black a
-    graphics terminal composites a transparent region onto. Centralising the
-    lookup keeps the surface single-homed: a future per-theme surface only has
-    to feed this one resolver -- the mirror of :func:`resolve_accent_hex`.
+    surface -- the same surface ``Screen { background: $surface }`` paints behind
+    the hero seal -- so the matted PNG blends into the live TUI surface rather
+    than the black a graphics terminal composites a transparent region onto.
+
+    The surface is THEME-DEPENDENT: the ``light`` theme paints a light ``$surface``
+    (``#F5F5F5``) and the ``dark`` theme a near-black one (``#1E1E1E``). A fixed
+    dark matte would leave a dark square on a light surface, so the hex is read
+    from the *running* app's active theme when there is one; :data:`SURFACE_HEX`
+    is the headless fallback (no running app, e.g. unit tests). Centralising the
+    lookup keeps the surface single-homed -- the mirror of
+    :func:`resolve_accent_hex`.
 
     Returns:
         The ``#rrggbb`` surface hex the seal is matted onto.
     """
-    return SURFACE_HEX
+    from textual.app import active_app
+
+    app = active_app.get(None)
+    if app is None:
+        return SURFACE_HEX
+    try:
+        surface = app.current_theme.to_color_system().generate().get("surface")
+    except Exception:  # any theme-resolution failure falls back to the constant
+        return SURFACE_HEX
+    return str(surface) if surface else SURFACE_HEX
 
 
 def _substitute_current_color(svg_text: str, accent_hex: str) -> str:

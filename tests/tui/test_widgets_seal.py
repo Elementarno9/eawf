@@ -424,3 +424,54 @@ def test_rasterised_seal_real_resvg_matte_fills_corners_opaque(
     assert abs(corner[0] - bg[0]) <= tol
     assert abs(corner[1] - bg[1]) <= tol
     assert abs(corner[2] - bg[2]) <= tol
+
+
+# --------------------------------------------------------------------------
+# W26 follow-up -- resolve_surface_hex tracks the ACTIVE theme so the matte
+# is the light surface on the light theme (not a fixed dark square).
+# --------------------------------------------------------------------------
+
+
+def test_resolve_surface_hex_tracks_active_theme_surface() -> None:
+    """The matte hex is read from the running app's active theme.
+
+    A fixed dark matte would leave a dark square on the light theme's light
+    surface; the resolver must return the active theme's ``$surface``.
+    """
+    from textual.app import active_app
+
+    from eawf.surfaces.tui.theme import EA_DARK, EA_LIGHT
+    from eawf.surfaces.tui.widgets.seal import resolve_surface_hex
+
+    class _StubApp:
+        def __init__(self, theme: object) -> None:
+            self.current_theme = theme
+
+    light_surface = str(EA_LIGHT.to_color_system().generate()["surface"])
+    dark_surface = str(EA_DARK.to_color_system().generate()["surface"])
+
+    token = active_app.set(_StubApp(EA_LIGHT))  # type: ignore[arg-type]
+    try:
+        assert resolve_surface_hex() == light_surface
+        assert resolve_surface_hex() != dark_surface
+    finally:
+        active_app.reset(token)
+
+    token = active_app.set(_StubApp(EA_DARK))  # type: ignore[arg-type]
+    try:
+        assert resolve_surface_hex() == dark_surface
+    finally:
+        active_app.reset(token)
+
+
+def test_resolve_surface_hex_headless_falls_back_to_constant() -> None:
+    """With no running app (unit/headless) the resolver returns the constant."""
+    from textual.app import active_app
+
+    from eawf.surfaces.tui.widgets.seal import SURFACE_HEX, resolve_surface_hex
+
+    token = active_app.set(None)
+    try:
+        assert resolve_surface_hex() == SURFACE_HEX
+    finally:
+        active_app.reset(token)
