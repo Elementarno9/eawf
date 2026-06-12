@@ -23875,6 +23875,47 @@
         "P30-I19-W14",
         "P30-I19-W15"
       ]
+    },
+    "P30-I20": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "Polish/repair iteration from the 2026-06-12 global review (.ea/local/review/2026-06-12-p30-global-review.md): 5 ship blockers (release annotation; just-test red; campaign producer stub; win pipe accept-loop; import pwd) plus gate/runtime/UI/state-honesty fixes ratified by operator AUQ; ends with validated re-close and PR.",
+      "estimate_id": null,
+      "id": "P30-I20",
+      "intent": null,
+      "opened_at": "2026-06-12T17:57:41.834527Z",
+      "phase_id": "P30",
+      "status": "planned",
+      "title": "Honest close: fix global-review blockers and re-close v0.6.0",
+      "trigger": "none",
+      "wave_ids": [
+        "P30-I20-W01",
+        "P30-I20-W02",
+        "P30-I20-W03",
+        "P30-I20-W04",
+        "P30-I20-W05",
+        "P30-I20-W06",
+        "P30-I20-W07",
+        "P30-I20-W08",
+        "P30-I20-W09",
+        "P30-I20-W10",
+        "P30-I20-W11",
+        "P30-I20-W12",
+        "P30-I20-W13",
+        "P30-I20-W14",
+        "P30-I20-W15",
+        "P30-I20-W16",
+        "P30-I20-W17",
+        "P30-I20-W18",
+        "P30-I20-W19",
+        "P30-I20-W20",
+        "P30-I20-W21",
+        "P30-I20-W22",
+        "P30-I20-W23",
+        "P30-I20-W24",
+        "P30-I20-W25"
+      ]
     }
   },
   "mcp_grants": null,
@@ -24899,7 +24940,8 @@
         "P30-I16",
         "P30-I17",
         "P30-I18",
-        "P30-I19"
+        "P30-I19",
+        "P30-I20"
       ],
       "opened_at": "2026-06-09T12:29:17.752919Z",
       "outcome_ids": [],
@@ -24950,7 +24992,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T14:48:18.281286Z",
+  "updated_at": "2026-06-12T18:02:41.450862Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -94394,6 +94436,2176 @@
         }
       ],
       "title": "Phase-audit polish sweep: naming, docstrings, stale comments",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W06",
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/kernel/config/layered.py",
+        "tests/integration/test_cli_config.py",
+        "justfile"
+      ],
+      "gates": [],
+      "id": "P30-I20-W01",
+      "intent": {
+        "desired_outcome": "EAWF_SKIP_PERF reserved; config validate green under every escape-hatch env; just test exits 0 end to end",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Ship blocker BL-2: the documented local fast loop is red and the serial TUI leg silently never runs.",
+        "problem": "EAWF_SKIP_PERF leaks via _collect_env_overrides into config key skip_perf; strict schema rejects it; just test deterministically red (7 failures)",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:06.356219Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "EAWF_SKIP_PERF added to the reserved control-knob list in src/eawf/kernel/config/layered.py so _collect_env_overrides never emits skip_perf",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "EAWF_SKIP_PERF added to the reserved control-knob list in src/eawf/kernel/config/layered.py so _collect_env_overrides never emits skip_perf",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "regression test runs config validate under every EAWF_* escape-hatch env",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "regression test runs config validate under every EAWF_* escape-hatch env",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "just test exits 0 including the serial TUI snapshot leg",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "just test exits 0 including the serial TUI snapshot leg",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Reserve EAWF_SKIP_PERF as runtime control knob",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W02": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/wave_sha.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W02",
+      "intent": {
+        "desired_outcome": "Detector honors the ack file; pins repaired; verify-commits exits 0; no git_state_drift WARN",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Red release gate (R-3) rooted in latent defect N-2; an acked drift must stop reding the dashboard.",
+        "problem": "Drift acks are write-only: 14 acked waves on disk but status reports acked=0; verify-commits exits 2 with 22 benign rows; doctor WARN permanent",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:06.883521Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "detect_git_state_drift loads .eawf/drift-acks.json and eawf status reports the true acked count",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "detect_git_state_drift loads .eawf/drift-acks.json and eawf status reports the true acked count",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "repairable pinned_mismatch rows repaired via eawf wave verify-commits --repair; residue explicitly acked",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "repairable pinned_mismatch rows repaired via eawf wave verify-commits --repair; residue explicitly acked",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "eawf wave verify-commits exits 0 and eawf doctor shows no git_state_drift WARN",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf wave verify-commits exits 0 and eawf doctor shows no git_state_drift WARN",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix drift-ack read path and clear the 22-drift WARN",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W03": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/observability/doctor/doc_verify.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W03",
+      "intent": {
+        "desired_outcome": "Store-fragment URIs verify; plugin-target posture decided; doc verify --strict exits 0",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Red release gate R-4 (Codex F03); strict doc verification must be green before re-close.",
+        "problem": "doc verify --strict exits 2: repo:<jsonl>#<id> URIs treated as filesystem paths; 140 generated plugin target rows missing with no recorded posture",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:07.424264Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "doc_verify treats repo:<jsonl>#<id> URIs as store fragments with regression test",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "doc_verify treats repo:<jsonl>#<id> URIs as store fragments with regression test",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "decision recorded for the 140 missing generated plugin target rows (expected-local vs gate input)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "decision recorded for the 140 missing generated plugin target rows (expected-local vs gate input)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "eawf --json doc verify --strict exits 0",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf --json doc verify --strict exits 0",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Doc-verify strict accepts store-fragment artifact URIs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W04": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts/audits/2026-06-12-A-P30-ship-gate.md",
+        "src/eawf/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W04",
+      "intent": {
+        "desired_outcome": "Artifact validates; validator blocks invalid artifacts at audit/ship close; append idempotent",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "R-5 (Codex F05): the audit that justified phase close does not itself validate; gate the gap.",
+        "problem": "A-P30-ship-gate.md fails validate_markdown_artifact (scrub unclean; citations lack rows); validator unenforced at audit close; audit row double-written",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:07.939573Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "2026-06-12-A-P30-ship-gate.md rewritten with valid chassis + citation rows for every [N] marker",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "2026-06-12-A-P30-ship-gate.md rewritten with valid chassis + citation rows for every [N] marker",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "validate_markdown_artifact wired into audit/ship close so an invalid artifact blocks",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "validate_markdown_artifact wired into audit/ship close so an invalid artifact blocks",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "duplicate A-P30-ship-gate audit-row cause fixed; audit-record append is idempotent",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "duplicate A-P30-ship-gate audit-row cause fixed; audit-record append is idempotent",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Ship-gate audit artifact passes the markdown validator",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tools/idle_contract_gate.py",
+        "tools/coverage_gate.py",
+        "src/eawf/platform/lint/eawf023_artifact_placement.py",
+        "tests/**",
+        ".pre-commit-config.yaml"
+      ],
+      "gates": [],
+      "id": "P30-I20-W05",
+      "intent": {
+        "desired_outcome": "Hook and PR-range agree; 4 contracts resolved; producer seams asserted non-stub",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "R-6 + C-3: the gate built to catch idle contracts has a hole exactly where BL-3 lived.",
+        "problem": "PR-range idle gate fails (4 new contracts) while the hook passes; gate never checks producer seams so the campaign raise-stub passed every binding gate",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:08.469079Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the 4 new idle contracts resolved (eawf023 asserting test; check_artifact_path call site; coverage_gate _classes_for_gate + run_gate)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the 4 new idle contracts resolved (eawf023 asserting test; check_artifact_path call site; coverage_gate _classes_for_gate + run_gate)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "pre-commit hook and PR-range invocations run the same range-aware checks",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "pre-commit hook and PR-range invocations run the same range-aware checks",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "gate extended to assert producer seams are non-stub (campaign producer class)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "gate extended to assert producer seams are non-stub (campaign producer class)",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Close idle-contract gate holes and align hook vs PR-range",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W06": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W07",
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I20-W01"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W06",
+      "intent": {
+        "desired_outcome": "research.run drives a real researcher spawn via agent.dispatch; validated agent_end parsed; recorded smoke round in event.jsonl",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Ship blocker BL-3: the I18 headline deliverable cannot run; the idle-contract disease inside the binding pass.",
+        "problem": "_live_agent_end_producer raises NotImplementedError yet is the only production producer wired by research.run; a real campaign dies at first dispatch; zero run evidence",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:08.995623Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_live_agent_end_producer dispatches a real researcher spawn via the agent.dispatch spawn path and parses a validated agent_end (replaces NotImplementedError at research.py:832)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_live_agent_end_producer dispatches a real researcher spawn via the agent.dispatch spawn path and parses a validated agent_end (replaces NotImplementedError at research.py:832)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "RPC-level research.run test with no stubbed producer",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "RPC-level research.run test with no stubbed producer",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "recorded smoke round leaves research.run evidence in event.jsonl",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "recorded smoke round leaves research.run evidence in event.jsonl",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire the live campaign producer through dispatch spawn",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W07": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I20-W06"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py",
+        "src/eawf/runtime/daemon/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W07",
+      "intent": {
+        "desired_outcome": "research.run returns a run handle; campaign runs on a background task; daemon stays responsive mid-campaign",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "C-2 (Codex F09): without this the live producer from W06 freezes the daemon for the whole campaign.",
+        "problem": "research.run executes the campaign synchronously inside the awaited daemon handler; a long campaign monopolizes the loop so ping/steer/pause/kill stop responding",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:09.552949Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "research.run returns a run handle and executes the campaign on a background task or thread",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "research.run returns a run handle and executes the campaign on a background task or thread",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "concurrent research.run + daemon.ping + research.steer test passes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "concurrent research.run + daemon.ping + research.steer test passes",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Background research.run with a run handle",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W08": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/kernel/state/models.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W08",
+      "intent": {
+        "desired_outcome": "subprocess_pid persisted; pgid + enforcement mode reach run_dispatch; kill and over-budget tests pass",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "A-1 (Codex F10, source-confirmed): kill/budget teeth exist on lanes but not single-wave dispatch.",
+        "problem": "Live dispatch captures pid but the persisted SessionAttempt omits subprocess_pid and run_dispatch gets no pgid/enforce mode; single-wave kill cannot resolve the process from state",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:10.117384Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "SessionAttempt.subprocess_pid persisted on the live dispatch path (agent.py DispatchPlan construction)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "SessionAttempt.subprocess_pid persisted on the live dispatch path (agent.py DispatchPlan construction)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "run_dispatch receives pgid and resolved enforcement mode",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "run_dispatch receives pgid and resolved enforcement mode",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "dispatch-then-kill and over-budget live-spawn tests pass",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "dispatch-then-kill and over-budget live-spawn tests pass",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Persist dispatch pid and feed kill plus budget enforcement",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W09": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W09",
+      "intent": {
+        "desired_outcome": "Pause/resume go through canonical mutation with events; read surfaces provably write nothing",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "A-2 + X-6: audit-trail hole observed independently by two reviewers; read surfaces must be inert.",
+        "problem": "_set_dispatch_paused mutates state with no event/bus row (silently flipped twice during review); status bumps updated_at and roadmap show writes an event despite being reads",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:10.647069Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "_set_dispatch_paused routes through canonical mutation with event append + bus publish + last_event_id advance",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "_set_dispatch_paused routes through canonical mutation with event append + bus publish + last_event_id advance",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "idempotent resume test",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "idempotent resume test",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "eawf status and roadmap show perform zero state writes (regression test)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf status and roadmap show perform zero state writes (regression test)",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Publish pause/resume events and pin read-only invariants",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W10": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/draft.py",
+        "src/eawf/platform/artifacts/validation.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W10",
+      "intent": {
+        "desired_outcome": "Real promotions run EviBound; non-resolving claim refs fail typed; campaign synthesis has a production caller",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "C-4: Keystone B of P29 still unfed two phases later; cheap to wire now that W06 makes campaigns real.",
+        "problem": "Operator promote CLI never passes intent= so EviBound is skipped on real promotions; synthesize_campaign_brief has zero production callers (RC-5; landmine f)",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:11.163741Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "promote CLI passes intent= so _evibound_errors_for_intent runs on real promotions",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "promote CLI passes intent= so _evibound_errors_for_intent runs on real promotions",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "synthesize_campaign_brief gains a production caller",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "synthesize_campaign_brief gains a production caller",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "promotion of a brief with a non-resolving claim ref fails with a typed error",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "promotion of a brief with a non-resolving claim ref fails with a typed error",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Feed EviBound on the operator promote path",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W11": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/service_install.py",
+        "src/eawf/runtime/daemon/spawn.py",
+        "src/eawf/runtime/daemon/windows_pipe.py",
+        "src/eawf/observability/telemetry/projector.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W11",
+      "intent": {
+        "desired_outcome": "Service verbs reach win32 dispatch; 20s budget enforced in spawn; dead branch removed; incremental projection works on Windows",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Ship blocker BL-5 plus W-3/W-8/W-9 from the cross-platform review; all small and mechanical.",
+        "problem": "Unguarded import pwd kills daemon service verbs on Windows (reproduced); win32 20s cold-start budget is test-only; MORE_DATA strerror branch wrong; projector tempfile reopen fails on win32",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:11.702925Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "import pwd deferred or platform-guarded in service_install.py so Windows service verbs reach win32 dispatch",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "import pwd deferred or platform-guarded in service_install.py so Windows service verbs reach win32 dispatch",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "SPAWN_POLL_TIMEOUT 20s on win32 in the production spawn path",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "SPAWN_POLL_TIMEOUT 20s on win32 in the production spawn path",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "MORE_DATA exc.strerror-as-data branch removed from windows_pipe.py",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "MORE_DATA exc.strerror-as-data branch removed from windows_pipe.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "projector NamedTemporaryFile reopen-by-name fixed for Windows incremental capture",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "projector NamedTemporaryFile reopen-by-name fixed for Windows incremental capture",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix Windows import and small platform hazards",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W12": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/spawn.py",
+        "src/eawf/runtime/daemon/windows_security.py",
+        "docs/architecture/windows-named-pipe-threat-model.md",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W12",
+      "intent": {
+        "desired_outcome": "Readiness proves daemon identity via real ping; verify_peer_sid round-trips in a win32 test; threat model reconciled",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W-5/W-6 (Codex F14): the security second-gate may throw AttributeError on first real connection.",
+        "problem": "Win32 readiness = pipe availability + pid file (can attach to wrong daemon); real SID-verify API path has zero coverage and uses spellings the port gotchas flagged broken",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:12.232940Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "readiness performs daemon.ping over the pipe or the pipe name is runtime-dir scoped",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "readiness performs daemon.ping over the pipe or the pipe name is runtime-dir scoped",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "win32 test round-trips verify_peer_sid against a real same-user pipe",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "win32 test round-trips verify_peer_sid against a real same-user pipe",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "threat-model doc reconciles gotcha 2/3 API spellings",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "threat-model doc reconciles gotcha 2/3 API spellings",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make Windows readiness a real ping and test SID verify",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W13": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/windows_pipe.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W13",
+      "intent": {
+        "desired_outcome": "Subscriptions stream on dedicated workers while the listener accepts; full call deadline-bound; concurrency proven by test",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Ship blocker BL-4 (Codex F12); operator chose fix-now over deferred platform-risk Decision.",
+        "problem": "Subscription streams inline in the only accept loop so an open TUI subscription makes the daemon single-client on Windows; blocking ReadFile + done.wait() have no deadline",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:12.782405Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "each accepted connection (at least streaming subscriptions) runs on a dedicated worker so the listener keeps accepting",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "each accepted connection (at least streaming subscriptions) runs on a dedicated worker so the listener keeps accepting",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "client call timeout bounds read + handler wait via CancelIoEx or a cancellable reader",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "client call timeout bounds read + handler wait via CancelIoEx or a cancellable reader",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "win32 test holds a subscription open while daemon.ping succeeds on a second client",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "win32 test holds a subscription open while daemon.ping succeeds on a second client",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix Windows pipe concurrency and call deadlines",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W14": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".github/workflows/ci.yaml"
+      ],
+      "gates": [],
+      "id": "P30-I20-W14",
+      "intent": {
+        "desired_outcome": "Windows job fires on push too and includes a shared-code smoke so cross-platform regressions surface in CI",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W-7 (Codex F16): every Windows finding this review landed outside the 7-file subset.",
+        "problem": "windows-latest job is PR-only and runs exactly 7 named transport files; no shared code ever executes on Windows so shared-code win32 breakage cannot red the PR",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:13.323534Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "windows job triggers on push to main/release as well as PRs",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "windows job triggers on push to main/release as well as PRs",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "shared-code Windows smoke added (eawf --help; init; status; one daemonless mutation)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "shared-code Windows smoke added (eawf --help; init; status; one daemonless mutation)",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Broaden Windows CI beyond the transport subset",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W15": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "src/eawf/surfaces/tui/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W15",
+      "intent": {
+        "desired_outcome": "Swappable production panes render inside the boundary; a real exception shows the crash frame not a panic",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "U-2: RS-26 is an idle contract on the exact failure it was specced to prevent.",
+        "problem": "PaneErrorBoundary + pane_boundary() are built and tested but have zero production callers; a real pane render exception still escalates to App.panic",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:13.859186Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "pane_boundary() wraps the swappable production panes (roadmap/status/attention)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "pane_boundary() wraps the swappable production panes (roadmap/status/attention)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "mounted test injects a real render exception and asserts crash-frame render not App.panic",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "mounted test injects a real render exception and asserts crash-frame render not App.panic",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire RS-26 pane boundary into production panes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W16": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/snapshots/tui/test_tui_flow.py",
+        "src/eawf/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W16",
+      "intent": {
+        "desired_outcome": "The four journeys assert their register terminal states or a typed deferral Decision records the gap",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "U-3: criteria-thinning (B091 lineage) hidden inside a passing gate misleads future audits.",
+        "problem": "G1/G3/G5/G6 of 7 tui_flow journeys are thinned to single-keypress mode-switch assertions; the gate proves navigation not the register terminal states; re-scope conceded only in a docstring",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:14.393908Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "G1/G3/G5/G6 assert the scenario-gate register terminal states (close-gate pass + elapsed_eu; iter PLANNED with revised DAG; authority transition; follow-ups filed) or a typed deferral Decision is recorded",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "G1/G3/G5/G6 assert the scenario-gate register terminal states (close-gate pass + elapsed_eu; iter PLANNED with revised DAG; authority transition; follow-ups filed) or a typed deferral Decision is recorded",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Strengthen tui_flow journeys to terminal-state assertions",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W17": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/audit_dsl/kinds/mockup_image_diff.py",
+        "tests/**",
+        ".ea/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W17",
+      "intent": {
+        "desired_outcome": "A structured mockup_golden_diff gate row diffs a real redesign mockup against an actual TUI screenshot and blocks on drift",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "U-4: the gate added after the I15 false-pass cannot catch the regression that motivated it.",
+        "problem": "The VIS-1 image-diff gate fires only against synthetic fixtures; zero gate rows diff a real mockup against a real TUI render so the square-vs-round regression class is still uncatchable",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:14.951903Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a structured kind=mockup_golden_diff gate row diffs a real redesign mockup against an actual TUI screenshot",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a structured kind=mockup_golden_diff gate row diffs a real redesign mockup against an actual TUI screenshot",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "synthetic-fixture-only binding retired or kept as unit coverage only",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "synthetic-fixture-only binding retired or kept as unit coverage only",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Bind mockup_golden_diff to a real mockup vs real render",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W18": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/init_wizard.py",
+        "src/eawf/surfaces/tui/screens/overlays/init_wizard_render.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W18",
+      "intent": {
+        "desired_outcome": "Register is distinct or removed; every advertised key bound per state; J1 cards + J2 bordered inputs match the mock",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "U-5/U-6/U-7 (Codex F17/F18): a forced-init affordance lie on the first-run surface is operator-hostile.",
+        "problem": "r (register existing repo) maps to REPO_INIT and runs a forced init flow; footer advertises dead/wrong keys; J1/J2 field shapes diverge from the mockup",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:15.479654Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "r maps to a distinct register journey (no forced init flow) with mounted keypress test",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "r maps to a distinct register journey (no forced init flow) with mounted keypress test",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "advertised-key contract test per wizard state; dead hints removed or bound",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "advertised-key contract test per wizard state; dead hints removed or bound",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "J1 option cards + J2 bordered inputs with inline-right validity per mockup",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "J1 option cards + J2 bordered inputs with inline-right validity per mockup",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Init wizard honesty: register journey, keys, field shapes",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W19": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W19",
+      "intent": {
+        "desired_outcome": "Cockpit overlays match mock affordances and never lie about state; copy and key vocab consistent; narrow goldens added",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "U-1 + U-8..U-13 (Codex F19/F20/F21/F22): batched cockpit honesty pass per rendered-image audit.",
+        "problem": "Arm overlay omits budget caps + hard-halt + risk matrix vs mock S1; fork inbox drops cards on daemon failure; empty-arm key lie; run-summary caption lie; footer collision; k-vs-x copy; copy drift",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:16.014493Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "arm overlay shows EU/$/waves caps + hard-halt vs drain row + 2-row risk matrix + drain-over-N title per mock S1",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "arm overlay shows EU/$/waves caps + hard-halt vs drain row + 2-row risk matrix + drain-over-N title per mock S1",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "fork inbox drops a card only after daemon acceptance (no-daemon test keeps it visible)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "fork inbox drops a card only after daemon acceptance (no-daemon test keeps it visible)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "empty-frontier arm renders close-only and run summary caption matches what it renders",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "empty-frontier arm renders close-only and run summary caption matches what it renders",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "footer/burn collision fixed at 120 cols; k-to-x cancel copy; 40/48-col goldens for arm/fork-inbox/run-summary; feed/separator/needs_user copy nits",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "footer/burn collision fixed at 120 cols; k-to-x cancel copy; 40/48-col goldens for arm/fork-inbox/run-summary; feed/separator/needs_user copy nits",
+          "waiver_reason": null
+        }
+      ],
+      "title": "TUI parity batch: arm overlay, cockpit honesty, copy",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W20": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/git_pane.py",
+        "src/eawf/surfaces/tui/screens/overlays/pr_list.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W20",
+      "intent": {
+        "desired_outcome": "All TUI shell-outs detached; kwargs pinned by tests",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "W-10 (Codex F15): same root cause as the worst P30 runtime incident; cheap to finish.",
+        "problem": "git_pane and pr_list shell-outs run without stdin=DEVNULL or detached_subprocess_kwargs — the disease class that produced the I18 doctor fd-0 crash, incompletely propagated",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:16.553949Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "git_pane + pr_list shell-outs use stdin=DEVNULL + detached_subprocess_kwargs",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "git_pane + pr_list shell-outs use stdin=DEVNULL + detached_subprocess_kwargs",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "kwargs-capture tests for git status / gh pr list / gh pr view --web",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "kwargs-capture tests for git status / gh pr list / gh pr view --web",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Detach TUI git/gh subprocesses from the terminal",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W21": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/commands/lifecycle_iter.py",
+        "src/eawf/runtime/daemon/**",
+        "docs/architecture/state-model.md",
+        "src/eawf/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W21",
+      "intent": {
+        "desired_outcome": "track add/switch daemon-routed; state-model.md current; config keys renamed; B102-B104 closed; I19 criteria annotated",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "X-3 (Codex F06/F07): operator chose implement over waive via AUQ 2026-06-12.",
+        "problem": "Closed I19 W14/W15 criteria claim track daemon RPC routing + refreshed docs but source calls _run_mutation directly and state-model.md still says Subproject/schema 1.0 at ~17 spots",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:17.087262Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "eawf track add and track switch route via daemon mutation kinds with tests; B102 closed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawf track add and track switch route via daemon mutation kinds with tests; B102 closed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "docs/architecture/state-model.md refreshed to Track + schema 1.12 across all stale spots; B103 closed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "docs/architecture/state-model.md refreshed to Track + schema 1.12 across all stale spots; B103 closed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "config keys renamed off subproject with migration; B104 closed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "config keys renamed off subproject with migration; B104 closed",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "W14/W15 (I19) criteria annotated to reflect the landed implementation",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "W14/W15 (I19) criteria annotated to reflect the landed implementation",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Implement track daemon routing and refresh state-model docs",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W22": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/**",
+        "src/eawf/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W22",
+      "intent": {
+        "desired_outcome": "Typed Incident rows exist for the four instructive events; I19 audit-skip confirmed or recorded",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "N-1: without typed rows the systemic signal (the escape class recurred 4+ times) is invisible to queries.",
+        "problem": "state.incidents is None project-wide despite 6+ incident-grade P30 events (idle-contract escapes; doctor fd-0 crash; reskin audit false-pass; drift-ack defect); typed forensic surface absent",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:17.621030Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "typed Incident rows landed for the idle-contract escape class + doctor fd-0 crash + reskin audit false-pass + drift-ack read defect",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "typed Incident rows landed for the idle-contract escape class + doctor fd-0 crash + reskin audit false-pass + drift-ack read defect",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "I19 audit-skip either confirmed as intentional ship-gate substitution or recorded as a gap",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "I19 audit-skip either confirmed as intentional ship-gate substitution or recorded as a gap",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Backfill typed Incident rows for P30 events",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W23": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "pyproject.toml",
+        ".github/workflows/ci.yaml",
+        ".ea/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W23",
+      "intent": {
+        "desired_outcome": "Dead dep gone; deptry red in CI; delivered backlog closed; aging backlog gets defer-decisions",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "X-1/X-2/T-2/X-4: the typer-click dep hazard shape plus silent backlog rot; all mechanical.",
+        "problem": "pillow is a dead runtime dep masked by a deptry ignore; hypothesis is product-imported but dev-only; deptry not in CI; B012/B069 delivered but open; 2026-05-10 backlog rotting",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:40.861371Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "pillow removed from runtime deps along with its DEP002 ignore",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "pillow removed from runtime deps along with its DEP002 ignore",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "hypothesis DEP004 resolved (promoted or documented ignore)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "hypothesis DEP004 resolved (promoted or documented ignore)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "deptry wired into CI",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "deptry wired into CI",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "B012 + B069 closed or downscoped; defer-decisions recorded for the aging 2026-05-10 backlog",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "B012 + B069 closed or downscoped; defer-decisions recorded for the aging 2026-05-10 backlog",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Dependency and backlog hygiene",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W24": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/main.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W24",
+      "intent": {
+        "desired_outcome": "Startup sweep GCs orphaned oversize backups; eawfd.err rotates; disk bounded forever",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "N-3: the I14 claim is true forward-only; legacy damage and the err channel remain unbounded.",
+        "problem": "A 165MB pre-rotation eawfd.log.3 orphan survives the I14 unbounded-growth fix (forward-only); eawfd.err is never rotated",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:18.692833Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "startup orphan-backup sweep GCs oversize legacy daemon log backups (165MB eawfd.log.3 class) with test",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "startup orphan-backup sweep GCs oversize legacy daemon log backups (165MB eawfd.log.3 class) with test",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "eawfd.err rotation added with test",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "eawfd.err rotation added with test",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Daemon log GC and rotation hardening",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W25": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I20-W01",
+        "P30-I20-W02",
+        "P30-I20-W03",
+        "P30-I20-W04",
+        "P30-I20-W05",
+        "P30-I20-W06",
+        "P30-I20-W07",
+        "P30-I20-W08",
+        "P30-I20-W09",
+        "P30-I20-W10",
+        "P30-I20-W11",
+        "P30-I20-W12",
+        "P30-I20-W13",
+        "P30-I20-W14",
+        "P30-I20-W15",
+        "P30-I20-W16",
+        "P30-I20-W17",
+        "P30-I20-W18",
+        "P30-I20-W19",
+        "P30-I20-W20",
+        "P30-I20-W21",
+        "P30-I20-W22",
+        "P30-I20-W23",
+        "P30-I20-W24"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/commit_prefix_lint.py",
+        "CHANGELOG.md",
+        ".ea/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W25",
+      "intent": {
+        "desired_outcome": "Preflight validates annotation against the workflow regex; gauntlet green; recorded autopilot smoke; re-close with separate groups; branch pushed + PR open",
+        "evidence_refs": [
+          ".ea/local/review/2026-06-12-p30-global-review.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": "Ship blocker BL-1: a silent total release failure; the terminal wave of the iteration.",
+        "problem": "The reset close commit fused audit + release into one paren group which phase-release.yaml cannot parse — no tag, no PyPI/npm publish; nothing validates the annotation against the workflow regex",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-12T18:02:41.450557Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "phase-close preflight validates the (release=) annotation against the phase-release.yaml extraction regex",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "phase-close preflight validates the (release=) annotation against the phase-release.yaml extraction regex",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "full gauntlet green (pre-commit; mypy; just test; verify-commits; doc verify --strict; artifact validator; idle-contract PR-range)",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "full gauntlet green (pre-commit; mypy; just test; verify-commits; doc verify --strict; artifact validator; idle-contract PR-range)",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "recorded autopilot smoke drive leaves fleet events in event.jsonl",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "recorded autopilot smoke drive leaves fleet events in event.jsonl",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "iter + phase close commit subject carries (audit=<id>) (release=v0.6.0) as separate groups; branch pushed and phase PR opened",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "iter + phase close commit subject carries (audit=<id>) (release=v0.6.0) as separate groups; branch pushed and phase PR opened",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-close v0.6.0 with validated release annotation",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
