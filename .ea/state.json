@@ -8414,6 +8414,20 @@
       "status": "done",
       "updated_at": "2026-06-12T18:51:44.474699Z"
     },
+    "P30-I20-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W06",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W06",
+      "model": null,
+      "scope_id": "P30-I20-W06",
+      "status": "done",
+      "updated_at": "2026-06-12T23:37:45.432733Z"
+    },
     "P30-I20-W08": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -11653,9 +11667,9 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I20-W06",
       "P30-I20-W12",
-      "P30-I20-W13"
+      "P30-I20-W13",
+      "P30-I20-W07"
     ],
     "iter_id": "P30-I20",
     "phase_id": "P30",
@@ -12300,7 +12314,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -22039,6 +22053,19 @@
       "scope_id": "P30-I20-W06",
       "updated_at": "2026-06-12T22:06:35.612996Z"
     },
+    "P30-I20-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W07-bucket-20260612T233806Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I20-W07",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I20-W07",
+      "updated_at": "2026-06-12T23:38:06.520194Z"
+    },
     "P30-I20-W08": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I20-W08-bucket-20260612T182256Z",
@@ -25525,7 +25552,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T23:35:29.765559Z",
+  "updated_at": "2026-06-12T23:38:07.628709Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -95422,7 +95449,7 @@
       ],
       "claim_session_id": "SES-p30-i20-w06-codex",
       "claimed_at": "2026-06-12T22:06:35.612902Z",
-      "closed_at": null,
+      "closed_at": "2026-06-12T23:37:45.432733Z",
       "commit": null,
       "deps": [
         "P30-I20-W01"
@@ -95449,12 +95476,12 @@
       },
       "iter_id": "P30-I20",
       "opened_at": "2026-06-12T18:02:08.995623Z",
-      "outcome": null,
+      "outcome": "wired live research campaign producer through agent.dispatch spawn path",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -95509,8 +95536,8 @@
       "blocks": [
         "P30-I20-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-p30-i20-w07-codex",
+      "claimed_at": "2026-06-12T23:38:06.520096Z",
       "closed_at": null,
       "commit": null,
       "deps": [
@@ -95544,7 +95571,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -95578,7 +95605,7 @@
       "title": "Background research.run with a run handle",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I20-W07-1781307487"
     },
     "P30-I20-W08": {
       "agent_role": null,
@@ -100330,11 +100357,22 @@
       "branch": "feature/eawf-v0.6-p30-i20-w06",
       "created_at": "2026-06-12T22:06:36.693519Z",
       "id": "WT-P30-I20-W06-1781301996",
-      "merged_commit": null,
+      "merged_commit": "28783766",
       "owner_session_id": "SES-p30-i20-w06-codex",
       "path": ".ea/worktrees/p30-i20-w06",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P30-I20-W06"
+    },
+    "WT-P30-I20-W07-1781307487": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i20-w07",
+      "created_at": "2026-06-12T23:38:07.628709Z",
+      "id": "WT-P30-I20-W07-1781307487",
+      "merged_commit": null,
+      "owner_session_id": "SES-p30-i20-w07-codex",
+      "path": ".ea/worktrees/p30-i20-w07",
+      "status": "active",
+      "wave_id": "P30-I20-W07"
     },
     "WT-P30-I20-W08-1781288577": {
       "base_branch": "feature/eawf-v0.6-p30",
