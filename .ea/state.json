@@ -7727,6 +7727,34 @@
       "scope_id": "P30-I16-W25",
       "status": "done",
       "updated_at": "2026-06-11T21:41:12.086191Z"
+    },
+    "P30-I16-W26": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W26",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W26",
+      "model": null,
+      "scope_id": "P30-I16-W26",
+      "status": "done",
+      "updated_at": "2026-06-12T02:39:43.381098Z"
+    },
+    "P30-I16-W27": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W27",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W27",
+      "model": null,
+      "scope_id": "P30-I16-W27",
+      "status": "done",
+      "updated_at": "2026-06-12T02:39:44.129671Z"
     }
   },
   "agent_sessions": {
@@ -20563,6 +20591,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I16-W25",
       "updated_at": "2026-06-11T16:44:09.074895Z"
+    },
+    "P30-I16-W26": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W26-bucket-20260612T020436Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W26",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W26",
+      "updated_at": "2026-06-12T02:04:36.882449Z"
+    },
+    "P30-I16-W27": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W27-bucket-20260612T020437Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W27",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W27",
+      "updated_at": "2026-06-12T02:04:37.380790Z"
     }
   },
   "fleet_run": null,
@@ -23729,7 +23783,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T02:02:54.143497Z",
+  "updated_at": "2026-06-12T02:39:44.129905Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -89613,10 +89667,10 @@
     "P30-I16-W26": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T02:04:36.881401Z",
+      "closed_at": "2026-06-12T02:39:43.381098Z",
+      "commit": "efd4ee36487714a09da39149cd6ff7278b525ffd",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89642,12 +89696,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-12T02:02:53.614853Z",
-      "outcome": null,
+      "outcome": "Seal mattes onto the ACTIVE theme surface via resvg --background (light #F5F5F5 / dark #1E1E1E, cache key += bg hex) so transparent regions blend instead of rendering black; header reverted to crisp accent glyph (1-cell raster unreadable), seal image kept for large hero surfaces. Glyph goldens byte-identical. NEEDS operator live re-verify on Ghostty.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -89672,10 +89726,10 @@
     "P30-I16-W27": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T02:04:37.380694Z",
+      "closed_at": "2026-06-12T02:39:44.129671Z",
+      "commit": "1be74c34ec324db0a713a21860011b9b9fe00869",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89700,12 +89754,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-12T02:02:54.143348Z",
-      "outcome": null,
+      "outcome": "Interactive-ready gate: on_key swallows keys arriving before first paint (closes the terminal probe-response ? leak that opened help on startup); action_open_help self-defends; genuine ?-after-ready still opens help. 7 regression tests + W23 digit + affordance suites green. NEEDS operator live re-verify on Ghostty (DA-reply race not headlessly reproducible).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
