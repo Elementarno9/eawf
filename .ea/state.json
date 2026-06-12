@@ -22608,7 +22608,9 @@
         "P30-I16-W22",
         "P30-I16-W23",
         "P30-I16-W24",
-        "P30-I16-W25"
+        "P30-I16-W25",
+        "P30-I16-W26",
+        "P30-I16-W27"
       ]
     },
     "P30-I17": {
@@ -23727,7 +23729,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T02:00:35.952594Z",
+  "updated_at": "2026-06-12T02:02:54.143497Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -89604,6 +89606,137 @@
         }
       ],
       "title": "Wire daemonless-waiver door + harness/model attribution into live paths",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I16-W26": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/seal.py",
+        "src/eawf/surfaces/tui/widgets/header.py"
+      ],
+      "gates": [],
+      "id": "P30-I16-W26",
+      "intent": {
+        "desired_outcome": "Seal mattes onto the theme surface hex so it blends in; header shows the crisp accent glyph; seal image reserved for large hero surfaces.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Pass resvg --background <resolved surface hex>; extend cache key with bg hex; revert header to the accent glyph; unit-test the resvg argv + cache key."
+        ],
+        "priority_rationale": "Blocks the W15 D-I screenshot review: the seal is the brand keystone and renders as a black box on the real graphics terminal.",
+        "problem": "Live Ghostty review: the rasterised seal renders on an opaque BLACK square (transparent PNG regions composite to black) and the 1-cell header seal is an unreadable square.",
+        "risks": [
+          "Surface bg differs per surface; matte to the main surface and let the operator re-verify on Ghostty."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I16",
+      "opened_at": "2026-06-12T02:02:53.614853Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The rasterised seal PNG is matted onto the resolved theme surface hex via resvg --background (cache key includes the bg hex) so transparent regions render as the surface colour not black; the header brand mark renders the crisp accent glyph (seal image reserved for large hero surfaces); glyph-fallba",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The rasterised seal PNG is matted onto the resolved theme surface hex via resvg --background (cache key includes the bg hex) so transparent regions render as the surface colour not black; the header brand mark renders the crisp accent glyph (seal image reserved for large hero surfaces); glyph-fallback goldens stay byte-identical; a unit test asserts the resvg invocation carries --background <surface-hex> and the cache key includes it.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Matte seal onto surface bg and use crisp header glyph mark",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I16-W27": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "gates": [],
+      "id": "P30-I16-W27",
+      "intent": {
+        "desired_outcome": "No modal opens on startup without a real keypress; the probe-response no longer reaches the help action; ?-on-real-keypress still works.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Trace the startup key path; guard action_open_help / the app input path against synthetic or pre-interactive keys; regression-test a stray ? injected during startup."
+        ],
+        "priority_rationale": "First-run impression is broken: the app boots straight into an unsolicited help modal on a graphics terminal.",
+        "problem": "Live review: on startup (after seal-render lag) a help pane opens with zero clicks; a terminal probe-response carrying a literal ? leaks into input and triggers action_open_help.",
+        "risks": [
+          "Hard to reproduce headlessly; the deterministic guard + test land here and the operator re-verifies live."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I16",
+      "opened_at": "2026-06-12T02:02:54.143348Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "On startup with the seal image mounted",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "On startup with the seal image mounted",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "no help/modal opens without a real keypress: the terminal probe-response (e.g. a Device-Attributes reply carrying a literal ?) no longer reaches action_open_help; the fix guards the help action / app input path against synthetic or pre-interactive keys; a regression test simulates a stray ? arriving",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no help/modal opens without a real keypress: the terminal probe-response (e.g. a Device-Attributes reply carrying a literal ?) no longer reaches action_open_help; the fix guards the help action / app input path against synthetic or pre-interactive keys; a regression test simulates a stray ? arriving during startup and asserts no HelpScreen is pushed while ?-on-real-keypress still opens help.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stop zero-click help on startup from terminal probe-response leak",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
