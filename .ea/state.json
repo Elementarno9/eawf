@@ -7420,6 +7420,20 @@
       "status": "done",
       "updated_at": "2026-06-11T21:40:33.674155Z"
     },
+    "P30-I16-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W03",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W03",
+      "model": null,
+      "scope_id": "P30-I16-W03",
+      "status": "done",
+      "updated_at": "2026-06-12T00:43:33.364546Z"
+    },
     "P30-I16-W04": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -7490,6 +7504,48 @@
       "status": "done",
       "updated_at": "2026-06-11T22:58:24.185617Z"
     },
+    "P30-I16-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W09",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W09",
+      "model": null,
+      "scope_id": "P30-I16-W09",
+      "status": "done",
+      "updated_at": "2026-06-12T00:43:52.061585Z"
+    },
+    "P30-I16-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W10",
+      "model": null,
+      "scope_id": "P30-I16-W10",
+      "status": "done",
+      "updated_at": "2026-06-12T00:43:42.465153Z"
+    },
+    "P30-I16-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W11",
+      "model": null,
+      "scope_id": "P30-I16-W11",
+      "status": "done",
+      "updated_at": "2026-06-12T01:16:59.061357Z"
+    },
     "P30-I16-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -7503,6 +7559,20 @@
       "scope_id": "P30-I16-W12",
       "status": "done",
       "updated_at": "2026-06-11T23:49:22.369663Z"
+    },
+    "P30-I16-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W13",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W13",
+      "model": null,
+      "scope_id": "P30-I16-W13",
+      "status": "done",
+      "updated_at": "2026-06-12T01:17:09.382359Z"
     },
     "P30-I16-W14": {
       "actual_cost_usd": 0.0,
@@ -7615,6 +7685,20 @@
       "scope_id": "P30-I16-W22",
       "status": "done",
       "updated_at": "2026-06-11T16:16:38.211985Z"
+    },
+    "P30-I16-W23": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W23",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W23",
+      "model": null,
+      "scope_id": "P30-I16-W23",
+      "status": "done",
+      "updated_at": "2026-06-12T02:00:35.952292Z"
     },
     "P30-I16-W24": {
       "actual_cost_usd": 0.0,
@@ -10763,11 +10847,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I16-W03",
-      "P30-I16-W10",
-      "P30-I16-W09"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I16",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -10788,6 +10868,22 @@
       "status": "active",
       "superseded_by": null,
       "title": "Fleet high-risk waves keep verify enforce after band merge"
+    },
+    "D-BRAND-MARK": {
+      "alternatives": [
+        "Reintroduce an optional config knob (rejected: contradicts mockups + zero-new-config)",
+        "Drop the header mark entirely (rejected: every mockup leads the wordmark with the mark)"
+      ],
+      "consequences": [],
+      "created_at": "2026-06-12T01:15:19.393391Z",
+      "description": null,
+      "id": "D-BRAND-MARK",
+      "obsoleted_at": null,
+      "rationale": "The 2026-06-08 reskin reconciliation 'zero new config' dropped the ui.brand_glyph CONFIG knob, not the brand mark itself. The ratified mockups (handoff/2026-06-11-init-entry/mockup.html + handoff/brand-and-sigils.md) show the seal/glyph leading the Ea wordmark in every header and hero. The brand mark is mandatory chrome: the seal image when seal_capable(), else the bold accent glyph, else the * ASCII fallback.",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Brand mark is mandatory header chrome; 2026-06-08 dropped only the knob"
     },
     "D-FIDELITY-SPINE": {
       "alternatives": [
@@ -20286,6 +20382,19 @@
       "scope_id": "P30-I16-W10",
       "updated_at": "2026-06-11T22:58:52.256267Z"
     },
+    "P30-I16-W11": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W11-bucket-20260612T004427Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I16-W11",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I16-W11",
+      "updated_at": "2026-06-12T00:44:27.340847Z"
+    },
     "P30-I16-W12": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I16-W12-bucket-20260611T214530Z",
@@ -20298,6 +20407,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I16-W12",
       "updated_at": "2026-06-11T21:45:30.456432Z"
+    },
+    "P30-I16-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W13-bucket-20260612T004427Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I16-W13",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I16-W13",
+      "updated_at": "2026-06-12T00:44:27.892071Z"
     },
     "P30-I16-W14": {
       "confidence": "low",
@@ -20402,6 +20524,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I16-W22",
       "updated_at": "2026-06-11T15:47:07.207394Z"
+    },
+    "P30-I16-W23": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W23-bucket-20260612T011719Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W23",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W23",
+      "updated_at": "2026-06-12T01:17:19.351142Z"
     },
     "P30-I16-W24": {
       "confidence": "low",
@@ -23592,7 +23727,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-11T23:50:32.740907Z",
+  "updated_at": "2026-06-12T02:00:35.952594Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -87211,8 +87346,8 @@
       ],
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T22:58:51.666004Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-12T00:43:33.364546Z",
+      "commit": "5595bf204ec6c5fb9cbabf171329dcd0103abc49",
       "deps": [],
       "description": "sandbox_events has no snapshot golden despite the designer \"pin now\" directive; Enter is bound to reload not the row affordance; the chrome-role count test asserts a test-local fixture so additive drift is invisible.",
       "dispatch_history": [],
@@ -87267,12 +87402,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:32.781635Z",
-      "outcome": null,
+      "outcome": "Pinned U6 sandbox empty+populated goldens, Enter-opens-selected-row peek (reload->r + selection cursor), chrome-role count asserts against source _CHROME (ratified brand + W10 tab markers). Reconciled with W10 in main.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -87770,8 +87905,8 @@
       ],
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T22:58:52.751182Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-12T00:43:52.061585Z",
+      "commit": "8b68e66932d946d489f029a15ae40720943d754c",
       "deps": [
         "P30-I16-W08"
       ],
@@ -87866,12 +88001,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:44.249158Z",
-      "outcome": null,
+      "outcome": "Stepped live-executing init wizard (detect->choose->configure->preview->execute->done) across 4 journeys; CR-01/02 fully met, CR-03 substantial (real-terminal seal screenshot at W15 review). Split into init_wizard.py + init_wizard_render.py (both <1400); 13 journey goldens; 34 Pilot tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -87958,8 +88093,8 @@
       ],
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T22:58:52.256179Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-12T00:43:42.465153Z",
+      "commit": "d0e2a9d0282551e231aca304f2a09de38943abaa",
       "deps": [],
       "description": "Bar-width unification (record the canonical width), doctor middle-dot header separator, selection tint, detail tab markers moved into sigils.py, research \"press n\" pinned-literal reconciliation, U5 lane-grid sandbox column.",
       "dispatch_history": [],
@@ -88016,12 +88151,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:46.130651Z",
-      "outcome": null,
+      "outcome": "Batch strict-spec XS: CANONICAL_BAR_CELLS=8 unifies EU+completion bars; doctor middle-dot header; selection tint; detail tab markers folded into sigils._CHROME; research press-n literal; U5 lane-grid sandbox column. 477 tests pass, 15 goldens regenerated.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -88058,10 +88193,10 @@
       "blocks": [
         "P30-I16-W15"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T00:44:27.334843Z",
+      "closed_at": "2026-06-12T01:16:59.061357Z",
+      "commit": "e72283a47fd7833477c3dfd54ba9b6d6d6bdc22a",
       "deps": [],
       "description": "Record the Decision superseding the 2026-06-08 ui.brand_glyph drop (mockups show the seal in every header; the drop targeted the config knob); assert the ASCII fallback for the header mark.",
       "dispatch_history": [],
@@ -88083,12 +88218,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:48.018395Z",
-      "outcome": null,
+      "outcome": "Recorded Decision D-BRAND-MARK (brand mark is mandatory header chrome: seal image when capable, else accent glyph, else * ASCII fallback; 2026-06-08 dropped only the config knob, mockup-cited). Pinned the * ASCII fallback leading the Ea wordmark + unicode fisheye.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -88225,10 +88360,10 @@
         "P30-I16-W15",
         "P30-I16-W23"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T00:44:27.891977Z",
+      "closed_at": "2026-06-12T01:17:09.382359Z",
+      "commit": "0a1e7d52734b4bbc2e610fefdcdbc1096f11b22c",
       "deps": [
         "P30-I16-W12"
       ],
@@ -88305,12 +88440,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:51.775064Z",
-      "outcome": null,
+      "outcome": "SEAL-2: accent-hex substitution into SVG before resvg (no black seal) + cache keyed on (px,accent); hero seal centered with with_sigil=False on steady tick (I15-W20 regression fixed); header renders 1-cell seal when capable, offline frame gains brand glyph (UX-19). 203 tests pass.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -89248,10 +89383,10 @@
     "P30-I16-W23": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T01:17:19.351008Z",
+      "closed_at": "2026-06-12T02:00:35.952292Z",
+      "commit": "cf99a17bdb070bd89c95e39b4a587d3b6483cb09",
       "deps": [
         "P30-I16-W13"
       ],
@@ -89308,12 +89443,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:25:10.674038Z",
-      "outcome": null,
+      "outcome": "RB-2 root cause: mode digit bindings were non-priority, so a focus-capturing widget intercepted the digit before App priority pass -> misroute to help. Fix: priority=True on mode_bindings + key-trace hook + Pilot digit-sweep (every digit x every mode, seal mounted). 2271 tests pass.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
