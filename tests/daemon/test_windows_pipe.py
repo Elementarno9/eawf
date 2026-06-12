@@ -432,3 +432,203 @@ def test_pipe_ready_probe_does_not_consume_an_instance() -> None:
     asyncio.run(runner())
     assert result["ready"] is True
     assert result["payload"]["result"]["ok"] is True
+
+
+def _event_envelope(scope_id: str) -> Any:
+    """Build a minimal EVENT-kind envelope for *scope_id* to publish."""
+    from datetime import UTC, datetime
+
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.store.envelope import Envelope
+    from eawf.kernel.store.kinds.event import EventPayload
+
+    now = datetime.now(UTC)
+    payload = EventPayload(
+        timestamp=now,
+        event_type="wave.close",
+        actor="test",
+        command="wave close",
+        args_hash="",
+        status="ok",
+        message="streamed",
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=scope_id,
+        created_at=now,
+        updated_at=None,
+        summary="streamed",
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def test_subscription_streams_event_push_through_real_scope_id() -> None:
+    """A subscription receives a live ``event.push`` for the bound scope_id.
+
+    Wires a real ``EventBus`` into the listener via
+    ``make_bus_subscribe_router``, opens a streaming subscription filtered
+    on a REAL scope_id (never None), publishes a matching envelope, and
+    asserts the push frame arrives carrying that exact scope_id. The
+    listener keeps serving a separate ``daemon.ping`` RPC while the
+    subscription streams, proving streaming does not block the listener.
+    """
+    from eawf.runtime.daemon.bus import EventBus
+    from eawf.runtime.daemon.windows_pipe import (
+        PipeReader,
+        WindowsPipeServer,
+        close_pipe,
+        make_bus_subscribe_router,
+        open_subscription_pipe,
+        pipe_client_call,
+    )
+
+    pipe_name = _unique_pipe_name("sub")
+    scope_id = "EAWF:wave:P30-I19-W03"
+    bus = EventBus()
+    result: dict[str, Any] = {}
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+        ctx = _build_ctx()
+        ctx.bus = bus
+        ctx.event_path = None
+
+        async def handler(payload: bytes) -> bytes:
+            from eawf.runtime.daemon.server import process_frame_bytes
+
+            return await process_frame_bytes(payload, ctx)
+
+        server = WindowsPipeServer(
+            loop,
+            handler,
+            pipe_name=pipe_name,
+            verify_sid_enabled=False,
+            subscribe_router=make_bus_subscribe_router(loop, ctx),
+        )
+        server.start()
+
+        def _subscribe_and_read() -> dict[str, Any]:
+            request = orjson.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "1",
+                    "method": "state.subscribe",
+                    "params": {"kinds": ["event"], "scope_id": scope_id},
+                }
+            )
+            handle = open_subscription_pipe(pipe_name, request + b"\n", wait_ms=5000)
+            reader = PipeReader(handle)
+            reader.read_message()  # ack
+            # Publish from the loop thread after the subscriber is live.
+            loop.call_soon_threadsafe(bus.publish, _event_envelope(scope_id))
+            push = orjson.loads(reader.read_message().rstrip(b"\n"))
+            close_pipe(handle)
+            return push
+
+        try:
+            push = await asyncio.to_thread(_subscribe_and_read)
+            result["push"] = push
+            # The listener still serves a request/reply RPC during streaming.
+            ping_req = orjson.dumps(
+                {"jsonrpc": "2.0", "id": "2", "method": "daemon.ping", "params": {}}
+            )
+            ping_bytes = await asyncio.to_thread(pipe_client_call, pipe_name, ping_req + b"\n")
+            result["ping"] = orjson.loads(ping_bytes.rstrip(b"\n"))
+        finally:
+            server.stop()
+            await asyncio.sleep(0.1)
+
+    asyncio.run(runner())
+    push = result["push"]
+    assert push["method"] == "event.push"
+    # The intended filter semantics: the push carries the binding's REAL
+    # scope_id, never None.
+    assert push["params"]["event"]["scope_id"] == scope_id
+    assert push["params"]["event"]["scope_id"] is not None
+    # active_subscriptions drops once the client closes the pipe.
+    assert bus.active_subscriptions == 0
+    # The concurrent ping still succeeded mid-stream.
+    assert result["ping"]["result"]["pid"] == os.getpid()
+
+
+def test_cancel_pending_read_unblocks_blocked_read() -> None:
+    """``cancel_pending_read`` (CancelIoEx) unblocks a parked ``ReadFile``.
+
+    A reader thread blocks in ``PipeReader.read_message`` with no data
+    pending; ``cancel_pending_read`` must make that read return promptly
+    (within a short bound) rather than hang -- the behaviour
+    ``StateBinding.disconnect`` relies on for a prompt TUI teardown.
+    """
+    import threading
+
+    from eawf.runtime.daemon.windows_pipe import (
+        PipeReader,
+        WindowsPipeServer,
+        cancel_pending_read,
+        close_pipe,
+        open_subscription_pipe,
+    )
+
+    pipe_name = _unique_pipe_name("cancel")
+    bus_state: dict[str, Any] = {}
+    done = threading.Event()
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+        ctx = _build_ctx()
+        from eawf.runtime.daemon.bus import EventBus
+
+        ctx.bus = EventBus()
+        ctx.event_path = None
+
+        async def handler(payload: bytes) -> bytes:
+            from eawf.runtime.daemon.server import process_frame_bytes
+
+            return await process_frame_bytes(payload, ctx)
+
+        from eawf.runtime.daemon.windows_pipe import make_bus_subscribe_router
+
+        server = WindowsPipeServer(
+            loop,
+            handler,
+            pipe_name=pipe_name,
+            verify_sid_enabled=False,
+            subscribe_router=make_bus_subscribe_router(loop, ctx),
+        )
+        server.start()
+
+        def _open_and_block() -> None:
+            request = orjson.dumps(
+                {"jsonrpc": "2.0", "id": "1", "method": "state.subscribe", "params": {}}
+            )
+            handle = open_subscription_pipe(pipe_name, request + b"\n", wait_ms=5000)
+            bus_state["handle"] = handle
+            reader = PipeReader(handle)
+            reader.read_message()  # ack
+            try:
+                reader.read_message()  # blocks until cancelled
+            except Exception:
+                bus_state["cancelled"] = True
+            finally:
+                close_pipe(handle)
+                done.set()
+
+        worker = threading.Thread(target=_open_and_block, daemon=True)
+        worker.start()
+        try:
+            # Give the worker time to reach the blocking read.
+            await asyncio.sleep(0.3)
+            assert "handle" in bus_state
+            cancel_pending_read(bus_state["handle"])
+            unblocked = await asyncio.to_thread(done.wait, 2.0)
+            bus_state["unblocked"] = unblocked
+        finally:
+            server.stop()
+            await asyncio.sleep(0.1)
+
+    asyncio.run(runner())
+    assert bus_state.get("unblocked") is True, "blocked read did not unblock after CancelIoEx"

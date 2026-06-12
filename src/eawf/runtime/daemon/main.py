@@ -431,14 +431,24 @@ async def _run_windows_server(ctx: MethodContext) -> None:
     # The Windows transport lives behind the import-guarded module so
     # the POSIX dev loop is not contaminated. The outer ``run()``
     # already gates on ``sys.platform`` before reaching here.
-    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer
+    from eawf.runtime.daemon.windows_pipe import (
+        WindowsPipeServer,
+        make_bus_subscribe_router,
+    )
 
     loop = asyncio.get_running_loop()
 
     async def _handler(payload: bytes) -> bytes:
         return await process_frame_bytes(payload, ctx)
 
-    pipe_server = WindowsPipeServer(loop, _handler)
+    # The subscribe router bridges a pipe subscribe frame to the live
+    # event bus so the TUI receives ``event.push`` frames over the pipe;
+    # the listener keeps serving other RPCs while a subscription streams.
+    pipe_server = WindowsPipeServer(
+        loop,
+        _handler,
+        subscribe_router=make_bus_subscribe_router(loop, ctx),
+    )
     pipe_server.start()
     logger.info(f"_run_windows_server bound pipe={pipe_server.pipe_path!r}")
 

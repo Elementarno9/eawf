@@ -24,12 +24,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ctypes
 import getpass
+import json
 import logging
+import queue as _queue
 import sys
 import threading
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Protocol
 
 if sys.platform != "win32":
     raise ImportError("eawf.runtime.daemon.windows_pipe is win32-only")
@@ -63,6 +66,109 @@ _DEFAULT_WAIT_MS = 5000
 
 FrameHandler = Callable[[bytes], Awaitable[bytes]]
 ReplyCallback = Callable[[bytes], None]
+
+# Heartbeat cadence (seconds) for the subscription idle reap. Between
+# ``event.push`` frames the streamer wakes every heartbeat to ``PeekNamedPipe``
+# the client side: if the peer has closed (or the daemon is shutting down) the
+# stream tears down promptly instead of blocking forever on a silent bus.
+_IDLE_HEARTBEAT_SECONDS = 5.0
+
+# The subscribe RPC method names that switch the listener from
+# request/response into streaming mode. Mirrors
+# ``state_subscribe.SUBSCRIBE_METHODS`` but is duplicated here as a literal so
+# this win32-only module never imports the POSIX dispatch graph at module top.
+_SUBSCRIBE_METHODS = frozenset({"event.subscribe", "state.subscribe"})
+
+if sys.platform == "win32":  # pragma: no cover - win32-only branch
+    # ``CancelIoEx`` is the only reliable way to unblock a pending blocking
+    # ``ReadFile`` on a named pipe (gotcha 1: ``CloseHandle`` alone does NOT
+    # unblock it -- the read stays parked until data or a real cancel). The
+    # client uses this from ``disconnect()`` so a TUI teardown returns
+    # promptly instead of hanging on the streaming read. ``argtypes`` is set
+    # once at module load (W05 contract) so every call marshals the handle
+    # correctly.
+    _CancelIoEx = ctypes.windll.kernel32.CancelIoEx
+    _CancelIoEx.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    _CancelIoEx.restype = ctypes.c_bool
+
+
+class SubscriptionFeed(Protocol):
+    """A thread-pullable source of ``event.push`` frames for one subscriber.
+
+    The Windows listener thread cannot ``await`` the asyncio
+    :class:`~eawf.runtime.daemon.bus.EventBus`, so the daemon main bridges a
+    bus subscriber into this thread-safe surface: :meth:`next_frame` blocks
+    (up to a timeout) for the next push frame, and :meth:`close` unregisters
+    the subscriber so :attr:`EventBus.active_subscriptions` drops when the
+    client leaves.
+    """
+
+    def next_frame(self, timeout: float) -> bytes | None:
+        """Return the next push frame, or ``None`` on *timeout* expiry.
+
+        Args:
+            timeout: Seconds to block for the next frame.
+
+        Returns:
+            One newline-terminated ``event.push`` frame, or ``None`` when
+            no frame arrived within *timeout* (the caller then heartbeats).
+        """
+        ...
+
+    def close(self) -> None:
+        """Unregister the underlying subscriber (idempotent)."""
+        ...
+
+
+#: Builds a :class:`SubscriptionFeed` from a parsed subscribe params dict, or
+#: returns ``None`` to reject the subscribe (e.g. no bus). The daemon main
+#: wires this to the live :class:`EventBus`; tests pass a fake feed.
+SubscribeRouter = Callable[[dict[str, Any]], "SubscriptionFeed | None"]
+
+
+def cancel_pending_read(pipe: Any) -> bool:
+    """Cancel an in-flight blocking ``ReadFile`` on *pipe* via ``CancelIoEx``.
+
+    The teardown primitive for the streaming client: a subscription reader
+    blocked in ``ReadFile`` does not unblock on ``CloseHandle`` alone, so
+    ``disconnect()`` calls this to cancel the pending I/O. The blocked read
+    then returns with ``ERROR_OPERATION_ABORTED`` and the reader thread
+    exits, after which the caller closes the handle.
+
+    Args:
+        pipe: The connected pipe handle whose pending read should cancel.
+
+    Returns:
+        ``True`` when ``CancelIoEx`` accepted the cancel; ``False`` when
+        there was no pending I/O to cancel (already idle / closed).
+    """
+    try:
+        handle = int(pipe)
+    except TypeError, ValueError:
+        handle = pipe
+    return bool(_CancelIoEx(ctypes.c_void_p(handle), None))
+
+
+def _peer_still_connected(pipe: Any) -> bool:
+    """Return whether the streaming peer is still attached, via PeekNamedPipe.
+
+    ``PeekNamedPipe`` is non-destructive: it reports buffered bytes without
+    consuming them, and raises ``ERROR_BROKEN_PIPE`` once the client closes
+    its handle. The streamer calls this each heartbeat so a client that
+    left without a clean unsubscribe is reaped instead of stranding the
+    subscriber on the bus.
+
+    Args:
+        pipe: The connected pipe handle to probe.
+
+    Returns:
+        ``True`` while the peer is connected; ``False`` once it closed.
+    """
+    try:
+        win32pipe.PeekNamedPipe(pipe, 0)
+    except pywintypes.error:
+        return False
+    return True
 
 
 def _read_first_chunk(pipe: Any) -> tuple[bytes, bool]:
@@ -219,6 +325,56 @@ def pipe_client_call(
         win32file.CloseHandle(handle)
 
 
+def open_subscription_pipe(
+    pipe_name: str,
+    request_frame: bytes,
+    *,
+    wait_ms: int = _DEFAULT_WAIT_MS,
+) -> Any:
+    r"""Open a persistent pipe for a streaming subscription and send the request.
+
+    Unlike :func:`pipe_client_call` (which closes after one round-trip), a
+    subscription holds the handle open for the lifetime of the stream. This
+    opens the pipe, switches it to message read-mode, writes the subscribe
+    *request_frame*, and returns the handle. The caller reads the ack +
+    streams ``event.push`` frames via :class:`PipeReader`, cancels a blocked
+    read with :func:`cancel_pending_read`, and finally closes the handle
+    with :func:`close_pipe`. Keeping every pywin32 reference inside this
+    win32-only module lets the TUI binding stay free of guarded imports.
+
+    Args:
+        pipe_name: The per-user pipe path the daemon bound.
+        request_frame: The newline-terminated ``state.subscribe`` frame.
+        wait_ms: Milliseconds to wait for a free pipe instance.
+
+    Returns:
+        The connected pipe handle (held open for the stream).
+    """
+    win32pipe.WaitNamedPipe(pipe_name, wait_ms)
+    handle = win32file.CreateFile(
+        pipe_name,
+        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+        0,
+        None,
+        win32file.OPEN_EXISTING,
+        0,
+        None,
+    )
+    win32pipe.SetNamedPipeHandleState(handle, win32pipe.PIPE_READMODE_MESSAGE, None, None)
+    win32file.WriteFile(handle, request_frame)
+    return handle
+
+
+def close_pipe(handle: Any) -> None:
+    """Close a pipe handle, tolerating an already-closed handle.
+
+    Args:
+        handle: The pipe handle to close.
+    """
+    with contextlib.suppress(pywintypes.error):
+        win32file.CloseHandle(handle)
+
+
 class PipeReader:
     """Drain full messages from a connected pipe handle, reassembly-safe.
 
@@ -250,6 +406,120 @@ class PipeReader:
             pywintypes.error: For any pipe error other than ``ERROR_MORE_DATA``.
         """
         return _read_full_message(self._pipe)
+
+
+class _BusSubscriptionFeed:
+    """Bridge one asyncio :class:`EventBus` subscriber to the listener thread.
+
+    The listener thread cannot ``await`` the bus, so this feed runs an
+    asyncio task on the daemon loop that pulls
+    :meth:`EventBus.iter_subscriber_pushes`, frames each envelope as an
+    ``event.push`` notification, and hands the frames to the listener
+    thread through a thread-safe :class:`queue.Queue`. :meth:`next_frame`
+    blocks on that queue; :meth:`close` unregisters the subscriber (so
+    :attr:`EventBus.active_subscriptions` drops) and stops the task.
+
+    Implements the :class:`SubscriptionFeed` protocol.
+    """
+
+    def __init__(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        bus: Any,
+        subscriber: Any,
+        connection_id: str,
+    ) -> None:
+        """Wire the queue and start the asyncio pump task.
+
+        Args:
+            loop: The daemon asyncio loop owning the bus.
+            bus: The live :class:`EventBus`.
+            subscriber: The registered subscriber to drain.
+            connection_id: The id to unregister on close.
+        """
+        self._loop = loop
+        self._bus = bus
+        self._subscriber = subscriber
+        self._connection_id = connection_id
+        self._frames: _queue.Queue[bytes] = _queue.Queue()
+        self._closed = threading.Event()
+        self._pump = asyncio.run_coroutine_threadsafe(self._pump_loop(), loop)
+
+    async def _pump_loop(self) -> None:
+        """Drain the bus subscriber, framing each push for the thread queue."""
+        async for envelope in self._bus.iter_subscriber_pushes(self._subscriber):
+            notification = {
+                "jsonrpc": "2.0",
+                "method": "event.push",
+                "params": {"event": envelope.model_dump(mode="json")},
+            }
+            self._frames.put(json.dumps(notification).encode("utf-8") + b"\n")
+
+    def next_frame(self, timeout: float) -> bytes | None:
+        """Return the next push frame, or ``None`` on *timeout* expiry."""
+        try:
+            return self._frames.get(timeout=timeout)
+        except _queue.Empty:
+            return None
+
+    def close(self) -> None:
+        """Unregister the subscriber and stop the pump task. Idempotent."""
+        if self._closed.is_set():
+            return
+        self._closed.set()
+        self._loop.call_soon_threadsafe(self._bus.unregister, self._connection_id)
+        self._pump.cancel()
+
+
+def make_bus_subscribe_router(
+    loop: asyncio.AbstractEventLoop,
+    ctx: Any,
+) -> SubscribeRouter:
+    """Build a :class:`SubscribeRouter` bound to *ctx*'s live event bus.
+
+    The daemon main passes the returned router to
+    :class:`WindowsPipeServer` so a subscribe frame on the pipe registers
+    a bus subscriber and streams ``event.push`` frames. The router runs
+    the registration on the asyncio loop (the bus is loop-owned) and
+    wraps the result in a :class:`_BusSubscriptionFeed`. Returns a router
+    that yields ``None`` when ``ctx.bus`` is not a live bus, so the
+    listener falls back to the rejecting request/reply handler.
+
+    Args:
+        loop: The daemon asyncio loop.
+        ctx: The :class:`~eawf.runtime.daemon.methods.MethodContext` carrying
+            ``bus`` + ``event_path``.
+
+    Returns:
+        A router callable mapping subscribe params to a feed (or ``None``).
+    """
+    import uuid
+
+    from eawf.runtime.daemon.bus import EventBus
+    from eawf.runtime.daemon.methods.event import subscribe as run_subscribe
+
+    def _router(params: dict[str, Any]) -> SubscriptionFeed | None:
+        if not isinstance(ctx.bus, EventBus):
+            return None
+        connection_id = f"winpipe-{uuid.uuid4().hex[:12]}"
+
+        async def _register() -> Any:
+            # Registration creates the subscriber's asyncio.Event and
+            # mutates the bus dict, both of which MUST run on the loop
+            # thread that owns the bus.
+            sub, _backlog = run_subscribe(
+                ctx.bus,
+                connection_id=connection_id,
+                params=params,
+                event_path=ctx.event_path,
+            )
+            return sub
+
+        future = asyncio.run_coroutine_threadsafe(_register(), loop)
+        subscriber = future.result()
+        return _BusSubscriptionFeed(loop, ctx.bus, subscriber, connection_id)
+
+    return _router
 
 
 def default_pipe_name(username: str | None = None) -> str:
@@ -294,6 +564,7 @@ class WindowsPipeServer:
         pipe_name: str | None = None,
         verify_sid: Any | None = None,
         verify_sid_enabled: bool = True,
+        subscribe_router: SubscribeRouter | None = None,
     ) -> None:
         """Wire the queue + shutdown event.
 
@@ -308,12 +579,18 @@ class WindowsPipeServer:
                 user at verification time.
             verify_sid_enabled: When False, skip the SID check (tests
                 without an impersonable pipe client).
+            subscribe_router: Builds a :class:`SubscriptionFeed` from a
+                parsed subscribe params dict so the listener can stream
+                ``event.push`` frames on a kept-open pipe. ``None``
+                disables the streaming path (a subscribe frame then falls
+                through to the request/response handler, which rejects it).
         """
         self._loop = loop
         self._handler = handler
         self._pipe_name = pipe_name or default_pipe_name()
         self._verify_sid = verify_sid
         self._verify_sid_enabled = verify_sid_enabled
+        self._subscribe_router = subscribe_router
         self._queue: asyncio.Queue[tuple[bytes, ReplyCallback]] = asyncio.Queue()
         self._shutdown = threading.Event()
         self._listener_thread: threading.Thread | None = None
@@ -448,6 +725,16 @@ class WindowsPipeServer:
                 payload = first_chunk
                 if more:
                     payload = first_chunk + _read_full_message(pipe)
+
+                # Subscribe frames switch the pipe into streaming mode and
+                # keep it open; every other frame is one-shot request/reply.
+                feed = self._maybe_open_subscription(payload)
+                if feed is not None:
+                    self._stream_subscription(pipe, feed)
+                    # _stream_subscription owns the pipe to teardown; the
+                    # finally below still closes the handle defensively.
+                    continue
+
                 response = self._await_handler(payload)
                 win32file.WriteFile(pipe, response)
             except pywintypes.error as exc:
@@ -495,6 +782,66 @@ class WindowsPipeServer:
         except Exception:
             logger.debug("_write_unauthorized write-failed")
 
+    def _maybe_open_subscription(self, payload: bytes) -> SubscriptionFeed | None:
+        """Open a streaming feed when *payload* is a subscribe frame.
+
+        Sniffs the frame's ``method``; for a subscribe verb (with a router
+        wired) it asks the router to build a :class:`SubscriptionFeed`
+        bound to the bus. A non-subscribe frame, no router, or an
+        unparseable frame returns ``None`` so the caller falls back to the
+        one-shot request/reply path.
+
+        Args:
+            payload: The full request frame bytes.
+
+        Returns:
+            A live feed to stream from, or ``None`` for the non-streaming
+            path.
+        """
+        if self._subscribe_router is None:
+            return None
+        try:
+            frame = json.loads(payload.rstrip(b"\n"))
+        except ValueError, json.JSONDecodeError:
+            return None
+        if not isinstance(frame, dict) or frame.get("method") not in _SUBSCRIBE_METHODS:
+            return None
+        params = frame.get("params") or {}
+        if not isinstance(params, dict):
+            params = {}
+        return self._subscribe_router(params)
+
+    def _stream_subscription(self, pipe: Any, feed: SubscriptionFeed) -> None:
+        """Stream ``event.push`` frames to *pipe* until the peer leaves.
+
+        Writes one ack frame, then pumps frames from *feed*: each heartbeat
+        with no frame triggers a :func:`_peer_still_connected` probe so a
+        client that left without a clean close is reaped. The subscriber is
+        always unregistered via ``feed.close()`` in the finally block, so
+        :attr:`EventBus.active_subscriptions` drops once the client leaves.
+        The listener thread stays free to accept and serve other pipe
+        instances while this stream runs because each accept builds a fresh
+        instance (``PIPE_UNLIMITED_INSTANCES``).
+
+        Args:
+            pipe: The connected pipe handle held open for the stream.
+            feed: The thread-pullable subscription feed.
+        """
+        try:
+            win32file.WriteFile(pipe, b'{"jsonrpc":"2.0","id":null,"result":{"ok":true}}\n')
+            while not self._shutdown.is_set():
+                frame = feed.next_frame(_IDLE_HEARTBEAT_SECONDS)
+                if frame is None:
+                    if not _peer_still_connected(pipe):
+                        logger.info("_stream_subscription peer-gone reaped")
+                        break
+                    continue
+                win32file.WriteFile(pipe, frame)
+        except pywintypes.error as exc:
+            logger.info(f"_stream_subscription pipe-closed err={exc!s}")
+        finally:
+            feed.close()
+
     async def _dispatch_loop(self) -> None:
         """Drain the queue and feed frames into :attr:`handler`.
 
@@ -530,8 +877,14 @@ class WindowsPipeServer:
 
 __all__ = [
     "PipeReader",
+    "SubscribeRouter",
+    "SubscriptionFeed",
     "WindowsPipeServer",
+    "cancel_pending_read",
+    "close_pipe",
     "default_pipe_name",
+    "make_bus_subscribe_router",
+    "open_subscription_pipe",
     "pipe_client_call",
     "pipe_ready",
 ]

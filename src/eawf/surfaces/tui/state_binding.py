@@ -39,7 +39,7 @@ import os
 import socket
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import orjson
 from pydantic import ValidationError
@@ -260,6 +260,11 @@ class StateBinding:
         self._scope_id: str | None = None
         self._is_degraded = False
         self._consecutive_failures = 0
+        # Windows: the live subscription holds a persistent pipe handle the
+        # streaming read blocks on. ``disconnect`` cancels that read via
+        # ``CancelIoEx`` (CloseHandle alone does not unblock it), so the
+        # handle is retained here for teardown.
+        self._win_pipe: Any = None
         self._daemon_failure_threshold = max(1, int(daemon_failure_threshold))
         env_interval = os.environ.get("EAWF_POLL_INTERVAL_S")
         probe_env = os.environ.get("EAWF_DAEMON_PROBE_INTERVAL_S")
@@ -298,9 +303,18 @@ class StateBinding:
         await self._start_probe_loop()
 
     def _daemon_socket_available(self) -> bool:
-        """Return whether a daemon socket exists for a cheap push attempt."""
+        """Return whether a daemon transport is up for a cheap push attempt.
+
+        On Windows there is no UDS, so this probes the per-user named pipe
+        via ``pipe_ready`` (a ``WaitNamedPipe`` check that never consumes a
+        pipe instance). On POSIX it probes the UDS socket.
+        """
         if os.name == "nt":
-            return False
+            from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_ready
+
+            ready = pipe_ready(default_pipe_name(), 0)
+            logger.debug(f"_daemon_socket_available win-pipe ready={ready}")
+            return ready
         sock_path = runtime_dir() / "eawfd.sock"
         eawf_runtime_dir = os.environ.get("EAWF_RUNTIME_DIR")
         xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
@@ -412,13 +426,26 @@ class StateBinding:
             if not self._stopping:
                 self._consecutive_failures = 0
 
-    def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Subscribe to ``state.subscribe`` with ``DaemonClient``."""
+    def _subscribe_params(self) -> dict[str, object]:
+        """Build the ``state.subscribe`` params with the binding's real scope.
+
+        The stream filters on the bound scope so the TUI only sees pushes
+        for the scope it is rendering. The scope is set from the loaded
+        state's URN in :meth:`connect`, so it is the binding's REAL
+        ``scope_id`` (never ``None`` once a state file is bound).
+        """
         params: dict[str, object] = {"kinds": [StoreKind.EVENT.value]}
         if self._scope_id is not None:
             params["scope_id"] = self._scope_id
+        return params
+
+    def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Subscribe to ``state.subscribe`` and stream pushes (per-platform)."""
+        if os.name == "nt":
+            self._run_subscription_windows(loop)
+            return
         with self._client_factory() as client:
-            client.call("state.subscribe", params)
+            client.call("state.subscribe", self._subscribe_params())
             self._consecutive_failures = 0
             asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
             while not self._stopping:
@@ -432,6 +459,52 @@ class StateBinding:
                 if not line:
                     raise RuntimeError("daemon subscribe stream ended")
                 self._handle_push_line(loop, line)
+
+    def _run_subscription_windows(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Stream ``state.subscribe`` pushes over a persistent named pipe.
+
+        Unlike the connectionless request/reply pipe path, a subscription
+        holds the pipe handle open: it opens the pipe + sends the subscribe
+        frame (:func:`open_subscription_pipe`), reads the ack, then loops
+        reading ``event.push`` frames via :class:`PipeReader`. The handle is
+        stored on ``self._win_pipe`` so :meth:`disconnect` can ``CancelIoEx``
+        the blocked read -- the only reliable way to unblock a pending
+        ``ReadFile`` (``CloseHandle`` alone does not). The cancel makes the
+        blocked read raise, which exits the loop cleanly under
+        ``self._stopping``. Every pywin32 reference lives in the win32-only
+        ``windows_pipe`` module so this binding stays import-clean on POSIX.
+        """
+        from eawf.runtime.daemon.windows_pipe import (
+            PipeReader,
+            close_pipe,
+            default_pipe_name,
+            open_subscription_pipe,
+        )
+
+        request = orjson.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": "tui-subscribe",
+                "method": "state.subscribe",
+                "params": self._subscribe_params(),
+            }
+        )
+        handle = open_subscription_pipe(default_pipe_name(), request + b"\n", wait_ms=1000)
+        self._win_pipe = handle
+        reader = PipeReader(handle)
+        try:
+            # First message is the subscribe ack.
+            reader.read_message()
+            self._consecutive_failures = 0
+            asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
+            while not self._stopping:
+                line = reader.read_message()
+                if not line:
+                    raise RuntimeError("daemon subscribe stream ended")
+                self._handle_push_line(loop, line)
+        finally:
+            self._win_pipe = None
+            close_pipe(handle)
 
     async def _on_subscription_connected(self) -> None:
         """Clear failures + degraded once push connects; keep the backstop.
@@ -499,9 +572,33 @@ class StateBinding:
             if refreshed is not None:
                 await self._callbacks.on_state(refreshed)
 
+    def _cancel_win_pipe_read(self) -> None:
+        """Cancel the streaming-pipe read on Windows via ``CancelIoEx``.
+
+        No-op on POSIX (no ``_win_pipe`` handle) and when no subscription
+        pipe is open. Tolerant of a handle already closed by the
+        subscription thread's own teardown -- the goal is only to unblock
+        a still-pending ``ReadFile`` so ``disconnect`` returns promptly.
+        """
+        pipe = self._win_pipe
+        if pipe is None:
+            return
+        from eawf.runtime.daemon.windows_pipe import cancel_pending_read
+
+        with contextlib.suppress(Exception):
+            cancel_pending_read(pipe)
+
     async def disconnect(self) -> None:
-        """Cancel background tasks on app teardown."""
+        """Cancel background tasks on app teardown.
+
+        On Windows the live subscription thread is parked in a blocking
+        ``ReadFile`` on the streaming pipe; cancelling the asyncio task
+        does NOT unblock that read, so this first ``CancelIoEx``-cancels
+        the pending read (via :func:`cancel_pending_read`) so the read
+        returns promptly and the thread exits, then cancels the task.
+        """
         self._stopping = True
+        self._cancel_win_pipe_read()
         if self._subscribe_task is not None:
             self._subscribe_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
