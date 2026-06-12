@@ -339,6 +339,16 @@ def test_campaign_acceptance_two_rounds_steer_claims_checkpoint_and_evibound(
         assert "OQ-tenor" in state.open_questions
         assert state.open_questions["OQ-tenor"].status is OpenQuestionStatus.OPEN
 
+        # -- The live run FOLDED its reconciled claims into the canonical
+        # state.claims (not a throwaway shadow): every round-record claim id
+        # resolves to a real Claim row on the persisted state (W05/W06 binding).
+        assert state.claims is not None
+        assert len(state.claims) == 4
+        for round_record in rounds:
+            for claim_id in round_record.claim_ids:
+                assert claim_id in state.claims, claim_id
+                assert state.claims[claim_id].evidence_refs == [resolving_ref]
+
         # (5) The run evidence (campaign record + rounds + checkpoint) is
         # reconstructible off the temp state alone -- the snapshot RPC folds it.
         snap = await snapshot(ctx, {"campaign_id": campaign_id})

@@ -510,6 +510,9 @@ def test_store_kind_values() -> None:
         # P25-W03 — spec writer / cache lifecycle events.
         "spec_updated",
         "research_campaign",
+        # P30-I18-W03/W04 — campaign run rounds + operator-channel inputs.
+        "research_round",
+        "operator_input",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

@@ -467,6 +467,7 @@ Show and promote research briefs.
 |---|---|
 | `promote` | — |
 | `show` | Show one research store record. |
+| `status` | Render the active scope's research campaign + round + checkpoint state. |
 
 ### `eawf roadmap`
 

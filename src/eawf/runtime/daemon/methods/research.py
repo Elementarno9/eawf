@@ -47,6 +47,7 @@ from eawf.kernel.spec.operator_input import (
     SteerAction,
     SteerPayload,
 )
+from eawf.kernel.spec.pruning import prune_round_carryover
 from eawf.kernel.spec.research_campaign import (
     ResearchProfileBlock,
     StagedCampaign,
@@ -66,13 +67,14 @@ from eawf.kernel.store.kinds.research_campaign import (
     CampaignTombstone,
     ResearchCampaignPayload,
 )
+from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.methods import MethodContext, register
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.research_campaign import StagedDispatch
     from eawf.kernel.spec.round_loop import RoundOutcome
-    from eawf.kernel.state.models import State
+    from eawf.kernel.state.models import Claim, State
 
 logger = logging.getLogger(__name__)
 
@@ -699,47 +701,6 @@ def reconcile_round_claims(
 # --------------------------------------------------------------------------
 
 
-class ResearchRoundPayload(BaseModel):
-    """Payload for one persisted research-campaign round record.
-
-    Appended to the append-only ``research_round`` store once per executed
-    round by :func:`run_campaign`. Carries the round's per-domain findings, the
-    saturation verdict that ended the round, and whether the round coincided
-    with an operator-review checkpoint -- enough for the board RUN / ROUND
-    bands + the snapshot RPC to read the real run state off the store rather
-    than a synthetic node.
-
-    Attributes:
-        campaign_id: The campaign the round belongs to.
-        round_number: The 1-based round index.
-        domains: The domains spawned this round, in dispatch order.
-        finding_lines: Every findings line the round's researchers returned.
-        claim_ids: The Claim row ids the round-end reconcile wrote.
-        saturated: Whether the round's saturation reducer declared the
-            campaign dry.
-        checkpoint: Whether the round coincided with an operator-review
-            checkpoint (per the run's checkpoint policy).
-        steer_notes: The operator steer / override notes folded in *before*
-            this round ran (the active channel inputs that shaped the round's
-            dispatch set). Empty when the operator pushed nothing -- a mid-run
-            steer surfaces here on the next round, so a steer visibly changes
-            the round it lands before.
-        recorded_at: When the round record was persisted (UTC).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    campaign_id: str = Field(min_length=1)
-    round_number: int = Field(ge=1)
-    domains: list[str] = Field(default_factory=list)
-    finding_lines: list[str] = Field(default_factory=list)
-    claim_ids: list[str] = Field(default_factory=list)
-    saturated: bool = False
-    steer_notes: list[str] = Field(default_factory=list)
-    checkpoint: bool = False
-    recorded_at: datetime
-
-
 def persist_round(state_path: Path, payload: ResearchRoundPayload) -> str:
     """Append one :class:`ResearchRoundPayload` to the ``research_round`` store.
 
@@ -881,6 +842,98 @@ def _live_agent_end_producer(ctx: MethodContext, runtime: str) -> AgentEndProduc
     return _produce
 
 
+def _reconcile_round_claims_for(
+    ctx: MethodContext,
+    findings: RoundFindings,
+    *,
+    state_path: Path,
+    campaign_id: str,
+    scope_id: str | None,
+    now: datetime,
+    fold_into_state: bool,
+) -> list[Claim]:
+    """Reconcile a round's findings into Claim rows, folding into real state.
+
+    When *fold_into_state* is true the reconcile runs inside
+    :func:`~eawf.runtime.daemon.methods.state._commit_worktree_state` so the new
+    Claim rows land on the canonical ``state.claims`` through the daemon-owned
+    per-file portalock + WAL + event-append path (AGENTS rule 4) -- the same
+    writer ``add_question`` uses for ``state.open_questions`` -- and the rows are
+    read back off the post-write state. When false (the run-rpc unit path with no
+    on-disk state / WAL dir) the reconcile runs against a throwaway in-memory
+    shadow so the run still completes and yields the round's Claim rows.
+
+    Args:
+        ctx: The daemon context the canonical write runs under.
+        findings: The round's parsed findings.
+        state_path: Path to the scope's ``state.json``.
+        campaign_id: The running campaign id (recorded in the event params).
+        scope_id: Explicit scope for the claims; ``None`` resolves to the project.
+        now: The instant the claims are logged at.
+        fold_into_state: Whether the canonical-writer fold path is available.
+
+    Returns:
+        The Claim rows written this round, in finding order.
+    """
+    from eawf.kernel.state.models import State
+
+    if not fold_into_state:
+        shadow = State.model_construct(claims={}, open_questions={}, project=None)
+        reconcile_round_claims(shadow, findings, scope_id=scope_id, now=now)
+        return list((shadow.claims or {}).values())
+
+    from eawf.runtime.daemon.methods.state import _commit_worktree_state
+    from eawf.workflow.evidence._io import load_state
+
+    written_ids: list[str] = []
+
+    def _apply(state: State) -> dict[str, Any]:
+        written_ids.extend(reconcile_round_claims(state, findings, scope_id=scope_id, now=now))
+        return {"claim_ids": list(written_ids)}
+
+    _commit_worktree_state(
+        ctx=ctx,
+        repo_root=None,
+        params={"campaign_id": campaign_id, "round_number": findings.round_number},
+        command="research.run.reconcile_round",
+        scope_id=scope_id,
+        apply_func=_apply,
+    )
+    claims = load_state(state_path).claims or {}
+    return [claims[cid] for cid in written_ids if cid in claims]
+
+
+def _prune_carried_ledger(
+    carried_claims: list[Claim],
+    round_claims: list[Claim],
+    *,
+    campaign_id: str,
+    now: datetime,
+) -> None:
+    """Carry the round's claims forward and prune the ledger to the live frontier.
+
+    Appends *round_claims* to the accumulated *carried_claims* ledger, then runs
+    the L1 between-rounds reducer (:func:`~eawf.kernel.spec.pruning.prune_round_carryover`)
+    over it so the provably-dead rows (``SUPERSEDED`` + answers-to-``DROPPED``-
+    questions) drop. The ledger is trimmed in place to the kept (live) frontier
+    the next round carries.
+
+    Args:
+        carried_claims: The accumulated ledger, mutated in place.
+        round_claims: The Claim rows this round reconciled.
+        campaign_id: The running campaign id (for the log line).
+        now: The reference instant threaded into the reducer.
+    """
+    carried_claims.extend(round_claims)
+    pruned = prune_round_carryover(carried_claims, [], now=now)
+    kept_ids = set(pruned.kept)
+    carried_claims[:] = [claim for claim in carried_claims if claim.id in kept_ids]
+    logger.info(
+        f"_prune_carried_ledger campaign={campaign_id!r} "
+        f"kept={len(pruned.kept)} dropped={len(pruned.dropped)}"
+    )
+
+
 def run_campaign(
     ctx: MethodContext,
     args: RunCampaignParams,
@@ -928,13 +981,22 @@ def run_campaign(
         raise ValueError(f"campaign not active: {args.campaign_id!r} is {campaign.status.value!r}")
 
     # Reconcile each round's findings into Claim rows as the loop drives, so
-    # the saturation reducer scores the real ledger. The claims accumulate in
-    # an in-memory state shadow per round; the canonical persist is the
-    # per-round store append (the Claim *state* fold lands with W05/W06).
-    from eawf.kernel.state.models import State
-
+    # the saturation reducer scores the real ledger. Each round's claims fold
+    # into the canonical ``state.claims`` through the daemon-owned state writer
+    # (:func:`_commit_worktree_state`, the same path ``add_question`` uses), so
+    # a live run populates ``state.claims`` rather than a throwaway shadow. The
+    # per-round store append + the L1 carryover prune ride alongside.
     claim_ids: list[str] = []
     round_payloads: list[ResearchRoundPayload] = []
+    # The accumulated live-claim ledger carried between rounds. The L1 carryover
+    # reducer (:func:`prune_round_carryover`) runs over it after each round so
+    # the next round + the synthesis work over only the live claims.
+    carried_claims: list[Claim] = []
+    # The canonical state writer needs the on-disk state + a WAL dir. The
+    # run-rpc unit path drives run_campaign against a context with neither (no
+    # real ``.ea/state.json``, no ``wal_dir``); there the run still completes and
+    # accumulates the round's claim ids in-memory, but no state fold occurs.
+    can_fold_state = state_path.exists() and isinstance(ctx.wal_dir, Path)
 
     def _channel_notes() -> tuple[list[str], bool]:
         """Fold the operator channel: return the active steer notes + paused bit.
@@ -956,9 +1018,22 @@ def run_campaign(
     def _reconcile(findings: RoundFindings) -> tuple[list[str], bool]:
         now = datetime.now(UTC)
         steer_notes, paused = _channel_notes()
-        shadow = State.model_construct(claims={}, open_questions={}, project=None)
-        written = reconcile_round_claims(shadow, findings, scope_id=args.scope_id, now=now)
+        round_claims = _reconcile_round_claims_for(
+            ctx,
+            findings,
+            state_path=state_path,
+            campaign_id=args.campaign_id,
+            scope_id=args.scope_id,
+            now=now,
+            fold_into_state=can_fold_state,
+        )
+        written = [claim.id for claim in round_claims]
         claim_ids.extend(written)
+        # Carry the round's claims forward, then run the L1 carryover reducer over
+        # the accumulated ledger so the next round + the synthesis work over only
+        # the live claims (dead rows drop). The kept set is the live frontier the
+        # next round carries.
+        _prune_carried_ledger(carried_claims, round_claims, campaign_id=args.campaign_id, now=now)
         payload = ResearchRoundPayload(
             campaign_id=args.campaign_id,
             round_number=findings.round_number,

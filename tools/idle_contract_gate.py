@@ -72,6 +72,16 @@ exits non-zero:
   into ``run_dispatch`` (I17-W11), so the W08 stdout producer fires on a real
   spawn and the agent-watch live tail is not empty. Dropping the thread reds this
   row.
+- :func:`check_campaign_claim_fold_wired` -- a source-scan probe asserting the
+  campaign run path (``research.py``) folds each round's reconciled claims into
+  the canonical ``state.claims`` via ``_commit_worktree_state`` (P30-I18 W05/W06),
+  so a live round populates the real claim ledger instead of a throwaway
+  ``State.model_construct`` shadow. Reverting to the shadow-only reconcile reds
+  this row.
+- :func:`check_campaign_carryover_prune_wired` -- a source-scan probe asserting
+  ``run_campaign`` calls ``prune_round_carryover`` between rounds (P30-I18 W06),
+  so the L1 between-rounds reducer has a production caller. Dropping the call
+  (its prior zero-caller state) reds this row.
 - :func:`check_runtime_gate_is_not_idle` -- verifies this always-run
   pre-commit gate stays enabled so the runtime close gate cannot ship idle.
 - :func:`detect_idle_contracts` -- a *meta-gate* that reads a git diff and
@@ -209,6 +219,8 @@ class GateFailure(StrEnum):
     PHASE_TRACK_TAG_IDLE = "phase_track_tag_idle"
     DRIVE_LADDERS_IDLE = "drive_ladders_idle"
     LIVE_OUTPUT_TEXT_IDLE = "live_output_text_idle"
+    CAMPAIGN_CLAIM_FOLD_IDLE = "campaign_claim_fold_idle"
+    CAMPAIGN_CARRYOVER_PRUNE_IDLE = "campaign_carryover_prune_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1210,6 +1222,147 @@ _DRIVE_REPAIR_RE = re.compile(r"\brepair\s*=\s*repair_hook\b")
 #: The live spawn threads its captured answer text into the stdout producer.
 _LIVE_OUTPUT_TEXT_RE = re.compile(r"\boutput_text\s*=\s*spawn_result\.text\b")
 
+# =========================================================================== #
+# P30-I18 campaign-run bindings: the state.claims fold + the L1 carryover prune.
+# =========================================================================== #
+
+#: The daemon research-methods module whose ``run_campaign`` folds each round's
+#: reconciled claims into the canonical ``state.claims`` (W05/W06) and runs the
+#: L1 carryover prune between rounds (W06). Read off the working tree; if either
+#: binding regresses to the throwaway-shadow / no-prune path the source no longer
+#: matches and the corresponding row reds.
+_CAMPAIGN_RUN_MODULE = "src/eawf/runtime/daemon/methods/research.py"
+
+#: ``run_campaign`` folds the reconciled claims into REAL state through the
+#: daemon-owned canonical writer (``_commit_worktree_state``), the same path
+#: ``add_question`` uses for ``state.open_questions``. A regression that reverts
+#: to the throwaway ``State.model_construct(claims={}, ...)`` shadow as the ONLY
+#: reconcile path drops this call and re-idles the fold.
+_CAMPAIGN_CLAIM_FOLD_RE = re.compile(r"\b_commit_worktree_state\s*\(")
+
+#: ``run_campaign`` runs ``reconcile_round_claims`` through that canonical writer
+#: by binding it inside the ``apply_func`` the writer calls -- the fold mutates
+#: the real ``state.claims``, not a shadow.
+_CAMPAIGN_RECONCILE_FOLD_RE = re.compile(r"\breconcile_round_claims\s*\(\s*state\b")
+
+#: ``run_campaign`` calls the L1 between-rounds carryover reducer so the next
+#: round + the synthesis work over only the live claims. A regression that drops
+#: the call leaves the reducer with zero production callers (its prior state).
+_CAMPAIGN_CARRYOVER_CALL_RE = re.compile(r"\bprune_round_carryover\s*\(")
+
+
+def check_campaign_claim_fold_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _CAMPAIGN_RUN_MODULE,
+) -> GateResult:
+    """Assert ``run_campaign`` folds reconciled claims into canonical state (W05/W06).
+
+    The P30-I18 binding: :func:`eawf.runtime.daemon.methods.research.run_campaign`
+    folds each round's reconciled claims into the REAL ``state.claims`` through
+    the daemon-owned canonical writer
+    (:func:`eawf.runtime.daemon.methods.state._commit_worktree_state`, the same
+    path ``add_question`` uses for ``state.open_questions``), by binding
+    :func:`reconcile_round_claims` against the live ``state`` inside the writer's
+    ``apply_func``. Before the binding the reconcile ran only against a throwaway
+    ``State.model_construct(claims={}, ...)`` shadow, so a live round never wrote
+    a Claim row to ``state.claims`` -- only ``claim_ids`` landed on the round
+    record. If a later refactor reverts to the shadow-only path the source no
+    longer matches both anchors and this gate fails
+    :attr:`GateFailure.CAMPAIGN_CLAIM_FOLD_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-idled (shadow-only) outcomes.
+
+    Args:
+        module_text: The campaign-run module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the campaign-run module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        both calls ``_commit_worktree_state(`` and reconciles against the live
+        ``state`` (``reconcile_round_claims(state``); otherwise ``failure`` is
+        :attr:`GateFailure.CAMPAIGN_CLAIM_FOLD_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    commits = _CAMPAIGN_CLAIM_FOLD_RE.search(text) is not None
+    reconciles_state = _CAMPAIGN_RECONCILE_FOLD_RE.search(text) is not None
+    if commits and reconciles_state:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (run_campaign folds reconciled claims into "
+                "state.claims via _commit_worktree_state -- a live round populates "
+                "the canonical claim ledger, not a throwaway shadow)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.CAMPAIGN_CLAIM_FOLD_IDLE,
+        message=(
+            "campaign claim fold is idle: "
+            f"{module_path} commits={commits} reconciles_state={reconciles_state} "
+            "(expected both True); run_campaign must reconcile each round into the "
+            "live state via _commit_worktree_state -- the fold regressed to the "
+            "throwaway State.model_construct shadow, so state.claims stays empty"
+        ),
+    )
+
+
+def check_campaign_carryover_prune_wired(
+    *,
+    module_text: str | None = None,
+    module_path: str = _CAMPAIGN_RUN_MODULE,
+) -> GateResult:
+    """Assert ``run_campaign`` calls the L1 carryover prune between rounds (W06).
+
+    The P30-I18 binding: :func:`eawf.runtime.daemon.methods.research.run_campaign`
+    calls :func:`eawf.kernel.spec.pruning.prune_round_carryover` over the
+    accumulated claim ledger between rounds, so the next round + the synthesis
+    work over only the live claims (the provably-dead rows drop). Before the
+    binding the L1 reducer had ZERO production callers -- a built-but-idle
+    contract the P30 thesis forbids. If a later refactor drops the call the
+    source no longer matches and this gate fails
+    :attr:`GateFailure.CAMPAIGN_CARRYOVER_PRUNE_IDLE`.
+
+    The probe reads source only -- it never mutates state, never writes a file,
+    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
+    test can drive both the wired and the re-idled (no-caller) outcomes.
+
+    Args:
+        module_text: The campaign-run module source. ``None`` reads
+            *module_path* off the working tree under :data:`_REPO_ROOT`.
+        module_path: Repo-relative path of the campaign-run module to scan.
+
+    Returns:
+        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
+        carries a ``prune_round_carryover(`` call; otherwise ``failure`` is
+        :attr:`GateFailure.CAMPAIGN_CARRYOVER_PRUNE_IDLE`.
+    """
+    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
+    if _CAMPAIGN_CARRYOVER_CALL_RE.search(text) is not None:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (run_campaign calls prune_round_carryover "
+                "between rounds -- the L1 reducer has a production caller, not idle)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.CAMPAIGN_CARRYOVER_PRUNE_IDLE,
+        message=(
+            "campaign carryover prune is idle: "
+            f"{module_path} carries no prune_round_carryover(...) call, so the L1 "
+            "between-rounds reducer has zero production callers (the run never prunes "
+            "the carried claim ledger -- the contract ships built-but-idle)"
+        ),
+    )
+
 
 def check_drive_ladders_wired(
     *,
@@ -1947,7 +2100,9 @@ def main(argv: list[str]) -> int:
     :func:`check_validate_jury_cli_wired`), then the two I11 Track binding probes
     (:func:`check_track_rpc_wired`, :func:`check_phase_track_tag_wired`), then the
     two I17 live-autopilot binding probes (:func:`check_drive_ladders_wired`,
-    :func:`check_live_output_text_wired`), then the
+    :func:`check_live_output_text_wired`), then the two P30-I18 campaign-run
+    binding probes (:func:`check_campaign_claim_fold_wired`,
+    :func:`check_campaign_carryover_prune_wired`), then the
     runtime-gate binding check (:func:`check_runtime_gate_is_not_idle`), then the
     registry-wide audit-DSL wired-on sweep
     (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
@@ -2000,6 +2155,11 @@ def main(argv: list[str]) -> int:
     # The two I17 live-autopilot bindings read their live source off the working
     # tree the same way: the drive-arming classify + repair kwargs (W11) and the
     # live-spawn output_text fan (W11). Either re-dormant fails its row.
+    #
+    # The two P30-I18 campaign-run bindings read their live source off the working
+    # tree the same way: run_campaign's state.claims fold via the canonical writer
+    # (W05/W06) and its L1 carryover prune call between rounds (W06). Either
+    # re-idle fails its row.
     for source_scan_check in (
         check_spec_jury_ballot_fn_wired(),
         check_jury_reliability_map_wired(),
@@ -2009,6 +2169,8 @@ def main(argv: list[str]) -> int:
         check_phase_track_tag_wired(),
         check_drive_ladders_wired(),
         check_live_output_text_wired(),
+        check_campaign_claim_fold_wired(),
+        check_campaign_carryover_prune_wired(),
     ):
         failed |= _report_result(source_scan_check)
 
