@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -45,6 +46,8 @@ from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import research as research_mod
+from eawf.runtime.daemon.methods.daemon import ping
 from eawf.runtime.daemon.methods.research import (
     RunCampaignParams,
     create_campaign,
@@ -231,6 +234,25 @@ def _run(body: Callable[[], Awaitable[None]]) -> None:
     asyncio.run(body())
 
 
+async def _wait_for_research_run(campaign_id: str, *, timeout: float = 5.0) -> None:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while research_mod.research_run_in_flight(campaign_id):
+        if loop.time() >= deadline:
+            raise AssertionError(f"timed out waiting for research run: {campaign_id!r}")
+        await asyncio.sleep(0.02)
+
+
+@pytest.fixture(autouse=True)
+def _clear_background_research_runs() -> Any:
+    """Ensure a failed background-run test cannot leak the module registry."""
+    with research_mod._RESEARCH_RUN_LOCK:
+        research_mod._ACTIVE_RESEARCH_RUNS.clear()
+    yield
+    with research_mod._RESEARCH_RUN_LOCK:
+        research_mod._ACTIVE_RESEARCH_RUNS.clear()
+
+
 def _block() -> ResearchProfileBlock:
     return ResearchProfileBlock(
         default_depth=ResearchDepth.MEDIUM,
@@ -340,9 +362,14 @@ def test_research_run_rpc_uses_live_producer_without_stub(
     async def body() -> None:
         await create_campaign(ctx, _stage_params("campaign-live"))
         result = await run(ctx, {"campaign_id": "campaign-live", "round_budget": 1})
-        assert result["rounds_run"] == 1
-        assert result["halt_reason"] == "round_budget"
-        assert len(result["claim_ids"]) == 2
+        assert result["campaign_id"] == "campaign-live"
+        assert result["run_state"] == "running"
+        assert result["backgrounded"] is True
+        assert result["handle_id"].startswith("research-run-")
+        await _wait_for_research_run("campaign-live")
+        rounds = read_campaign_rounds(state_path, "campaign-live")
+        assert len(rounds) == 1
+        assert rounds[0].claim_ids == ["CLM-r1-market-structure-0", "CLM-r1-pricing-models-0"]
 
     _run(body)
 
@@ -360,6 +387,66 @@ def test_research_run_rpc_uses_live_producer_without_stub(
     event_types = [row.payload.get("event_type") for row in events]
     assert "research.run.round" in event_types
     assert "dispatch_cost" in event_types
+
+
+def test_research_run_ping_and_steer_answer_while_background_run_blocks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """research.run returns a handle while ping + steer answer mid-run."""
+    ctx, state_path = _build_live_ctx(tmp_path)
+    started = threading.Event()
+    release = threading.Event()
+    calls: list[str] = []
+
+    def _gated_producer(dispatch: StagedDispatch) -> Mapping[str, object]:
+        calls.append(dispatch.domain)
+        started.set()
+        release.wait(timeout=5.0)
+        return _agent_end_body(dispatch.domain, findings=[f"{dispatch.domain}-background-claim"])
+
+    monkeypatch.setattr(
+        research_mod,
+        "_live_agent_end_producer",
+        lambda _ctx, runtime: _gated_producer,
+    )
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-bg"))
+        handle = await run(ctx, {"campaign_id": "campaign-bg", "round_budget": 1})
+        assert handle["campaign_id"] == "campaign-bg"
+        assert handle["run_state"] == "running"
+        assert handle["backgrounded"] is True
+        assert await asyncio.to_thread(started.wait, 1.0)
+        assert research_mod.research_run_in_flight("campaign-bg") is True
+
+        pong = await asyncio.wait_for(ping(ctx, {}), timeout=1.0)
+        steer_result = await asyncio.wait_for(
+            research_mod.steer(
+                ctx,
+                {"text": "narrow to exchange microstructure", "campaign_id": "campaign-bg"},
+            ),
+            timeout=1.0,
+        )
+
+        assert pong["pid"] == ctx.pid
+        assert steer_result["kind"] == "steer"
+        release.set()
+        await _wait_for_research_run("campaign-bg")
+
+    try:
+        _run(body)
+    finally:
+        release.set()
+
+    assert calls == ["market-structure", "pricing-models"]
+    rounds = read_campaign_rounds(state_path, "campaign-bg")
+    assert len(rounds) == 1
+    assert rounds[0].finding_lines == [
+        "market-structure-background-claim",
+        "pricing-models-background-claim",
+    ]
+    assert any("narrow to exchange microstructure" in note for note in rounds[0].steer_notes)
 
 
 def test_run_campaign_rejects_unknown_campaign(tmp_path: Path) -> None:

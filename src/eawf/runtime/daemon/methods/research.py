@@ -20,9 +20,12 @@ board topic tree) re-validate the row by reading the envelope back and running
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 import uuid
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -838,6 +841,84 @@ class RunCampaignResult(BaseModel):
     claim_ids: list[str]
 
 
+class ResearchRunHandle(BaseModel):
+    """Run handle returned by the backgrounded ``research.run`` RPC.
+
+    Attributes:
+        handle_id: Opaque id for correlating daemon logs with this run.
+        campaign_id: Campaign id being drained in the background.
+        run_state: State at the moment the RPC returned.
+        backgrounded: True when a worker thread was started.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    handle_id: str
+    campaign_id: str
+    run_state: str
+    backgrounded: bool
+
+
+class _ThreadsafeBus:
+    """Marshal bus publishes from a research worker back onto the daemon loop."""
+
+    def __init__(
+        self,
+        bus: Any,
+        *,
+        loop: asyncio.AbstractEventLoop | None,
+        loop_thread: threading.Thread,
+    ) -> None:
+        self._bus = bus
+        self._loop = loop
+        self._loop_thread = loop_thread
+
+    @property
+    def active_subscriptions(self) -> int:
+        return int(getattr(self._bus, "active_subscriptions", 0))
+
+    def publish(self, envelope: Envelope) -> None:
+        if (
+            self._loop is not None
+            and self._loop.is_running()
+            and threading.current_thread() is not self._loop_thread
+        ):
+            self._loop.call_soon_threadsafe(self._bus.publish, envelope)
+            return
+        self._bus.publish(envelope)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._bus, name)
+
+
+class _ActiveResearchRun:
+    """Process-local bookkeeping for one background campaign run."""
+
+    def __init__(
+        self,
+        *,
+        handle_id: str,
+        campaign_id: str,
+        thread: threading.Thread,
+    ) -> None:
+        self.handle_id = handle_id
+        self.campaign_id = campaign_id
+        self.thread = thread
+        self.result: dict[str, Any] | None = None
+        self.error: BaseException | None = None
+
+
+_RESEARCH_RUN_LOCK = threading.Lock()
+_ACTIVE_RESEARCH_RUNS: dict[str, _ActiveResearchRun] = {}
+
+
+def research_run_in_flight(campaign_id: str | None = None) -> bool:
+    """Return whether a background research run is active."""
+    with _RESEARCH_RUN_LOCK:
+        if campaign_id is not None:
+            return campaign_id in _ACTIVE_RESEARCH_RUNS
+        return bool(_ACTIVE_RESEARCH_RUNS)
+
+
 def _live_agent_end_producer(ctx: MethodContext, runtime: str) -> AgentEndProducer:
     """Build the production agent-end producer over the ``agent.dispatch`` spawn.
 
@@ -1086,6 +1167,117 @@ def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
     if value not in ("soft", "hard"):
         raise ValueError(f"invalid flow.budget.enforce: {value!r}")
     return cast(EnforceMode, value)
+
+
+def _validate_runnable_campaign(state_path: Path, campaign_id: str) -> None:
+    """Raise when *campaign_id* cannot be started as an ACTIVE campaign."""
+    campaign = read_latest_campaign(state_path, campaign_id)
+    if campaign is None:
+        raise ValueError(f"unknown campaign: {campaign_id!r}")
+    if campaign.status is not CampaignStatus.ACTIVE:
+        raise ValueError(f"campaign not active: {campaign_id!r} is {campaign.status.value!r}")
+
+
+def _research_worker_context(
+    ctx: MethodContext,
+    *,
+    loop: asyncio.AbstractEventLoop | None,
+    loop_thread: threading.Thread,
+) -> MethodContext:
+    """Return a worker-safe context for background ``research.run``."""
+    if ctx.bus is None or not hasattr(ctx.bus, "publish"):
+        return ctx
+    return replace(
+        ctx,
+        bus=_ThreadsafeBus(ctx.bus, loop=loop, loop_thread=loop_thread),
+    )
+
+
+def start_background_research_run(
+    ctx: MethodContext,
+    args: RunCampaignParams,
+    *,
+    produce_agent_end: AgentEndProducer,
+    checkpoint_policy: CheckpointPolicy | None = None,
+) -> ResearchRunHandle:
+    """Start ``run_campaign`` on a worker thread and return a run handle.
+
+    ``run_campaign`` is synchronous because each round blocks on live researcher
+    spawns. Running it inside the awaited RPC handler would monopolise the
+    daemon event loop, so the RPC validates the campaign, records a process-local
+    handle, and lets a daemon thread drain the bounded campaign while concurrent
+    RPCs such as ``daemon.ping`` and ``research.steer`` continue to answer.
+
+    Args:
+        ctx: Daemon context.
+        args: Validated run params.
+        produce_agent_end: Per-dispatch agent-end producer.
+        checkpoint_policy: Optional checkpoint cadence.
+
+    Returns:
+        The handle for the started background run.
+
+    Raises:
+        RuntimeError: When ``ctx.state_path`` is unset.
+        ValueError: When the campaign is unknown, inactive, or already running.
+    """
+    if ctx.state_path is None:
+        raise RuntimeError("state_path not configured on daemon context")
+    state_path = Path(ctx.state_path)
+    _validate_runnable_campaign(state_path, args.campaign_id)
+    with _RESEARCH_RUN_LOCK:
+        if args.campaign_id in _ACTIVE_RESEARCH_RUNS:
+            raise ValueError(f"research run already in flight: {args.campaign_id!r}")
+
+    try:
+        loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    loop_thread = threading.current_thread()
+    handle_id = f"research-run-{uuid.uuid4().hex[:12]}"
+    active_holder: list[_ActiveResearchRun] = []
+
+    def _drive() -> None:
+        active = active_holder[0]
+        worker_ctx = _research_worker_context(ctx, loop=loop, loop_thread=loop_thread)
+        try:
+            active.result = run_campaign(
+                worker_ctx,
+                args,
+                produce_agent_end=produce_agent_end,
+                checkpoint_policy=checkpoint_policy,
+            )
+        except Exception as exc:  # pragma: no cover - defensive background guard
+            active.error = exc
+            logger.exception(f"start_background_research_run failed handle={handle_id!r}")
+        finally:
+            with _RESEARCH_RUN_LOCK:
+                current = _ACTIVE_RESEARCH_RUNS.get(args.campaign_id)
+                if current is active:
+                    _ACTIVE_RESEARCH_RUNS.pop(args.campaign_id, None)
+            logger.info(f"start_background_research_run done handle={handle_id!r}")
+
+    thread = threading.Thread(target=_drive, name=f"research-run-{handle_id}", daemon=True)
+    active = _ActiveResearchRun(
+        handle_id=handle_id,
+        campaign_id=args.campaign_id,
+        thread=thread,
+    )
+    active_holder.append(active)
+    with _RESEARCH_RUN_LOCK:
+        if args.campaign_id in _ACTIVE_RESEARCH_RUNS:
+            raise ValueError(f"research run already in flight: {args.campaign_id!r}")
+        _ACTIVE_RESEARCH_RUNS[args.campaign_id] = active
+    thread.start()
+    logger.info(
+        f"start_background_research_run started handle={handle_id!r} campaign={args.campaign_id!r}"
+    )
+    return ResearchRunHandle(
+        handle_id=handle_id,
+        campaign_id=args.campaign_id,
+        run_state="running",
+        backgrounded=True,
+    )
 
 
 def _emit_research_run_round_event(
@@ -1400,15 +1592,15 @@ def run_campaign(
 
 @register("research.run")
 async def run(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Run a bounded research campaign over the live ``agent.dispatch`` spawn.
+    """Start a bounded research campaign over the live ``agent.dispatch`` spawn.
 
     Registers the campaign run RPC over
     :func:`~eawf.kernel.spec.campaign_driver.drive_campaign` with the
-    production-bound round runner: each round spawns a researcher session per
-    staged dispatch, reconciles the findings into Claim rows, and persists the
-    round + checkpoint. The board RUN band reads the persisted rounds, so it
-    reflects the real run state. The run respects the bounded round loop +
-    saturation gates.
+    production-bound round runner, but returns a run handle immediately and
+    drives the blocking campaign loop on a worker thread. Each round still
+    spawns a researcher session per staged dispatch, reconciles the findings
+    into Claim rows, and persists the round + checkpoint; the board RUN band
+    reads those persisted rounds as the background thread advances.
 
     Args:
         ctx: Server context -- needs ``state_path`` (+ ``event_path`` for the
@@ -1416,7 +1608,7 @@ async def run(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         params: JSON-RPC params per :class:`RunCampaignParams`.
 
     Returns:
-        Dict matching :class:`RunCampaignResult`.
+        Dict matching :class:`ResearchRunHandle`.
 
     Raises:
         ValueError: When *params* does not validate or the campaign id names
@@ -1428,7 +1620,12 @@ async def run(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     # harness injects a stub producer into run_campaign directly, so this RPC
     # entrypoint never spawns a real subprocess under test.
     produce_agent_end = _live_agent_end_producer(ctx, runtime="claude")
-    return run_campaign(ctx, args, produce_agent_end=produce_agent_end)
+    handle = start_background_research_run(
+        ctx,
+        args,
+        produce_agent_end=produce_agent_end,
+    )
+    return handle.model_dump(mode="json")
 
 
 # --------------------------------------------------------------------------
