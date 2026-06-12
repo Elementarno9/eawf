@@ -1595,7 +1595,21 @@ class _Loop:
         self.claimed_ids |= set(self.run.lanes)
 
     def _persist(self) -> None:
-        """Persist the current run snapshot through the daemon canonical writer."""
+        """Persist the current run snapshot through the daemon canonical writer.
+
+        Operator intervention wins (W06): a ``fleet.pause`` / ``fleet.halt`` RPC
+        can land on disk MID-round (between the round's top run-state read and
+        this persist), so before writing a DRAINING in-memory run this re-reads
+        the disk run-state and adopts a HELD (PAUSED / HALTED) state -- otherwise
+        the loop's own persist would clobber the operator's pause / halt and the
+        run would keep claiming. A run already in a HELD / terminal state, or a
+        stateless context, writes unchanged.
+        """
+        if self.run.run_state is FleetRunState.DRAINING:
+            disk = self._disk_run_state()
+            if disk in {FleetRunState.PAUSED, FleetRunState.HALTED}:
+                assert disk is not None
+                self.run.run_state = disk
         _persist_fleet_run(self.ctx, self.run)
 
     def _recompute_frontier(self) -> None:
@@ -2107,6 +2121,37 @@ class _Loop:
         """
         return self.cancel is not None and self.cancel.is_set()
 
+    def _disk_run_state(self) -> FleetRunState | None:
+        """Re-read the persisted run state from disk, or ``None`` when stateless -- W06.
+
+        The loop runs on the W01 worker thread; a ``fleet.pause`` / ``fleet.halt``
+        RPC mutates ``run_state`` on disk from the event-loop thread. This
+        point-read (free read access) lets the loop observe that operator
+        intervention each round so it can cooperate (stop claiming on a pause,
+        drain to done on a halt) WITHOUT the RPC having to abort the run. A
+        stateless context (no on-disk run) returns ``None`` so the in-memory loop
+        runs uninterrupted.
+
+        Returns:
+            The persisted :class:`FleetRunState`, or ``None`` when no on-disk run
+            is configured.
+        """
+        if self.ctx.state_path is None:
+            return None
+        run = load_state(Path(self.ctx.state_path)).fleet_run
+        return run.run_state if run is not None else None
+
+    def _drain_in_flight_no_claim(self) -> None:
+        """Finish every in-flight lane WITHOUT claiming any further wave -- W06.
+
+        The shared graceful-stop drain the pause-hold + halt paths use: watch
+        each open lane to completion (freeing + deregistering its slot) so the
+        operator's pause / halt lets the in-flight work finish, then leaves the
+        frontier un-claimed. Mirrors the budget-graceful-drain body.
+        """
+        for wave_id in list(self.run.lanes):
+            self._finish_lane(wave_id)
+
     def run_to_terminal(self) -> FleetRun:
         """Drive the loop until it reaches a terminal or held state.
 
@@ -2124,8 +2169,17 @@ class _Loop:
         reattach to recover, rather than transitioning DONE; the in-flight lanes
         are never reaped on shutdown.
 
+        W06 loop cooperation: each round the loop re-reads the persisted
+        ``run_state`` so a ``fleet.pause`` / ``fleet.halt`` RPC (mutating it from
+        the event-loop thread) is observed WITHOUT aborting the run. A PAUSED run
+        claims no further wave, lets the in-flight lanes finish, then HOLDS
+        (blocking on a short re-check sleep) until a resume flips it back to
+        DRAINING or a halt ends it -- so a resume continues the same run. A
+        HALTED run drains the in-flight lanes then transitions to DONE so the
+        cockpit run-summary card opens.
+
         Returns:
-            The terminal :class:`FleetRun` snapshot.
+            The terminal (or held) :class:`FleetRun` snapshot.
         """
         while True:
             if self._cancelled():
@@ -2134,6 +2188,32 @@ class _Loop:
                 self._persist()
                 logger.info("run_to_terminal cancelled run_state=draining")
                 return self.run
+            disk_state = self._disk_run_state()
+            if disk_state is FleetRunState.HALTED:
+                # Operator halt: block new claims, let the in-flight lanes finish,
+                # then transition to DONE so the run-summary card opens.
+                self.run.run_state = FleetRunState.HALTED
+                self._drain_in_flight_no_claim()
+                self._finish_run(FleetTerminalReason.DRAINED)
+                self._persist()
+                logger.info("run_to_terminal halted run_state=done")
+                return self.run
+            if disk_state is FleetRunState.PAUSED:
+                # Operator pause: claim no further wave; let the in-flight lanes
+                # finish, then HOLD (re-check each tick) until resume / halt. The
+                # run stays PAUSED on disk for the operator to resume the SAME run.
+                self.run.run_state = FleetRunState.PAUSED
+                self._drain_in_flight_no_claim()
+                self._persist()
+                if self._cancelled():
+                    return self.run
+                time.sleep(_WATCH_POLL_SECONDS)
+                continue
+            # Not held (DRAINING, or stateless): a resume flipped the disk state
+            # back to DRAINING, so absorb it into the in-memory run before the
+            # next claim -- otherwise a lingering in-memory PAUSED would make
+            # _persist re-write PAUSED and re-hold the run (a resume deadlock).
+            self.run.run_state = FleetRunState.DRAINING
             # W04: recompute the ready frontier off live state BEFORE filling, so
             # a wave newly unblocked by a just-closed dep joins the frontier this
             # round rather than being stranded off the armed list.
@@ -2403,6 +2483,34 @@ def halt_all(ctx: MethodContext) -> FleetRun:
     run.run_state = FleetRunState.HALTED
     _persist_fleet_run(ctx, run)
     logger.info(f"halt_all lanes={len(run.lanes)} frontier={len(run.frontier)}")
+    return run
+
+
+def resume_cooperative(ctx: MethodContext) -> FleetRun:
+    """Flip a PAUSED run back to DRAINING so a HELD live loop continues -- W06.
+
+    The cooperative resume the ``fleet.resume`` RPC takes when a background drive
+    is already in flight (the W01 worker thread is HOLDING the run paused). The
+    loop re-reads ``run_state`` each round, so flipping the persisted state back
+    to :data:`FleetRunState.DRAINING` is all the held loop needs to continue the
+    SAME run -- no second loop is started (which would race the held one). When
+    NO drive is in flight (the held loop already returned, e.g. after a daemon
+    restart) the operator-facing RPC falls back to :func:`resume`, which re-runs
+    the loop inline over the remaining frontier.
+
+    Args:
+        ctx: Daemon method context.
+
+    Returns:
+        The :class:`FleetRun` snapshot after the resume.
+
+    Raises:
+        LifecycleError: When no fleet run is armed.
+    """
+    run = _require_run(ctx)
+    run.run_state = FleetRunState.DRAINING
+    _persist_fleet_run(ctx, run)
+    logger.info(f"resume_cooperative lanes={len(run.lanes)} frontier={len(run.frontier)}")
     return run
 
 
@@ -3225,6 +3333,116 @@ async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         f"backgrounded={handle.backgrounded}"
     )
     return handle.model_dump(mode="json")
+
+
+class FleetControlParams(BaseModel):
+    """Params for the parameterless ``fleet.pause`` / ``fleet.halt`` / ``fleet.resume`` RPCs.
+
+    The three control RPCs act on the single armed run, so they carry no fields;
+    the model exists to enforce ``extra="forbid"`` so a caller that ships a stray
+    key is rejected rather than silently ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FleetControlResult(BaseModel):
+    """Result of a ``fleet.pause`` / ``fleet.halt`` / ``fleet.resume`` RPC -- W06.
+
+    Attributes:
+        run_state: The :class:`FleetRunState` after the control transition --
+            ``paused`` after a pause, ``halted`` after a halt, ``draining`` after
+            a cooperative resume.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    run_state: FleetRunState
+
+
+@register("fleet.pause")
+async def pause_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Pause the armed fleet run: set PAUSED so the loop stops claiming -- W06.
+
+    The ``fleet.pause`` RPC flips the persisted ``run_state`` to
+    :data:`FleetRunState.PAUSED`; the background drive loop re-reads it each round
+    and stops claiming new waves while the in-flight lanes finish, WITHOUT the RPC
+    having to abort the run. A resume returns it to ``DRAINING`` and the SAME loop
+    continues. The transition persists only through the daemon canonical writer.
+
+    Args:
+        ctx: Daemon method context. Needs ``state_path`` to read + persist the run.
+        params: JSON-RPC params per :class:`FleetControlParams` (parameterless).
+
+    Returns:
+        Dict matching :class:`FleetControlResult` with ``run_state=paused``.
+
+    Raises:
+        ValueError: When *params* carries an unexpected key.
+        LifecycleError: When no fleet run is armed.
+    """
+    FleetControlParams.model_validate(params)
+    run = pause_all(ctx)
+    logger.info(f"pause_rpc run_state={run.run_state.value}")
+    return FleetControlResult(run_state=run.run_state).model_dump(mode="json")
+
+
+@register("fleet.halt")
+async def halt_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Halt the armed fleet run: set HALTED so the loop drains to the summary -- W06.
+
+    The ``fleet.halt`` RPC flips the persisted ``run_state`` to
+    :data:`FleetRunState.HALTED`; the background drive loop re-reads it each round,
+    blocks new claims, lets the in-flight lanes finish, then transitions the run to
+    DONE so the cockpit run-summary card opens. Distinct from a kill-all (the
+    in-flight work is NOT reaped). The transition persists only through the daemon
+    canonical writer.
+
+    Args:
+        ctx: Daemon method context. Needs ``state_path`` to read + persist the run.
+        params: JSON-RPC params per :class:`FleetControlParams` (parameterless).
+
+    Returns:
+        Dict matching :class:`FleetControlResult` with ``run_state=halted``.
+
+    Raises:
+        ValueError: When *params* carries an unexpected key.
+        LifecycleError: When no fleet run is armed.
+    """
+    FleetControlParams.model_validate(params)
+    run = halt_all(ctx)
+    logger.info(f"halt_rpc run_state={run.run_state.value}")
+    return FleetControlResult(run_state=run.run_state).model_dump(mode="json")
+
+
+@register("fleet.resume")
+async def resume_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Resume a PAUSED fleet run -- W06.
+
+    The ``fleet.resume`` RPC continues a paused run by flipping the persisted
+    ``run_state`` back to :data:`FleetRunState.DRAINING`
+    (:func:`resume_cooperative`). When a background drive is in flight (the W01
+    worker thread is HOLDING the run paused) the held loop re-reads that state on
+    its next round and continues the SAME run -- no second loop is started (which
+    would race the held one). When no drive is in flight (the held loop already
+    returned, e.g. after a daemon restart) the run is left DRAINING for a
+    ``fleet.reattach`` to recover + resume its lanes; the resume RPC never blocks
+    the handler by re-running the loop inline.
+
+    Args:
+        ctx: Daemon method context. Needs ``state_path`` to read + persist the run.
+        params: JSON-RPC params per :class:`FleetControlParams` (parameterless).
+
+    Returns:
+        Dict matching :class:`FleetControlResult` with ``run_state=draining``.
+
+    Raises:
+        ValueError: When *params* carries an unexpected key.
+        LifecycleError: When no fleet run is armed.
+    """
+    FleetControlParams.model_validate(params)
+    run = resume_cooperative(ctx)
+    logger.info(f"resume_rpc run_state={run.run_state.value} in_flight={drive_in_flight()}")
+    return FleetControlResult(run_state=run.run_state).model_dump(mode="json")
 
 
 @register("fleet.resolve_fork")

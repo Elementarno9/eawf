@@ -304,11 +304,30 @@ HALT_NO_DAEMON: str = "halt: daemon unavailable -- request not issued"
 #: Daemon JSON-RPC methods the ``space`` (pause / resume) key routes through.
 #: ``agent.pause`` persists ``dispatch_paused = True`` (a deliberate stop that
 #: blocks the next claim); ``agent.resume`` clears it. The flag picks which.
+#: These are the DEFAULT (no-fleet-run) target; when a fleet run is in flight the
+#: ``space`` key instead drives the fleet-run pause / resume (W06).
 _PAUSE_RPC: str = "agent.pause"
 _RESUME_RPC: str = "agent.resume"
 
+#: Daemon JSON-RPC methods the cockpit fleet controls drive while a fleet run is
+#: DRAINING / PAUSED (W06): ``fleet.pause`` holds the running drive loop (it stops
+#: claiming while in-flight lanes finish), ``fleet.resume`` continues the SAME
+#: loop, and ``fleet.halt`` drains the in-flight lanes to the run-summary card.
+#: None of the three aborts the run.
+_FLEET_PAUSE_RPC: str = "fleet.pause"
+_FLEET_RESUME_RPC: str = "fleet.resume"
+_FLEET_HALT_RPC: str = "fleet.halt"
+
+#: Fleet run-state values that mean a live run is in flight (so the cockpit
+#: fleet controls route to the ``fleet.*`` RPCs rather than the per-wave / global
+#: dispatch-pause fallbacks).
+_ACTIVE_RUN_STATES: frozenset[str] = frozenset({"draining", "paused"})
+
 #: Result line when a pause request could not reach the daemon.
 PAUSE_NO_DAEMON: str = "pause: daemon unavailable -- request not issued"
+
+#: Result line when a fleet halt request could not reach the daemon.
+FLEET_HALT_NO_DAEMON: str = "halt: daemon unavailable -- request not issued"
 
 #: Result line when ``S`` (skip) advances past the last ready wave -- nothing
 #: further to step to, so the cursor stays put and the line says so honestly.
@@ -1173,14 +1192,27 @@ class AutopilotModeScreen(ScopeScreen):
         )
 
     def action_halt_selected(self) -> None:
-        """Halt the selected wave gracefully (destructive -- confirm-gated).
+        """Halt the fleet run, or the selected wave when no run is in flight (``H``).
 
-        Confirms, then issues the real ``agent.kill`` RPC with a graceful
-        SIGTERM signal (the soft entry to the same daemon-owned
-        SIGTERM-grace-SIGKILL ladder) and surfaces the typed (today: placeholder
-        ``killed=false``) outcome. With no selected wave there is nothing to
-        halt, surfaced honestly without opening the modal.
+        While a fleet run is in flight (DRAINING / PAUSED) ``H`` drives the FLEET
+        halt (W06): ``fleet.halt`` blocks new claims, lets the in-flight lanes
+        finish, then drains the run to the run-summary card -- it does NOT abort
+        the run or reap live work. With no live fleet run it falls back to the
+        per-wave graceful halt (``agent.kill`` SIGTERM on the selected wave). The
+        fleet halt runs off the UI thread; an unreachable daemon (checked up
+        front) surfaces the honest unavailable line.
         """
+        if self._active_run_state() is not None:
+            if not self._daemon_available():
+                self._set_result(f"[$warn]{FLEET_HALT_NO_DAEMON}[/]")
+                logger.info("action_halt_selected fleet no_daemon")
+                return
+            self.run_worker(
+                self._fleet_halt_worker(),
+                group=_INTERVENTION_GROUP,
+                exclusive=True,
+            )
+            return
         target = self._selected_row()
         if target is None:
             self._set_result(f"[$warn]{HALT_NO_TARGET}[/]")
@@ -1192,6 +1224,47 @@ class AutopilotModeScreen(ScopeScreen):
             verb="halt",
             no_daemon=HALT_NO_DAEMON,
         )
+
+    async def _fleet_halt_worker(self) -> None:
+        """Worker body: drive the fleet halt off-thread, then repaint the result.
+
+        Runs the synchronous :meth:`_issue_fleet_halt` through
+        :func:`asyncio.to_thread` so the daemon round-trip never blocks the event
+        loop, then sets the honest result line after the await (loop-safe).
+        """
+        result_line = await asyncio.to_thread(self._issue_fleet_halt)
+        self._set_result(result_line)
+        logger.info(f"action_halt_selected fleet result={result_line!r}")
+
+    def _issue_fleet_halt(self) -> str:
+        """Drive the ``fleet.halt`` RPC and return a cockpit result line (W06).
+
+        Calls ``fleet.halt`` through the
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam; the daemon
+        blocks new claims, lets the in-flight lanes finish, and drains the run to
+        the summary card. The line reports the halted verdict, or the honest
+        unavailable / rejected line rather than a faked halt.
+
+        Returns:
+            A content-markup result line describing the fleet-halt outcome.
+        """
+        unavailable = f"[$warn]{FLEET_HALT_NO_DAEMON}[/]"
+        if not self._daemon_available():
+            return unavailable
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                client.call(_FLEET_HALT_RPC, {})
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_fleet_halt daemon_rejected message={exc.message!r}")
+            return (
+                f"[$warn]halt: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+            )
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_fleet_halt daemon_fallback cause={exc!r}")
+            return unavailable
+        return "[$ok]halt: fleet draining to summary[/]"
 
     def action_skip_selected(self) -> None:
         """Skip the selected ready wave by advancing the selection (local).
@@ -1259,13 +1332,36 @@ class AutopilotModeScreen(ScopeScreen):
         state = self._current_state()
         return bool(state.dispatch_paused) if state is not None else False
 
-    def _issue_pause(self) -> str:
-        """Toggle dispatch pause via the real RPC and return a result line.
+    def _active_run_state(self) -> str | None:
+        """Return the bound fleet run's state when a live run is in flight (W06).
 
-        Calls ``agent.resume`` (when paused) or ``agent.pause`` (when not)
-        through the :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam
-        when available; the line reports the persisted verdict (``paused`` /
-        ``resumed``), or the honest unavailable line rather than a faked toggle.
+        The ``space`` (pause / resume) + ``H`` (halt) keys route to the
+        ``fleet.*`` control RPCs only while a fleet run is DRAINING / PAUSED; an
+        idle / done / unarmed run keeps the per-wave / global dispatch-pause
+        fallbacks. A bound run whose state is not active reads as ``None``.
+
+        Returns:
+            The active fleet run-state value (``"draining"`` / ``"paused"``), or
+            ``None`` when no live run is in flight.
+        """
+        run = self._current_fleet_run()
+        if run is None:
+            return None
+        value = run.run_state.value
+        return value if value in _ACTIVE_RUN_STATES else None
+
+    def _issue_pause(self) -> str:
+        """Toggle pause via the real RPC and return a result line.
+
+        While a fleet run is in flight (DRAINING / PAUSED) the ``space`` key drives
+        the FLEET pause / resume (W06): ``fleet.pause`` holds the running drive
+        loop (it stops claiming while the in-flight lanes finish) and
+        ``fleet.resume`` continues the SAME loop -- neither aborts the run. With no
+        live fleet run it falls back to the global ``agent.pause`` / ``agent.resume``
+        dispatch-pause toggle. The call routes through the
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam when
+        available; the line reports the persisted verdict, or the honest
+        unavailable line rather than a faked toggle.
 
         Returns:
             A content-markup result line describing the pause / resume outcome.
@@ -1275,8 +1371,16 @@ class AutopilotModeScreen(ScopeScreen):
             return unavailable
         from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
-        paused = self._currently_paused()
-        method = _RESUME_RPC if paused else _PAUSE_RPC
+        run_state = self._active_run_state()
+        if run_state is not None:
+            # A live fleet run: drive the fleet pause / resume (W06). A PAUSED run
+            # resumes; a DRAINING run pauses.
+            method = _FLEET_RESUME_RPC if run_state == "paused" else _FLEET_PAUSE_RPC
+            verb = "resumed" if run_state == "paused" else "paused"
+        else:
+            paused = self._currently_paused()
+            method = _RESUME_RPC if paused else _PAUSE_RPC
+            verb = None
         try:
             with DaemonClient(call_timeout_seconds=1.0) as client:
                 result = client.call(method, {})
@@ -1288,9 +1392,10 @@ class AutopilotModeScreen(ScopeScreen):
         except (OSError, RuntimeError, TimeoutError) as exc:
             logger.debug(f"_issue_pause daemon_fallback method={method!r} cause={exc!r}")
             return unavailable
-        # The daemon returns the persisted flag; report the honest verdict.
-        now_paused = bool(result.get("paused", not paused))
-        verb = "paused" if now_paused else "resumed"
+        if verb is None:
+            # The global dispatch-pause path returns the persisted flag.
+            now_paused = bool(result.get("paused", method == _PAUSE_RPC))
+            verb = "paused" if now_paused else "resumed"
         return f"[$ok]pause: {verb}[/]"
 
     def action_arm_flow(self) -> None:
@@ -1963,6 +2068,7 @@ __all__ = [
     "DISPATCH_NO_TARGET",
     "DISPATCH_RESULT_ID",
     "EMPTY_NOTICE",
+    "FLEET_HALT_NO_DAEMON",
     "FORK_ESCALATION_LABEL",
     "FORK_INBOX_NO_TARGET",
     "FRONTIER_EMPTY_ID",

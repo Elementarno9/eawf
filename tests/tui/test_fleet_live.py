@@ -338,7 +338,13 @@ def test_cockpit_pause_offloads_to_worker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """C1: the pause key round-trips its RPC on a worker, then repaints honestly."""
+    """C1: over a live fleet run the pause key drives fleet.pause on a worker (W06).
+
+    With a DRAINING fleet run bound, ``space`` drives the FLEET pause
+    (``fleet.pause`` -- it holds the running drive loop without aborting it)
+    rather than the global ``agent.pause`` dispatch-pause toggle. The RPC
+    round-trips on a worker so the cockpit never blocks, then repaints honestly.
+    """
     state_path = _write_state(tmp_path, _state(waves=_frontier_waves(), fleet_run=_draining_run()))
     calls: list[str] = []
 
@@ -354,7 +360,7 @@ def test_cockpit_pause_offloads_to_worker(
 
         def call(self, method: str, _params: dict[str, object]) -> dict[str, object]:
             calls.append(method)
-            return {"paused": True}
+            return {"run_state": "paused"}
 
     async def body() -> None:
         from eawf.surfaces.cli import _daemon_client as dc
@@ -370,7 +376,8 @@ def test_cockpit_pause_offloads_to_worker(
             assert "paused" in str(result.render())  # type: ignore[attr-defined]
 
     asyncio.run(body())
-    assert calls == ["agent.pause"]
+    # A live fleet run routes space -> fleet.pause (W06), not the global toggle.
+    assert calls == ["fleet.pause"]
 
 
 def test_cockpit_kill_offloads_to_worker_after_confirm(
@@ -516,3 +523,100 @@ def test_cockpit_poll_backstop_refreshes_without_push(
 
     asyncio.run(body())
     assert os.environ.get("EAWF_POLL_INTERVAL_S") == "0.05"
+
+
+# --------------------------------------------------------------------------
+# W06 -- the cockpit fleet controls (space pause/resume, H halt) drive the
+# fleet.* RPCs over a live run, without aborting it.
+# --------------------------------------------------------------------------
+
+
+def test_cockpit_resume_over_paused_run_drives_fleet_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W06: over a PAUSED fleet run the space key drives fleet.resume.
+
+    A bound run whose state is PAUSED routes ``space`` to ``fleet.resume`` (it
+    continues the held drive loop), not the global dispatch-pause toggle -- the
+    resume continues the SAME run rather than aborting it.
+    """
+    paused = _draining_run()
+    paused.run_state = FleetRunState.PAUSED
+    state_path = _write_state(tmp_path, _state(waves=_frontier_waves(), fleet_run=paused))
+    calls: list[str] = []
+
+    class _ResumeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _ResumeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, _params: dict[str, object]) -> dict[str, object]:
+            calls.append(method)
+            return {"run_state": "draining"}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _ResumeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            screen = await _enter_cockpit(pilot, app)
+            await pilot.press("space")  # resume the held run
+            await settle_screen(pilot)
+            result = screen.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert "resumed" in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+    assert calls == ["fleet.resume"]
+
+
+def test_cockpit_halt_over_live_run_drives_fleet_halt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W06: over a DRAINING fleet run the H key drives fleet.halt (no confirm/abort).
+
+    With a live run bound, ``H`` drives the FLEET halt (``fleet.halt`` -- it
+    drains the in-flight lanes to the summary card) rather than the per-wave
+    ``agent.kill``. The halt runs straight on a worker (no destructive confirm)
+    and never reaps the in-flight work.
+    """
+    state_path = _write_state(tmp_path, _state(waves=_frontier_waves(), fleet_run=_draining_run()))
+    calls: list[str] = []
+
+    class _HaltClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _HaltClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, _params: dict[str, object]) -> dict[str, object]:
+            calls.append(method)
+            return {"run_state": "halted"}
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _HaltClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            screen = await _enter_cockpit(pilot, app)
+            await pilot.press("H")  # fleet halt -> drains to summary
+            await settle_screen(pilot)
+            result = screen.query_one(f"#{DISPATCH_RESULT_ID}")
+            assert "draining to summary" in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+    assert calls == ["fleet.halt"]
