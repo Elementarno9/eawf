@@ -132,6 +132,26 @@ _CONCURRENCY_LANES: dict[str, int] = {
     "8 lanes": 8,
 }
 
+#: The EU / USD / waves spend-cap triple each :data:`BUDGET_OPTIONS` tier maps to
+#: -- the ``fleet.drive`` ``eu_cap`` / ``usd_cap`` / ``waves_cap`` params (DL-4).
+#: ``unbounded`` leaves every cap ``None`` (the run never HALTs on spend); the
+#: named tiers tighten from lenient down to strict so an operator can bound a run
+#: by effort, dollars, AND wave count at once. The figures are deliberately round
+#: so the cockpit's ``$ used/cap`` + EU block-bar read cleanly; the daemon loop
+#: HALTs at the FIRST cap any axis reaches (the ``budget_exhausted`` DL-4 gate).
+_BUDGET_CAPS: dict[str, tuple[float | None, float | None, int | None]] = {
+    "unbounded": (None, None, None),
+    "lenient": (40.0, 80.0, 32),
+    "standard": (16.0, 32.0, 12),
+    "strict": (4.0, 8.0, 4),
+}
+
+#: The ``kclean`` K threshold an armed run uses when its convergence option is
+#: ``K-clean rounds`` -- the consecutive-clean-round count the loop stops after.
+#: Pinned to the ``fleet.drive`` ``kclean_k`` default (2) so the arm form and the
+#: daemon agree on the convergence ceiling; the ``drain`` option ignores it.
+_KCLEAN_K: int = 2
+
 
 class ArmSpec(BaseModel):
     """Typed launch config the operator arms the fleet drive with.
@@ -151,6 +171,15 @@ class ArmSpec(BaseModel):
             selected risk policy).
         convergence: The ``fleet.drive`` convergence mode -- ``drain`` or
             ``kclean`` -- derived from the selected convergence option.
+        eu_cap: The cumulative EU spend cap (DL-4), derived from the budget
+            tier; ``None`` under the ``unbounded`` tier so the run never HALTs
+            on EU spend.
+        usd_cap: The cumulative USD spend cap, derived from the budget tier;
+            ``None`` under ``unbounded``.
+        waves_cap: The claimed-wave count cap, derived from the budget tier;
+            ``None`` under ``unbounded``.
+        kclean_k: The consecutive-clean-round threshold for ``kclean``
+            convergence; ignored under ``drain``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -160,6 +189,10 @@ class ArmSpec(BaseModel):
     risk_policy: str
     hard_halt: bool
     convergence: str
+    eu_cap: float | None = Field(default=None, gt=0.0)
+    usd_cap: float | None = Field(default=None, gt=0.0)
+    waves_cap: int | None = Field(default=None, ge=1)
+    kclean_k: int = Field(default=_KCLEAN_K, ge=1)
 
 
 def build_arm_spec(
@@ -173,9 +206,12 @@ def build_arm_spec(
     """Derive the typed :class:`ArmSpec` from the selected launch-form options.
 
     Maps the human-readable selections onto the typed ``fleet.drive`` params:
-    the concurrency option resolves to its integer lane width, the risk policy
-    resolves the hard-halt toggle (a ``hard-halt`` label sets it), and the
-    convergence option resolves the ``drain`` / ``kclean`` mode.
+    the concurrency option resolves to its integer lane width, the budget tier
+    resolves the DL-4 EU / USD / waves spend caps (``unbounded`` leaves them
+    ``None``), the risk policy resolves the hard-halt toggle (a ``hard-halt``
+    label sets it), and the convergence option resolves the ``drain`` /
+    ``kclean`` mode plus the ``kclean`` K threshold. Every derived field rides
+    the spec so NONE is dropped before the RPC -- the W02 fix.
 
     Args:
         scope: The selected drain-scope option.
@@ -187,6 +223,7 @@ def build_arm_spec(
     Returns:
         The typed launch spec.
     """
+    eu_cap, usd_cap, waves_cap = _BUDGET_CAPS.get(budget, (None, None, None))
     return ArmSpec(
         scope=scope,
         budget=budget,
@@ -194,20 +231,77 @@ def build_arm_spec(
         risk_policy=risk_policy,
         hard_halt="hard-halt" in risk_policy,
         convergence="kclean" if convergence_option == "K-clean rounds" else "drain",
+        eu_cap=eu_cap,
+        usd_cap=usd_cap,
+        waves_cap=waves_cap,
+        kclean_k=_KCLEAN_K,
     )
+
+
+def scope_frontier(scope: str, frontier: list[str]) -> list[str]:
+    """Narrow the ready *frontier* to the waves the drain *scope* reaches.
+
+    The arm form's scope option (one of :data:`SCOPE_OPTIONS`) is no longer
+    cosmetic (the W02 fix): it filters the ready frontier before the
+    ``fleet.drive`` RPC so a narrower scope claims fewer waves. The scope is
+    resolved off the frontier ids themselves (each ``P<NN>-I<NN>-W<NN>`` encodes
+    its phase + iter via :func:`~eawf.kernel.state.ids.parents_of`), anchored on
+    the HEAD of the frontier (the next wave the loop would claim):
+
+    - ``this iter`` keeps only the waves sharing the head wave's iter prefix --
+      the narrowest drain, this iter's ready waves alone.
+    - ``this phase`` keeps the waves sharing the head wave's phase prefix --
+      every ready wave under the current phase.
+    - ``cross-repo`` keeps the whole frontier unchanged -- the broadest drain.
+
+    A frontier whose head is not a parseable wave id (defensive) is returned
+    unchanged so the arm never silently drops every wave on a malformed id.
+    Claim order is preserved (the filter keeps the input order).
+
+    Args:
+        scope: The selected drain-scope option (one of :data:`SCOPE_OPTIONS`).
+        frontier: The ready ``W<NN>`` wave ids to drain, in claim order.
+
+    Returns:
+        The scope-filtered frontier, in claim order; the whole frontier for
+        ``cross-repo`` or an unparseable head.
+    """
+    if scope == "cross-repo" or not frontier:
+        return list(frontier)
+    from eawf.kernel.state.ids import is_wave_id, parents_of
+
+    head = frontier[0]
+    if not is_wave_id(head):
+        return list(frontier)
+    phase_id, iter_id = parents_of(head)
+    # ``this iter`` matches the head wave's iter; ``this phase`` matches its phase.
+    target = iter_id if scope == "this iter" else phase_id
+    target_index = 1 if scope == "this iter" else 0
+
+    def _in_scope(wid: str) -> bool:
+        return is_wave_id(wid) and parents_of(wid)[target_index] == target
+
+    kept = [wid for wid in frontier if _in_scope(wid)]
+    logger.debug(
+        f"scope_frontier scope={scope!r} target={target!r} kept={len(kept)}/{len(frontier)}"
+    )
+    return kept
 
 
 def issue_drive(spec: ArmSpec, frontier: list[str], *, daemon_available: bool) -> str:
     """Issue the ``fleet.drive`` RPC for *spec* and return a cockpit result line.
 
-    Folds the typed :class:`ArmSpec` into the ``fleet.drive`` params -- the ready
-    *frontier* wave ids (in claim order) plus the spec's concurrency + convergence
-    mode -- and calls it through the
+    Folds EVERY :class:`ArmSpec` field into the ``fleet.drive`` params (the W02
+    fix -- no field is dropped): the scope-filtered *frontier*
+    (:func:`scope_frontier`) in claim order, the lane concurrency, the
+    convergence mode + its ``kclean_k`` threshold, the DL-4 EU / USD / waves
+    spend caps, and the hard-halt toggle. The call routes through the
     :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam when the daemon
     is reachable. The line reports the cockpit flipped to ``DRAINING``, or the
-    honest unavailable / rejected line rather than a faked arm. An empty *frontier*
-    is a no-op cancel (defence in depth -- the overlay already refuses a dry
-    frontier, so this only fires if the rows emptied between open and arm).
+    honest unavailable / rejected line rather than a faked arm. An empty
+    (scope-filtered) *frontier* is a no-op cancel (defence in depth -- the
+    overlay already refuses a dry frontier, so this only fires if the rows
+    emptied between open and arm, or the scope filtered every wave out).
 
     Args:
         spec: The overlay's typed launch config.
@@ -217,30 +311,40 @@ def issue_drive(spec: ArmSpec, frontier: list[str], *, daemon_available: bool) -
     Returns:
         A content-markup result line describing the arm outcome.
     """
-    if not frontier:
+    scoped = scope_frontier(spec.scope, frontier)
+    if not scoped:
         return f"[$warn]{ARM_CANCELLED}[/]"
     if not daemon_available:
         return f"[$warn]{ARM_NO_DAEMON}[/]"
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
+    params: dict[str, object] = {
+        "frontier": scoped,
+        "concurrency": spec.concurrency,
+        "convergence": spec.convergence,
+        "kclean_k": spec.kclean_k,
+        "hard_halt": spec.hard_halt,
+    }
+    # Only send the spend caps that are armed -- an unbounded tier leaves them
+    # unset so the strict ``DriveParams`` (gt=0.0 / ge=1) never sees a None it
+    # would otherwise have to allow as an explicit key.
+    if spec.eu_cap is not None:
+        params["eu_cap"] = spec.eu_cap
+    if spec.usd_cap is not None:
+        params["usd_cap"] = spec.usd_cap
+    if spec.waves_cap is not None:
+        params["waves_cap"] = spec.waves_cap
     try:
         with DaemonClient(call_timeout_seconds=30.0) as client:
-            client.call(
-                _DRIVE_RPC,
-                {
-                    "frontier": frontier,
-                    "concurrency": spec.concurrency,
-                    "convergence": spec.convergence,
-                },
-            )
+            client.call(_DRIVE_RPC, params)
     except DaemonRpcError as exc:
         logger.debug(f"issue_drive daemon_rejected message={exc.message!r}")
         return f"[$warn]arm: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
     except (OSError, RuntimeError, TimeoutError) as exc:
         logger.debug(f"issue_drive daemon_fallback cause={exc!r}")
         return f"[$warn]{ARM_NO_DAEMON}[/]"
-    plural = "" if len(frontier) == 1 else "s"
-    return f"[$ok]{ARM_DRAINING}[/] [$muted]{len(frontier)} wave{plural} on the frontier[/]"
+    plural = "" if len(scoped) == 1 else "s"
+    return f"[$ok]{ARM_DRAINING}[/] [$muted]{len(scoped)} wave{plural} on the frontier[/]"
 
 
 #: The five launch-form groups, in cursor order: (group id, caption, options).
@@ -485,4 +589,5 @@ __all__ = [
     "build_arm_spec",
     "issue_drive",
     "render_group_row",
+    "scope_frontier",
 ]
