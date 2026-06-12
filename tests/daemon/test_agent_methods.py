@@ -633,7 +633,12 @@ def test_kill_legacy_term_alias_sends_sigterm(tmp_path: Path) -> None:
 
 
 def test_kill_no_fleet_run_returns_not_found(tmp_path: Path) -> None:
-    """C2: no fleet run armed -> typed not-found, never a faked kill."""
+    """C2: no fleet run + no dispatched session -> typed not-found, never a faked kill.
+
+    With no fleet lane the kill falls back to the wave's single-wave dispatched
+    session (W09); the wave here has neither a lane NOR a recorded session, so it
+    returns the ``no-session`` not-found and signals nothing.
+    """
     from eawf.runtime.daemon.methods import fleet as _fleet
 
     state_path = tmp_path / "state.json"
@@ -648,14 +653,19 @@ def test_kill_no_fleet_run_returns_not_found(tmp_path: Path) -> None:
             result: dict[str, Any] = await kill(
                 ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
             )
-        assert result == {"killed": False, "signal": "kill", "reason": "no-fleet-run"}
+        assert result == {"killed": False, "signal": "kill", "reason": "no-session"}
         assert sent == []  # no signal on the not-found path
 
     _run(body)
 
 
 def test_kill_attempt_mismatch_returns_not_found(tmp_path: Path) -> None:
-    """C2: a stale attempt number resolves no lane -> typed not-found."""
+    """C2: a stale attempt resolves no lane + no session -> typed not-found.
+
+    A lane exists for attempt 2; killing attempt 1 resolves no lane, falls back
+    to the wave's session table (W09), finds no attempt-1 session, and returns
+    the ``no-session`` not-found rather than signalling the wrong attempt.
+    """
     from eawf.runtime.daemon.methods import fleet as _fleet
 
     state_path = tmp_path / "state.json"
@@ -670,7 +680,7 @@ def test_kill_attempt_mismatch_returns_not_found(tmp_path: Path) -> None:
             result: dict[str, Any] = await kill(
                 ctx, {"wave_id": "P24-I01-W07", "attempt": 1, "signal": "kill"}
             )
-        assert result == {"killed": False, "signal": "kill", "reason": "no-lane"}
+        assert result == {"killed": False, "signal": "kill", "reason": "no-session"}
         assert sent == []
 
     _run(body)

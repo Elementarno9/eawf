@@ -670,6 +670,100 @@ _WATCH_POLL_SECONDS = 1.0
 _WATCH_STALL_DEADLINE_SECONDS = 30.0
 
 
+def _has_open_pause(state_path: Path, wave_id: str) -> bool:
+    """Return whether *wave_id* has an unresolved needs_user pause -- W09.
+
+    The live watcher consults this each poll: a lane whose executor surfaced a
+    needs_user pause (a clarification it could not resolve) has an open
+    ``needs_user_pause`` row with no matching resume on the event feed, scoped to
+    the wave id. The watcher reports such a lane ``"needs_user"`` so the loop
+    produces the DL-6 ``NEEDS_USER_SPLIT`` blocking fork rather than wedging.
+    Reads through :func:`~eawf.workflow.skills.needs_user.list_open_pauses` (free
+    read access). A read error degrades to ``False`` (no pause) so a transient
+    feed-read hiccup never mis-forks a healthy lane.
+
+    Args:
+        state_path: Path to ``state.json`` (the event feed resolves under its
+            sibling ``store/``).
+        wave_id: ``W<NN>`` wave whose open pauses to check.
+
+    Returns:
+        ``True`` when the wave has at least one unresolved needs_user pause.
+    """
+    from eawf.workflow.skills.needs_user import list_open_pauses
+
+    try:
+        return bool(list_open_pauses(state_path, scope_id=wave_id))
+    except (OSError, ValueError) as exc:
+        logger.debug(f"_has_open_pause wave={wave_id} read_failed cause={exc!r}")
+        return False
+
+
+@dataclass
+class _StallDeadline:
+    """Tracks the dead-pgid stall grace window for one watched lane -- W05.
+
+    The liveness probe reads dead intermittently; this records the wall-clock of
+    the FIRST dead observation and reports the lane stalled once the grace window
+    elapses. A live (or transiently-recovered) observation resets the window so a
+    flicker never trips the fork.
+
+    Attributes:
+        now: Monotonic clock the deadline measures against.
+        stall_deadline: Grace seconds after the first dead read before forking.
+        dead_since: Wall-clock of the first dead read, or ``None`` while alive.
+    """
+
+    now: Callable[[], float]
+    stall_deadline: float
+    dead_since: float | None = None
+
+    def observe_dead(self, *, wave_id: str, pgid: int) -> bool:
+        """Record a dead-pgid read; return whether the grace window has elapsed."""
+        if self.dead_since is None:
+            self.dead_since = self.now()
+            logger.info(
+                f"liveness_watcher wave={wave_id} pgid={pgid} status=dead "
+                f"deadline={self.stall_deadline}"
+            )
+            return False
+        if self.now() - self.dead_since >= self.stall_deadline:
+            logger.warning(
+                f"liveness_watcher wave={wave_id} pgid={pgid} status=stalled-dead outcome=forked"
+            )
+            return True
+        return False
+
+    def observe_alive(self) -> None:
+        """Reset the window on a live (or unaddressable) read -- not a stall."""
+        self.dead_since = None
+
+
+def _status_terminal_outcome(wave: Any) -> LaneOutcome | None:
+    """Map a polled wave's status to a terminal :data:`LaneOutcome`, or ``None``.
+
+    The status half of the watcher's per-poll decision: a vanished wave (gone
+    from state) or a ``FAILED`` / ``ABANDONED`` status resolves ``"forked"``, a
+    ``CLOSED`` status resolves ``"closed"``, and any in-flight status returns
+    ``None`` so the watcher keeps polling.
+
+    Args:
+        wave: The polled :class:`~eawf.kernel.state.models.Wave`, or ``None`` when
+            it has vanished from state.
+
+    Returns:
+        The terminal :data:`LaneOutcome`, or ``None`` when the wave is still in
+        flight.
+    """
+    if wave is None:
+        return "forked"
+    if wave.status is WaveStatus.CLOSED:
+        return "closed"
+    if wave.status in {WaveStatus.FAILED, WaveStatus.ABANDONED}:
+        return "forked"
+    return None
+
+
 def build_liveness_watcher(
     *,
     is_alive: LivenessProbe | None = None,
@@ -715,52 +809,82 @@ def build_liveness_watcher(
     Returns:
         A :class:`LaneWatcher` resolving each lane to its terminal outcome.
     """
-    probe = is_alive if is_alive is not None else _default_liveness
-    now = clock if clock is not None else time.monotonic
-    rest = sleep if sleep is not None else time.sleep
+    return _LivenessWatcher(
+        probe=is_alive if is_alive is not None else _default_liveness,
+        now=clock if clock is not None else time.monotonic,
+        rest=sleep if sleep is not None else time.sleep,
+        stall_deadline=stall_deadline,
+        poll_seconds=poll_seconds,
+    )
 
-    def _watch(ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
+
+@dataclass
+class _LivenessWatcher:
+    """The status-poll watcher with a pgid liveness probe + stall deadline -- W05.
+
+    A callable :data:`LaneWatcher` (not a closure) so each per-poll concern is a
+    method with its own complexity budget. Built by :func:`build_liveness_watcher`
+    with the live probe / clock / sleep (or injected fakes under test).
+
+    Attributes:
+        probe: Liveness probe (``pgid -> bool``).
+        now: Monotonic clock for the stall deadline.
+        rest: Sleep callable between polls.
+        stall_deadline: Grace seconds after the pgid first reads dead before fork.
+        poll_seconds: Seconds slept between status polls.
+    """
+
+    probe: LivenessProbe
+    now: Callable[[], float]
+    rest: Callable[[float], None]
+    stall_deadline: float
+    poll_seconds: float
+
+    def _poll_outcome(self, state_path: Path, lane: FleetLane) -> LaneOutcome | None:
+        """Return the lane's terminal outcome this poll, or ``None`` if in flight.
+
+        A vanished / terminal wave resolves immediately
+        (:func:`_status_terminal_outcome`), an open needs_user pause (W09)
+        resolves ``"needs_user"``, else the lane is still in flight (``None``).
+        """
+        wave = load_state(state_path).waves.get(lane.wave_id)
+        terminal = _status_terminal_outcome(wave)
+        if terminal is not None:
+            return terminal
+        if _has_open_pause(state_path, lane.wave_id):
+            logger.info(f"liveness_watcher wave={lane.wave_id} status=needs_user")
+            return "needs_user"
+        return None
+
+    def _liveness_forked(self, lane: FleetLane, deadline: _StallDeadline) -> bool:
+        """Return whether the dead-pgid stall deadline has elapsed this poll -- W05.
+
+        A lane with no addressable pgid (or a live group) resets the deadline and
+        keeps polling; a dead group starts / continues the deadline and forks once
+        the grace window elapses.
+        """
+        if lane.pgid is not None and not self.probe(lane.pgid):
+            return deadline.observe_dead(wave_id=lane.wave_id, pgid=lane.pgid)
+        deadline.observe_alive()
+        return False
+
+    def __call__(self, ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
+        """Block-poll *lane* to its terminal outcome (the :data:`LaneWatcher` body)."""
         if ctx.state_path is None:
             # Stateless context cannot poll a status -- treat the lane as forked
             # so the loop frees the slot rather than spinning.
             return "forked"
         state_path = Path(ctx.state_path)
-        # Wall-clock of the FIRST poll that observed the pgid dead; ``None`` while
-        # the group is still alive (or the lane carries no addressable pgid).
-        dead_since: float | None = None
+        deadline = _StallDeadline(now=self.now, stall_deadline=self.stall_deadline)
         while True:
-            wave = load_state(state_path).waves.get(lane.wave_id)
-            if wave is None:
+            outcome = self._poll_outcome(state_path, lane)
+            if outcome is not None:
+                return outcome
+            # The wave is still in flight. The liveness deadline forks a lane
+            # whose process group has been dead past the grace window.
+            if self._liveness_forked(lane, deadline):
                 return "forked"
-            if wave.status is WaveStatus.CLOSED:
-                return "closed"
-            if wave.status in {WaveStatus.FAILED, WaveStatus.ABANDONED}:
-                return "forked"
-            # The wave is still in flight. Probe the lane's process-group
-            # liveness; a lane with no addressable pgid has nothing to probe, so
-            # it keeps the pre-W05 status-poll-forever behaviour.
-            if lane.pgid is not None and not probe(lane.pgid):
-                if dead_since is None:
-                    dead_since = now()
-                    logger.info(
-                        f"liveness_watcher wave={lane.wave_id} pgid={lane.pgid} status=dead "
-                        f"deadline={stall_deadline}"
-                    )
-                elif now() - dead_since >= stall_deadline:
-                    # The group is gone AND the wave did not flip terminal within
-                    # the grace window: resolve the wedged lane to a fork.
-                    logger.warning(
-                        f"liveness_watcher wave={lane.wave_id} pgid={lane.pgid} "
-                        f"status=stalled-dead outcome=forked"
-                    )
-                    return "forked"
-            else:
-                # Alive (or unaddressable): reset any prior dead observation -- a
-                # transiently-unreadable group that recovered is not stalled.
-                dead_since = None
-            rest(poll_seconds)
-
-    return _watch
+            self.rest(self.poll_seconds)
 
 
 def _default_watcher(ctx: MethodContext, lane: FleetLane) -> LaneOutcome:
@@ -2606,10 +2730,15 @@ def kill_lane(
     ``delivered=False`` rather than raising), so the lane is deregistered and
     the kill is reported successful.
 
-    When no live killable lane resolves -- no fleet run armed, no lane for the
-    pair, or a lane carrying no addressable ``pgid`` (``killable=False``) --
-    the function returns a typed not-found (``killed=False`` + ``reason``) and
-    signals nothing: it never fakes a kill on an unaddressable lane.
+    When no live fleet lane resolves (no fleet run armed, or no lane for the
+    pair) the kill FALLS BACK to the wave's single-wave dispatched session (W09):
+    a wave dispatched via ``eawf dispatch wave`` (no fleet run) records its child
+    pid on the matching :class:`~eawf.kernel.state.models.SessionAttempt`, so the
+    kill resolves that ``subprocess_pid`` and signals its group -- a single-wave
+    spawn is killable even without a fleet run. Only when NEITHER a live lane NOR
+    a session pid resolves -- or a lane / session carrying no addressable pid --
+    does the function return a typed not-found (``killed=False`` + ``reason``) and
+    signal nothing: it never fakes a kill on an unaddressable target.
 
     Args:
         ctx: Daemon method context -- supplies ``state_path`` (the registry +
@@ -2627,17 +2756,19 @@ def kill_lane(
 
     Returns:
         A :class:`LaneKillResult` -- ``killed=True`` + the cancel result on a
-        signalled lane, or ``killed=False`` + a not-found reason otherwise.
+        signalled lane / session, or ``killed=False`` + a not-found reason
+        otherwise.
     """
     signal_group = cancel if cancel is not None else cancel_process_group
     run = load_state(Path(ctx.state_path)).fleet_run if ctx.state_path is not None else None
-    if run is None:
-        logger.info(f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=no-fleet-run")
-        return LaneKillResult(killed=False, reason="no-fleet-run", cancel=None)
     lane = resolve_lane(run, wave_id=wave_id, attempt=attempt)
     if lane is None:
-        logger.info(f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=no-lane")
-        return LaneKillResult(killed=False, reason="no-lane", cancel=None)
+        # No live fleet lane: fall back to the single-wave dispatched session's
+        # recorded child pid (W09) so a non-fleet ``eawf dispatch wave`` spawn is
+        # still killable.
+        return _kill_session_pid(
+            ctx, wave_id=wave_id, attempt=attempt, hard=hard, signal_group=signal_group
+        )
     if not lane.killable or lane.pgid is None:
         logger.info(
             f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=unkillable-lane"
@@ -2650,6 +2781,62 @@ def kill_lane(
     logger.info(
         f"kill_lane wave={wave_id} attempt={attempt} pgid={lane.pgid} "
         f"hard={hard} delivered={result.delivered} killed=true"
+    )
+    return LaneKillResult(killed=True, reason=None, cancel=result)
+
+
+def _kill_session_pid(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    attempt: int,
+    hard: bool,
+    signal_group: Callable[..., CancelResult],
+) -> LaneKillResult:
+    """Kill a single-wave dispatched session's spawned process group -- W09.
+
+    The non-fleet kill fallback: a wave dispatched via ``eawf dispatch wave`` (no
+    fleet run) records its spawned child pid on the matching
+    :attr:`~eawf.kernel.state.models.SessionAttempt.subprocess_pid` rather than a
+    :class:`FleetLane`. This resolves that pid for ``(wave_id, attempt)`` and
+    signals its group (SIGKILL when *hard*, else SIGTERM), so the operator can
+    halt a single dispatched session even with no armed fleet run. The child is
+    its own group leader (the adapter spawns ``start_new_session=True``), so the
+    pid IS the pgid.
+
+    Returns a typed not-found when no state is configured (``no-fleet-run``, the
+    no-run reason the pre-W09 path used), the wave / attempt has no recorded
+    session (``no-session``), or the session recorded no pid (``unkillable-
+    session``) -- it never fakes a kill on an unaddressable session.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path``.
+        wave_id: ``W<NN>`` wave whose dispatched session to kill.
+        attempt: 1-based dispatch attempt keying the session row.
+        hard: SIGKILL when ``True``, else SIGTERM.
+        signal_group: The resolved one-shot group-signal seam.
+
+    Returns:
+        A :class:`LaneKillResult` -- ``killed=True`` + the cancel result on a
+        signalled session, or ``killed=False`` + a not-found reason otherwise.
+    """
+    if ctx.state_path is None:
+        logger.info(f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=no-fleet-run")
+        return LaneKillResult(killed=False, reason="no-fleet-run", cancel=None)
+    wave = load_state(Path(ctx.state_path)).waves.get(wave_id)
+    session = wave.sessions.get(attempt) if wave is not None else None
+    if session is None:
+        logger.info(f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=no-session")
+        return LaneKillResult(killed=False, reason="no-session", cancel=None)
+    if session.subprocess_pid is None:
+        logger.info(
+            f"kill_lane wave={wave_id} attempt={attempt} killed=false reason=unkillable-session"
+        )
+        return LaneKillResult(killed=False, reason="unkillable-session", cancel=None)
+    result = signal_group(session.subprocess_pid, hard=hard)
+    logger.info(
+        f"kill_lane wave={wave_id} attempt={attempt} session_pid={session.subprocess_pid} "
+        f"hard={hard} delivered={result.delivered} killed=true source=session"
     )
     return LaneKillResult(killed=True, reason=None, cancel=result)
 
@@ -3193,6 +3380,46 @@ def shutdown_drive(*, timeout: float = 5.0) -> None:
     logger.info(f"shutdown_drive handle={active.handle_id!r} joined={not active.thread.is_alive()}")
 
 
+def _resolve_run_block_authority(ctx: MethodContext) -> BlockAuthority:
+    """Resolve the run's jury block authority through the close-gate resolver -- W09.
+
+    The fleet loop's DL-5 safety gate downgrades a high / ui lane's clean close to
+    a fork UNLESS the cross-vendor jury has EARNED blocking authority. Before W09
+    the loop always ran under the uncalibrated :attr:`BlockAuthority.ADVISORY`
+    default, so a calibrated jury could never enable high-tier auto-close even
+    after passing its trust floors. This resolves the run's authority through the
+    SAME resolver the wave-close gate uses
+    (:func:`eawf.runtime.daemon.methods.state._resolve_jury_block_authority` over
+    the active :class:`~eawf.platform.profiles.models.VerifyBlock`), so a drive
+    auto-closes a high-tier lane exactly when the close gate would -- one
+    authority source, not a drive-local default that drifts from the gate.
+
+    Default-advisory by construction: the validation substrate is empty today, so
+    the resolver returns :attr:`BlockAuthority.ADVISORY` and high / ui lanes fork.
+    A stateless context (no ``state_path``) likewise resolves advisory.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path``.
+
+    Returns:
+        The :class:`BlockAuthority` the jury has earned for this run.
+    """
+    if ctx.state_path is None:
+        return BlockAuthority.ADVISORY
+    from eawf.runtime.daemon.methods.state import _resolve_jury_block_authority
+    from eawf.workflow.verify.readiness import load_active_verify_block
+
+    state_path = Path(ctx.state_path)
+    state = load_state(state_path)
+    scope_id = state.current.project_code
+    verify_block = load_active_verify_block(scope_id, state, repo_root=state_path.parent.parent)
+    authority = _resolve_jury_block_authority(
+        state, state_path=state_path, verify_block=verify_block
+    )
+    logger.info(f"_resolve_run_block_authority authority={authority.value}")
+    return authority
+
+
 def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveHandle:
     """Arm a drive + run its drain on a worker thread, returning a handle -- W01.
 
@@ -3232,6 +3459,10 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
     if not args.frontier:
         raise LifecycleError("cannot arm fleet drive: ready frontier is empty")
     handle_id = f"fleet-run-{uuid.uuid4().hex[:12]}"
+    # W09: resolve the run's jury block authority through the SAME resolver the
+    # close gate uses, so a high / ui lane auto-closes exactly when the close
+    # gate would (default-advisory until the jury is calibrated).
+    block_authority = _resolve_run_block_authority(ctx)
     # Paused arm: stage the frontier IDLE on the calling thread + return; no
     # worker thread is started (a paused state claims nothing).
     if _dispatch_paused(ctx):
@@ -3245,6 +3476,7 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
             usd_cap=args.usd_cap,
             waves_cap=args.waves_cap,
             hard_halt=args.hard_halt,
+            block_authority=block_authority,
         )
         logger.info(
             f"start_background_drive paused handle={handle_id!r} run_state={run.run_state.value}"
@@ -3270,6 +3502,7 @@ def start_background_drive(ctx: MethodContext, args: DriveParams) -> FleetDriveH
                 waves_cap=args.waves_cap,
                 hard_halt=args.hard_halt,
                 cancel=cancel,
+                block_authority=block_authority,
             )
         except Exception:  # pragma: no cover - defensive: never leak from the thread
             logger.exception(f"start_background_drive drain failed handle={handle_id!r}")

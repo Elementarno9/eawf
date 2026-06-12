@@ -117,9 +117,9 @@ _RUNTIME_TRIPLE: dict[RuntimeId, RuntimeTriple] = {
 
 
 #: Session-policy values accepted by :func:`dispatch`. Only ``"fresh"``
-#: runs end-to-end in W07; ``"continue"`` is rejected with -32602
-#: invalid params, and ``"hybrid"`` falls through to the fresh path
-#: (since no prior attempts exist for the wave).
+#: runs end-to-end; ``"continue"`` is rejected with -32602 invalid params
+#: (the ``--continue`` resume + V5 fallback path is deferred), and ``"hybrid"``
+#: falls through to the fresh path (since no prior attempts exist for the wave).
 SessionPolicy = Literal["fresh", "continue", "hybrid"]
 
 #: Signals accepted by :func:`kill`. ``"halt"`` (default) and the legacy
@@ -137,13 +137,14 @@ _HARD_KILL_SIGNALS: frozenset[str] = frozenset({"kill"})
 class DispatchOutcome(BaseModel):
     """Post-dispatch metering the caller hands :func:`dispatch`.
 
-    The live subprocess spawn + token metering that will populate this
-    automatically lands in a later wave; until then the caller supplies
-    the served model + token tally + priced cost, plus an optional
-    error-driven fallback. When :attr:`primary_error` is set the
-    dispatch runner emits a ``runtime_switched`` event and the
-    :attr:`fallback_runtime` serves the dispatch; the cost is always
-    billed against the serving attempt.
+    This is the HAND-FED-OUTCOME path: a caller that already metered a dispatch
+    out of band supplies the served model + token tally + priced cost (plus an
+    optional error-driven fallback) so the dispatch runner emits the C09 events
+    without spawning. The live-spawn path (``spawn=True``) derives its own metered
+    outcome from a real subprocess instead and is mutually exclusive with this.
+    When :attr:`primary_error` is set the dispatch runner emits a
+    ``runtime_switched`` event and the :attr:`fallback_runtime` serves the
+    dispatch; the cost is always billed against the serving attempt.
 
     Attributes:
         model: Model identifier the serving runtime priced its cost
@@ -240,10 +241,10 @@ class DispatchParams(BaseModel):
 class DispatchPlan(BaseModel):
     """Dispatch-plan result.
 
-    A later wave turns this payload into an ``AddSessionAttempt``
-    mutation against ``state.json`` + the real subprocess spawn. The
-    daemon returns the plan so callers can exercise the fresh-path shape
-    (attempt number, session id, typed annotation + attempt rows).
+    On the plan-only / hand-fed-outcome paths the daemon returns this plan
+    (attempt number, session id, typed annotation + attempt rows) without a
+    subprocess. On the live-spawn path (``spawn=True``) the plan carries the real
+    captured child ``pid`` + the registered session id off the actual spawn.
 
     When the caller supplies a :class:`DispatchOutcome` and the daemon
     context carries an ``event_path``, :attr:`event_ids` carries the ids
@@ -264,7 +265,8 @@ class DispatchPlan(BaseModel):
             spawn's ``on_spawn`` callback on the live-spawn path.
         runtime: Resolved runtime adapter id (plugin spelling).
         annotation: Typed dispatch annotation for the attempt.
-        session_attempt: Typed session-attempt row a later wave persists.
+        session_attempt: Typed session-attempt row for the dispatch (the
+            live-spawn path persists it on the registered session).
         event_ids: Ids of the C09 envelopes emitted to the live event
             log, in append order; empty when no outcome was supplied and
             no live spawn ran. On the live-spawn path these are the
@@ -306,18 +308,20 @@ class KillParams(BaseModel):
 
 
 class KillResult(BaseModel):
-    """Result of :func:`kill` -- whether the lane's process group was signalled.
+    """Result of :func:`kill` -- whether a process group was signalled.
 
     Attributes:
-        killed: ``True`` when a live fleet lane resolved for the
-            ``(wave_id, attempt)`` pair and its process group was signalled
-            (including the already-dead race, which still counts as reaped);
-            ``False`` when no live lane resolved so nothing was signalled.
+        killed: ``True`` when a live fleet lane OR a single-wave dispatched
+            session resolved for the ``(wave_id, attempt)`` pair and its process
+            group was signalled (including the already-dead race, which still
+            counts as reaped); ``False`` when neither resolved so nothing was
+            signalled.
         signal: The :data:`KillSignal` the caller requested, echoed back so the
             response records which rung of the ladder was attempted.
         reason: A short not-found cause when *killed* is ``False`` (e.g.
-            ``no-fleet-run`` / ``no-lane`` / ``unkillable-lane``); ``None`` on a
-            successful kill.
+            ``no-fleet-run`` / ``unkillable-lane`` for a lane, or
+            ``no-session`` / ``unkillable-session`` for a dispatched session);
+            ``None`` on a successful kill.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -365,8 +369,8 @@ def _pick_runtime(*, override: str | None, preference: list[str] | None) -> str:
 
     Raises:
         ValueError: When neither *override* nor *preference* yields a
-            runtime. (W08 layers a daemon-config default in front of
-            this; W07 fails fast so the operator notices the gap.)
+            runtime -- the dispatch fails fast so the operator notices the gap
+            rather than silently picking an arbitrary runtime.
     """
     if override:
         return override
@@ -492,17 +496,18 @@ def _build_plan(
         state_path: Optional path to ``state.json``.
 
     Returns:
-        A :class:`DispatchPlan` carrying the typed annotation and
-        session-attempt payload W09 will persist.
+        A :class:`DispatchPlan` carrying the typed annotation + session-attempt
+        payload for the plan-only / hand-fed-outcome dispatch (no subprocess).
 
     Raises:
         ValueError: When *wave_id* is unknown in the on-disk state.
     """
     session_id = str(uuid.uuid4())
     now = datetime.now(UTC)
-    # The opaque handle here is the URN-form sentinel for the plan; W09
-    # will substitute the daemon-registered handle once the dispatcher
-    # opens the runtime subprocess and resolves the session-log path.
+    # The opaque handle here is the URN-form sentinel for the plan-only /
+    # hand-fed-outcome path; the live-spawn path (``_spawn_and_dispatch``)
+    # substitutes the adapter-resolved session-log handle off the real spawned
+    # subprocess instead.
     handle = f"urn:eawf:v1:session-log:{runtime}:{uuid.uuid4().hex}"
 
     attempt = 1
@@ -1227,15 +1232,21 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     returns ``killed=true``. A group already dead at signal time still counts
     as reaped (the kill primitive reports it rather than raising).
 
-    A wave with no live lane -- no fleet run armed, no lane for the pair, or a
-    lane carrying no addressable ``pgid`` -- returns ``killed=false`` + a typed
-    ``reason`` and signals nothing, so the response never fakes a kill on an
-    unaddressable lane.
+    When no live fleet lane resolves (no fleet run armed, or no lane for the
+    pair) the kill FALLS BACK to the wave's single-wave dispatched session (W09):
+    a wave dispatched via ``eawf dispatch wave`` (no fleet run) records its child
+    pid on the matching ``SessionAttempt``, so the kill resolves that pid and
+    signals its group -- a single dispatched session is killable even without a
+    fleet run. Only when NEITHER a live lane NOR a session pid resolves (or the
+    lane / session carries no addressable pid) does the handler return
+    ``killed=false`` + a typed ``reason`` and signal nothing, so the response
+    never fakes a kill on an unaddressable target.
 
     Args:
-        ctx: Server context; ``ctx.state_path`` carries the lane registry +
-            the deregister write target. A stateless context resolves no run,
-            so every kill returns the ``no-fleet-run`` not-found.
+        ctx: Server context; ``ctx.state_path`` carries the lane registry + the
+            session table + the deregister write target. A stateless context
+            resolves neither, so every kill returns the ``no-fleet-run``
+            not-found.
         params: JSON-RPC params per :class:`KillParams`.
 
     Returns:
