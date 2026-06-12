@@ -8091,6 +8091,20 @@
       "scope_id": "P30-I18-W09",
       "status": "done",
       "updated_at": "2026-06-12T10:19:41.029726Z"
+    },
+    "P30-I18-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I18-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I18-W10",
+      "model": null,
+      "scope_id": "P30-I18-W10",
+      "status": "done",
+      "updated_at": "2026-06-12T10:52:08.332289Z"
     }
   },
   "agent_sessions": {
@@ -11881,7 +11895,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -21307,6 +21321,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I18-W09",
       "updated_at": "2026-06-12T10:10:08.992300Z"
+    },
+    "P30-I18-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I18-W10-bucket-20260612T102703Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I18-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I18-W10",
+      "updated_at": "2026-06-12T10:27:03.284752Z"
     }
   },
   "fleet_run": null,
@@ -23410,7 +23437,9 @@
         "P30-I18-W07",
         "P30-I18-W08",
         "P30-I18-W09",
-        "P30-I18-W10"
+        "P30-I18-W10",
+        "P30-I18-W11",
+        "P30-I18-W12"
       ]
     },
     "P30-I19": {
@@ -24500,7 +24529,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T10:26:38.645476Z",
+  "updated_at": "2026-06-12T10:53:27.683610Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -92599,10 +92628,10 @@
     "P30-I18-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i18",
+      "claimed_at": "2026-06-12T10:27:03.284286Z",
+      "closed_at": "2026-06-12T10:52:08.332289Z",
+      "commit": "2d06b561f52acae99cc4ff8a4e906283c3467cfe",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -92630,12 +92659,12 @@
       },
       "iter_id": "P30-I18",
       "opened_at": "2026-06-12T10:26:38.645256Z",
-      "outcome": null,
+      "outcome": "Fixed 3 close regressions (StoreKind research_round/operator_input registered in kinds registry + enum pin + autogen regen); folded campaign claims into state.claims via canonical writer; wired prune_round_carryover into the run loop; idle-gate guards both. 142 tests + idle-gate green.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -92653,6 +92682,130 @@
         }
       ],
       "title": "Complete I18 binding: claim fold, pruning loop, store-kind registry",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I18-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/observability/doctor/checks.py",
+        "src/eawf/surfaces/tui/modes/doctor.py",
+        "src/eawf/platform/install/instrument_probe.py",
+        "src/eawf/workflow/lifecycle/wave_sha.py"
+      ],
+      "gates": [],
+      "id": "P30-I18-W11",
+      "intent": {
+        "desired_outcome": "Doctor gather isolates child stdin WITHOUT touching the live App's fd 0; no crash; the probe-leak still closed.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Drop detached_tty_stdin's global fd-0 swap; pass stdin=subprocess.DEVNULL at the probe subprocess.run sites (instrument_probe.py + wave_sha.py); update the idle-gate check + W29 tests."
+        ],
+        "priority_rationale": "Doctor crashes the whole TUI on entry - worse than the original leak; a hard regression.",
+        "problem": "Doctor mode crashes the TUI with OSError Errno 9 Bad file descriptor: W29 detached_tty_stdin re-points the process-global fd 0 to /dev/null while Textual's async stdin reader owns fd 0, corrupting it.",
+        "risks": [
+          "Must keep the probe-reply leak closed; per-subprocess DEVNULL achieves the same isolation without global fd surgery."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I18",
+      "opened_at": "2026-06-12T10:53:27.117983Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Doctor gather passes stdin=DEVNULL at each probe subprocess.run (no process-global fd-0 redirect); switching to doctor does not crash and opens no config/help pane; idle-gate + W29 tests updated and green.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Doctor gather passes stdin=DEVNULL at each probe subprocess.run (no process-global fd-0 redirect); switching to doctor does not crash and opens no config/help pane; idle-gate + W29 tests updated and green.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix doctor-mode TUI crash from process-global stdin redirect",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I18-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/empty_state.py",
+        "src/eawf/surfaces/tui/modes/autopilot.py",
+        "src/eawf/surfaces/tui/modes/feed.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "src/eawf/surfaces/tui/modes/evidence.py"
+      ],
+      "gates": [],
+      "id": "P30-I18-W12",
+      "intent": {
+        "desired_outcome": "The seal hero is vertically + horizontally centered as one block in each of the four empty panes, matching research.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Give seal_empty_hero a full-height (height: 1fr) center-aligned region so the seal+copy block centers vertically; apply consistently across the 4 modes; regen goldens."
+        ],
+        "priority_rationale": "Inconsistent vertical alignment reads as broken layout across the empty modes.",
+        "problem": "On watch/evidence/feed/autopilot the seal sits high (top third), not vertically centered like research: the W30 per-mode hero mounts left the seal block top-anchored, not centered in the full pane.",
+        "risks": [
+          "Per-mode layouts differ (result line",
+          "ledger panes); keep those honest while centering the empty hero."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I18",
+      "opened_at": "2026-06-12T10:53:27.683412Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The autopilot/feed/agent_watch/evidence empty heroes render the seal vertically AND horizontally centered as one block (matching research); regenerated goldens show the centered block; tests pass.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The autopilot/feed/agent_watch/evidence empty heroes render the seal vertically AND horizontally centered as one block (matching research); regenerated goldens show the centered block; tests pass.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Vertically center the ASCII-art seal across the four empty heroes",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
