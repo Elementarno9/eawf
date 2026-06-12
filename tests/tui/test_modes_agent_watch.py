@@ -1040,3 +1040,102 @@ def test_agent_watch_pane_keeps_chassis_brand(tmp_path: Path) -> None:
             assert "Watch" in header_row
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W08 -- the FA4 live-output producer feeds the App buffer + the agent-watch tail
+# --------------------------------------------------------------------------
+
+
+def _agent_output_envelope(wave_id: str, lines: list[str]) -> Envelope:
+    """Build an ``agent.output`` envelope the way the dispatch-runner producer does."""
+    from datetime import UTC, datetime
+
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_EVENT_TYPE
+
+    now = datetime.now(UTC)
+    return Envelope(
+        schema_version="1.0",
+        id="EV-agentoutput1",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=f"agent_output wave={wave_id}",
+        payload={
+            "timestamp": now.isoformat(),
+            "event_type": AGENT_OUTPUT_EVENT_TYPE,
+            "actor": "daemon",
+            "command": "dispatch_runner.emit_agent_output",
+            "args_hash": "",
+            "status": "ok",
+            "message": f"agent_output wave={wave_id}",
+            "extras": {"wave_id": wave_id, "lines": "\n".join(lines), "line_count": len(lines)},
+        },
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def test_app_routes_agent_output_event_to_buffer_and_tail(tmp_path: Path) -> None:
+    """W08: an agent.output event feeds the App ring buffer + the agent-watch tail.
+
+    The dispatch-runner producer publishes spawned-child stdout as an
+    ``agent.output`` event; the App's _on_event routes it to the raw-output
+    buffer (the live tail seed) AND fans each line to the agent-watch zoom's
+    tail, so the operator reads the agent's OWN words live -- the producer is no
+    longer idle.
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            # Deliver an agent.output event for the watched wave through the App
+            # event seam (the real producer->consumer bridge).
+            await app._on_event(_agent_output_envelope(_WAVE, ["building...", "done."]))
+            await settle_screen(pilot)
+            # The App ring buffer recorded the rows (the tail-seed source).
+            assert (_WAVE, "building...") in app.live_output_buffer
+            assert (_WAVE, "done.") in app.live_output_buffer
+            # The agent-watch tail rendered the lines (the consumer fan-out).
+            tail = pane.query_one(f"#{WATCH_OUTPUT_ID}", OutputTail)
+            rows = [str(r.render()) for r in tail.query(f".{OUTPUT_TAIL_ROW_CLASS}").results()]
+            assert any("building..." in row for row in rows)
+            assert any("done." in row for row in rows)
+            assert tail.has_output
+
+    asyncio.run(body())
+
+
+def test_app_output_buffer_is_bounded(tmp_path: Path) -> None:
+    """W08: the raw-output ring buffer is bounded (the oldest lines scroll off).
+
+    A producer chattier than the ring cap never grows the buffer unbounded: the
+    buffer holds at most LIVE_OUTPUT_BUFFER_MAX rows, and the FRESHEST lines win
+    (the oldest are evicted left).
+    """
+    from eawf.surfaces.tui.app import LIVE_OUTPUT_BUFFER_MAX
+
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            # Feed far more lines than the ring cap straight through append_output.
+            for n in range(LIVE_OUTPUT_BUFFER_MAX + 100):
+                app.append_output(_WAVE, f"line {n}")
+            buffer = app.live_output_buffer
+            assert len(buffer) == LIVE_OUTPUT_BUFFER_MAX
+            # The freshest line survived; the oldest scrolled off.
+            assert buffer[-1] == (_WAVE, f"line {LIVE_OUTPUT_BUFFER_MAX + 99}")
+            assert (_WAVE, "line 0") not in buffer
+
+    asyncio.run(body())

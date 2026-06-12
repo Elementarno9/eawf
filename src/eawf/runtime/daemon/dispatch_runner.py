@@ -428,6 +428,111 @@ def enforcement_sink(ctx: MethodContext) -> Callable[[SandboxEnforcementEvent], 
     return _sink
 
 
+#: The ``event_type`` the live-output producer stamps on its envelope -- the
+#: discriminator the TUI App keys on to route a row to the agent-watch tail
+#: (FA4, W08) rather than the typed lifecycle stream.
+AGENT_OUTPUT_EVENT_TYPE: str = "agent.output"
+
+#: Ring-buffer cap on the number of raw output lines one spawned session fans to
+#: the live tail (W08). A spawn can emit a very large answer; capping the lines
+#: the producer publishes bounds the event payload + the App-side
+#: ``live_output_buffer`` so the tail never grows unbounded -- the operator reads
+#: the freshest output, the oldest scrolls off. The TAIL of the output is kept
+#: (the most recent lines) since that is what an operator watching a live run
+#: cares about.
+AGENT_OUTPUT_LINE_CAP: int = 200
+
+#: Max characters of any single captured output line the producer publishes, so a
+#: pathological no-newline blob cannot blow the event payload.
+_AGENT_OUTPUT_LINE_MAX_CHARS: int = 2000
+
+
+def capture_output_lines(text: str, *, cap: int = AGENT_OUTPUT_LINE_CAP) -> list[str]:
+    """Split a spawn's captured *text* into the bounded tail of output lines -- W08, pure.
+
+    The live-output producer captures the spawned child's stdout/stderr as the
+    completed spawn's answer text; this splits it into non-empty lines and keeps
+    the LAST *cap* of them (the freshest tail the operator watches), each bounded
+    to :data:`_AGENT_OUTPUT_LINE_MAX_CHARS` so a no-newline blob cannot blow the
+    payload. Blank lines are dropped so the tail carries signal, not whitespace.
+
+    Args:
+        text: The spawn's captured output text.
+        cap: Maximum lines to keep (the ring-buffer tail cap).
+
+    Returns:
+        The bounded tail of non-empty output lines, oldest-first.
+    """
+    lines = [line[:_AGENT_OUTPUT_LINE_MAX_CHARS] for line in text.splitlines() if line.strip()]
+    return lines[-cap:] if cap > 0 else []
+
+
+def emit_agent_output(ctx: MethodContext, *, wave_id: str, text: str) -> str | None:
+    """Fan a spawned session's captured stdout/stderr to the live output tail -- W08.
+
+    The FA4 producer the agent-watch tail consumes: the dispatch runner captures
+    the spawned child's output (the completed spawn's answer text) and publishes
+    it as a single ``agent.output`` event carrying the bounded tail of output
+    lines (:func:`capture_output_lines`). The TUI App keys on the
+    :data:`AGENT_OUTPUT_EVENT_TYPE` discriminator to route the lines to the
+    agent-watch session zoom's tail (``EaApp.append_output``) rather than the
+    typed lifecycle stream, so the operator reads the agent's OWN words live.
+
+    The event is persisted through the daemon canonical event writer (the same
+    portalock + fsync path every dispatch event takes) and published on the bus.
+    A spawn that produced no capturable output is a no-op (no empty event); a
+    bus-less / event-less context (a stateless unit test) is likewise a no-op.
+
+    Args:
+        ctx: Daemon method context -- supplies ``event_path`` + ``bus``.
+        wave_id: ``W<NN>`` wave the spawned session scopes to (the tail filters
+            on this so a multi-lane fleet routes each line to its own session).
+        text: The spawn's captured stdout/stderr text.
+
+    Returns:
+        The id of the appended envelope, or ``None`` when there was no output to
+        fan (or no event store configured).
+    """
+    if ctx.event_path is None:
+        return None
+    lines = capture_output_lines(text)
+    if not lines:
+        return None
+    now = datetime.now(UTC)
+    summary = f"agent_output wave={wave_id} lines={len(lines)}"
+    # The EventPayload ``extras`` map is scalar-valued (str|int|float|bool), so the
+    # bounded line tail rides as one newline-joined ``lines`` string the App splits
+    # back on the consumer side; ``line_count`` carries the count for the renderer.
+    payload = EventPayload(
+        timestamp=now,
+        event_type=AGENT_OUTPUT_EVENT_TYPE,
+        actor="daemon",
+        command="dispatch_runner.emit_agent_output",
+        args_hash="",
+        status="ok",
+        message=summary,
+        extras={"wave_id": wave_id, "lines": "\n".join(lines), "line_count": len(lines)},
+    ).model_dump(mode="json")
+    envelope = Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+    append_envelope(Path(ctx.event_path), envelope)
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(envelope)
+    ctx.last_event_id = envelope.id
+    logger.info(f"emit_agent_output wave={wave_id} lines={len(lines)} envelope_id={envelope.id!r}")
+    return envelope.id
+
+
 def emit_runtime_switched(
     ctx: MethodContext,
     *,
@@ -1051,6 +1156,7 @@ def run_dispatch(
     report_body: AgentReportBody | None = None,
     pgid: int | None = None,
     enforce: EnforceMode = DEFAULT_ENFORCE,
+    output_text: str | None = None,
 ) -> DispatchResult:
     """Drive one wave dispatch attempt, emitting the C09 dispatch events.
 
@@ -1106,10 +1212,16 @@ def run_dispatch(
             body from *outcome*. The live-spawn caller supplies this so the
             persisted report carries the agent's words; the hand-fed-outcome
             caller leaves it ``None`` (the synthetic body is built).
+        output_text: Optional captured stdout/stderr of the spawned child
+            (FA4, W08). When supplied the runner fans its bounded line tail to
+            the live output tail via :func:`emit_agent_output` (an
+            ``agent.output`` event the TUI routes to the agent-watch zoom);
+            ``None`` (the hand-fed-outcome path) fans no output.
 
     Returns:
         A :class:`DispatchResult` naming the serving runtime, its attempt
-        id, whether a fallback fired, the emitted C09 event ids, and the
+        id, whether a fallback fired, the emitted C09 event ids (including the
+        ``agent.output`` envelope when *output_text* was fanned), and the
         ``agent_end`` report id (``None`` when no report was emitted).
 
     Raises:
@@ -1168,6 +1280,15 @@ def run_dispatch(
             trace_request_id=trace_request_id,
         )
     )
+
+    # FA4 (W08): fan the spawned child's captured stdout/stderr to the live
+    # output tail. The producer publishes the bounded line tail as an
+    # ``agent.output`` event the TUI App routes to the agent-watch session zoom;
+    # a hand-fed-outcome dispatch (no captured text) is a no-op.
+    if output_text is not None:
+        output_id = emit_agent_output(ctx, wave_id=wave_id, text=output_text)
+        if output_id is not None:
+            event_ids.append(output_id)
 
     # Fold the dispatch's token tally into Wave.tokens_consumed so the live
     # burn gauge advances during execution. Routes through the daemon

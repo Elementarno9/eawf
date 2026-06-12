@@ -365,6 +365,14 @@ class PaneErrorBoundary(Vertical):
 #: visible. Oldest envelopes drop off the tail once the cap is reached.
 LIVE_EVENT_BUFFER_MAX: int = 200
 
+#: Ring-buffer cap on the FA4 raw-output buffer (W08): the most-recent
+#: ``(wave_id, line)`` rows the dispatch runner fanned via ``agent.output``
+#: events. The agent-watch tail seeds + streams from this, so the cap bounds the
+#: live tail's memory -- a chatty spawn keeps only the freshest lines, the oldest
+#: scroll off. Sized above the producer's per-event line cap so a single spawn's
+#: output is not truncated by the buffer before the operator sees it.
+LIVE_OUTPUT_BUFFER_MAX: int = 500
+
 #: Cap on the reference back / forward navigation history. Each clicked
 #: reference target (a card the operator drilled into) is pushed onto the back
 #: ring; an unbounded history grows for the whole session on a long
@@ -696,6 +704,13 @@ class EaApp(App[None]):
         # ``run_coroutine_threadsafe``), so no extra lock is needed. Bounded
         # at LIVE_EVENT_BUFFER_MAX so an idle session never grows unbounded.
         self._live_event_buffer: deque[Envelope] = deque(maxlen=LIVE_EVENT_BUFFER_MAX)
+        # FA4 (W08) raw-output ring buffer: ``(wave_id, line)`` rows the dispatch
+        # runner fans via ``agent.output`` events (the agent-watch session zoom's
+        # tail seeds + streams from this). Bounded at LIVE_OUTPUT_BUFFER_MAX so a
+        # chatty spawn never grows it unbounded -- the freshest lines win, the
+        # oldest scroll off. Appends run on the event-loop thread (the binding
+        # marshals pushes back), so no extra lock is needed.
+        self._live_output_buffer: deque[tuple[str, str]] = deque(maxlen=LIVE_OUTPUT_BUFFER_MAX)
         # Mounted panes that want each live envelope pushed to them as it
         # arrives -- the live Feed pane and the agent-watch zoom (which
         # filters the same stream to one session). Each registers on mount +
@@ -900,9 +915,69 @@ class EaApp(App[None]):
             envelope: The live event envelope pushed by the daemon.
         """
         logger.debug(f"_on_event id={envelope.id!r} kind={envelope.kind.value!r}")
+        # FA4 (W08): an ``agent.output`` envelope carries a spawned session's raw
+        # stdout/stderr tail rather than a typed lifecycle row, so it routes to
+        # the raw-output buffer + tail fan-out, NOT the typed feed stream.
+        if self._route_agent_output(envelope):
+            return
         self._live_event_buffer.append(envelope)
         for listener in list(self._feed_listeners):
             listener.append_event(envelope)
+
+    def _route_agent_output(self, envelope: Envelope) -> bool:
+        """Route an ``agent.output`` envelope to the raw-output tail -- FA4, W08.
+
+        The dispatch runner fans a spawned child's captured stdout/stderr as an
+        ``agent.output`` event (:func:`~eawf.runtime.daemon.dispatch_runner.emit_agent_output`)
+        carrying the wave id + the newline-joined bounded line tail in its
+        payload extras. This splits the tail back into lines and feeds each to
+        :meth:`append_output` (the App ring + the agent-watch tail fan-out), then
+        reports it handled so the caller skips the typed-feed path. A non-output
+        envelope is left for the feed stream.
+
+        Args:
+            envelope: The live event envelope to inspect.
+
+        Returns:
+            ``True`` when the envelope was an ``agent.output`` row routed to the
+            tail, else ``False``.
+        """
+        from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_EVENT_TYPE
+
+        payload = envelope.payload
+        if not isinstance(payload, dict) or payload.get("event_type") != AGENT_OUTPUT_EVENT_TYPE:
+            return False
+        extras = payload.get("extras")
+        if not isinstance(extras, dict):
+            return True
+        wave_id = extras.get("wave_id")
+        joined = extras.get("lines")
+        if not isinstance(wave_id, str) or not isinstance(joined, str):
+            return True
+        for line in joined.split("\n"):
+            self.append_output(wave_id, line)
+        return True
+
+    def append_output(self, wave_id: str, line: str) -> None:
+        """Append one raw output *line* for *wave_id* to the buffer + tail -- FA4, W08.
+
+        The App-owned raw-output fan-out: records the ``(wave_id, line)`` row in
+        the bounded :attr:`_live_output_buffer` ring (so a tail mounted later
+        seeds the backlog) and pushes it to every registered listener that
+        exposes an ``append_output`` (the agent-watch session zoom, which renders
+        the line into its tail when it names the watched session's wave). Runs on
+        the event-loop thread, so the deque append + the fan-out need no lock.
+
+        Args:
+            wave_id: The wave the output line belongs to (the dispatching
+                session's ``scope_id``).
+            line: The raw stdout/stderr line the spawned agent emitted.
+        """
+        self._live_output_buffer.append((wave_id, line))
+        for listener in list(self._feed_listeners):
+            sink = getattr(listener, "append_output", None)
+            if callable(sink):
+                sink(wave_id, line)
 
     @property
     def live_event_buffer(self) -> tuple[Envelope, ...]:
@@ -916,6 +991,20 @@ class EaApp(App[None]):
             The buffered live envelopes in arrival order (oldest first).
         """
         return tuple(self._live_event_buffer)
+
+    @property
+    def live_output_buffer(self) -> tuple[tuple[str, str], ...]:
+        """Return a snapshot of the raw-output buffer, oldest-first -- FA4, W08.
+
+        The agent-watch session zoom seeds its tail from this on mount (filtered
+        to the watched session's wave) so a zoom opened mid-spawn shows the
+        output that arrived before the tail existed. A tuple copy keeps the
+        caller from mutating the deque.
+
+        Returns:
+            The buffered ``(wave_id, line)`` rows in arrival order (oldest first).
+        """
+        return tuple(self._live_output_buffer)
 
     @property
     def nav_position(self) -> NavPosition:
