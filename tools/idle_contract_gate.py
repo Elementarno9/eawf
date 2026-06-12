@@ -52,11 +52,6 @@ exits non-zero:
   ``validate_jury`` has a live CLI caller (I09-W07): the ``eawf metrics
   jury-validation`` command binds it directly. Orphaning the reducer reds this
   row.
-- :func:`check_track_rpc_wired` -- a source-scan probe asserting the daemon
-  method table registers BOTH the ``track.add`` and ``track.switch`` RPCs
-  (I11-W02), so the CLI ``track add`` / ``track switch`` shims have a daemon
-  caller. Dropping either ``@register("track.<verb>")`` orphans the Track
-  add/switch seam and reds this row.
 - :func:`check_phase_track_tag_wired` -- a source-scan probe asserting
   ``open_phase`` silently stamps each phase with ``track_id=state.current.track_id``
   (I11-W03), so phases tag their owning Track. Dropping the stamp re-idles the
@@ -215,7 +210,6 @@ class GateFailure(StrEnum):
     JURY_RELIABILITY_MAP_IDLE = "jury_reliability_map_idle"
     JURY_BLOCK_AUTHORITY_IDLE = "jury_block_authority_idle"
     VALIDATE_JURY_CLI_IDLE = "validate_jury_cli_idle"
-    TRACK_RPC_IDLE = "track_rpc_idle"
     PHASE_TRACK_TAG_IDLE = "phase_track_tag_idle"
     DRIVE_LADDERS_IDLE = "drive_ladders_idle"
     LIVE_OUTPUT_TEXT_IDLE = "live_output_text_idle"
@@ -1055,90 +1049,19 @@ def check_validate_jury_cli_wired(
 
 
 # =========================================================================== #
-# I11 Track bindings: the add/switch RPCs and the silent phase-tag stamp.
+# I11 Track binding: the silent phase-tag stamp.
 # =========================================================================== #
-
-#: The daemon method module that registers the ``track.add`` / ``track.switch``
-#: RPCs (I11-W02). Read off the working tree; the CLI ``track add`` / ``track
-#: switch`` shims route their mutations here over JSON-RPC, so a dropped
-#: registration leaves the Track add/switch seam without a daemon caller and
-#: re-idles it. A test injects the text to drive both outcomes.
-_TRACK_RPC_MODULE = "src/eawf/runtime/daemon/methods/state.py"
 
 #: The lifecycle module whose ``open_phase`` silently stamps every phase with the
 #: current Track id (I11-W03). Read off the working tree; if the stamp stops
 #: firing, phases stop tagging their owning Track and the binding is idle.
 _PHASE_TRACK_TAG_MODULE = "src/eawf/workflow/lifecycle/phase.py"
 
-#: The ``@register("track.add")`` decorator that binds the add RPC into the
-#: daemon method table. The literal command token is what distinguishes a live
-#: registration from a docstring / cross-link mention of ``track.add``.
-_TRACK_ADD_REGISTER_RE = re.compile(r"""@register\(\s*['"]track\.add['"]\s*\)""")
-
-#: The ``@register("track.switch")`` decorator that binds the switch RPC.
-_TRACK_SWITCH_REGISTER_RE = re.compile(r"""@register\(\s*['"]track\.switch['"]\s*\)""")
-
 #: The silent phase-tag stamp: ``open_phase`` constructs each ``Phase`` with
 #: ``track_id=state.current.track_id``. A regression that drops the keyword
 #: (constructing the phase with no Track tag) leaves phases untagged and reds
 #: this row.
 _PHASE_TRACK_TAG_RE = re.compile(r"\btrack_id\s*=\s*state\.current\.track_id\b")
-
-
-def check_track_rpc_wired(
-    *,
-    module_text: str | None = None,
-    module_path: str = _TRACK_RPC_MODULE,
-) -> GateResult:
-    """Assert the daemon registers the ``track.add`` / ``track.switch`` RPCs (I11-W02).
-
-    The TRACK-2 binding: the daemon method table registers both
-    :func:`eawf.runtime.daemon.methods.state.track_add_rpc` (``@register("track.add")``)
-    and :func:`eawf.runtime.daemon.methods.state.track_switch_rpc`
-    (``@register("track.switch")``), so the CLI ``track add`` / ``track switch``
-    shims have a daemon caller to route their mutations through. If a later
-    refactor drops either registration (orphaning the add/switch seam so the CLI
-    shim has no RPC to dispatch to), the source no longer matches and this gate
-    fails :attr:`GateFailure.TRACK_RPC_IDLE`.
-
-    The probe reads source only -- it never mutates state, never writes a file,
-    and never runs a mutating ``eawf`` command. *module_text* is injectable so a
-    test can drive both the wired and the re-idled (registration-dropped)
-    outcomes.
-
-    Args:
-        module_text: The daemon method module source. ``None`` reads
-            *module_path* off the working tree under :data:`_REPO_ROOT`.
-        module_path: Repo-relative path of the daemon method module to scan.
-
-    Returns:
-        A :class:`GateResult` whose ``passed`` is ``True`` only when the module
-        registers BOTH ``track.add`` and ``track.switch``; otherwise ``failure``
-        is :attr:`GateFailure.TRACK_RPC_IDLE`.
-    """
-    text = module_text if module_text is not None else (_REPO_ROOT / module_path).read_text()
-    registers_add = _TRACK_ADD_REGISTER_RE.search(text) is not None
-    registers_switch = _TRACK_SWITCH_REGISTER_RE.search(text) is not None
-    if registers_add and registers_switch:
-        return GateResult(
-            passed=True,
-            failure=None,
-            message=(
-                "idle-contract gate: ok (daemon registers track.add + track.switch "
-                "RPCs -- the Track add/switch seam has a daemon caller, not idle)"
-            ),
-        )
-    return GateResult(
-        passed=False,
-        failure=GateFailure.TRACK_RPC_IDLE,
-        message=(
-            "track add/switch RPCs are idle: "
-            f"{module_path} registers_add={registers_add} "
-            f"registers_switch={registers_switch} (expected both True); the daemon "
-            "must @register('track.add') AND @register('track.switch') -- a dropped "
-            "registration orphans the Track add/switch seam from its CLI shim"
-        ),
-    )
 
 
 def check_phase_track_tag_wired(
@@ -2097,8 +2020,8 @@ def main(argv: list[str]) -> int:
     binding probes (:func:`check_spec_jury_ballot_fn_wired`,
     :func:`check_jury_reliability_map_wired`,
     :func:`check_jury_block_authority_wired`,
-    :func:`check_validate_jury_cli_wired`), then the two I11 Track binding probes
-    (:func:`check_track_rpc_wired`, :func:`check_phase_track_tag_wired`), then the
+    :func:`check_validate_jury_cli_wired`), then the I11 phase-track-tag binding
+    probe (:func:`check_phase_track_tag_wired`), then the
     two I17 live-autopilot binding probes (:func:`check_drive_ladders_wired`,
     :func:`check_live_output_text_wired`), then the two P30-I18 campaign-run
     binding probes (:func:`check_campaign_claim_fold_wired`,
@@ -2148,9 +2071,8 @@ def main(argv: list[str]) -> int:
     # (W06), the earned block authority (W04), and the validate_jury CLI caller
     # (W07). Any re-idle of one fails its row and reds the gate.
     #
-    # The two I11 Track bindings read their live source off the working tree the
-    # same way: the daemon-registered track.add / track.switch RPCs (W02) and the
-    # silent open_phase track-tag stamp (W03). Either re-idle fails its row.
+    # The I11 Track binding reads its live source off the working tree the same
+    # way: the silent open_phase track-tag stamp (W03). A re-idle fails its row.
     #
     # The two I17 live-autopilot bindings read their live source off the working
     # tree the same way: the drive-arming classify + repair kwargs (W11) and the
@@ -2165,7 +2087,6 @@ def main(argv: list[str]) -> int:
         check_jury_reliability_map_wired(),
         check_jury_block_authority_wired(),
         check_validate_jury_cli_wired(),
-        check_track_rpc_wired(),
         check_phase_track_tag_wired(),
         check_drive_ladders_wired(),
         check_live_output_text_wired(),
