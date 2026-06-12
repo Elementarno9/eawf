@@ -198,6 +198,12 @@ def probe_one(spec: InstrumentSpec) -> ProbeResult:
         )
 
     args = spec.version_args or ["--version"]
+    # stdin=DEVNULL isolates this non-interactive version probe from the
+    # parent's fd 0. Inside the live TUI's Doctor-mode gather the parent fd 0
+    # is the controlling TTY; a child that inherited it could touch the TTY and
+    # solicit a terminal escape-sequence reply that the App's stdin reader then
+    # parses as a synthetic keypress. A dead stdin closes that leak at each
+    # child without disturbing the App's own fd 0.
     try:
         proc = subprocess.run(
             [spec.name, *args],
@@ -205,6 +211,7 @@ def probe_one(spec: InstrumentSpec) -> ProbeResult:
             capture_output=True,
             text=True,
             timeout=_VERSION_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         logger.warning(f"probe_one tool={spec.name!r} status=failed exc={exc!r}")

@@ -677,8 +677,8 @@ class EaApp(App[None]):
         # terminal a probe child can trigger a TTY escape-reply that leaks back
         # into stdin as a synthetic ``c`` (config) / ``?`` (help) key the
         # instant the operator enters Doctor mode. The deterministic root fix
-        # detaches the probe children's stdin (see
-        # :func:`eawf.observability.doctor.checks.detached_tty_stdin`); this
+        # passes ``stdin=subprocess.DEVNULL`` at each probe subprocess call site
+        # so its child inherits a dead stdin and can solicit no TTY reply; this
         # flag is the belt-and-suspenders backstop -- :meth:`on_key` drops a
         # bare ``c`` / ``?`` while it is set so a leak that still slips through
         # opens no overlay, without ever suppressing a genuine post-gather

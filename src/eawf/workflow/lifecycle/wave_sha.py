@@ -44,6 +44,15 @@ DRIFT_ACKS_FILENAME: str = "drift-acks.json"
 _TIMEOUT_SECONDS: float = 5.0
 _WAVE_TRAILER_NAME = "Eawf-Wave"
 
+# Every git probe in this module passes ``stdin=subprocess.DEVNULL``. These are
+# non-interactive ``capture_output=True`` reads, so a dead stdin is correct, and
+# it isolates each child from the parent's fd 0. When the drift scan runs inside
+# the live TUI's Doctor-mode gather the parent fd 0 is the controlling TTY; a
+# child that inherited it could touch the TTY and solicit an escape-sequence
+# reply that the App's stdin reader then mis-parses as a synthetic keypress. A
+# dead stdin closes that leak per-child without ever disturbing the App's own
+# fd 0 (which a process-global redirect would corrupt mid-render).
+
 # Field/record separators for the one-pass ``git log`` in
 # :func:`build_wave_sha_index`. A commit message can carry newlines but never a
 # NUL byte, so NUL is a safe record boundary even when the trailer placeholder
@@ -325,6 +334,7 @@ def build_wave_sha_index(repo_root: Path | None = None) -> Mapping[str, str]:
             text=True,
             timeout=_TIMEOUT_SECONDS,
             check=False,
+            stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired:
         logger.debug("build_wave_sha_index status=timeout")
@@ -421,6 +431,7 @@ def _git_merge_base_head_main(
             text=True,
             timeout=_TIMEOUT_SECONDS,
             check=False,
+            stdin=subprocess.DEVNULL,
         )
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
         logger.debug(f"_git_merge_base_head_main status=failed err={exc!s}")
@@ -525,6 +536,7 @@ def derive_wave_sha(
                 text=True,
                 timeout=_TIMEOUT_SECONDS,
                 check=False,
+                stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired:
             logger.debug(f"derive_wave_sha wave={wave_id} status=timeout prefix={prefix!r}")

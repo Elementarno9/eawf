@@ -1,4 +1,4 @@
-"""Doctor-mode probe-reply leak guard (P30-I16-W29).
+"""Doctor-mode probe-reply leak guard (P30-I16-W29, P30-I18-W11).
 
 Operator report 2026-06-11 (Ghostty graphics terminal): switching to Doctor
 mode (digit ``5``) popped a config / help modal with NO such keypress.
@@ -17,21 +17,28 @@ onto the shared TTY where the App's stdin reader parses it as a synthetic key
 (``c`` -> config window, ``?`` -> help). It fires on Doctor-mode ENTRY, after
 first paint, so the W27 startup gate cannot catch it.
 
-The deterministic root fix detaches fd 0 to ``/dev/null`` for the gather's
-duration (:func:`~eawf.observability.doctor.checks.detached_tty_stdin`), so
-every probe child inherits a dead stdin and can solicit no TTY reply. A
-belt-and-suspenders backstop drops a bare ``c`` / ``?`` in
+W29's first fix re-pointed the PROCESS-GLOBAL fd 0 at ``/dev/null`` for the
+gather's duration -- but that ``os.dup2`` over fd 0 corrupted the live App's
+asyncio stdin reader and crashed the running TUI with
+``OSError: [Errno 9] Bad file descriptor``. W11 moves the isolation to the
+correct seam: each probe ``subprocess.run`` call site passes
+``stdin=subprocess.DEVNULL`` directly, so its child inherits a dead stdin and
+can solicit no TTY reply WITHOUT ever touching the App's own fd 0. A
+belt-and-suspenders backstop still drops a bare ``c`` / ``?`` in
 :meth:`~eawf.surfaces.tui.app.EaApp.on_key` while the gather is in flight
-(:attr:`EaApp._health_probe_in_flight`), without suppressing a genuine
-post-gather keypress.
+(:attr:`EaApp._health_probe_in_flight`) -- it only inspects the key event, never
+fd 0, so it is harmless alongside the per-subprocess fix.
 
 These tests pin:
 
-* switching to Doctor mode and draining the gather worker leaves the Doctor
-  screen active -- NO :class:`ConfigModal` / :class:`HelpScreen` on the stack;
-* the in-flight backstop drops a synthetic ``c`` / ``?`` while the probe flag
-  is set, and a genuine ``c`` / ``?`` once the flag clears still opens the
-  overlay (no regression of the affordance).
+* switching to Doctor mode and draining the gather worker does NOT crash and
+  leaves the Doctor screen active -- NO :class:`ConfigModal` / :class:`HelpScreen`
+  on the stack (the operator's reported failure);
+* the probe ``subprocess.run`` calls pass ``stdin=subprocess.DEVNULL`` (the
+  per-subprocess isolation that replaces the process-global fd-0 redirect);
+* the in-flight backstop drops a synthetic ``c`` / ``?`` while the probe flag is
+  set, and a genuine ``c`` / ``?`` once the flag clears still opens the overlay
+  (no regression of the affordance).
 
 NOTE: the operator's failure is a live terminal-protocol race that cannot be
 reproduced headlessly (``run_test`` has no real TTY emitting an escape reply);
@@ -45,7 +52,9 @@ workers via :func:`~eawf.surfaces.tui.snapshot.settle_screen` before asserting.
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from textual import events
@@ -85,17 +94,19 @@ def _stub_git(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --------------------------------------------------------------------------
-# Core W29 guard: entering Doctor mode opens no config / help overlay
+# Core W11 guard: entering Doctor mode does NOT crash + opens no overlay
 # --------------------------------------------------------------------------
 
 
-def test_doctor_mode_entry_opens_no_config_or_help_overlay() -> None:
-    """Digit ``5`` then a drained gather leaves Doctor active -- no overlay.
+def test_doctor_mode_entry_does_not_crash_or_open_overlay() -> None:
+    """Digit ``5`` then a drained gather leaves Doctor active -- no crash, no overlay.
 
-    The core W29 guard, the operator's reported failure: switching to Doctor
-    mode and waiting for the gather worker to finish must leave the Doctor
-    screen on top -- no :class:`ConfigModal` (the ``c`` leak) and no
-    :class:`HelpScreen` (the ``?`` leak) popped with zero real keypresses.
+    The core guard, the operator's reported failure: switching to Doctor mode
+    and waiting for the gather worker to finish must NOT raise (the W29 fd-0
+    redirect crashed the live App with ``OSError: [Errno 9] Bad file
+    descriptor``) and must leave the Doctor screen on top -- no
+    :class:`ConfigModal` (the ``c`` leak) and no :class:`HelpScreen` (the ``?``
+    leak) popped with zero real keypresses. The App stays running throughout.
     """
 
     async def body() -> None:
@@ -106,6 +117,8 @@ def test_doctor_mode_entry_opens_no_config_or_help_overlay() -> None:
             # Drain the gather worker explicitly (settle_screen also waits).
             await app.workers.wait_for_complete()
             await settle_screen(pilot)
+            # The App must still be running -- the W29 fd-0 redirect crashed it.
+            assert app.is_running
             assert app.current_mode == "doctor"
             assert isinstance(app.screen, DoctorModeScreen)
             assert not isinstance(app.screen, ConfigModal)
@@ -135,6 +148,73 @@ def test_health_probe_flag_clears_after_gather() -> None:
             assert app._health_probe_in_flight is False
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# Per-subprocess isolation: the probe subprocess.run calls pass stdin=DEVNULL
+# --------------------------------------------------------------------------
+
+
+def test_instrument_probe_subprocess_passes_devnull_stdin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The instrument version-probe threads ``stdin=subprocess.DEVNULL``.
+
+    The replacement for the process-global fd-0 redirect: a probe child must
+    inherit a dead stdin so it can solicit no TTY reply, WITHOUT touching the
+    live App's fd 0. Mock ``subprocess.run`` and assert the isolation kwarg.
+    """
+    from eawf.platform.install import instrument_probe
+    from eawf.platform.install.instrument_probe import InstrumentSpec, probe_one
+
+    captured: dict[str, Any] = {}
+
+    class _Proc:
+        stdout = "git version 2.46.0\n"
+        stderr = ""
+        returncode = 0
+
+    def fake_run(*args: Any, **kwargs: Any) -> _Proc:
+        captured.update(kwargs)
+        return _Proc()
+
+    monkeypatch.setattr(instrument_probe.shutil, "which", lambda _name: "/usr/bin/git")
+    monkeypatch.setattr(instrument_probe.subprocess, "run", fake_run)
+
+    probe_one(
+        InstrumentSpec(
+            name="git",
+            kind="hard",
+            probe="version",
+            version_args=["--version"],
+            version_regex=r"^git version",
+        )
+    )
+    assert captured.get("stdin") is subprocess.DEVNULL
+
+
+def test_wave_sha_drift_subprocess_passes_devnull_stdin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-wave ``git log`` drift scan threads ``stdin=subprocess.DEVNULL``."""
+    from eawf.workflow.lifecycle import wave_sha
+
+    captured: dict[str, Any] = {}
+
+    class _Proc:
+        stdout = ""
+        stderr = ""
+        returncode = 0
+
+    def fake_run(*args: Any, **kwargs: Any) -> _Proc:
+        captured.update(kwargs)
+        return _Proc()
+
+    monkeypatch.setattr(wave_sha.shutil, "which", lambda _name: "/usr/bin/git")
+    monkeypatch.setattr(wave_sha.subprocess, "run", fake_run)
+
+    wave_sha.build_wave_sha_index(repo_root=Path("/tmp"))
+    assert captured.get("stdin") is subprocess.DEVNULL
 
 
 # --------------------------------------------------------------------------

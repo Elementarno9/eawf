@@ -408,31 +408,30 @@ def gather_doctor_health(*, workspace: Path | None, state_path: Path | None) -> 
     from eawf.surfaces.tui.screens.overlays.events import load_recent_events
 
     # The gather fans out to blocking subprocesses (the instrument
-    # version-probes and the per-wave ``git log`` drift scan). Each runs
-    # ``subprocess.run`` with the default ``stdin=None``, so a child would
-    # otherwise inherit the live TUI's controlling TTY as fd 0 -- and on a
-    # graphics terminal a child that touches that TTY can trigger an escape-
-    # sequence reply that leaks back into the App's stdin as a synthetic key
-    # (``c`` -> config, ``?`` -> help) the instant the operator enters Doctor
-    # mode. Detaching fd 0 to ``/dev/null`` for the gather closes that leak at
-    # the root: every probe child inherits a dead stdin and can solicit no TTY
-    # reply. The original fd 0 is restored on exit.
-    with doctor_checks.detached_tty_stdin():
-        try:
-            check_results = doctor_checks.run_all(workspace=workspace)
-        except Exception as exc:
-            # The hard-probe path raises UserError (kind="InstrumentMissing")
-            # in the CLI to drive exit code 6; in the read-only TUI we never
-            # abort the render loop -- surface the hard miss as a single FAIL
-            # row so the pane still paints.
-            logger.warning(f"gather_doctor_health status=checks-failed error={exc!r}")
-            from eawf.observability.doctor.checks import CheckResult
+    # version-probes and the per-wave ``git log`` drift scan). On a graphics
+    # terminal a child that inherited the live TUI's controlling TTY as fd 0
+    # could touch it and solicit an escape-sequence reply that leaks back into
+    # the App's stdin as a synthetic key (``c`` -> config, ``?`` -> help) the
+    # instant the operator enters Doctor mode. Each probe call site now passes
+    # ``stdin=subprocess.DEVNULL`` so its child inherits a dead stdin and can
+    # solicit no TTY reply -- the isolation lives at each subprocess, never on
+    # the App's process-global fd 0 (re-pointing fd 0 mid-render corrupts
+    # Textual's input reader and crashes the live App).
+    try:
+        check_results = doctor_checks.run_all(workspace=workspace)
+    except Exception as exc:
+        # The hard-probe path raises UserError (kind="InstrumentMissing")
+        # in the CLI to drive exit code 6; in the read-only TUI we never
+        # abort the render loop -- surface the hard miss as a single FAIL
+        # row so the pane still paints.
+        logger.warning(f"gather_doctor_health status=checks-failed error={exc!r}")
+        from eawf.observability.doctor.checks import CheckResult
 
-            check_results = [
-                CheckResult(name="tools_available", status="fail", detail=f"probe failed: {exc}")
-            ]
+        check_results = [
+            CheckResult(name="tools_available", status="fail", detail=f"probe failed: {exc}")
+        ]
 
-        drifts = _gather_drifts(state_path)
+    drifts = _gather_drifts(state_path)
 
     event_path = _resolve_event_path(state_path)
     events = load_recent_events(event_path, limit=_EVENT_SAMPLE)
@@ -695,9 +694,10 @@ class DoctorModeScreen(ScopeScreen):
         :attr:`~eawf.surfaces.tui.app.EaApp._health_probe_in_flight` flag is
         set so :meth:`~eawf.surfaces.tui.app.EaApp.on_key` drops a bare ``c``
         / ``?`` -- the belt-and-suspenders backstop behind the deterministic
-        :func:`~eawf.observability.doctor.checks.detached_tty_stdin` fix for
-        a graphics-terminal probe-reply leak. The flag clears in ``finally``
-        so a probe crash never leaves genuine ``c`` / ``?`` keys suppressed.
+        fix for a graphics-terminal probe-reply leak (each probe subprocess
+        now runs with ``stdin=subprocess.DEVNULL`` so its child can solicit no
+        TTY reply). The flag clears in ``finally`` so a probe crash never
+        leaves genuine ``c`` / ``?`` keys suppressed.
         """
         state_path = getattr(self.app, "_state_path", None)
         workspace = state_path.parent.parent if state_path is not None else None

@@ -27,10 +27,8 @@ drive its exit code.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
-from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -54,64 +52,6 @@ logger = logging.getLogger(__name__)
 
 
 CheckStatus = Literal["ok", "warn", "fail"]
-
-
-@contextlib.contextmanager
-def detached_tty_stdin() -> Iterator[None]:
-    """Point the process stdin (fd 0) at ``/dev/null`` for the block's scope.
-
-    The doctor checks fan out to blocking subprocesses (the instrument
-    version-probes in
-    :func:`eawf.platform.install.instrument_probe.probe`, and the per-wave
-    ``git log`` drift scan in
-    :func:`eawf.workflow.lifecycle.wave_sha.build_wave_sha_index`). Those
-    call sites run ``subprocess.run`` with ``capture_output=True`` but with
-    the default ``stdin=None``, so each child INHERITS the parent's fd 0 --
-    the controlling TTY when the gather runs inside the live TUI.
-
-    On a graphics terminal (Ghostty / a Kitty-protocol host), a child that
-    touches the inherited TTY can trigger a terminal escape-sequence reply
-    (a Device-Attributes / capability query answer); that reply is written
-    back onto the shared TTY, where the host App's stdin reader parses it as
-    a synthetic key (``c`` -> config window, ``?`` -> help). The W27 startup
-    gate cannot catch it because the leak fires on doctor-mode ENTRY, after
-    first paint.
-
-    Re-pointing fd 0 at ``/dev/null`` for the duration of the gather closes
-    the leak at the root: every child the probes spawn inherits a dead
-    stdin, so no probe can solicit a TTY reply. The original fd 0 is dup'd
-    aside and restored on exit (even on error), so the host's input loop is
-    untouched after the block. A platform with no ``os.dup2`` / no
-    ``/dev/null`` (the harness on a non-POSIX host) degrades to a no-op
-    rather than raising out of the render loop.
-
-    Yields:
-        ``None`` -- a bare scope guard; the redirect is a process-global
-        side effect for the block's duration, not a value.
-    """
-    try:
-        devnull_fd = os.open(os.devnull, os.O_RDONLY)
-    except OSError as exc:
-        logger.debug(f"detached_tty_stdin status=no-devnull error={exc!r}")
-        yield
-        return
-    saved_fd = -1
-    try:
-        try:
-            saved_fd = os.dup(0)
-            os.dup2(devnull_fd, 0)
-        except OSError as exc:
-            # No real fd 0 (a fully detached harness) -- nothing to detach.
-            logger.debug(f"detached_tty_stdin status=no-stdin error={exc!r}")
-            yield
-            return
-        yield
-    finally:
-        if saved_fd >= 0:
-            with contextlib.suppress(OSError):
-                os.dup2(saved_fd, 0)
-            os.close(saved_fd)
-        os.close(devnull_fd)
 
 
 # The single-file ``state.json`` model holds to roughly this many waves before

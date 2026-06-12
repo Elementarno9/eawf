@@ -1,135 +1,115 @@
-"""Unit tests for the Doctor-mode stdin-isolation guard (P30-I16-W29).
+"""Unit tests for the Doctor-mode probe stdin isolation (P30-I16-W29, P30-I18-W11).
 
 The Doctor-mode health gather fans out to blocking subprocesses (the
-instrument version-probes + a per-wave ``git log`` drift scan) that run
-``subprocess.run`` with the default ``stdin=None`` -- so each child inherits
-the parent's fd 0 (the controlling TTY when the gather runs inside the live
-TUI). On a graphics terminal a child that touches that TTY can trigger an
-escape-sequence reply that leaks back into the App's stdin as a synthetic key
-(``c`` -> config, ``?`` -> help) the instant the operator enters Doctor mode.
+instrument version-probes + the per-wave ``git log`` drift scan). Inside the
+live TUI the parent fd 0 is the controlling TTY; a child that inherited it
+could touch the TTY and solicit an escape-sequence reply that the App's stdin
+reader then mis-parses as a synthetic key (``c`` -> config, ``?`` -> help) the
+instant the operator enters Doctor mode.
 
-:func:`~eawf.observability.doctor.checks.detached_tty_stdin` closes that at the
-root by pointing process fd 0 at ``/dev/null`` for the gather's duration, so
-every probe child inherits a dead stdin and can solicit no TTY reply. These
-tests pin the contract:
+W29 first closed this by re-pointing the PROCESS-GLOBAL fd 0 at ``/dev/null``
+for the gather's duration -- but that ``os.dup2`` over fd 0 corrupted the live
+App's asyncio stdin reader and crashed the running TUI with
+``OSError: [Errno 9] Bad file descriptor`` (the reader already held the
+original fd). W11 moves the isolation to the correct seam: each probe
+``subprocess.run`` call site passes ``stdin=subprocess.DEVNULL`` directly, so
+its child inherits a dead stdin and can solicit no TTY reply WITHOUT ever
+touching the App's own fd 0.
 
-* inside the block, a ``subprocess.run`` child (default ``stdin=None``)
-  inherits ``/dev/null`` -- a ``cat`` sees immediate EOF, not the test's stdin;
-* the original fd 0 is restored after the block, including on error;
-* the gather entry (:func:`gather_doctor_health`) runs its probe + drift fan-out
-  under the guard (so the ``subprocess.run`` children never see a live stdin).
+These tests pin the per-subprocess isolation contract:
+
+* the instrument version-probe (:func:`eawf.platform.install.instrument_probe.probe_one`)
+  passes ``stdin=subprocess.DEVNULL`` to ``subprocess.run``;
+* the per-wave ``git log`` drift scan
+  (:func:`eawf.workflow.lifecycle.wave_sha.build_wave_sha_index`) passes
+  ``stdin=subprocess.DEVNULL`` to ``subprocess.run``;
+* the process-global ``detached_tty_stdin`` redirect is GONE from the doctor
+  checks module (re-introducing it would re-open the live-App crash).
 """
 
 from __future__ import annotations
 
-import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from eawf.observability.doctor import checks
+from eawf.platform.install import instrument_probe
+from eawf.platform.install.instrument_probe import InstrumentSpec, probe_one
+from eawf.workflow.lifecycle import wave_sha
 
 
-def _stat_of_fd(fd: int) -> tuple[int, int]:
-    """Return the ``(st_dev, st_ino)`` identity of an open fd."""
-    st = os.fstat(fd)
-    return (st.st_dev, st.st_ino)
+class _FakeProc:
+    """Minimal stand-in for a ``subprocess.CompletedProcess``."""
+
+    def __init__(self, *, stdout: str = "", returncode: int = 0) -> None:
+        self.stdout = stdout
+        self.stderr = ""
+        self.returncode = returncode
 
 
-def test_child_inherits_devnull_stdin_inside_block() -> None:
-    """A default-``stdin`` child inside the block reads ``/dev/null`` (EOF).
+def test_instrument_version_probe_passes_devnull_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The instrument version-probe runs ``subprocess.run`` with ``stdin=DEVNULL``.
 
-    The behavioural heart of the fix: with fd 0 detached, a subprocess that
-    reads its stdin gets an immediate EOF (empty read) rather than inheriting
-    the parent's live stdin. We run ``cat`` with the DEFAULT ``stdin`` (no
-    explicit ``stdin=`` kwarg) so the test exercises the exact inheritance
-    path the doctor probes use.
+    The behavioural heart of the W11 fix at the instrument seam: a probe child
+    must inherit a dead stdin, never the live App's controlling TTY. We mock
+    ``shutil.which`` to resolve the binary and capture the ``subprocess.run``
+    kwargs to assert the isolation kwarg is threaded.
     """
-    with checks.detached_tty_stdin():
-        proc = subprocess.run(
-            [sys.executable, "-c", "import sys; sys.stdout.write(sys.stdin.read())"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-    # /dev/null reads as empty: the child saw a dead stdin, not the parent's.
-    assert proc.stdout == ""
-    assert proc.returncode == 0
+    captured: dict[str, Any] = {}
+
+    def fake_run(*args: Any, **kwargs: Any) -> _FakeProc:
+        captured.update(kwargs)
+        return _FakeProc(stdout="git version 2.46.0\n", returncode=0)
+
+    monkeypatch.setattr(instrument_probe.shutil, "which", lambda _name: "/usr/bin/git")
+    monkeypatch.setattr(instrument_probe.subprocess, "run", fake_run)
+
+    spec = InstrumentSpec(
+        name="git",
+        kind="hard",
+        probe="version",
+        version_args=["--version"],
+        version_regex=r"^git version",
+    )
+    result = probe_one(spec)
+
+    assert result.status == "ok"
+    assert captured.get("stdin") is subprocess.DEVNULL
+    # The probe must still capture output (it parses the version stdout).
+    assert captured.get("capture_output") is True
 
 
-def test_fd0_points_at_devnull_inside_block() -> None:
-    """Inside the block, process fd 0 is the ``/dev/null`` device."""
-    devnull_id = _stat_of_fd(os.open(os.devnull, os.O_RDONLY))
-    # The freshly opened fd above is distinct from fd 0; identity is by device.
-    with checks.detached_tty_stdin():
-        assert _stat_of_fd(0) == devnull_id
+def test_wave_sha_drift_scan_passes_devnull_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The per-wave ``git log`` drift scan runs with ``stdin=DEVNULL``.
 
-
-def test_fd0_restored_after_block() -> None:
-    """The original fd 0 identity is restored once the block exits."""
-    before = _stat_of_fd(0)
-    with checks.detached_tty_stdin():
-        # Detached to /dev/null in here (covered by the test above).
-        pass
-    assert _stat_of_fd(0) == before
-
-
-def test_fd0_restored_on_error() -> None:
-    """fd 0 is restored even when the block raises."""
-    before = _stat_of_fd(0)
-    with pytest.raises(RuntimeError, match="boom"), checks.detached_tty_stdin():
-        raise RuntimeError("boom")
-    assert _stat_of_fd(0) == before
-
-
-def test_no_devnull_degrades_to_noop(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A host with no ``/dev/null`` degrades to a no-op rather than raising.
-
-    The guard must never abort the render loop on an exotic host: when the
-    ``/dev/null`` open fails, the block body still runs and fd 0 is untouched.
+    The drift scan is the second TTY-touching probe the Doctor gather fans out
+    to; under the live TUI its child must also inherit a dead stdin. Mock
+    ``shutil.which`` (so git resolves) and capture the ``subprocess.run`` kwargs.
     """
+    captured: dict[str, Any] = {}
 
-    def fake_open(path: str, flags: int, *args: object) -> int:
-        if path == os.devnull:
-            raise OSError("no devnull on this host")
-        return os.open(path, flags, *args)
+    def fake_run(*args: Any, **kwargs: Any) -> _FakeProc:
+        captured.update(kwargs)
+        return _FakeProc(stdout="", returncode=0)
 
-    monkeypatch.setattr(checks.os, "open", fake_open)
-    before = _stat_of_fd(0)
-    ran = False
-    with checks.detached_tty_stdin():
-        ran = True
-        # No detach happened, so fd 0 is the original.
-        assert _stat_of_fd(0) == before
-    assert ran is True
-    assert _stat_of_fd(0) == before
+    monkeypatch.setattr(wave_sha.shutil, "which", lambda _name: "/usr/bin/git")
+    monkeypatch.setattr(wave_sha.subprocess, "run", fake_run)
+
+    wave_sha.build_wave_sha_index(repo_root=Path("/tmp"))
+
+    assert captured.get("stdin") is subprocess.DEVNULL
+    assert captured.get("capture_output") is True
 
 
-def test_gather_runs_probe_fanout_under_the_guard(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """:func:`gather_doctor_health` runs its subprocess fan-out under the guard.
+def test_detached_tty_stdin_is_gone() -> None:
+    """The process-global fd-0 redirect is removed from the doctor checks module.
 
-    Proves the wiring, not just the helper: a stub ``run_all`` records whether
-    fd 0 was detached to ``/dev/null`` at the moment the doctor checks run --
-    the exact instant the real probes would spawn their TTY-touching children.
+    Re-introducing ``detached_tty_stdin`` would re-open the live-App crash the
+    W11 fix closed (``os.dup2`` over fd 0 corrupts Textual's stdin reader). The
+    isolation lives at each subprocess (``stdin=subprocess.DEVNULL``) instead,
+    so the symbol must NOT exist on the checks module.
     """
-    from eawf.surfaces.tui.modes.doctor import gather_doctor_health
-
-    devnull_id = _stat_of_fd(os.open(os.devnull, os.O_RDONLY))
-    seen: dict[str, Any] = {}
-
-    def fake_run_all(*, workspace: Path | None) -> list[checks.CheckResult]:
-        seen["fd0"] = _stat_of_fd(0)
-        return [checks.CheckResult(name="tools_available", status="ok", detail="stub")]
-
-    monkeypatch.setattr(checks, "run_all", fake_run_all)
-    # Drift + events read no live state here; point at an empty tmp tree.
-    health = gather_doctor_health(workspace=tmp_path, state_path=tmp_path / "state.json")
-
-    assert seen["fd0"] == devnull_id, "run_all must execute with fd 0 detached to /dev/null"
-    assert health.rows  # the fold still produced a view
+    assert not hasattr(checks, "detached_tty_stdin")
