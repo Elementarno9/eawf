@@ -8232,6 +8232,20 @@
       "status": "done",
       "updated_at": "2026-06-12T12:34:19.934061Z"
     },
+    "P30-I19-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W08",
+      "model": null,
+      "scope_id": "P30-I19-W08",
+      "status": "done",
+      "updated_at": "2026-06-12T18:11:09.165192Z"
+    },
     "P30-I19-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -8287,6 +8301,48 @@
       "scope_id": "P30-I19-W12",
       "status": "done",
       "updated_at": "2026-06-12T14:24:16.165298Z"
+    },
+    "P30-I19-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W13",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W13",
+      "model": null,
+      "scope_id": "P30-I19-W13",
+      "status": "done",
+      "updated_at": "2026-06-12T18:11:41.492896Z"
+    },
+    "P30-I19-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W14",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W14",
+      "model": null,
+      "scope_id": "P30-I19-W14",
+      "status": "done",
+      "updated_at": "2026-06-12T18:11:42.893818Z"
+    },
+    "P30-I19-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W15",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W15",
+      "model": null,
+      "scope_id": "P30-I19-W15",
+      "status": "done",
+      "updated_at": "2026-06-12T18:11:44.340432Z"
     }
   },
   "agent_sessions": {
@@ -11470,10 +11526,8 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I19-W08"
-    ],
-    "iter_id": "P30-I19",
+    "active_wave_ids": [],
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -12116,7 +12170,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -21737,6 +21791,45 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I19-W12",
       "updated_at": "2026-06-12T13:56:19.891509Z"
+    },
+    "P30-I19-W13": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W13-bucket-20260612T181140Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I19-W13",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I19-W13",
+      "updated_at": "2026-06-12T18:11:40.669701Z"
+    },
+    "P30-I19-W14": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W14-bucket-20260612T181142Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I19-W14",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I19-W14",
+      "updated_at": "2026-06-12T18:11:42.130879Z"
+    },
+    "P30-I19-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W15-bucket-20260612T181143Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I19-W15",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I19-W15",
+      "updated_at": "2026-06-12T18:11:43.550955Z"
     }
   },
   "fleet_run": null,
@@ -23846,16 +23939,16 @@
       ]
     },
     "P30-I19": {
-      "audit_id": null,
+      "audit_id": "A-P30-ship-gate",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-12T18:11:51.835652Z",
       "description": "Phase-co-closing iter. Consume poc/windows-pipe-daemon (11bb3a03) per WINDOWS_PORT_AGENT_PROMPT.md. POSIX stays byte-identical; every change win32-guarded. Lands after I16 (conflicts in _mutation.py, wal.py, app.py). Ship gates ride here.",
       "estimate_id": null,
       "id": "P30-I19",
       "intent": null,
       "opened_at": "2026-06-11T15:24:01.039345Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "Windows support and ship",
       "trigger": "none",
       "wave_ids": [
@@ -24282,6 +24375,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I18-close-A-P30-i18",
       "summary": "iter P30-I18 closed with audit A-P30-i18; waves closed=12; outcomes P30-I18-W01: round_runner binding: drive_campaign spawns each StagedDispatch via the live agent.dispatch p... | P30-I18-W02: Claim + OpenQuestion daemon writers: research.add_question + round-end claim reconcile throug... | P30-I18-W03: research.run RPC over drive_campaign + per-round/checkpoint persistence (research_round store...",
+      "tier": "working"
+    },
+    "MEM-P30-I19-close-A-P30-ship-gate": {
+      "confidence": "high",
+      "id": "MEM-P30-I19-close-A-P30-ship-gate",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-12T18:11:51.835652Z",
+      "scope_id": "P30-I19",
+      "status": "active",
+      "store_record_id": "MEM-P30-I19-close-A-P30-ship-gate",
+      "summary": "iter P30-I19 closed with audit A-P30-ship-gate; waves closed=15; outcomes P30-I19-W01: WIN-P1: guarded every POSIX-only os/signal/socket attr behind the daemon import graph (new fs... | P30-I19-W02: WIN-P2: named-pipe RPC client (pipe_client_call/PipeReader) + ERROR_MORE_DATA large-frame rea... | P30-I19-W03: WIN-P3: pipe subscription streaming (subscribe_router + bus bridge + PeekNamedPipe idle reap)...",
       "tier": "working"
     }
   },
@@ -24992,7 +25096,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T18:02:41.450862Z",
+  "updated_at": "2026-06-12T18:11:51.836311Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -93936,8 +94040,8 @@
       "blocks": [],
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T13:40:34.199903Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-12T18:11:09.165192Z",
+      "commit": "35c064d39a600c2fcca524a77835b1a47d4cda7d",
       "deps": [
         "P30-I19-W05",
         "P30-I19-W07"
@@ -93982,12 +94086,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-11T15:26:57.335554Z",
-      "outcome": null,
+      "outcome": "v0.6.0 release pre-flight: CHANGELOG section + README refresh landed (re-close after reset of d122b9fb)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -94263,10 +94367,10 @@
     "P30-I19-W13": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-recovery-20260612",
+      "claimed_at": "2026-06-12T18:11:40.663454Z",
+      "closed_at": "2026-06-12T18:11:41.492896Z",
+      "commit": "e809d838a381ae65f7a3707cd96acf0dd5b08851",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94291,12 +94395,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-12T14:47:59.359007Z",
-      "outcome": null,
+      "outcome": "stale doctor run_all check-count assertion fixed (re-close after reset of d122b9fb)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -94321,10 +94425,10 @@
     "P30-I19-W14": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-recovery-20260612",
+      "claimed_at": "2026-06-12T18:11:42.130763Z",
+      "closed_at": "2026-06-12T18:11:42.893818Z",
+      "commit": "eb8d3b1d38c909710a0e15c59b0d1e5a0e49990c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94353,12 +94457,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-12T14:48:17.717770Z",
-      "outcome": null,
+      "outcome": "orphaned track add/switch RPCs retired; daemon-proxy routing backlogged as B102, implementation lands in P30-I20-W21 (re-close after reset of d122b9fb)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -94383,10 +94487,10 @@
     "P30-I19-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-recovery-20260612",
+      "claimed_at": "2026-06-12T18:11:43.550836Z",
+      "closed_at": "2026-06-12T18:11:44.340432Z",
+      "commit": "2230273ae20e3f915343e014b2e98150d41a073c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94413,12 +94517,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-12T14:48:18.281096Z",
-      "outcome": null,
+      "outcome": "phase-audit polish sweep: latent mypy errors cleared + stale seal-Image comments refreshed; state-model.md refresh backlogged as B103, lands in P30-I20-W21 (re-close after reset of d122b9fb)",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
