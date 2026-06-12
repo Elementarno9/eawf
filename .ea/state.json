@@ -8231,6 +8231,34 @@
       "scope_id": "P30-I19-W07",
       "status": "done",
       "updated_at": "2026-06-12T12:34:19.934061Z"
+    },
+    "P30-I19-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W09",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W09",
+      "model": null,
+      "scope_id": "P30-I19-W09",
+      "status": "done",
+      "updated_at": "2026-06-12T13:39:17.777970Z"
+    },
+    "P30-I19-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I19-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I19-W10",
+      "model": null,
+      "scope_id": "P30-I19-W10",
+      "status": "done",
+      "updated_at": "2026-06-12T13:39:18.709633Z"
     }
   },
   "agent_sessions": {
@@ -12058,7 +12086,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -21614,6 +21642,32 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I19-W07",
       "updated_at": "2026-06-12T12:34:19.065220Z"
+    },
+    "P30-I19-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W09-bucket-20260612T123616Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I19-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I19-W09",
+      "updated_at": "2026-06-12T12:36:16.358958Z"
+    },
+    "P30-I19-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I19-W10-bucket-20260612T123616Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I19-W10",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I19-W10",
+      "updated_at": "2026-06-12T12:36:16.957521Z"
     }
   },
   "fleet_run": null,
@@ -24822,7 +24876,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T12:35:54.225177Z",
+  "updated_at": "2026-06-12T13:39:18.709900Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -93852,10 +93906,10 @@
     "P30-I19-W09": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:36:16.358843Z",
+      "closed_at": "2026-06-12T13:39:17.777970Z",
+      "commit": "52ad7a92d9aa02ce2c7325c612dfd92cfcccf42f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -93882,12 +93936,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-12T12:35:26.892369Z",
-      "outcome": null,
+      "outcome": "Added a 1-row gap between the seal art and the hero headline across all seal-empty modes (margin-top in seal_empty_hero + research hero; centering preserved); routed the sandbox honest-empty through the centered ASCII-art seal. 7 goldens regenerated; 438 tests pass.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -93912,10 +93966,10 @@
     "P30-I19-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i19",
+      "claimed_at": "2026-06-12T12:36:16.957405Z",
+      "closed_at": "2026-06-12T13:39:18.709633Z",
+      "commit": "ce6b61f69a8eb8664d6cd7bb6f47f8d2d7d0d5e7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -93944,12 +93998,12 @@
       },
       "iter_id": "P30-I19",
       "opened_at": "2026-06-12T12:35:54.224924Z",
-      "outcome": null,
+      "outcome": "Detach TUI-spawned subprocesses from the controlling TTY: shared detached_subprocess_kwargs() (start_new_session POSIX / CREATE_NO_WINDOW win32) at the doctor probe + wave_sha git sites (daemon spawn already setsid/DETACHED); doctor gather stays on a worker. Closes the terminal-escape-reply digit-leak class. Regression tests assert the kwargs; POSIX green. Needs operator live re-verify.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
