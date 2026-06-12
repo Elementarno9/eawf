@@ -14,6 +14,8 @@ suite. ``--version`` short-circuits via the eager callback and exits.
 
 from __future__ import annotations
 
+import contextlib
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -233,6 +235,31 @@ def _configure_logging() -> None:
     root.setLevel(logging.INFO)
 
 
+def _ensure_utf8_console() -> None:
+    """Make stdout/stderr UTF-8-safe so the Eä brand never crashes on Windows.
+
+    The brand wordmark (``Eä``) and the rendered help carry non-ASCII
+    glyphs. On a Windows console whose active code page is cp1251 / a CJK
+    page (not UTF-8), the default stdout encoding cannot represent ``ä``
+    and ``typer.echo`` / ``print`` raise :class:`UnicodeEncodeError`,
+    crashing even ``eawf --help``. This reconfigures both streams to UTF-8
+    with ``errors="replace"`` so an unrepresentable glyph degrades to a
+    placeholder instead of crashing. POSIX terminals already default to
+    UTF-8, so this only fires on Windows and is a no-op when the stream is
+    not reconfigurable (e.g. a captured non-``TextIOWrapper`` stream under
+    test).
+    """
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        with contextlib.suppress(ValueError, OSError):
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
+    _ensure_utf8_console()
     _configure_logging()
     app()

@@ -193,9 +193,6 @@ def run_cmd(
     """
     from eawf.runtime.daemon.main import run as run_daemon
 
-    if sys.platform.startswith("win"):
-        typer.echo("eawf daemon run is not supported on windows yet (W02)", err=True)
-        raise typer.Exit(code=2)
     flags: GlobalFlags = ctx.obj
     if flags.json_output:
         # The daemon is a long-running process; JSON envelope output
