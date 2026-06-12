@@ -363,3 +363,50 @@ jobs:
           if summary:
               pathlib.Path(summary).write_text(report + "\n")
           PY
+
+  windows:
+    name: Windows named-pipe transport (win32 test set)
+    # The `test` matrix above runs only on POSIX, where every win32-marked
+    # test SKIPS -- so the named-pipe transport (pywin32 CreateNamedPipe /
+    # ReadFile MORE_DATA loop / CancelIoEx teardown / PeekNamedPipe idle
+    # reap / cold-start budget) is never actually exercised there. This job
+    # runs the win32 test set on a real Windows host so a regression in the
+    # pipe transport reds the PR. Pull-request only: it is the binding-pass
+    # gate for the P30-I19 Windows support, not a per-push cost.
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen) + windows extra
+        # `uv sync --frozen` brings the dev deps; `--extra windows` pulls
+        # pywin32 so the import-guarded named-pipe transport modules
+        # (windows_pipe / windows_security) actually import on this host.
+        run: uv sync --frozen --extra windows
+
+      - name: Pytest (win32 transport set)
+        # The win32-marked test set, run serially (-n0) so the per-user
+        # singleton pipe is never contended by parallel workers. On Windows
+        # these cases EXECUTE (instead of skipping on POSIX): the named-pipe
+        # transport, security DACL/SID, atomic-write floor, and the W04
+        # policy regressions. Listed explicitly (not the whole tests/ tree)
+        # so the job is the focused Windows transport gate, not a full
+        # cross-OS suite re-run.
+        run: >
+          uv run pytest -n0 --no-cov
+          tests/daemon/test_windows_pipe.py
+          tests/daemon/test_windows_pipe_design_only.py
+          tests/daemon/test_windows_pipe_poc_scenarios.py
+          tests/daemon/test_win_service.py
+          tests/unit/test_windows_atomic_floor.py
+          tests/cli/test_windows_w04_policy.py
+          tests/unit/test_packaging.py
