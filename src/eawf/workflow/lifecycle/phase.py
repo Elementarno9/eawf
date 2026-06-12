@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eawf.kernel.spec.intent import IntentBrief
@@ -210,6 +211,55 @@ def _phase_close_audit_warning(
     if require_real_evidence and not _audit_has_real_close_evidence(state, audit=audit):
         return f"close audit {audit_id!r} must include real audit evidence"
     return None
+
+
+def _repo_markdown_artifact_path(uri: str, *, project_root: Path) -> Path | None:
+    """Resolve a repo-relative markdown artifact URI, or ``None`` when not applicable."""
+    if not uri.startswith("repo:"):
+        return None
+    repo_ref = uri.removeprefix("repo:").split("#", 1)[0]
+    if not repo_ref.endswith(".md"):
+        return None
+    repo_path = Path(repo_ref)
+    if repo_path.is_absolute() or ".." in repo_path.parts:
+        return None
+    return project_root / repo_path
+
+
+def _phase_close_audit_artifact_warning(
+    state: State,
+    *,
+    audit_id: str | None,
+    project_root: Path | None,
+) -> str | None:
+    """Return a blocker when the close audit's markdown artifact is invalid."""
+    if audit_id is None or project_root is None:
+        return None
+    audit = (state.audits or {}).get(audit_id)
+    if audit is None or not audit.report_artifact_id:
+        return None
+    artifact = state.artifacts.get(audit.report_artifact_id)
+    if artifact is None:
+        return None
+    path = _repo_markdown_artifact_path(artifact.uri, project_root=project_root)
+    if path is None:
+        return None
+    from eawf.platform.artifacts.validation import validate_markdown_artifact
+
+    try:
+        report = validate_markdown_artifact(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        reason = exc.strerror or exc.__class__.__name__
+        return (
+            f"close audit {audit_id!r} report artifact {audit.report_artifact_id!r} "
+            f"cannot be read: {reason}"
+        )
+    if report.ok:
+        return None
+    return (
+        f"close audit {audit_id!r} report artifact {audit.report_artifact_id!r} "
+        f"markdown invalid: {'; '.join(report.errors)}"
+    )
 
 
 def _audit_row_get(row: object, key: str) -> object:
@@ -586,6 +636,7 @@ def phase_close_readiness(
     require_audit: bool = False,
     include_structure: bool = True,
     require_release_preflight: bool = False,
+    project_root: Path | None = None,
 ) -> CloseReadiness:
     """Return phase-level close readiness derived from state.
 
@@ -624,6 +675,14 @@ def phase_close_readiness(
         criteria.append(_phase_close_view("close-audit", passed=audit_warning is None))
         if audit_warning is not None:
             warnings.append(audit_warning)
+        artifact_warning = _phase_close_audit_artifact_warning(
+            state,
+            audit_id=audit_id,
+            project_root=project_root,
+        )
+        criteria.append(_phase_close_view("close-audit-artifact", passed=artifact_warning is None))
+        if artifact_warning is not None:
+            warnings.append(artifact_warning)
 
     if require_release_preflight:
         # _validate_phase_closable extended: phase close enforces release preflight.
@@ -654,6 +713,7 @@ def _validate_phase_closable(
     phase_id: str,
     audit_id: str,
     require_release_preflight: bool = False,
+    project_root: Path | None = None,
 ) -> Phase:
     """Run the close-phase gates and return the closable phase.
 
@@ -672,6 +732,7 @@ def _validate_phase_closable(
         audit_id=audit_id,
         require_audit=True,
         require_release_preflight=require_release_preflight,
+        project_root=project_root,
     )
     if not readiness.ready:
         details = "; ".join(phase_close_readiness_blockers(readiness))
@@ -686,6 +747,7 @@ def close_phase(
     audit_id: str,
     checkpoint: str | None = None,
     require_release_preflight: bool = False,
+    project_root: Path | None = None,
 ) -> Phase:
     """Close an active phase.
 
@@ -716,6 +778,7 @@ def close_phase(
         phase_id=phase_id,
         audit_id=audit_id,
         require_release_preflight=require_release_preflight,
+        project_root=project_root,
     )
     phase.status = PhaseStatus.CLOSED
     phase.closed_at = datetime.now(UTC)

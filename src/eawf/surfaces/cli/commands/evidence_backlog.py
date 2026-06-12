@@ -61,7 +61,7 @@ def audit_add(
     """Register an audit; report-bearing audits land status=complete."""
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.evidence import audit as audit_evi
-    from eawf.workflow.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence._io import append_jsonl, store_contains_envelope, store_paths
 
     flags = _flags(ctx)
     state_path = _state_path(flags)
@@ -76,9 +76,11 @@ def audit_add(
                 report_artifact_id=report,
                 verdict=verdict,
             )
-            paths = store_paths(state_path)
-            append_jsonl(paths[StoreKind.AUDIT], record)
-            append_jsonl(paths[StoreKind.EVENT], event)
+            if record is not None and event is not None:
+                paths = store_paths(state_path)
+                if not store_contains_envelope(paths[StoreKind.AUDIT], record):
+                    append_jsonl(paths[StoreKind.AUDIT], record)
+                append_jsonl(paths[StoreKind.EVENT], event)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return

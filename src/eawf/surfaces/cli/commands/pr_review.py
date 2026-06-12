@@ -235,7 +235,7 @@ def _attach_findings(
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.evidence import artifact as artifact_evi
     from eawf.workflow.evidence import audit as audit_evi
-    from eawf.workflow.evidence._io import append_jsonl, store_paths
+    from eawf.workflow.evidence._io import append_jsonl, store_contains_envelope, store_paths
     from eawf.workflow.pr_review import parse_findings, summary_line, verdict_for
 
     if not findings_path.exists():
@@ -310,8 +310,10 @@ def _attach_findings(
             )
             paths = store_paths(state_path)
             append_jsonl(paths[StoreKind.EVENT], event_art)
-            append_jsonl(paths[StoreKind.AUDIT], record_audit)
-            append_jsonl(paths[StoreKind.EVENT], event_audit)
+            if record_audit is not None and event_audit is not None:
+                if not store_contains_envelope(paths[StoreKind.AUDIT], record_audit):
+                    append_jsonl(paths[StoreKind.AUDIT], record_audit)
+                append_jsonl(paths[StoreKind.EVENT], event_audit)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return

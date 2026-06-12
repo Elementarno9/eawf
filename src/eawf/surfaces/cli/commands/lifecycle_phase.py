@@ -65,6 +65,12 @@ def _phase_close_requires_release_preflight(ctx: typer.Context) -> bool:
     return vcs_config.conventions.release.cadence == "per-phase"
 
 
+def _phase_close_project_root(flags: GlobalFlags) -> Path:
+    """Resolve the repo root used for repo-relative close-audit artifacts."""
+    state_path = resolve_state_path(flags.workspace)
+    return state_path.parent.parent
+
+
 # ---- Phase handlers ---------------------------------------------------------
 
 
@@ -181,6 +187,7 @@ def phase_close_cmd(
         return
     preflight_state, _ = loaded
     require_release_preflight = _phase_close_requires_release_preflight(ctx)
+    project_root = _phase_close_project_root(flags)
     try:
         checklist = _phase_prepare_close_checklist(
             preflight_state,
@@ -188,6 +195,7 @@ def phase_close_cmd(
             audit_id=audit,
             require_audit=True,
             require_release_preflight=require_release_preflight,
+            project_root=project_root,
         )
     except LifecycleError as exc:
         cli_errors.emit_error(cli_errors.ValidationError(str(exc)), flags=flags)
@@ -206,6 +214,7 @@ def phase_close_cmd(
             audit_id=audit,
             checkpoint=checkpoint,
             require_release_preflight=require_release_preflight,
+            project_root=project_root,
         )
 
     _run_mutation(
@@ -674,6 +683,7 @@ def _phase_prepare_close_checklist(
     audit_id: str | None = None,
     require_audit: bool = False,
     require_release_preflight: bool = False,
+    project_root: Path | None = None,
 ) -> dict[str, Any]:
     """Compute a structured pre-close checklist for *phase_id*.
 
@@ -744,6 +754,7 @@ def _phase_prepare_close_checklist(
         audit_id=audit_id,
         require_audit=require_audit,
         require_release_preflight=require_release_preflight,
+        project_root=project_root,
     )
     checklist["close_readiness_ready"] = readiness.ready
     checklist["close_readiness_warnings"] = list(readiness.warnings)
@@ -851,6 +862,7 @@ def phase_prepare_close_cmd(
             audit_id=audit,
             require_audit=audit is not None,
             require_release_preflight=release_preflight,
+            project_root=state_path.parent.parent,
         )
     except LifecycleError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)

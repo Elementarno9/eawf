@@ -543,6 +543,7 @@ class _ShipInputs:
         pr_action: The normalised ``--pr`` action, or ``None``.
         artifact_paths: The artifact paths to validate.
         pr_body: The optional PR body text to validate.
+        project_root: Repository root for repo-relative artifact validation.
         state: The loaded state document, or ``None``.
         phase_id: The phase id resolved from the scope, or ``None``.
         vcs_config: The validated ``vcs`` config surface.
@@ -554,6 +555,7 @@ class _ShipInputs:
     pr_action: str | None
     artifact_paths: list[Path]
     pr_body: Any
+    project_root: Path
     state: State | None
     phase_id: str | None
     vcs_config: VcsConfig
@@ -590,6 +592,7 @@ class ShipSkill(SkillAction):
                 run.args.get("artifact_paths") or run.args.get("artifacts")
             ),
             pr_body=run.args.get("pr_body"),
+            project_root=run.state_path.parent.parent,
             state=_load_state(run.state_path),
             phase_id=_phase_id_from_scope(run.scope_id),
             vcs_config=_load_vcs_config(run.state_path),
@@ -661,6 +664,7 @@ class ShipSkill(SkillAction):
                 audit_id=audit.id if audit is not None else None,
                 require_audit=True,
                 include_structure=True,
+                project_root=inputs.project_root,
             )
             if not readiness.ready:
                 blockers = phase_close_readiness_blockers(readiness)

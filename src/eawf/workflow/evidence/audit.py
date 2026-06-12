@@ -31,6 +31,25 @@ from eawf.workflow.evidence import _io
 logger = logging.getLogger(__name__)
 
 
+def _audit_matches_add(
+    audit: Audit,
+    *,
+    scope_id: str,
+    kind: AuditKind,
+    report_artifact_id: str | None,
+    verdict: AuditVerdict | None,
+) -> bool:
+    """Return whether an existing audit is an exact replay of ``add_audit``."""
+    return (
+        audit.scope_id == scope_id
+        and audit.kind == kind
+        and audit.report_artifact_id == report_artifact_id
+        and audit.verdict == verdict
+        and audit.check_results == []
+        and audit.integrity_results == []
+    )
+
+
 def add_audit(
     state: State,
     *,
@@ -39,7 +58,7 @@ def add_audit(
     kind: AuditKind,
     report_artifact_id: str | None = None,
     verdict: AuditVerdict | None = None,
-) -> tuple[Envelope, Envelope]:
+) -> tuple[Envelope | None, Envelope | None]:
     """Register a new audit in place and return (record, event) envelopes.
 
     When ``report_artifact_id`` is provided, the audit lands in
@@ -48,14 +67,25 @@ def add_audit(
     closed via :func:`require_complete_audit`.
 
     Raises:
-        UserError: When ``audit_id`` already exists, when ``verdict`` is
-            given without ``report_artifact_id``, or when ``report_artifact_id``
-            is non-None but absent from :attr:`State.artifacts` (orphan-ref
-            guard — the audit-evidence anchor must point at an existing
-            artifact, not a placeholder id). Carries ``kind="InvalidInput"``.
+        UserError: When ``audit_id`` already exists with different fields,
+            when ``verdict`` is given without ``report_artifact_id``, or
+            when ``report_artifact_id`` is non-None but absent from
+            :attr:`State.artifacts` (orphan-ref guard — the audit-evidence
+            anchor must point at an existing artifact, not a placeholder
+            id). Carries ``kind="InvalidInput"``.
     """
     audits: dict[str, Audit] = dict(state.audits or {})
     if audit_id in audits:
+        existing = audits[audit_id]
+        if _audit_matches_add(
+            existing,
+            scope_id=scope_id,
+            kind=kind,
+            report_artifact_id=report_artifact_id,
+            verdict=verdict,
+        ):
+            logger.info(f"add_audit idempotent-replay audit={audit_id}")
+            return None, None
         raise UserError(f"audit {audit_id!r} already exists", kind="InvalidInput")
 
     if verdict is not None and report_artifact_id is None:

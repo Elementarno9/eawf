@@ -117,6 +117,33 @@ def test_add_audit_duplicate_raises(tmp_path: Path) -> None:
         )
 
 
+def test_add_audit_exact_duplicate_is_idempotent(tmp_path: Path) -> None:
+    state_path = _state_path(tmp_path)
+    state = _io.load_state(state_path)
+    _seed_artifact(state)
+    audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+        report_artifact_id="ART-001",
+        verdict=AuditVerdict.PASS,
+    )
+
+    record, event = audit.add_audit(
+        state,
+        audit_id="AUD-001",
+        scope_id="QR",
+        kind=AuditKind.EVALUATION,
+        report_artifact_id="ART-001",
+        verdict=AuditVerdict.PASS,
+    )
+
+    assert record is None
+    assert event is None
+    assert len(state.audits) == 1
+
+
 def test_run_audit_stub_path(tmp_path: Path) -> None:
     """Without a fixture path, run_audit lands a single passing stub result."""
     state_path = _state_path(tmp_path)
@@ -264,6 +291,47 @@ def test_state_transaction_persists_add_audit(tmp_path: Path) -> None:
     assert len(audit_lines) == 1
     event_lines = paths[StoreKind.EVENT].read_text().splitlines()
     assert len(event_lines) == 1
+
+
+def test_state_transaction_repair_skips_duplicate_audit_store_row(tmp_path: Path) -> None:
+    state_path = _state_path(tmp_path)
+    paths = _io.store_paths(state_path)
+    with state_transaction(state_path) as state:
+        _seed_artifact(state)
+        record, event = audit.add_audit(
+            state,
+            audit_id="AUD-001",
+            scope_id="QR",
+            kind=AuditKind.EVALUATION,
+            report_artifact_id="ART-001",
+        )
+        assert record is not None
+        assert event is not None
+        _io.append_jsonl(paths[StoreKind.AUDIT], record)
+        _io.append_jsonl(paths[StoreKind.EVENT], event)
+
+    body = json.loads(state_path.read_text())
+    body["audits"] = {}
+    state_path.write_text(json.dumps(body), encoding="utf-8")
+
+    with state_transaction(state_path) as state:
+        record, event = audit.add_audit(
+            state,
+            audit_id="AUD-001",
+            scope_id="QR",
+            kind=AuditKind.EVALUATION,
+            report_artifact_id="ART-001",
+        )
+        assert record is not None
+        assert event is not None
+        if not _io.store_contains_envelope(paths[StoreKind.AUDIT], record):
+            _io.append_jsonl(paths[StoreKind.AUDIT], record)
+        _io.append_jsonl(paths[StoreKind.EVENT], event)
+
+    assert len(paths[StoreKind.AUDIT].read_text().splitlines()) == 1
+    assert len(paths[StoreKind.EVENT].read_text().splitlines()) == 2
+    repaired = json.loads(state_path.read_text())
+    assert repaired["audits"]["AUD-001"]["status"] == "complete"
 
 
 def test_add_audit_rejects_unknown_report_artifact_id(tmp_path: Path) -> None:

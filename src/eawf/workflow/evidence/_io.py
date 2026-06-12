@@ -53,6 +53,7 @@ __all__ = [
     "event_envelope",
     "kind_envelope",
     "load_state",
+    "store_contains_envelope",
     "store_paths",
 ]
 
@@ -185,6 +186,54 @@ def kind_envelope(
         blob_refs=blob_refs or [],
         artifact_ids=artifact_ids or [],
     )
+
+
+def store_contains_envelope(path: Path, envelope: Envelope) -> bool:
+    """Return whether *path* already contains an equivalent envelope.
+
+    The evidence CLI uses this as a narrow repair path for append-first
+    transactions: when a prior attempt landed the audit JSONL row but failed
+    before ``state.json`` was updated, a retry should repair state without
+    appending a duplicate audit record. A same-id row with different payload is
+    not a replay and remains a hard conflict.
+
+    Args:
+        path: JSONL store path to scan.
+        envelope: Envelope the caller is about to append.
+
+    Returns:
+        ``True`` when an equivalent row is already present.
+
+    Raises:
+        UserError: When a same-id row exists with different payload.
+        ValidationError: When the store contains malformed JSON.
+    """
+    if not path.exists():
+        return False
+    expected = envelope.model_dump(mode="json")
+    expected.pop("created_at", None)
+    expected.pop("updated_at", None)
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = orjson.loads(line)
+        except orjson.JSONDecodeError as exc:
+            raise ValidationError(
+                f"store {path.name} has malformed JSON at line {line_number}: {exc}"
+            ) from exc
+        if row.get("id") != envelope.id:
+            continue
+        comparable = dict(row)
+        comparable.pop("created_at", None)
+        comparable.pop("updated_at", None)
+        if comparable == expected:
+            return True
+        raise UserError(
+            f"store record {envelope.id!r} already exists with different payload",
+            kind="InvalidInput",
+        )
+    return False
 
 
 def artifact_urn(scope_id: str, artifact_id: str) -> str:
