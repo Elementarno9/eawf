@@ -38,6 +38,7 @@ from eawf.kernel.state.enums import (
 from eawf.surfaces.tui.app import resolve_render_mode
 from eawf.surfaces.tui.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.eu_bar import GLYPH_EMPTY, GLYPH_FULL
+from eawf.surfaces.tui.widgets.header import render_header
 from eawf.surfaces.tui.widgets.sigils import (
     _CHROME,
     FOLLOWUP_BADGE,
@@ -456,3 +457,32 @@ def test_status_sigil_unmapped_member_raises_key_error() -> None:
     # silently rendering a fallthrough (no idle contract).
     with pytest.raises(KeyError):
         status_sigil(WaveStatus)  # the class itself is not a mapped member
+
+
+# --------------------------------------------------------------------------
+# D-BRAND-MARK -- the brand mark is mandatory header chrome; the ASCII
+# fallback is the ``*`` glyph leading the ``Eä`` wordmark (the 2026-06-08
+# reconciliation dropped only the ui.brand_glyph config knob, not the mark).
+# --------------------------------------------------------------------------
+
+
+def test_brand_chrome_ascii_fallback_is_star() -> None:
+    # The terminal stand-in for the Seal SVG when graphics are unavailable.
+    assert chrome("brand", mode="ascii") == "*"
+    assert chrome("brand", mode="unicode") == "◉"
+
+
+def test_header_ascii_mark_is_star_leading_the_wordmark() -> None:
+    # Per D-BRAND-MARK: a non-graphics terminal leads the header with the ``*``
+    # ASCII brand mark immediately before the two-tone ``Eä`` wordmark; the
+    # unicode fisheye never leaks into the ASCII column.
+    ascii_line = render_header(None, render_mode="ascii")
+    star = ascii_line.index("*")
+    wordmark = ascii_line.index("E")
+    assert star < wordmark, "the * brand mark must lead the Eä wordmark"
+    assert "◉" not in ascii_line
+
+
+def test_header_unicode_mark_is_the_fisheye() -> None:
+    # The graphics-capable / unicode path leads with the ◉ fisheye stand-in.
+    assert "◉" in render_header(None, render_mode="unicode")
