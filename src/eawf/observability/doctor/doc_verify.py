@@ -21,9 +21,11 @@ freely inside other commands (``doctor``, CI checks).
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from eawf.kernel.state.enums import PhaseStatus
 from eawf.kernel.state.models import State
@@ -65,14 +67,35 @@ class DocVerifyReport:
         return bool(self.cross_check_violations)
 
 
-def _resolve_artifact_uri(repo_root: Path, uri: str) -> Path | None:
-    """Resolve a ``repo:<relpath>`` URI to a filesystem path. Returns None on miss."""
-    if not uri.startswith("repo:"):
+@dataclass(frozen=True)
+class ResolvedRepoUri:
+    """Resolved repo artifact URI components."""
+
+    path: Path
+    fragment: str | None = None
+
+
+def _resolve_artifact_uri(repo_root: Path, uri: str) -> ResolvedRepoUri | None:
+    """Resolve a ``repo:<relpath>`` URI. Returns None on malformed/non-repo URI."""
+    parsed = urlsplit(uri)
+    if parsed.scheme != "repo":
         return None
-    relpath = uri[len("repo:") :]
+    relpath = unquote(parsed.path)
     if not relpath:
         return None
-    return repo_root / relpath
+    fragment = unquote(parsed.fragment) if parsed.fragment else None
+    return ResolvedRepoUri(path=repo_root / relpath, fragment=fragment)
+
+
+def _jsonl_contains_id(path: Path, fragment: str) -> bool:
+    """Return whether JSONL *path* has a dict row whose ``id`` matches *fragment*."""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if isinstance(row, dict) and row.get("id") == fragment:
+            return True
+    return False
 
 
 def _cross_check_state(state: State, repo_root: Path) -> list[CrossCheckViolation]:
@@ -92,7 +115,7 @@ def _cross_check_state(state: State, repo_root: Path) -> list[CrossCheckViolatio
         if not artifact.uri.startswith("repo:"):
             continue
         resolved = _resolve_artifact_uri(repo_root, artifact.uri)
-        if resolved is None or not resolved.exists():
+        if resolved is None or not resolved.path.exists():
             findings.append(
                 CrossCheckViolation(
                     code="DOC.ARTIFACT_URI_MISSING",
@@ -100,6 +123,22 @@ def _cross_check_state(state: State, repo_root: Path) -> list[CrossCheckViolatio
                     message=(
                         f"artifact {artifact_id!r} uri {artifact.uri!r} does not resolve to a "
                         f"file under {repo_root}"
+                    ),
+                )
+            )
+            continue
+        if (
+            resolved.fragment is not None
+            and resolved.path.suffix == ".jsonl"
+            and not _jsonl_contains_id(resolved.path, resolved.fragment)
+        ):
+            findings.append(
+                CrossCheckViolation(
+                    code="DOC.ARTIFACT_URI_FRAGMENT_MISSING",
+                    target=f"/artifacts/{artifact_id}",
+                    message=(
+                        f"artifact {artifact_id!r} uri {artifact.uri!r} does not resolve to a "
+                        f"JSONL row id under {repo_root}"
                     ),
                 )
             )

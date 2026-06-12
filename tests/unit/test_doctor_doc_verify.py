@@ -167,6 +167,50 @@ def test_verify_docs_cross_check_artifact_repo_uri_unresolved(tmp_path: Path) ->
     assert any(v.code == "DOC.ARTIFACT_URI_MISSING" for v in report.cross_check_violations)
 
 
+def test_verify_docs_cross_check_artifact_jsonl_fragment_resolved(tmp_path: Path) -> None:
+    state_dir = tmp_path / ".ea"
+    store_dir = state_dir / "store"
+    store_dir.mkdir(parents=True, exist_ok=True)
+    save_atomic(state_dir / "indexes" / "generated.json", Manifest(version=1, generated={}))
+    (store_dir / "audit.jsonl").write_text(
+        '{"schema_version":"1.0","id":"A01","kind":"audit"}\n',
+        encoding="utf-8",
+    )
+    state = _make_state(
+        artifacts={"ART-1": _artifact("ART-1", "repo:.ea/store/audit.jsonl#A01")},
+    )
+    report = verify_docs(state, tmp_path)
+    assert report.status == "ok"
+    assert report.cross_check_violations == []
+
+
+def test_verify_docs_cross_check_artifact_jsonl_fragment_missing(tmp_path: Path) -> None:
+    state_dir = tmp_path / ".ea"
+    store_dir = state_dir / "store"
+    store_dir.mkdir(parents=True, exist_ok=True)
+    save_atomic(state_dir / "indexes" / "generated.json", Manifest(version=1, generated={}))
+    (store_dir / "audit.jsonl").write_text(
+        '{"schema_version":"1.0","id":"A01","kind":"audit"}\n',
+        encoding="utf-8",
+    )
+    state = _make_state(
+        artifacts={"ART-1": _artifact("ART-1", "repo:.ea/store/audit.jsonl#A02")},
+    )
+    report = verify_docs(state, tmp_path)
+    assert report.status == "drift"
+    assert any(v.code == "DOC.ARTIFACT_URI_FRAGMENT_MISSING" for v in report.cross_check_violations)
+
+
+def test_verify_docs_missing_manifest_is_empty_gate_input(tmp_path: Path) -> None:
+    state_dir = tmp_path / ".ea"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state = _make_state()
+    report = verify_docs(state, tmp_path)
+    assert report.status == "ok"
+    assert report.manifest_entries == 0
+    assert report.manifest_targets == 0
+
+
 def test_doc_verify_cli_strict_exits_4_on_drift(tmp_path: Path) -> None:
     """``eawf doc verify --strict`` exits 4 when drift is present."""
     from typer.testing import CliRunner
