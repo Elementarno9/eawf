@@ -9,7 +9,7 @@ import orjson
 import pytest
 from typer.testing import CliRunner
 
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import ClaimStatus, StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
 from eawf.platform.artifacts.validation import validate_markdown_artifact
@@ -153,3 +153,35 @@ def test_draft_new_validate_and_plan_promote(
     artifact = state["artifacts"]["ART-plan-p16"]
     assert artifact["kind"] == "plan_spec"
     assert artifact["uri"] == "repo:.ea/artifacts/plan-p16.md"
+
+
+def test_research_promote_rejects_non_resolving_claim_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _seed(tmp_path)
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["claims"] = {
+        "CLM-missing": {
+            "id": "CLM-missing",
+            "scope_id": "QR",
+            "title": "claim with missing evidence",
+            "status": ClaimStatus.OPEN.value,
+            "evidence_refs": ["evidence/missing.md"],
+            "created_at": datetime(2026, 1, 1, tzinfo=UTC).isoformat(),
+        }
+    }
+    state_path.write_bytes(orjson.dumps(state))
+    monkeypatch.setenv("EA_STATE", str(state_path))
+
+    created = runner.invoke(app, ["draft", "new", "research", "campaign", "--title", "Campaign"])
+    assert created.exit_code == 0, created.output
+
+    promoted = runner.invoke(app, ["--json", "research", "promote", "campaign"])
+
+    assert promoted.exit_code != 0
+    payload = json.loads(promoted.stdout)
+    assert payload["error"] == "ValidationError"
+    assert "evidence/missing.md" in payload["message"]
+    assert "rung-1" in payload["message"]
+    assert not (tmp_path / ".ea" / "artifacts" / "research-campaign.md").exists()

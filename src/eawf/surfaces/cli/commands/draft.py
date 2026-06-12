@@ -88,6 +88,21 @@ def _artifact_kind_for(kind: str) -> str:
     return kind
 
 
+def _promotion_intent_for_state_claims(
+    *,
+    kind: str,
+    slug: str,
+    state_path: Path,
+) -> IntentBrief | None:
+    if kind != "research":
+        return None
+
+    from eawf.workflow.evidence._io import load_state
+
+    state = load_state(state_path)
+    return synthesize_campaign_brief(slug, list((state.claims or {}).values()))
+
+
 def _new_draft_text(kind: str, slug: str, title: str | None) -> str:
     heading = title or f"{kind.title()} Draft: {slug}"
     return "\n".join(
@@ -274,7 +289,13 @@ def promote_draft(
             chassis_report = validate_markdown_artifact(
                 text,
                 require_template_sentinel=True,
-                intent=intent,
+                intent=intent
+                if intent is not None
+                else _promotion_intent_for_state_claims(
+                    kind=kind,
+                    slug=slug,
+                    state_path=state_path,
+                ),
                 project_root=root,
             )
             report_ok, report_errors = chassis_report.ok, chassis_report.errors
