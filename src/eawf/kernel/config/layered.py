@@ -287,6 +287,7 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         "EAWF_DAEMON_SESSION_TTL",
         "EAWF_LOCK_TIMEOUT",
         "EAWF_SKIP_GLOBAL_HOOKS",
+        "EAWF_SKIP_PERF",
         "EAWF_BLITZ_DEPTH",
         "EAWF_BLITZ_DEPTH_COUNTER",
     }

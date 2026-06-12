@@ -153,6 +153,14 @@ def test_validate_ok_on_clean_repo(repo_root: Path) -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_validate_ignores_reserved_runtime_env_vars(repo_root: Path) -> None:
+    env = dict.fromkeys(layered._RESERVED_ENV_VARS | {"EAWF_SKIP_PERF"}, "1")
+
+    result = runner.invoke(app, ["config", "validate"], env=env)
+
+    assert result.exit_code == 0, result.output
+
+
 def test_validate_ok_json_envelope(repo_root: Path) -> None:
     result = runner.invoke(app, ["--json", "config", "validate"])
     assert result.exit_code == 0
