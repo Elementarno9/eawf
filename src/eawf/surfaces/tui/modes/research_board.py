@@ -81,7 +81,7 @@ from eawf.surfaces.tui.widgets.empty_state import render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.seal import seal_image_widget
+from eawf.surfaces.tui.widgets.seal import seal_art_widget
 from eawf.surfaces.tui.widgets.sigils import Sigil
 
 if TYPE_CHECKING:
@@ -1737,8 +1737,10 @@ class ResearchBoardModeScreen(ScopeScreen):
         height: auto;
     }
     ResearchBoardModeScreen .research-empty-seal {
-        width: 16;
-        height: 8;
+        width: 31;
+        height: 14;
+        content-align: center middle;
+        color: $accent;
     }
     ResearchBoardModeScreen .research-center-section {
         height: auto;
@@ -1814,18 +1816,19 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._tree = build_tree_nodes(campaigns, questions, claims=claims)
         with Vertical(id="research-body"):
             if self.empty:
-                seal = seal_image_widget()
-                if seal is None:
-                    # Default / CI path: the unicode brand glyph leads the hero.
-                    yield Static(self._empty_body(), id=EMPTY_ID)
-                else:
-                    # Graphics-terminal path (eawf[seal] installed): the real
-                    # Seal image is the centerpiece, so the glyph sigil is
-                    # dropped from the text to avoid a double brand mark.
-                    seal.add_class("research-empty-seal")
+                if self._render_mode() == "unicode":
+                    # Unicode path: the hand-tuned ASCII-art Seal (deterministic
+                    # accent-on-surface TEXT, no graphics protocol) is the
+                    # centerpiece, so the glyph sigil is dropped from the copy to
+                    # avoid a double brand mark. The art centers via the
+                    # #research-empty-hero align.
                     with Vertical(id="research-empty-hero"):
-                        yield seal
+                        yield seal_art_widget()
                         yield Static(self._empty_body(with_sigil=False), id=EMPTY_ID)
+                else:
+                    # ASCII path: the small unicode/ascii brand glyph leads the
+                    # hero (the half-block art needs block-glyph coverage).
+                    yield Static(self._empty_body(), id=EMPTY_ID)
                 return
             pause = self._current_checkpoint()
             mode = self._render_mode()
@@ -2522,11 +2525,11 @@ class ResearchBoardModeScreen(ScopeScreen):
             self._recompose_body()
             return
         if self.empty:
-            # When the Seal image leads the hero (the graphics-terminal path
-            # composed the #research-empty-hero wrapper), the steady empty-tick
-            # update MUST preserve with_sigil=False so the glyph is not re-added
-            # beside the image as a second brand mark -- the I15-W20 regression
-            # where a tick re-rendered the sigil-bearing body over the seal hero.
+            # When the ASCII-art Seal leads the hero (the unicode path composed
+            # the #research-empty-hero wrapper), the steady empty-tick update
+            # MUST preserve with_sigil=False so the glyph is not re-added beside
+            # the art as a second brand mark -- the I15-W20 regression where a
+            # tick re-rendered the sigil-bearing body over the seal hero.
             seal_mounted = bool(self.query("#research-empty-hero"))
             self._update_one(EMPTY_ID, self._empty_body(with_sigil=not seal_mounted))
             logger.info(f"research_rebuild empty=True seal_mounted={seal_mounted}")
@@ -2634,9 +2637,8 @@ class ResearchBoardModeScreen(ScopeScreen):
 
         Args:
             with_sigil: When ``False`` the leading brand glyph is dropped -- the
-                graphics-terminal path renders the real Seal image as the
-                centerpiece instead, so the glyph would be a redundant second
-                brand mark.
+                unicode path renders the ASCII-art Seal as the centerpiece
+                instead, so the glyph would be a redundant second brand mark.
         """
         return render_empty_state(
             EMPTY_NOTICE,

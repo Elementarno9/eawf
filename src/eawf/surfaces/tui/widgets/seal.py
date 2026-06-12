@@ -50,12 +50,49 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from textual.widgets import Static
+
 from eawf.surfaces.render.brand import ACCENT_HEX
 
 if TYPE_CHECKING:
     from textual.widget import Widget
 
 logger = logging.getLogger(__name__)
+
+#: The hand-tuned half-block ASCII-art Seal -- 14 rows of ``▀▄█`` + spaces,
+#: max width 31 -- copied verbatim from the operator-approved
+#: ``.ea/local/dispatch/seal_art.txt``. It is the deterministic TEXT brand mark
+#: the hero surfaces render in place of the raster image: drawn with the
+#: half-block glyphs in the accent colour and the empty halves / spaces left
+#: UNstyled, the cell's own ``$surface`` background shows through. That makes it
+#: theme-portable (correct on BOTH the light and dark themes) on one colour
+#: (``$accent``) with no graphics protocol -- no Kitty transmit lag, no terminal
+#: probe-reply leak, no alpha matte, and it centers like any other text.
+SEAL_ART_LINES: tuple[str, ...] = (
+    "          ▄▄▄▄▄██▄▄▄▄▄",
+    "      ▄▄█▀▀█▄▄▄▄▄▄▄▄█▀▀█▄▄",
+    "    ▄█▀▄▄██████▀▀██████▄▄▀█▄",
+    "  ▄█▀▄█████████  █████████▄▀█▄",
+    " ▄█▀▄██▀██████▀  ▀██████▀██▄▀█▄",
+    " █▀▄████▄    ▀    ▀    ▄████▄▀█",
+    " █ ███████▄   ▄██▄   ▄███████ █",
+    " █ ███████▀   ▀██▀   ▀███████ █",
+    " █▄▀████▀    ▄    ▄    ▀████▀▄█",
+    " ▀█▄▀██▄▄█████▄  ▄█████▄▄██▀▄█▀",
+    "  ▀█▄▀█████████  █████████▀▄█▀",
+    "    ▀█▄▀▀██████▄▄██████▀▀▄█▀",
+    "      ▀▀█▄▄█▀▀▀▀▀▀▀▀█▄▄█▀▀",
+    "          ▀▀▀▀▀██▀▀▀▀▀",
+)
+
+#: Stable id for the art-seal :class:`~textual.widgets.Static` so a hero
+#: stylesheet can size + center its box.
+SEAL_ART_ID: str = "seal-art"
+
+#: Stable class on the art-seal Static, shared with the legacy
+#: ``.research-empty-seal`` hero CSS hook so the art's box keeps the centered
+#: ~width-31 / height-14 layout the heroes rely on.
+SEAL_ART_CLASS: str = "research-empty-seal"
 
 #: The Seal SVG asset (``currentColor`` fill, so it inherits the text colour).
 #: ``seal.py`` lives in ``surfaces/tui/widgets/``; the asset in
@@ -361,13 +398,55 @@ def seal_image_widget(px: int = 96, *, bg_hex: str | None = None) -> Widget | No
     return Image(str(png))
 
 
+def seal_art_markup() -> str:
+    """Return the ASCII-art Seal as Textual content-markup in the theme accent.
+
+    Joins :data:`SEAL_ART_LINES` with newlines and wraps the whole block in a
+    single ``[$accent]...[/]`` span, so the half-block glyphs render in the
+    theme accent while the empty halves / spaces stay UNstyled and the cell's
+    own ``$surface`` background shows through. Wrapping on the ``$accent`` token
+    rather than a fixed hex keeps the mark theme-portable: it is correct on BOTH
+    the light and dark themes from one colour, with no graphics protocol.
+
+    The art is pure ``▀▄█`` + spaces (no ``[``/``]`` content), so there is no
+    markup-escaping concern -- the only brackets in the returned string are the
+    accent span this function adds.
+
+    Returns:
+        The accent-wrapped 14-row art block as a Textual content-markup string.
+    """
+    block = "\n".join(SEAL_ART_LINES)
+    return f"[$accent]{block}[/]"
+
+
+def seal_art_widget() -> Static:
+    """Return a :class:`textual.widgets.Static` rendering the ASCII-art Seal.
+
+    The deterministic TEXT brand mark the hero surfaces mount in place of the
+    raster image. The Static carries the :data:`SEAL_ART_ID` id + the
+    :data:`SEAL_ART_CLASS` class so a hero stylesheet can size + center its box
+    (~width 31, height 14). Unlike :func:`seal_image_widget`, this never returns
+    ``None`` and never touches :func:`seal_capable` / a graphics protocol: the
+    art renders identically in CI, a pipe, and a live terminal.
+
+    Returns:
+        The art Static, ready to mount.
+    """
+    return Static(seal_art_markup(), id=SEAL_ART_ID, classes=SEAL_ART_CLASS)
+
+
 __all__ = [
+    "SEAL_ART_CLASS",
+    "SEAL_ART_ID",
+    "SEAL_ART_LINES",
     "SEAL_DISABLE_ENV",
     "SURFACE_HEX",
     "deps_present",
     "resolve_accent_hex",
     "resolve_surface_hex",
     "resvg_present",
+    "seal_art_markup",
+    "seal_art_widget",
     "seal_capable",
     "seal_image_widget",
     "terminal_supports_images",
