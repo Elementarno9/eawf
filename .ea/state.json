@@ -7588,6 +7588,20 @@
       "status": "done",
       "updated_at": "2026-06-11T16:40:08.208885Z"
     },
+    "P30-I16-W15": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I16-W15",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I16-W15",
+      "model": null,
+      "scope_id": "P30-I16-W15",
+      "status": "done",
+      "updated_at": "2026-06-12T05:29:17.284987Z"
+    },
     "P30-I16-W16": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 103297,
@@ -7816,6 +7830,16 @@
     }
   },
   "artifacts": {
+    "A-P30-i16-report": {
+      "created_at": "2026-06-12T06:22:31.071218Z",
+      "id": "A-P30-i16-report",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-12-A-P30-i16-flow-audit.md",
+      "urn": "urn:eawf:v1:artifact:P30-I16/A-P30-i16-report"
+    },
     "A33-P26-tui-fixes-report": {
       "created_at": "2026-05-21T10:26:56.308705Z",
       "id": "A33-P26-tui-fixes-report",
@@ -8588,6 +8612,17 @@
     }
   },
   "audits": {
+    "A-P30-i16": {
+      "check_results": [],
+      "created_at": "2026-06-12T06:22:31.686138Z",
+      "id": "A-P30-i16",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "A-P30-i16-report",
+      "scope_id": "P30-I16",
+      "status": "complete",
+      "verdict": "minor"
+    },
     "A01-P00": {
       "check_results": [],
       "created_at": "2026-05-10T12:49:57.714684Z",
@@ -10918,7 +10953,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I16",
+    "iter_id": null,
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -20504,6 +20539,19 @@
       "scope_id": "P30-I16-W14",
       "updated_at": "2026-06-11T16:18:52.950082Z"
     },
+    "P30-I16-W15": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I16-W15-bucket-20260612T052916Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I16-W15",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I16-W15",
+      "updated_at": "2026-06-12T05:29:16.449496Z"
+    },
     "P30-I16-W16": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I16-W16-bucket-20260611T154706Z",
@@ -22706,16 +22754,16 @@
       ]
     },
     "P30-I16": {
-      "audit_id": null,
+      "audit_id": "A-P30-i16",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-06-12T06:22:42.280986Z",
       "description": "Strict-spec alignment of open handoff divergences (D-B), live-executing stepped init wizard (D-G), seal-everywhere with default deps (D-H), image-diff visual gate (D-I), three global-review tail bundles (D-C), daemonless waiver (D-D), doctor green-path (D-F), plus the three live research-board defects from the 2026-06-11 operator screenshot.",
       "estimate_id": null,
       "id": "P30-I16",
       "intent": null,
       "opened_at": "2026-06-11T15:16:31.117473Z",
       "phase_id": "P30",
-      "status": "active",
+      "status": "closed",
       "title": "UI strict parity, init redesign, seal + visual gates, P30-tail bundles",
       "trigger": "none",
       "wave_ids": [
@@ -23158,6 +23206,17 @@
       "status": "active",
       "store_record_id": "MEM-P30-I15-close-A72-P30-i15",
       "summary": "iter P30-I15 closed with audit A72-P30-i15; waves closed=20; outcomes P30-I15-W01: is_editable_install() via direct_url.json with .git fallback | P30-I15-W02: compose_display_version PEP440 +dev.g<sha>.dirty when editable, clean base on wheel | P30-I15-W03: Clean-base version binding-proof (no +dev in programmatic consumers)",
+      "tier": "working"
+    },
+    "MEM-P30-I16-close-A-P30-i16": {
+      "confidence": "high",
+      "id": "MEM-P30-I16-close-A-P30-i16",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-06-12T06:22:42.280986Z",
+      "scope_id": "P30-I16",
+      "status": "active",
+      "store_record_id": "MEM-P30-I16-close-A-P30-i16",
+      "summary": "iter P30-I16 closed with audit A-P30-i16; waves closed=30; outcomes P30-I16-W01: Routed detail-card iter/phase/backlog/incident status cells through status_sigil; goldens reg... | P30-I16-W02: Re-pinned U2/U1 cost+ballot literals to designer pin-strip; evidence goldens regenerated for ... | P30-I16-W03: Pinned U6 sandbox empty+populated goldens, Enter-opens-selected-row peek (reload->r + selecti...",
       "tier": "working"
     }
   },
@@ -23867,7 +23926,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T05:26:31.825219Z",
+  "updated_at": "2026-06-12T06:22:42.281718Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -88754,10 +88813,10 @@
     "P30-I16-W15": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i16",
+      "claimed_at": "2026-06-12T05:29:16.449328Z",
+      "closed_at": "2026-06-12T05:29:17.284987Z",
+      "commit": "21f3f5b5d801869382302e0b7e609dde845b147d",
       "deps": [
         "P30-I16-W01",
         "P30-I16-W02",
@@ -88792,12 +88851,12 @@
       },
       "iter_id": "P30-I16",
       "opened_at": "2026-06-11T15:24:55.614890Z",
-      "outcome": null,
+      "outcome": "Golden completeness sweep + D-I operator screenshot review SIGNED OFF. Sweep: snapshot-pairing passes phase-PR mode; full snapshot suite green; schema-banner goldens at 1.12. Review spawned + closed reactive waves W26 (seal matte->header glyph), W27 (startup help guard), W28 (operator-approved 42-wide symmetric ASCII-art hero seal, centered), W29 (doctor config/help pane fd-0 leak fix), W30 (seal spread to autopilot/feed/agent_watch/evidence empties). Operator signed off on the consolidated result.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
