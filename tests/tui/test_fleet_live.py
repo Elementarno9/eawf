@@ -377,7 +377,8 @@ def test_cockpit_pause_offloads_to_worker(
 
     asyncio.run(body())
     # A live fleet run routes space -> fleet.pause (W06), not the global toggle.
-    assert calls == ["fleet.pause"]
+    # The cockpit also reattaches the draining run on mount (W07), so filter it.
+    assert [m for m in calls if m != "fleet.reattach"] == ["fleet.pause"]
 
 
 def test_cockpit_kill_offloads_to_worker_after_confirm(
@@ -428,8 +429,10 @@ def test_cockpit_kill_offloads_to_worker_after_confirm(
             assert "not killed" in str(result.render())  # type: ignore[attr-defined]
 
     asyncio.run(body())
-    assert calls and calls[0][0] == "agent.kill"
-    assert calls[0][1]["signal"] == "kill"
+    # Filter the on-mount fleet.reattach (W07): the confirmed kill is agent.kill.
+    kill_calls = [c for c in calls if c[0] != "fleet.reattach"]
+    assert kill_calls and kill_calls[0][0] == "agent.kill"
+    assert kill_calls[0][1]["signal"] == "kill"
 
 
 # --------------------------------------------------------------------------
@@ -619,4 +622,5 @@ def test_cockpit_halt_over_live_run_drives_fleet_halt(
             assert "draining to summary" in str(result.render())  # type: ignore[attr-defined]
 
     asyncio.run(body())
-    assert calls == ["fleet.halt"]
+    # Filter the on-mount fleet.reattach (W07): H over a live run drives fleet.halt.
+    assert [m for m in calls if m != "fleet.reattach"] == ["fleet.halt"]

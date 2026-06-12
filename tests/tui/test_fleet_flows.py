@@ -18,7 +18,8 @@ of ``tui_flow`` spec ``args`` dicts, the same shape the G1-G7
 dispatched through the production
 :data:`~eawf.workflow.audit_dsl.registry.CHECK_REGISTRY` ``"tui_flow"`` entry --
 the live ``check_tui_flow`` call-site the audit runner uses -- and a count guard
-pins the registry at exactly ten flows. So a DROPPED journey reds the audit two
+pins the registry at exactly eleven flows (the S1-S12 G8-G17 journeys plus the
+W07 G18 cockpit reattach-on-mount). So a DROPPED journey reds the audit two
 ways: the count guard fails, and its parametrized gate case disappears. The
 journeys are bound to the flow-gate kind, never a green-by-omission claim.
 
@@ -375,6 +376,22 @@ FLEET_FLOW_SPECS: tuple[dict[str, object], ...] = (
             "modal_depth": 1,
         },
     },
+    {
+        # G18 (W07, S12 session-resume) -- mounting the cockpit over a persisted
+        # DRAINING run re-binds the run via fleet.reattach (the on-mount call) and
+        # resumes live vitals, landing back on the cockpit (no modal). With no
+        # live daemon in the flow harness the reattach is a silent no-op, so the
+        # journey's observable terminal is the cockpit rendering the draining
+        # vitals -- the reattach binding is wired, not idle.
+        "flow": "G18-cockpit-reattach-on-mount",
+        "run_kind": "draining",
+        "key_sequence": ["2"],
+        "terminal_state": {
+            "current_mode": "autopilot",
+            "top_screen": "AutopilotModeScreen",
+            "modal_depth": 0,
+        },
+    },
 )
 
 
@@ -411,17 +428,18 @@ def _spec_with_state(spec_args: dict[str, object], tmp_path: Path) -> CheckSpec:
 # --------------------------------------------------------------------------
 
 
-def test_fleet_flow_specs_count_is_ten() -> None:
-    # The S1-S12 fleet journeys fold into exactly ten G8-G17 flow rows; the
-    # count guard reds the audit if a journey is dropped from the registry.
-    assert len(FLEET_FLOW_SPECS) == 10
+def test_fleet_flow_specs_count_is_eleven() -> None:
+    # The S1-S12 fleet journeys fold into G8-G17, plus the W07 G18 session-resume
+    # (cockpit reattach-on-mount) journey -- eleven rows. The count guard reds the
+    # audit if a journey is dropped from the registry.
+    assert len(FLEET_FLOW_SPECS) == 11
 
 
-def test_fleet_flow_ids_are_g8_through_g17() -> None:
-    # The ten rows carry the G8..G17 ids in order, so a renamed / reordered
+def test_fleet_flow_ids_are_g8_through_g18() -> None:
+    # The eleven rows carry the G8..G18 ids in order, so a renamed / reordered
     # journey is caught (the registry is the canonical journey list).
     prefixes = [str(spec["flow"]).split("-", 1)[0] for spec in FLEET_FLOW_SPECS]
-    assert prefixes == [f"G{n}" for n in range(8, 18)]
+    assert prefixes == [f"G{n}" for n in range(8, 19)]
 
 
 def test_fleet_flow_specs_only_pin_known_observable_fields() -> None:

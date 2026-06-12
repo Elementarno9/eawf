@@ -318,6 +318,16 @@ _FLEET_PAUSE_RPC: str = "fleet.pause"
 _FLEET_RESUME_RPC: str = "fleet.resume"
 _FLEET_HALT_RPC: str = "fleet.halt"
 
+#: Daemon JSON-RPC method the cockpit calls on mount when it binds a persisted
+#: DRAINING run (W07): ``fleet.reattach`` re-binds the run's still-live lanes
+#: against the pid registry + resumes draining, so reopening the cockpit after a
+#: TUI close picks the run back up rather than showing a stale frozen vitals row.
+_FLEET_REATTACH_RPC: str = "fleet.reattach"
+
+#: Worker group the on-mount fleet reattach runs under, so the synchronous RPC
+#: round-trip never blocks the cockpit's first paint.
+_REATTACH_GROUP: str = "autopilot-reattach"
+
 #: Fleet run-state values that mean a live run is in flight (so the cockpit
 #: fleet controls route to the ``fleet.*`` RPCs rather than the per-wave / global
 #: dispatch-pause fallbacks).
@@ -1053,7 +1063,7 @@ class AutopilotModeScreen(ScopeScreen):
             yield Static(_dispatch_idle_line(), id=DISPATCH_RESULT_ID)
 
     def on_mount(self) -> None:
-        """Seed from app state, arm the rebuild seams, and render the frontier."""
+        """Seed from app state, arm the rebuild seams, render the frontier, reattach."""
         super().on_mount()
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
@@ -1063,6 +1073,76 @@ class AutopilotModeScreen(ScopeScreen):
         if hasattr(self.app, "render_mode"):
             self.watch(self.app, "render_mode", self._on_render_mode)
         self._rebuild()
+        # W07: a cockpit mounted with a persisted DRAINING run re-binds that run's
+        # live lanes + resumes draining via fleet.reattach, so reopening the
+        # cockpit after a TUI close picks the run back up rather than showing a
+        # stale frozen vitals row.
+        self._maybe_reattach()
+
+    def _maybe_reattach(self) -> None:
+        """Re-bind a persisted DRAINING run on mount via fleet.reattach (W07).
+
+        Reopening the cockpit while a fleet run is mid-drain must re-bind to the
+        live run rather than render a frozen snapshot: the daemon-owned
+        :func:`~eawf.runtime.daemon.methods.fleet.reattach` walks the persisted
+        run's in-flight lanes against the pid registry (re-binding the live ones,
+        resolving the dead ones), then resumes draining. The cockpit calls it on
+        mount ONLY when (a) a fleet run is bound, (b) its state is DRAINING (a
+        held / done / unarmed run needs no reattach), and (c) a daemon socket is
+        reachable. The RPC round-trips on a worker so the first paint never
+        blocks; an unreachable daemon is a silent no-op (the vitals still render
+        off the persisted run).
+        """
+        run = self._current_fleet_run()
+        if run is None or run.run_state.value != "draining":
+            return
+        if not self._daemon_available():
+            logger.info("autopilot_reattach skipped no_daemon")
+            return
+        self.run_worker(
+            self._reattach_worker(),
+            group=_REATTACH_GROUP,
+            exclusive=True,
+        )
+
+    async def _reattach_worker(self) -> None:
+        """Worker body: call fleet.reattach off-thread, then refresh the vitals.
+
+        Runs the synchronous :meth:`_issue_reattach` through
+        :func:`asyncio.to_thread` so the daemon round-trip never blocks the event
+        loop, then rebuilds the cockpit so the re-bound run's live vitals paint.
+        """
+        reattached = await asyncio.to_thread(self._issue_reattach)
+        if reattached and self.is_mounted:
+            self._rebuild()
+        logger.info(f"autopilot_reattach reattached={reattached}")
+
+    def _issue_reattach(self) -> bool:
+        """Call the ``fleet.reattach`` RPC; return whether it was issued (W07).
+
+        Calls ``fleet.reattach`` through the
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam; the daemon
+        re-binds the persisted run's live lanes + resumes draining. An
+        unreachable / rejecting / timing-out daemon is a silent no-op (the cockpit
+        keeps rendering off the persisted run rather than faking a reattach).
+
+        Returns:
+            ``True`` when the reattach RPC was issued + accepted, else ``False``.
+        """
+        if not self._daemon_available():
+            return False
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=30.0) as client:
+                client.call(_FLEET_REATTACH_RPC, {})
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_reattach daemon_rejected message={exc.message!r}")
+            return False
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_reattach daemon_fallback cause={exc!r}")
+            return False
+        return True
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Mirror an app-level state change onto this screen's reactive."""
