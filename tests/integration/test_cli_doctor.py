@@ -73,7 +73,6 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "mcp_drift",
         "state_scale_ceiling",
         "render_output_roundtrip",
-        "seal_capable",
         "project_record_present",
         "plugin_cross_scope_dup",
         "git_state_drift",

@@ -9,22 +9,21 @@ narrow-variant golden every journey ships per CR-03.
 Each frame is captured from the :class:`InitWizardModal` mounted IN ISOLATION
 on a bare themed host (mirroring ``test_overlays_reskin_w21.py``) so the frame
 is a pure function of the constructed :class:`WizardModel` with no off-disk
-daemon read and no live worker. The seal kill switch is set so the hero uses
-the glyph fallback (deterministic, no terminal-dependent raster image).
+daemon read and no live worker. The J1 hero mounts the deterministic ASCII-art
+Seal (accent-on-surface TEXT, no terminal-dependent raster image), so the frame
+is byte-stable across machines.
 
 Regenerate after an intentional layout change with::
 
-    EAWF_DAEMONLESS=1 EAWF_SEAL_DISABLE=1 EAWF_SNAPSHOT_REGEN=1 \\
+    EAWF_DAEMONLESS=1 EAWF_SNAPSHOT_REGEN=1 \\
         uv run pytest tests/tui/test_init_wizard_snapshots.py
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 
-import pytest
 from textual.app import App
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -39,7 +38,6 @@ from eawf.surfaces.tui.screens.overlays.init_wizard import (
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
-from eawf.surfaces.tui.widgets.seal import SEAL_DISABLE_ENV, seal_capable
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _GOLDEN = Path(__file__).resolve().parents[2] / "tests" / "snapshots" / "tui" / "golden"
@@ -48,13 +46,6 @@ _WIDE = (120, 44)
 _NARROW = (80, 40)
 
 assert _THEME.is_file(), f"missing theme: {_THEME}"
-
-
-@pytest.fixture(autouse=True)
-def _force_seal_glyph(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the glyph-fallback seal path so goldens never embed a raster."""
-    monkeypatch.setenv(SEAL_DISABLE_ENV, "1")
-    seal_capable.cache_clear()
 
 
 class _HostApp(App[None]):
@@ -245,11 +236,3 @@ def test_j4_done_doctor_warn_snapshot() -> None:
 
 def test_j4_done_narrow_snapshot() -> None:
     _capture(_done(warn=False), "init_wizard_j4_done_narrow.txt", size=_NARROW)
-
-
-# ---- guard: the seal kill switch is honored for deterministic goldens -------
-
-
-def test_seal_kill_switch_forces_glyph_fallback() -> None:
-    assert os.environ.get(SEAL_DISABLE_ENV) == "1"
-    assert seal_capable() is False

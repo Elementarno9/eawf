@@ -581,14 +581,14 @@ def test_header_render_returns_brand_after_assignment() -> None:
 def test_header_renders_crisp_glyph_and_mounts_no_seal_image() -> None:
     # W26 revert: the header brand mark is the crisp accent glyph on every
     # terminal -- a 1-cell raster cannot show the seal's fisheye detail and
-    # reads as an unreadable square, so the header mounts no Image widget and
-    # always renders the brand glyph in the text. header_mod no longer imports
-    # seal_capable / seal_image_widget at all.
+    # reads as an unreadable square, so the header is a bare Static that mounts
+    # no child widget and always renders the brand glyph in the text. header_mod
+    # no longer imports any raster-seal capability helper at all.
     assert not hasattr(header_mod, "seal_capable")
     assert not hasattr(header_mod, "seal_image_widget")
 
     async def body() -> tuple[bool, bool]:
-        from textual_image.widget import Image  # type: ignore[import-untyped]
+        from textual.widget import Widget
 
         app = _Harness()
         async with app.run_test(size=(80, 6)) as pilot:
@@ -596,13 +596,15 @@ def test_header_renders_crisp_glyph_and_mounts_no_seal_image() -> None:
             header = app.query_one("#hdr", Header)
             header.state = _load(_EMPTY_REPO)
             await pilot.pause()
-            image_mounted = bool(header.query(Image))
+            # The header is a bare Static: it mounts no child widget (the seal
+            # image path is retired), it renders the brand glyph in its text.
+            child_mounted = bool(header.query(Widget))
             glyph = chrome("brand", mode="unicode")
             text = str(header.render())
-            return image_mounted, glyph in text
+            return child_mounted, glyph in text
 
-    image_mounted, glyph_in_text = asyncio.run(body())
-    assert image_mounted is False, "the header mounts no seal Image widget"
+    child_mounted, glyph_in_text = asyncio.run(body())
+    assert child_mounted is False, "the header mounts no child widget"
     assert glyph_in_text is True, "the crisp brand glyph leads the header text"
 
 
