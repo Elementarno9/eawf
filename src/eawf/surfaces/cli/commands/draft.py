@@ -17,7 +17,10 @@ from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from eawf.kernel.spec.intent import IntentBrief
+    from eawf.kernel.state.models import Claim
 
 draft_app = typer.Typer(
     name="draft",
@@ -338,6 +341,53 @@ def promote_draft(
         {"artifact_id": artifact_id, "uri": uri, "kind": artifact_kind},
         f"{kind} promote {slug} -> {artifact_id}",
         flags=flags,
+    )
+
+
+def synthesize_campaign_brief(topic: str, claims: Sequence[Claim]) -> IntentBrief:
+    """Synthesise an :class:`IntentBrief` from a campaign's surviving claims.
+
+    The campaign synthesis step: it folds the *surviving* (live) claims of a
+    research campaign into a typed :class:`~eawf.kernel.spec.intent.IntentBrief`
+    so the brief can be promoted through :func:`promote_draft` with the EviBound
+    rung-1 gate scoring its ``evidence_refs``. Every live claim's
+    ``evidence_refs`` are aggregated (deduped, order-preserved) onto the brief,
+    and each claim title becomes a planned step -- so a brief synthesised from
+    claims whose evidence does not resolve is rejected at the operator promote
+    path (the EviBound feed this wave un-idles), while a fully-referenced brief
+    promotes.
+
+    Only :attr:`~eawf.kernel.state.enums.ClaimStatus.OPEN` /
+    :attr:`~eawf.kernel.state.enums.ClaimStatus.SUPPORTED` claims count as
+    surviving; ``REFUTED`` / ``SUPERSEDED`` claims are pruned (they carry no
+    forward-looking evidence), so the brief's evidence reflects only the live
+    survivor set.
+
+    Args:
+        topic: The campaign topic the brief converges on.
+        claims: The campaign's claim ledger; the live survivors are folded in.
+
+    Returns:
+        A :class:`~eawf.kernel.spec.intent.IntentBrief` carrying the surviving
+        claims' aggregated evidence refs + a planned step per claim title.
+    """
+    from eawf.kernel.spec.intent import IntentBrief
+    from eawf.kernel.state.enums import ClaimStatus
+
+    survivors = [c for c in claims if c.status in (ClaimStatus.OPEN, ClaimStatus.SUPPORTED)]
+    evidence: list[str] = []
+    for claim in survivors:
+        for ref in claim.evidence_refs:
+            if ref not in evidence:
+                evidence.append(ref)
+    steps = [claim.title for claim in survivors][:10]
+    problem = f"Synthesise the campaign findings for: {topic}"[:200]
+    desired = f"A promotable brief backed by {len(survivors)} surviving claim(s)"[:200]
+    return IntentBrief(
+        problem=problem,
+        desired_outcome=desired,
+        planned_steps=steps,
+        evidence_refs=evidence,
     )
 
 

@@ -457,6 +457,44 @@ def _neg_epoch(moment: datetime) -> float:
     return -moment.timestamp()
 
 
+def prune_round_carryover(
+    claims: Iterable[Claim],
+    open_questions: Iterable[OpenQuestion],
+    *,
+    now: datetime,
+) -> PruningResult:
+    """Prune the claim ledger carried between campaign rounds (the L1 reducer).
+
+    The between-rounds wire the bounded round loop calls after each round
+    reconciles its findings: it runs the lightest :attr:`PruneLevel.L1` reducer
+    over the accumulated ledger so the next round (and the synthesis) work over
+    only the *live* claims -- the provably-dead rows (``SUPERSEDED`` claims +
+    claims answering a ``DROPPED`` question) are dropped from the carried-forward
+    context, while every live assertion is kept.
+
+    L1 is the deliberate floor for the between-rounds prune: a campaign mid-run
+    must not lose a live (possibly still-converging) claim, so the loop never
+    escalates past dropping the provably-dead rows. The stronger levels
+    (L2-L5) stay reserved for the orchestrator's per-dispatch context-budget
+    fit (the P31 catalog), not the between-rounds carryover.
+
+    Pure: the same ledgers + ``now`` always yield the same
+    :class:`PruningResult` (it delegates to :func:`prune` at ``L1``).
+
+    Args:
+        claims: The accumulated Claim ledger after the round reconciled.
+        open_questions: The OpenQuestion ledger (L1 needs the DROPPED-question
+            set to drop claims answering a dropped question).
+        now: The reference instant (unused by L1's rules but threaded so the
+            signature matches the loop's per-round clock).
+
+    Returns:
+        The :class:`PruningResult` at :attr:`PruneLevel.L1` -- the survivor
+        ids the next round carries plus every dropped dead row.
+    """
+    return prune(PruneLevel.L1, claims, open_questions, now=now)
+
+
 __all__ = [
     "DEFAULT_RETENTION_WINDOW",
     "DEFAULT_TOP_K",
@@ -466,4 +504,5 @@ __all__ = [
     "PruneLevel",
     "PruningResult",
     "prune",
+    "prune_round_carryover",
 ]
