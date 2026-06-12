@@ -1011,6 +1011,45 @@ DEFAULT_MAX_TOTAL_ATTEMPTS: int = 3
 LaneSpawnFn = Callable[["MethodContext", str, str], "Awaitable[LaneDispatch]"]
 
 
+class LaneRepairOutcome(BaseModel):
+    """Outcome of driving a failing lane through the grounded repair ladder -- W03.
+
+    The loop's :attr:`_Loop.repair` hook returns this when a lane the watcher
+    reported a failing-check fork is routed through the bounded grounded repair
+    ladder (:func:`repair_lane_or_fork`):
+
+    - ``resolved=True`` -- the repair re-dispatch passed the refused check, so the
+      lane is re-registered in flight under *dispatch* (its incremented dispatch
+      ``attempt`` IS the cockpit repair counter the lane cell renders).
+    - ``resolved=False`` -- the repair budget was spent without the check passing,
+      so the hook has already enqueued a ``REPAIR_EXHAUSTED`` fork; the lane stays
+      forked.
+
+    Attributes:
+        resolved: Whether the repair re-dispatch resolved the refused check.
+        attempts_used: The number of grounded-repair attempts the ladder burned
+            (the cockpit's ``repair n/<budget>`` counter reads this).
+        dispatch: The re-dispatched lane on a resolved repair (carrying the
+            incremented attempt + fresh session / pgid); ``None`` on escalation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    resolved: bool
+    attempts_used: int = Field(ge=1)
+    dispatch: LaneDispatch | None = None
+
+
+#: Drive one failing lane through the bounded grounded repair ladder -- W03.
+#: Given the daemon context + the forked lane, returns the
+#: :class:`LaneRepairOutcome` of re-dispatching it up the ladder
+#: (:func:`repair_lane_or_fork`): a resolved repair carries the re-dispatched
+#: lane (its incremented attempt is the cockpit repair counter), an exhausted
+#: one has already enqueued the ``REPAIR_EXHAUSTED`` fork. The daemon wires a
+#: live hook; tests inject a deterministic fake so the loop exercises the repair
+#: path without a real adapter.
+LaneRepairHook = Callable[["MethodContext", FleetLane], LaneRepairOutcome]
+
+
 #: A HARD spawn-failure class -> the :class:`FleetForkReason` it terminates the
 #: lane to (DL-11). Total over the two HARD members of
 #: :class:`~eawf.runtime.daemon.dispatch_runner.SpawnFailureClass`
@@ -1341,6 +1380,36 @@ async def spawn_lane_or_fork(
     )
 
 
+def _drive_coro(coro: Awaitable[Any]) -> Any:
+    """Run *coro* to completion from the synchronous fleet loop -- W03.
+
+    The fleet drain is synchronous (it runs on the W01 worker thread, or inline
+    for a test caller), but the bounded spawn ladder
+    (:func:`spawn_lane_or_fork`) and the grounded repair ladder
+    (:func:`repair_lane_or_fork`) are async. This bridges the two: when no event
+    loop is running on the current thread (the normal case -- the worker drive
+    thread + the synchronous test callers) it runs the coroutine on a fresh loop
+    via :func:`asyncio.run`; when a loop IS running (a coroutine driving the
+    loop, e.g. a test that awaits the drive on the event loop) it runs the
+    coroutine on a fresh loop in a dedicated worker thread so it never nests an
+    ``asyncio.run`` inside the running loop.
+
+    Args:
+        coro: The awaitable the synchronous loop drives to completion.
+
+    Returns:
+        The coroutine's result.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)  # type: ignore[arg-type]
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(lambda: asyncio.run(coro)).result()  # type: ignore[arg-type]
+
+
 @dataclass
 class _Loop:
     """In-memory driver of one fleet auto-drain run.
@@ -1369,6 +1438,25 @@ class _Loop:
         fork_evidence: The injected fork-evidence reader. When a lane pauses to
             a DL-6 blocking fork the reader supplies the evidence ref the queued
             :class:`FleetFork` carries.
+        cancel: Optional shutdown event the loop checks between rounds (W01).
+        classify: Optional :class:`ErrorClassifier` for the bounded spawn ladder
+            (W03). When set, a lane spawn that raises ``RuntimeSpawnError`` is
+            routed through :func:`spawn_lane_or_fork` so a HARD failure
+            terminates the lane to a typed fork on the first failure and a
+            RECOVERABLE one retries up the bounded ladder -- a spawn error FORKS
+            the lane rather than aborting the whole run. ``None`` (the default)
+            keeps the pre-W03 direct-spawn path for the synchronous in-process
+            callers + the W01 spawner fakes.
+        runtime_preference: The ``Wave.runtime_preference`` runtime ladder the
+            bounded spawn ladder's V5 switch walks past a failed runtime (W03).
+        max_total_attempts: Total spawn ceiling for the bounded spawn ladder.
+        repair: Optional repair hook the loop invokes on a failing-check fork
+            (W03). When set, a lane the watcher reports ``"forked"`` on a failing
+            check is routed through it to re-dispatch up the bounded grounded
+            repair ladder (:func:`repair_lane_or_fork`); the resolved lane's
+            dispatch attempt advances so the cockpit repair counter reflects the
+            real attempts. ``None`` (the default) keeps the pre-W03 terminal-fork
+            behaviour.
     """
 
     ctx: MethodContext
@@ -1380,6 +1468,10 @@ class _Loop:
     spend: LaneSpendReader = _default_lane_spend
     fork_evidence: ForkEvidenceReader = _default_fork_evidence
     cancel: threading.Event | None = None
+    classify: ErrorClassifier | None = None
+    runtime_preference: list[str] = field(default_factory=list)
+    max_total_attempts: int = DEFAULT_MAX_TOTAL_ATTEMPTS
+    repair: LaneRepairHook | None = None
 
     def _persist(self) -> None:
         """Persist the current run snapshot through the daemon canonical writer."""
@@ -1409,7 +1501,24 @@ class _Loop:
                 # lanes are resolved by the drain / hard-halt branch).
                 break
             wave_id = self.run.frontier.pop(0)
-            dispatch = _normalise_dispatch(self.spawn(self.ctx, wave_id))
+            # Resolve the lane's RiskTier badge up front so a spawn that FORKS
+            # (a HARD spawn failure / a retry-exhausted ladder) records the band
+            # on the queued fork too.
+            risk_tier = _lane_risk_tier(self.ctx, wave_id)
+            dispatch = self._spawn_lane(wave_id, risk_tier)
+            if dispatch is None:
+                # The bounded spawn ladder terminated the lane to a queued fork
+                # (a HARD failure or a spent retry budget): the run is NOT
+                # aborted -- the loop counts the fork + moves to the next wave.
+                # The ladder enqueued the fork DIRECTLY through the canonical
+                # writer (it bumped forked + blocked + appended to forks on
+                # disk), so absorb that disk-side fork into the in-memory run
+                # before the loop's next persist would otherwise clobber it.
+                self._resync_forks_from_disk()
+                self.run.counters.claimed += 1
+                self.run.counters.dispatched += 1
+                logger.info(f"_fill_lanes wave={wave_id} status=spawn-forked")
+                continue
             self.run.lanes[wave_id] = FleetLane(
                 wave_id=wave_id,
                 attempt=dispatch.attempt,
@@ -1417,10 +1526,8 @@ class _Loop:
                 pgid=dispatch.pgid,
                 dispatched_at=datetime.now(UTC),
             )
-            # Resolve + record the lane's RiskTier badge from the wave's gate
-            # kinds so the cockpit can render it and the drain-time auto-close /
-            # fork gate can consult it.
-            risk_tier = _lane_risk_tier(self.ctx, wave_id)
+            # The cockpit reads the lane's RiskTier badge + drives the drain-time
+            # auto-close / fork gate from this registry.
             self.risk_tiers[wave_id] = risk_tier
             self.run.counters.claimed += 1
             self.run.counters.dispatched += 1
@@ -1429,6 +1536,87 @@ class _Loop:
                 f"session={dispatch.session_id!r} pgid={dispatch.pgid} "
                 f"killable={dispatch.pgid is not None} risk_tier={risk_tier.value}"
             )
+
+    def _spawn_lane(self, wave_id: str, risk_tier: RiskTier) -> LaneDispatch | None:
+        """Spawn one lane, routing failures through the bounded spawn ladder -- W03.
+
+        When no :class:`ErrorClassifier` is wired (the synchronous in-process
+        callers + the W01 spawner fakes) this calls the injected spawner
+        directly + normalises its return, unchanged from the pre-W03 path.
+
+        When *classify* IS wired (the live drive), the spawn routes through the
+        bounded spawn ladder (:func:`spawn_lane_or_fork`): a clean spawn returns
+        its :class:`LaneDispatch`, a HARD spawn failure (ENOENT / OOM)
+        TERMINATES the lane to a typed fork on the first failure, and a
+        RECOVERABLE failure retries up the bounded ladder (RETRY_SAME / SWITCH)
+        before HALTing to a ``RETRY_EXHAUSTED`` fork. Either terminal enqueues
+        the fork through the daemon canonical writer + re-raises; this catches
+        the re-raise and returns ``None`` so the loop counts the fork + advances
+        to the next wave rather than ABORTING the whole run on one spawn error.
+
+        Args:
+            wave_id: ``W<NN>`` wave to spawn into a lane.
+            risk_tier: The lane's resolved :class:`RiskTier`, recorded on any
+                termination fork the ladder enqueues.
+
+        Returns:
+            The :class:`LaneDispatch` of a clean spawn, or ``None`` when the
+            bounded ladder terminated the lane to a queued fork.
+        """
+        if self.classify is None:
+            return _normalise_dispatch(self.spawn(self.ctx, wave_id))
+
+        classify = self.classify
+
+        async def _spawn_once(ctx: MethodContext, wid: str, _runtime: str) -> LaneDispatch:
+            # The injected spawner is sync; a RuntimeSpawnError it raises is the
+            # signal the bounded ladder classifies + bounds. A clean return is
+            # normalised to a LaneDispatch.
+            return _normalise_dispatch(self.spawn(ctx, wid))
+
+        runtime = self.runtime_preference[0] if self.runtime_preference else "claude-code"
+        try:
+            return _drive_coro(
+                spawn_lane_or_fork(
+                    self.ctx,
+                    runtime=runtime,
+                    preference=list(self.runtime_preference),
+                    spawn=_spawn_once,
+                    classify=classify,
+                    wave_id=wave_id,
+                    attempt=1,
+                    risk_tier=risk_tier,
+                    max_total_attempts=self.max_total_attempts,
+                )
+            )
+        except RuntimeSpawnError, LaneRetryExhaustedError:
+            # The bounded ladder already enqueued the typed termination fork
+            # through the daemon canonical writer; the lane is forked, not
+            # registered. The run continues (it is NOT aborted on a spawn error).
+            return None
+
+    def _resync_forks_from_disk(self) -> None:
+        """Absorb a ladder-enqueued fork from disk into the in-memory run -- W03.
+
+        The bounded spawn ladder (:func:`spawn_lane_or_fork`) and the grounded
+        repair ladder (:func:`repair_lane_or_fork`) enqueue their termination
+        forks DIRECTLY through the daemon canonical writer (:func:`_enqueue_fork`
+        bumps ``forked`` + ``blocked`` + appends to ``forks`` on disk). The loop
+        holds an in-memory run it re-persists each round, so without re-reading
+        the disk fork the loop's next ``_persist()`` would clobber it. This
+        reloads the persisted run's fork queue + the two safety tallies into the
+        in-memory run so the disk-side fork survives the next persist. A
+        stateless context (no on-disk run) is a no-op -- the ladder cannot have
+        enqueued a fork there.
+        """
+        if self.ctx.state_path is None:
+            return
+        persisted = load_state(Path(self.ctx.state_path)).fleet_run
+        if persisted is None:
+            return
+        self.run.forks = list(persisted.forks)
+        self.run.counters.forked = persisted.counters.forked
+        self.run.counters.blocked = persisted.counters.blocked
 
     def _drain_lanes(self) -> bool:
         """Watch in-flight lanes to their terminal outcome, freeing each slot.
@@ -1503,6 +1691,15 @@ class _Loop:
         draining). A genuine watcher fork is NOT enqueued -- it is a terminal
         failure, not an operator pause.
 
+        DL-7 (W03): when a genuine watcher fork (a failing check) occurs AND a
+        repair hook is wired, the lane is first routed through the bounded
+        grounded repair ladder (:func:`repair_lane_or_fork`): a resolved repair
+        RE-REGISTERS the lane in flight under its incremented dispatch attempt
+        (so the loop watches it again and the cockpit repair counter advances),
+        and an exhausted ladder leaves the enqueued ``REPAIR_EXHAUSTED`` fork
+        the hook already queued. A re-dispatched lane returns ``"running"`` so
+        the round is not counted clean and the drain continues to watch it.
+
         Args:
             wave_id: ``W<NN>`` wave whose in-flight lane to finish.
 
@@ -1535,8 +1732,31 @@ class _Loop:
                     forked_at=datetime.now(UTC),
                 )
             )
+        elif outcome == "forked" and self.repair is not None:
+            # A genuine watcher fork (a failing check) with a repair hook wired:
+            # re-dispatch up the bounded grounded repair ladder (DL-7) before
+            # counting it a terminal failure.
+            repaired = self._repair_lane(wave_id, lane, risk_tier)
+            if repaired is not None:
+                # The repair re-dispatch resolved the refused check: re-register
+                # the lane in flight under its incremented attempt (the cockpit
+                # repair counter) so the loop watches it again. Restore the
+                # RiskTier badge popped above.
+                self.run.lanes[wave_id] = repaired
+                self.risk_tiers[wave_id] = risk_tier
+                logger.info(
+                    f"_finish_lane wave={wave_id} status=repaired attempt={repaired.attempt}"
+                )
+                return "running"
+            # The repair ladder was spent: the hook drove repair_lane_or_fork,
+            # which enqueued the REPAIR_EXHAUSTED fork DIRECTLY through the
+            # canonical writer (bumping forked + blocked on disk). Absorb that
+            # disk-side fork so the loop's next persist does not clobber it +
+            # does not double-count the failure.
+            self._resync_forks_from_disk()
         elif outcome == "forked":
-            # A genuine watcher fork: a terminal failure, not an operator pause.
+            # A genuine watcher fork with no repair hook: a terminal failure
+            # (the pre-W03 behaviour), not an operator pause.
             self.run.counters.forked += 1
             self.run.counters.failed += 1
         else:
@@ -1553,6 +1773,53 @@ class _Loop:
         # A needs-user pause must reset the convergence streak too: report it as
         # a fork to the drain loop's clean-round accounting.
         return "forked" if fork_reason is not None else outcome
+
+    def _repair_lane(self, wave_id: str, lane: FleetLane, risk_tier: RiskTier) -> FleetLane | None:
+        """Re-dispatch a failing lane up the bounded grounded repair ladder -- W03.
+
+        Invoked from :meth:`_finish_lane` when the watcher reported a genuine
+        failing-check fork AND a :attr:`repair` hook is wired. The hook drives
+        the bounded grounded repair ladder (:func:`repair_lane_or_fork`): a
+        resolved repair yields a re-dispatched :class:`FleetLane` carrying the
+        INCREMENTED dispatch attempt (the cockpit's ``repair n/<budget>``
+        counter), and an exhausted ladder has already enqueued the
+        ``REPAIR_EXHAUSTED`` fork so the lane stays forked.
+
+        When no hook is wired (the synchronous in-process callers + the existing
+        tests) this returns ``None`` so the lane keeps its pre-W03 terminal-fork
+        behaviour.
+
+        Args:
+            wave_id: ``W<NN>`` wave whose failing lane to repair.
+            lane: The forked lane (carrying its pre-repair attempt).
+            risk_tier: The lane's resolved :class:`RiskTier`, carried onto the
+                re-dispatched lane's badge.
+
+        Returns:
+            The re-dispatched :class:`FleetLane` on a resolved repair (its
+            ``attempt`` advanced), or ``None`` when no hook is wired or the
+            repair ladder was exhausted (a ``REPAIR_EXHAUSTED`` fork queued).
+        """
+        if self.repair is None:
+            return None
+        outcome = self.repair(self.ctx, lane)
+        if not outcome.resolved or outcome.dispatch is None:
+            logger.info(
+                f"_repair_lane wave={wave_id} status=exhausted attempts={outcome.attempts_used}"
+            )
+            return None
+        dispatch = outcome.dispatch
+        logger.info(
+            f"_repair_lane wave={wave_id} status=resolved attempt={dispatch.attempt} "
+            f"attempts_used={outcome.attempts_used}"
+        )
+        return FleetLane(
+            wave_id=wave_id,
+            attempt=dispatch.attempt,
+            session_id=dispatch.session_id,
+            pgid=dispatch.pgid,
+            dispatched_at=datetime.now(UTC),
+        )
 
     def _finish_run(self, reason: FleetTerminalReason) -> None:
         """Stamp the terminal run-summary fields at the DONE transition -- DL-10.
@@ -1728,6 +1995,10 @@ def arm_drive(
     fork_evidence: ForkEvidenceReader | None = None,
     block_authority: BlockAuthority = BlockAuthority.ADVISORY,
     cancel: threading.Event | None = None,
+    classify: ErrorClassifier | None = None,
+    runtime_preference: list[str] | None = None,
+    max_total_attempts: int = DEFAULT_MAX_TOTAL_ATTEMPTS,
+    repair: LaneRepairHook | None = None,
 ) -> FleetRun:
     """Arm + run the fleet auto-drain loop over *frontier*.
 
@@ -1779,6 +2050,18 @@ def arm_drive(
             When set the loop stops claiming + returns the run still DRAINING
             for a later reattach to recover; ``None`` (the synchronous callers)
             runs uninterrupted.
+        classify: Optional :class:`ErrorClassifier` enabling the bounded spawn
+            ladder (W03). When set, a lane spawn that raises ``RuntimeSpawnError``
+            routes through :func:`spawn_lane_or_fork` so a spawn error FORKS the
+            lane rather than aborting the run; ``None`` keeps the direct-spawn
+            path.
+        runtime_preference: The ``Wave.runtime_preference`` runtime ladder the
+            bounded spawn ladder's V5 switch walks (W03); empty when the wave
+            pins one runtime.
+        max_total_attempts: Total spawn ceiling for the bounded spawn ladder.
+        repair: Optional :class:`LaneRepairHook` enabling the bounded grounded
+            repair ladder (W03). When set, a failing-check fork re-dispatches up
+            the ladder; ``None`` keeps the terminal-fork behaviour.
 
     Returns:
         The :class:`FleetRun` snapshot after the loop returns -- ``DONE`` on a
@@ -1824,6 +2107,10 @@ def arm_drive(
         spend=spend if spend is not None else _default_lane_spend,
         fork_evidence=fork_evidence if fork_evidence is not None else _default_fork_evidence,
         cancel=cancel,
+        classify=classify,
+        runtime_preference=list(runtime_preference) if runtime_preference else [],
+        max_total_attempts=max_total_attempts,
+        repair=repair,
     )
     terminal = loop.run_to_terminal()
     logger.info(
