@@ -54,7 +54,7 @@ def _build_ctx(
     *,
     state_path: Path | None = None,
     event_path: Path | None = None,
-    bus: EventBus | None = None,
+    bus: Any | None = None,
 ) -> MethodContext:
     return MethodContext(
         started_at="2026-05-19T00:00:00+00:00",
@@ -138,6 +138,14 @@ def _build_state_payload(
 def _write_state(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(orjson.dumps(payload))
+
+
+class _RecordingBus:
+    def __init__(self) -> None:
+        self.published: list[Envelope] = []
+
+    def publish(self, envelope: Envelope) -> None:
+        self.published.append(envelope)
 
 
 def test_dispatch_fresh_path_returns_attempt_one_with_uuid_session(
@@ -1018,6 +1026,31 @@ def test_pause_sets_dispatch_paused_true_and_persists(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_pause_appends_event_publishes_bus_and_advances_last_event_id(tmp_path: Path) -> None:
+    """``agent.pause`` appends and publishes the same state mutation event."""
+    state_path = tmp_path / "state.json"
+    event_path = tmp_path / "store" / "event.jsonl"
+    _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
+    bus = _RecordingBus()
+    ctx = _build_ctx(state_path=state_path, event_path=event_path, bus=bus)
+
+    async def body() -> None:
+        result: dict[str, Any] = await pause(ctx, {})
+        assert result == {"paused": True}
+        envelopes = _read_envelopes(event_path)
+        assert len(envelopes) == 1
+        envelope = envelopes[0]
+        assert bus.published == [envelope]
+        assert ctx.last_event_id == envelope.id
+        assert envelope.payload["command"] == "agent.pause"
+        assert envelope.payload["event_type"] == "state.mutate.agent.pause"
+        assert envelope.payload["event_kind"] == "state_mutated"
+        assert envelope.payload["extras"] == {"dispatch_paused": True}
+        assert envelope.payload["before_state_version"] != envelope.payload["after_state_version"]
+
+    _run(body)
+
+
 def test_resume_sets_dispatch_paused_false_and_persists(tmp_path: Path) -> None:
     """``agent.resume`` returns ``paused=False`` and clears the persisted flag."""
     state_path = tmp_path / "state.json"
@@ -1053,14 +1086,25 @@ def test_pause_is_idempotent(tmp_path: Path) -> None:
 def test_resume_is_idempotent(tmp_path: Path) -> None:
     """Resuming an already-running state re-asserts the cleared flag."""
     state_path = tmp_path / "state.json"
+    event_path = tmp_path / "store" / "event.jsonl"
     _write_state(state_path, _build_state_payload(wave_id="P24-I01-W07"))
-    ctx = _build_ctx(state_path=state_path)
+    bus = _RecordingBus()
+    ctx = _build_ctx(state_path=state_path, event_path=event_path, bus=bus)
 
     async def body() -> None:
         first: dict[str, Any] = await resume(ctx, {})
         second: dict[str, Any] = await resume(ctx, {})
         assert first == second == {"paused": False}
         assert _read_dispatch_paused(state_path) is False
+        envelopes = _read_envelopes(event_path)
+        assert len(envelopes) == 2
+        assert [env.payload["command"] for env in envelopes] == ["agent.resume", "agent.resume"]
+        assert [env.payload["extras"] for env in envelopes] == [
+            {"dispatch_paused": False},
+            {"dispatch_paused": False},
+        ]
+        assert bus.published == envelopes
+        assert ctx.last_event_id == envelopes[-1].id
 
     _run(body)
 

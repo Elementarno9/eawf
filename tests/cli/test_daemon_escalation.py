@@ -387,6 +387,36 @@ def test_cli_read_verb_honours_daemonless_flag(
     assert result.exit_code == exit_codes.OK, result.output
 
 
+@pytest.mark.parametrize(
+    "argv",
+    (
+        ["--json", "status"],
+        ["--json", "roadmap", "show"],
+    ),
+)
+def test_cli_read_surfaces_do_not_write_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+) -> None:
+    """``eawf status`` and ``roadmap show`` are read-only state consumers."""
+    state_path = tmp_path / ".ea" / "state.json"
+    _build_state(state_path)
+    before = state_path.read_bytes()
+    write_calls: list[Path] = []
+
+    def fail_state_write(path: Path, _payload: dict[str, Any]) -> None:
+        write_calls.append(path)
+        pytest.fail(f"read-only command wrote state: {path}")
+
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    monkeypatch.setattr(_mutation, "atomic_write_json_locked", fail_state_write)
+    result = runner.invoke(app, argv)
+    assert result.exit_code == exit_codes.OK, result.output
+    assert write_calls == []
+    assert state_path.read_bytes() == before
+
+
 # ---- dev-mode gate on the raw RPC passthrough verb -------------------------
 
 

@@ -197,6 +197,8 @@ def state_transaction(
                 )
             state = report.state
             yield state
+            if read_only:
+                return
             new_payload = state.model_dump(mode="json")
             post = validate_state(new_payload, strict_optional=False)
             if post.state is None:

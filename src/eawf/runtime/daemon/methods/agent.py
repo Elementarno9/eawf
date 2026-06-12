@@ -1,5 +1,8 @@
 """``agent.*`` JSON-RPC methods: dispatch / session / kill.
 
+# noqa: EAWF010 cohesive agent RPC surface; split deferred until dispatch,
+session, kill, and pause/resume eventing stop changing together.
+
 The **skill -> adapter handshake** layers on top of the
 **fresh-dispatch** path of ``agent.dispatch``: when a caller supplies a
 :class:`~eawf.runtime.runtimes.plugin_manifest.SkillManifest` the dispatcher
@@ -48,6 +51,7 @@ not-found (``killed=false`` + ``reason``) rather than faking a kill.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
@@ -56,6 +60,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal, cast
 
+import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.layered import merge_config
@@ -64,12 +69,17 @@ from eawf.kernel.state.enums import (
     AgentSessionStatus,
     DispatchNote,
     EffortBucket,
+    StoreKind,
 )
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
+from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
+from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
@@ -1317,12 +1327,12 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:
     """Persist :attr:`~eawf.kernel.state.models.State.dispatch_paused` = *paused*.
 
-    Routes the write through the daemon canonical state writer (``portalock``
-    + locked atomic write, mirroring :func:`_register_executor_session`):
-    acquire the sibling lock, load the typed state, set the flag, stamp
-    ``updated_at``, then ``atomic_write_json_locked`` under the held lock.
-    Idempotent — setting the flag to its current value re-writes the same
-    payload (only ``updated_at`` advances).
+    Routes the write through the daemon canonical state/event path:
+    acquire the state sibling lock, load the typed state, set the flag,
+    stamp ``updated_at``, persist ``state.json``, append a matching
+    ``EVENT`` row, then publish that same envelope on the subscription bus.
+    Idempotent -- setting the flag to its current value re-writes the same
+    payload (only ``updated_at`` advances) and emits a fresh event row.
 
     Args:
         ctx: Daemon method context — supplies ``state_path``.
@@ -1338,12 +1348,54 @@ def _set_dispatch_paused(ctx: MethodContext, *, paused: bool) -> bool:
     if ctx.state_path is None:
         raise RuntimeError("state_path not configured on daemon context")
     state_path = Path(ctx.state_path)
+    event_path = (
+        Path(ctx.event_path)
+        if ctx.event_path is not None
+        else store_path(state_path, StoreKind.EVENT)
+    )
+    command = "agent.pause" if paused else "agent.resume"
+    summary = f"{command} dispatch_paused={paused}"
     with portalock.acquire(state_path, timeout=5.0):
         state = load_state(state_path)
+        before_version = state_version(state.model_dump(mode="json"))
         state.dispatch_paused = paused
         state.updated_at = datetime.now(UTC)
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
-    logger.info(f"_set_dispatch_paused paused={paused}")
+        new_payload = state.model_dump(mode="json")
+        after_version = state_version(new_payload)
+        atomic_write_json_locked(state_path, new_payload)
+        now = datetime.now(UTC)
+        args_hash = hashlib.sha256(
+            orjson.dumps({"paused": paused}, option=orjson.OPT_SORT_KEYS)
+        ).hexdigest()[:16]
+        envelope = Envelope(
+            schema_version="1.0",
+            id=f"EV-{uuid.uuid4().hex[:12]}",
+            kind=StoreKind.EVENT,
+            scope_id=state.urn,
+            created_at=now,
+            updated_at=None,
+            summary=summary,
+            payload=EventPayload(
+                timestamp=now,
+                event_type=f"state.mutate.{command}",
+                event_kind="state_mutated",
+                actor="daemon",
+                command=command,
+                args_hash=args_hash,
+                before_state_version=before_version,
+                after_state_version=after_version,
+                status="ok",
+                message=summary,
+                extras={"dispatch_paused": paused},
+            ).model_dump(mode="json"),
+            blob_refs=[],
+            artifact_ids=[],
+        )
+        append_envelope(event_path, envelope)
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(envelope)
+    ctx.last_event_id = envelope.id
+    logger.info(f"_set_dispatch_paused paused={paused} envelope_id={envelope.id!r}")
     return paused
 
 
