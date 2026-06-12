@@ -7811,6 +7811,146 @@
       "scope_id": "P30-I16-W30",
       "status": "done",
       "updated_at": "2026-06-12T05:26:31.825008Z"
+    },
+    "P30-I17-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W01",
+      "model": null,
+      "scope_id": "P30-I17-W01",
+      "status": "done",
+      "updated_at": "2026-06-12T07:52:53.317919Z"
+    },
+    "P30-I17-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W02",
+      "model": null,
+      "scope_id": "P30-I17-W02",
+      "status": "done",
+      "updated_at": "2026-06-12T07:52:55.111595Z"
+    },
+    "P30-I17-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W03",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W03",
+      "model": null,
+      "scope_id": "P30-I17-W03",
+      "status": "done",
+      "updated_at": "2026-06-12T07:53:08.572354Z"
+    },
+    "P30-I17-W04": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W04",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W04",
+      "model": null,
+      "scope_id": "P30-I17-W04",
+      "status": "done",
+      "updated_at": "2026-06-12T07:53:10.386060Z"
+    },
+    "P30-I17-W05": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W05",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W05",
+      "model": null,
+      "scope_id": "P30-I17-W05",
+      "status": "done",
+      "updated_at": "2026-06-12T07:53:12.223199Z"
+    },
+    "P30-I17-W06": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W06",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W06",
+      "model": null,
+      "scope_id": "P30-I17-W06",
+      "status": "done",
+      "updated_at": "2026-06-12T07:53:13.994909Z"
+    },
+    "P30-I17-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W07",
+      "model": null,
+      "scope_id": "P30-I17-W07",
+      "status": "done",
+      "updated_at": "2026-06-12T07:53:27.470652Z"
+    },
+    "P30-I17-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W08",
+      "model": null,
+      "scope_id": "P30-I17-W08",
+      "status": "done",
+      "updated_at": "2026-06-12T07:53:37.360894Z"
+    },
+    "P30-I17-W09": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W09",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W09",
+      "model": null,
+      "scope_id": "P30-I17-W09",
+      "status": "done",
+      "updated_at": "2026-06-12T07:53:47.581084Z"
+    },
+    "P30-I17-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I17-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I17-W10",
+      "model": null,
+      "scope_id": "P30-I17-W10",
+      "status": "done",
+      "updated_at": "2026-06-12T08:07:33.681028Z"
     }
   },
   "agent_sessions": {
@@ -10953,7 +11093,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": null,
+    "iter_id": "P30-I17",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -11580,7 +11720,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -20746,6 +20886,136 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I16-W30",
       "updated_at": "2026-06-12T04:31:18.883190Z"
+    },
+    "P30-I17-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W01-bucket-20260612T062522Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I17-W01",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I17-W01",
+      "updated_at": "2026-06-12T06:25:22.118204Z"
+    },
+    "P30-I17-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W02-bucket-20260612T075254Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W02",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W02",
+      "updated_at": "2026-06-12T07:52:54.431597Z"
+    },
+    "P30-I17-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W03-bucket-20260612T075307Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W03",
+      "updated_at": "2026-06-12T07:53:07.734613Z"
+    },
+    "P30-I17-W04": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W04-bucket-20260612T075309Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W04",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W04",
+      "updated_at": "2026-06-12T07:53:09.651246Z"
+    },
+    "P30-I17-W05": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W05-bucket-20260612T075311Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W05",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W05",
+      "updated_at": "2026-06-12T07:53:11.521298Z"
+    },
+    "P30-I17-W06": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W06-bucket-20260612T075313Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W06",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W06",
+      "updated_at": "2026-06-12T07:53:13.301623Z"
+    },
+    "P30-I17-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W07-bucket-20260612T075326Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I17-W07",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I17-W07",
+      "updated_at": "2026-06-12T07:53:26.711468Z"
+    },
+    "P30-I17-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W08-bucket-20260612T075336Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I17-W08",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I17-W08",
+      "updated_at": "2026-06-12T07:53:36.663831Z"
+    },
+    "P30-I17-W09": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W09-bucket-20260612T075346Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W09",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W09",
+      "updated_at": "2026-06-12T07:53:46.866698Z"
+    },
+    "P30-I17-W10": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I17-W10-bucket-20260612T075412Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I17-W10",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I17-W10",
+      "updated_at": "2026-06-12T07:54:12.639057Z"
     }
   },
   "fleet_run": null,
@@ -22809,7 +23079,7 @@
       "intent": null,
       "opened_at": "2026-06-11T15:23:59.976459Z",
       "phase_id": "P30",
-      "status": "planned",
+      "status": "active",
       "title": "Autopilot full-wire",
       "trigger": "none",
       "wave_ids": [
@@ -23926,7 +24196,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T06:22:42.281718Z",
+  "updated_at": "2026-06-12T08:07:33.681265Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -90226,10 +90496,10 @@
         "P30-I17-W07",
         "P30-I17-W08"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T06:25:22.118084Z",
+      "closed_at": "2026-06-12T07:52:53.317919Z",
+      "commit": "5a9ca4be73434600882cd7371bb31f46859565c4",
       "deps": [],
       "description": "fleet.drive currently runs the whole drain synchronously inside the async RPC handler, blocking every other RPC and timing out the TUI arm call. Move the loop to a worker thread/task; the RPC returns a run handle immediately.",
       "dispatch_history": [],
@@ -90271,12 +90541,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:12.560469Z",
-      "outcome": null,
+      "outcome": "Background-run fleet.drive: RPC returns a FleetDriveHandle <1s, drain on a worker thread, concurrent daemon.ping answers mid-run, transitions persist via canonical writer, bus publishes. 8 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90314,10 +90584,10 @@
         "P30-I17-W03",
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:52:54.431431Z",
+      "closed_at": "2026-06-12T07:52:55.111595Z",
+      "commit": "8722e3d175676f105827ea6facc15e346a6c7b30",
       "deps": [
         "P30-I17-W01"
       ],
@@ -90373,12 +90643,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:14.462324Z",
-      "outcome": null,
+      "outcome": "Full arm spec (eu/usd/waves caps, hard_halt, kclean_k, scope) reaches DriveParams; budget cap HALTs (DL-4), hard_halt escalates, scope narrows frontier. 14 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90416,10 +90686,10 @@
         "P30-I17-W04",
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:53:07.734468Z",
+      "closed_at": "2026-06-12T07:53:08.572354Z",
+      "commit": "ae1ce056059323a003246f74e023b4ac95ed0e0e",
       "deps": [
         "P30-I17-W02"
       ],
@@ -90462,12 +90732,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:16.355868Z",
-      "outcome": null,
+      "outcome": "_fill_lanes routes through spawn_lane_or_fork (DL-11, fork on spawn error) + repair_lane_or_fork (DL-7); cockpit repair counter reflects real attempts. 6 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90505,10 +90775,10 @@
         "P30-I17-W05",
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:53:09.651110Z",
+      "closed_at": "2026-06-12T07:53:10.386060Z",
+      "commit": "42ebbb6a69840a260b6addd9c8ac53ab150db246",
       "deps": [
         "P30-I17-W03"
       ],
@@ -90551,12 +90821,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:18.231417Z",
-      "outcome": null,
+      "outcome": "Per-round frontier recompute: 3-layer dep chain drains to empty in one run, newly-unblocked waves claimed as deps close. 3 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90594,10 +90864,10 @@
         "P30-I17-W06",
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:53:11.521163Z",
+      "closed_at": "2026-06-12T07:53:12.223199Z",
+      "commit": "c5459d8f660d22969ad31c18d7d25496b1983cb9",
       "deps": [
         "P30-I17-W04"
       ],
@@ -90640,12 +90910,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:20.114107Z",
-      "outcome": null,
+      "outcome": "Watcher pgid liveness probe + stall deadline forks a dead-but-unflipped lane; healthy slow lane not killed. 5 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90683,10 +90953,10 @@
         "P30-I17-W09",
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:53:13.301477Z",
+      "closed_at": "2026-06-12T07:53:13.994909Z",
+      "commit": "75e5cc977e8e47322b11a3edbae4a48639ccad2f",
       "deps": [
         "P30-I17-W05"
       ],
@@ -90742,12 +91012,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:21.988732Z",
-      "outcome": null,
+      "outcome": "fleet.pause/halt/resume registered; loop re-reads run_state each round; cockpit space/H drive them without aborting the run. 11 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90784,10 +91054,10 @@
       "blocks": [
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:53:26.711314Z",
+      "closed_at": "2026-06-12T07:53:27.470652Z",
+      "commit": "401b86754b0a8e44a3cae996c5e0cd84b9549c73",
       "deps": [
         "P30-I17-W01"
       ],
@@ -90843,12 +91113,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:23.868540Z",
-      "outcome": null,
+      "outcome": "Cockpit auto-reattach: mounting over a persisted DRAINING run calls fleet.reattach + resumes vitals; G18 reattach tui_flow gate. 43 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90885,10 +91155,10 @@
       "blocks": [
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:53:36.663711Z",
+      "closed_at": "2026-06-12T07:53:37.360894Z",
+      "commit": "71e2be5438213dc3ccc2196d9b42645522b8c8a0",
       "deps": [
         "P30-I17-W01"
       ],
@@ -90945,12 +91215,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:25.746505Z",
-      "outcome": null,
+      "outcome": "FA4 stdout producer: dispatch runner captures child stdout/stderr -> App live_output_buffer (bounded ring) -> agent-watch tail. 18 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -90987,10 +91257,10 @@
       "blocks": [
         "P30-I17-W10"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:53:46.866599Z",
+      "closed_at": "2026-06-12T07:53:47.581084Z",
+      "commit": "24e46d273441dd3d994b5c8a37c1fd37ce14fa38",
       "deps": [
         "P30-I17-W06"
       ],
@@ -91034,12 +91304,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:27.651420Z",
-      "outcome": null,
+      "outcome": "needs_user fork reachable live; DriveParams jury block-authority via the close-gate resolver; non-lane single-wave kill; docstrings fixed. 49 tests.",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -91074,10 +91344,10 @@
     "P30-I17-W10": {
       "agent_role": "executor",
       "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "operator-flow-p30i17",
+      "claimed_at": "2026-06-12T07:54:12.638880Z",
+      "closed_at": "2026-06-12T08:07:33.681028Z",
+      "commit": "3feb2ec596cfcbe4e43762bb1c50a14103f42244",
       "deps": [
         "P30-I17-W02",
         "P30-I17-W03",
@@ -91108,12 +91378,12 @@
       },
       "iter_id": "P30-I17",
       "opened_at": "2026-06-11T15:25:29.540258Z",
-      "outcome": null,
+      "outcome": "Autopilot capstone acceptance: in-process end-to-end test arms a drive, drains a 2-wave frontier under an honoured budget cap (claim->dispatch->watch->close-gate->drain), fleet_run record + summary produced via canonical writer; live cockpit vitals proven to update mid-drain; tui_flow G-series extended (G19 pause, G20 pause->resume). 73 tests. Evidence = temp-fixture fleet_run (in-process, not a live spawn).",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
