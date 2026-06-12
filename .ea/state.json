@@ -11720,7 +11720,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -23092,7 +23092,8 @@
         "P30-I17-W07",
         "P30-I17-W08",
         "P30-I17-W09",
-        "P30-I17-W10"
+        "P30-I17-W10",
+        "P30-I17-W11"
       ]
     },
     "P30-I18": {
@@ -24196,7 +24197,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T08:07:33.681265Z",
+  "updated_at": "2026-06-12T08:16:27.403784Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -91409,6 +91410,67 @@
         }
       ],
       "title": "Live acceptance run and flow-gate extension",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I17-W11": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "tools/idle_contract_gate.py",
+        "tests/tui/test_modes_autopilot.py"
+      ],
+      "gates": [],
+      "id": "P30-I17-W11",
+      "intent": {
+        "desired_outcome": "Live drive enables the ladders + the live spawn feeds the tail; idle-gate guards both; the stale test passes.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Pass classify+repair into start_background_drive arm_drive; thread spawn_result.text into run_dispatch; extend idle_contract_gate; fix the autopilot test."
+        ],
+        "priority_rationale": "P30 binding pass: test-only-bound ladders + tail are the exact idle contract P30 eliminates.",
+        "problem": "I17 audit: W03 spawn/repair ladders + W08 output producer are wired but DORMANT on the live fleet.drive path (hooks only in tests); W07 reattach left a stale autopilot fork-inbox test.",
+        "risks": [
+          "Live behavior change; covered by existing ladder/output tests."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I17",
+      "opened_at": "2026-06-12T08:16:27.403591Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Live drive enables the ladders (classify+repair passed) + the live spawn threads output_text so emit_agent_output fires; idle_contract_gate asserts both; the autopilot fork-inbox test passes.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Live drive enables the ladders (classify+repair passed) + the live spawn threads output_text so emit_agent_output fires; idle_contract_gate asserts both; the autopilot fork-inbox test passes.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Complete the live autopilot binding: ladders + output tail",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
