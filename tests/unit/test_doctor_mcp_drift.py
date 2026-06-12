@@ -150,7 +150,7 @@ def test_run_all_includes_mcp_drift(tmp_path: Path) -> None:
     results = run_all(workspace=tmp_path)
     names = [r.name for r in results]
     assert "mcp_drift" in names
-    assert len(results) == 8
+    assert len(results) == 7
 
 
 def test_check_warns_on_unreadable_settings(tmp_path: Path) -> None:
