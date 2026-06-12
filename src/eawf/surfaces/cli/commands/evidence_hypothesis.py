@@ -184,6 +184,8 @@ def outcome_set(
                 audit_id=audit,
                 evidence_refs=list(evidence_ref),
             )
+            # set_outcome populated state.outcomes with outcome_id above.
+            assert state.outcomes is not None
             derived_status = state.outcomes[outcome_id].status.value
             append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
     except cli_errors.CliError as err:

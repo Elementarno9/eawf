@@ -2098,7 +2098,7 @@ class _Loop:
 
         runtime = self.runtime_preference[0] if self.runtime_preference else "claude-code"
         try:
-            return _drive_coro(
+            dispatch: LaneDispatch | None = _drive_coro(
                 spawn_lane_or_fork(
                     self.ctx,
                     runtime=runtime,
@@ -2111,6 +2111,7 @@ class _Loop:
                     max_total_attempts=self.max_total_attempts,
                 )
             )
+            return dispatch
         except RuntimeSpawnError, LaneRetryExhaustedError:
             # The bounded ladder already enqueued the typed termination fork
             # through the daemon canonical writer; the lane is forked, not
@@ -3619,6 +3620,8 @@ def _resolve_run_block_authority(ctx: MethodContext) -> BlockAuthority:
     state_path = Path(ctx.state_path)
     state = load_state(state_path)
     scope_id = state.current.project_code
+    if scope_id is None:
+        return BlockAuthority.ADVISORY
     verify_block = load_active_verify_block(scope_id, state, repo_root=state_path.parent.parent)
     authority = _resolve_jury_block_authority(
         state, state_path=state_path, verify_block=verify_block

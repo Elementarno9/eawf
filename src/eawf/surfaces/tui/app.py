@@ -686,8 +686,8 @@ class EaApp(App[None]):
         self._health_probe_in_flight = False
         # ``False`` until the App has finished its first paint -- the
         # interactive-ready gate :meth:`on_key` consults. A graphics terminal
-        # (Ghostty / Kitty protocol) answers the seal Image widget's transmit
-        # with a capability / Device-Attributes probe REPLY (e.g. the literal
+        # (Ghostty / Kitty protocol) answers Textual's startup capability /
+        # Device-Attributes queries with a probe REPLY (e.g. the literal
         # ``\x1b[?62;...c`` DA1 response carries a ``?``); a partially-parsed
         # reply can leak a stray key event into stdin during the startup window
         # before any human has touched the keyboard. Such a key arrives BEFORE
@@ -861,9 +861,9 @@ class EaApp(App[None]):
         self.set_interval(THEME_POLL_INTERVAL_S, self._poll_os_appearance)
         # Open the interactive-ready gate AFTER first paint. ``call_after_refresh``
         # runs the callback once the next refresh has flushed to the terminal --
-        # i.e. once the first frame (carrying the seal Image transmit) is painted.
-        # A terminal capability / Device-Attributes probe reply provoked by that
-        # transmit can leak a stray key (the DA1 ``\x1b[?...c`` form carries a
+        # i.e. once the first frame is painted. A terminal capability /
+        # Device-Attributes probe reply exchanged during that startup window
+        # can leak a stray key (the DA1 ``\x1b[?...c`` form carries a
         # ``?``) into stdin DURING this startup window; the gate in
         # :meth:`on_key` swallows any key that lands before this flips, so the
         # leak never reaches the ``?`` -> help binding. A genuine keypress only
@@ -1624,10 +1624,10 @@ class EaApp(App[None]):
         """Open the interactive-ready gate once the first frame has painted.
 
         Scheduled ``call_after_refresh`` from :meth:`on_mount`, so it runs
-        after the first refresh has flushed the launch frame (the one that
-        transmits the seal Image) to the terminal. Flipping the gate here --
-        rather than in ``on_mount`` directly -- keeps the startup window during
-        which a graphics-terminal probe reply can leak a stray key (see
+        after the first refresh has flushed the launch frame to the terminal.
+        Flipping the gate here -- rather than in ``on_mount`` directly -- keeps
+        the startup window during which a graphics-terminal probe reply can
+        leak a stray key (see
         :attr:`_interactive_ready`) on the swallow side of the gate, while every
         genuine keypress (which can only follow the painted frame) lands after
         it opens. Idempotent: a second call is harmless.
@@ -1641,8 +1641,8 @@ class EaApp(App[None]):
         App's ``on_key`` before binding dispatch):
 
         * **Interactive-ready gate.** A graphics terminal (Ghostty / Kitty
-          protocol) answers the seal Image widget's transmit with a capability
-          / Device-Attributes probe REPLY -- the DA1 form ``\\x1b[?62;...c``
+          protocol) answers Textual's startup capability / Device-Attributes
+          queries with a probe REPLY -- the DA1 form ``\\x1b[?62;...c``
           carries a literal ``?``. A partially-parsed reply can leak a stray
           key (notably ``?``) into stdin during the startup window, BEFORE the
           operator has touched the keyboard; left untouched it would resolve
