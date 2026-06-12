@@ -947,33 +947,30 @@ def test_research_board_pane_renders_honest_empty(tmp_path: Path) -> None:
     asyncio.run(body())
 
 
-def test_empty_tick_preserves_seal_hero_no_glyph_re_added(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_empty_tick_preserves_seal_hero_no_glyph_re_added(tmp_path: Path) -> None:
     """CR-02 observed-behavior: the steady empty-tick keeps with_sigil=False.
 
-    The I15-W20 regression: when the Seal image leads the honest-empty hero (the
-    graphics-terminal path mounts ``#research-empty-hero`` with the sigil-less
-    body), the 5 s refresh tick re-rendered the EMPTY_ID Static with the DEFAULT
+    The I15-W20 regression: when the ASCII-art Seal leads the honest-empty hero
+    (the unicode path mounts ``#research-empty-hero`` with the sigil-less body),
+    the 5 s refresh tick re-rendered the EMPTY_ID Static with the DEFAULT
     ``with_sigil=True`` body, re-adding the brand glyph as a second mark beside
-    the image. The fix makes ``_rebuild`` detect the mounted seal hero and
-    preserve ``with_sigil=False`` across the tick. We force the seal path by
-    stubbing the image factory to a placeholder widget, mount the empty board,
-    fire a tick, and assert the post-tick rendered body carries NO brand glyph
-    (no second mark) while still showing the hero copy.
+    the art. The fix makes ``_rebuild`` detect the mounted seal hero and preserve
+    ``with_sigil=False`` across the tick. We drive the unicode render mode (the
+    art-hero path), mount the empty board, fire a tick, and assert the post-tick
+    rendered body carries NO brand glyph (no second mark) while still showing the
+    hero copy.
     """
     from textual.widgets import Static as _Static
 
-    from eawf.surfaces.tui.modes import research_board as rb
     from eawf.surfaces.tui.widgets.sigils import chrome
 
-    monkeypatch.setattr(rb, "seal_image_widget", lambda: _Static("seal"))
     state_path = _write_state(tmp_path, _project_state())
 
     async def body() -> tuple[bool, bool, bool, str]:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
+            app.render_mode = "unicode"  # the ASCII-art seal-hero path
             await pilot.press("3")  # -> research_board
             await settle_screen(pilot)
             pane = app.screen
@@ -993,19 +990,19 @@ def test_empty_tick_preserves_seal_hero_no_glyph_re_added(
             )
 
     hero_present, glyph_in_body, headline_present, post_tick_text = asyncio.run(body())
-    assert hero_present is True, "the stubbed seal must mount the hero wrapper"
-    # The load-bearing assertion: no brand glyph re-added beside the seal image.
+    assert hero_present is True, "the unicode mode must mount the art hero wrapper"
+    # The load-bearing assertion: no brand glyph re-added beside the seal art.
     assert glyph_in_body is False, f"glyph re-added on tick: {post_tick_text!r}"
     # The hero copy still renders -- the body is the sigil-less hero, not blank.
     assert headline_present is True
 
 
-def test_empty_tick_keeps_glyph_when_no_seal_image(tmp_path: Path) -> None:
+def test_empty_tick_keeps_glyph_when_ascii_mode(tmp_path: Path) -> None:
     """The glyph-fallback hero keeps its brand glyph across the empty-tick.
 
-    The mirror of the seal-hero case: with no seal image mounted (the default /
-    CI path), the empty body retains its leading brand glyph through the tick --
-    the glyph IS the brand mark on a non-graphics terminal, not a redundant
+    The mirror of the seal-hero case: in ASCII render mode (no half-block art
+    hero mounted), the empty body retains its leading brand glyph through the
+    tick -- the glyph IS the brand mark on a glyph-only terminal, not a redundant
     double.
     """
     from textual.widgets import Static as _Static
@@ -1018,6 +1015,7 @@ def test_empty_tick_keeps_glyph_when_no_seal_image(tmp_path: Path) -> None:
         app = EaApp(scope="repo", state_path=state_path)
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
+            app.render_mode = "ascii"  # the glyph-hero path (no art seal)
             await pilot.press("3")
             await settle_screen(pilot)
             pane = app.screen
