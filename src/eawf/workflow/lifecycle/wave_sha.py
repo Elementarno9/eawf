@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from eawf.platform.subprocess_detach import detached_subprocess_kwargs
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -44,14 +46,18 @@ DRIFT_ACKS_FILENAME: str = "drift-acks.json"
 _TIMEOUT_SECONDS: float = 5.0
 _WAVE_TRAILER_NAME = "Eawf-Wave"
 
-# Every git probe in this module passes ``stdin=subprocess.DEVNULL``. These are
-# non-interactive ``capture_output=True`` reads, so a dead stdin is correct, and
-# it isolates each child from the parent's fd 0. When the drift scan runs inside
-# the live TUI's Doctor-mode gather the parent fd 0 is the controlling TTY; a
-# child that inherited it could touch the TTY and solicit an escape-sequence
-# reply that the App's stdin reader then mis-parses as a synthetic keypress. A
-# dead stdin closes that leak per-child without ever disturbing the App's own
-# fd 0 (which a process-global redirect would corrupt mid-render).
+# Every git probe in this module passes ``stdin=subprocess.DEVNULL`` AND the
+# ``detached_subprocess_kwargs()`` detach knobs. These are non-interactive
+# ``capture_output=True`` reads, so a dead stdin is correct. When the drift scan
+# runs inside the live TUI's Doctor-mode gather the parent fd 0 is the
+# controlling TTY; a dead stdin stops the child reading it, but a child that
+# merely SHARES the parent's controlling terminal can still provoke a terminal
+# escape-reply (a Device-Attributes / capability response) written back onto the
+# shared TTY -- which the App's stdin reader then mis-parses as synthetic
+# digit-mode-switch keypresses. The detach kwargs put each child in its own
+# session (POSIX) / windowless console (win32) so it has no controlling terminal
+# and can neither provoke nor receive such a reply, without ever disturbing the
+# App's own fd 0 (which a process-global redirect would corrupt mid-render).
 
 # Field/record separators for the one-pass ``git log`` in
 # :func:`build_wave_sha_index`. A commit message can carry newlines but never a
@@ -327,7 +333,10 @@ def build_wave_sha_index(repo_root: Path | None = None) -> Mapping[str, str]:
     )
     cmd = ["git", "log", "--all", "--source", f"--format={fmt}"]
     try:
-        out = subprocess.run(
+        # Annotate ``out`` explicitly: splatting the ``dict[str, Any]`` detach
+        # kwargs defeats mypy's ``subprocess.run`` overload narrowing, so the
+        # ``text=True`` -> ``CompletedProcess[str]`` inference is restored here.
+        out: subprocess.CompletedProcess[str] = subprocess.run(
             cmd,
             cwd=str(repo_root) if repo_root else None,
             capture_output=True,
@@ -335,6 +344,7 @@ def build_wave_sha_index(repo_root: Path | None = None) -> Mapping[str, str]:
             timeout=_TIMEOUT_SECONDS,
             check=False,
             stdin=subprocess.DEVNULL,
+            **detached_subprocess_kwargs(),
         )
     except subprocess.TimeoutExpired:
         logger.debug("build_wave_sha_index status=timeout")
@@ -424,7 +434,10 @@ def _git_merge_base_head_main(
         logger.debug("_git_merge_base_head_main git=not-on-path")
         return fallback
     try:
-        out = subprocess.run(
+        # Annotate explicitly so the splatted detach kwargs do not collapse the
+        # ``subprocess.run`` overload to its ``Any``-returning fallback (which
+        # would make ``out.stdout`` Any).
+        out: subprocess.CompletedProcess[str] = subprocess.run(
             ["git", "merge-base", "HEAD", "main"],
             cwd=str(repo_root) if repo_root else None,
             capture_output=True,
@@ -432,6 +445,7 @@ def _git_merge_base_head_main(
             timeout=_TIMEOUT_SECONDS,
             check=False,
             stdin=subprocess.DEVNULL,
+            **detached_subprocess_kwargs(),
         )
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
         logger.debug(f"_git_merge_base_head_main status=failed err={exc!s}")
@@ -529,7 +543,9 @@ def derive_wave_sha(
             "1",
         ]
         try:
-            out = subprocess.run(
+            # Annotate explicitly so the splatted detach kwargs do not collapse
+            # the ``subprocess.run`` overload to its ``Any``-returning fallback.
+            out: subprocess.CompletedProcess[str] = subprocess.run(
                 cmd,
                 cwd=str(repo_root) if repo_root else None,
                 capture_output=True,
@@ -537,6 +553,7 @@ def derive_wave_sha(
                 timeout=_TIMEOUT_SECONDS,
                 check=False,
                 stdin=subprocess.DEVNULL,
+                **detached_subprocess_kwargs(),
             )
         except subprocess.TimeoutExpired:
             logger.debug(f"derive_wave_sha wave={wave_id} status=timeout prefix={prefix!r}")

@@ -58,6 +58,7 @@ from typing import Literal
 import orjson
 from pydantic import BaseModel, ConfigDict
 
+from eawf.platform.subprocess_detach import detached_subprocess_kwargs
 from eawf.surfaces.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
@@ -198,20 +199,28 @@ def probe_one(spec: InstrumentSpec) -> ProbeResult:
         )
 
     args = spec.version_args or ["--version"]
-    # stdin=DEVNULL isolates this non-interactive version probe from the
-    # parent's fd 0. Inside the live TUI's Doctor-mode gather the parent fd 0
-    # is the controlling TTY; a child that inherited it could touch the TTY and
-    # solicit a terminal escape-sequence reply that the App's stdin reader then
-    # parses as a synthetic keypress. A dead stdin closes that leak at each
-    # child without disturbing the App's own fd 0.
+    # stdin=DEVNULL + detach isolate this non-interactive version probe from the
+    # parent's controlling terminal. Inside the live TUI's Doctor-mode gather the
+    # parent fd 0 is the controlling TTY; a dead stdin stops the child reading it,
+    # but a child that merely SHARES the parent's controlling terminal can still
+    # provoke a terminal escape-reply (a Device-Attributes / capability response)
+    # written back onto the shared TTY -- which the App's stdin reader then parses
+    # as synthetic digit-mode-switch keypresses. detached_subprocess_kwargs() puts
+    # the child in its own session (POSIX) / windowless console (win32) so it has
+    # no controlling terminal and can neither provoke nor receive such a reply,
+    # all without touching the App's own fd 0.
     try:
-        proc = subprocess.run(
+        # Annotate explicitly so the splatted detach kwargs do not collapse the
+        # ``subprocess.run`` overload to its ``Any``-returning fallback (which
+        # would make ``proc.stdout`` Any).
+        proc: subprocess.CompletedProcess[str] = subprocess.run(
             [spec.name, *args],
             check=False,
             capture_output=True,
             text=True,
             timeout=_VERSION_TIMEOUT_SECONDS,
             stdin=subprocess.DEVNULL,
+            **detached_subprocess_kwargs(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
         logger.warning(f"probe_one tool={spec.name!r} status=failed exc={exc!r}")
