@@ -1,0 +1,31 @@
+# Normalize line endings to LF in the repository for every text file so a
+# Windows checkout never reintroduces CRLF. The daemon named-pipe transport
+# ships on Windows (P30-I19), so contributors on Windows must not commit
+# CRLF-tainted source / fixtures / goldens -- snapshot and golden-file diffs
+# are byte-exact and a stray CRLF would red the suite. Git auto-detects text
+# vs binary; these rules pin the line ending for the file types we own.
+* text=auto eol=lf
+
+*.py text eol=lf
+*.pyi text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+*.cast text eol=lf
+
+# Binary assets keep their bytes untouched (no eol filtering).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

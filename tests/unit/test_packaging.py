@@ -285,3 +285,58 @@ def test_build_wheel_skips_when_opt_out_env_set(
     """The ``EAWF_SKIP_WHEEL_BUILD`` opt-out short-circuits to a skip (None)."""
     monkeypatch.setenv("EAWF_SKIP_WHEEL_BUILD", "1")
     assert _build_wheel(tmp_path / "dist") is None
+
+
+# --- Windows extra (P30-I19-W05) --------------------------------------------
+
+
+def test_windows_extra_pins_pywin32_in_pyproject() -> None:
+    """The ``[windows]`` optional extra pins pywin32 for the pipe transport.
+
+    ``pip install eawf[windows]`` must resolve pywin32 (the named-pipe
+    transport backs the Windows daemon). This pins the source-of-truth in
+    pyproject so the extra cannot silently drop the dependency.
+    """
+    with open(_PYPROJECT, "rb") as handle:
+        data = tomllib.load(handle)
+    extras = data["project"]["optional-dependencies"]
+    assert "windows" in extras, "missing [windows] optional extra"
+    assert any(req.startswith("pywin32") for req in extras["windows"]), extras["windows"]
+
+
+def test_wheel_metadata_declares_windows_extra(tmp_path: Path) -> None:
+    """The built wheel METADATA advertises the ``windows`` extra + pywin32.
+
+    The install-resolve smoke: a built wheel must carry
+    ``Provides-Extra: windows`` and a ``Requires-Dist`` for pywin32 gated
+    on that extra, so ``pip install eawf[windows]`` resolves pywin32.
+    """
+    wheel = _build_wheel(tmp_path / "dist")
+    if wheel is None:
+        pytest.skip("uv build unavailable in this environment")
+
+    with zipfile.ZipFile(wheel) as archive:
+        metadata_name = next(n for n in archive.namelist() if n.endswith("METADATA"))
+        metadata = archive.read(metadata_name).decode()
+    assert "Provides-Extra: windows" in metadata
+    requires = [line for line in metadata.splitlines() if line.startswith("Requires-Dist:")]
+    pywin32_lines = [line for line in requires if "pywin32" in line]
+    assert pywin32_lines, requires
+    assert any('extra == "windows"' in line for line in pywin32_lines), pywin32_lines
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="win32-only ctypes binding")
+def test_cancel_io_ex_argtypes_set_once_at_module_load() -> None:
+    """``CancelIoEx.argtypes`` is bound at import (W05 contract).
+
+    The streaming teardown calls ``CancelIoEx`` per disconnect; binding
+    ``argtypes`` once at module load (not per call) keeps the handle
+    marshalling correct and cheap. Asserts the binding is present after a
+    bare import of the win32-only transport module.
+    """
+    import ctypes
+
+    from eawf.runtime.daemon import windows_pipe
+
+    assert windows_pipe._CancelIoEx.argtypes == [ctypes.c_void_p, ctypes.c_void_p]
+    assert windows_pipe._CancelIoEx.restype is ctypes.c_bool

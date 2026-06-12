@@ -82,8 +82,8 @@ extend_exclude = ["benches", "tools"]
 [tool.deptry.package_module_name_map]
 # Distribution names whose import module differs from the package name.
 # ``pywin32`` ships the Windows-only ``win32*`` / ``pywintypes`` /
-# ``servicemanager`` / ``ntsecuritycon`` modules imported (import-guarded)
-# by the daemon named-pipe transport + service wiring.
+# ``winerror`` / ``servicemanager`` / ``ntsecuritycon`` modules imported
+# (import-guarded) by the daemon named-pipe transport + service wiring.
 pyyaml = "yaml"
 pywin32 = [
     "ntsecuritycon",
@@ -97,6 +97,7 @@ pywin32 = [
     "win32security",
     "win32service",
     "win32serviceutil",
+    "winerror",
 ]
 
 [tool.deptry.per_rule_ignores]
