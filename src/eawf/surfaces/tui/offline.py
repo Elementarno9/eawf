@@ -14,14 +14,15 @@ This module owns both:
   plain-text frame for ``workspace registry-status`` (and its JSON
   envelope's ``rendered`` field). Strictly read-only over the registry.
 
-Both renderers head their daemon-down brand frame with the SAME two-tone
-green ``Eä`` wordmark the interactive header paints, emitted via the shared
+Both renderers head their daemon-down brand frame with the SAME brand mark the
+interactive header paints -- the leading ``◉`` brand glyph (UX-19) then the
+two-tone green ``Eä`` wordmark, emitted via the shared
 :func:`eawf.surfaces.render.brand.render_wordmark_ansi` ANSI channel (the
 ``E`` plain, the ``ä`` carrying the reskin-green accent) and threaded through
 :func:`~eawf.surfaces.tui.widgets.header.build_breadcrumb` for the trailing
 scope breadcrumb -- so the headless splash stays visually identical to the
-live header rather than the old colourless / teal head. ``width`` is honoured
-via :func:`textwrap.fill` so narrow callers wrap the body lines.
+live header rather than the old glyph-less / colourless / teal head. ``width``
+is honoured via :func:`textwrap.fill` so narrow callers wrap the body lines.
 
 This module replaces the two live consumers of the deleted legacy
 ``src/eawf/surfaces/tui/`` tree (its ``run_tui`` offline mode + its workspace
@@ -41,6 +42,7 @@ from eawf.surfaces.render.brand import render_wordmark_ansi
 from eawf.surfaces.tui.state_binding import load_state
 from eawf.surfaces.tui.widgets.footer import DEFAULT_HINTS, format_hints
 from eawf.surfaces.tui.widgets.header import DEFAULT_PROJECT_CODE, build_breadcrumb
+from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -52,6 +54,18 @@ logger = logging.getLogger(__name__)
 #: segment, matching :func:`eawf.surfaces.render.brand.render_breadcrumb_head`.
 _BRAND_GAP: str = "  "
 
+#: Single space between the leading brand glyph and the ``Eä`` wordmark,
+#: matching the interactive header (``◉ Eä``).
+_GLYPH_GAP: str = " "
+
+#: The leading brand glyph the offline frame gains so the headless splash
+#: matches the live header's brand mark (UX-19). The offline frame is plain
+#: text on a non-graphics path, so it always renders the unicode ``◉`` glyph
+#: (the terminal stand-in for the Seal image the live header mounts when
+#: graphics-capable), never the image -- there is no graphics protocol in a
+#: piped / CI / daemon-down splash.
+_BRAND_GLYPH: str = chrome("brand", mode="unicode")
+
 #: Placeholder rendered in the workspace strip when the registry file is
 #: missing or fails to load. The substring ``registry unavailable`` is
 #: part of the ``workspace registry-status`` text contract.
@@ -59,28 +73,29 @@ _REGISTRY_UNAVAILABLE: str = "registry unavailable (read failed)"
 
 
 def _brand_head(breadcrumb: str) -> str:
-    """Render the offline daemon-down brand head ``Eä  <breadcrumb>``.
+    """Render the offline daemon-down brand head ``◉ Eä  <breadcrumb>``.
 
-    The headless brand frame paints the SAME two-tone green ``Eä`` wordmark
-    the interactive header (:func:`eawf.surfaces.tui.widgets.header.render_header`)
-    renders -- the ``E`` plain, the ``ä`` carrying the reskin-green accent --
-    so the daemon-down splash and the live app are visually identical rather
-    than the old colourless / teal head. The wordmark is emitted via the
-    shared :func:`eawf.surfaces.render.brand.render_wordmark_ansi` ANSI channel
-    (the header threads the same accent through its markup channel), so both
-    surfaces draw from one accent token and cannot drift apart. The visible
-    glyphs stay the ``Eä`` brand literal; only the accent layer wraps the
-    umlaut.
+    The headless brand frame paints the SAME brand mark the interactive header
+    (:func:`eawf.surfaces.tui.widgets.header.render_header`) renders: the leading
+    ``◉`` brand glyph (the terminal stand-in for the Seal image, UX-19) then the
+    two-tone green ``Eä`` wordmark -- the ``E`` plain, the ``ä`` carrying the
+    reskin-green accent -- so the daemon-down splash and the live app are visually
+    identical rather than the old glyph-less / colourless / teal head. The wordmark
+    is emitted via the shared
+    :func:`eawf.surfaces.render.brand.render_wordmark_ansi` ANSI channel (the
+    header threads the same accent through its markup channel), so both surfaces
+    draw from one accent token and cannot drift apart. The visible glyphs stay the
+    ``◉ Eä`` brand mark; only the accent layer wraps the umlaut.
 
     Args:
         breadcrumb: The pre-rendered scope breadcrumb that trails the brand,
             joined to the wordmark by the canonical two-space gap.
 
     Returns:
-        ``"E<accent>ä<reset>  <breadcrumb>"`` -- the two-tone green wordmark,
-        the canonical gap, then the breadcrumb.
+        ``"◉ E<accent>ä<reset>  <breadcrumb>"`` -- the brand glyph, the two-tone
+        green wordmark, the canonical gap, then the breadcrumb.
     """
-    return f"{render_wordmark_ansi()}{_BRAND_GAP}{breadcrumb}"
+    return f"{_BRAND_GLYPH}{_GLYPH_GAP}{render_wordmark_ansi()}{_BRAND_GAP}{breadcrumb}"
 
 
 def _status_counts(state: State | None) -> dict[str, int]:
@@ -126,8 +141,9 @@ def build_status_text(state: State | None) -> str:
     The three-line frame is the non-TTY fallback contract for bare
     ``eawf`` / ``eawf tui``:
 
-    1. ``Eä  <breadcrumb>`` — the two-tone green brand wordmark (the ``ä``
-       carries the reskin accent) outside-left of the scope breadcrumb.
+    1. ``◉ Eä  <breadcrumb>`` — the leading brand glyph then the two-tone
+       green brand wordmark (the ``ä`` carries the reskin accent) outside-left
+       of the scope breadcrumb.
     2. ``  project=<code> phases_open=N iters_open=N ...`` — a one-line
        lifecycle-count summary.
     3. ``keymap: <hints>`` — the shared footer key hints.

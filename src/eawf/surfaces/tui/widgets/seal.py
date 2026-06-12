@@ -8,6 +8,14 @@ rasterised to a PNG via the ``resvg`` CLI (already a repo dependency for the
 ``svg_pixel_diff`` audit kind), and :class:`textual_image.widget.Image` embeds
 it through whatever protocol the terminal supports.
 
+The asset fills with ``currentColor`` so it inherits the surrounding text
+colour in a live document, but ``resvg`` rasterises with no document context
+and so resolves ``currentColor`` to **black** -- the seal would render as a
+black blob on a dark theme. The rasterise path therefore substitutes the
+resolved theme accent hex into the SVG text BEFORE invoking ``resvg``, and the
+PNG cache keys on ``(px, accent_hex)`` (overwriting any stale PNG) so a
+pre-existing black PNG from before the fix can never survive into the render.
+
 The capability **degrades cleanly**. ``textual-image`` + Pillow now ship in the
 default dependency set, so the import is no longer an invisible-extra trap: a
 default install can render the seal whenever the host terminal supports a
@@ -20,6 +28,7 @@ autouse so the goldens stay glyph-based and deterministic.
 
 from __future__ import annotations
 
+import getpass
 import logging
 import os
 import shutil
@@ -29,6 +38,8 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from eawf.surfaces.render.brand import ACCENT_HEX
 
 if TYPE_CHECKING:
     from textual.widget import Widget
@@ -40,6 +51,13 @@ logger = logging.getLogger(__name__)
 #: ``surfaces/render/assets/`` -- two parents up from ``widgets`` to
 #: ``surfaces``, then into ``render/assets``.
 _SEAL_SVG: Path = Path(__file__).resolve().parents[2] / "render" / "assets" / "ea-seal.svg"
+
+#: The SVG colour token the asset fills with so it inherits the surrounding text
+#: colour in a live document. ``resvg`` rasterises with no surrounding document
+#: context, so it resolves ``currentColor`` to BLACK -- the live-render defect
+#: this module forecloses by substituting the resolved theme accent hex into the
+#: SVG text BEFORE invoking ``resvg``.
+_CURRENT_COLOR: str = "currentColor"
 
 #: The ``resvg`` CLI binary name (the same renderer the ``svg_pixel_diff`` audit
 #: kind pins). Absent on most machines -- :func:`resvg_present` checks for it.
@@ -133,29 +151,103 @@ def seal_capable() -> bool:
     return deps_present() and resvg_present() and terminal_supports_images()
 
 
+def resolve_accent_hex() -> str:
+    """Return the resolved theme accent hex the seal rasterises in.
+
+    The seal's ``currentColor`` fill resolves to the same canonical reskin-green
+    accent the header wordmark + offline frame carry
+    (:data:`~eawf.surfaces.render.brand.ACCENT_HEX`), so the rasterised mark
+    tracks the brand accent rather than ``resvg``'s black default. Centralising
+    the lookup keeps the accent single-homed: a future per-theme accent only has
+    to feed this one resolver.
+
+    Returns:
+        The ``#rrggbb`` accent hex the seal renders in.
+    """
+    return ACCENT_HEX
+
+
+def _substitute_current_color(svg_text: str, accent_hex: str) -> str:
+    """Return *svg_text* with every ``currentColor`` token replaced by *accent_hex*.
+
+    ``resvg`` has no surrounding document, so it resolves ``currentColor`` to
+    black; substituting the resolved accent hex into the SVG text before
+    rendering makes the rasterised mark carry the theme accent instead. The
+    substitution is a literal token replacement (deterministic), so the same
+    ``(svg_text, accent_hex)`` pair always yields the same SVG.
+
+    Args:
+        svg_text: The raw Seal SVG markup.
+        accent_hex: The ``#rrggbb`` accent to substitute in.
+
+    Returns:
+        The SVG text with ``currentColor`` replaced by *accent_hex*.
+    """
+    return svg_text.replace(_CURRENT_COLOR, accent_hex)
+
+
+def _seal_png_path(px: int, accent_hex: str) -> Path:
+    """Return the per-user cache path for the ``px``/``accent_hex`` seal PNG.
+
+    The filename keys on BOTH the pixel size and the accent hex so a re-theme
+    (or the black-to-accent fix itself) writes a fresh PNG rather than reusing a
+    stale one. The directory is namespaced by the current user so two operators
+    sharing a host never collide on (or read) each other's tmp PNG.
+
+    Args:
+        px: The square pixel size the PNG was rendered at.
+        accent_hex: The ``#rrggbb`` accent the PNG was rendered in.
+
+    Returns:
+        The per-user, per-(px, accent) cache path.
+    """
+    try:
+        user = getpass.getuser()
+    except KeyError, OSError:
+        user = str(os.getuid()) if hasattr(os, "getuid") else "user"
+    cache_dir = Path(tempfile.gettempdir()) / f"eawf-seal-{user}"
+    # The accent hex leads with ``#``, which is filename-safe but reads cleaner
+    # stripped; keep it in the stem so the cache key is visible on disk.
+    accent_key = accent_hex.lstrip("#")
+    return cache_dir / f"ea-seal-{px}-{accent_key}.png"
+
+
 @lru_cache(maxsize=8)
-def _rasterised_seal(px: int) -> Path | None:
-    """Rasterise the Seal SVG to a ``px``-square PNG via ``resvg``; cache it.
+def _rasterised_seal(px: int, accent_hex: str) -> Path | None:
+    """Rasterise the accent-substituted Seal SVG to a ``px``-square PNG; cache it.
+
+    Substitutes *accent_hex* for the SVG's ``currentColor`` token (so ``resvg``
+    cannot render it black), then rasterises the substituted SVG to a per-user
+    PNG keyed on ``(px, accent_hex)``. A stale PNG at the same path is
+    OVERWRITTEN, so a pre-existing black PNG from before this fix can never
+    survive into the render -- correctness wins over the read-cache shortcut.
+    The in-process :func:`functools.lru_cache` still elides the ``resvg``
+    round-trip on a repeat call for the same ``(px, accent_hex)`` within the run.
 
     Args:
         px: The square pixel size to render the seal at.
+        accent_hex: The ``#rrggbb`` accent to substitute for ``currentColor``.
 
     Returns:
-        The cached PNG path, or ``None`` when ``resvg`` is absent / fails.
+        The cached PNG path, or ``None`` when ``resvg`` is absent / the asset is
+        missing / the rasterise fails.
     """
     if shutil.which(_RESVG) is None or not _SEAL_SVG.exists():
         return None
-    out = Path(tempfile.gettempdir()) / f"ea-seal-{px}.png"
-    if out.exists():
-        return out
+    out = _seal_png_path(px, accent_hex)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    svg_text = _SEAL_SVG.read_text(encoding="utf-8")
+    coloured = _substitute_current_color(svg_text, accent_hex)
+    coloured_svg = out.with_suffix(".svg")
     try:
+        coloured_svg.write_text(coloured, encoding="utf-8")
         subprocess.run(
-            [_RESVG, "-w", str(px), "-h", str(px), str(_SEAL_SVG), str(out)],
+            [_RESVG, "-w", str(px), "-h", str(px), str(coloured_svg), str(out)],
             check=True,
             capture_output=True,
         )
     except (subprocess.CalledProcessError, OSError) as exc:
-        logger.info(f"_rasterised_seal failed px={px} err={exc!r}")
+        logger.info(f"_rasterised_seal failed px={px} accent={accent_hex!r} err={exc!r}")
         return None
     return out
 
@@ -166,7 +258,9 @@ def seal_image_widget(px: int = 96) -> Widget | None:
     Returns ``None`` (the caller renders the unicode glyph instead) whenever the
     seal is not capable or the rasterisation fails, so a caller can write
     ``widget = seal_image_widget() or fallback`` and never crash on a terminal
-    or install that cannot show the image.
+    or install that cannot show the image. The seal rasterises in the resolved
+    theme accent (:func:`resolve_accent_hex`) so the mark carries the brand
+    green rather than ``resvg``'s black default.
 
     Args:
         px: The square pixel size to rasterise the seal at; the widget scales it
@@ -177,7 +271,7 @@ def seal_image_widget(px: int = 96) -> Widget | None:
     """
     if not seal_capable():
         return None
-    png = _rasterised_seal(px)
+    png = _rasterised_seal(px, resolve_accent_hex())
     if png is None:
         return None
     from textual_image.widget import Image
@@ -188,6 +282,7 @@ def seal_image_widget(px: int = 96) -> Widget | None:
 __all__ = [
     "SEAL_DISABLE_ENV",
     "deps_present",
+    "resolve_accent_hex",
     "resvg_present",
     "seal_capable",
     "seal_image_widget",

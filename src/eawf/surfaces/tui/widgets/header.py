@@ -50,10 +50,20 @@ from textual.widgets import Static
 from eawf.kernel.state.enums import AgentSessionStatus
 from eawf.surfaces.render.brand import render_wordmark_markup
 from eawf.surfaces.tui.widgets.markup import escape_markup
+from eawf.surfaces.tui.widgets.seal import seal_capable, seal_image_widget
 from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
+
+#: CSS class on the 1-cell Seal image the header mounts in place of the brand
+#: glyph on a graphics-capable terminal. Sized to a single cell box so the seal
+#: reads as the header-left brand mark the ``Eä`` wordmark trails.
+HEADER_SEAL_CLASS: str = "header-seal"
+
+#: Id of the 1-cell Seal image widget the header mounts at header-left when
+#: capable; addressable so a re-mount can drop the prior image.
+HEADER_SEAL_ID: str = "header-seal-image"
 
 #: The brand string rendered outside-left of the scope breadcrumb.
 #: Literal ``Eä`` (capital E + a-umlaut) per the operator branding
@@ -278,6 +288,7 @@ def render_header(
     mode_name: str | None = None,
     entity: str | None = None,
     render_mode: str = "unicode",
+    with_seal_image: bool = False,
 ) -> str:
     """Render the full header content-markup line from *state*.
 
@@ -291,6 +302,12 @@ def render_header(
     segments carry their ``[@click=...]`` nav links (this is the clickable
     render path), and the runtime cell is muted via ``[$muted]…[/]``.
 
+    When *with_seal_image* is set the leading brand glyph is DROPPED from the
+    text line: the :class:`Header` widget has mounted a 1-cell Seal image at
+    header-left in its place (the graphics-terminal path), so emitting the glyph
+    too would paint a redundant second brand mark beside the image. The wordmark
+    still leads the text line so the ``Eä`` reads immediately right of the seal.
+
     Args:
         state: The currently bound state, or ``None``.
         scope: The active screen scope name driving the breadcrumb's
@@ -303,18 +320,23 @@ def render_header(
         render_mode: The App's resolved render-mode label forwarded to the
             runtime cell's harmony glyph -- ``"ascii"`` selects the ASCII
             glyph, any other value the unicode one.
+        with_seal_image: When ``True`` the leading brand glyph is dropped from
+            the text (the widget mounts the Seal image in its place); when
+            ``False`` (the default, and every non-graphics terminal) the glyph
+            leads the wordmark.
 
     Returns:
         A Textual content-markup string for the header line.
     """
     crumb = build_breadcrumb(state, scope, mode, mode_name=mode_name, entity=entity, clickable=True)
     runtime = runtime_cell_text(state, mode=render_mode)
-    brand_glyph = chrome("brand", mode=render_mode)
     wordmark = render_wordmark_markup("$accent")
-    return (
-        f"[b][$accent]{brand_glyph}[/] {wordmark}[/b]  {crumb}    "
-        f"[$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
-    )
+    if with_seal_image:
+        brand = f"[b]{wordmark}[/b]"
+    else:
+        brand_glyph = chrome("brand", mode=render_mode)
+        brand = f"[b][$accent]{brand_glyph}[/] {wordmark}[/b]"
+    return f"{brand}  {crumb}    [$muted]{runtime}[/]    [$muted]{_clock_text()}[/]"
 
 
 class Header(Static):
@@ -334,6 +356,13 @@ class Header(Static):
         background: $panel;
         color: $text;
         padding: 0 1;
+        layers: base seal;
+    }
+    Header .header-seal {
+        layer: seal;
+        dock: left;
+        width: 2;
+        height: 1;
     }
     """
 
@@ -350,7 +379,10 @@ class Header(Static):
         the app's mode-change signal so the breadcrumb's mode segment
         repaints when ``switch_mode`` flips the active mode (the signal
         fires after ``current_mode`` is updated, so a first-switch mount
-        that read the prior mode is corrected on the same flip).
+        that read the prior mode is corrected on the same flip). Mounts the
+        1-cell Seal image at header-left when the terminal is graphics-capable
+        (the glyph is dropped from the text in its place); a non-graphics
+        terminal keeps the unicode glyph and mounts nothing.
         """
         app_state = getattr(self.app, "state", None)
         if app_state is not None and self.state is None:
@@ -362,7 +394,32 @@ class Header(Static):
         mode_signal = getattr(self.app, "mode_change_signal", None)
         if mode_signal is not None:
             mode_signal.subscribe(self, self._on_mode_change)
+        self._mount_seal_image()
         self._repaint()
+
+    def _seal_mounted(self) -> bool:
+        """Return whether the 1-cell Seal image is mounted at header-left."""
+        return bool(self.query(f"#{HEADER_SEAL_ID}"))
+
+    def _mount_seal_image(self) -> None:
+        """Mount the 1-cell Seal image at header-left when capable (idempotent).
+
+        On a graphics-capable terminal (:func:`~eawf.surfaces.tui.widgets.seal.seal_capable`)
+        the header renders the rasterised Seal image in place of the brand glyph;
+        the image mounts once on a dedicated ``seal`` layer docked left so it sits
+        where the glyph would. On a non-graphics terminal (and every CI / snapshot
+        run, where the kill switch forces the capability ``False``) nothing mounts
+        and the text keeps the unicode glyph -- the deterministic glyph fallback.
+        A failed rasterise hands back ``None`` and falls back to the glyph too.
+        """
+        if not seal_capable() or self._seal_mounted():
+            return
+        image = seal_image_widget(px=32)
+        if image is None:
+            return
+        image.add_class(HEADER_SEAL_CLASS)
+        image.id = HEADER_SEAL_ID
+        self.mount(image)
 
     def _on_mode_change(self, _mode: str) -> None:
         """Repaint the header line when the active mode changes."""
@@ -410,7 +467,14 @@ class Header(Static):
             mode = mode_title(raw_mode) if isinstance(raw_mode, str) else None
         render_mode = getattr(self.app, "render_mode", "unicode")
         self.update(
-            render_header(self.state, scope, mode, mode_name=mode_name, render_mode=render_mode)
+            render_header(
+                self.state,
+                scope,
+                mode,
+                mode_name=mode_name,
+                render_mode=render_mode,
+                with_seal_image=self._seal_mounted(),
+            )
         )
 
 
@@ -418,6 +482,8 @@ __all__ = [
     "BRAND",
     "CRUMB_SEP",
     "DEFAULT_PROJECT_CODE",
+    "HEADER_SEAL_CLASS",
+    "HEADER_SEAL_ID",
     "RUNTIME_IDLE",
     "Header",
     "active_runtime_id",

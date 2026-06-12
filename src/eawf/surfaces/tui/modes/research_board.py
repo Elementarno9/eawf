@@ -2522,8 +2522,14 @@ class ResearchBoardModeScreen(ScopeScreen):
             self._recompose_body()
             return
         if self.empty:
-            self._update_one(EMPTY_ID, self._empty_body())
-            logger.info("research_rebuild empty=True")
+            # When the Seal image leads the hero (the graphics-terminal path
+            # composed the #research-empty-hero wrapper), the steady empty-tick
+            # update MUST preserve with_sigil=False so the glyph is not re-added
+            # beside the image as a second brand mark -- the I15-W20 regression
+            # where a tick re-rendered the sigil-bearing body over the seal hero.
+            seal_mounted = bool(self.query("#research-empty-hero"))
+            self._update_one(EMPTY_ID, self._empty_body(with_sigil=not seal_mounted))
+            logger.info(f"research_rebuild empty=True seal_mounted={seal_mounted}")
             return
         pause = self._current_checkpoint()
         mode = self._render_mode()
