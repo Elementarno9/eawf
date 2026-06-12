@@ -23842,7 +23842,8 @@
         "P30-I19-W08",
         "P30-I19-W09",
         "P30-I19-W10",
-        "P30-I19-W11"
+        "P30-I19-W11",
+        "P30-I19-W12"
       ]
     }
   },
@@ -24919,7 +24920,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T13:49:27.825670Z",
+  "updated_at": "2026-06-12T13:55:59.236683Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -94122,6 +94123,67 @@
         }
       ],
       "title": "Stop the doctor seal-capability check probing the terminal",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I19-W12": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/seal.py",
+        "src/eawf/surfaces/tui/screens/overlays/init_wizard.py",
+        "src/eawf/observability/doctor/checks.py",
+        "pyproject.toml"
+      ],
+      "gates": [],
+      "id": "P30-I19-W12",
+      "intent": {
+        "desired_outcome": "No raster seal in the live TUI; textual-image dropped from default deps; no dead raster code.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "init_wizard->seal_art_widget; remove dead raster fns + seal_capable doctor row; drop textual-image (keep pillow); prune tests."
+        ],
+        "priority_rationale": "Operator cleanup before v0.6.0; honors no-idle-contract.",
+        "problem": "Only the init wizard still uses the raster seal; textual-image is an idle default dep. resvg+pillow stay (VIS-1 audit).",
+        "risks": [
+          "Subsystem removal at ship; run full suites + idle-gate."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I19",
+      "opened_at": "2026-06-12T13:55:59.236490Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "init wizard renders the ASCII seal; textual-image gone from default deps (pillow+resvg kept); dead raster code + doctor row removed; idle-gate + suite green.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "init wizard renders the ASCII seal; textual-image gone from default deps (pillow+resvg kept); dead raster code + doctor row removed; idle-gate + suite green.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Retire the raster seal stack; init wizard uses the ASCII seal",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
