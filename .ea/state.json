@@ -11881,7 +11881,7 @@
       "title": "I08 QC gate is deterministic-first with a jury for the true residual"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -23409,7 +23409,8 @@
         "P30-I18-W06",
         "P30-I18-W07",
         "P30-I18-W08",
-        "P30-I18-W09"
+        "P30-I18-W09",
+        "P30-I18-W10"
       ]
     },
     "P30-I19": {
@@ -24499,7 +24500,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-12T10:19:41.030046Z",
+  "updated_at": "2026-06-12T10:26:38.645476Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -92591,6 +92592,67 @@
         }
       ],
       "title": "Live acceptance campaign with mid-run steer",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I18-W10": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py",
+        "src/eawf/kernel/spec/pruning.py",
+        "src/eawf/kernel/store/kinds/__init__.py",
+        "tools/idle_contract_gate.py"
+      ],
+      "gates": [],
+      "id": "P30-I18-W10",
+      "intent": {
+        "desired_outcome": "New store kinds registered; a live round writes Claim rows to state.claims; the loop calls L1 pruning; idle-gate guards both.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Register the store kinds + regen autogen + fix pins; fold claims into real state; call prune between rounds; extend idle-gate."
+        ],
+        "priority_rationale": "3 real test regressions block close; the dormant bindings are the idle contract P30 eliminates.",
+        "problem": "New StoreKinds research_round/operator_input fail the registry/enum/autogen pins; run_campaign claims reconcile into a throwaway shadow; prune_round_carryover has no production caller.",
+        "risks": [
+          "Live behavior change; covered by W09 acceptance + new tests."
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I18",
+      "opened_at": "2026-06-12T10:26:38.645256Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Store kinds registered (pins green); a live round writes Claim rows to state.claims; run_campaign calls prune_round_carryover; idle-gate asserts both.",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Store kinds registered (pins green); a live round writes Claim rows to state.claims; run_campaign calls prune_round_carryover; idle-gate asserts both.",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Complete I18 binding: claim fold, pruning loop, store-kind registry",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
