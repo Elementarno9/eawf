@@ -255,3 +255,180 @@ def test_dacl_post_connect_sid_check_rejects(monkeypatch: pytest.MonkeyPatch) ->
     asyncio.run(runner())
     assert result["payload"]["error"]["code"] == -32000
     assert "unexpected" not in str(result["payload"])
+
+
+def test_state_mutate_round_trips_via_pipe_client_call() -> None:
+    """``pipe_client_call`` drives a full request/response round-trip.
+
+    Exercises the W02 synchronous client transport (the one the CLI
+    ``DaemonClient`` uses on Windows) against a live ``WindowsPipeServer``,
+    proving the WaitNamedPipe -> CreateFile -> WriteFile -> read-loop path
+    works for a non-ping method.
+    """
+    from eawf.runtime.daemon.server import process_frame_bytes
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer, pipe_client_call
+
+    pipe_name = _unique_pipe_name("mutate")
+    ctx = _build_ctx()
+    result: dict[str, Any] = {}
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+
+        async def handler(payload: bytes) -> bytes:
+            return await process_frame_bytes(payload, ctx)
+
+        server = WindowsPipeServer(loop, handler, pipe_name=pipe_name, verify_sid_enabled=False)
+        server.start()
+        try:
+            request = orjson.dumps(
+                {"jsonrpc": "2.0", "id": "1", "method": "daemon.status", "params": {}}
+            )
+            response_bytes = await asyncio.to_thread(pipe_client_call, pipe_name, request + b"\n")
+            result["payload"] = orjson.loads(response_bytes.rstrip(b"\n"))
+        finally:
+            server.stop()
+            await asyncio.sleep(0.05)
+
+    asyncio.run(runner())
+    assert "error" not in result["payload"], result["payload"]
+    assert "active_subscriptions" in result["payload"]["result"]
+
+
+def test_large_frame_reassembles_via_more_data_loop() -> None:
+    """A response larger than the pipe buffer reassembles, never truncates.
+
+    The handler returns a payload several times ``_PIPE_BUFFER_BYTES`` so a
+    single ``ReadFile`` cannot hold it; ``pipe_client_call`` must drain the
+    ``ERROR_MORE_DATA`` tail. A truncated read would fail JSON parse or
+    drop the marker, so byte-exact reassembly is the proof.
+    """
+    from eawf.runtime.daemon.windows_pipe import (
+        _PIPE_BUFFER_BYTES,
+        WindowsPipeServer,
+        pipe_client_call,
+    )
+
+    pipe_name = _unique_pipe_name("bigframe")
+    # ~3.5 buffers of filler so the message spans multiple MORE_DATA chunks.
+    big_value = "z" * (_PIPE_BUFFER_BYTES * 3 + 1234)
+    result: dict[str, Any] = {}
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+
+        async def handler(payload: bytes) -> bytes:
+            # Echo a large success envelope regardless of the request body.
+            return (
+                orjson.dumps({"jsonrpc": "2.0", "id": "1", "result": {"blob": big_value}}) + b"\n"
+            )
+
+        server = WindowsPipeServer(loop, handler, pipe_name=pipe_name, verify_sid_enabled=False)
+        server.start()
+        try:
+            request = orjson.dumps(
+                {"jsonrpc": "2.0", "id": "1", "method": "daemon.ping", "params": {}}
+            )
+            response_bytes = await asyncio.to_thread(pipe_client_call, pipe_name, request + b"\n")
+            result["payload"] = orjson.loads(response_bytes.rstrip(b"\n"))
+        finally:
+            server.stop()
+            await asyncio.sleep(0.05)
+
+    asyncio.run(runner())
+    assert result["payload"]["result"]["blob"] == big_value
+    assert len(result["payload"]["result"]["blob"]) == _PIPE_BUFFER_BYTES * 3 + 1234
+
+
+def test_large_request_frame_reassembles_server_side() -> None:
+    """A REQUEST larger than the pipe buffer reassembles on the server read.
+
+    Mirrors the response-side reassembly for the inbound direction: the
+    client sends a frame several buffers long; the listener's
+    ``_read_first_chunk`` + MORE_DATA drain must hand the handler the full
+    payload. The handler echoes back the received byte length so a
+    truncated server read surfaces as a mismatch.
+    """
+    from eawf.runtime.daemon.windows_pipe import (
+        _PIPE_BUFFER_BYTES,
+        WindowsPipeServer,
+        pipe_client_call,
+    )
+
+    pipe_name = _unique_pipe_name("bigreq")
+    filler = "q" * (_PIPE_BUFFER_BYTES * 2 + 77)
+    request = orjson.dumps(
+        {"jsonrpc": "2.0", "id": "1", "method": "daemon.ping", "params": {"pad": filler}}
+    )
+    expected_len = len(request + b"\n")
+    result: dict[str, Any] = {}
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+
+        async def handler(payload: bytes) -> bytes:
+            return (
+                orjson.dumps(
+                    {"jsonrpc": "2.0", "id": "1", "result": {"received_len": len(payload)}}
+                )
+                + b"\n"
+            )
+
+        server = WindowsPipeServer(loop, handler, pipe_name=pipe_name, verify_sid_enabled=False)
+        server.start()
+        try:
+            response_bytes = await asyncio.to_thread(pipe_client_call, pipe_name, request + b"\n")
+            result["payload"] = orjson.loads(response_bytes.rstrip(b"\n"))
+        finally:
+            server.stop()
+            await asyncio.sleep(0.05)
+
+    asyncio.run(runner())
+    assert result["payload"]["result"]["received_len"] == expected_len
+
+
+def test_pipe_ready_probe_does_not_consume_an_instance() -> None:
+    """``pipe_ready`` reports availability without stealing a pipe instance.
+
+    The per-user pipe is a singleton listener with one free instance at a
+    time. If the readiness probe consumed an instance, the following real
+    RPC would block / fail. This test probes readiness, then immediately
+    drives a full ``pipe_client_call`` round-trip on the SAME instance and
+    asserts it still succeeds -- proving the probe did not consume it.
+    """
+    from eawf.runtime.daemon.windows_pipe import (
+        WindowsPipeServer,
+        pipe_client_call,
+        pipe_ready,
+    )
+
+    pipe_name = _unique_pipe_name("ready")
+    result: dict[str, Any] = {}
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+
+        async def handler(payload: bytes) -> bytes:
+            return b'{"jsonrpc":"2.0","id":"1","result":{"ok":true}}\n'
+
+        server = WindowsPipeServer(loop, handler, pipe_name=pipe_name, verify_sid_enabled=False)
+        server.start()
+        try:
+
+            def _probe_then_call() -> tuple[bool, bytes]:
+                ready = pipe_ready(pipe_name, 5000)
+                request = orjson.dumps(
+                    {"jsonrpc": "2.0", "id": "1", "method": "daemon.ping", "params": {}}
+                )
+                return ready, pipe_client_call(pipe_name, request + b"\n")
+
+            ready, response_bytes = await asyncio.to_thread(_probe_then_call)
+            result["ready"] = ready
+            result["payload"] = orjson.loads(response_bytes.rstrip(b"\n"))
+        finally:
+            server.stop()
+            await asyncio.sleep(0.05)
+
+    asyncio.run(runner())
+    assert result["ready"] is True
+    assert result["payload"]["result"]["ok"] is True

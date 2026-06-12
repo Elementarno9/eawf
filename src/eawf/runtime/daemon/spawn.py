@@ -178,28 +178,45 @@ def _wait_for_socket(runtime_dir: Path, deadline: float) -> bool:
 
 
 def _wait_for_pipe(runtime_dir: Path, deadline: float) -> bool:
-    """Poll the daemon's named pipe until liveness or *deadline* passes (Windows).
+    """Poll the daemon's named pipe until ready or *deadline* passes (Windows).
+
+    Uses :func:`win32pipe.WaitNamedPipe` as the readiness probe. That call
+    blocks until a pipe instance is *available* but does NOT open or
+    consume one -- so a readiness check never steals the instance a real
+    RPC needs. A successful ``WaitNamedPipe`` means the listener has the
+    pipe bound and a slot free; the JSON-RPC client then opens the actual
+    handle. ``ERROR_FILE_NOT_FOUND`` (pipe not bound yet) is the loop's
+    "not ready" signal.
+
+    The ``win32pipe`` import is lazy + guarded: this helper only runs on
+    win32 (the caller branches on ``sys.platform``), so the import never
+    fires on a POSIX dev host.
 
     Args:
-        runtime_dir: Daemon runtime directory; used to compute the
-            per-user pipe name fallback.
-        deadline: ``time.monotonic()`` value at which the poll loop
-            gives up and returns False.
+        runtime_dir: Daemon runtime directory; unused on Windows (the pipe
+            name is per-user, not per-runtime-dir) but kept for call-site
+            symmetry with the POSIX :func:`_wait_for_socket`.
+        deadline: ``time.monotonic()`` value at which the poll loop gives
+            up and returns False.
 
     Returns:
-        True when the pipe responds; False on deadline expiry. The
-        implementation uses :func:`os.path.exists` against the pipe
-        path because pywin32 is import-guarded — a basic existence
-        check is sufficient for spawn liveness; the JSON-RPC client
-        opens the actual pipe afterwards.
+        True when ``WaitNamedPipe`` reports a free instance; False on
+        deadline expiry.
     """
-    # The per-user pipe name lives at \\.\pipe\eawfd-<username>;
-    # `runtime_dir` is unused on Windows but kept symmetric for
-    # callers that pass it positionally.
-    del runtime_dir  # silence unused-variable lint without renaming the arg
-    pipe_path = rf"\\.\pipe\eawfd-{os.environ.get('USERNAME', 'eawf')}"
+    del runtime_dir  # symmetric signature with _wait_for_socket; unused on win32
+    # ``default_pipe_name`` + ``pipe_ready`` live in the import-guarded,
+    # mypy-overridden windows_pipe module so every pywin32 reference stays
+    # behind one win32-only boundary. This helper only runs on win32 (the
+    # caller branches on ``sys.platform``), so the lazy import never fires
+    # on a POSIX dev host.
+    from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_ready
+
+    pipe_path = default_pipe_name()
     while time.monotonic() < deadline:
-        if os.path.exists(pipe_path):
+        # 0 ms: do not block inside a single poll iteration -- the outer
+        # loop owns the deadline + backoff. ``pipe_ready`` (WaitNamedPipe)
+        # reports availability without consuming a pipe instance.
+        if pipe_ready(pipe_path, 0):
             return True
         time.sleep(SPAWN_POLL_INTERVAL_SECONDS)
     return False
@@ -348,25 +365,51 @@ def _spawn_posix(runtime_dir: Path) -> None:
     os.execve(sys.executable, [sys.executable, "-m", "eawf.runtime.daemon.main"], os.environ)
 
 
+def _pythonw_executable() -> str:
+    """Return the GUI (no-console) interpreter path on Windows.
+
+    Auto-spawning the daemon with ``python.exe`` flashes a console window
+    on each cold start; ``pythonw.exe`` is the windowless sibling that
+    ships beside it. This resolves ``pythonw.exe`` next to
+    :data:`sys.executable` when present and falls back to
+    :data:`sys.executable` otherwise (e.g. an embedded interpreter with no
+    ``pythonw``), so the spawn never fails for lack of the GUI build.
+
+    Returns:
+        The windowless interpreter path, or :data:`sys.executable` when no
+        ``pythonw.exe`` sits beside it.
+    """
+    exe = Path(sys.executable)
+    pythonw = exe.with_name("pythonw.exe")
+    if pythonw.exists():
+        return str(pythonw)
+    return sys.executable
+
+
 def _spawn_windows(runtime_dir: Path) -> None:
-    """Spawn the daemon detached via :func:`subprocess.Popen` (Windows).
+    """Spawn the daemon detached + windowless via :func:`subprocess.Popen` (Windows).
 
     Args:
         runtime_dir: Runtime directory the spawned daemon should bind
             its socket + PID file under.
 
-    Uses ``DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`` flags so the
-    CLI's CTRL+C does not propagate to the spawned daemon. pywin32 is
-    NOT required here — the standard library carries the constants
-    on the win32 build of Python.
+    Uses ``pythonw.exe`` (the windowless interpreter) plus
+    ``DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW`` so
+    the cold-spawn never flashes a console and the CLI's CTRL+C does not
+    propagate to the spawned daemon. The constants live on the win32 build
+    of the standard-library ``subprocess`` module -- ``getattr`` with a 0
+    fallback keeps this readable on POSIX where the flags are absent (this
+    branch only runs on win32 regardless, gated by the caller).
     """
-    creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
-        subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+    creationflags = (
+        getattr(subprocess, "DETACHED_PROCESS", 0)
+        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        | getattr(subprocess, "CREATE_NO_WINDOW", 0)
     )
     env = dict(os.environ)
     env["EAWF_RUNTIME_DIR"] = str(runtime_dir)
     subprocess.Popen(
-        [sys.executable, "-m", "eawf.runtime.daemon.main"],
+        [_pythonw_executable(), "-m", "eawf.runtime.daemon.main"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

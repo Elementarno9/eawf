@@ -38,17 +38,218 @@ if sys.platform == "win32":  # pragma: no cover - win32-only branch
     import pywintypes
     import win32file
     import win32pipe
+    import winerror
 
 logger = logging.getLogger(__name__)
 
 
-# Per-frame buffer cap matches the JSON-RPC frame ceiling we enforce on
-# the POSIX listener.
+# Per-read chunk size handed to ``win32file.ReadFile``. A message-mode pipe
+# whose message exceeds this chunk does NOT truncate: ``ReadFile`` returns
+# ``ERROR_MORE_DATA`` and the rest of the message stays queued for the next
+# read. The reassembly loops (:func:`_read_full_message` server-side,
+# :func:`pipe_client_call` client-side) drain that tail. The value matches
+# the per-instance buffer the listener requests from ``CreateNamedPipe`` --
+# it is a chunking hint, NOT a frame ceiling.
 _PIPE_BUFFER_BYTES = 65536
+
+# Default wait (ms) for ``WaitNamedPipe`` when a client opens the pipe. The
+# server may be mid-accept between connections; the wait blocks until an
+# instance is free rather than failing fast with ERROR_PIPE_BUSY. Critically,
+# ``WaitNamedPipe`` does NOT consume a pipe instance -- it only blocks until
+# one is available, so a readiness probe through it never steals the slot a
+# real RPC needs.
+_DEFAULT_WAIT_MS = 5000
 
 
 FrameHandler = Callable[[bytes], Awaitable[bytes]]
 ReplyCallback = Callable[[bytes], None]
+
+
+def _read_first_chunk(pipe: Any) -> tuple[bytes, bool]:
+    """Read ONE bounded chunk and report whether the message continues.
+
+    Used server-side to read the first ``_PIPE_BUFFER_BYTES`` of a client
+    message BEFORE impersonating the peer for the SID check. Two reasons
+    this single bounded read precedes the SID verify:
+
+    1. ``ImpersonateNamedPipeClient`` requires the server to have read
+       from the pipe first, so the client's security context is the one
+       impersonated -- impersonating before any read is unreliable.
+    2. The DACL (owner-only) is the primary gate; this read is bounded to
+       one chunk so an unauthenticated peer can move at most
+       ``_PIPE_BUFFER_BYTES`` of bytes through the server before the SID
+       check runs (the accepted residual the W07 threat-model note
+       records). The MORE_DATA tail is drained only AFTER the SID passes.
+
+    Args:
+        pipe: Connected named-pipe handle.
+
+    Returns:
+        ``(chunk, more)`` -- the first chunk's bytes and ``True`` when the
+        message continues (an ``ERROR_MORE_DATA`` tail remains to drain).
+
+    Raises:
+        pywintypes.error: For any pipe error other than ``ERROR_MORE_DATA``.
+    """
+    try:
+        hr, segment = win32file.ReadFile(pipe, _PIPE_BUFFER_BYTES)
+    except pywintypes.error as exc:
+        if exc.winerror == winerror.ERROR_MORE_DATA:
+            tail = exc.strerror if isinstance(exc.strerror, bytes) else b""
+            return tail, True
+        raise
+    return bytes(segment), hr == winerror.ERROR_MORE_DATA
+
+
+def _read_full_message(pipe: Any) -> bytes:
+    """Read one complete pipe message, draining the ``ERROR_MORE_DATA`` tail.
+
+    A message-mode named pipe delivers one logical message per send, but a
+    single ``ReadFile`` only returns up to its chunk size. When the message
+    is larger, ``ReadFile`` raises ``pywintypes.error`` with
+    ``winerror.ERROR_MORE_DATA`` and leaves the remainder queued; the loop
+    keeps reading until a call returns without that code, which marks the
+    message boundary. Without this loop a frame over ``_PIPE_BUFFER_BYTES``
+    (e.g. a large ``state.mutate`` payload) would be silently truncated.
+
+    Args:
+        pipe: Connected named-pipe handle (server or client side).
+
+    Returns:
+        The full message bytes, concatenated across every MORE_DATA chunk.
+
+    Raises:
+        pywintypes.error: For any pipe error other than ``ERROR_MORE_DATA``
+            (e.g. the peer closed the handle).
+    """
+    chunks: list[bytes] = []
+    while True:
+        try:
+            hr, segment = win32file.ReadFile(pipe, _PIPE_BUFFER_BYTES)
+        except pywintypes.error as exc:
+            if exc.winerror == winerror.ERROR_MORE_DATA:
+                # pywin32 surfaces the partial buffer on the exception in
+                # some builds; defensively append it before continuing.
+                tail = exc.strerror if isinstance(exc.strerror, bytes) else b""
+                if tail:
+                    chunks.append(tail)
+                continue
+            raise
+        chunks.append(bytes(segment))
+        # hr == ERROR_MORE_DATA means the message continues; 0 means done.
+        if hr != winerror.ERROR_MORE_DATA:
+            break
+    return b"".join(chunks)
+
+
+def pipe_ready(pipe_name: str, wait_ms: int = 0) -> bool:
+    r"""Return True when a pipe instance for *pipe_name* is available.
+
+    A readiness probe for the spawn poll loop. ``WaitNamedPipe`` blocks up
+    to *wait_ms* for a free instance and -- critically -- does NOT open or
+    consume one, so probing readiness never steals the slot a real RPC
+    needs. A bound pipe with a free instance returns True; an unbound pipe
+    (``ERROR_FILE_NOT_FOUND``) or no instance free within the wait
+    (``ERROR_SEM_TIMEOUT``) returns False so the caller keeps polling.
+
+    Args:
+        pipe_name: The ``\\.\pipe\eawfd-<user>`` path to probe.
+        wait_ms: Milliseconds to wait for a free instance (0 = poll once).
+
+    Returns:
+        True when a pipe instance is available; False otherwise.
+    """
+    try:
+        return bool(win32pipe.WaitNamedPipe(pipe_name, wait_ms))
+    except pywintypes.error:
+        return False
+
+
+def pipe_client_call(
+    pipe_name: str,
+    payload: bytes,
+    *,
+    wait_ms: int = _DEFAULT_WAIT_MS,
+) -> bytes:
+    r"""Open *pipe_name*, write *payload*, read one full response message.
+
+    The synchronous client transport the CLI ``DaemonClient`` uses on
+    Windows. Procedure:
+
+    1. ``WaitNamedPipe`` until an instance is free (does NOT consume one).
+    2. ``CreateFile`` the pipe and switch it to message read-mode so a
+       single logical response maps to one message.
+    3. ``WriteFile`` the request frame.
+    4. Drain the response via :func:`_read_full_message` so a reply larger
+       than the pipe buffer reassembles rather than truncating.
+
+    Args:
+        pipe_name: The ``\\.\pipe\eawfd-<user>`` path the daemon bound.
+        payload: One JSON-RPC request frame (newline-terminated by the
+            caller, matching the POSIX UDS wire format).
+        wait_ms: Milliseconds to wait for a free pipe instance.
+
+    Returns:
+        The full response message bytes (one JSON-RPC response frame).
+
+    Raises:
+        pywintypes.error: When the pipe cannot be opened or the round-trip
+            fails for a reason other than MORE_DATA chunking.
+    """
+    win32pipe.WaitNamedPipe(pipe_name, wait_ms)
+    handle = win32file.CreateFile(
+        pipe_name,
+        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+        0,
+        None,
+        win32file.OPEN_EXISTING,
+        0,
+        None,
+    )
+    try:
+        win32pipe.SetNamedPipeHandleState(
+            handle,
+            win32pipe.PIPE_READMODE_MESSAGE,
+            None,
+            None,
+        )
+        win32file.WriteFile(handle, payload)
+        return _read_full_message(handle)
+    finally:
+        win32file.CloseHandle(handle)
+
+
+class PipeReader:
+    """Drain full messages from a connected pipe handle, reassembly-safe.
+
+    A thin object wrapper over :func:`_read_full_message` so the streaming
+    subscription path (W03) and any caller that holds a long-lived
+    connected pipe can pull one complete message at a time without each
+    re-implementing the ``ERROR_MORE_DATA`` loop. The reader does NOT own
+    the handle lifecycle -- the caller opens and closes the pipe.
+
+    Attributes:
+        pipe: The connected named-pipe handle to read from.
+    """
+
+    def __init__(self, pipe: Any) -> None:
+        """Bind the reader to a connected pipe handle.
+
+        Args:
+            pipe: Connected named-pipe handle.
+        """
+        self._pipe = pipe
+
+    def read_message(self) -> bytes:
+        """Return the next complete message, draining the MORE_DATA tail.
+
+        Returns:
+            Full message bytes across every ``ERROR_MORE_DATA`` chunk.
+
+        Raises:
+            pywintypes.error: For any pipe error other than ``ERROR_MORE_DATA``.
+        """
+        return _read_full_message(self._pipe)
 
 
 def default_pipe_name(username: str | None = None) -> str:
@@ -186,12 +387,17 @@ class WindowsPipeServer:
         Each iteration:
           1. Build a fresh pipe instance with the user-restricted DACL.
           2. Wait for a client connection.
-          3. Read one frame.
-          4. Hand off to asyncio via :func:`Queue.put_nowait` through
-             :func:`loop.call_soon_threadsafe`.
-          5. Wait on a per-frame :class:`threading.Event` for the
-             reply bytes.
-          6. ``WriteFile`` the reply, close the pipe instance.
+          3. Read the FIRST bounded chunk of the request (so the peer's
+             security context exists to impersonate, and so an
+             unauthenticated peer moves at most one chunk pre-verify).
+          4. Verify the peer SID (read-before-impersonate order); on
+             mismatch write the ``-32000`` envelope and loop.
+          5. Drain any ``ERROR_MORE_DATA`` tail of the request only AFTER
+             the SID passes.
+          6. Hand the full frame to asyncio via :func:`Queue.put_nowait`
+             through :func:`loop.call_soon_threadsafe`.
+          7. Wait on a per-frame :class:`threading.Event` for the reply.
+          8. ``WriteFile`` the reply, close the pipe instance.
 
         Exceptions in any step are logged at WARNING; the listener
         attempts to close the current pipe instance and loop back so a
@@ -224,6 +430,12 @@ class WindowsPipeServer:
                 if self._shutdown.is_set():
                     break
 
+                # Read-before-impersonate: read ONE bounded chunk so the
+                # client's security context is established for the SID check.
+                # This is the single pre-verify read the W07 threat-model
+                # note accepts; the DACL is the primary gate.
+                first_chunk, more = _read_first_chunk(pipe)
+
                 if self._verify_sid_enabled:
                     try:
                         verify_peer_sid(pipe, self._verify_sid)
@@ -232,8 +444,11 @@ class WindowsPipeServer:
                         self._write_unauthorized(pipe)
                         continue
 
-                _hr, payload = win32file.ReadFile(pipe, _PIPE_BUFFER_BYTES)
-                response = self._await_handler(bytes(payload))
+                # Drain the MORE_DATA tail only after the SID passed.
+                payload = first_chunk
+                if more:
+                    payload = first_chunk + _read_full_message(pipe)
+                response = self._await_handler(payload)
                 win32file.WriteFile(pipe, response)
             except pywintypes.error as exc:
                 logger.warning(f"_listen_loop pywin32 err={exc!s}")
@@ -311,3 +526,12 @@ class WindowsPipeServer:
                 )
             else:
                 reply(response)
+
+
+__all__ = [
+    "PipeReader",
+    "WindowsPipeServer",
+    "default_pipe_name",
+    "pipe_client_call",
+    "pipe_ready",
+]

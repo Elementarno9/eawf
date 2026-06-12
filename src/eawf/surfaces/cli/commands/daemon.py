@@ -76,10 +76,12 @@ _DEFAULT_BACKUP_KEEP: int = 3
 
 
 async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
-    """Issue a single JSON-RPC call against the local daemon socket.
+    """Issue a single JSON-RPC call against the local daemon socket (POSIX).
 
     Cold-spawns the daemon when no live socket is present, per the V1
     on-demand spawn contract. Silent unless ``EAWF_VERBOSE=1`` is set.
+    Windows routes through :func:`_rpc_call_pipe` instead -- there is no
+    UDS on Windows.
 
     Args:
         method: JSON-RPC method name.
@@ -121,8 +123,42 @@ async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
             await writer.wait_closed()
 
 
+def _rpc_call_pipe(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Issue a single JSON-RPC call over the Windows named pipe.
+
+    The synchronous counterpart of :func:`_rpc_call`: there is no UDS on
+    Windows, so the daemon CLI verbs round-trip through the per-user named
+    pipe via the shared :class:`~eawf.surfaces.cli._daemon_client.DaemonClient`
+    (which owns the ``ERROR_MORE_DATA`` reassembly + cold-spawn). The
+    client raises :class:`DaemonRpcError` on an error envelope; this
+    helper re-wraps it into the ``{"error": {...}}`` shape
+    :func:`_emit_or_fail` expects so the two transports share one
+    formatter.
+
+    Args:
+        method: JSON-RPC method name.
+        params: Method params object.
+
+    Returns:
+        The parsed response envelope (``{"result": ...}`` or
+        ``{"error": ...}``).
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    try:
+        with DaemonClient(runtime_dir=runtime_dir()) as client:
+            result = client.call(method, params)
+        return {"result": result}
+    except DaemonRpcError as exc:
+        return {"error": {"code": exc.code, "message": exc.message, "data": exc.data}}
+
+
 def _run_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
-    """Synchronous wrapper around :func:`_rpc_call` for Typer handlers.
+    """Synchronous wrapper around the per-platform RPC transport.
+
+    Routes through the Windows named pipe (:func:`_rpc_call_pipe`) on
+    win32 and the POSIX UDS (:func:`_rpc_call`) elsewhere, so the Typer
+    handlers stay transport-agnostic.
 
     Args:
         method: JSON-RPC method name.
@@ -131,6 +167,8 @@ def _run_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
     Returns:
         The parsed response envelope.
     """
+    if sys.platform == "win32":
+        return _rpc_call_pipe(method, params)
     return asyncio.run(_rpc_call(method, params))
 
 

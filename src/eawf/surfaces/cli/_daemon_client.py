@@ -91,6 +91,12 @@ class DaemonClient:
         self._sock: socket.socket | None = None
         self._reader: Any = None  # makefile("rb") for newline-framed reads
         self._pid: int = 0
+        # Windows named-pipe path: request/response is connectionless (each
+        # ``call`` opens + round-trips + closes a pipe handle via
+        # ``pipe_client_call``), so there is no persistent socket. The pipe
+        # name is set on enter and signals ``call`` to route over the pipe.
+        self._pipe_name: str | None = None
+        self._entered: bool = False
 
     @property
     def pid(self) -> int:
@@ -105,17 +111,28 @@ class DaemonClient:
     def __enter__(self) -> DaemonClient:
         self._pid = auto_spawn_daemon(self._runtime_dir)
         if sys.platform == "win32":
-            # Windows named-pipe transport — the synchronous helper
-            # is owned by the windows_pipe bridge in a later wave.
-            # W08 ships the POSIX path + the spawn contract; W09
-            # wires the windows-pipe client side.
-            raise NotImplementedError("windows-pipe transport pending W09 wiring")
+            # Windows named-pipe transport: connectionless request/response.
+            # Each ``call`` opens its own pipe handle through
+            # ``pipe_client_call`` (the per-user pipe is a singleton
+            # listener, so a long-held client handle would block other
+            # callers). Resolve the per-user pipe name once here so the
+            # client carries it for every call.
+            from eawf.runtime.daemon.windows_pipe import default_pipe_name
+
+            self._pipe_name = default_pipe_name()
+            self._entered = True
+            logger.debug(
+                f"__enter__ pipe pid={self._pid} pipe={self._pipe_name!r} "
+                f"runtime={self._runtime_dir.name!r}"
+            )
+            return self
         sock_path = self._runtime_dir / "eawfd.sock"
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self._call_timeout_seconds)
         sock.connect(str(sock_path))
         self._sock = sock
         self._reader = sock.makefile("rb")
+        self._entered = True
         logger.debug(f"__enter__ connected pid={self._pid} runtime={self._runtime_dir.name!r}")
         return self
 
@@ -133,6 +150,8 @@ class DaemonClient:
             with contextlib.suppress(OSError):
                 self._sock.close()
             self._sock = None
+        self._pipe_name = None
+        self._entered = False
 
     def call(
         self,
@@ -163,7 +182,7 @@ class DaemonClient:
             TimeoutError: When the daemon did not respond within
                 ``call_timeout_seconds``.
         """
-        if self._sock is None or self._reader is None:
+        if not self._entered:
             raise RuntimeError("daemon client not connected; use as a context manager")
         payload_params = dict(params) if params is not None else {}
         if idempotency_key is not None and "idempotency_key" not in payload_params:
@@ -175,14 +194,85 @@ class DaemonClient:
             "params": payload_params,
         }
         line = orjson.dumps(request) + b"\n"
+        if self._pipe_name is not None:
+            response_bytes = self._call_over_pipe(line, method=method)
+        else:
+            response_bytes = self._call_over_socket(line, method=method)
+        return self._parse_response(response_bytes)
+
+    def _call_over_socket(self, line: bytes, *, method: str) -> bytes:
+        """Round-trip one frame over the POSIX UDS (newline-framed).
+
+        Args:
+            line: The newline-terminated request frame.
+            method: Method name, for error messages.
+
+        Returns:
+            The response frame bytes (one newline-terminated line).
+
+        Raises:
+            RuntimeError: When the daemon closed the connection mid-call.
+            TimeoutError: When the response did not arrive in time.
+        """
+        if self._sock is None or self._reader is None:
+            raise RuntimeError("daemon client not connected; use as a context manager")
         deadline = time.monotonic() + self._call_timeout_seconds
         self._sock.sendall(line)
-        response_line = self._reader.readline()
+        response_line: bytes = self._reader.readline()
         if not response_line:
             raise RuntimeError(f"daemon closed connection during call method={method!r}")
         if time.monotonic() > deadline:
             raise TimeoutError(f"daemon call exceeded timeout method={method!r}")
-        response = orjson.loads(response_line)
+        return response_line
+
+    def _call_over_pipe(self, line: bytes, *, method: str) -> bytes:
+        """Round-trip one frame over the Windows named pipe.
+
+        Connectionless: opens a fresh pipe handle, writes the request, and
+        reads the full response (reassembling any frame larger than the
+        pipe buffer through the transport's ``ERROR_MORE_DATA`` loop).
+
+        Args:
+            line: The newline-terminated request frame.
+            method: Method name, for error messages.
+
+        Returns:
+            The response frame bytes.
+
+        Raises:
+            RuntimeError: When the pipe round-trip fails.
+        """
+        from eawf.runtime.daemon.windows_pipe import pipe_client_call
+
+        assert self._pipe_name is not None
+        wait_ms = int(self._call_timeout_seconds * 1000)
+        try:
+            response: bytes = pipe_client_call(self._pipe_name, line, wait_ms=wait_ms)
+        except OSError as exc:
+            raise RuntimeError(f"daemon pipe round-trip failed method={method!r}: {exc}") from exc
+        return response
+
+    @staticmethod
+    def _parse_response(response_bytes: bytes) -> dict[str, Any]:
+        """Parse a JSON-RPC response frame into its ``result`` dict.
+
+        Shared by the socket + pipe transports so the wire-contract checks
+        (object response, error envelope -> :class:`DaemonRpcError`, object
+        result) live in one place.
+
+        Args:
+            response_bytes: One JSON-RPC response frame (trailing newline
+                tolerated).
+
+        Returns:
+            The ``result`` object of a success envelope.
+
+        Raises:
+            DaemonRpcError: When the envelope carries a JSON-RPC error.
+            RuntimeError: When the frame is not a well-formed success
+                envelope with an object ``result``.
+        """
+        response = orjson.loads(response_bytes.rstrip(b"\n"))
         if not isinstance(response, dict):
             raise RuntimeError(f"daemon returned non-object response: {response!r}")
         if "error" in response and response["error"] is not None:
