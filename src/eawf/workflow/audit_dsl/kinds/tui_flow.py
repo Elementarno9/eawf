@@ -14,12 +14,11 @@ landed where it should" was claim-only.
 This kind drives a named ``key_sequence`` through the real
 key->:class:`~textual.binding.Binding` path (the
 :func:`~eawf.surfaces.tui.snapshot.behaviour_probe.record_flow_terminal_state`
-driver) and asserts the TERMINAL observable state -- the seven signals the
-probe samples (the active mode, the bound nav scope + mode, the screen-stack
-depth + top-screen class, the modal-overlay depth, the mounted-toast count) --
-equals the declared ``terminal_state``. On divergence it FAILS, naming each
-divergent observable field with its actual-vs-expected value, so a journey
-that lands in the wrong place is wave-provable, not silently green.
+driver) and asserts the TERMINAL observable state -- app chrome plus the
+state-backed lifecycle facts the probe samples -- equals the declared
+``terminal_state``. On divergence it FAILS, naming each divergent observable
+field with its actual-vs-expected value, so a journey that lands in the wrong
+place is wave-provable, not silently green.
 
 Args (read from ``spec.args``)
 ------------------------------
@@ -29,7 +28,7 @@ Args (read from ``spec.args``)
   str.
 * ``key_sequence`` -- the ordered Textual key strings the journey drives
   (e.g. ``["2", "1"]``). Required, list of strs.
-* ``terminal_state`` -- a mapping of one or more of the seven observable
+* ``terminal_state`` -- a mapping of one or more of the observable
   fields (:data:`~eawf.surfaces.tui.snapshot.behaviour_probe.OBSERVABLE_FIELDS`)
   to the value the journey must land each at. A PARTIAL spec is allowed --
   only the named fields are asserted, so a flow that pins the terminal mode
@@ -40,12 +39,15 @@ Args (read from ``spec.args``)
 * ``state_path`` -- repo-relative path to the ``state.json`` fixture the
   app binds (resolved against ``cwd``). Optional; defaults to ``None`` (the
   launch with no bound state).
+* ``state`` -- inline ``State`` payload to bind for in-process probes.
+  Optional; mutually exclusive with ``state_path``.
 * ``size`` -- the ``[cols, rows]`` terminal size the Pilot harness runs at.
   Optional; defaults to ``[120, 40]``.
 
 A malformed ``args`` (missing / mistyped ``flow`` / ``key_sequence`` /
 ``terminal_state``, an unknown terminal-state field, a bad ``size`` shape,
-an unreadable fixture) yields ``status="fail"`` with a ``details`` note
+an unreadable fixture, an invalid inline state) yields ``status="fail"`` with
+a ``details`` note
 rather than propagating an exception, so one bad criterion cannot abort the
 audit run -- the same degrade-not-raise contract
 :func:`~eawf.workflow.audit_dsl.kinds.affordance_parity.check_affordance_parity`
@@ -61,10 +63,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from pydantic import ValidationError
+
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 
 if TYPE_CHECKING:
     from textual.pilot import Pilot
+
+    from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +140,7 @@ async def _flow_terminal_state(
     key_sequence: list[str],
     scope: str,
     state_path: Path | None,
+    state: State | None,
     size: tuple[int, int],
 ) -> dict[str, object]:
     """Mount the TUI, drive *key_sequence*, and return the terminal state.
@@ -149,6 +156,7 @@ async def _flow_terminal_state(
         key_sequence: The ordered Textual key strings to drive.
         scope: The launch nav scope (``repo`` / ``workspace`` / ``user``).
         state_path: The fixture ``state.json`` to bind, or ``None``.
+        state: The inline state to bind, or ``None``.
         size: The Pilot terminal size.
 
     Returns:
@@ -159,7 +167,7 @@ async def _flow_terminal_state(
     from eawf.surfaces.tui.snapshot.behaviour_probe import record_flow_terminal_state
     from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 
-    app = EaApp(scope="repo", state_path=state_path)
+    app = EaApp(scope="repo", state_path=state_path, initial_state=state)
     async with app.run_test(size=size) as raw_pilot:
         pilot = cast("Pilot[object]", raw_pilot)
         await settle_screen(pilot)
@@ -174,6 +182,7 @@ def _drive_flow(
     key_sequence: list[str],
     scope: str,
     state_path: Path | None,
+    state: State | None,
     size: tuple[int, int],
 ) -> dict[str, object]:
     """Run :func:`_flow_terminal_state` to completion from a sync caller, loop-safe.
@@ -192,6 +201,7 @@ def _drive_flow(
         key_sequence: The ordered Textual key strings to drive.
         scope: The launch nav scope.
         state_path: The fixture ``state.json`` to bind, or ``None``.
+        state: The inline state to bind, or ``None``.
         size: The Pilot terminal size.
 
     Returns:
@@ -204,6 +214,7 @@ def _drive_flow(
                 key_sequence=key_sequence,
                 scope=scope,
                 state_path=state_path,
+                state=state,
                 size=size,
             )
         )
@@ -227,6 +238,7 @@ class _FlowArgs:
             must land each at.
         scope: The launch nav scope (``repo`` / ``workspace`` / ``user``).
         state_path: The resolved fixture ``state.json`` path, or ``None``.
+        state: The validated inline state, or ``None``.
         size: The Pilot terminal size.
     """
 
@@ -235,6 +247,7 @@ class _FlowArgs:
     terminal_state: dict[str, object]
     scope: str
     state_path: Path | None
+    state: State | None
     size: tuple[int, int]
 
 
@@ -245,6 +258,35 @@ class _FlowArgsError(ValueError):
     validation failure to a single degrade-not-raise ``status="fail"``
     result, keeping the per-guard branching out of the dispatch function.
     """
+
+
+def _parse_state_source(
+    args: dict[str, Any], cwd: Path, flow: str
+) -> tuple[Path | None, State | None]:
+    """Validate the optional ``state_path`` / inline ``state`` source."""
+    state_path_arg = args.get("state_path")
+    if state_path_arg is not None and not isinstance(state_path_arg, str):
+        raise _FlowArgsError(f"flow={flow} arg 'state_path' must be a str")
+
+    state_arg = args.get("state")
+    if state_path_arg is not None and state_arg is not None:
+        raise _FlowArgsError(f"flow={flow} args 'state_path' and 'state' are mutually exclusive")
+    if state_arg is not None and not isinstance(state_arg, dict):
+        raise _FlowArgsError(f"flow={flow} arg 'state' must be a mapping")
+
+    state_path = (cwd / state_path_arg).resolve() if state_path_arg is not None else None
+    if state_path is not None and not state_path.is_file():
+        raise _FlowArgsError(f"flow={flow} state_path={state_path_arg} not found")
+
+    if state_arg is None:
+        return state_path, None
+
+    from eawf.kernel.state.models import State
+
+    try:
+        return state_path, State.model_validate(state_arg)
+    except ValidationError as exc:
+        raise _FlowArgsError(f"flow={flow} arg 'state' failed validation: {exc}") from exc
 
 
 def _parse_flow_args(args: dict[str, Any], cwd: Path) -> _FlowArgs:
@@ -285,18 +327,12 @@ def _parse_flow_args(args: dict[str, Any], cwd: Path) -> _FlowArgs:
     if not isinstance(scope, str) or scope not in ("repo", "workspace", "user"):
         raise _FlowArgsError(f"flow={flow} arg 'scope' must be one of repo/workspace/user")
 
-    state_path_arg = args.get("state_path")
-    if state_path_arg is not None and not isinstance(state_path_arg, str):
-        raise _FlowArgsError(f"flow={flow} arg 'state_path' must be a str")
-
     try:
         size = _coerce_size(args.get("size"))
     except ValueError as exc:
         raise _FlowArgsError(f"flow={flow} {exc}") from exc
 
-    state_path = (cwd / state_path_arg).resolve() if state_path_arg is not None else None
-    if state_path is not None and not state_path.is_file():
-        raise _FlowArgsError(f"flow={flow} state_path={state_path_arg} not found")
+    state_path, state = _parse_state_source(args, cwd, flow)
 
     return _FlowArgs(
         flow=flow,
@@ -304,6 +340,7 @@ def _parse_flow_args(args: dict[str, Any], cwd: Path) -> _FlowArgs:
         terminal_state=dict(terminal_state),
         scope=scope,
         state_path=state_path,
+        state=state,
         size=size,
     )
 
@@ -314,13 +351,15 @@ def check_tui_flow(spec: CheckSpec, cwd: Path) -> CheckResult:
     Args (read from ``spec.args``):
         flow: The journey name, surfaced in ``details``.
         key_sequence: The ordered Textual key strings the journey drives.
-        terminal_state: A mapping of one or more of the seven observable
+        terminal_state: A mapping of one or more of the observable
             fields to the value the journey must land each at (a partial
             spec is allowed).
         scope: The launch nav scope (``repo`` / ``workspace`` / ``user``).
             Optional (defaults to ``"repo"``).
         state_path: Repo-relative ``state.json`` fixture path resolved
             against ``cwd``. Optional (defaults to no bound state).
+        state: Inline ``State`` payload to bind. Optional; mutually
+            exclusive with ``state_path``.
         size: The ``[cols, rows]`` Pilot terminal size. Optional (defaults
             to ``[120, 40]``).
 
@@ -348,6 +387,7 @@ def check_tui_flow(spec: CheckSpec, cwd: Path) -> CheckResult:
             key_sequence=parsed.key_sequence,
             scope=parsed.scope,
             state_path=parsed.state_path,
+            state=parsed.state,
             size=parsed.size,
         )
     except Exception as exc:

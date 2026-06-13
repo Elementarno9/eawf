@@ -70,6 +70,15 @@ from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.state.enums import (
+    AuditStatus,
+    AuditVerdict,
+    BacklogStatus,
+    DecisionStatus,
+    IterStatus,
+    WaveStatus,
+)
+from eawf.kernel.state.ids import natural_key
 from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 
 if TYPE_CHECKING:
@@ -78,6 +87,7 @@ if TYPE_CHECKING:
 
     from textual.pilot import Pilot
 
+    from eawf.kernel.state.models import ActualSummary
     from eawf.surfaces.tui.app import EaApp
 
 #: The default Pilot terminal size the affordance sweep mounts at. Wide
@@ -131,6 +141,11 @@ _TOKEN_KEYS: dict[str, tuple[str, ...]] = {
 #: wholesale.
 DEFERRED_KEYS: frozenset[str] = frozenset()
 
+#: Sentinel used by state-backed terminal fields when no matching fact exists.
+#: Keeping this as a string lets ``tui_flow`` specs compare terminal states
+#: without a special ``None`` convention.
+NO_TERMINAL_FACT: str = "none"
+
 
 class ProbeStatus(StrEnum):
     """Outcome class of one probed action.
@@ -162,6 +177,13 @@ class _ObservableState(BaseModel):
         top_screen: The class name of the top-of-stack screen.
         modal_depth: The number of modal overlays on the stack.
         toast_count: The number of mounted toast notifications.
+        close_gate_pass_count: Closed waves with a passing audit verdict and
+            positive measured ``elapsed_eu``.
+        elapsed_eu_total: Total measured EU over closed waves.
+        planned_iter_count: Number of PLANNED iters in the bound state.
+        planned_iter_dag: Stable dependency-edge signature for PLANNED iters.
+        authority_transition: Active decision ids scoped to the current phase.
+        followup_ids: Live backlog ids scoped to the current phase or iter.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -173,6 +195,12 @@ class _ObservableState(BaseModel):
     top_screen: str
     modal_depth: int
     toast_count: int
+    close_gate_pass_count: int
+    elapsed_eu_total: float
+    planned_iter_count: int
+    planned_iter_dag: str
+    authority_transition: str
+    followup_ids: str
 
 
 class ProbeOutcome(BaseModel):
@@ -212,14 +240,137 @@ class BehaviourTranscript(BaseModel):
     outcomes: tuple[ProbeOutcome, ...]
 
 
+def _actual_for_wave(app: EaApp, wave_id: str) -> ActualSummary | None:
+    """Return the actual row that records runtime for *wave_id*, if present."""
+    state = app.state
+    if state is None:
+        return None
+    actuals = state.actuals or {}
+    direct = actuals.get(wave_id)
+    if direct is not None:
+        return direct
+    for actual in actuals.values():
+        if actual.scope_id == wave_id:
+            return actual
+    return None
+
+
+def _closed_wave_ids(app: EaApp) -> tuple[str, ...]:
+    """Return closed wave ids in stable order."""
+    state = app.state
+    if state is None:
+        return ()
+    return tuple(
+        sorted(
+            (wave.id for wave in state.waves.values() if wave.status is WaveStatus.CLOSED),
+            key=natural_key,
+        )
+    )
+
+
+def _elapsed_eu_total(app: EaApp) -> float:
+    """Return total measured EU for closed waves in the bound state."""
+    total = 0.0
+    for wave_id in _closed_wave_ids(app):
+        actual = _actual_for_wave(app, wave_id)
+        if actual is not None:
+            total += actual.elapsed_eu
+    return round(total, 6)
+
+
+def _close_gate_pass_count(app: EaApp) -> int:
+    """Count closed waves with a pass audit verdict and positive elapsed EU."""
+    state = app.state
+    if state is None:
+        return 0
+    audits = state.audits or {}
+    count = 0
+    for wave_id in _closed_wave_ids(app):
+        actual = _actual_for_wave(app, wave_id)
+        if actual is None or actual.elapsed_eu <= 0.0:
+            continue
+        if any(
+            audit.scope_id == wave_id
+            and audit.status is AuditStatus.COMPLETE
+            and audit.verdict is AuditVerdict.PASS
+            for audit in audits.values()
+        ):
+            count += 1
+    return count
+
+
+def _planned_iter_count(app: EaApp) -> int:
+    """Return how many PLANNED iters are present in the bound state."""
+    state = app.state
+    if state is None:
+        return 0
+    return sum(1 for iteration in state.iters.values() if iteration.status is IterStatus.PLANNED)
+
+
+def _planned_iter_dag(app: EaApp) -> str:
+    """Return a stable dependency-edge signature for every PLANNED iter."""
+    state = app.state
+    if state is None:
+        return NO_TERMINAL_FACT
+    chunks: list[str] = []
+    for iter_id in sorted(state.iters, key=natural_key):
+        iteration = state.iters[iter_id]
+        if iteration.status is not IterStatus.PLANNED:
+            continue
+        wave_ids = [wave_id for wave_id in iteration.wave_ids if wave_id in state.waves]
+        wave_set = set(wave_ids)
+        edges: list[str] = []
+        for wave_id in wave_ids:
+            wave = state.waves[wave_id]
+            deps = [dep for dep in wave.deps if dep in wave_set]
+            if not deps:
+                edges.append(f"{wave_id}:root")
+                continue
+            edges.extend(f"{dep}->{wave_id}" for dep in sorted(deps, key=natural_key))
+        chunks.append(f"{iter_id}:{','.join(edges)}")
+    return "|".join(chunks) if chunks else NO_TERMINAL_FACT
+
+
+def _authority_transition(app: EaApp) -> str:
+    """Return active decision ids scoped to the current phase."""
+    state = app.state
+    if state is None or state.current.phase_id is None:
+        return NO_TERMINAL_FACT
+    decision_ids = [
+        decision.id
+        for decision in state.decisions.values()
+        if decision.scope_id == state.current.phase_id and decision.status is DecisionStatus.ACTIVE
+    ]
+    return "|".join(sorted(decision_ids, key=natural_key)) if decision_ids else NO_TERMINAL_FACT
+
+
+def _followup_ids(app: EaApp) -> str:
+    """Return live backlog ids scoped to the current phase or iter."""
+    state = app.state
+    if state is None:
+        return NO_TERMINAL_FACT
+    backlog = state.backlog or {}
+    followups: list[str] = []
+    scopes = {
+        scope_id
+        for scope_id in (state.current.phase_id, state.current.iter_id)
+        if scope_id is not None
+    }
+    live_statuses = {BacklogStatus.OPEN, BacklogStatus.IN_PROGRESS, BacklogStatus.DEFERRED}
+    for item in backlog.values():
+        if item.scope_id in scopes and item.status in live_statuses:
+            followups.append(item.id)
+    return "|".join(sorted(followups, key=natural_key)) if followups else NO_TERMINAL_FACT
+
+
 def _sample_observable_state(app: EaApp) -> _ObservableState:
     """Capture the app's observable signals into an immutable snapshot.
 
-    Reads only already-exposed signals -- the active mode, the bound nav
+    Reads already-exposed signals -- the active mode, the bound nav
     position, the screen stack (depth + top class), the modal-overlay
-    depth, and the mounted-toast count -- so the sample touches no
-    private rendering internals beyond what other harness code already
-    reads.
+    depth, the mounted-toast count, and typed lifecycle facts from the
+    app-bound state -- so a flow can assert a real terminal outcome rather
+    than only a screen switch.
 
     Args:
         app: The live :class:`~eawf.surfaces.tui.app.EaApp` under a Pilot
@@ -237,6 +388,12 @@ def _sample_observable_state(app: EaApp) -> _ObservableState:
         top_screen=type(app.screen).__name__,
         modal_depth=app.modal_depth(),
         toast_count=len(app._notifications),
+        close_gate_pass_count=_close_gate_pass_count(app),
+        elapsed_eu_total=_elapsed_eu_total(app),
+        planned_iter_count=_planned_iter_count(app),
+        planned_iter_dag=_planned_iter_dag(app),
+        authority_transition=_authority_transition(app),
+        followup_ids=_followup_ids(app),
     )
 
 
@@ -260,6 +417,12 @@ def _diff_signals(before: _ObservableState, after: _ObservableState) -> tuple[st
         "top_screen",
         "modal_depth",
         "toast_count",
+        "close_gate_pass_count",
+        "elapsed_eu_total",
+        "planned_iter_count",
+        "planned_iter_dag",
+        "authority_transition",
+        "followup_ids",
     )
     changed: list[str] = []
     for name in fields:
@@ -418,11 +581,13 @@ async def record_keypress_transcript(
     return BehaviourTranscript(source_commit=source_commit, outcomes=tuple(outcomes))
 
 
-#: The stable field order of the seven observable signals
+#: The stable field order of the observable signals
 #: :func:`_sample_observable_state` samples. Exported so a caller (the
 #: ``tui_flow`` audit kind) can validate a declared terminal-state spec
 #: against the exact field set the probe knows, rather than duplicating the
-#: list and drifting from it.
+#: list and drifting from it. The first seven fields are app chrome; the
+#: trailing fields are state-backed terminal facts for scenario-gate flows
+#: that must prove lifecycle outcomes.
 OBSERVABLE_FIELDS: tuple[str, ...] = (
     "current_mode",
     "nav_scope",
@@ -431,6 +596,12 @@ OBSERVABLE_FIELDS: tuple[str, ...] = (
     "top_screen",
     "modal_depth",
     "toast_count",
+    "close_gate_pass_count",
+    "elapsed_eu_total",
+    "planned_iter_count",
+    "planned_iter_dag",
+    "authority_transition",
+    "followup_ids",
 )
 
 

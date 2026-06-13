@@ -687,6 +687,8 @@ class EaApp(App[None]):
         self,
         scope: ScopeName,
         state_path: Path | None,
+        *,
+        initial_state: State | None = None,
     ) -> None:
         """Construct the app for a resolved scope.
 
@@ -695,6 +697,8 @@ class EaApp(App[None]):
                 resolved by the CLI bare-command dispatch ladder.
             state_path: Path to the scope's ``state.json`` (read-only),
                 or ``None`` for the user scope / no resolved state.
+            initial_state: Optional already-validated state for in-process
+                probes that need a state-backed view without a disk fixture.
         """
         super().__init__()
         self._scope: ScopeName = scope
@@ -848,7 +852,9 @@ class EaApp(App[None]):
         # one and cannot name the trailing version on its own.
         self._stale_schema_seen = False
         self._bound_schema_version: str | None = None
-        if self._scope != "user" and self._state_path is not None:
+        if initial_state is not None:
+            self.state = self._track_and_migrate_state(initial_state)
+        elif self._scope != "user" and self._state_path is not None:
             from eawf.surfaces.tui.state_binding import load_state
 
             initial_state = load_state(self._state_path)
