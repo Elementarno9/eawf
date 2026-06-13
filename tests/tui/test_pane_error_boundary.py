@@ -30,9 +30,11 @@ from pathlib import Path
 
 import pytest
 from textual.binding import Binding
+from textual.geometry import Region
 from textual.widget import Widget
 from textual.widgets import Static
 
+import eawf.surfaces.tui.scopes.repo as repo_scope
 from eawf.surfaces.tui.app import (
     PANE_CRASH_HEADLINE,
     PANE_CRASH_HINTS,
@@ -40,6 +42,7 @@ from eawf.surfaces.tui.app import (
     PaneErrorBoundary,
     render_pane_crash_frame,
 )
+from eawf.surfaces.tui.scopes import ATTENTION_BAND_PANE
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -67,6 +70,18 @@ def _exploding_builder() -> Widget:
         RuntimeError: Always -- the injected render exception.
     """
     raise RuntimeError("injected render explosion")
+
+
+class _ExplodingRenderPane(Static):
+    """Mounted test pane whose real render path raises."""
+
+    def __init__(self, **kwargs: object) -> None:
+        """Construct the exploding pane with a stable content placeholder."""
+        super().__init__("boom", **kwargs)  # type: ignore[arg-type]
+
+    def render(self) -> str:
+        """Raise from Textual's render path, not from the builder."""
+        raise RuntimeError("injected production render explosion")
 
 
 def _binding_for(widget: object, key: str) -> Binding:
@@ -233,6 +248,51 @@ def test_healthy_pane_renders_no_boundary_crash_frame() -> None:
     asyncio.run(body())
 
 
+def test_repo_production_wraps_roadmap_status_and_attention_panes() -> None:
+    """Repo production screen wraps the swappable panes in boundaries."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            boundary_ids = {boundary.id for boundary in app.screen.query(PaneErrorBoundary)}
+            assert {
+                "pane-boundary-roadmap",
+                "pane-boundary-status",
+                f"pane-boundary-{ATTENTION_BAND_PANE}",
+            } <= boundary_ids
+
+    asyncio.run(body())
+
+
+def test_production_roadmap_render_exception_renders_crash_frame_not_panic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mounted production roadmap render failure shows crash frame, no panic."""
+    monkeypatch.setattr(repo_scope, "RoadmapTree", _ExplodingRenderPane)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        panic_calls: list[tuple[object, ...]] = []
+        app.panic = lambda *renderables: panic_calls.append(renderables)  # type: ignore[method-assign]
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            exploding = app.screen.query("#roadmap-tree")
+            if exploding:
+                exploding.first(_ExplodingRenderPane).render_lines(Region(0, 0, 40, 3))
+            await pilot.pause()
+            frames = app.screen.query(".pane-crash-frame")
+            assert len(frames) == 1
+            rendered = str(frames.first(Static).render())
+            assert _FAIL_UNICODE in rendered
+            assert PANE_CRASH_HEADLINE in rendered
+            assert "roadmap raised mid-paint" in rendered
+            assert app._exception is None
+            assert panic_calls == []
+
+    asyncio.run(body())
+
+
 # --------------------------------------------------------------------------
 # affordance_parity -- r / l / Esc resolve to live Bindings AND fire
 # --------------------------------------------------------------------------
@@ -245,6 +305,31 @@ def test_boundary_affordance_parity_keys_resolve_to_live_bindings() -> None:
     assert _binding_for(PaneErrorBoundary, "escape").action == "dismiss"
     for action in ("action_retry", "action_view_log", "action_dismiss"):
         assert callable(getattr(PaneErrorBoundary, action))
+
+
+def test_boundary_recovery_bindings_enable_only_when_crashed() -> None:
+    """Healthy panes do not expose recovery keys that shadow global shortcuts."""
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            healthy = app.pane_boundary(
+                builder=lambda: _healthy_builder("all good"), pane_id="status"
+            )
+            broken = app.pane_boundary(builder=_exploding_builder, pane_id="roadmap")
+            await app.screen.mount(healthy)
+            await app.screen.mount(broken)
+            await pilot.pause()
+            assert healthy.check_action("retry", ()) is False
+            assert healthy.check_action("view_log", ()) is False
+            assert healthy.check_action("dismiss", ()) is False
+            assert broken.check_action("retry", ()) is True
+            assert broken.check_action("view_log", ()) is True
+            assert broken.check_action("dismiss", ()) is True
+            assert healthy.check_action("not_boundary_owned", ()) is True
+
+    asyncio.run(body())
 
 
 def test_boundary_retry_key_rebuilds_the_content() -> None:

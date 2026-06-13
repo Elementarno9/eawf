@@ -35,7 +35,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
-from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
+from eawf.surfaces.tui.scopes import ScopeScreen, attention_band, pane_boundary
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.git_pane import GitPane
@@ -78,14 +78,22 @@ class RepoScreen(ScopeScreen):
     def compose_body(self) -> ComposeResult:
         """Yield the Home attention band, then the 2x2 quadrant body."""
         with Vertical(id="body"):
-            yield from attention_band()
+            yield from attention_band(self.app)
             with Horizontal(classes="row"):
                 with Vertical(classes="pane", id="pane-roadmap"):
                     yield Static("ROADMAP", classes="pane-title")
-                    yield RoadmapTree(id="roadmap-tree")
+                    yield pane_boundary(
+                        self.app,
+                        builder=lambda: RoadmapTree(id="roadmap-tree"),
+                        pane_id="roadmap",
+                    )
                 with Vertical(classes="pane", id="pane-status"):
                     yield Static("STATUS", classes="pane-title")
-                    yield StatusPane(id="status-pane")
+                    yield pane_boundary(
+                        self.app,
+                        builder=lambda: StatusPane(id="status-pane"),
+                        pane_id="status",
+                    )
             with Horizontal(classes="row"):
                 with Vertical(classes="pane", id="pane-git"):
                     yield Static("GIT", classes="pane-title")

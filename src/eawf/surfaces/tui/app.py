@@ -50,8 +50,11 @@ from textual import events
 from textual.app import App
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
+from textual.geometry import Region
 from textual.reactive import reactive
 from textual.screen import ModalScreen, Screen
+from textual.strip import Strip
+from textual.visual import Visual
 from textual.widget import AwaitMount, Widget
 from textual.widgets import Static
 
@@ -226,13 +229,11 @@ class PaneErrorBoundary(Vertical):
       boundary empty (the operator chose to stop looking at it).
     """
 
-    #: The boundary is focusable so its recovery bindings (``r`` / ``l`` /
-    #: ``Esc``) resolve when the operator focuses a crashed pane -- a
-    #: non-focusable container would never receive the key events, leaving the
-    #: advertised affordances dead. Focus is the natural shape: the operator
-    #: tabs to the failed pane to act on it. Matches the base ``Widget``
-    #: declaration form (a plain ``bool``, not a ``ClassVar``).
-    can_focus: bool = True
+    #: The boundary becomes focusable only while it shows a crash frame so
+    #: its recovery keys never steal global scope shortcuts from healthy
+    #: production panes. Matches the base ``Widget`` declaration form (a
+    #: plain ``bool``, not a ``ClassVar``).
+    can_focus: bool = False
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("r", "retry", "retry", show=False),
@@ -250,9 +251,10 @@ class PaneErrorBoundary(Vertical):
                 boundary's own id + the crash-frame log lines so a failure is
                 attributable to its pane.
         """
-        super().__init__(id=f"pane-boundary-{pane_id}")
+        super().__init__(id=f"pane-boundary-{pane_id}", classes="pane-boundary")
         self._builder = builder
         self._pane_id = pane_id
+        self._render_failure_pending = False
 
     def on_mount(self) -> None:
         """Build the guarded content once the boundary is mounted."""
@@ -274,6 +276,8 @@ class PaneErrorBoundary(Vertical):
             ``False`` when the build raised and the crash frame was mounted.
         """
         self.remove_children()
+        self._render_failure_pending = False
+        self.can_focus = False
         try:
             content = self._builder()
         except Exception as exc:
@@ -281,10 +285,50 @@ class PaneErrorBoundary(Vertical):
             # building the pane's content widget. Swallowing it here is the
             # whole point of the boundary -- escalating would panic the App.
             logger.warning(f"build_content pane={self._pane_id!r} render_failed cause={exc!r}")
-            self.mount(self._crash_frame())
+            self._mount_crash_frame()
             return False
-        self.mount(content)
+        self.mount(self._guard_render_exceptions(content))
         return True
+
+    def _guard_render_exceptions(self, content: Widget) -> Widget:
+        """Wrap *content*'s render pass so child paint errors stay pane-local."""
+        render = content._render
+        render_lines = content.render_lines
+
+        def guarded_render() -> Visual:
+            try:
+                return render()
+            except Exception as exc:
+                self._handle_child_render_exception(exc)
+                return content.render_str("")
+
+        def guarded_render_lines(crop: Region) -> list[Strip]:
+            try:
+                return render_lines(crop)
+            except Exception as exc:
+                self._handle_child_render_exception(exc)
+                return [
+                    Strip.blank(crop.width, content.visual_style.rich_style)
+                    for _ in range(crop.height)
+                ]
+
+        content._render = guarded_render  # type: ignore[method-assign]
+        content.render_lines = guarded_render_lines  # type: ignore[method-assign]
+        return content
+
+    def _handle_child_render_exception(self, exc: Exception) -> None:
+        """Schedule crash-frame replacement for a mounted child render error."""
+        if self._render_failure_pending:
+            return
+        self._render_failure_pending = True
+        logger.warning(f"render_lines pane={self._pane_id!r} render_failed cause={exc!r}")
+        self.call_after_refresh(self._mount_crash_frame)
+
+    def _mount_crash_frame(self) -> None:
+        """Replace current boundary children with the pane crash frame."""
+        self.remove_children()
+        self.can_focus = True
+        self.mount(self._crash_frame())
 
     def _crash_frame(self) -> Static:
         """Build the crash-frame :class:`Static` for the failed builder.
@@ -337,6 +381,14 @@ class PaneErrorBoundary(Vertical):
         logger.info(f"action_retry pane={self._pane_id!r}")
         self.build_content()
 
+    def _check_pane_action(self, action: str, _parameters: tuple[object, ...]) -> bool | None:
+        """Enable recovery bindings only while this boundary shows a crash frame."""
+        if action in {"retry", "view_log", "dismiss"}:
+            return bool(self.query(".pane-crash-frame"))
+        return True
+
+    check_action = _check_pane_action  # type: ignore[assignment]
+
     def action_view_log(self) -> None:
         """Open the live event feed (the ``l`` affordance).
 
@@ -357,6 +409,7 @@ class PaneErrorBoundary(Vertical):
         """
         logger.info(f"action_dismiss pane={self._pane_id!r}")
         self.remove_children()
+        self.can_focus = False
 
 
 #: Cap on the App-owned live event ring buffer. The Feed pane renders this

@@ -115,12 +115,26 @@ Heartbeat.-degraded {
     text-style: bold;
 }
 
+.pane-boundary {
+    width: 1fr;
+    height: 1fr;
+}
+
+.pane-crash-frame {
+    width: 1fr;
+    height: auto;
+}
+
 /* Home attention band: a compact overview strip above the scope body --
    override the .pane 1fr flex so it sizes to its content (title + feed)
    instead of claiming an equal vertical share with the scope quadrant. */
 #pane-attention-band {
     height: auto;
     max-height: 8;
+}
+
+#pane-attention-band .pane-boundary {
+    height: auto;
 }
 
 /* --- UserScreen weighted sections (attention 3 : effort 2 : portfolio 5) --- */

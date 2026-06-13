@@ -42,10 +42,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from textual.containers import Container, Horizontal, Vertical
+from textual.widget import Widget
 from textual.widgets import Static
 
 from eawf.surfaces.tui.state_binding import load_state
@@ -245,8 +247,10 @@ class RepoZoomMixin(_Base):
         repo_state = load_state(repo_path / ".ea" / "state.json")
         cast(Any, self.app)._active_repo_path = repo_path
         mount = self.query_one("#zoom-mount", Container)
-        roadmap = RoadmapTree(id="zoom-roadmap")
-        status = StatusPane(id="zoom-status")
+        roadmap = self._pane_boundary(
+            builder=lambda: RoadmapTree(id="zoom-roadmap"), pane_id="roadmap"
+        )
+        status = self._pane_boundary(builder=lambda: StatusPane(id="zoom-status"), pane_id="status")
         git = GitPane(id="zoom-git", cwd=repo_path)
         backlog = BacklogTable(id="zoom-backlog")
         quadrant = Vertical(
@@ -281,6 +285,13 @@ class RepoZoomMixin(_Base):
         # mirroring the parent grid's focused-row highlight from the first
         # frame rather than only after the operator moves focus.
         self.call_after_refresh(self._repaint_zoom_focus)
+
+    def _pane_boundary(self, *, builder: Callable[[], Widget], pane_id: str) -> Widget:
+        """Return *builder* wrapped by the host App's pane boundary when present."""
+        boundary = getattr(self.app, "pane_boundary", None)
+        if callable(boundary):
+            return cast(Widget, boundary(builder=builder, pane_id=pane_id))
+        return builder()
 
     def _quadrant_title(self, repo_code: str, repo_path: str) -> str:
         """Render the quadrant header in the green/sigil language as Rich markup.

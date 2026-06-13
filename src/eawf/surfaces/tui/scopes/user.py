@@ -470,7 +470,7 @@ class UserScreen(ScopeScreen, RepoZoomMixin):
         active and which key reaches the others.
         """
         with Vertical(id="body"):
-            yield from attention_band()
+            yield from attention_band(self.app)
             with Vertical(classes="pane", id="pane-portfolio"):
                 yield Static("PORTFOLIO", classes="pane-title")
                 yield HonestEmptyCard(id="portfolio-empty")

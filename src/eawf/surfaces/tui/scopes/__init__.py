@@ -31,12 +31,14 @@ Per-scope body layouts:
 
 from __future__ import annotations
 
-from typing import ClassVar
+from collections.abc import Callable
+from typing import ClassVar, cast
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.screen import Screen
+from textual.widget import Widget
 from textual.widgets import Static
 
 from eawf.surfaces.tui.palette.command_palette import open_palette
@@ -54,7 +56,15 @@ from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
 ATTENTION_BAND_PANE: str = "attention-band"
 
 
-def attention_band() -> ComposeResult:
+def pane_boundary(app: object, *, builder: Callable[[], Widget], pane_id: str) -> Widget:
+    """Return *builder* wrapped by the host App's pane boundary when present."""
+    boundary = getattr(app, "pane_boundary", None)
+    if callable(boundary):
+        return cast(Widget, boundary(builder=builder, pane_id=pane_id))
+    return builder()
+
+
+def attention_band(app: object | None = None) -> ComposeResult:
     """Yield the Home overview band (an :class:`AttentionFeed` in a titled pane).
 
     The single source of the Home attention strip every scope screen leads
@@ -69,7 +79,14 @@ def attention_band() -> ComposeResult:
     """
     with Vertical(classes="pane", id=f"pane-{ATTENTION_BAND_PANE}"):
         yield Static("ATTENTION", classes="pane-title")
-        yield AttentionFeed(id=ATTENTION_BAND_PANE)
+        if app is None:
+            yield AttentionFeed(id=ATTENTION_BAND_PANE)
+        else:
+            yield pane_boundary(
+                app,
+                builder=lambda: AttentionFeed(id=ATTENTION_BAND_PANE),
+                pane_id=ATTENTION_BAND_PANE,
+            )
 
 
 class ScopeScreen(Screen[None]):
@@ -257,4 +274,5 @@ __all__ = [
     "UserScreen",
     "WorkspaceScreen",
     "attention_band",
+    "pane_boundary",
 ]

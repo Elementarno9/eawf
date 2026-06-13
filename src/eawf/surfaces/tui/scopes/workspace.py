@@ -138,7 +138,7 @@ class WorkspaceScreen(ScopeScreen, RepoZoomMixin):
         visible across a zoom.
         """
         with Vertical(id="body"):
-            yield from attention_band()
+            yield from attention_band(self.app)
             with Vertical(id="pane-repos"):
                 with Vertical(classes="pane", id="pane-workspace"):
                     yield Static("WORKSPACE", classes="pane-title")
