@@ -11808,7 +11808,8 @@
     ],
     "active_wave_ids": [
       "P30-I20-W21",
-      "P30-I20-W22"
+      "P30-I20-W22",
+      "P30-I20-W24"
     ],
     "iter_id": "P30-I20",
     "phase_id": "P30",
@@ -22415,7 +22416,7 @@
     },
     "P30-I20-W24": {
       "confidence": "low",
-      "current_store_record_id": "EST-P30-I20-W24-bucket-20260612T182323Z",
+      "current_store_record_id": "EST-P30-I20-W24-bucket-20260613T194517Z",
       "display": "0.5 EU · exp ~15m · pess ~54m",
       "expected_eu": 0.5,
       "expected_minutes": 15.0,
@@ -22424,7 +22425,7 @@
       "pessimistic_minutes": 54.0,
       "reference_class": "bucket:S",
       "scope_id": "P30-I20-W24",
-      "updated_at": "2026-06-12T18:23:23.352482Z"
+      "updated_at": "2026-06-13T19:45:17.168541Z"
     }
   },
   "fleet_run": null,
@@ -25691,7 +25692,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-13T19:41:00.171351Z",
+  "updated_at": "2026-06-13T19:45:18.081662Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97116,7 +97117,7 @@
       "blocks": [
         "P30-I20-W25"
       ],
-      "claim_session_id": null,
+      "claim_session_id": "SES-p30-i20-w24-codex",
       "claimed_at": "2026-06-12T18:23:23.352376Z",
       "closed_at": null,
       "commit": null,
@@ -97148,7 +97149,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -97182,7 +97183,7 @@
       "title": "Daemon log GC and rotation hardening",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P30-I20-W24-1781379918"
     },
     "P30-I20-W25": {
       "agent_role": null,
@@ -100819,6 +100820,17 @@
       "owner_session_id": "SES-p30-i20-w24-codex",
       "path": ".ea/worktrees/p30-i20-w24",
       "status": "abandoned",
+      "wave_id": "P30-I20-W24"
+    },
+    "WT-P30-I20-W24-1781379918": {
+      "base_branch": "feature/eawf-v0.6-p30",
+      "branch": "feature/eawf-v0.6-p30-i20-w24",
+      "created_at": "2026-06-13T19:45:18.081662Z",
+      "id": "WT-P30-I20-W24-1781379918",
+      "merged_commit": null,
+      "owner_session_id": "SES-p30-i20-w24-codex",
+      "path": ".ea/worktrees/p30-i20-w24",
+      "status": "active",
       "wave_id": "P30-I20-W24"
     }
   }
