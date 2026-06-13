@@ -68,6 +68,8 @@ HERO_PURPOSE: str = (
 PATH_LABEL_INIT: str = "init this repo"
 PATH_LABEL_REGISTER: str = "register an existing repo"
 PATH_LABEL_WORKSPACE: str = "bootstrap a workspace"
+REGISTER_TITLE: str = "Register existing repo"
+REGISTER_DETAIL: str = "adds this path to the user registry · no init files written"
 
 #: J2 configure.
 IDENTITY_TITLE: str = "Identity"
@@ -111,6 +113,7 @@ CREATED_TITLE: str = "Created"
 #: Step-rail labels per journey (pinned-literals.md "Shared chassis").
 J2_RAIL: tuple[str, ...] = ("detect", "choose", "configure", "preview", "execute", "done")
 J3_RAIL: tuple[str, ...] = ("detect", "create", "select", "preview", "link + validate", "done")
+REGISTER_RAIL: tuple[str, ...] = ("detect", "choose", "register")
 #: The literal separator between rail segments.
 RAIL_SEP: str = "\u203a"  # >
 
@@ -124,11 +127,13 @@ class Journey(Enum):
     Attributes:
         FIRST_RUN: J1 — the seal hero with three entry paths (no mutation).
         REPO_INIT: J2 — the stepped repo init flow.
+        REGISTER: existing repo registration, distinct from repo init.
         WORKSPACE: J3 — the workspace bootstrap flow.
     """
 
     FIRST_RUN = "first_run"
     REPO_INIT = "repo_init"
+    REGISTER = "register"
     WORKSPACE = "workspace"
 
 
@@ -352,6 +357,11 @@ def workspace_transparency_line(model: WizardModel) -> str:
     return f"eawf workspace init {name}; … add-repo {codes}; … validate"
 
 
+def register_transparency_line(repo_path: Path) -> str:
+    """Return the exact ``eawf repo add …`` line the register preview shows."""
+    return format_command(register_repo_command(repo_path))
+
+
 def _ordered_profiles(profiles: set[str]) -> list[str]:
     """Return the on profiles in chip order, with ``core`` first.
 
@@ -374,7 +384,11 @@ def _resolve_render_mode(app: object) -> str:
 
 def _rail_for(journey: Journey) -> tuple[str, ...]:
     """Return the step-rail labels for *journey*."""
-    return J3_RAIL if journey is Journey.WORKSPACE else J2_RAIL
+    if journey is Journey.WORKSPACE:
+        return J3_RAIL
+    if journey is Journey.REGISTER:
+        return REGISTER_RAIL
+    return J2_RAIL
 
 
 def _rail_index(model: WizardModel) -> int:
@@ -392,6 +406,8 @@ def _rail_index(model: WizardModel) -> int:
     if model.step is Step.CONFIGURE:
         return 2  # configure / select
     if model.step is Step.PREVIEW:
+        if model.journey is Journey.REGISTER:
+            return rail.index("register")
         return rail.index("preview")
     return 1  # choose / create
 
@@ -444,11 +460,12 @@ def hero_markup(*, mode: str, seal_ready: bool) -> str:
 
 
 def path_rows_markup(selected: int, *, mode: str, git_root_found: bool) -> str:
-    """Render the three J1 entry-path rows as content markup.
+    """Render the three J1 entry-path option cards as content markup.
 
-    Each row is ``<key> <label>``; the selected row wears the accent cursor
-    glyph + accent text, the rest render muted. The init row trails a
-    ``git root found`` detail when *git_root_found*.
+    Each compact card is key-led and bounded so the entry paths read as
+    concrete choices rather than loose help text. The selected card wears the
+    accent cursor + border; muted cards remain visible but quiet. The init
+    row trails a ``git root found`` detail when *git_root_found*.
     """
     cursor = chrome("dispatch", mode=mode)
     detail = "git root found" if git_root_found else ""
@@ -459,16 +476,24 @@ def path_rows_markup(selected: int, *, mode: str, git_root_found: bool) -> str:
     )
     lines: list[str] = []
     for index, (key, label, trail) in enumerate(rows):
-        marker = f"[$accent b]{cursor}[/]" if index == selected else " "
-        key_span = f"[$accent b]{escape_markup(key)}[/]"
-        label_span = (
-            f"[$text]{escape_markup(label)}[/]"
-            if index == selected
-            else f"[$text-muted]{escape_markup(label)}[/]"
-        )
-        trail_span = f"  [$text-disabled]{escape_markup(trail)}[/]" if trail else ""
-        lines.append(f"{marker} {key_span} {label_span}{trail_span}")
+        text = f"{key} {label}"
+        if trail:
+            text = f"{text} · {trail}"
+        card_width = 42
+        padded = text[:card_width].ljust(card_width)
+        if index == selected:
+            lines.append(f"[$accent b]{cursor} ╭─ {escape_markup(padded)} ─╮[/]")
+        else:
+            lines.append(f"  [$text-muted]╭─ {escape_markup(padded)} ─╮[/]")
     return "\n".join(lines)
+
+
+def register_preview_markup(repo_path: Path) -> str:
+    """Render the J-register preview rows without implying repo init."""
+    return (
+        f"[$text]repo[/]  [$text-disabled]{escape_markup(str(repo_path))}[/]\n"
+        f"[$success]+ registry entry[/]  [$text-disabled]{REGISTER_DETAIL}[/]"
+    )
 
 
 def code_hint_markup(model: WizardModel, *, mode: str) -> str:
@@ -645,19 +670,13 @@ def doctor_rows_markup(model: WizardModel, *, mode: str) -> str:
 def next_chips_markup(model: WizardModel) -> str:
     """Render the J4 next-action chips.
 
-    When the done card carries a doctor warn the ``d doctor`` chip leads;
-    otherwise the chips are ``t tour · R roadmap · p prep · Esc dismiss``.
+    These are suggestions, not hotkeys, except ``Esc dismiss`` which is bound
+    by the modal. Keeping inactive suggestions keyless prevents dead hints.
     """
     has_warn = any(not c.ok for c in model.doctor)
-    chips = (
-        [("d", "doctor"), ("t", "tour"), ("p", "prep"), ("Esc", "dismiss")]
-        if has_warn
-        else [("t", "tour"), ("R", "roadmap"), ("p", "prep"), ("Esc", "dismiss")]
-    )
-    cells = [
-        f"[$accent b]{escape_markup(key)}[/] [$text-muted]{escape_markup(label)}[/]"
-        for key, label in chips
-    ]
+    labels = ["doctor", "tour", "prep"] if has_warn else ["tour", "roadmap", "prep"]
+    cells = [f"[$text-muted]{escape_markup(label)}[/]" for label in labels]
+    cells.append("[$accent b]Esc[/] [$text-muted]dismiss[/]")
     return "   ".join(cells)
 
 
@@ -1003,6 +1022,9 @@ __all__ = [
     "PROFILE_CHIPS",
     "PROFILE_LOCKED",
     "RAIL_SEP",
+    "REGISTER_DETAIL",
+    "REGISTER_RAIL",
+    "REGISTER_TITLE",
     "TEMPLATE_DEFAULT",
     "WORKSPACE_NAME_TITLE",
     "DoctorCheck",
@@ -1032,7 +1054,9 @@ __all__ = [
     "next_chips_markup",
     "path_rows_markup",
     "quick_init_command",
+    "register_preview_markup",
     "register_repo_command",
+    "register_transparency_line",
     "repo_rows_markup",
     "select_title",
     "steprail_markup",

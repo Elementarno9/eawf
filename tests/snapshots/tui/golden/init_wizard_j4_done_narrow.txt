@@ -24,7 +24,7 @@
          │  │ ● plugin                                             │  │
          │  ╰──────────────────────────────────────────────────────╯  │
          │                                                            │
-         │         t tour   R roadmap   p prep   Esc dismiss          │
+         │            tour   roadmap   prep   Esc dismiss             │
          │                                                            │
          │                                                            │
          │                                                            │
@@ -32,6 +32,6 @@
          │                                                            │
          │                                                            │
          │                                                            │
-         │  [ t tour · R roadmap · p prep · Esc dismiss ]             │
+         │                                                            │
          │                                                            │
          ╰────────────────────────────────────────────────────────────╯

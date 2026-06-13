@@ -9,12 +9,15 @@ mounting a screen). This file holds only the :class:`InitWizardModal`
 public API for backward compatibility.
 
 The wizard drives a step state machine (``detect -> choose -> configure ->
-preview -> execute -> done``) over four onboarding journeys:
+preview -> execute -> done``) over onboarding journeys:
 
 * **J1 first-run** — a fresh user scope with ``init_needed`` auto-opens to the
   seal / wordmark hero with three entry paths (``i`` init this repo, ``r``
   register an existing repo, ``w`` bootstrap a workspace). It NEVER
   auto-mutates; choosing a path advances into the relevant journey.
+* **JR register existing** — the ``r`` path previews the explicit registry-add
+  command and dismisses with that command plan; it never falls through to repo
+  init and never writes ``.ea`` files.
 * **J2 repo init** — from a git root with no ``.ea`` the wizard configures
   identity (the project code validates live against the canonical regex),
   profile chips, and a template, previews the resolved file tree + the exact
@@ -76,6 +79,7 @@ from eawf.surfaces.tui.screens.overlays.init_wizard_render import (
     PREVIEW_NOTHING_WRITTEN,
     PREVIEW_TITLE,
     PROFILES_TITLE,
+    REGISTER_TITLE,
     WORKSPACE_NAME_TITLE,
     DoctorCheck,
     InitWizardContext,
@@ -109,7 +113,9 @@ from eawf.surfaces.tui.screens.overlays.init_wizard_render import (
     next_chips_markup,
     path_rows_markup,
     quick_init_command,
+    register_preview_markup,
     register_repo_command,
+    register_transparency_line,
     repo_rows_markup,
     select_title,
     steprail_markup,
@@ -131,7 +137,7 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
     """The stepped, live-executing onboarding wizard.
 
     Drives the ``detect -> choose -> configure -> preview -> execute -> done``
-    step machine over the J1 / J2 / J3 journeys. ``Esc`` is safe at every
+    step machine over the J1 / JR / J2 / J3 journeys. ``Esc`` is safe at every
     pre-execute step (cancels with no mutation); during execute ``Esc`` opens
     a cancel-confirm. The execute step runs the real init / workspace
     bootstrap on a Textual worker (never inline) and streams substep sigil
@@ -336,7 +342,6 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         identity: list[Widget] = [
             Static(IDENTITY_TITLE, classes="init-ptitle"),
             Static(self._code_field_text(), classes="init-field", id="init-code"),
-            Static(code_hint_markup(self.model, mode=mode), classes="init-help", id="init-hint"),
         ]
         if not code_is_valid(self.model.project_code):
             identity.append(
@@ -344,7 +349,7 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
             )
         identity.append(
             Static(
-                f"[$text-muted]title[/]  [$text]{escape_markup(self.model.project_title)}[/]",
+                self._input_line_text(label="title", value=self.model.project_title),
                 classes="init-field",
             )
         )
@@ -363,7 +368,6 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         name_pane = self._pane(
             Static(WORKSPACE_NAME_TITLE, classes="init-ptitle"),
             Static(self._code_field_text(label="name"), classes="init-field", id="init-code"),
-            Static(code_hint_markup(self.model, mode=mode), classes="init-help", id="init-hint"),
         )
         select_pane = self._pane(
             Static(select_title(self.model), classes="init-ptitle", id="init-select-title"),
@@ -379,6 +383,12 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
                 Static(repo_rows_markup(self.model, mode=mode)),
             )
             line = workspace_transparency_line(self.model)
+        elif self.model.journey is Journey.REGISTER:
+            pane = self._pane(
+                Static(REGISTER_TITLE, classes="init-ptitle"),
+                Static(register_preview_markup(self._ctx.target_dir)),
+            )
+            line = register_transparency_line(self._ctx.target_dir)
         else:
             pane = self._pane(
                 Static(PREVIEW_TITLE, classes="init-ptitle"),
@@ -466,10 +476,32 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
     # -- header / footer / hero ----------------------------------------------
 
     def _code_field_text(self, *, label: str = "code") -> str:
-        """Render the code / name input field line (with a cursor caret)."""
+        """Render the code / name input with inline-right validity."""
+        return self._input_line_text(
+            label=label,
+            value=self.model.project_code,
+            cursor=True,
+            right=code_hint_markup(self.model, mode=self._mode()),
+        )
+
+    def _input_line_text(
+        self,
+        *,
+        label: str,
+        value: str,
+        cursor: bool = False,
+        right: str = "",
+    ) -> str:
+        """Render one bordered input row with optional right-side status."""
+        field_width = 28
+        marker = "\u258f" if cursor else ""
+        visible = f"{value}{marker}"
+        clipped = visible[:field_width]
+        padded = clipped.ljust(field_width)
+        suffix = f"  {right}" if right else ""
         return (
-            f"[$text-muted]{escape_markup(label)}[/]  "
-            f"[$text]{escape_markup(self.model.project_code)}[/][$accent]\u258f[/]"
+            f"[$text-muted]{escape_markup(label)}[/]  [$border]│[/] "
+            f"[$text]{escape_markup(padded)}[/] [$border]│[/]{suffix}"
         )
 
     def _header_text(self, *, mode: str) -> str:
@@ -487,6 +519,8 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         arrow = "\u276f"  # >
         if self.model.journey is Journey.WORKSPACE:
             return f"workspace {arrow} new"
+        if self.model.journey is Journey.REGISTER:
+            return f"user {arrow} register"
         if self.model.journey is Journey.FIRST_RUN:
             return f"user {arrow} welcome"
         return f"repo {arrow} init"
@@ -495,6 +529,8 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         """Return the right-aligned header status for the current step."""
         if self.model.journey is Journey.FIRST_RUN:
             return "first run"
+        if self.model.journey is Journey.REGISTER:
+            return "no init"
         if self.model.step is Step.CONFIGURE and self.model.journey is Journey.REPO_INIT:
             return "no .ea yet"
         if self.model.step is Step.PREVIEW:
@@ -516,20 +552,22 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         """Return the key-hint footer for the current step."""
         step = self.model.step
         if step is Step.CHOOSE:
-            return "[ ↑/↓ select · Enter choose · \u276f i init here · ? help · Esc quit ]"
+            return "[ ↑/↓ select · i/r/w choose · Enter choose · Esc quit ]"
         if step is Step.CONFIGURE and self.model.journey is Journey.WORKSPACE:
             return "[ ↑/↓ select · Space toggle · a all · \u276f Enter preview · Esc cancel ]"
         if step is Step.CONFIGURE:
             valid = code_is_valid(self.model.project_code)
             enter = "\u276f Enter preview" if valid else "Enter preview · fix code first"
-            return f"[ Tab field · Space toggle chip · {enter} · Esc cancel ]"
+            return f"[ Space toggle chip · {enter} · Esc cancel ]"
         if step is Step.PREVIEW:
-            return "[ ←/→ step · \u276f Enter create · Esc cancel ]"
+            if self.model.journey is Journey.REGISTER:
+                return "[ \u276f Enter register · Esc cancel ]"
+            return "[ \u276f Enter create · Esc cancel ]"
         if step is Step.EXECUTE:
             return f"[ {EXECUTE_FOOTER_LIVE} · \u276f Esc cancel ]"
         if step is Step.ERROR:
-            return "[ \u276f r retry · b back to configure · v full log · Esc abandon ]"
-        return "[ t tour · R roadmap · p prep · Esc dismiss ]"
+            return "[ \u276f Enter retry · b back to configure · Esc abandon ]"
+        return "[ Esc dismiss ]"
 
     # -- lifecycle ------------------------------------------------------------
 
@@ -621,10 +659,12 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
         """
         if self.model.step is not Step.CHOOSE:
             return
-        if key in ("i", "r"):
-            # Register-existing reuses the J2 configure chassis.
+        if key == "i":
             self.model.journey = Journey.REPO_INIT
             self.model.step = Step.CONFIGURE
+        elif key == "r":
+            self.model.journey = Journey.REGISTER
+            self.model.step = Step.PREVIEW
         elif key == "w":
             self.model.journey = Journey.WORKSPACE
             self.model.step = Step.CONFIGURE
@@ -694,6 +734,14 @@ class InitWizardModal(ModalScreen[InitWizardResult | None]):
             self._goto(Step.PREVIEW)
             return
         if step is Step.PREVIEW:
+            if self.model.journey is Journey.REGISTER:
+                self.dismiss(
+                    InitWizardResult(
+                        INIT_ACTION_REGISTER,
+                        register_repo_command(self._ctx.target_dir),
+                    )
+                )
+                return
             self._start_execute()
             return
         if step is Step.ERROR:
@@ -925,7 +973,9 @@ __all__ = [
     "open_init_wizard",
     "path_rows_markup",
     "quick_init_command",
+    "register_preview_markup",
     "register_repo_command",
+    "register_transparency_line",
     "repo_rows_markup",
     "select_title",
     "steprail_markup",

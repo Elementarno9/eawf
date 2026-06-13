@@ -27,14 +27,17 @@ from pathlib import Path
 
 import pytest
 from textual.app import App
+from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import ModalScreen
+from textual.widgets import Static
 
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays import init_wizard_render as render
 from eawf.surfaces.tui.screens.overlays.init_wizard import (
     InitWizardContext,
     InitWizardModal,
+    InitWizardResult,
     Journey,
     Step,
     SubstepState,
@@ -51,6 +54,7 @@ from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
 _SIZE = (120, 48)
+_ARROW = "\u276f"
 
 
 # ---- pure render helpers (no Textual mount) --------------------------------
@@ -124,6 +128,14 @@ def test_select_title_tracks_live_selected_count() -> None:
     assert render.select_title(model) == "Registry repos · space toggles · 2 selected"
 
 
+def test_j1_path_rows_render_option_cards() -> None:
+    rows = render.path_rows_markup(0, mode="unicode", git_root_found=True)
+
+    assert f"{_ARROW} ╭─ i init this repo · git root found" in rows
+    assert "╭─ r register an existing repo" in rows
+    assert "╭─ w bootstrap a workspace" in rows
+
+
 def test_legacy_command_builders_kept_for_compat(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     ws = tmp_path / "ws" / ".ea" / "state.json"
@@ -152,6 +164,84 @@ class _HostApp(App[None]):
 
 def _repo_context(target: Path) -> InitWizardContext:
     return InitWizardContext(scope="repo", target_dir=target, git_root_found=True)
+
+
+def _binding_for(screen: object, key: str) -> Binding:
+    """Return the live ``Binding`` declared for *key* on *screen*."""
+    for binding in screen.BINDINGS:  # type: ignore[attr-defined]
+        if isinstance(binding, Binding) and binding.key == key:
+            return binding
+    raise AssertionError(f"no live binding for key {key!r}")
+
+
+def test_advertised_footer_keys_are_bound_per_wizard_state(tmp_path: Path) -> None:
+    """Every footer-advertised key has a live binding in its wizard state."""
+    modal = InitWizardModal(_repo_context(tmp_path))
+    cases = [
+        (
+            Journey.FIRST_RUN,
+            Step.CHOOSE,
+            "[ ↑/↓ select · i/r/w choose · Enter choose · Esc quit ]",
+            ("up", "down", "i", "r", "w", "enter", "escape"),
+        ),
+        (
+            Journey.REPO_INIT,
+            Step.CONFIGURE,
+            f"[ Space toggle chip · {_ARROW} Enter preview · Esc cancel ]",
+            ("space", "enter", "escape"),
+        ),
+        (
+            Journey.WORKSPACE,
+            Step.CONFIGURE,
+            f"[ ↑/↓ select · Space toggle · a all · {_ARROW} Enter preview · Esc cancel ]",
+            ("up", "down", "space", "a", "enter", "escape"),
+        ),
+        (
+            Journey.REPO_INIT,
+            Step.PREVIEW,
+            f"[ {_ARROW} Enter create · Esc cancel ]",
+            ("enter", "escape"),
+        ),
+        (
+            Journey.REGISTER,
+            Step.PREVIEW,
+            f"[ {_ARROW} Enter register · Esc cancel ]",
+            ("enter", "escape"),
+        ),
+        (
+            Journey.REPO_INIT,
+            Step.EXECUTE,
+            f"[ live · do not close · {_ARROW} Esc cancel ]",
+            ("escape",),
+        ),
+        (
+            Journey.REPO_INIT,
+            Step.ERROR,
+            f"[ {_ARROW} Enter retry · b back to configure · Esc abandon ]",
+            ("enter", "b", "escape"),
+        ),
+        (Journey.REPO_INIT, Step.DONE, "[ Esc dismiss ]", ("escape",)),
+    ]
+    forbidden = (
+        "? help",
+        "Tab field",
+        "←/→",
+        f"{_ARROW} r retry",
+        "v full log",
+        "t tour",
+        "R roadmap",
+        "p prep",
+    )
+
+    for journey, step, footer, keys in cases:
+        modal.model.journey = journey
+        modal.model.step = step
+        modal.model.project_code = "ABC"
+        assert modal._footer_text() == footer
+        for key in keys:
+            _binding_for(modal, key)
+        for dead_hint in forbidden:
+            assert dead_hint not in footer
 
 
 # ---- CR-01: J2 repo init executes live in-TUI ------------------------------
@@ -223,6 +313,22 @@ def test_j2_space_toggles_profile_chip(tmp_path: Path) -> None:
             await pilot.pause()
             assert "python" in modal.model.profiles
             assert "core" in modal.model.profiles  # always present
+
+    asyncio.run(body())
+
+
+def test_j2_configure_input_shows_inline_right_validity(tmp_path: Path) -> None:
+    """CR-01: the code input is bordered and carries validity on the same row."""
+
+    async def body() -> None:
+        modal = InitWizardModal(_repo_context(tmp_path))
+        modal.model.project_code = "ABC"
+        app = _HostApp(modal)
+        async with app.run_test(size=_SIZE) as pilot:
+            await pilot.pause()
+            code_line = str(modal.query_one("#init-code", Static).render())
+            assert "│ ABC▏" in code_line
+            assert "│  ● valid" in code_line
 
     asyncio.run(body())
 
@@ -438,6 +544,39 @@ def test_j1_path_i_advances_into_repo_init_without_mutating(tmp_path: Path) -> N
             assert modal.model.journey is Journey.REPO_INIT
             assert modal.model.step is Step.CONFIGURE
         assert not (tmp_path / ".ea").exists()  # still nothing written
+
+    asyncio.run(body())
+
+
+def test_j1_path_r_opens_register_journey_without_forced_init(tmp_path: Path) -> None:
+    """CR-03: choosing ``r`` opens register preview, not the repo-init flow."""
+
+    async def body() -> None:
+        sink: list[InitWizardResult | None] = []
+        ctx = InitWizardContext(
+            scope="user", target_dir=tmp_path, init_needed=True, git_root_found=True
+        )
+        modal = InitWizardModal(ctx)
+        app = _HostApp(modal)
+        async with app.run_test(size=_SIZE) as pilot:
+            await pilot.pause()
+            modal.dismiss = lambda result=None: sink.append(result)  # type: ignore[method-assign]
+            await pilot.press("r")
+            await pilot.pause()
+            assert modal.model.journey is Journey.REGISTER
+            assert modal.model.step is Step.PREVIEW
+            assert "eawf repo add" in render.register_transparency_line(tmp_path)
+            assert not (tmp_path / ".ea").exists()
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+        assert len(sink) == 1
+        result = sink[0]
+        assert result is not None
+        assert result.action == render.INIT_ACTION_REGISTER
+        assert result.command == register_repo_command(tmp_path)
+        assert not (tmp_path / ".ea").exists()
 
     asyncio.run(body())
 

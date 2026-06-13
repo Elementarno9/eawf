@@ -27,7 +27,7 @@
              │  │ △ plugin  .claude/ preview missing — run eawf doctor --fix                          │  │
              │  ╰─────────────────────────────────────────────────────────────────────────────────────╯  │
              │                                                                                           │
-             │                         d doctor   t tour   p prep   Esc dismiss                          │
+             │                            doctor   tour   prep   Esc dismiss                             │
              │                                                                                           │
              │                                                                                           │
              │                                                                                           │
@@ -36,6 +36,6 @@
              │                                                                                           │
              │                                                                                           │
              │                                                                                           │
-             │  [ t tour · R roadmap · p prep · Esc dismiss ]                                            │
+             │                                                                                           │
              │                                                                                           │
              ╰───────────────────────────────────────────────────────────────────────────────────────────╯

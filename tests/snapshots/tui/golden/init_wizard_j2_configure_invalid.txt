@@ -8,10 +8,9 @@
              │                                                                                           │
              │  ╭─────────────────────────────────────────────────────────────────────────────────────╮  │
              │  │ Identity                                                                            │  │
-             │  │ code  abc-1▏                                                                        │  │
-             │  │ ✕ invalid                                                                           │  │
+             │  │ code  │ abc-1▏                       │  ✕ invalid                                   │  │
              │  │ must match A-Z A-Z0-9_- · 2–16 chars · starts uppercase. try ABC                    │  │
-             │  │ title  Alpha control bus                                                            │  │
+             │  │ title  │ Alpha control bus            │                                             │  │
              │  ╰─────────────────────────────────────────────────────────────────────────────────────╯  │
              │                                                                                           │
              │  ╭─────────────────────────────────────────────────────────────────────────────────────╮  │
@@ -36,6 +35,7 @@
              │                                                                                           │
              │                                                                                           │
              │                                                                                           │
-             │  [ Tab field · Space toggle chip · Enter preview · fix code first · Esc cancel ]          │
+             │                                                                                           │
+             │  [ Space toggle chip · Enter preview · fix code first · Esc cancel ]                      │
              │                                                                                           │
              ╰───────────────────────────────────────────────────────────────────────────────────────────╯

@@ -36,6 +36,6 @@
              │                                                                                           │
              │                                                                                           │
              │                                                                                           │
-             │  [ ❯ r retry · b back to configure · v full log · Esc abandon ]                           │
+             │  [ ❯ Enter retry · b back to configure · Esc abandon ]                                    │
              │                                                                                           │
              ╰───────────────────────────────────────────────────────────────────────────────────────────╯

@@ -29,9 +29,9 @@
          │  the workflow that speaks projects into being. nothing     │
          │               is here yet — let us begin.                  │
          │                                                            │
-         │  ❯ i init this repo  git root found                        │
-         │    r register an existing repo                         ▇▇  │
+         │  ❯ ╭─ i init this repo · git root found          ─╮        │
+         │    ╭─ r register an existing repo                ─╮    ▇▇  │
          │                                                            │
-         │  [ ↑/↓ select · Enter choose · ❯ i init here · ? help ·    │
+         │  [ ↑/↓ select · i/r/w choose · Enter choose · Esc quit ]   │
          │                                                            │
          ╰────────────────────────────────────────────────────────────╯
