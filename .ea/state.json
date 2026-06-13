@@ -8525,6 +8525,20 @@
       "scope_id": "P30-I20-W13",
       "status": "done",
       "updated_at": "2026-06-13T00:18:50.833032Z"
+    },
+    "P30-I20-W14": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W14",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W14",
+      "model": null,
+      "scope_id": "P30-I20-W14",
+      "status": "done",
+      "updated_at": "2026-06-13T00:33:10.181916Z"
     }
   },
   "agent_sessions": {
@@ -11709,7 +11723,6 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [
-      "P30-I20-W14",
       "P30-I20-W15",
       "P30-I20-W16",
       "P30-I20-W17"
@@ -25595,7 +25608,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-13T00:18:52.129754Z",
+  "updated_at": "2026-06-13T00:33:12.293219Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -96201,7 +96214,7 @@
       ],
       "claim_session_id": "SES-p30-i20-w14-codex",
       "claimed_at": "2026-06-12T18:23:06.772859Z",
-      "closed_at": null,
+      "closed_at": "2026-06-13T00:33:10.181916Z",
       "commit": null,
       "deps": [],
       "description": null,
@@ -96225,12 +96238,12 @@
       },
       "iter_id": "P30-I20",
       "opened_at": "2026-06-12T18:02:13.323534Z",
-      "outcome": null,
+      "outcome": "broadened Windows CI to protected-branch pushes and added shared CLI smoke with fail-closed PowerShell native command handling",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -100521,10 +100534,10 @@
       "branch": "feature/eawf-v0.6-p30-i20-w14",
       "created_at": "2026-06-12T23:57:20.241161Z",
       "id": "WT-P30-I20-W14-1781308640",
-      "merged_commit": null,
+      "merged_commit": "953ac958",
       "owner_session_id": "SES-p30-i20-w14-codex",
       "path": ".ea/worktrees/p30-i20-w14",
-      "status": "active",
+      "status": "merged",
       "wave_id": "P30-I20-W14"
     },
     "WT-P30-I20-W15-1781288589": {
