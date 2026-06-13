@@ -25838,7 +25838,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-13T21:09:29.304012Z",
+  "updated_at": "2026-06-13T21:18:28.221431Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -79627,7 +79627,7 @@
       "claim_session_id": "codex-p30-i04-w09",
       "claimed_at": "2026-06-10T03:41:52.172635Z",
       "closed_at": "2026-06-10T04:01:58.177279Z",
-      "commit": "4e22dc8a88cde161b1eeb0fdd5994c4144191586",
+      "commit": "3128e35b2f968aa54b72473d3d051fc713af6dce",
       "deps": [
         "P30-I04-W05"
       ],
@@ -81327,7 +81327,7 @@
       "claim_session_id": "codex-p30-i05-w10",
       "claimed_at": "2026-06-10T11:51:36.326349Z",
       "closed_at": "2026-06-10T11:58:16.034920Z",
-      "commit": "40bc62adca3877de9ab1232726915d2d95a549a2",
+      "commit": "8f8e445b1ad38c534de95c55bfb9a5361c963546",
       "deps": [
         "P30-I05-W06"
       ],
@@ -81419,7 +81419,7 @@
       "claim_session_id": "opus-fasttest-w11",
       "claimed_at": "2026-06-10T13:28:55.954355Z",
       "closed_at": "2026-06-10T13:34:48.095288Z",
-      "commit": "ad31b35a8d08b7c2b205d9f223a6a3aaacfde8d9",
+      "commit": "dee7f4594ed020cce313b43431d8b007106d8c43",
       "deps": [],
       "description": "Add a justfile with parallel test recipes mirroring CI, document just test as the fast-suite command, route agent full-suite runs through it, and drop the false slow-marker exclusion claim.",
       "dispatch_history": [],
@@ -81486,7 +81486,7 @@
       "claim_session_id": "opus-fasttest-w12",
       "claimed_at": "2026-06-10T13:35:14.701552Z",
       "closed_at": "2026-06-10T13:59:48.178640Z",
-      "commit": "2077623713a24fd66eb13e12d4872e14ba6c38a7",
+      "commit": "f6962f319d439c1f4c9c9a83cf3aa9b36dacd794",
       "deps": [],
       "description": "Remove the eager kernel.config.registry import from import eawf.surfaces.cli.app by lazily resolving PANEL_ORDER and moving the import-time drift guard into a unit test, shaving registry cost off every CLI/worker/e2e cold start.",
       "dispatch_history": [],
@@ -81549,7 +81549,7 @@
       "claim_session_id": "flow-p30-i05-w13",
       "claimed_at": "2026-06-10T14:45:42.721958Z",
       "closed_at": "2026-06-10T14:46:24.744686Z",
-      "commit": "524b27500a02750e9e32dd9fd7b9657b618b988d",
+      "commit": "cda55f3ff469193810c802b21dba49df3a88fd57",
       "deps": [],
       "description": "W08's zero-runtime close gate broke three sibling daemon gate tests (verdict, spec-jury, cross-vendor-jury) whose _state_payload fixtures lacked runtime data. Add runtime_baseline/runtime_latest so the close path resolves non-zero EU and the gate routes as designed.",
       "dispatch_history": [],
@@ -81641,7 +81641,7 @@
       "claim_session_id": "flow-p30-i05-w14",
       "claimed_at": "2026-06-10T15:39:47.282026Z",
       "closed_at": "2026-06-10T15:41:39.199213Z",
-      "commit": "8546eeffb95fec337776c54bcb0e7a1e548cc320",
+      "commit": "c96cb1808717daae54c71d238f505beca9c2b341",
       "deps": [],
       "description": "_capture_runtime_baseline was a return-None stub, so no production path ever stamped Wave.runtime_baseline and the EUCAP delta could never fire on a live close. Give it the claim session_id, read the session-keyed statusline runtime-counter sidecar, and stamp a real baseline; return None only on a genuine sidecar miss.",
       "dispatch_history": [],
@@ -81706,7 +81706,7 @@
       "claim_session_id": "flow-p30-i05-w15",
       "claimed_at": "2026-06-10T15:50:01.829278Z",
       "closed_at": "2026-06-10T15:50:38.253520Z",
-      "commit": "1dedcdb5d54f2ad07766c3dcbfb21a0f7b0c5d17",
+      "commit": "cf032c135c2841509e7d6e9f3c89bbeba9a9ecc2",
       "deps": [],
       "description": "Polish sweep flagged _tokens_to_eu's keyword-only tokens_per_eu param plus its <=0.0 guard as YAGNI: the sole caller (_runtime_basis_eu) never overrides it, and the eu_basis choice already happens at the call site. Divide by the module constant directly.",
       "dispatch_history": [],
@@ -81783,7 +81783,7 @@
       "claim_session_id": "flow-p30-i05-w16",
       "claimed_at": "2026-06-10T15:56:49.392518Z",
       "closed_at": "2026-06-10T16:04:05.734107Z",
-      "commit": "aa22631cda7f1543f7bdbbdf713ddffdc51e9a38",
+      "commit": "a9d71c52e975965b51615cad12364886ad4feb94",
       "deps": [],
       "description": "The full-tree gauntlet caught nine close-gate tests in tests/unit/daemon and tests/workflow/verify still failing under W08's zero-runtime close gate; their CLAIMED-wave fixtures lack runtime data. W08/W13 fixed only tests/daemon. Add runtime_baseline/runtime_latest to each so the close path resolves non-zero EU and exercises the gate under test.",
       "dispatch_history": [],
@@ -81914,7 +81914,7 @@
       "claim_session_id": "flow-p30-i06-w01",
       "claimed_at": "2026-06-10T18:05:05.990008Z",
       "closed_at": "2026-06-10T18:29:29.458771Z",
-      "commit": "ec09babb452d9558a652bb1d1ddd391169f51051",
+      "commit": "eb50ec646b7a9a23b9b045202c8be40423adba65",
       "deps": [],
       "description": "Drive assist_with_schema over the spawned executor's real text to populate ExecutorReportBody, replacing the synthetic body emit_agent_end_report mints, so the report carries the agent's word on every agent.dispatch(spawn=True).",
       "dispatch_history": [],
@@ -81984,7 +81984,7 @@
       "claim_session_id": "flow-p30-i06-w02",
       "claimed_at": "2026-06-10T18:30:12.323899Z",
       "closed_at": "2026-06-10T18:34:24.727434Z",
-      "commit": "a3bbd838e43a7fec4394a529bfc1be1402d9a65d",
+      "commit": "db54235c92391909e3f09485476cc62d30b92974",
       "deps": [
         "P30-I06-W01"
       ],
@@ -82048,7 +82048,7 @@
       "claim_session_id": "flow-p30-i06-w03",
       "claimed_at": "2026-06-10T18:34:59.276651Z",
       "closed_at": "2026-06-10T18:39:19.680022Z",
-      "commit": "c37ed444f8bd6d4af7e5cdb6564118c1fe143ba3",
+      "commit": "f83a802da859d8a263a7a7538af790100c55b43b",
       "deps": [
         "P30-I06-W01"
       ],
@@ -82114,7 +82114,7 @@
       "claim_session_id": "flow-p30-i06-w04",
       "claimed_at": "2026-06-10T18:39:35.549108Z",
       "closed_at": "2026-06-10T18:45:04.923439Z",
-      "commit": "8c9a636d9dfd9922af076470b971a9d608dc5171",
+      "commit": "50ad44ec1790001eb74b9eee719b8d3c8d1ed10e",
       "deps": [
         "P30-I06-W01"
       ],
@@ -82181,7 +82181,7 @@
       "claim_session_id": "flow-p30-i06-w05",
       "claimed_at": "2026-06-10T18:45:21.780798Z",
       "closed_at": "2026-06-10T19:51:59.655977Z",
-      "commit": "d0742dca995144a9df8a6e365f9bdf4b0006d042",
+      "commit": "ec525bfb12d64d9fddb75224bc0ef707d5cb6f65",
       "deps": [],
       "description": "Extend RenderBlockTier with a per-agent_role role-rule tier and inject the resolved role rules into RoleContract.system_prompt inside build_role_contract, so the dispatched child's prompt carries profile-sourced role rules additively.",
       "dispatch_history": [],
@@ -82244,7 +82244,7 @@
       "claim_session_id": "flow-p30-i06-w06",
       "claimed_at": "2026-06-10T19:53:07.353681Z",
       "closed_at": "2026-06-10T19:59:53.314491Z",
-      "commit": "a655ba918470f370090a3437b31577f0886c97fa",
+      "commit": "4c2162966fe2b4236453228bd0a608f813c33f9c",
       "deps": [
         "P30-I06-W05"
       ],
@@ -82312,7 +82312,7 @@
       "claim_session_id": "flow-p30-i06-w07",
       "claimed_at": "2026-06-10T20:00:15.334561Z",
       "closed_at": "2026-06-10T20:10:11.228246Z",
-      "commit": "b070c6d9583e318833d616a5e57a438f48f66ca8",
+      "commit": "3be7f3b438f8ba5ff3df6ca62348209b2eeb74b3",
       "deps": [
         "P30-I06-W01",
         "P30-I06-W02"
@@ -82382,7 +82382,7 @@
       "claim_session_id": "flow-p30-i06-w08",
       "claimed_at": "2026-06-10T20:10:28.398111Z",
       "closed_at": "2026-06-10T20:17:58.910914Z",
-      "commit": "ea57bb1ee5d751d660c782afb0920c33ba24bb5d",
+      "commit": "85bc343ed54ccf6f05e66e6c75b63b37da144f74",
       "deps": [
         "P30-I06-W01"
       ],
@@ -82447,7 +82447,7 @@
       "claim_session_id": "flow-p30-i06-w09",
       "claimed_at": "2026-06-10T19:04:37.663617Z",
       "closed_at": "2026-06-10T19:39:05.684004Z",
-      "commit": "1197c64ad9976d512f8c7da6b54a974d2bdc5e54",
+      "commit": "627565edf6d45f8561b3b1c0378eb713b4d35a42",
       "deps": [],
       "description": "run_oracle held a jury FAIL advisory (uncalibrated jury) but let NEEDS_USER (split / sub-quorum) block the close. With codex/opencode jurors still stubs the jury cannot reach quorum, so every L/judgment-role wave intermittently blocks on a spurious NEEDS_USER. Generalize the advisory hold to ANY non-pass so an advisory jury only logs; TRUST-4 (I09) grants real blocking authority.",
       "dispatch_history": [],
@@ -82511,7 +82511,7 @@
       "claim_session_id": "flow-p30-i06-w10",
       "claimed_at": "2026-06-10T20:25:41.238896Z",
       "closed_at": "2026-06-10T20:26:25.575934Z",
-      "commit": "ec967d90cd66eb70f2474992b1272ff766c93327",
+      "commit": "ce33eaeb0d52629f9ae1bbbe3fd3703ef16ef85c",
       "deps": [],
       "description": "W02 added the 'eawf dispatch wave' verb, drifting the committed docs/reference/autogen/cli.md from a fresh introspection. Regenerate the autogen tree so the docs-autogen drift gate is green.",
       "dispatch_history": [],
@@ -82580,7 +82580,7 @@
       "claim_session_id": "flow-p30-i07-w01",
       "claimed_at": "2026-06-10T20:44:22.997226Z",
       "closed_at": "2026-06-10T21:01:31.518230Z",
-      "commit": "3da927255b98cb4f2e7156cb897b503c00b3c1c1",
+      "commit": "7f34f162704dd74b882ef07660b3d1fb7e9a7ba7",
       "deps": [],
       "description": "Project each success-criterion's full CriterionSpec shape (oracle_tier, evidence_kind, quality_dimension, measurable_signal, gate_ids, required, response) into the d tab of the wave-detail modal, replacing the criterion.text-only loop. oracle_tier renders read-only as the cheapest-falsifying-tier label.",
       "dispatch_history": [],
@@ -82629,7 +82629,7 @@
       "claim_session_id": "flow-p30-i07-w02",
       "claimed_at": "2026-06-10T21:02:24.299219Z",
       "closed_at": "2026-06-10T21:08:52.441800Z",
-      "commit": "ab6a93b70238c3e268e33cf72c53771fd5ee45e1",
+      "commit": "52a779ef14a113b97063b761d9958593dbc2c382",
       "deps": [
         "P30-I07-W01"
       ],
@@ -82679,7 +82679,7 @@
       "claim_session_id": "flow-p30-i07-w03",
       "claimed_at": "2026-06-10T21:08:59.480119Z",
       "closed_at": "2026-06-10T21:13:45.906206Z",
-      "commit": "3eca23cfa44bc8a458d21ea4c51f642b0519596f",
+      "commit": "5246c9eeed30530cf4a46430f135d0fa94fd0c5d",
       "deps": [
         "P30-I07-W01"
       ],
@@ -82727,7 +82727,7 @@
       "claim_session_id": "flow-p30-i07-w04",
       "claimed_at": "2026-06-10T21:15:07.406446Z",
       "closed_at": "2026-06-10T21:18:41.670382Z",
-      "commit": "23896ec5c5c34f6439304db3018c4740bad79e38",
+      "commit": "6fee16e1f111535b9b51ae3f476fd91cab76982e",
       "deps": [
         "P30-I07-W01"
       ],
@@ -82778,7 +82778,7 @@
       "claim_session_id": "flow-p30-i07-w05",
       "claimed_at": "2026-06-10T21:19:01.749656Z",
       "closed_at": "2026-06-10T21:26:23.270741Z",
-      "commit": "a3a88d1f7349d94edad8a385f78fe67016d0072e",
+      "commit": "19341076f793973dd57a8bb029e9bebecba81da3",
       "deps": [
         "P30-I07-W01"
       ],
@@ -82830,7 +82830,7 @@
       "claim_session_id": "flow-p30-i07-w06",
       "claimed_at": "2026-06-10T21:05:48.020946Z",
       "closed_at": "2026-06-10T21:23:27.720852Z",
-      "commit": "c1fa2e6b60005d328e76039d035e7b58e643d070",
+      "commit": "7056caf39e698b70f6f4af2b65dab70af12cd42d",
       "deps": [],
       "description": "Add a multi-select state to the autopilot frontier reusing the MultichoiceChecklist [X]/[ ] toggle primitive over the compute_ready_frontier ready rows, producing a typed FleetSelection (the set of selected ready WaveFrontierItem ids) the dispatch action consumes. Arrows drive the cursor; Space toggles; Enter commits.",
       "dispatch_history": [],
@@ -82879,7 +82879,7 @@
       "claim_session_id": "flow-p30-i07-w07",
       "claimed_at": "2026-06-10T21:23:35.785350Z",
       "closed_at": "2026-06-10T22:06:57.908227Z",
-      "commit": "b80df9870286f8b6c28f883ae380d1adcf0ae777",
+      "commit": "78d0fdbee9d13abb3c31075ce068c9b89a4e6df7",
       "deps": [
         "P30-I07-W06"
       ],
@@ -82931,7 +82931,7 @@
       "claim_session_id": "flow-p30-i07-w08",
       "claimed_at": "2026-06-10T21:23:36.295084Z",
       "closed_at": "2026-06-10T21:48:24.016081Z",
-      "commit": "74fd28276aa1c8e17b2d2137a008bf223a631b23",
+      "commit": "c033711691a71fdf1808aa7b05f3f8c544c0bbdb",
       "deps": [
         "P30-I07-W06"
       ],
@@ -82982,7 +82982,7 @@
       "claim_session_id": "flow-p30-i07-w09",
       "claimed_at": "2026-06-10T21:48:47.289415Z",
       "closed_at": "2026-06-10T22:11:23.216119Z",
-      "commit": "d40124ce568360e3024b41deacc0e4727a374b3f",
+      "commit": "45fc5c20526d1f2f3eac10ee7b3da7b15539e492",
       "deps": [
         "P30-I07-W08"
       ],
@@ -83033,7 +83033,7 @@
       "claim_session_id": "flow-p30-i07-w10",
       "claimed_at": "2026-06-10T21:05:48.512636Z",
       "closed_at": "2026-06-10T21:14:25.386469Z",
-      "commit": "28a1449aac7c9487a4dbe39e1b670314a261c175",
+      "commit": "8362f8872e74e15d7c6a5ec75a1a9317ddc55be8",
       "deps": [],
       "description": "Register a research.stage_campaign daemon method that wraps the pure stage_campaign(topic, block) Level-1 runner, builds a ResearchCampaignPayload, and persists via persist_campaign. Typed extra=forbid params: campaign_id, topic, config (ResearchProfileBlock). The daemon is the canonical writer for research_campaign.jsonl.",
       "dispatch_history": [],
@@ -83083,7 +83083,7 @@
       "claim_session_id": "flow-p30-i07-w11",
       "claimed_at": "2026-06-10T21:15:07.927547Z",
       "closed_at": "2026-06-10T21:26:50.242094Z",
-      "commit": "ed65e93f0e11e2e1c014b87332209e28de84914c",
+      "commit": "8692719f437419a6b0d0142a7cfe8240958c8ac2",
       "deps": [
         "P30-I07-W10"
       ],
@@ -83131,7 +83131,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:07.495095Z",
       "closed_at": "2026-06-10T23:46:28.658278Z",
-      "commit": "da3dcf61bd46efa3b529144b723112b21033e99e",
+      "commit": "014e71ed0e0591189edea3204648dd804642d5a5",
       "deps": [
         "P30-I07-W05",
         "P30-I07-W09",
@@ -83181,7 +83181,7 @@
       "claim_session_id": "flow-p30-i07-w13",
       "claimed_at": "2026-06-10T21:27:25.761237Z",
       "closed_at": "2026-06-10T22:18:43.103793Z",
-      "commit": "49c49afece2adac2f126f2f8b17d464b77629140",
+      "commit": "fc91d91d46ff427cc1675bf16da8693ab4d5f65c",
       "deps": [
         "P30-I07-W05"
       ],
@@ -83235,7 +83235,7 @@
       "claim_session_id": "flow-p30-i07-w14",
       "claimed_at": "2026-06-10T22:12:08.092120Z",
       "closed_at": "2026-06-10T22:39:38.534963Z",
-      "commit": "41f6c74cddc81028a83be7f3183579015964908f",
+      "commit": "b423ef290e036871e476edccca81c7ddd21ac524",
       "deps": [
         "P30-I07-W09"
       ],
@@ -83290,7 +83290,7 @@
       "claim_session_id": "flow-p30-i07-w15",
       "claimed_at": "2026-06-10T21:27:26.262751Z",
       "closed_at": "2026-06-10T22:19:32.758468Z",
-      "commit": "8504b0814705a5c9abf5e8166ebb2ffa33fda080",
+      "commit": "6b5b06e339fda05f9d7921a856865b81fba49b2e",
       "deps": [
         "P30-I07-W11"
       ],
@@ -83338,7 +83338,7 @@
       "claim_session_id": "flow-p30-i07-w16",
       "claimed_at": "2026-06-10T22:20:31.494662Z",
       "closed_at": "2026-06-10T22:34:35.210650Z",
-      "commit": "a42020504479819511ef91c328aebc2271cea6ab",
+      "commit": "61ac1bd69c269cf5a8055dd453030c0267d7bd83",
       "deps": [
         "P30-I07-W01"
       ],
@@ -83390,7 +83390,7 @@
       "claim_session_id": "flow-p30-i07-w17",
       "claimed_at": "2026-06-10T22:12:07.541499Z",
       "closed_at": "2026-06-10T22:22:39.053698Z",
-      "commit": "78c8e35994d7ac0d89bb15021df4cc77e1a4a83d",
+      "commit": "5331bd9c2fb6f2dc812a031c637f5aad98db3288",
       "deps": [
         "P30-I07-W08"
       ],
@@ -83440,7 +83440,7 @@
       "claim_session_id": "flow-p30-i08-w01",
       "claimed_at": "2026-06-10T21:56:23.874171Z",
       "closed_at": "2026-06-10T22:19:31.976397Z",
-      "commit": "bcf25e9de8cbbcd1e9e862961968c43154622059",
+      "commit": "377e1fb04745edc5f8fc403186b700b6d4e47c06",
       "deps": [],
       "description": "Move RegistryPane from the word-list listing to the brand language: each registry line leads with the repo's lifecycle sigil (active vs idle vs stale) and the (active)/(stale) chips render in the green accent palette. Pure render change over the existing read-only, explicit-registry-only load path — no scan, no growth.",
       "dispatch_history": [],
@@ -83489,7 +83489,7 @@
       "claim_session_id": "flow-p30-i08-w02",
       "claimed_at": "2026-06-10T22:20:32.033288Z",
       "closed_at": "2026-06-10T22:48:11.501078Z",
-      "commit": "04119387f9ad08446aa1100622b6cf062ec574ed",
+      "commit": "f11fc3c95ac7ac210c9199e64a224a8199297eb7",
       "deps": [
         "P30-I08-W01"
       ],
@@ -83548,7 +83548,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:07.976492Z",
       "closed_at": "2026-06-10T23:46:29.361216Z",
-      "commit": "de3a21786a8d0c7e2ab7838fc2cc6cf22e0a3cd6",
+      "commit": "03e978afc0cbac2c60955b5088ca5d82f13ae192",
       "deps": [
         "P30-I08-W02"
       ],
@@ -83597,7 +83597,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:03.206933Z",
       "closed_at": "2026-06-11T00:11:18.830932Z",
-      "commit": "3d5cbc8d3522575cf4f7b6c77d838e4e8aa8ede0",
+      "commit": "351eec7fd933ab5776dc49ee7325a1ebbbd3c7b4",
       "deps": [
         "P30-I08-W03"
       ],
@@ -83645,7 +83645,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:03.676409Z",
       "closed_at": "2026-06-11T00:11:19.541245Z",
-      "commit": "398b666a7c84bbe77bede33d7ddd84c9050e07f8",
+      "commit": "86b9417d60a970de591bd991e51f6373295a2379",
       "deps": [
         "P30-I08-W03"
       ],
@@ -83696,7 +83696,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:13:59.585814Z",
       "closed_at": "2026-06-11T00:46:20.135110Z",
-      "commit": "e2e4e0db4b12a1c1b21f3f86ece0dcf4032b91b9",
+      "commit": "ffc57e400b6d9fe39f5f371c030fc7e30ab23317",
       "deps": [
         "P30-I08-W02",
         "P30-I08-W03"
@@ -83746,7 +83746,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:47:23.492644Z",
       "closed_at": "2026-06-11T02:14:05.020378Z",
-      "commit": "da95ebfd757c2c9f96ede591afa36ea807fd156a",
+      "commit": "5532e30e2ae4f86c408a8a4c92e495bcebaa6149",
       "deps": [
         "P30-I08-W06"
       ],
@@ -83797,7 +83797,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:10.081252Z",
       "closed_at": "2026-06-10T23:46:32.237296Z",
-      "commit": "906bb654e331bf5981766312b5353112a194658e",
+      "commit": "66847cfd142a6335ff1b9a2f1de2b1b92d74b87f",
       "deps": [],
       "description": "Add build_jury_validation_cohort and a typed ValidationCohort (silver/gold LabeledVerdict) joining each VerdictOutcome from build_verdict_outcomes to a ground_truth bool. Silver reuses the existing held join (reactive/rework/revert/reopen = known-bad); a new append-only GoldLabel store overrides silver per wave. Empty store returns an empty cohort, never fabricated labels.",
       "dispatch_history": [],
@@ -83862,7 +83862,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:04.156990Z",
       "closed_at": "2026-06-11T00:11:20.331376Z",
-      "commit": "811d7299411fecc4614cdfeca80ee07c4697ca80",
+      "commit": "483f3c053ca006ea62c7b74c361454bea599b4c7",
       "deps": [
         "P30-I09-W01"
       ],
@@ -83927,7 +83927,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:00.068172Z",
       "closed_at": "2026-06-11T00:46:20.834395Z",
-      "commit": "ef62d1767f468d8fed49a38e86b09a295be622d2",
+      "commit": "6575eefa7c4fb9b3a9d84fa2a84ad3cd298948ee",
       "deps": [
         "P30-I09-W02"
       ],
@@ -83995,7 +83995,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:47:24.002411Z",
       "closed_at": "2026-06-11T02:14:05.720008Z",
-      "commit": "3a511af10ae2158143edc14e8f3fe844f2093116",
+      "commit": "d03be36800b47108cc02f15b484de249dd7799f2",
       "deps": [
         "P30-I09-W02",
         "P30-I09-W03"
@@ -84063,7 +84063,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T02:14:26.671364Z",
       "closed_at": "2026-06-11T02:14:27.832400Z",
-      "commit": "9c878855af951cdffdb06bd44405d29bfe62ce7d",
+      "commit": "9fbe981023c572ab71969145d8eb479c8ef59c0b",
       "deps": [
         "P30-I09-W04"
       ],
@@ -84129,7 +84129,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T02:16:03.900251Z",
       "closed_at": "2026-06-11T03:38:14.148645Z",
-      "commit": "ad7ca2d57815cb5792fc96211d383a77217846bc",
+      "commit": "2ffcf3345f49caf2d1befac61c977dff65ebed72",
       "deps": [
         "P30-I09-W04"
       ],
@@ -84193,7 +84193,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:00.568438Z",
       "closed_at": "2026-06-11T00:46:21.547524Z",
-      "commit": "3d00a07e1a95fb6ab4971d21c6757594ac4e86c8",
+      "commit": "b1b004b1c2a2ebd71dd86427abb6db368b46f39d",
       "deps": [
         "P30-I09-W02"
       ],
@@ -84243,7 +84243,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T03:41:21.249408Z",
       "closed_at": "2026-06-11T03:58:28.472428Z",
-      "commit": "4e09a04219a1e198794859ad8214644a15c8ea90",
+      "commit": "f8e881cd5f1e18de9d529834b4f2b940490e8c39",
       "deps": [
         "P30-I09-W04",
         "P30-I09-W05",
@@ -84297,7 +84297,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:04.630938Z",
       "closed_at": "2026-06-11T00:11:21.123011Z",
-      "commit": "cb332f5a852235aea458f1182e97e01f62c77483",
+      "commit": "2532f05ebe84dc2e5e5d94f5a2c96bf731094943",
       "deps": [],
       "description": "Convert the 1392/1434 legacy no-op CriterionSpec rows to real falsifying gates. Build the missing legacy-to-typed converter (seed verb to tier via assign_oracle_tier + the eawf021 verb/locus parser; hand-author the GateSpec bodies). Closes B095.",
       "dispatch_history": [],
@@ -84349,7 +84349,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:01.042168Z",
       "closed_at": "2026-06-11T00:46:22.254002Z",
-      "commit": "0d03cc3199e61da2b997183d0b582611b55fc1c5",
+      "commit": "eb1401cb3d8f2b8686ae4ca45af7058368c31da1",
       "deps": [
         "P30-I10-W01"
       ],
@@ -84399,7 +84399,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:47:24.501953Z",
       "closed_at": "2026-06-11T02:14:06.440819Z",
-      "commit": "0ec791923170a993e973805ea86b7e34bc480b26",
+      "commit": "41006560a93b38f9c14ddb10b38b397f0f7be0ce",
       "deps": [
         "P30-I10-W02"
       ],
@@ -84452,7 +84452,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:10.636264Z",
       "closed_at": "2026-06-10T23:46:32.956112Z",
-      "commit": "0989972a356d19d84c7eb68e5f9c147dcbfcf33b",
+      "commit": "8a9e6f25817d87fbaa09cda045b3501adc5a3495",
       "deps": [],
       "description": "Wire start_egress_proxy (zero callers today) into the live jail so a spawned agent has network containment; thread the captured pgid into enforce_token_cap (hardcoded pgid=None today) so budget-HALT can reap a runaway; add a concurrent-spawn cap; claude env-scrub/jail-wrap test parity. Closes B066/B049/B077/B078.",
       "dispatch_history": [],
@@ -84516,7 +84516,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:05.120064Z",
       "closed_at": "2026-06-11T00:11:21.916330Z",
-      "commit": "15e15b2ded3d6334132c641972fd749d55f7bbd7",
+      "commit": "39e92ab2ab663ef00acab5c2cc3ca08569184a85",
       "deps": [
         "P30-I10-W04"
       ],
@@ -84565,7 +84565,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:01.526578Z",
       "closed_at": "2026-06-11T00:46:22.941994Z",
-      "commit": "37ca5a56b4e0b94e3c1ff76391811f3a76335570",
+      "commit": "30c3e3bee6cff1714dc9d14dac011d1ea88f9005",
       "deps": [
         "P30-I10-W01"
       ],
@@ -84614,7 +84614,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:47:24.971547Z",
       "closed_at": "2026-06-11T02:14:07.149790Z",
-      "commit": "293e88fbc9adfe5fd651b1be27121f8112a7b4c8",
+      "commit": "605125967ed10c42305caa6fe51b964e2e578d03",
       "deps": [
         "P30-I10-W02"
       ],
@@ -84726,7 +84726,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:02.029476Z",
       "closed_at": "2026-06-11T02:14:09.321280Z",
-      "commit": "c11e68cf636a0d9e55b09a039e2e13d0e63a6802",
+      "commit": "03ddc118c2ef1f0046cbd14a2a20178e68323889",
       "deps": [
         "P30-I10-W04",
         "P30-I02-W02"
@@ -84792,7 +84792,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:05.592816Z",
       "closed_at": "2026-06-11T00:11:22.688294Z",
-      "commit": "ee33f4db20d687a908b5792298115cd1ff379250",
+      "commit": "5924d68f3bba37edd0f9e86de7ff98873432b6d9",
       "deps": [
         "P30-I06-W02"
       ],
@@ -84856,7 +84856,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:06.073882Z",
       "closed_at": "2026-06-11T00:11:23.457205Z",
-      "commit": "ef16b3e3ca7d4cc3b74f79b0b07e2a423647fa04",
+      "commit": "851a81432910172ea8a1aa9e92c187988da62318",
       "deps": [],
       "description": "The balanced-autonomy interrupt (surface only a genuine fork, not every question) needs an urgency on the pause/UserQuestion schema; it is absent, so the attention feed cannot rank a blocking fork above a routine prompt. Add the typed urgency field + a feed-ordering use.",
       "dispatch_history": [],
@@ -84904,7 +84904,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:11.145266Z",
       "closed_at": "2026-06-10T23:46:33.654612Z",
-      "commit": "6ec539a9d68278af050378789774dca9b2deb890",
+      "commit": "b530bdc9e5cfc06adaa28a03feed8f52f6f1a3f0",
       "deps": [],
       "description": "The clarify path discards its proposed questions instead of seeding the needs_user / OpenQuestion ledger, so the two live halves of the research loop are disconnected. Wire clarify output to seed the ledger so a clarify run produces resolvable questions.",
       "dispatch_history": [],
@@ -84952,7 +84952,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:06.551680Z",
       "closed_at": "2026-06-11T00:11:24.211893Z",
-      "commit": "f73caf663411bcc2f7eb6523802200f038a1c02d",
+      "commit": "2603089679129ffa27468d751bc302997a196f13",
       "deps": [],
       "description": "The depth vocabulary drifts three ways and research.default_depth is a dark config key nothing reads. Reconcile to the canonical shallow/medium/deep/exhaustive set and make the research stage read research.default_depth, closing a standing idle config contract.",
       "dispatch_history": [],
@@ -85000,7 +85000,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:11:00.837833Z",
       "closed_at": "2026-06-11T00:11:25.713477Z",
-      "commit": "5f27a1ca5b97f69e1b96707b3ca8ee8ce3d38f39",
+      "commit": "a5d7e920a3f1cc02dd3b34fe4c02e98f3aa83f0c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -85058,7 +85058,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T01:46:26.970267Z",
       "closed_at": "2026-06-11T02:14:10.051759Z",
-      "commit": "114969279387229c85f11d9d6cbe78846ec1572e",
+      "commit": "77b04d904f30bcfecdfcf61344651d0006aeb89f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -85133,7 +85133,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T03:30:31.527317Z",
       "closed_at": "2026-06-11T03:38:15.541120Z",
-      "commit": "f18be089d20e2113c669d0361ef7d203f18e8af4",
+      "commit": "5c452baf3b1bf0f9b0b0810939d5b375f27201d3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -85208,7 +85208,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T02:16:03.401423Z",
       "closed_at": "2026-06-11T03:38:14.840444Z",
-      "commit": "713ad01995c2f7d7c9861fc1894c8e1fe75f624e",
+      "commit": "b8212087872d9bf01173bcdfddbf1ef1b9acb0be",
       "deps": [],
       "description": "Rename class Subproject to Track and CurrentPointers.subproject_id to track_id, add a kind field plus a new typed TrackKindSpec (extra=forbid) carrying noun, status_lifecycle, outcome_template, overview_view, landed on a new TrackProfileBlock on the layered profile.",
       "dispatch_history": [],
@@ -85272,7 +85272,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:03:58.716328Z",
       "closed_at": "2026-06-11T04:15:49.414000Z",
-      "commit": "f946d71eb824ff54812555b249b76c279633273c",
+      "commit": "7c1b7976dd95be09160256705e62fea80891c22f",
       "deps": [
         "P30-I11-W01"
       ],
@@ -85323,7 +85323,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:16:30.519020Z",
       "closed_at": "2026-06-11T04:32:11.447951Z",
-      "commit": "3d63db2d38426b6e673c137c0512bdc986803edd",
+      "commit": "960ed03f6a4443c68c4edc3980d49fa31608ff57",
       "deps": [
         "P30-I11-W02"
       ],
@@ -85374,7 +85374,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T03:41:20.768847Z",
       "closed_at": "2026-06-11T03:58:27.756680Z",
-      "commit": "9201caf37fe10ea3c0078f6d6e45d83ae46e53e2",
+      "commit": "f17a464c23027d829b2442f5c465a7880ea07bb5",
       "deps": [
         "P30-I11-W01"
       ],
@@ -85427,7 +85427,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:32:56.805793Z",
       "closed_at": "2026-06-11T04:43:52.639288Z",
-      "commit": "c565bf64cd7cadb2cfdaa17baef5efecae9783a9",
+      "commit": "08c5053a0eaa7431062009d08a24a404786ff626",
       "deps": [
         "P30-I11-W02",
         "P30-I11-W03",
@@ -85479,7 +85479,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:32:57.293876Z",
       "closed_at": "2026-06-11T04:43:53.349448Z",
-      "commit": "437c459de3c670394740365e90c569cd9d37ae42",
+      "commit": "60b174cc386c05e1adbc17a62bf178eb87298e99",
       "deps": [
         "P30-I11-W01"
       ],
@@ -85545,7 +85545,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:44:32.602569Z",
       "closed_at": "2026-06-11T04:58:45.569485Z",
-      "commit": "3662999ce44f6fb62a5423754919c8674f6d3000",
+      "commit": "c90bb9564f52f547994797ddc9b854987609ea22",
       "deps": [
         "P30-I11-W06"
       ],
@@ -85595,7 +85595,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:00:45.523749Z",
       "closed_at": "2026-06-11T05:14:34.165661Z",
-      "commit": "d89c83321b3bda7a70efb2a8a38eaa193c8ea9bc",
+      "commit": "57ce3ee9cec2cd7b8abfa1b4d29b612f2c1be788",
       "deps": [
         "P30-I11-W07"
       ],
@@ -85658,7 +85658,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T03:37:49.448400Z",
       "closed_at": "2026-06-11T03:38:16.259298Z",
-      "commit": "e2dafe47ea7037a83334f8b725129ff5bbdeb2ad",
+      "commit": "a18b3e7388b1a4087dc82993c445e042a49546f9",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -85783,7 +85783,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:48:07.026258Z",
       "closed_at": "2026-06-11T00:11:24.985686Z",
-      "commit": "0bae450829b48964e94ecef8705c47e8ea1e993f",
+      "commit": "557ff2c55ff48ac1638fab252aa028a4ce18eee8",
       "deps": [
         "P30-I06-W07",
         "P30-I07-W07"
@@ -85894,7 +85894,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:02.519104Z",
       "closed_at": "2026-06-11T00:46:23.709240Z",
-      "commit": "db7d373c4cf9dccb9ad12f9630ed17138e353b85",
+      "commit": "7074e046037be6307b7d38c888a82f8259c39cb7",
       "deps": [
         "P30-I12-W01"
       ],
@@ -85957,7 +85957,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:47:25.441266Z",
       "closed_at": "2026-06-11T02:14:07.846395Z",
-      "commit": "4ced24f0cf987d6abd20795b60369521780582dd",
+      "commit": "6afed7b7bdebb0c838ea14d9d4d0684a3d20b1ab",
       "deps": [
         "P30-I12-W02"
       ],
@@ -86024,7 +86024,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T03:41:20.299281Z",
       "closed_at": "2026-06-11T03:58:27.033001Z",
-      "commit": "689d470961d42e9793f76cb81a1fed36a38ab270",
+      "commit": "c73b7f2620f7239be32b69b45933667d6172e05c",
       "deps": [
         "P30-I12-W01",
         "P30-I05-W06"
@@ -86091,7 +86091,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T02:14:27.170771Z",
       "closed_at": "2026-06-11T02:14:28.543116Z",
-      "commit": "8c6ec69a6cf383b0d37bdc4af24c823248ad4e2f",
+      "commit": "2a760aa8de76d5b2b5df5fe0faa6c76c7007f72b",
       "deps": [
         "P30-I12-W01",
         "P30-I09-W04"
@@ -86173,7 +86173,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:16:30.033595Z",
       "closed_at": "2026-06-11T04:32:10.733246Z",
-      "commit": "6b6bf79105dd50a72f078fdae42e1fff852fdad9",
+      "commit": "15d18b253cc4a7d195c68cdf5f84da30c171a825",
       "deps": [
         "P30-I12-W05"
       ],
@@ -86239,7 +86239,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:44:32.128814Z",
       "closed_at": "2026-06-11T04:58:44.860864Z",
-      "commit": "14b328dd2738d18498a2c438135dc31db9c9a78a",
+      "commit": "f681a9cb2342d7c944834bbd2c0c6570522589f8",
       "deps": [
         "P30-I06-W07",
         "P30-I12-W06"
@@ -86305,7 +86305,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T02:16:02.920027Z",
       "closed_at": "2026-06-11T03:38:13.435312Z",
-      "commit": "fac347d3a8a23ddd580d9a198679a267e21e037b",
+      "commit": "091b2cb7c1f5b09309333cc255047ac2ce8ec400",
       "deps": [
         "P30-I12-W02"
       ],
@@ -86368,7 +86368,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:32:56.319739Z",
       "closed_at": "2026-06-11T04:43:51.930797Z",
-      "commit": "ee8a9844c6196ad4d00a4e52954fa079ef0b0685",
+      "commit": "d213bc6e72bd81567864cfc9b5fc2f6b7b5e44c7",
       "deps": [
         "P30-I12-W01",
         "P30-I06-W08",
@@ -86436,7 +86436,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:03:58.236004Z",
       "closed_at": "2026-06-11T04:15:48.704566Z",
-      "commit": "154d7b31bbade2344ad84f1517f264367fdaa58f",
+      "commit": "89e9a55eab00cbc481c616dc57b1a11ee731f049",
       "deps": [
         "P30-I12-W01",
         "P30-I12-W04"
@@ -86500,7 +86500,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:00:45.028317Z",
       "closed_at": "2026-06-11T05:14:33.447899Z",
-      "commit": "3050357500a9dc219f890ccb2b46b7dd2b840ed9",
+      "commit": "1a3376572165b86d2431644693508a1344589d84",
       "deps": [
         "P30-I12-W01",
         "P30-I12-W04",
@@ -86566,7 +86566,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:03.008095Z",
       "closed_at": "2026-06-11T00:46:24.452904Z",
-      "commit": "0c59e977ce08d8b76cfe8970ad8b50daa501cc12",
+      "commit": "34618755180450b06e020925030d1ff9e5f82ed0",
       "deps": [
         "P30-I12-W01"
       ],
@@ -86634,7 +86634,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:16:29.552843Z",
       "closed_at": "2026-06-11T04:32:09.994888Z",
-      "commit": "d83abfa61fd8fa8f18414ee7b3396995c06dd69e",
+      "commit": "4d6d5f794ce118037b71be2a94ced2525dddb447",
       "deps": [
         "P30-I12-W01",
         "P30-I12-W10",
@@ -86714,7 +86714,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:15:12.390033Z",
       "closed_at": "2026-06-11T05:42:59.178802Z",
-      "commit": "c9c89f5dddb9959851a7f5dfc49aad22e9496cd3",
+      "commit": "d03e424785159c6bac52271344d6d9b4fd760f49",
       "deps": [
         "P30-I07-W08",
         "P30-I13-W02"
@@ -86778,7 +86778,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:47:25.922712Z",
       "closed_at": "2026-06-11T02:14:08.603242Z",
-      "commit": "ef1f91bf954cd37eeecf2c09d67552127839b05f",
+      "commit": "141cf22b3955b9a88a5fdf59ed7b9d07ccd447bf",
       "deps": [
         "P30-I12-W02",
         "P30-I02-W17"
@@ -86845,7 +86845,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:44:31.625832Z",
       "closed_at": "2026-06-11T04:58:44.133949Z",
-      "commit": "ddba0d13e0103418af477295a6258ad5738900d3",
+      "commit": "09b3c6b3374faadee4836e5bf6fcde6f8aab6183",
       "deps": [
         "P30-I12-W06"
       ],
@@ -86910,7 +86910,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:00:44.532999Z",
       "closed_at": "2026-06-11T05:14:32.725649Z",
-      "commit": "1482711b54b5ca02d1feac6dc71d312b7a14c531",
+      "commit": "c04cbd61d74c71130f09c7ccb579c6f93510af38",
       "deps": [
         "P30-I12-W07",
         "P30-I12-W05"
@@ -86977,7 +86977,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T04:32:55.820807Z",
       "closed_at": "2026-06-11T04:43:51.211982Z",
-      "commit": "f58c07f2674ead607b11fda82c21b4e2cb3ae60b",
+      "commit": "c3aa8ac9dff4f23dbb6dd52c68778df05b738953",
       "deps": [
         "P30-I12-W10"
       ],
@@ -87040,7 +87040,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:14:03.491385Z",
       "closed_at": "2026-06-11T00:46:25.159288Z",
-      "commit": "25024216033466989061325e346a18ccf4b882e6",
+      "commit": "60655faa4e455946fce115ef566f5cf61b6c7f35",
       "deps": [
         "P30-I07-W15",
         "P30-I12-W01"
@@ -87103,7 +87103,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:15:12.884030Z",
       "closed_at": "2026-06-11T05:42:59.891989Z",
-      "commit": "e8feb4c77e8531375f674904934e8809040f28fd",
+      "commit": "d143a4a48df35427d8c16a2fffb5638b6251b739",
       "deps": [
         "P30-I13-W02",
         "P30-I13-W05",
@@ -87185,7 +87185,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:43:54.289327Z",
       "closed_at": "2026-06-11T05:56:49.808141Z",
-      "commit": "b76cc10881d583238f5cab189667eed971aa8299",
+      "commit": "17e1729a4c8ddd16d224859e846f79a2a3a30fe1",
       "deps": [
         "P30-I13-W02"
       ],
@@ -87262,7 +87262,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:43:54.769119Z",
       "closed_at": "2026-06-11T05:56:49.094065Z",
-      "commit": "7aebfefab50b8f5a8d0aeba450480e6997dd8870",
+      "commit": "bc9e65b55cac28f3bb17b48bdc8dfb99c41baea3",
       "deps": [
         "P30-I13-W02",
         "P30-I13-W03",
@@ -87314,7 +87314,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T00:46:02.985952Z",
       "closed_at": "2026-06-11T00:46:25.877169Z",
-      "commit": "c2373fef0afe13744331682a02afef9b47de29ff",
+      "commit": "ca2d76f64dc15bff4c8b306e40a6f4c157bb5b25",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -87371,7 +87371,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T02:12:35.083503Z",
       "closed_at": "2026-06-11T02:14:10.758066Z",
-      "commit": "e6f7e6df92bff49f661ab1e609635993c30b3d6b",
+      "commit": "6f8789184819c8ea6109a4b44da3ca8e0ae1f076",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -87431,7 +87431,7 @@
       "claim_session_id": "flow-p30-i14-w01",
       "claimed_at": "2026-06-10T21:56:24.962841Z",
       "closed_at": "2026-06-10T22:06:59.589077Z",
-      "commit": "88a9465e8b9e1ad066db3c2c8772f1275310dd3e",
+      "commit": "590531549c76d08759adf02956ca898113420631",
       "deps": [],
       "description": "The daemon never auto-GCs the WAL (gc_done_records fires only via the wal.gc RPC / replay-wal --gc), so .ea/locks/wal grows unbounded. Add an async run_wal_gc_loop scheduled like the existing ttl/stale-wave sweeps, tuned by env vars (the daemon is global, env-keyed not layered-config), wired into both _run_server and _run_windows_server with cancel-in-finally.",
       "dispatch_history": [],
@@ -87493,7 +87493,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:08.500268Z",
       "closed_at": "2026-06-10T23:46:30.092706Z",
-      "commit": "d292d5cc287d73623e9623fc2ee2d024402a1d42",
+      "commit": "611df0afc0d0a6d766694b76165b202f010beb3d",
       "deps": [
         "P30-I14-W01"
       ],
@@ -87542,7 +87542,7 @@
       "claim_session_id": "flow-p30-i14-w03",
       "claimed_at": "2026-06-10T22:08:29.761787Z",
       "closed_at": "2026-06-10T22:19:33.562187Z",
-      "commit": "d1cc8330922a189e0b49571cca91c5db883fb04a",
+      "commit": "0d818dd07809f739e8254492e581d7e24fc9c3c1",
       "deps": [],
       "description": "eawfd.log uses a plain FileHandler (main.py) and grows unbounded (~128MB observed). Swap it for a RotatingFileHandler with maxBytes / backupCount resolved from env (default 16MiB x 5).",
       "dispatch_history": [],
@@ -87589,7 +87589,7 @@
       "claim_session_id": "flow-p30-i14-w04",
       "claimed_at": "2026-06-10T22:08:30.320312Z",
       "closed_at": "2026-06-10T22:19:34.338628Z",
-      "commit": "e8437920b411c4bde975919654b22d0ac89664a1",
+      "commit": "f44f3f13cce0a27eba8acbc4416f8db96ea59e59",
       "deps": [
         "P30-I14-W01"
       ],
@@ -87641,7 +87641,7 @@
       "claim_session_id": "flow-p30-i14-w05",
       "claimed_at": "2026-06-10T21:53:44.849097Z",
       "closed_at": "2026-06-10T21:58:22.979491Z",
-      "commit": "457e6fad3f594cd19a390f80846e4e0110e52509",
+      "commit": "a4e9b2a71239df8f2dd82d68436a072ab2d573e9",
       "deps": [],
       "description": "The artifact builder uses a slug-/ heuristic to place promoted artifacts, diverging from the canonical kind subdirs. Add a _KIND_SUBDIR map over the already-validated _PROMOTABLE_KINDS (incl. a releases entry) so placement is a pure lookup, not a heuristic.",
       "dispatch_history": [],
@@ -87688,7 +87688,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:09.018619Z",
       "closed_at": "2026-06-10T23:46:30.777008Z",
-      "commit": "1b65f6fb12c5b3f59e5432fb48d056661c043c76",
+      "commit": "22f3a7e2f57941b152b597c91d002904dd28fad1",
       "deps": [
         "P30-I14-W05"
       ],
@@ -87752,7 +87752,7 @@
       "claim_session_id": "flow-p30-i14-w07",
       "claimed_at": "2026-06-10T22:20:32.575639Z",
       "closed_at": "2026-06-10T22:48:10.173846Z",
-      "commit": "784f6f452797ef9129597bb65a499b92edf6c0a4",
+      "commit": "96a0e0176149b2cd7eafd6bf85b5ebfe7489db9a",
       "deps": [
         "P30-I14-W05"
       ],
@@ -87805,7 +87805,7 @@
       "claim_session_id": "flow-p30-i14-w08",
       "claimed_at": "2026-06-10T21:56:24.432181Z",
       "closed_at": "2026-06-10T22:06:58.751927Z",
-      "commit": "58ee58313d8bdfe343110c967af4a836a4717d38",
+      "commit": "49d0aaf63b4cab19a4c0bf7c508effe765e3fed3",
       "deps": [],
       "description": "spec.archive rejects anything but IMPLEMENTED, but the in-band init->sync flow never sets IMPLEMENTED, so archive is unreachable for the specs P29-I13 uses. Add an explicit force flag to ArchiveParams that skips the status check (still requires the cache entry + file present); the close cascade passes force=True. Blob SHA still recorded for git recovery.",
       "dispatch_history": [],
@@ -87852,7 +87852,7 @@
       "claim_session_id": "flow-p30-i14-w09",
       "claimed_at": "2026-06-10T22:20:33.115231Z",
       "closed_at": "2026-06-10T22:29:56.397397Z",
-      "commit": "36926a1f33665139d0298389503e64636ee280a7",
+      "commit": "b89261bad1370f0294831fded34ee2f65285742f",
       "deps": [
         "P30-I14-W08"
       ],
@@ -87916,7 +87916,7 @@
       "claim_session_id": "flow-p30-i14-w10",
       "claimed_at": "2026-06-10T21:53:45.396246Z",
       "closed_at": "2026-06-10T22:08:59.089579Z",
-      "commit": "757a3cc3eee9cc51976d855c403b65caf76bf7f9",
+      "commit": "85fea9e2e4280c1eb55da7061fea8f155991ca0e",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88027,7 +88027,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-10T23:12:09.557199Z",
       "closed_at": "2026-06-10T23:46:31.478562Z",
-      "commit": "027d87cbcdf8da38518a2fb1e97c21bb303e979d",
+      "commit": "4a375e334eb5181f818377fecc4f842624e9a911",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88141,7 +88141,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:58:44.359177Z",
       "closed_at": "2026-06-11T06:07:01.633333Z",
-      "commit": "5a59cdf07b77379c8e209fb00e41af1718175669",
+      "commit": "26a31af3d72a6caa2f83920854484e9018cba5ce",
       "deps": [],
       "description": "New display-layer helper is_editable_install() reads the PEP 660 dir_info.editable flag from Distribution(\"eawf\").read_text(\"direct_url.json\"); on PackageNotFoundError or a missing key it falls back to .git presence at the package import root. Display-only by construction — no consumer outside the version surface.",
       "dispatch_history": [],
@@ -88189,7 +88189,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:07:22.901837Z",
       "closed_at": "2026-06-11T06:16:40.591975Z",
-      "commit": "e107854587d1daad83c3fb575ca350bd06cfac29",
+      "commit": "ebd75e92292d45f56fa97827c9aea79e87677373",
       "deps": [
         "P30-I15-W01"
       ],
@@ -88238,7 +88238,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:16:49.372969Z",
       "closed_at": "2026-06-11T06:25:11.242507Z",
-      "commit": "5292d5855cc4269523b80e2b857e521829d1781f",
+      "commit": "31920de676f45c53a49d3e43708c08d9cdbdca12",
       "deps": [
         "P30-I15-W02"
       ],
@@ -88290,7 +88290,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:07:23.396235Z",
       "closed_at": "2026-06-11T06:16:41.306455Z",
-      "commit": "6d739780b4a911f5e24d667d1d797035ecd779a4",
+      "commit": "eb2a82814f53cbfa291959152b3cb90cbae4a97f",
       "deps": [
         "P30-I15-W07"
       ],
@@ -88352,7 +88352,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:16:49.866212Z",
       "closed_at": "2026-06-11T06:25:11.943000Z",
-      "commit": "b06c6645784a172f908021f9f6a58e4bd510609c",
+      "commit": "f5715dd2790c2aa5327df44b501d60455e3652e5",
       "deps": [
         "P30-I15-W04"
       ],
@@ -88400,7 +88400,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:58:44.837839Z",
       "closed_at": "2026-06-11T06:07:02.340159Z",
-      "commit": "423b32d61ea8095b83d44a9498b084a6647291a5",
+      "commit": "1f60b4610d896250af939d192cba2396ab7962ba",
       "deps": [],
       "description": "The two CI-only gates that surface late if not run locally: the coverage gate parses coverage.xml against [tool.eawf.coverage] per-package thresholds, and snapshot_pairing_gate.py over <PR-base>..HEAD rejects a managed golden mutation lacking a wave-form test: subject. A verification wave — no new code path.",
       "dispatch_history": [],
@@ -88451,7 +88451,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T05:58:45.326225Z",
       "closed_at": "2026-06-11T06:07:03.054340Z",
-      "commit": "41b669bc7274efc63b0207f2510dc084b4f9213e",
+      "commit": "a72a00b58ae7f980cc72e76168276e33afabad44",
       "deps": [],
       "description": "Clears _phase_close_release_preflight_warning for v0.6.0: __version__ advanced 0.5.0 to 0.6.0 via version_bump.py --minor, CHANGELOG.md has a new [0.6.0] section with >=1 bullet, a migration note iff a v1_8_to_v1_9.py migration landed, and the close commit carries the (release=v0.6.0) annotation.",
       "dispatch_history": [],
@@ -88501,7 +88501,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:07:23.870658Z",
       "closed_at": "2026-06-11T06:16:42.008847Z",
-      "commit": "c12e0203dc978808a64513f7e59c9d134c360d6f",
+      "commit": "39a0df09c2a0e771d7c288d881ebe2dca3cc58f7",
       "deps": [
         "P30-I15-W07"
       ],
@@ -88551,7 +88551,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:16:50.356640Z",
       "closed_at": "2026-06-11T06:25:12.656450Z",
-      "commit": "4aac8fbc030aa53ffd7d5267dfc127ee64aac404",
+      "commit": "9e0f9d86792e0ff23663bc83ebc699723495b799",
       "deps": [
         "P30-I15-W07",
         "P30-I15-W08"
@@ -88601,7 +88601,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:06:35.946442Z",
       "closed_at": "2026-06-11T06:06:37.354082Z",
-      "commit": "d4e7627e79aef8ca3746ae43f44eba2229624536",
+      "commit": "06b37a4742ce5a2e5dfcb554a829512aee72e5d7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88659,7 +88659,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T06:24:47.498500Z",
       "closed_at": "2026-06-11T06:24:48.915517Z",
-      "commit": "df50615a96fddddbe1875a4f2d09d00d04aac96b",
+      "commit": "537ca5f2f5941fb607dbd3aa02e9b9adaaed5784",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88807,7 +88807,7 @@
       "claim_session_id": "p30-i15-w13-uiparity",
       "claimed_at": "2026-06-11T10:59:33.890110Z",
       "closed_at": "2026-06-11T12:47:16.257563Z",
-      "commit": "b93aeedbe97d249420e8e8b481ad5a841776d3d6",
+      "commit": "b464bb3dc00bbdf08fab8d43d49f91d3541bece1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88864,7 +88864,7 @@
       "claim_session_id": "p30-i15-w14-uiparity",
       "claimed_at": "2026-06-11T11:41:07.078287Z",
       "closed_at": "2026-06-11T12:47:17.048234Z",
-      "commit": "7028dd06c6cf33dc09add8325d0192e6e88b597b",
+      "commit": "d3d0ce8cb8b999fdb397b3ebb511f90d1c8a7636",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -88922,7 +88922,7 @@
       "claim_session_id": "p30-i15-w15-uiparity",
       "claimed_at": "2026-06-11T11:58:17.568731Z",
       "closed_at": "2026-06-11T12:47:17.887248Z",
-      "commit": "d60d3d6fa70aa08c8012010c0938365199968496",
+      "commit": "f6a90af3d4a5db63ba5418099446db1d5d997360",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89037,7 +89037,7 @@
       "claim_session_id": "p30-i15-w17",
       "claimed_at": "2026-06-11T13:04:38.569855Z",
       "closed_at": "2026-06-11T14:10:45.745875Z",
-      "commit": "87b683afa062ea97fb10f8753aff72010483c41c",
+      "commit": "1780b0aaa79dceda55e4300a2bfb5a3c8c432ffc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89093,7 +89093,7 @@
       "claim_session_id": "p30-i15-w18",
       "claimed_at": "2026-06-11T13:15:09.398520Z",
       "closed_at": "2026-06-11T14:10:46.472878Z",
-      "commit": "762c145b62b4a9d4adf794d266e261e353c40745",
+      "commit": "fab000a017e8ca76f64c5a0a4938beeabc84c54b",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89202,7 +89202,7 @@
       "claim_session_id": "p30-i15-w20",
       "claimed_at": "2026-06-11T14:11:41.521910Z",
       "closed_at": "2026-06-11T14:22:38.887660Z",
-      "commit": "5f4224e041cb8a91021dcbcf0722736a91bd7756",
+      "commit": "94c4b5ca4b02a15b90c9baedd8a3050d8c437956",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -89260,7 +89260,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:44:07.125468Z",
       "closed_at": "2026-06-11T21:40:14.831853Z",
-      "commit": "31918c27b5e5d7c09100e989d5631b28d558ea26",
+      "commit": "cc48880c42deb13ff50d4817acbd892308314585",
       "deps": [],
       "description": "I15-W18 added the wave status pill; iter/phase/backlog/incident cards still render bare status words.",
       "dispatch_history": [],
@@ -89359,7 +89359,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:44:07.617176Z",
       "closed_at": "2026-06-11T21:40:33.674155Z",
-      "commit": "51795450974da4fae826575b326b8f9263aa0ec2",
+      "commit": "15504f136ac058fd797f8015afa448c230855171",
       "deps": [],
       "description": "Evidence ballot rows render bare pass/fail words, the empty line and column header drifted from the U2 pin-strip, and the U1 un-priced cell renders the word \"unbilled\" instead of the pinned glyph.",
       "dispatch_history": [],
@@ -89458,7 +89458,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T22:58:51.666004Z",
       "closed_at": "2026-06-12T00:43:33.364546Z",
-      "commit": "5595bf204ec6c5fb9cbabf171329dcd0103abc49",
+      "commit": "1c52cb30b1f7961e93c0cdb5c3f2bb237e9964be",
       "deps": [],
       "description": "sandbox_events has no snapshot golden despite the designer \"pin now\" directive; Enter is bound to reload not the row affordance; the chrome-role count test asserts a test-local fixture so additive drift is invisible.",
       "dispatch_history": [],
@@ -89558,7 +89558,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T21:45:31.652553Z",
       "closed_at": "2026-06-11T23:50:32.740673Z",
-      "commit": "9de6c8a8cc717bad9a64fa4d47646499403b2c91",
+      "commit": "77472de180954b4a444a4f09058d510b6acf4df1",
       "deps": [],
       "description": "empty_state.render_empty_state hero is consumed only by research_board and sandbox_events; autopilot, evidence, feed, agent_watch, trust, and attention keep pre-reskin empties (verify attention first — the register's delivered-clean list disputes it; drop from scope if already at parity).",
       "dispatch_history": [],
@@ -89657,7 +89657,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:44:08.092385Z",
       "closed_at": "2026-06-11T21:40:43.606292Z",
-      "commit": "b95e957008ad6f702d680129b198424d3093cd8b",
+      "commit": "f476b9f84764c592cdb9060b84be0a621c9cb96d",
       "deps": [],
       "description": "Inbox cards lack the spec approve/hold/dismiss keys; agent-watch cancel is k-only. Strict-spec alignment per D-B.",
       "dispatch_history": [],
@@ -89756,7 +89756,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T21:45:31.048873Z",
       "closed_at": "2026-06-11T23:50:23.891333Z",
-      "commit": "b9d344797d3232d5e2c4aee88c2a3c1ae4a3ee81",
+      "commit": "044c32151ed7bb75821d6799f16339d5ce99badf",
       "deps": [],
       "description": "Designer ruling A3-a placed the incident timeline on a History tab; implementation folded it into the evidence group.",
       "dispatch_history": [],
@@ -89855,7 +89855,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:44:08.594532Z",
       "closed_at": "2026-06-11T21:40:52.929171Z",
-      "commit": "f55ac48b4bd67b4f372aafa0f0c6e2bf5b6c180d",
+      "commit": "3cbb04d3e8e3559bafeaf81140db3d017784ca41",
       "deps": [],
       "description": "The overlay renders the DAG frontier but not the EU rollup or the EAWF022 dropped-detail report the surface-redesign-notes specify.",
       "dispatch_history": [],
@@ -90017,7 +90017,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T22:58:52.751182Z",
       "closed_at": "2026-06-12T00:43:52.061585Z",
-      "commit": "8b68e66932d946d489f029a15ae40720943d754c",
+      "commit": "d81abbeb4a64a3273c354ecd1d7504f781d6fb07",
       "deps": [
         "P30-I16-W08"
       ],
@@ -90205,7 +90205,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T22:58:52.256179Z",
       "closed_at": "2026-06-12T00:43:42.465153Z",
-      "commit": "d0e2a9d0282551e231aca304f2a09de38943abaa",
+      "commit": "427bcbf1df38c92c8c81cc0f3db006d5b3e4aa7c",
       "deps": [],
       "description": "Bar-width unification (record the canonical width), doctor middle-dot header separator, selection tint, detail tab markers moved into sigils.py, research \"press n\" pinned-literal reconciliation, U5 lane-grid sandbox column.",
       "dispatch_history": [],
@@ -90307,7 +90307,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T00:44:27.334843Z",
       "closed_at": "2026-06-12T01:16:59.061357Z",
-      "commit": "e72283a47fd7833477c3dfd54ba9b6d6d6bdc22a",
+      "commit": "1560302c3d35050327699c1a7d3ad8e50730f672",
       "deps": [],
       "description": "Record the Decision superseding the 2026-06-08 ui.brand_glyph drop (mockups show the seal in every header; the drop targeted the config knob); assert the ASCII fallback for the header mark.",
       "dispatch_history": [],
@@ -90373,7 +90373,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T21:45:30.456292Z",
       "closed_at": "2026-06-11T23:49:22.369663Z",
-      "commit": "06ea302215f360590ca93df2ab1654ade35a866d",
+      "commit": "d8077a62dbd1b252e336ff2535d7aa65f35caa4b",
       "deps": [],
       "description": "Kill the invisible-extra trap: move textual-image and pillow into default dependencies, add a doctor row reporting seal render capability (deps present, resvg on PATH, terminal protocol), and document graphics-terminal support.",
       "dispatch_history": [],
@@ -90474,7 +90474,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T00:44:27.891977Z",
       "closed_at": "2026-06-12T01:17:09.382359Z",
-      "commit": "0a1e7d52734b4bbc2e610fefdcdbc1096f11b22c",
+      "commit": "edf0a087b53ac9e274141eb113e7e7f598d617db",
       "deps": [
         "P30-I16-W12"
       ],
@@ -90642,7 +90642,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:18:52.949986Z",
       "closed_at": "2026-06-11T16:40:08.208885Z",
-      "commit": "49f85302fe9f7e4b75fcc22d685998445c37ac39",
+      "commit": "47f43c78b7d7f01e99bdd31957d69820ece245ef",
       "deps": [],
       "description": "Consume the why-missed brief: rasterize mockup frames (resvg / static HTML render) and screenshot the live TUI (Textual SVG export to PNG); diff as images with a layout-weighted rubric; wire the registered-but-uncited mockup_golden_diff audit kind; pin the CSS-to-Textual mapping table in the gate spec.",
       "dispatch_history": [],
@@ -90804,7 +90804,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T15:47:06.200468Z",
       "closed_at": "2026-06-11T16:16:28.367979Z",
-      "commit": "b36d265fec2d7a9658930759a2e236e7e86898f2",
+      "commit": "1ab6b58f5eee13261c9fac704bbc699dd34bef38",
       "deps": [],
       "description": "The campaign rank-1 fix: sandbox-exec -f to -p flag fix, pinning test flip, semantics-executing smoke test, juror stderr logging, PATH threading, network carve. Unlocks real juror ballots, the first priced session, and the dark-tier proof.",
       "dispatch_history": [],
@@ -90890,7 +90890,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:18:53.452825Z",
       "closed_at": "2026-06-11T16:40:09.852827Z",
-      "commit": "ad051d56def99f66bab3de815bbc7d13375137ed",
+      "commit": "def3d9580be7d1cf590cd1f33cfbbfd499c5690d",
       "deps": [],
       "description": "V1 journal digest-compare fix plus the crash matrix and the journal_chain audit kind; flip the poisoned-WAL falsifier test from expected-fail to passing.",
       "dispatch_history": [],
@@ -90976,7 +90976,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:18:53.934005Z",
       "closed_at": "2026-06-11T21:41:08.358143Z",
-      "commit": "d91209c7e8b984d7d5ee9b4dce77ab9d40f680c1",
+      "commit": "0d12a7845cf7b737ece718d14b83b28b0fac70ee",
       "deps": [],
       "description": "Close-mechanism field on wave-close events; EAWF_DAEMONLESS waiver per D-D (env hatch keeps non-gate-bearing mutations; gate-bearing closes need an explicit per-invocation waiver flag recording a waiver event); band-merge intent ruling + resolver re-order; token-arm word-boundary fix.",
       "dispatch_history": [],
@@ -91107,7 +91107,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:18:54.431318Z",
       "closed_at": "2026-06-11T21:41:10.544020Z",
-      "commit": "2e012006c3ac8adbf928c0648e4fc14512816a45",
+      "commit": "e2a13dbb6c98a5535dabad7f19348713078281ae",
       "deps": [],
       "description": "Add harness/model attribution fields to ActualSummary and RuntimeCounters plus the session-tree rollup so EU actuals are calibratable (the T5/T6 non-negotiable that I05 missed).",
       "dispatch_history": [],
@@ -91192,7 +91192,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T15:47:06.705477Z",
       "closed_at": "2026-06-11T16:16:36.990190Z",
-      "commit": "68aba24a44a2ef435b0b943bb8cf6021aea9a354",
+      "commit": "e654ea4ab40d6dd2c30a5336cf6ab64d5bae8d75",
       "deps": [],
       "description": "EvalReport schema + tools/recount_build_report.py, landing BEFORE phase close per D-T5-2 so issue #1 can cite pre-registered metrics.",
       "dispatch_history": [],
@@ -91277,7 +91277,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-11T21:45:29.294038Z",
       "closed_at": "2026-06-11T23:50:22.525751Z",
-      "commit": "2d8c24a5341609b59d0de375f7b650f444f99c85",
+      "commit": "93198b0af850cdfa95a79b508bf3b92ba391a486",
       "deps": [
         "P30-I16-W19"
       ],
@@ -91367,7 +91367,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T15:47:07.207304Z",
       "closed_at": "2026-06-11T16:16:38.211985Z",
-      "commit": "80fd3d0615973b08423e423cd7dcdb5dfd9acf69",
+      "commit": "0931bb90570fa23fac7144be21c15d0ed0a9dc10",
       "deps": [],
       "description": "D-F: pwd-upward anchor resolution for the three anchor-dependent checks; install-mode-aware manifest (plugin-cache satisfies plugin-owned regions, no local .claude duplication); drift ack/retro-pin verb for the 12 historical drifts; stop stray side-effect writes (instrument-probe.json, researchcfg.yaml, coverage.xml — root-caused per class); release install-smoke CI gate. Campaign docs are owned by I18-W07, not here.",
       "dispatch_history": [],
@@ -91497,7 +91497,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T01:17:19.351008Z",
       "closed_at": "2026-06-12T02:00:35.952292Z",
-      "commit": "cf99a17bdb070bd89c95e39b4a587d3b6483cb09",
+      "commit": "9b2bd39995082191119366133a1c80b2b0185a23",
       "deps": [
         "P30-I16-W13"
       ],
@@ -91597,7 +91597,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T15:43:15.561154Z",
       "closed_at": "2026-06-11T15:44:30.244780Z",
-      "commit": "4e8f7e7f02d07a40c4ee8ba56a7d76f290cabd51",
+      "commit": "dda3b308e7a6aeea7fc64a51e98eaca0f2556cd9",
       "deps": [],
       "description": "Land the pending ruff 0.15.12 reflow churn (pinned hook version) so the main tree is format-clean before worktree cherry-picks; format-only, no semantic change.",
       "dispatch_history": [],
@@ -91659,7 +91659,7 @@
       "claim_session_id": "flow-p30",
       "claimed_at": "2026-06-11T16:44:09.074792Z",
       "closed_at": "2026-06-11T21:41:12.086191Z",
-      "commit": "639b911a6864f553d0b2ef9dcd3bcb9d6fc1952f",
+      "commit": "7ff338576e8ff2bef0db808bff08ea4dad0ba683",
       "deps": [],
       "description": "Reactive: W18 built the daemonless-waiver door + close_mechanism + W19 built harness/model attribution, but neither is called from the live close/capture path. Wire both so the end-to-end criteria are genuinely true (no idle contract).",
       "dispatch_history": [],
@@ -91725,7 +91725,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T02:04:36.881401Z",
       "closed_at": "2026-06-12T02:39:43.381098Z",
-      "commit": "efd4ee36487714a09da39149cd6ff7278b525ffd",
+      "commit": "b8c269b95cf3d13f65b9a56af07520f0b49870fc",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -91784,7 +91784,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T02:04:37.380694Z",
       "closed_at": "2026-06-12T02:39:44.129671Z",
-      "commit": "1be74c34ec324db0a713a21860011b9b9fe00869",
+      "commit": "e9f0ca3622fd9f75ee03b8bc76ef52bb0dcd7bae",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -91856,7 +91856,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T03:08:53.750217Z",
       "closed_at": "2026-06-12T03:56:50.138098Z",
-      "commit": "7538ed9305f7af442589bbcee1c30da04bae248e",
+      "commit": "0efe2f2fc9acf8cec55d7ae65766f66351feead8",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -91958,7 +91958,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T04:31:18.380190Z",
       "closed_at": "2026-06-12T05:26:31.085066Z",
-      "commit": "269536aa85c383827773150e167e5a1d2c609ecb",
+      "commit": "d4889288f38360408e77676294b1542dba1a71a6",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -92019,7 +92019,7 @@
       "claim_session_id": "operator-flow-p30i16",
       "claimed_at": "2026-06-12T04:31:18.883071Z",
       "closed_at": "2026-06-12T05:26:31.825008Z",
-      "commit": "298ba602fd3d92257d16e6b01dffdae691785e2c",
+      "commit": "95a88547ee9aa3344949887032d95cce2a0a43ac",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -92141,7 +92141,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T06:25:22.118084Z",
       "closed_at": "2026-06-12T07:52:53.317919Z",
-      "commit": "5a9ca4be73434600882cd7371bb31f46859565c4",
+      "commit": "48d9bdb32bcdfbf546c36d23cc837dc21437e832",
       "deps": [],
       "description": "fleet.drive currently runs the whole drain synchronously inside the async RPC handler, blocking every other RPC and timing out the TUI arm call. Move the loop to a worker thread/task; the RPC returns a run handle immediately.",
       "dispatch_history": [],
@@ -92229,7 +92229,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:52:54.431431Z",
       "closed_at": "2026-06-12T07:52:55.111595Z",
-      "commit": "8722e3d175676f105827ea6facc15e346a6c7b30",
+      "commit": "e59717d883583a59cc1b0fcfc138a5ad728fd59e",
       "deps": [
         "P30-I17-W01"
       ],
@@ -92331,7 +92331,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:53:07.734468Z",
       "closed_at": "2026-06-12T07:53:08.572354Z",
-      "commit": "ae1ce056059323a003246f74e023b4ac95ed0e0e",
+      "commit": "c93b9a11c511279a7a8d410e5770726bb932a8d0",
       "deps": [
         "P30-I17-W02"
       ],
@@ -92420,7 +92420,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:53:09.651110Z",
       "closed_at": "2026-06-12T07:53:10.386060Z",
-      "commit": "42ebbb6a69840a260b6addd9c8ac53ab150db246",
+      "commit": "c3ee5c57f89b3f2e38faae80bda51df97bbf7b0a",
       "deps": [
         "P30-I17-W03"
       ],
@@ -92509,7 +92509,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:53:11.521163Z",
       "closed_at": "2026-06-12T07:53:12.223199Z",
-      "commit": "c5459d8f660d22969ad31c18d7d25496b1983cb9",
+      "commit": "2bea4b762edbe11fcdf8ebb42d99c0cbfd0324ec",
       "deps": [
         "P30-I17-W04"
       ],
@@ -92598,7 +92598,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:53:13.301477Z",
       "closed_at": "2026-06-12T07:53:13.994909Z",
-      "commit": "75e5cc977e8e47322b11a3edbae4a48639ccad2f",
+      "commit": "c2a02ce98ee4e0693ecd45b4216629da64580a02",
       "deps": [
         "P30-I17-W05"
       ],
@@ -92699,7 +92699,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:53:26.711314Z",
       "closed_at": "2026-06-12T07:53:27.470652Z",
-      "commit": "401b86754b0a8e44a3cae996c5e0cd84b9549c73",
+      "commit": "f4e07341b10fcdebb8de0caac86de6afc3317172",
       "deps": [
         "P30-I17-W01"
       ],
@@ -92800,7 +92800,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:53:36.663711Z",
       "closed_at": "2026-06-12T07:53:37.360894Z",
-      "commit": "71e2be5438213dc3ccc2196d9b42645522b8c8a0",
+      "commit": "9417d499ecfff17f951b0153cf8b2d47cbe0054c",
       "deps": [
         "P30-I17-W01"
       ],
@@ -92902,7 +92902,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:53:46.866599Z",
       "closed_at": "2026-06-12T07:53:47.581084Z",
-      "commit": "24e46d273441dd3d994b5c8a37c1fd37ce14fa38",
+      "commit": "2cb00cfea47b32bb3c6875185941a89fb46af862",
       "deps": [
         "P30-I17-W06"
       ],
@@ -92989,7 +92989,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T07:54:12.638880Z",
       "closed_at": "2026-06-12T08:07:33.681028Z",
-      "commit": "3feb2ec596cfcbe4e43762bb1c50a14103f42244",
+      "commit": "e1cc2a397e49def0f0038f61d076726f13215203",
       "deps": [
         "P30-I17-W02",
         "P30-I17-W03",
@@ -93061,7 +93061,7 @@
       "claim_session_id": "operator-flow-p30i17",
       "claimed_at": "2026-06-12T08:16:47.662426Z",
       "closed_at": "2026-06-12T08:41:10.018236Z",
-      "commit": "7d770d8560f11e6f79948e2d0c86e0821b3e88b9",
+      "commit": "5002f532da2429f7d465eb1dadcea7e64af699a3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -93125,7 +93125,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T08:43:29.997393Z",
       "closed_at": "2026-06-12T10:08:53.833784Z",
-      "commit": "2f66f8ebf03e89da509d0d990265bee6e828f86b",
+      "commit": "0a58ee3f9646e9dc49cd71b4260e5b6ba69901fd",
       "deps": [],
       "description": "The critical seam: convert each StagedDispatch into a real spawned researcher session via the live agent.dispatch spawn path and parse the researcher agent_end body into typed rows.",
       "dispatch_history": [],
@@ -93213,7 +93213,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:08:55.370005Z",
       "closed_at": "2026-06-12T10:08:56.331900Z",
-      "commit": "0908d5ea4dd5cd8d206ccd53fc3a54c938ddce11",
+      "commit": "19a82e690f4f571a1f4cfd012713017f074e8a5a",
       "deps": [
         "P30-I18-W01"
       ],
@@ -93304,7 +93304,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:08:57.756168Z",
       "closed_at": "2026-06-12T10:08:58.656100Z",
-      "commit": "b324212448bd684a292a98cd0d93eb7334b8deee",
+      "commit": "8bb172cb4892951e6cde1e4fdf5d0413b483f248",
       "deps": [
         "P30-I18-W01"
       ],
@@ -93392,7 +93392,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:09:00.074405Z",
       "closed_at": "2026-06-12T10:09:00.961815Z",
-      "commit": "cc67ac0cb3857e4765c85ddf3da0eaa270112b97",
+      "commit": "f1cec442f742688162d73b9cd5d66171a2df8390",
       "deps": [
         "P30-I18-W03"
       ],
@@ -93493,7 +93493,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:09:12.407064Z",
       "closed_at": "2026-06-12T10:09:13.343241Z",
-      "commit": "503423903c4cbf973cc5c0b7ee0cd0294ad00eef",
+      "commit": "027d73bcc9f8a2d24ba9cdd2008d684f04804318",
       "deps": [
         "P30-I18-W03"
       ],
@@ -93595,7 +93595,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:09:24.940684Z",
       "closed_at": "2026-06-12T10:09:25.849237Z",
-      "commit": "05940b2cbbea0377424829638de44706c0e6f325",
+      "commit": "26572336afb533b761cb9d49c0748ffec3ba013a",
       "deps": [
         "P30-I18-W02"
       ],
@@ -93684,7 +93684,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:09:27.373300Z",
       "closed_at": "2026-06-12T10:09:28.286712Z",
-      "commit": "f6a5a84a68c1816f135da1ad3b5b99af0e771af0",
+      "commit": "cc10f0d200565fe0e9633a7fc236ca6d3a68c8dc",
       "deps": [
         "P30-I18-W02"
       ],
@@ -93773,7 +93773,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:09:29.806068Z",
       "closed_at": "2026-06-12T10:09:31.059952Z",
-      "commit": "edfd9c09f96626928fdc8eea3fc01d626f748591",
+      "commit": "f43addc3856216bd81b3911df73655f6860b034f",
       "deps": [
         "P30-I18-W03"
       ],
@@ -93872,7 +93872,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:10:08.992147Z",
       "closed_at": "2026-06-12T10:19:41.029726Z",
-      "commit": "ab730776a426260dc6a08962b2281dc85aa893d3",
+      "commit": "e9250893e667bbe2c39ee18c5b112c01d0c61ac1",
       "deps": [
         "P30-I18-W04",
         "P30-I18-W05",
@@ -93940,7 +93940,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:27:03.284286Z",
       "closed_at": "2026-06-12T10:52:08.332289Z",
-      "commit": "2d06b561f52acae99cc4ff8a4e906283c3467cfe",
+      "commit": "06cb840930171b002d17eab247eabc881d20c438",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94001,7 +94001,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:53:45.931538Z",
       "closed_at": "2026-06-12T11:25:50.858619Z",
-      "commit": "d95fb8c9447bf6d69d5918b7d63c2546ae26268a",
+      "commit": "560ee490dc6fc27d109c66ef618adfeaa34958f2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94062,7 +94062,7 @@
       "claim_session_id": "operator-flow-p30i18",
       "claimed_at": "2026-06-12T10:53:46.459136Z",
       "closed_at": "2026-06-12T11:25:51.657289Z",
-      "commit": "4b75e3607edaf86189db2b97e362cd6ed9485ada",
+      "commit": "78b254e9f0851e22983b08658c144e06829c24c9",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94127,7 +94127,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T11:31:41.957583Z",
       "closed_at": "2026-06-12T12:33:51.962757Z",
-      "commit": "80c786d49d63ef191b52c96defdbc405678a535c",
+      "commit": "69d16f7778f6a041b34f4bb5ca6bfb1967abb97a",
       "deps": [],
       "description": "cancel.py SIGKILL/killpg/getpgid guards plus the nine O_DIRECTORY parent-dir fsync guards so the module graph imports and atomic writes work on Windows.",
       "dispatch_history": [],
@@ -94233,7 +94233,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:34:00.774679Z",
       "closed_at": "2026-06-12T12:34:01.482597Z",
-      "commit": "d307258fd7f60dec9d7c3c5e99a76cf93838651d",
+      "commit": "0a0df00bf827c9004225acb4deb14d9437816c3e",
       "deps": [
         "P30-I19-W01"
       ],
@@ -94325,7 +94325,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:34:02.565522Z",
       "closed_at": "2026-06-12T12:34:03.275841Z",
-      "commit": "6d3700602a1a398f1ef8b5fe4f71398db3e76a88",
+      "commit": "01999c28e66b54d779931bcccd8b247fd6f69889",
       "deps": [
         "P30-I19-W02"
       ],
@@ -94428,7 +94428,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:34:12.394895Z",
       "closed_at": "2026-06-12T12:34:13.280636Z",
-      "commit": "53a9b972d3c6305c7cd67972c5fc9f426f6eaab2",
+      "commit": "b4ac83060fd1bf11b0e52a1696af42ca2bb4c268",
       "deps": [
         "P30-I19-W02"
       ],
@@ -94518,7 +94518,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:34:14.675739Z",
       "closed_at": "2026-06-12T12:34:15.551136Z",
-      "commit": "9ec00cf1301b1457be78a00d416b10a1e6081034",
+      "commit": "1243944ec9d223be075c01beec9937c422de1020",
       "deps": [
         "P30-I19-W02"
       ],
@@ -94607,7 +94607,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:34:16.861150Z",
       "closed_at": "2026-06-12T12:34:17.720721Z",
-      "commit": "9f60e8c0085e2c4a54a05f15733b8eab2cb2e085",
+      "commit": "e632dc27e13e1dc150f624014faae8cd10c57dfd",
       "deps": [
         "P30-I19-W03",
         "P30-I19-W04"
@@ -94696,7 +94696,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:34:19.065055Z",
       "closed_at": "2026-06-12T12:34:19.934061Z",
-      "commit": "f3d529895379e5c6f9f554bc34d029267fff1661",
+      "commit": "ae0e53fb76c5678314123be2e586c82f77a35cbd",
       "deps": [
         "P30-I19-W06"
       ],
@@ -94783,7 +94783,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T13:40:34.199903Z",
       "closed_at": "2026-06-12T18:11:09.165192Z",
-      "commit": "35c064d39a600c2fcca524a77835b1a47d4cda7d",
+      "commit": "3014cfa8478e8e4f6b27e9ac3440f4d053bd4069",
       "deps": [
         "P30-I19-W05",
         "P30-I19-W07"
@@ -94871,7 +94871,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:36:16.358843Z",
       "closed_at": "2026-06-12T13:39:17.777970Z",
-      "commit": "52ad7a92d9aa02ce2c7325c612dfd92cfcccf42f",
+      "commit": "e94d03968e796b569ef43a8a4f26e917d97354ac",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94931,7 +94931,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T12:36:16.957405Z",
       "closed_at": "2026-06-12T13:39:18.709633Z",
-      "commit": "ce6b61f69a8eb8664d6cd7bb6f47f8d2d7d0d5e7",
+      "commit": "9bebb90abe986c2e3c8ed4ab178dea2979114895",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -94993,7 +94993,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T13:47:21.739614Z",
       "closed_at": "2026-06-12T13:49:11.791449Z",
-      "commit": "45e1875fe935ea30dca5ef5e95031f059600877c",
+      "commit": "4b07c7be7c80355931dcfec52d7346d1404aa127",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -95051,7 +95051,7 @@
       "claim_session_id": "operator-flow-p30i19",
       "claimed_at": "2026-06-12T13:56:19.891371Z",
       "closed_at": "2026-06-12T14:24:16.165298Z",
-      "commit": "e8b73ad07c754c4dcea8a43c837eb562e4a91dae",
+      "commit": "7b465d5d7bc5fe58010ac0f7f428e2601da5ab6f",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -95112,7 +95112,7 @@
       "claim_session_id": "operator-recovery-20260612",
       "claimed_at": "2026-06-12T18:11:40.663454Z",
       "closed_at": "2026-06-12T18:11:41.492896Z",
-      "commit": "e809d838a381ae65f7a3707cd96acf0dd5b08851",
+      "commit": "5d55a765a8705501bf73fdce349d0efba81883f7",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -95170,7 +95170,7 @@
       "claim_session_id": "operator-recovery-20260612",
       "claimed_at": "2026-06-12T18:11:42.130763Z",
       "closed_at": "2026-06-12T18:11:42.893818Z",
-      "commit": "eb8d3b1d38c909710a0e15c59b0d1e5a0e49990c",
+      "commit": "6ac762cc1b4902b0047754184e1934bdd62a967d",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -95232,7 +95232,7 @@
       "claim_session_id": "operator-recovery-20260612",
       "claimed_at": "2026-06-12T18:11:43.550836Z",
       "closed_at": "2026-06-12T18:11:44.340432Z",
-      "commit": "2230273ae20e3f915343e014b2e98150d41a073c",
+      "commit": "8743d770905d10e188c28fcf3bca33e2fc8997f1",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -97164,7 +97164,7 @@
       "claim_session_id": "SES-p30-i20-w23-codex",
       "claimed_at": "2026-06-12T18:23:21.618811Z",
       "closed_at": "2026-06-13T21:08:10.309285Z",
-      "commit": "96635625813e66656fcfefc6920717b5b094d211",
+      "commit": "861ce0f1dc3d81919c1c496c60df73073ae878d2",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -101224,7 +101224,7 @@
       "branch": "feature/eawf-v0.6-p30-i20-w23",
       "created_at": "2026-06-13T20:36:36.938583Z",
       "id": "WT-P30-I20-W23-1781382996",
-      "merged_commit": "96635625",
+      "merged_commit": "861ce0f1",
       "owner_session_id": "SES-p30-i20-w23-codex",
       "path": ".ea/worktrees/p30-i20-w23",
       "status": "merged",
