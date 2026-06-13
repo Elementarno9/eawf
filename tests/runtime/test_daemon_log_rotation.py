@@ -95,6 +95,71 @@ def test_configure_logging_rotates_past_the_cap(
     assert log_file.stat().st_size <= 512
 
 
+def test_configure_logging_sweeps_oversize_and_orphan_backups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_root_logging: None
+) -> None:
+    """Startup sweep removes legacy oversize backups and count orphans."""
+    log_file = tmp_path / "runtime" / "eawfd.log"
+    log_file.parent.mkdir(parents=True)
+    monkeypatch.setattr(daemon_main, "log_path", lambda: log_file)
+    monkeypatch.setenv("EAWF_DAEMON_LOG_BACKUP_COUNT", "5")
+    logging.getLogger().handlers = []
+
+    retained = log_file.with_name("eawfd.log.2")
+    retained.write_bytes(b"bounded backup\n")
+    oversize = log_file.with_name("eawfd.log.3")
+    with oversize.open("wb") as handle:
+        handle.truncate(165 * 1024 * 1024)
+    orphan = log_file.with_name("eawfd.log.9")
+    orphan.write_bytes(b"old backup\n")
+    ignored = log_file.with_name("eawfd.log.not-a-number")
+    ignored.write_bytes(b"ignored backup\n")
+
+    daemon_main._configure_logging(foreground=False)
+
+    assert retained.exists()
+    assert not oversize.exists()
+    assert not orphan.exists()
+    assert ignored.exists()
+
+
+def test_configure_logging_rotates_error_log_past_the_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _restore_root_logging: None
+) -> None:
+    """The non-foreground branch rotates ``eawfd.err`` independently."""
+    log_file = tmp_path / "runtime" / "eawfd.log"
+    monkeypatch.setattr(daemon_main, "log_path", lambda: log_file)
+    monkeypatch.setenv("EAWF_DAEMON_LOG_MAX_BYTES", "512")
+    monkeypatch.setenv("EAWF_DAEMON_LOG_BACKUP_COUNT", "2")
+    logging.getLogger().handlers = []
+
+    daemon_main._configure_logging(foreground=False)
+    err_file = log_file.with_name("eawfd.err")
+    err_handlers = [
+        h
+        for h in logging.getLogger().handlers
+        if isinstance(h, logging.handlers.RotatingFileHandler)
+        and Path(h.baseFilename).name == "eawfd.err"
+    ]
+    assert err_handlers
+    handler = err_handlers[0]
+    assert handler.maxBytes == 512
+    assert handler.backupCount == 2
+    assert handler.level == logging.ERROR
+
+    log = logging.getLogger("eawf.test.daemon.err_rotation")
+    for index in range(200):
+        log.error("stderr rotation probe line index=%03d %s", index, "x" * 96)
+    handler.flush()
+
+    backups = sorted(log_file.parent.glob("eawfd.err.*"))
+    assert backups, "expected error-log rotation to produce at least one backup file"
+    assert len(backups) <= 2
+    assert {p.name for p in backups} <= {"eawfd.err.1", "eawfd.err.2"}
+    assert err_file.exists()
+    assert err_file.stat().st_size <= 512
+
+
 @pytest.mark.parametrize("raw", ["0", "-1", "not-an-int"])
 def test_resolve_log_max_bytes_guards_bad_override(
     raw: str, monkeypatch: pytest.MonkeyPatch

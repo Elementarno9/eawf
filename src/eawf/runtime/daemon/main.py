@@ -73,6 +73,9 @@ DEFAULT_DAEMON_LOG_MAX_BYTES: int = 16 * 1024 * 1024
 #: bounded at roughly ``(backup_count + 1) * max_bytes``.
 DEFAULT_DAEMON_LOG_BACKUP_COUNT: int = 5
 
+#: Service stderr sink name that shares the daemon runtime directory.
+DAEMON_ERR_LOG_NAME: str = "eawfd.err"
+
 
 def _resolve_idle_timeout() -> float:
     """Return the configured idle timeout in seconds.
@@ -192,6 +195,86 @@ def _resolve_log_backup_count() -> int:
         logger.warning(f"_resolve_log_backup_count non-positive raw={raw!r}; using default")
         return DEFAULT_DAEMON_LOG_BACKUP_COUNT
     return value
+
+
+def _err_log_path(log_file: Path) -> Path:
+    """Return the stderr log sibling for *log_file*."""
+    return log_file.with_name(DAEMON_ERR_LOG_NAME)
+
+
+def _iter_numbered_log_backups(base_path: Path) -> list[tuple[int, Path]]:
+    """Return numeric ``<base>.N`` backup files sorted oldest-index first."""
+    prefix = f"{base_path.name}."
+    backups: list[tuple[int, Path]] = []
+    for candidate in base_path.parent.glob(f"{base_path.name}.*"):
+        suffix = candidate.name.removeprefix(prefix)
+        if not suffix.isdecimal():
+            continue
+        backups.append((int(suffix), candidate))
+    return sorted(backups, key=lambda item: item[0])
+
+
+def _sweep_rotating_log_backups(base_path: Path, *, max_bytes: int, backup_count: int) -> int:
+    """Unlink stale or overlarge numbered backups for one rotating log file.
+
+    Args:
+        base_path: Live log file path whose numbered backups are scanned.
+        max_bytes: Per-file cap used by the active rotating handler.
+        backup_count: Highest numbered backup retained by the active handler.
+
+    Returns:
+        Count of backup files unlinked.
+    """
+    removed = 0
+    for index, backup_path in _iter_numbered_log_backups(base_path):
+        should_remove = index > backup_count
+        if not should_remove:
+            try:
+                should_remove = backup_path.stat().st_size > max_bytes
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                logger.warning(
+                    f"_sweep_rotating_log_backups stat-failed path={backup_path.name!r} "
+                    f"error={exc!s}"
+                )
+                continue
+        if not should_remove:
+            continue
+        try:
+            backup_path.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            logger.warning(
+                f"_sweep_rotating_log_backups unlink-failed path={backup_path.name!r} error={exc!s}"
+            )
+            continue
+        removed += 1
+    return removed
+
+
+def _sweep_daemon_log_backups(log_file: Path, *, max_bytes: int, backup_count: int) -> int:
+    """Sweep orphaned rotating backups for daemon stdout and stderr logs."""
+    return sum(
+        _sweep_rotating_log_backups(path, max_bytes=max_bytes, backup_count=backup_count)
+        for path in (log_file, _err_log_path(log_file))
+    )
+
+
+def _build_rotating_log_handler(
+    path: Path, *, fmt: str, max_bytes: int, backup_count: int
+) -> logging.handlers.RotatingFileHandler:
+    """Build a scrubbed rotating file handler for one daemon log file."""
+    handler = logging.handlers.RotatingFileHandler(
+        path,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter(fmt))
+    handler.addFilter(SensitiveScrubber())
+    return handler
 
 
 def _build_watchdog(ctx: MethodContext, idle_timeout_seconds: float) -> IdleTimeoutWatchdog:
@@ -330,10 +413,11 @@ def _configure_logging(foreground: bool) -> None:
     tokens (an unscrubbed ``error_detail`` / ``session_log_path`` would
     otherwise leak the operator's absolute paths into the log).
 
-    The file branch uses a :class:`logging.handlers.RotatingFileHandler`
-    so ``eawfd.log`` rolls at ``EAWF_DAEMON_LOG_MAX_BYTES`` (default
-    16 MiB) and retains ``EAWF_DAEMON_LOG_BACKUP_COUNT`` backups (default
-    5) instead of growing unbounded across a long-lived daemon.
+    The file branch uses :class:`logging.handlers.RotatingFileHandler`
+    instances so ``eawfd.log`` and ``eawfd.err`` roll at
+    ``EAWF_DAEMON_LOG_MAX_BYTES`` (default 16 MiB) and retain
+    ``EAWF_DAEMON_LOG_BACKUP_COUNT`` backups (default 5) instead of
+    growing unbounded across a long-lived daemon.
 
     Args:
         foreground: When True, logs go to stderr; otherwise to
@@ -354,17 +438,26 @@ def _configure_logging(foreground: bool) -> None:
     # holds the PID file, socket, log, and WAL — all embed operator paths).
     log_file.parent.mkdir(parents=True, exist_ok=True)
     harden_runtime_dir(log_file.parent)
-    handler = logging.handlers.RotatingFileHandler(
+    max_bytes = _resolve_log_max_bytes()
+    backup_count = _resolve_log_backup_count()
+    _sweep_daemon_log_backups(log_file, max_bytes=max_bytes, backup_count=backup_count)
+    handler = _build_rotating_log_handler(
         log_file,
-        maxBytes=_resolve_log_max_bytes(),
-        backupCount=_resolve_log_backup_count(),
-        encoding="utf-8",
+        fmt=fmt,
+        max_bytes=max_bytes,
+        backup_count=backup_count,
     )
-    handler.setFormatter(logging.Formatter(fmt))
-    handler.addFilter(SensitiveScrubber())
+    err_handler = _build_rotating_log_handler(
+        _err_log_path(log_file),
+        fmt=fmt,
+        max_bytes=max_bytes,
+        backup_count=backup_count,
+    )
+    err_handler.setLevel(logging.ERROR)
     root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
     root.setLevel(logging.INFO)
     root.addHandler(handler)
+    root.addHandler(err_handler)
 
 
 async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | None) -> None:
@@ -501,6 +594,12 @@ def run(*, foreground: bool = True) -> int:
     # it holds the PID file, socket, log, and WAL, all of which embed the
     # operator's cwd / state paths, so other local users must not traverse it.
     rt_dir = ensure_runtime_dir()
+    if foreground:
+        _sweep_daemon_log_backups(
+            rt_dir / "eawfd.log",
+            max_bytes=_resolve_log_max_bytes(),
+            backup_count=_resolve_log_backup_count(),
+        )
     try:
         with acquire_daemon_singleton(rt_dir):
             pid_file = pid_path()
