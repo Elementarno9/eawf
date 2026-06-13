@@ -47,6 +47,7 @@ from __future__ import annotations
 import logging
 import struct
 import zlib
+from collections import Counter
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -79,11 +80,16 @@ CSS_TO_TEXTUAL_MAPPING: dict[str, str] = {
 #: fine enough to resolve the four box corners and a central column gutter.
 _GRID_N: int = 32
 
-#: Luma threshold (0-255) above which a down-sampled cell counts as "ink".
-#: resvg renders dark box-drawing / text on a light background, so a cell is
-#: ink when its mean luma is BELOW this; tuned so anti-aliased edges still
-#: register as ink rather than dropping out.
-_INK_LUMA_MAX: int = 200
+#: RGB bucket size for finding the dominant background color. The live Textual
+#: screenshot uses a dark terminal background while the old synthetic fixtures
+#: use a light canvas; a fixed luma threshold makes the whole dark screenshot
+#: look like ink. The dominant opaque color is the background in both cases.
+_BACKGROUND_BUCKET: int = 16
+
+#: Minimum RGB distance from the dominant background for a source pixel to
+#: count as foreground ink. Tuned below visible text / border contrast and
+#: above anti-aliased background noise.
+_INK_BACKGROUND_DISTANCE_MIN: float = 35.0
 
 #: Ink fraction the EXTREME corner cell must reach for the corner to count as
 #: "filled" (a SQUARE border). A square border runs straight into the corner,
@@ -217,14 +223,65 @@ def _parse_png_chunks(png_bytes: bytes) -> tuple[int, int, bytes]:
     return width, height, bytes(idat)
 
 
+def _dominant_background_rgb(pixels: bytearray, width: int, height: int) -> tuple[int, int, int]:
+    """Return the dominant opaque RGB bucket center for a rendered PNG.
+
+    Both supported sources have a large flat background: the synthetic VIS-1
+    fixtures use light paper, and Textual ``export_screenshot`` uses dark
+    terminal/surface colors. Bucketed dominance survives antialiased text and
+    box borders without pinning the gate to either palette.
+    """
+    counts: Counter[tuple[int, int, int]] = Counter()
+    for off in range(0, width * height * 4, 4):
+        alpha = pixels[off + 3]
+        if alpha >= 128:
+            counts[
+                (
+                    pixels[off] // _BACKGROUND_BUCKET,
+                    pixels[off + 1] // _BACKGROUND_BUCKET,
+                    pixels[off + 2] // _BACKGROUND_BUCKET,
+                )
+            ] += 1
+    if not counts:
+        return (255, 255, 255)
+    bucket = counts.most_common(1)[0][0]
+    half = _BACKGROUND_BUCKET // 2
+    red, green, blue = bucket
+    return (
+        min(255, red * _BACKGROUND_BUCKET + half),
+        min(255, green * _BACKGROUND_BUCKET + half),
+        min(255, blue * _BACKGROUND_BUCKET + half),
+    )
+
+
+def _is_foreground_ink(
+    *,
+    r: int,
+    g: int,
+    b: int,
+    alpha: int,
+    background: tuple[int, int, int],
+) -> bool:
+    """Whether one source pixel differs enough from the background to be ink."""
+    if alpha < 128:
+        return False
+    dr = r - background[0]
+    dg = g - background[1]
+    db = b - background[2]
+    distance_sq = dr * dr + dg * dg + db * db
+    return distance_sq >= _INK_BACKGROUND_DISTANCE_MIN * _INK_BACKGROUND_DISTANCE_MIN
+
+
 def _downsample_ink(pixels: bytearray, width: int, height: int, grid_n: int) -> list[list[float]]:
     """Down-sample defiltered RGBA pixels to a ``grid_n`` ink-fraction grid.
 
-    A source pixel is "ink" when it is opaque and its BT.601 luma is below
-    :data:`_INK_LUMA_MAX` (dark mark on light background). Each grid cell
-    holds the fraction of its source pixels that are ink.
+    A source pixel is "ink" when it is opaque and its RGB color differs from
+    the dominant background color. This keeps the gate palette-neutral: dark
+    marks on light mockups and light / accent marks on dark Textual screenshots
+    both become foreground, while the background itself stays empty.
     """
     stride = width * 4
+    background = _dominant_background_rgb(pixels, width, height)
     grid = [[0.0 for _ in range(grid_n)] for _ in range(grid_n)]
     counts = [[0 for _ in range(grid_n)] for _ in range(grid_n)]
     for y in range(height):
@@ -235,8 +292,7 @@ def _downsample_ink(pixels: bytearray, width: int, height: int, grid_n: int) -> 
             r, g, b, alpha = pixels[off], pixels[off + 1], pixels[off + 2], pixels[off + 3]
             gx = min(grid_n - 1, x * grid_n // width)
             counts[gy][gx] += 1
-            luma = (299 * r + 587 * g + 114 * b) // 1000
-            if alpha >= 128 and luma < _INK_LUMA_MAX:
+            if _is_foreground_ink(r=r, g=g, b=b, alpha=alpha, background=background):
                 grid[gy][gx] += 1.0
     for gy in range(grid_n):
         for gx in range(grid_n):
@@ -249,9 +305,9 @@ def decode_png_luma_grid(png_bytes: bytes, grid_n: int = _GRID_N) -> list[list[f
     """Decode an 8-bit RGBA PNG to a coarse ``grid_n x grid_n`` ink-fraction grid.
 
     Dependency-free: inflates the IDAT stream with :mod:`zlib`, reverses the
-    PNG row filters, converts each pixel to luma, and down-samples into a
-    ``grid_n x grid_n`` grid whose cells hold the fraction of source pixels
-    that are "ink" (luma below :data:`_INK_LUMA_MAX`, alpha-weighted).
+    PNG row filters, estimates the dominant background color, and downsamples
+    into a ``grid_n x grid_n`` grid whose cells hold the fraction of source
+    pixels that are foreground "ink" (far enough from that background).
 
     Args:
         png_bytes: The PNG file bytes (8-bit, RGBA, non-interlaced -- the
@@ -289,23 +345,60 @@ class LayoutFeatures:
     column_count: int
 
 
-def _border_band_offset(grid: list[list[float]]) -> int:
-    """Find how many cells in from the edge the top border row sits.
+@dataclass(frozen=True)
+class _BorderBands:
+    """Top/bottom/left/right border bands in grid coordinates."""
 
-    The corner probe must read the cell where the border actually lands, not
-    a fixed offset: a thin stroke on a small frame can sit one or two cells
-    in from the very edge after down-sampling. We locate the topmost row that
-    carries a horizontal ink run (the top border) and use its offset for the
-    corner reads, so the probe tracks the border rather than the canvas edge.
+    top: int
+    bottom: int
+    left: int
+    right: int
+
+
+def _first_band(counts: list[int], *, start: int, stop: int, threshold: int, default: int) -> int:
+    """Return the first index in ``[start, stop)`` with enough ink."""
+    for idx in range(start, stop):
+        if counts[idx] >= threshold:
+            return idx
+    return default
+
+
+def _last_band(counts: list[int], *, start: int, stop: int, threshold: int, default: int) -> int:
+    """Return the last index in ``[start, stop)`` with enough ink."""
+    for idx in range(stop - 1, start - 1, -1):
+        if counts[idx] >= threshold:
+            return idx
+    return default
+
+
+def _border_bands(grid: list[list[float]]) -> _BorderBands:
+    """Locate horizontal and vertical border bands independently.
+
+    The original VIS-1 fixtures put the frame at a symmetric offset, but real
+    TUI screenshots often have different top and left margins. Reading one
+    offset for both axes makes the corner probe miss the actual corner. This
+    scans rows for horizontal runs and columns for vertical runs separately.
     """
     n = len(grid)
-    for r in range(min(4, n)):
-        if sum(1 for v in grid[r] if v >= 0.4) >= n // 3:
-            return r
-    return 1
+    ink = [[cell >= 0.4 for cell in row] for row in grid]
+    row_counts = [sum(row) for row in ink]
+    col_counts = [sum(ink[r][c] for r in range(n)) for c in range(n)]
+    row_threshold = max(2, n // 3)
+    col_threshold = max(2, n // 6)
+    edge_window = max(4, n // 3)
+    return _BorderBands(
+        top=_first_band(row_counts, start=0, stop=edge_window, threshold=row_threshold, default=1),
+        bottom=_last_band(
+            row_counts, start=n - edge_window, stop=n, threshold=row_threshold, default=n - 2
+        ),
+        left=_first_band(col_counts, start=0, stop=edge_window, threshold=col_threshold, default=1),
+        right=_last_band(
+            col_counts, start=n - edge_window, stop=n, threshold=col_threshold, default=n - 2
+        ),
+    )
 
 
-def _corner_filled(grid: list[list[float]], *, top: bool, left: bool, band: int) -> bool:
+def _corner_filled(grid: list[list[float]], *, top: bool, left: bool, bands: _BorderBands) -> bool:
     """Whether the EXTREME corner cell of the border band is ink-filled.
 
     Reads the single cell at the intersection of the border band row and the
@@ -314,9 +407,8 @@ def _corner_filled(grid: list[list[float]], *, top: bool, left: bool, band: int)
     that extreme cell near-empty -- so the boolean is ``True`` for square and
     ``False`` for round.
     """
-    n = len(grid)
-    r = band if top else n - 1 - band
-    c = band if left else n - 1 - band
+    r = bands.top if top else bands.bottom
+    c = bands.left if left else bands.right
     return grid[r][c] >= _CORNER_FILL_MIN
 
 
@@ -353,12 +445,12 @@ def _column_count(grid: list[list[float]]) -> int:
 
 def extract_layout_features(grid: list[list[float]]) -> LayoutFeatures:
     """Read border-corner shape and content column count off an ink grid."""
-    band = _border_band_offset(grid)
+    bands = _border_bands(grid)
     corners = (
-        _corner_filled(grid, top=True, left=True, band=band),
-        _corner_filled(grid, top=True, left=False, band=band),
-        _corner_filled(grid, top=False, left=True, band=band),
-        _corner_filled(grid, top=False, left=False, band=band),
+        _corner_filled(grid, top=True, left=True, bands=bands),
+        _corner_filled(grid, top=True, left=False, bands=bands),
+        _corner_filled(grid, top=False, left=True, bands=bands),
+        _corner_filled(grid, top=False, left=False, bands=bands),
     )
     return LayoutFeatures(corners_filled=corners, column_count=_column_count(grid))
 
