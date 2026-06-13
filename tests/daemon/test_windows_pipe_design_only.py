@@ -188,13 +188,18 @@ def _load_windows_pipe_with_fakes(monkeypatch: pytest.MonkeyPatch) -> Any:
             GENERIC_READ=1,
             GENERIC_WRITE=2,
             OPEN_EXISTING=3,
+            CloseHandle=lambda _handle: None,
         ),
     )
     monkeypatch.setitem(
         sys.modules,
         "win32pipe",
         types.SimpleNamespace(
+            PIPE_ACCESS_DUPLEX=1,
+            PIPE_TYPE_MESSAGE=2,
             PIPE_READMODE_MESSAGE=4,
+            PIPE_WAIT=8,
+            PIPE_UNLIMITED_INSTANCES=255,
         ),
     )
     monkeypatch.setitem(sys.modules, "winerror", types.SimpleNamespace(ERROR_MORE_DATA=234))
@@ -245,3 +250,79 @@ def test_first_chunk_more_data_exception_does_not_emit_strerror(
     module.win32file.ReadFile = _read_file
 
     assert module._read_first_chunk(object()) == (b"", True)
+
+
+def test_pipe_client_call_timeout_cancels_blocked_reader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stalled response read is bounded by ``wait_ms`` and cancelled."""
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    cancelled = threading.Event()
+
+    class _Handle:
+        def __int__(self) -> int:
+            return 1234
+
+    handle = _Handle()
+    module.win32pipe.WaitNamedPipe = lambda _name, _wait_ms: True
+    module.win32file.CreateFile = lambda *_args: handle
+    module.win32pipe.SetNamedPipeHandleState = lambda *_args: None
+    module.win32file.WriteFile = lambda *_args: None
+    module.win32file.CloseHandle = lambda _handle: None
+
+    def _read_file(_pipe: object, _size: int) -> tuple[int, bytes]:
+        cancelled.wait(1.0)
+        raise module.pywintypes.error(995, "operation aborted")
+
+    module.win32file.ReadFile = _read_file
+
+    def _cancel(_pipe: object) -> bool:
+        cancelled.set()
+        return True
+
+    module.cancel_pending_read = _cancel
+
+    with pytest.raises(TimeoutError, match="exceeded timeout"):
+        module.pipe_client_call(r"\\.\pipe\eawfd-timeout-test", b"{}\n", wait_ms=20)
+    assert cancelled.is_set()
+
+
+def test_listener_delegates_accepted_pipe_to_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The accept loop hands connected pipes to workers before serving them."""
+    loop = asyncio.new_event_loop()
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+    spawned: list[object] = []
+    pipe = object()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "eawf.runtime.daemon.windows_security",
+        types.SimpleNamespace(build_user_only_security_attributes=lambda: object()),
+    )
+    module.win32pipe.CreateNamedPipe = lambda *_args: pipe
+    module.win32pipe.ConnectNamedPipe = lambda *_args: None
+    module.win32file.CloseHandle = lambda _handle: None
+
+    try:
+
+        async def _handler(_payload: bytes) -> bytes:
+            return b""
+
+        server = module.WindowsPipeServer(
+            loop,
+            _handler,
+            pipe_name=r"\\.\pipe\eawfd-worker-test",
+            verify_sid_enabled=False,
+        )
+
+        def _spawn(accepted_pipe: object) -> None:
+            spawned.append(accepted_pipe)
+            server._shutdown.set()
+
+        server._spawn_connection_worker = _spawn
+        server._listen_loop()
+    finally:
+        loop.close()
+    assert spawned == [pipe]

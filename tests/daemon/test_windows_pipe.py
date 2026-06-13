@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import threading
 import time
 import uuid
 from typing import Any
@@ -595,6 +596,94 @@ def test_subscription_streams_event_push_through_real_scope_id() -> None:
     assert bus.active_subscriptions == 0
     # The concurrent ping still succeeded mid-stream.
     assert result["ping"]["result"]["pid"] == os.getpid()
+
+
+def test_subscription_stays_open_while_ping_succeeds_on_second_client() -> None:
+    """A held subscription does not block a second request/reply client."""
+    from eawf.runtime.daemon.bus import EventBus
+    from eawf.runtime.daemon.windows_pipe import (
+        PipeReader,
+        WindowsPipeServer,
+        close_pipe,
+        make_bus_subscribe_router,
+        open_subscription_pipe,
+        pipe_client_call,
+    )
+
+    pipe_name = _unique_pipe_name("sub-ping")
+    scope_id = "EAWF:wave:P30-I20-W13"
+    bus = EventBus()
+    ready = threading.Event()
+    release = threading.Event()
+    result: dict[str, Any] = {}
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+        ctx = _build_ctx()
+        ctx.bus = bus
+        ctx.event_path = None
+
+        async def handler(payload: bytes) -> bytes:
+            from eawf.runtime.daemon.server import process_frame_bytes
+
+            return await process_frame_bytes(payload, ctx)
+
+        server = WindowsPipeServer(
+            loop,
+            handler,
+            pipe_name=pipe_name,
+            verify_sid_enabled=False,
+            subscribe_router=make_bus_subscribe_router(loop, ctx),
+        )
+        server.start()
+
+        def _hold_subscription() -> None:
+            request = orjson.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "1",
+                    "method": "state.subscribe",
+                    "params": {"kinds": ["event"], "scope_id": scope_id},
+                }
+            )
+            handle = open_subscription_pipe(pipe_name, request + b"\n", wait_ms=5000)
+            try:
+                reader = PipeReader(handle)
+                reader.read_message()  # ack
+                ready.set()
+                push = orjson.loads(reader.read_message().rstrip(b"\n"))
+                result["push"] = push
+                release.wait(2.0)
+            finally:
+                close_pipe(handle)
+
+        worker = threading.Thread(target=_hold_subscription, daemon=True)
+        worker.start()
+        try:
+            assert await asyncio.to_thread(ready.wait, 5.0)
+            ping_req = orjson.dumps(
+                {"jsonrpc": "2.0", "id": "2", "method": "daemon.ping", "params": {}}
+            )
+            ping_bytes = await asyncio.to_thread(
+                pipe_client_call,
+                pipe_name,
+                ping_req + b"\n",
+                wait_ms=2000,
+            )
+            result["ping"] = orjson.loads(ping_bytes.rstrip(b"\n"))
+            loop.call_soon_threadsafe(bus.publish, _event_envelope(scope_id))
+            deadline = time.monotonic() + 2.0
+            while "push" not in result and time.monotonic() < deadline:
+                await asyncio.sleep(0.05)
+        finally:
+            release.set()
+            server.stop()
+            await asyncio.sleep(0.1)
+
+    asyncio.run(runner())
+    assert result["ping"]["result"]["pid"] == os.getpid()
+    assert result["push"]["method"] == "event.push"
+    assert result["push"]["params"]["event"]["scope_id"] == scope_id
 
 
 def test_cancel_pending_read_unblocks_blocked_read() -> None:

@@ -31,6 +31,7 @@ import logging
 import queue as _queue
 import sys
 import threading
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
@@ -265,6 +266,49 @@ def pipe_ready(pipe_name: str, wait_ms: int = 0) -> bool:
         return False
 
 
+def _read_full_message_with_deadline(pipe: Any, deadline: float) -> bytes:
+    """Read one message on a cancellable worker bounded by *deadline*.
+
+    ``ReadFile`` can block forever when the daemon accepted the pipe but the
+    handler is stalled. Run the blocking read on a helper thread, wait only
+    until the caller's deadline, then cancel the pending I/O with
+    :func:`CancelIoEx` so the worker can unwind.
+
+    Args:
+        pipe: Connected named-pipe handle.
+        deadline: Monotonic timestamp when the read must stop waiting.
+
+    Returns:
+        The complete response message.
+
+    Raises:
+        TimeoutError: When no complete response arrives by *deadline*.
+        pywintypes.error: Propagated from the reader worker.
+    """
+    done = threading.Event()
+    holder: dict[str, bytes | Exception] = {}
+
+    def _reader() -> None:
+        try:
+            holder["result"] = _read_full_message(pipe)
+        except Exception as exc:
+            holder["result"] = exc
+        finally:
+            done.set()
+
+    reader = threading.Thread(target=_reader, name="eawfd-pipe-client-reader", daemon=True)
+    reader.start()
+    remaining = deadline - time.monotonic()
+    if remaining <= 0 or not done.wait(remaining):
+        cancel_pending_read(pipe)
+        done.wait(1.0)
+        raise TimeoutError("daemon pipe call exceeded timeout")
+    result = holder["result"]
+    if isinstance(result, Exception):
+        raise result
+    return result
+
+
 def pipe_client_call(
     pipe_name: str,
     payload: bytes,
@@ -280,14 +324,15 @@ def pipe_client_call(
     2. ``CreateFile`` the pipe and switch it to message read-mode so a
        single logical response maps to one message.
     3. ``WriteFile`` the request frame.
-    4. Drain the response via :func:`_read_full_message` so a reply larger
-       than the pipe buffer reassembles rather than truncating.
+    4. Drain the response on a cancellable reader so a stalled handler
+       cannot outlive the call timeout.
 
     Args:
         pipe_name: The ``\\.\pipe\eawfd-<user>`` path the daemon bound.
         payload: One JSON-RPC request frame (newline-terminated by the
             caller, matching the POSIX UDS wire format).
-        wait_ms: Milliseconds to wait for a free pipe instance.
+        wait_ms: Milliseconds for the whole pipe round-trip. The budget is
+            spent across free-instance wait, open, write, and response read.
 
     Returns:
         The full response message bytes (one JSON-RPC response frame).
@@ -296,6 +341,7 @@ def pipe_client_call(
         pywintypes.error: When the pipe cannot be opened or the round-trip
             fails for a reason other than MORE_DATA chunking.
     """
+    deadline = time.monotonic() + (wait_ms / 1000)
     win32pipe.WaitNamedPipe(pipe_name, wait_ms)
     handle = win32file.CreateFile(
         pipe_name,
@@ -314,7 +360,9 @@ def pipe_client_call(
             None,
         )
         win32file.WriteFile(handle, payload)
-        return _read_full_message(handle)
+        if time.monotonic() >= deadline:
+            raise TimeoutError("daemon pipe call exceeded timeout")
+        return _read_full_message_with_deadline(handle, deadline)
     finally:
         win32file.CloseHandle(handle)
 
@@ -658,27 +706,17 @@ class WindowsPipeServer:
         Each iteration:
           1. Build a fresh pipe instance with the user-restricted DACL.
           2. Wait for a client connection.
-          3. Read the FIRST bounded chunk of the request (so the peer's
-             security context exists to impersonate, and so an
-             unauthenticated peer moves at most one chunk pre-verify).
-          4. Verify the peer SID (read-before-impersonate order); on
-             mismatch write the ``-32000`` envelope and loop.
-          5. Drain any ``ERROR_MORE_DATA`` tail of the request only AFTER
-             the SID passes.
-          6. Hand the full frame to asyncio via :func:`Queue.put_nowait`
-             through :func:`loop.call_soon_threadsafe`.
-          7. Wait on a per-frame :class:`threading.Event` for the reply.
-          8. ``WriteFile`` the reply, close the pipe instance.
+          3. Delegate the connected instance to a daemon worker thread.
+          4. Loop back immediately to create the next instance.
 
-        Exceptions in any step are logged at WARNING; the listener
-        attempts to close the current pipe instance and loop back so a
-        single malformed client does not take down the daemon.
+        Connection workers own request read, SID verification, JSON-RPC
+        handler wait, subscription streaming, and handle close. This keeps a
+        long-lived subscription from occupying the listener and lets a second
+        client run ``daemon.ping`` while the first client stays subscribed.
+        Exceptions in accept are logged at WARNING and the listener loops
+        back so one malformed client does not take down the daemon.
         """
-        from eawf.runtime.daemon.windows_security import (
-            WindowsAuthError,
-            build_user_only_security_attributes,
-            verify_peer_sid,
-        )
+        from eawf.runtime.daemon.windows_security import build_user_only_security_attributes
 
         sec_attrs = build_user_only_security_attributes()
 
@@ -700,37 +738,8 @@ class WindowsPipeServer:
                 win32pipe.ConnectNamedPipe(pipe, None)
                 if self._shutdown.is_set():
                     break
-
-                # Read-before-impersonate: read ONE bounded chunk so the
-                # client's security context is established for the SID check.
-                # This is the single pre-verify read the W07 threat-model
-                # note accepts; the DACL is the primary gate.
-                first_chunk, more = _read_first_chunk(pipe)
-
-                if self._verify_sid_enabled:
-                    try:
-                        verify_peer_sid(pipe, self._verify_sid)
-                    except WindowsAuthError as exc:
-                        logger.warning(f"_listen_loop reject reason={exc!s}")
-                        self._write_unauthorized(pipe)
-                        continue
-
-                # Drain the MORE_DATA tail only after the SID passed.
-                payload = first_chunk
-                if more:
-                    payload = first_chunk + _read_full_message(pipe)
-
-                # Subscribe frames switch the pipe into streaming mode and
-                # keep it open; every other frame is one-shot request/reply.
-                feed = self._maybe_open_subscription(payload)
-                if feed is not None:
-                    self._stream_subscription(pipe, feed)
-                    # _stream_subscription owns the pipe to teardown; the
-                    # finally below still closes the handle defensively.
-                    continue
-
-                response = self._await_handler(payload)
-                win32file.WriteFile(pipe, response)
+                self._spawn_connection_worker(pipe)
+                pipe = None
             except pywintypes.error as exc:
                 logger.warning(f"_listen_loop pywin32 err={exc!s}")
             except Exception:
@@ -740,6 +749,63 @@ class WindowsPipeServer:
                     with contextlib.suppress(pywintypes.error):
                         win32file.CloseHandle(pipe)
         logger.info("_listen_loop exit")
+
+    def _spawn_connection_worker(self, pipe: Any) -> None:
+        """Run one accepted pipe instance on a dedicated daemon thread.
+
+        Args:
+            pipe: Connected named-pipe handle. Ownership transfers to the
+                worker thread.
+        """
+        worker = threading.Thread(
+            target=self._serve_connected_pipe,
+            args=(pipe,),
+            name="eawfd-pipe-client",
+            daemon=True,
+        )
+        worker.start()
+
+    def _serve_connected_pipe(self, pipe: Any) -> None:
+        """Serve one connected pipe instance and close it on exit.
+
+        Reads the first bounded request chunk before SID verification, drains
+        any large-frame tail only after verification passes, then either
+        streams a subscription or performs one request/reply dispatch.
+
+        Args:
+            pipe: Connected named-pipe handle owned by this worker.
+        """
+        from eawf.runtime.daemon.windows_security import WindowsAuthError, verify_peer_sid
+
+        try:
+            first_chunk, more = _read_first_chunk(pipe)
+
+            if self._verify_sid_enabled:
+                try:
+                    verify_peer_sid(pipe, self._verify_sid)
+                except WindowsAuthError as exc:
+                    logger.warning(f"_serve_connected_pipe reject reason={exc!s}")
+                    self._write_unauthorized(pipe)
+                    return
+
+            payload = first_chunk
+            if more:
+                payload = first_chunk + _read_full_message(pipe)
+
+            feed = self._maybe_open_subscription(payload)
+            if feed is not None:
+                self._stream_subscription(pipe, feed)
+                return
+
+            response = self._await_handler(payload)
+            win32file.WriteFile(pipe, response)
+        except pywintypes.error as exc:
+            logger.warning(f"_serve_connected_pipe pywin32 err={exc!s}")
+        except Exception:
+            logger.exception("_serve_connected_pipe unhandled")
+        finally:
+            with contextlib.suppress(pywintypes.error):
+                win32file.CloseHandle(pipe)
 
     def _await_handler(self, payload: bytes) -> bytes:
         """Hand *payload* to the asyncio loop and block for the reply.
