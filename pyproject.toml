@@ -15,11 +15,6 @@ dependencies = [
     "click>=8.1,<8.4",
     "jinja2>=3.1.0",
     "orjson>=3.11.9",
-    # Pillow backs the visual-parity audit (``audit_dsl/kinds/svg_pixel_diff``
-    # + ``mockup_image_diff`` rasterise design-mockup SVGs via ``resvg`` and
-    # pixel-diff them through PIL). Pinned directly so the floor is controlled;
-    # see ``[tool.deptry.per_rule_ignores] DEP002`` for the import-consumer note.
-    "pillow>=10",
     "portalocker>=3.2.0",
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
@@ -101,11 +96,12 @@ pywin32 = [
 DEP001 = ["duckdb"]
 # DEP002 (declared-but-unused): mkdocs + mkdocs-material are the ``[docs]``
 # extra's CLI doc-build tools — invoked as commands, never imported in src/.
-# ``pillow`` backs the visual-parity audit: ``audit_dsl/kinds/svg_pixel_diff``
-# + ``mockup_image_diff`` rasterise design-mockup SVGs (via ``resvg``) and the
-# pixel-diff path consumes them through PIL. eawf pins the floor directly but
-# does not import ``PIL`` in product code, so deptry flags it declared-only.
-DEP002 = ["mkdocs", "mkdocs-material", "pillow"]
+# The optional ``transition_coverage`` machine path lazy-imports ``hypothesis``
+# only when an audit criterion omits explicit ``covered_edges``. Runtime installs
+# may skip it; the check degrades to a failed audit result naming the missing
+# dev-only dependency instead of crashing CLI import/registry startup.
+DEP002 = ["mkdocs", "mkdocs-material"]
+DEP004 = ["hypothesis"]
 # DEP003 (transitive): ``pydantic_core`` is pydantic's own compiled core,
 # pulled in transitively with pydantic; the direct ``ErrorDetails`` import
 # rides that coupling.

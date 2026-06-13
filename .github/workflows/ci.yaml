@@ -45,6 +45,9 @@ jobs:
       - name: Pre-commit
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
+      - name: Deptry
+        run: uv run deptry .
+
       - name: Mypy
         run: uv run mypy src/
 
