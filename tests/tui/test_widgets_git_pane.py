@@ -10,10 +10,14 @@ from __future__ import annotations
 import asyncio
 import subprocess
 from pathlib import Path
+from typing import Any
 
+import pytest
 from textual.app import ComposeResult
 
+from eawf.platform.subprocess_detach import detached_subprocess_kwargs
 from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.widgets import git_pane as git_pane_mod
 from eawf.surfaces.tui.widgets.git_pane import (
     ADDED_VAR,
     CHANGED_VAR,
@@ -150,6 +154,31 @@ def test_gather_git_fields_non_git_dir_dashes(tmp_path: Path) -> None:
     assert fields.dirty == DASH
     assert fields.ahead_behind == DASH
     assert fields.recent_commits == ()
+
+
+def test_git_run_status_uses_dead_stdin_and_detach_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        seen["argv"] = argv
+        seen["kwargs"] = kwargs
+        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert git_pane_mod._git_run(["status", "--porcelain"], cwd=tmp_path) == ""
+    assert seen["argv"] == ["git", "status", "--porcelain"]
+    kwargs = seen["kwargs"]
+    assert kwargs["cwd"] == str(tmp_path)
+    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert kwargs["capture_output"] is True
+    assert kwargs["text"] is True
+    assert kwargs["timeout"] == git_pane_mod.GIT_SUBPROCESS_TIMEOUT_S
+    assert kwargs["check"] is False
+    for key, value in detached_subprocess_kwargs().items():
+        assert kwargs[key] == value
 
 
 # --------------------------------------------------------------------------

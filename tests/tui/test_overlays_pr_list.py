@@ -22,6 +22,7 @@ import pytest
 from rich.text import Text
 from textual.widgets import Static
 
+from eawf.platform.subprocess_detach import detached_subprocess_kwargs
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays import pr_list as pr_list_mod
 from eawf.surfaces.tui.screens.overlays.pr_list import (
@@ -77,6 +78,16 @@ def _clear_pr_cache() -> Any:
 def _text(widget: Static) -> str:
     rendered = widget.render()
     return rendered.plain if isinstance(rendered, Text) else str(rendered)
+
+
+def _assert_dead_stdin_and_detach_kwargs(kwargs: dict[str, Any]) -> None:
+    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert kwargs["capture_output"] is True
+    assert kwargs["text"] is True
+    assert kwargs["timeout"] == GH_TIMEOUT_S
+    assert kwargs["check"] is False
+    for key, value in detached_subprocess_kwargs().items():
+        assert kwargs[key] == value
 
 
 # --------------------------------------------------------------------------
@@ -166,7 +177,7 @@ def test_fetch_open_prs_invokes_expected_argv(monkeypatch: pytest.MonkeyPatch) -
 
     def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
         seen["argv"] = argv
-        seen["timeout"] = kwargs.get("timeout")
+        seen["kwargs"] = kwargs
         seen["cwd"] = kwargs.get("cwd")
         return _completed(stdout="[]")
 
@@ -178,7 +189,7 @@ def test_fetch_open_prs_invokes_expected_argv(monkeypatch: pytest.MonkeyPatch) -
     json_value = seen["argv"][seen["argv"].index("--json") + 1]
     assert json_value == ",".join(GH_PR_FIELDS)
     assert "--limit" in seen["argv"]
-    assert seen["timeout"] == GH_TIMEOUT_S
+    _assert_dead_stdin_and_detach_kwargs(seen["kwargs"])
 
 
 def test_fetch_open_prs_genuine_empty_is_ok(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -439,12 +450,12 @@ def test_pr_modal_open_web_noop_on_empty(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_pr_modal_open_web_spawns_gh_view(monkeypatch: pytest.MonkeyPatch) -> None:
     async def body() -> None:
-        gh_argvs: list[list[str]] = []
+        gh_calls: list[tuple[list[str], dict[str, Any]]] = []
 
         def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
             # Record only gh argv; GitPane's git calls share this stub.
             if argv and argv[0] == "gh":
-                gh_argvs.append(argv)
+                gh_calls.append((argv, kwargs))
             return _completed()
 
         monkeypatch.setattr(subprocess, "run", fake_run)
@@ -458,7 +469,10 @@ def test_pr_modal_open_web_spawns_gh_view(monkeypatch: pytest.MonkeyPatch) -> No
             await pilot.press("enter")
             await app.workers.wait_for_complete()  # gh pr view --web runs in a worker
             await pilot.pause()
-            assert gh_argvs == [["gh", "pr", "view", "--web", "13"]]
+            assert len(gh_calls) == 1
+            argv, kwargs = gh_calls[0]
+            assert argv == ["gh", "pr", "view", "--web", "13"]
+            _assert_dead_stdin_and_detach_kwargs(kwargs)
 
     asyncio.run(body())
 

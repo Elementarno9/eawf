@@ -29,11 +29,12 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from textual.reactive import reactive
 from textual.widgets import Static
 
+from eawf.platform.subprocess_detach import detached_subprocess_kwargs
 from eawf.surfaces.tui.widgets.markup import escape_markup, style_labeled_line
 
 logger = logging.getLogger(__name__)
@@ -108,17 +109,19 @@ def _git_run(args: list[str], *, cwd: Path) -> str | None:
         completed = subprocess.run(
             ["git", *args],
             cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=GIT_SUBPROCESS_TIMEOUT_S,
             check=False,
+            **detached_subprocess_kwargs(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
         logger.debug(f"_git_run args={args!r} cwd={cwd!s} failed cause={exc!r}")
         return None
     if completed.returncode != 0:
         return None
-    return completed.stdout.strip()
+    return cast(str, completed.stdout).strip()
 
 
 def classify_porcelain(porcelain: str) -> tuple[int, int, int]:

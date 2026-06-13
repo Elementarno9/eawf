@@ -41,6 +41,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.platform.subprocess_detach import detached_subprocess_kwargs
 from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
@@ -215,10 +216,12 @@ def _gh_list_open_prs(cwd: Path) -> PrFetch:
                 ",".join(GH_PR_FIELDS),
             ],
             cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=GH_TIMEOUT_S,
             check=False,
+            **detached_subprocess_kwargs(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
         logger.debug(f"_gh_list_open_prs cwd={cwd!s} failed cause={exc!r}")
@@ -282,10 +285,12 @@ def _gh_view_web(number: int) -> None:
         subprocess.run(
             ["gh", "pr", "view", "--web", str(number)],
             cwd=str(Path.cwd()),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=GH_TIMEOUT_S,
             check=False,
+            **detached_subprocess_kwargs(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
         logger.debug(f"_gh_view_web number={number} failed cause={exc!r}")
