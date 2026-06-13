@@ -521,9 +521,9 @@ def _run_mutation(
     fall back to the in-process WAL-backed write only when the daemon is
     unavailable or predates the kind (the V1 CI/recovery carve-out). Verbs
     whose transition has no :class:`~eawf.kernel.state.mutations.MutationKind`
-    yet (``wave update`` / ``track add``·``switch`` / ``iter
-    activate`` / ``phase reopen`` / ``wave budget set``·``consume``) omit
-    *mutation_kind* and run the in-process WAL-backed path directly.
+    yet (``wave update`` / ``iter activate`` / ``phase reopen`` /
+    ``wave budget set``·``consume``) omit *mutation_kind* and run the
+    in-process WAL-backed path directly.
 
     Either *text* + *envelope* (static) or *text_factory* + *envelope_factory*
     (deferred until after the mutation has resolved auto-allocated ids) must

@@ -470,6 +470,56 @@ def test_mutate_wave_close_persists_state_event_wal(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_mutate_track_add_switch_persists_state_event_wal(tmp_path: Path) -> None:
+    """End-to-end track add/switch: daemon applies Track mutations."""
+    ctx, state_path, event_path, wal_dir = _build_ctx(tmp_path=tmp_path)
+    add_mutation = Mutation(
+        kind=MutationKind.TRACK_ADD,
+        scope_id="COLLAR",
+        mutation_id=uuid.uuid4().hex,
+        params={
+            "code": "COLLAR",
+            "kind": "strategy",
+            "title": "Collar",
+            "domains": ["quant"],
+        },
+    )
+    switch_mutation = Mutation(
+        kind=MutationKind.TRACK_SWITCH,
+        scope_id="COLLAR",
+        mutation_id=uuid.uuid4().hex,
+        params={"code": "COLLAR"},
+    )
+
+    async def body() -> None:
+        add_result: dict[str, Any] = await mutate(
+            ctx, {"mutation": add_mutation.model_dump(mode="json")}
+        )
+        switch_result: dict[str, Any] = await mutate(
+            ctx, {"mutation": switch_mutation.model_dump(mode="json")}
+        )
+        assert add_result["idempotent_replay"] is False
+        assert switch_result["idempotent_replay"] is False
+
+        written = orjson.loads(state_path.read_bytes())
+        assert written["tracks"]["COLLAR"]["kind"] == "strategy"
+        assert written["tracks"]["COLLAR"]["domains"] == ["quant"]
+        assert written["project"]["track_ids"] == ["COLLAR"]
+        assert written["current"]["track_id"] == "COLLAR"
+
+        rows = event_path.read_text().strip().splitlines()
+        assert len(rows) == 2
+        assert [orjson.loads(row)["payload"]["command"] for row in rows] == [
+            "state.mutate.track_add",
+            "state.mutate.track_switch",
+        ]
+        assert list(wal_dir.glob("*.pending.json")) == []
+        assert list(wal_dir.glob("*.applied.json")) == []
+        assert len(list(wal_dir.glob("*.fsynced.json"))) == 2
+
+    _run(body)
+
+
 def test_mutate_publishes_to_bus(tmp_path: Path) -> None:
     """The mutator publishes the post-apply envelope on the subscription bus."""
     ctx, _, _, _ = _build_ctx(tmp_path=tmp_path)

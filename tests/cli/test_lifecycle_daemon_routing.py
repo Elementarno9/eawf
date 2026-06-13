@@ -313,6 +313,75 @@ def test_iter_close_proxies_to_daemon_when_up(
     assert _CapturingClient.last_params == {"iter_id": "P01-I01", "audit_id": "AUD-1"}
 
 
+def test_track_add_proxies_to_daemon_when_up(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``track add`` routes TRACK_ADD through the daemon."""
+    _bootstrap_to_pending_wave(workspace)
+    _enable_proxy(monkeypatch, client=_CapturingClient)
+    _CapturingClient.last_kind = None
+    _CapturingClient.last_params = None
+    _CapturingClient.last_scope_id = None
+    _CapturingClient.call_count = 0
+    state_before = _state_path(workspace).read_bytes()
+
+    res = runner.invoke(
+        app,
+        [
+            "track",
+            "add",
+            "COLLAR",
+            "--kind",
+            "strategy",
+            "--title",
+            "Collar",
+            "--domains",
+            "quant,research",
+        ],
+    )
+
+    assert res.exit_code == 0, res.stdout
+    assert _CapturingClient.call_count == 1
+    assert _CapturingClient.last_kind is MutationKind.TRACK_ADD
+    assert _CapturingClient.last_scope_id == "COLLAR"
+    assert _CapturingClient.last_params == {
+        "code": "COLLAR",
+        "kind": "strategy",
+        "title": "Collar",
+        "domains": ["quant", "research"],
+    }
+    assert _state_path(workspace).read_bytes() == state_before
+
+
+def test_track_switch_proxies_to_daemon_when_up(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``track switch`` routes TRACK_SWITCH through the daemon."""
+    _bootstrap_to_pending_wave(workspace)
+    assert (
+        runner.invoke(
+            app,
+            ["track", "add", "COLLAR", "--kind", "strategy", "--title", "Collar"],
+        ).exit_code
+        == 0
+    )
+    _enable_proxy(monkeypatch, client=_CapturingClient)
+    _CapturingClient.last_kind = None
+    _CapturingClient.last_params = None
+    _CapturingClient.last_scope_id = None
+    _CapturingClient.call_count = 0
+    state_before = _state_path(workspace).read_bytes()
+
+    res = runner.invoke(app, ["track", "switch", "COLLAR"])
+
+    assert res.exit_code == 0, res.stdout
+    assert _CapturingClient.call_count == 1
+    assert _CapturingClient.last_kind is MutationKind.TRACK_SWITCH
+    assert _CapturingClient.last_scope_id == "COLLAR"
+    assert _CapturingClient.last_params == {"code": "COLLAR"}
+    assert _state_path(workspace).read_bytes() == state_before
+
+
 def test_wave_land_proxies_to_daemon_owned_method(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -412,6 +481,8 @@ def test_routed_kinds_are_all_in_daemon_apply_registry() -> None:
     routed_kinds = {kind for _id, _argv, kind, _scope in _ROUTED_VERBS}
     routed_kinds.add(MutationKind.ITER_CLOSE)
     routed_kinds.add(MutationKind.PHASE_CLOSE)
+    routed_kinds.add(MutationKind.TRACK_ADD)
+    routed_kinds.add(MutationKind.TRACK_SWITCH)
     assert routed_kinds <= set(_APPLY_REGISTRY)
 
 

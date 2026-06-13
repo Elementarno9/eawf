@@ -106,6 +106,20 @@ def test_migrate_payload_introduces_project_goals_and_metrics() -> None:
     assert upgraded["project"]["code"] == "DEMO"
 
 
+def test_migrate_payload_renames_track_config_keys_from_legacy_marker() -> None:
+    """Legacy markers also rewrite the Subproject-era config names."""
+    payload = {
+        "schema_version": "1.1",
+        "project": {"default_subproject": "COLLAR"},
+        "memory": {"stores": ["project", "subproject", "user"]},
+    }
+    upgraded, changed = migrate_config_payload(payload)
+    assert changed is True
+    assert "default_subproject" not in upgraded["project"]
+    assert upgraded["project"]["default_track"] == "COLLAR"
+    assert upgraded["memory"]["stores"] == ["project", "track", "user"]
+
+
 def test_migrate_payload_introduces_config_layers_visible() -> None:
     payload = {"schema_version": "1.1"}
     upgraded, _ = migrate_config_payload(payload)

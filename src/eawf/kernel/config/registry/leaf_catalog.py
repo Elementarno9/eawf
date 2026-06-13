@@ -116,7 +116,7 @@ _LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_REPO_ONLY,
     ),
     LeafKey(
-        key="project.default_subproject",
+        key="project.default_track",
         domain="project",
         type="str",
         default=None,

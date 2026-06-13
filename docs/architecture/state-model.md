@@ -83,7 +83,7 @@ Invariants:
 
 ```text
 Project
-  └─ Subproject
+  └─ Track
       └─ Phase
           └─ Iter
               └─ Wave
@@ -100,7 +100,7 @@ use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
 
 | Field | Type | Required | Notes |
 |---|---|---:|---|
-| `schema_version` | literal `"1.0"` | yes | current schema |
+| `schema_version` | literal `"1.12"` | yes | current schema; the loader accepts older supported markers and migrates them forward |
 | `scope_kind` | `repo` \| `workspace` | yes | workspace detection marker |
 | `urn` | urn | yes | state owner URN |
 | `updated_at` | datetime | yes | last mutation |
@@ -108,7 +108,9 @@ use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
 | `current` | CurrentPointers | yes | active pointers |
 | `workspace` | WorkspaceIndex or null | yes | workspace states require workspace; null on repo states |
 | `health` | enum `ok` \| `needs_setup` \| `degraded` or null | no | populated by `eawf doctor` / `validate` when applicable |
-| `subprojects` | map[id, Subproject] | no | materialized when multi-workstream depth chosen |
+| `dispatch_paused` | bool | no | additive daemon / fleet pause marker; defaults false |
+| `fleet_run` | FleetRun or null | no | active background fleet drive, if any |
+| `tracks` | map[id, Track] | no | materialized when a project has named workstreams |
 | `goals` | map[id, Goal] | no | materialized once first goal defined |
 | `outcomes` | map[id, Outcome] | no | profile-gated (research / quant) |
 | `phases` | map[id, Phase] | yes | lifecycle |
@@ -117,6 +119,8 @@ use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
 | `estimates` | map[id, EstimateSummary] | no | materialized once estimation enabled |
 | `actuals` | map[id, ActualSummary] | no | materialized once estimation enabled |
 | `hypotheses` | map[id, Hypothesis] | no | research profile materializes as `{}` |
+| `claims` | map[id, Claim] | no | research-campaign claim ledger |
+| `open_questions` | map[id, OpenQuestion] | no | research-campaign unresolved questions |
 | `audits` | map[id, Audit] | no | research profile materializes as `{}` |
 | `incidents` | map[id, Incident] | no | materialized on first `eawf incident open` |
 | `artifacts` | map[id, Artifact] | yes | artifact index |
@@ -125,6 +129,8 @@ use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
 | `agent_sessions` | map[id, AgentSession] | yes | work provenance |
 | `worktrees` | map[id, WorktreeRecord] | no | materialized once worktree policy enables them |
 | `mcp_servers` | map[id, McpServer] | no | Eä-owned MCP config refs (config-gated) |
+| `mcp_grants` | map[id, McpGrant] | no | runtime-grant approvals for managed MCP access |
+| `sandbox_policies` | map[id, SandboxPolicy] | no | per-scope sandbox policy rows |
 | `plugins` | map[id, PluginInstall] | yes | runtime integration refs (always materialized after `/init`) |
 | `memory_index` | map[id, MemorySummary] | no | materialized on first memory entry |
 | `indexes` | object | yes | derived lookup caches |
@@ -144,11 +150,11 @@ keys as `{}` during the next `eawf sync`.
 | Project | `code`, `slug`, `title`, `description`, `domains`, `default_branch`, `status`, `repo_urn` | state | code matches `^[A-Z][A-Z0-9_-]{1,15}$` |
 | WorkspaceIndex | `code`, `title`, `repos`, `current_repo_code` | state | repo paths absolute, local/workspace-owned |
 | WorkspaceRepoRef | `code`, `path`, `state_urn`, `project_code`, `title`, `status` | state | path absolute by default |
-| CurrentPointers | `project_code`, `subproject_id`, `phase_id`, `iter_id`, `active_wave_ids`, `active_session_ids` | state | nullable IDs |
-| Subproject | `id`, `code`, `slug`, `title`, `kind`, `domains`, `status`, `owner`, `goal_ids` | state | code unique; same regex as Project |
+| CurrentPointers | `project_code`, `track_id`, `phase_id`, `iter_id`, `active_wave_ids`, `active_session_ids` | state | nullable IDs |
+| Track | `id`, `code`, `slug`, `title`, `kind`, `domains`, `status`, `owner`, `goal_ids`, `scope_globs` | state | code unique; same regex as Project; `kind` is one of `strategy`, `model`, `target`, `feature`, `service` |
 | Goal | `id`, `scope_id`, `title`, `summary`, `status`, `outcome_ids`, `created_at`, `closed_at` | state | status enum |
 | Outcome | `id`, `scope_id`, `metric`, `threshold`, `direction`, `value`, `status`, `audit_id`, `updated_at` | state | status `pending` \| `met` \| `missed` \| `waived` |
-| Phase | `id`, `scope_id`, `title`, `status`, `iter_ids`, `outcome_ids`, `opened_at`, `closed_at`, `audit_id` | state | no close with open children |
+| Phase | `id`, `scope_id`, `track_id`, `title`, `status`, `iter_ids`, `outcome_ids`, `opened_at`, `closed_at`, `audit_id` | state | no close with open children |
 | Iter | `id`, `phase_id`, `title`, `status`, `wave_ids`, `estimate_id`, `audit_id`, `opened_at`, `closed_at` | state | parent inferred by ID |
 | Wave | `id`, `iter_id`, `title`, `status`, `deps`, `file_scopes`, `success_criteria`, `agent_role`, `effort_bucket`, `claim_session_id`, `worktree_id`, `commit`, `outcome`, `opened_at`, `closed_at` | state | atomic execution unit |
 | Hypothesis | `id`, `scope_id`, `text`, `metric`, `confirm`, `reject`, `status`, `verdict`, `audit_id`, `source_artifact_id` | state + optional artifact | thresholds concrete |
@@ -161,7 +167,7 @@ keys as `{}` during the next `eawf sync`.
 | AgentSession | `id`, `role`, `runtime`, `scope_id`, `status`, `claimed_wave_ids`, `worktree_ids`, `artifact_ids`, `started_at`, `ended_at`, `summary` | state + events | provenance |
 | WorktreeRecord | `id`, `wave_id`, `branch`, `path`, `base_branch`, `status`, `owner_session_id`, `created_at`, `merged_commit` | state | git-owned path |
 | McpServer | `id`, `owner`, `command`, `args`, `env_refs`, `risk`, `write_capable`, `status`, `installed_targets` | state / config | `owner` must be `eawf` for managed servers |
-| PluginInstall | `id`, `runtime`, `scope`, `target_path`, `status`, `managed_files`, `installed_at`, `updated_at` | state / config | Claude only v0.1 |
+| PluginInstall | `id`, `runtime`, `scope_id`, `target_path`, `status`, `managed_files`, `installed_at`, `updated_at` | state / config | managed runtime plugin install |
 | MemorySummary | `id`, `scope_id`, `summary`, `confidence`, `status`, `store_record_id`, `review_due` | state + `memory.jsonl` | JSONL authoritative |
 | Incident | `id`, `scope_id`, `severity`, `title`, `status`, `opened_at`, `closed_at`, `root_cause`, `corrective_action_ids`, `report_artifact_id` | state + `incident.jsonl` | severity enum `low` \| `medium` \| `high` \| `critical` |
 | Flow | `id`, `goal`, `budgets`, `status`, `current_pointers`, `policy`, `last_safe_checkpoint`, `next_action`, `started_at`, `updated_at` | state pointer + `flow.jsonl` | status enum `pending` \| `in_progress` \| `paused` \| `blocked` \| `done` \| `abandoned` \| `superseded` |
@@ -170,12 +176,12 @@ keys as `{}` during the next `eawf sync`.
 
 ```text
 Project:       <PROJECT_CODE>              # e.g. QR, EA
-Subproject:    <SUBPROJECT_CODE>           # e.g. COLLAR, PLATFORM
-Goal:          G<NNN> or <SUBPROJECT>-G<NNN>
+Track:         <TRACK_CODE>                # e.g. COLLAR, PLATFORM
+Goal:          G<NNN> or <TRACK>-G<NNN>
 Phase:         P<NN>
 Iter:          P<NN>-I<NN>
 Wave:          P<NN>-I<NN>-W<NN>
-Hypothesis:    H<NN>-<NN> or <SUBPROJECT>-H<NN>-<NN>
+Hypothesis:    H<NN>-<NN> or <TRACK>-H<NN>-<NN>
 Decision:      D<NNN>
 Audit:         AUD-P<NN>[-I<NN>][-W<NN>][-<slug>]
 Incident:      INC-YYYYMMDD-<slug>
@@ -186,11 +192,7 @@ Actual:        ACT-<SCOPE_ID>             # e.g. ACT-P13-I04-W01
 Backlog:       B<NNN>
 ```
 
-**Project / subproject code regex**: `^[A-Z][A-Z0-9_-]{1,15}$` —
-uppercase ASCII first character, optional digits / underscore / hyphen,
-total 2–16 characters. Validates `QR`, `EA`, `COLLAR`, `PLATFORM`,
-`AO-SERVER`. Rejects `Q` (single char), `qr` (lowercase), `1Q`
-(digit-leading).
+**Project / Track code regex**: `^[A-Z][A-Z0-9_-]{1,15}$` — uppercase ASCII first character, optional digits / underscore / hyphen, total 2–16 characters. Validates `QR`, `EA`, `COLLAR`, `PLATFORM`, `AO-SERVER`. Rejects `Q` (single char), `qr` (lowercase), `1Q` (digit-leading).
 
 All IDs are strings and immutable. Phase / iter / wave IDs encode
 parentage; commands do not require redundant parent flags:
@@ -198,25 +200,19 @@ parentage; commands do not require redundant parent flags:
 accepted for auto-allocation: `eawf iter open P13` lets the allocator
 choose the next `P13-Ixx`.
 
-### Phase scoping: project vs subproject
+### Phase scoping: project vs Track
 
-Phases are **project-scoped by default**. A phase opened with
-`eawf phase open P13` belongs to the project, not the current subproject
-pointer; iters opened under it can rebind to any subproject via
-`--subproject`.
+Phases are **project-scoped by default**. A phase opened with `eawf phase open P13` belongs to the project, not the current Track pointer. When a Track is active, the lifecycle opener stamps `phases.P13.track_id` so the phase can be reported against that Track, but lifecycle transitions do not require a Track.
 
-Subproject-scoped phases require explicit opt-in:
+Track-focused setup is explicit:
 
 ```bash
-eawf phase open P13 --subproject COLLAR --title "Collar volatility refit"
+eawf track add COLLAR --kind strategy --title "Collar volatility refit"
+eawf track switch COLLAR
+eawf phase open P13 --title "Collar volatility refit"
 ```
 
-A subproject-scoped phase records `phases.P13.subproject_id = "COLLAR"`.
-Child iters inherit the subproject unless explicitly overridden.
-`eawf phase close P13` requires the subproject pointer to match (or
-`--force` with an audit reason). When a subproject is added while a
-project-scoped phase is already open, the open phase stays
-project-scoped — it does not silently rebind.
+The first command materializes `tracks.COLLAR`; the second sets `current.track_id = "COLLAR"`; the phase opener records `phases.P13.track_id = "COLLAR"` when the cursor is active. If a Track is added while a project-scoped phase is already open, the open phase stays project-scoped — it does not silently rebind.
 
 ## Estimation model
 
@@ -272,15 +268,14 @@ carry an `eawf-template` sentinel and lose it on promotion.
 
 Suggested thresholds:
 
-- `title`: 120 chars
+- `title`: 72 chars
 - `summary`: 500 chars
 - `details`: 2,000 chars max inline, then artifact required
 - metric tables, long logs, and transcripts: artifact required
 
 ## URN namespace
 
-Implemented kinds (source of truth: `URN_KINDS` in
-`src/eawf/state/urn.py`):
+Implemented kinds (source of truth: `URN_KINDS` in `src/eawf/kernel/state/urn.py`):
 
 ```text
 urn:eawf:v1:workspace:<code>

@@ -86,6 +86,8 @@ class MutationKind(StrEnum):
     PHASE_CLOSE = "phase_close"
     ITER_OPEN = "iter_open"
     ITER_CLOSE = "iter_close"
+    TRACK_ADD = "track_add"
+    TRACK_SWITCH = "track_switch"
     EVENT_APPEND = "event_append"
     ROADMAP_REVISE = "roadmap_revise"
     ROADMAP_APPLY = "roadmap_apply"

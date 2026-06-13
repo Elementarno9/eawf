@@ -284,10 +284,37 @@ def _ensure_subkey(
         payload[parent][key] = _deep_copy(default)
 
 
-def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
-    """Strip legacy C08-superseded keys + rewrite ``runtime.kind``.
+def _rename_project_default_track(payload: dict[str, Any]) -> bool:
+    """Rename ``project.default_subproject`` to ``project.default_track``."""
+    project = payload.get("project")
+    if not isinstance(project, dict) or "default_subproject" not in project:
+        return False
+    default_track = project.pop("default_subproject")
+    if "default_track" not in project:
+        project["default_track"] = default_track
+    return True
 
-    Three signals identify a legacy body irrespective of the
+
+def _rename_memory_store_names(payload: dict[str, Any]) -> bool:
+    """Rename legacy ``memory.stores`` value ``subproject`` to ``track``."""
+    memory = payload.get("memory")
+    if not isinstance(memory, dict) or not isinstance(memory.get("stores"), list):
+        return False
+    migrated_stores: list[Any] = []
+    for store in memory["stores"]:
+        migrated = "track" if store == "subproject" else store
+        if migrated not in migrated_stores:
+            migrated_stores.append(migrated)
+    if migrated_stores == memory["stores"]:
+        return False
+    memory["stores"] = migrated_stores
+    return True
+
+
+def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
+    """Strip legacy keys + rewrite renamed config leaves.
+
+    Legacy signals identify a stale body irrespective of the
     ``schema_version`` marker:
 
     1. Top-level ``lifecycle`` block — the pre-C08 wizard wrote
@@ -299,8 +326,12 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
        (list) + ``runtime.preference`` (ordered fallback). The shim in
        :mod:`eawf.kernel.config.layered` warns on every CLI invocation until
        the on-disk file drops the legacy key.
+    4. ``project.default_subproject`` — renamed to
+       ``project.default_track`` with the Track model rename.
+    5. ``memory.stores`` entries named ``subproject`` — renamed to
+       ``track`` in place.
 
-    The cleanup is idempotent: a body that already passes all three
+    The cleanup is idempotent: a body that already passes all cleanup
     checks returns ``False`` and the input is untouched.
 
     Returns:
@@ -316,6 +347,9 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
     if "plugins" in payload:
         del payload["plugins"]
         changed = True
+
+    changed = _rename_project_default_track(payload) or changed
+    changed = _rename_memory_store_names(payload) or changed
 
     # ``telemetry.export.endpoint`` was dropped when telemetry became
     # strict-local (no external export target); strip the orphan leaf so

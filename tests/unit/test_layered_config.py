@@ -309,6 +309,7 @@ def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
     """The C08-new keys named in brief §5.2 are present."""
     must_have = {
         "config.layers_visible",
+        "project.default_track",
         "project.goals",
         "project.success_metrics",
         "profiles.trusted",
@@ -330,6 +331,7 @@ def test_leaf_key_registry_includes_canonical_c08_keys() -> None:
     }
     missing = must_have - set(LEAF_KEY_REGISTRY)
     assert not missing, f"missing canonical C08 leaf keys: {sorted(missing)}"
+    assert "project.default_subproject" not in LEAF_KEY_REGISTRY
 
 
 def test_leaf_key_lookup_known_key_returns_entry() -> None:

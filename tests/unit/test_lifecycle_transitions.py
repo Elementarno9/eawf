@@ -137,6 +137,8 @@ def test_add_track_happy() -> None:
     assert track.code == "COLLAR"
     assert state.tracks is not None
     assert "COLLAR" in state.tracks
+    assert state.project is not None
+    assert state.project.track_ids == ["COLLAR"]
 
 
 def test_add_track_duplicate_raises() -> None:

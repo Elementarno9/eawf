@@ -48,6 +48,8 @@ def add_track(
         goal_ids=[],
     )
     state.tracks[code] = track
+    if code not in state.project.track_ids:
+        state.project.track_ids.append(code)
     logger.info(f"add_track code={code} title={title!r}")
     return track
 

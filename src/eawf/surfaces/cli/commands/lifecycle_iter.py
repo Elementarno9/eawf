@@ -257,6 +257,13 @@ def track_add_cmd(
                 domains=domains_list,
             )
         ),
+        mutation_kind=MutationKind.TRACK_ADD,
+        params={
+            "code": code,
+            "kind": track_kind.value,
+            "title": title,
+            "domains": domains_list,
+        },
     )
 
 
@@ -283,6 +290,8 @@ def track_switch_cmd(
         text=f"track switch {code}",
         envelope=lambda: {"track": code, "current": True},
         mutate=lambda state: switch_track(state, code=code),
+        mutation_kind=MutationKind.TRACK_SWITCH,
+        params={"code": code},
     )
 
 

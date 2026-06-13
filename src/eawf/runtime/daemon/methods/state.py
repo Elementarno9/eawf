@@ -75,6 +75,7 @@ from eawf.kernel.state.enums import (
     EffortBucket,
     PhaseStatus,
     StoreKind,
+    TrackKind,
     WaveStatus,
 )
 from eawf.kernel.state.models import RuntimeLatest, State, Track, Wave
@@ -115,6 +116,7 @@ from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
     activate_phase,
+    add_track,
     archive_phase,
     claim_wave,
     close_iter,
@@ -129,6 +131,7 @@ from eawf.workflow.lifecycle.transitions import (
     release_wave,
     remove_wave_plan,
     set_wave_deps,
+    switch_track,
 )
 from eawf.workflow.lifecycle.wave import RuntimeDelta, compute_runtime_delta
 from eawf.workflow.verify.models import CloseReadiness
@@ -1851,6 +1854,24 @@ def _apply_iter_close(state: State, mutation: Mutation) -> None:
     )
 
 
+def _apply_track_add(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.TRACK_ADD` — delegate to ``add_track``."""
+    params = mutation.params
+    domains = params.get("domains") or []
+    add_track(
+        state,
+        code=str(params["code"]),
+        kind=TrackKind(str(params["kind"])),
+        title=str(params["title"]),
+        domains=list(domains),
+    )
+
+
+def _apply_track_switch(state: State, mutation: Mutation) -> None:
+    """Apply :attr:`MutationKind.TRACK_SWITCH` — delegate to ``switch_track``."""
+    switch_track(state, code=str(mutation.params["code"]))
+
+
 def _apply_wave_release(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.WAVE_RELEASE` — delegate to ``release_wave``.
 
@@ -2029,6 +2050,8 @@ _APPLY_REGISTRY: Final[dict[MutationKind, ApplyFunc]] = {
     MutationKind.PHASE_CLOSE: _apply_phase_close,
     MutationKind.ITER_OPEN: _apply_iter_open,
     MutationKind.ITER_CLOSE: _apply_iter_close,
+    MutationKind.TRACK_ADD: _apply_track_add,
+    MutationKind.TRACK_SWITCH: _apply_track_switch,
     MutationKind.EVENT_APPEND: _apply_event_append,
     MutationKind.ROADMAP_REVISE: _apply_roadmap_revise,
     MutationKind.ROADMAP_APPLY: _apply_roadmap_apply,

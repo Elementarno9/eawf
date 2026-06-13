@@ -48,7 +48,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "title": None,
         "slug": None,
         "domains": [],
-        "default_subproject": None,
+        "default_track": None,
         # Free-form project-level goal strings (one per list item). Surfaced
         # in dispatch envelopes + research/audit briefs so subagents see
         # project intent without re-deriving from state.
@@ -294,7 +294,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         },
     },
     "memory": {
-        "stores": ["project", "subproject", "agent", "user"],
+        "stores": ["project", "track", "agent", "user"],
         "review_on_ship": True,
         "review_on_polish": True,
         "auto_promote": "ask",
