@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, release, "release/**"]
   pull_request:
 
 concurrency:
@@ -370,10 +370,9 @@ jobs:
     # test SKIPS -- so the named-pipe transport (pywin32 CreateNamedPipe /
     # ReadFile MORE_DATA loop / CancelIoEx teardown / PeekNamedPipe idle
     # reap / cold-start budget) is never actually exercised there. This job
-    # runs the win32 test set on a real Windows host so a regression in the
-    # pipe transport reds the PR. Pull-request only: it is the binding-pass
-    # gate for the P30-I19 Windows support, not a per-push cost.
-    if: github.event_name == 'pull_request'
+    # runs the win32 test set plus shared CLI smoke on a real Windows host so
+    # a regression in the pipe transport or common CLI path reds PRs and
+    # protected branch pushes.
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -392,6 +391,41 @@ jobs:
         # pywin32 so the import-guarded named-pipe transport modules
         # (windows_pipe / windows_security) actually import on this host.
         run: uv sync --frozen --extra windows
+
+      - name: Smoke shared-code CLI on Windows
+        # Exercises common CLI paths on a real Windows host, not only the
+        # win32 transport modules: command startup/help, first-run init,
+        # status resolution, and one daemonless portalocker mutation.
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          uv run eawf --help *> $null
+
+          $initDir = Join-Path $env:RUNNER_TEMP "eawf-win-init-smoke"
+          if (Test-Path $initDir) {
+            Remove-Item -Recurse -Force $initDir
+          }
+          New-Item -ItemType Directory -Force -Path $initDir | Out-Null
+          git -C $initDir init -q
+          uv run eawf --no-input init --project-code WIN --project-title "Windows smoke" --target $initDir --no-acceptance-tests --no-acceptance-lint --no-acceptance-typecheck
+          if (-not (Test-Path (Join-Path $initDir ".ea/state.json"))) {
+            throw "eawf init did not create .ea/state.json"
+          }
+          uv run eawf --workspace $initDir status *> $null
+
+          $daemonlessDir = Join-Path $env:RUNNER_TEMP "eawf-win-daemonless-smoke"
+          if (Test-Path $daemonlessDir) {
+            Remove-Item -Recurse -Force $daemonlessDir
+          }
+          New-Item -ItemType Directory -Force -Path (Join-Path $daemonlessDir ".ea") | Out-Null
+          $env:EA_STATE = Join-Path $daemonlessDir ".ea/state.json"
+          $env:EAWF_DAEMONLESS = "1"
+          uv run eawf project init WSMK --title "Windows daemonless smoke" --domains ci --default-branch main
+          if (-not (Test-Path $env:EA_STATE)) {
+            throw "daemonless project init did not create state"
+          }
+          uv run eawf status *> $null
 
       - name: Pytest (win32 transport set)
         # The win32-marked test set, run serially (-n0) so the per-user
