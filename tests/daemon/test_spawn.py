@@ -11,8 +11,10 @@ fork+exec coverage lives in the cold-spawn benchmark under
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import sys
+import types
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -278,3 +280,54 @@ def test_default_spawn_poll_timeout_is_20s_on_win32() -> None:
     """Windows service cold-starts get a wider readiness window."""
     assert spawn_mod._default_spawn_poll_timeout_seconds("win32") == 20.0
     assert spawn_mod._default_spawn_poll_timeout_seconds("linux") == 5.0
+
+
+def test_win32_ping_daemon_once_round_trips_over_pipe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows readiness must be a real ``daemon.ping`` pipe RPC."""
+    calls: list[tuple[str, bytes, int]] = []
+    pipe_name = r"\\.\pipe\eawfd-test"
+
+    def _fake_pipe_client_call(name: str, payload: bytes, *, wait_ms: int) -> bytes:
+        calls.append((name, payload, wait_ms))
+        return b'{"jsonrpc":"2.0","id":"spawn-readiness","result":{"pid":4321}}\n'
+
+    fake_windows_pipe = types.SimpleNamespace(
+        default_pipe_name=lambda: pipe_name,
+        pipe_client_call=_fake_pipe_client_call,
+    )
+
+    def _fail_wait_for_pipe(_runtime_dir: Path, _deadline: float) -> bool:
+        raise AssertionError("_wait_for_pipe is not readiness")
+
+    monkeypatch.setattr(spawn_mod.sys, "platform", "win32")
+    monkeypatch.setattr(spawn_mod, "_wait_for_pipe", _fail_wait_for_pipe)
+    monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
+
+    assert spawn_mod._ping_daemon_once(tmp_path) == 4321
+    assert calls == [(pipe_name, calls[0][1], 50)]
+    request = json.loads(calls[0][1].decode("utf-8"))
+    assert request["method"] == "daemon.ping"
+    assert request["params"] == {}
+
+
+def test_win32_ping_daemon_once_rejects_non_pid_pipe_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows readiness ignores pipe responses that are not ping success."""
+
+    def _fake_pipe_client_call(_name: str, _payload: bytes, *, wait_ms: int) -> bytes:
+        assert wait_ms == 50
+        return b'{"jsonrpc":"2.0","id":"spawn-readiness","result":{"ok":true}}\n'
+
+    fake_windows_pipe = types.SimpleNamespace(
+        default_pipe_name=lambda: r"\\.\pipe\eawfd-test",
+        pipe_client_call=_fake_pipe_client_call,
+    )
+    monkeypatch.setattr(spawn_mod.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "eawf.runtime.daemon.windows_pipe", fake_windows_pipe)
+
+    assert spawn_mod._ping_daemon_once(tmp_path) is None

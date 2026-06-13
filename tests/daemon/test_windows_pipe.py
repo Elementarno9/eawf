@@ -132,6 +132,48 @@ def test_ping_round_trip_via_named_pipe() -> None:
     assert payload["result"]["pid"] == os.getpid()
 
 
+def test_ping_round_trip_with_real_same_user_sid_verify() -> None:
+    """A real same-user client passes ``verify_peer_sid`` over the pipe."""
+    from eawf.runtime.daemon.server import process_frame_bytes
+    from eawf.runtime.daemon.windows_pipe import WindowsPipeServer, pipe_client_call
+
+    pipe_name = _unique_pipe_name("sidpass")
+    ctx = _build_ctx()
+    result: dict[str, Any] = {}
+
+    async def runner() -> None:
+        loop = asyncio.get_running_loop()
+
+        async def handler(payload: bytes) -> bytes:
+            return await process_frame_bytes(payload, ctx)
+
+        server = WindowsPipeServer(
+            loop,
+            handler,
+            pipe_name=pipe_name,
+            verify_sid_enabled=True,
+        )
+        server.start()
+        try:
+            request = orjson.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": "1",
+                    "method": "daemon.ping",
+                    "params": {},
+                }
+            )
+            response_bytes = await asyncio.to_thread(pipe_client_call, pipe_name, request + b"\n")
+            result["payload"] = orjson.loads(response_bytes.rstrip(b"\n"))
+        finally:
+            server.stop()
+            await asyncio.sleep(0.05)
+
+    asyncio.run(runner())
+    assert "error" not in result["payload"], result["payload"]
+    assert result["payload"]["result"]["pid"] == os.getpid()
+
+
 def test_stop_unblocks_listener_thread() -> None:
     """``stop()`` wakes the listener thread within 2 s."""
     from eawf.runtime.daemon.windows_pipe import WindowsPipeServer

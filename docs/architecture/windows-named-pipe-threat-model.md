@@ -10,13 +10,17 @@ Two gates enforce that on the pipe:
 
 1. **Owner-only DACL (primary gate).** Every pipe instance is created with a `SECURITY_ATTRIBUTES` whose discretionary access-control list (DACL) grants full control to exactly one SID — the running user's — and grants nothing to `Everyone` or `Authenticated Users` (`build_user_only_security_attributes`). The Windows kernel enforces the DACL at `CreateFile` time: a process running as a different user is refused the open before any application code runs. This is the load-bearing control.
 
-2. **Post-connect SID verify (defence in depth).** After a client connects, the listener impersonates the named-pipe client (`ImpersonateNamedPipeClient` + `OpenThreadToken`) and compares the peer's token SID to the daemon owner's SID (`verify_peer_sid`); a mismatch closes the connection with a JSON-RPC `-32000 unauthorized` envelope. This catches DACL-bypass scenarios such as a malicious second pipe instance racing the daemon's accept loop.
+2. **Post-connect SID verify (defence in depth).** After a client connects, the listener impersonates the named-pipe client (`win32pipe.ImpersonateNamedPipeClient`), opens the resulting thread token (`win32security.OpenThreadToken`), reads the token user SID (`win32security.GetTokenInformation(..., win32security.TokenUser)`), and compares that SID to the daemon owner's SID (`verify_peer_sid`). A mismatch closes the connection with a JSON-RPC `-32000 unauthorized` envelope. This catches DACL-bypass scenarios such as a malicious second pipe instance racing the daemon's accept loop.
 
 ## The accepted residual: one bounded pre-verify read
 
 `ImpersonateNamedPipeClient` has a precondition: the server must have **read from the pipe first** so the client's security context is established for the impersonation. The Windows documentation is explicit that impersonating before any read is unreliable. The listener therefore reads **one bounded chunk** of the request *before* the SID verify (`_read_first_chunk`), then verifies the SID, then — only if the SID passes — drains any `ERROR_MORE_DATA` tail of a larger frame.
 
 The residual this introduces: an unauthenticated peer who has already passed the kernel DACL check can move **at most one `_PIPE_BUFFER_BYTES` (64 KB) chunk** of bytes into the daemon process before the SID verify rejects it. The bytes are read into a bounded buffer and discarded on rejection; they are never parsed, dispatched, or used to mutate state.
+
+### API spelling reconciliation
+
+The implementation intentionally uses the pywin32 spellings `win32pipe.ImpersonateNamedPipeClient`, `win32security.OpenThreadToken`, and `win32security.GetTokenInformation(..., win32security.TokenUser)`. Earlier notes used shorter prose names for the same calls and mentioned process-id-oriented helpers; those helpers are not the verifier. The verifier authenticates the impersonated client's token SID, not a process id, because the SID is the authorization principal enforced by the DACL.
 
 ### Why this residual is acceptable
 

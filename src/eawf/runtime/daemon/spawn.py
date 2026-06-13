@@ -229,6 +229,32 @@ def _wait_for_pipe(runtime_dir: Path, deadline: float) -> bool:
     return False
 
 
+def _daemon_ping_request() -> bytes:
+    """Return the newline-terminated ``daemon.ping`` request frame."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": "spawn-readiness",
+        "method": "daemon.ping",
+        "params": {},
+    }
+    return json.dumps(request).encode("utf-8") + b"\n"
+
+
+def _pid_from_ping_response(response_bytes: bytes) -> int | None:
+    """Return the daemon PID from a JSON-RPC ping response frame."""
+    try:
+        response = json.loads(response_bytes.rstrip(b"\n").decode("utf-8"))
+        result = response.get("result")
+        if not isinstance(result, dict):
+            return None
+        pid = result.get("pid")
+        if isinstance(pid, int) and pid > 0:
+            return pid
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+        return None
+    return None
+
+
 def _ping_daemon_once(runtime_dir: Path) -> int | None:
     """Return the daemon PID when ``daemon.ping`` succeeds once.
 
@@ -240,13 +266,18 @@ def _ping_daemon_once(runtime_dir: Path) -> int | None:
         transport is not ready yet.
     """
     if sys.platform == "win32":
-        # The Windows synchronous named-pipe client is still separate
-        # work. Keep the readiness predicate no weaker than the current
-        # pipe-open gate on that platform.
-        deadline = time.monotonic() + SPAWN_POLL_INTERVAL_SECONDS
-        if not _wait_for_pipe(runtime_dir, deadline):
+        from eawf.runtime.daemon.windows_pipe import default_pipe_name, pipe_client_call
+
+        del runtime_dir  # Windows readiness is the pipe RPC, not the pid file.
+        try:
+            response = pipe_client_call(
+                default_pipe_name(),
+                _daemon_ping_request(),
+                wait_ms=max(1, int(SPAWN_POLL_INTERVAL_SECONDS * 1000)),
+            )
+        except Exception:
             return None
-        return _read_pid_file(runtime_dir / "eawfd.pid")
+        return _pid_from_ping_response(response)
     sock_path = runtime_dir / "eawfd.sock"
     if not sock_path.exists():
         return None
@@ -254,13 +285,7 @@ def _ping_daemon_once(runtime_dir: Path) -> int | None:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
             probe.settimeout(0.2)
             probe.connect(str(sock_path))
-            request = {
-                "jsonrpc": "2.0",
-                "id": "spawn-readiness",
-                "method": "daemon.ping",
-                "params": {},
-            }
-            probe.sendall(json.dumps(request).encode("utf-8") + b"\n")
+            probe.sendall(_daemon_ping_request())
             reader = probe.makefile("rb")
             try:
                 line = reader.readline()
@@ -270,17 +295,7 @@ def _ping_daemon_once(runtime_dir: Path) -> int | None:
         return None
     if not line:
         return None
-    try:
-        response = json.loads(line.decode("utf-8"))
-        result = response.get("result")
-        if not isinstance(result, dict):
-            return None
-        pid = result.get("pid")
-        if isinstance(pid, int) and pid > 0:
-            return pid
-    except OSError, UnicodeDecodeError, json.JSONDecodeError:
-        return None
-    return None
+    return _pid_from_ping_response(line)
 
 
 def wait_for_daemon_ready(
