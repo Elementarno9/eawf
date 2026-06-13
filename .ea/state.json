@@ -8693,6 +8693,20 @@
       "scope_id": "P30-I20-W26",
       "status": "done",
       "updated_at": "2026-06-13T22:00:52.290649Z"
+    },
+    "P30-I20-W29": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W29",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W29",
+      "model": null,
+      "scope_id": "P30-I20-W29",
+      "status": "done",
+      "updated_at": "2026-06-13T22:05:56.197762Z"
     }
   },
   "agent_sessions": {
@@ -22595,6 +22609,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I20-W26",
       "updated_at": "2026-06-13T22:00:37.455077Z"
+    },
+    "P30-I20-W29": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W29-bucket-20260613T220125Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I20-W29",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I20-W29",
+      "updated_at": "2026-06-13T22:01:25.405771Z"
     }
   },
   "fleet_run": null,
@@ -25865,7 +25892,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-13T22:00:52.291742Z",
+  "updated_at": "2026-06-13T22:05:56.197970Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97688,10 +97715,10 @@
       "blocks": [
         "P30-I20-W25"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-flow-p30i20",
+      "claimed_at": "2026-06-13T22:01:25.405644Z",
+      "closed_at": "2026-06-13T22:05:56.197762Z",
+      "commit": "1ebcf21c142e0a6b81d879865dd9e1649ee010c3",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -97718,12 +97745,12 @@
       },
       "iter_id": "P30-I20",
       "opened_at": "2026-06-13T20:56:50.522938Z",
-      "outcome": null,
+      "outcome": "metrics honest-negative footer now conditional on captured elapsed_eu; flips to capture-live; tests green",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
