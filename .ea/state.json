@@ -8820,6 +8820,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-06-10-A63-P30-i06-flow-audit.md",
       "urn": "urn:eawf:v1:artifact:P30-I06/A63-P30-i06-report"
     },
+    "ART-A-P30-I20-W21-repair": {
+      "created_at": "2026-06-13T20:17:45.002299Z",
+      "id": "ART-A-P30-I20-W21-repair",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": null,
+      "size_bytes": null,
+      "uri": "repo:.ea/artifacts/audits/2026-06-13-A-P30-I20-W21-repair.md",
+      "urn": "urn:eawf:v1:artifact:P30-I20-W21/ART-A-P30-I20-W21-repair"
+    },
     "ART-A09-P08": {
       "created_at": "2026-05-10T23:05:27.654670Z",
       "id": "ART-A09-P08",
@@ -9472,6 +9482,17 @@
     }
   },
   "audits": {
+    "A-P30-I20-W21-repair": {
+      "check_results": [],
+      "created_at": "2026-06-13T20:17:50.744070Z",
+      "id": "A-P30-I20-W21-repair",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-A-P30-I20-W21-repair",
+      "scope_id": "P30-I20-W21",
+      "status": "complete",
+      "verdict": "pass"
+    },
     "A-P30-i16": {
       "check_results": [],
       "created_at": "2026-06-12T06:22:31.686138Z",
@@ -11743,6 +11764,45 @@
       "scope_id": "EAWF",
       "status": "open",
       "title": "TUI reskin-parity tail: deferred cosmetic surface fixes"
+    },
+    "B102": {
+      "closed_at": "2026-06-13T20:18:19.266704Z",
+      "commit": "f370d019ec4d120b9b802cd727e43db7fafe0a84",
+      "created_at": "2026-06-13T20:18:00.239748Z",
+      "description": "Ensure track add and switch use daemon-routed state mutations rather than direct local state writes.",
+      "id": "B102",
+      "intent": null,
+      "priority": "P2",
+      "resolution": "track add and switch now route through daemon mutation kinds in P30-I20-W21",
+      "scope_id": "P30-I20-W21",
+      "status": "closed",
+      "title": "Route track mutations through daemon"
+    },
+    "B103": {
+      "closed_at": "2026-06-13T20:18:25.763367Z",
+      "commit": "f370d019ec4d120b9b802cd727e43db7fafe0a84",
+      "created_at": "2026-06-13T20:18:07.034413Z",
+      "description": "Update state-model documentation and generated schema artifacts to match Track vocabulary and schema 1.12.",
+      "id": "B103",
+      "intent": null,
+      "priority": "P2",
+      "resolution": "state-model documentation and generated schemas now reflect Track vocabulary and schema 1.12",
+      "scope_id": "P30-I20-W21",
+      "status": "closed",
+      "title": "Refresh state model track schema docs"
+    },
+    "B104": {
+      "closed_at": "2026-06-13T20:18:32.066932Z",
+      "commit": "f370d019ec4d120b9b802cd727e43db7fafe0a84",
+      "created_at": "2026-06-13T20:18:12.456392Z",
+      "description": "Accept and migrate legacy subproject config shape onto canonical track config keys.",
+      "id": "B104",
+      "intent": null,
+      "priority": "P2",
+      "resolution": "legacy subproject config shape now migrates to canonical track config keys",
+      "scope_id": "P30-I20-W21",
+      "status": "closed",
+      "title": "Rename legacy subproject config keys"
     },
     "B70": {
       "closed_at": null,
@@ -25718,7 +25778,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-13T20:10:23.819904Z",
+  "updated_at": "2026-06-13T20:18:32.066932Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
