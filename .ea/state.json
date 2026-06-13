@@ -11874,6 +11874,19 @@
       "status": "closed",
       "title": "Rename legacy subproject config keys"
     },
+    "B105": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-06-13T22:25:57.558524Z",
+      "description": "W17 border-corner+column-count image oracle is too blunt for full-screen modes (trust/doctor render square-framed; column counts 3/1 do not map to the redesign). Build the layered/FSM oracle (spec-as-layered-oracle brief) to validate trust, doctor, and wave-detail against the cosmic redesign. Deferred from P30-I20-W28.",
+      "id": "B105",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Layered visual oracle for full-screen TUI modes"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -22666,7 +22679,22 @@
   },
   "health": null,
   "hypotheses": null,
-  "incidents": null,
+  "incidents": {
+    "INC-P30-08": {
+      "cause": "unknown",
+      "closed_at": null,
+      "corrective_action_ids": [],
+      "description": null,
+      "id": "INC-P30-08",
+      "opened_at": "2026-06-13T22:26:05.281778Z",
+      "report_artifact_id": null,
+      "root_cause": null,
+      "scope_id": "EAWF",
+      "severity": "low",
+      "status": "open",
+      "title": "Coarse image oracle too blunt for full-screen mode validation"
+    }
+  },
   "indexes": {},
   "iters": {
     "P08-I01": {
@@ -24829,7 +24857,6 @@
         "P30-I20-W25",
         "P30-I20-W26",
         "P30-I20-W27",
-        "P30-I20-W28",
         "P30-I20-W29"
       ]
     }
@@ -25919,7 +25946,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-13T22:16:34.124633Z",
+  "updated_at": "2026-06-13T22:26:05.281778Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97447,7 +97474,6 @@
         "P30-I20-W24",
         "P30-I20-W26",
         "P30-I20-W27",
-        "P30-I20-W28",
         "P30-I20-W29"
       ],
       "description": null,
@@ -97668,71 +97694,6 @@
         }
       ],
       "title": "Add operator trigger for live research.run",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
-    "P30-I20-W28": {
-      "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
-      "deps": [],
-      "description": null,
-      "dispatch_history": [],
-      "effort_bucket": "L",
-      "file_scopes": [
-        "tools/rasterize_svg.py",
-        "src/eawf/workflow/audit_dsl/kinds/mockup_image_diff.py",
-        "tests/fixtures/mockup_image_diff",
-        ".ea/specs/P30/P30-I20"
-      ],
-      "gates": [],
-      "id": "P30-I20-W28",
-      "intent": {
-        "desired_outcome": "trust, doctor, and wave-detail each gain a mockup_golden_diff gate vs a real Pilot screenshot asserting border-shape and column-count parity; the spec-tree gate count rises from one to four.",
-        "evidence_refs": [
-          ".ea/local/research/2026-06-11-why-missed-rendered-redesign.md",
-          "src/eawf/workflow/audit_dsl/kinds/mockup_image_diff.py",
-          ".ea/local/research/brand/ea-redesigns.html"
-        ],
-        "planned_steps": [
-          "rasterize redesign mockups for trust doctor and wave-detail;capture real Pilot screenshots;add three mockup_golden_diff gate rows asserting border and column parity;add drift fixtures proving each gate fails"
-        ],
-        "priority_rationale": null,
-        "problem": "Only init-wizard has a mockup image-diff gate; trust, doctor, and wave-detail surfaces ship text-snapshot only, blind to the border-shape and column-count drift the redesign retrospective flagged.",
-        "risks": [],
-        "source_brief_ids": []
-      },
-      "iter_id": "P30-I20",
-      "opened_at": "2026-06-13T20:56:49.838753Z",
-      "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "trust doctor and wave-detail each have a mockup image-diff gate vs a real render asserting border-shape and column-count parity",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "trust doctor and wave-detail each have a mockup image-diff gate vs a real render asserting border-shape and column-count parity",
-          "waiver_reason": null
-        }
-      ],
-      "title": "Extend mockup image-diff gate to trust doctor wave-detail",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
