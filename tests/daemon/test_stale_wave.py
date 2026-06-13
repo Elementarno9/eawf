@@ -32,7 +32,11 @@ from eawf.runtime.daemon.stale_wave import (
 from eawf.surfaces.tui.widgets.eu_bar import OK_THRESHOLD, WARN_THRESHOLD
 from eawf.workflow.estimation.buckets import BUCKET_EU, EU_MINUTES
 from eawf.workflow.estimation.thresholds import OK_BAND_CEILING, OVER_BUDGET_CEILING
-from eawf.workflow.skills.needs_user import list_open_pauses
+from eawf.workflow.skills.needs_user import (
+    AUTO_RESOLVED_CHOICE,
+    list_open_pauses,
+    retract_wave_pauses,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -345,6 +349,63 @@ def test_sweep_once_appends_publishes_and_preserves_state(tmp_path: Path) -> Non
     pauses = list_open_pauses(state_path, scope_id="urn:eawf:v1:state:ABC")
     assert len(pauses) == 1
     assert pauses[0].question.options[0].label == "keep"
+
+
+# ---- retract-on-close: the advisory clears when the wave closes ------------
+
+
+def _sweep_one_stale_pause(state_path: Path) -> None:
+    """Drive a single err-band advisory into the store for ``_WAVE_ID``."""
+    budget = _bucket_budget_minutes("M")
+    claimed = _now() - timedelta(minutes=budget * OVER_BUDGET_CEILING + 0.5)
+    _write_state(state_path, _state_payload(claimed_at=claimed, status="in_progress"))
+
+    async def body() -> None:
+        await sweep_once(state_path=state_path, now=_now())
+
+    _run(body)
+
+
+def test_list_open_pauses_exposes_subject_wave_id(tmp_path: Path) -> None:
+    # The advisory pause carries its subject wave so a surface can drop it
+    # once that wave is terminal, and the close path can retract it by wave.
+    state_path = tmp_path / ".ea" / "state.json"
+    _sweep_one_stale_pause(state_path)
+
+    pauses = list_open_pauses(state_path)
+
+    assert len(pauses) == 1
+    assert pauses[0].wave_id == _WAVE_ID
+
+
+def test_retract_wave_pauses_clears_the_open_advisory(tmp_path: Path) -> None:
+    # The operator's bug: a closed wave kept surfacing its over-budget
+    # prompt. Retracting on close pairs the open pause with a resume so it
+    # stops surfacing.
+    state_path = tmp_path / ".ea" / "state.json"
+    _sweep_one_stale_pause(state_path)
+    assert len(list_open_pauses(state_path)) == 1
+    published: list[Envelope] = []
+
+    resolved = retract_wave_pauses(state_path, wave_id=_WAVE_ID, publish=published.append)
+
+    assert len(resolved) == 1
+    assert list_open_pauses(state_path) == []
+    # A resume envelope was published so live subscribers drop the pause.
+    assert len(published) == 1
+    assert published[0].payload["extras"]["choice"] == AUTO_RESOLVED_CHOICE
+
+
+def test_retract_wave_pauses_leaves_other_waves_advisories(tmp_path: Path) -> None:
+    # Retraction is keyed on the subject wave: closing one wave must not
+    # clear a sibling wave's open advisory.
+    state_path = tmp_path / ".ea" / "state.json"
+    _sweep_one_stale_pause(state_path)
+
+    resolved = retract_wave_pauses(state_path, wave_id="P28-I02-W99")
+
+    assert resolved == []
+    assert len(list_open_pauses(state_path)) == 1
 
 
 # ---- escalating one-shot per band ------------------------------------------

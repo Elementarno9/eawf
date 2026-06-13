@@ -316,6 +316,30 @@ def _pause_items(pauses: Iterable[OpenPause]) -> list[AttentionItem]:
     return items
 
 
+def _pause_wave_closed(state: State, pause: OpenPause) -> bool:
+    """Return whether *pause* is a wave advisory whose wave is now CLOSED.
+
+    The daemon stale-wave detector raises a needs_user pause against an
+    active wave; the wave-close path retracts it, but an advisory already in
+    the store before that retract is read would otherwise keep re-surfacing
+    against a CLOSED wave. This drops such a pause at render time as
+    defense-in-depth (and clears advisories that leaked before the
+    retract-on-close fix shipped). A pause that names no wave -- an ordinary
+    skill pause -- is never dropped here.
+
+    Args:
+        state: The bound scope state whose waves fix each pause's status.
+        pause: The open pause to test.
+
+    Returns:
+        ``True`` when the pause names a wave that exists and is CLOSED.
+    """
+    if pause.wave_id is None:
+        return False
+    wave = state.waves.get(pause.wave_id)
+    return wave is not None and wave.status is WaveStatus.CLOSED
+
+
 def _is_active_wave(state: State, wave: object) -> bool:
     """Return whether *wave* sits under the active phase + iter.
 
@@ -494,7 +518,10 @@ def build_attention_feed(
         needs the operator (the honest-empty case the band renders as
         :data:`EMPTY_FEED_TEXT`).
     """
-    items: list[AttentionItem] = list(_pause_items(pauses))
+    open_pauses = list(pauses)
+    if state is not None:
+        open_pauses = [p for p in open_pauses if not _pause_wave_closed(state, p)]
+    items: list[AttentionItem] = list(_pause_items(open_pauses))
     if state is not None:
         items.extend(_failed_wave_items(state))
         items.extend(_incident_items(state))

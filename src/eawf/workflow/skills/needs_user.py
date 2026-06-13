@@ -70,6 +70,16 @@ _SCOPE_ID_KEY = "scope_id"
 #: ``extras`` key holding the chosen option label on a resume row.
 _CHOICE_KEY = "choice"
 
+#: ``extras`` key holding the subject wave id on a daemon-raised wave
+#: advisory pause (the stale-wave over-budget prompt). Ordinary skill
+#: pauses omit it; the scanner defaults them to ``None``.
+_WAVE_ID_KEY = "wave_id"
+
+#: Resume ``choice`` the close path stamps when it auto-retracts a wave's
+#: open advisory pauses. Distinct from the operator labels (keep / release
+#: / defer) so an audit can tell a system retraction from an operator answer.
+AUTO_RESOLVED_CHOICE = "auto-resolved"
+
 #: ``extras`` key holding the :class:`~eawf.kernel.state.enums.Urgency` value on
 #: a pause row. Older rows predate the key; the scanner defaults them to
 #: :attr:`~eawf.kernel.state.enums.Urgency.NORMAL` so the field is additive.
@@ -110,7 +120,15 @@ class OpenPause:
             stub) so the field stays additive.
     """
 
-    __slots__ = ("occurred_at", "pause_urn", "question", "scope_id", "session", "urgency")
+    __slots__ = (
+        "occurred_at",
+        "pause_urn",
+        "question",
+        "scope_id",
+        "session",
+        "urgency",
+        "wave_id",
+    )
 
     def __init__(
         self,
@@ -121,6 +139,7 @@ class OpenPause:
         question: UserQuestion,
         urgency: Urgency = Urgency.NORMAL,
         occurred_at: datetime | None = None,
+        wave_id: str | None = None,
     ) -> None:
         self.pause_urn = pause_urn
         self.scope_id = scope_id
@@ -128,6 +147,12 @@ class OpenPause:
         self.question = question
         self.urgency = urgency
         self.occurred_at = occurred_at
+        # The subject wave when this pause is a daemon-raised wave advisory
+        # (the stale-wave over-budget prompt stamps ``extras["wave_id"]``);
+        # ``None`` for an ordinary skill pause that names no wave. Lets a
+        # surface drop an advisory whose wave has since reached a terminal
+        # state, and lets the close path retract it by wave.
+        self.wave_id = wave_id
 
 
 def build_pause_urn(scope_id: str) -> str:
@@ -361,6 +386,7 @@ def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[O
             logger.debug(f"list_open_pauses outcome=skip_undecodable pause_urn={urn!r}")
             continue
         session = payload.extras.get(_SESSION_KEY)
+        raw_wave_id = payload.extras.get(_WAVE_ID_KEY)
         pending.append(
             OpenPause(
                 pause_urn=urn,
@@ -369,6 +395,7 @@ def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[O
                 question=question,
                 urgency=_decode_urgency(payload.extras.get(_URGENCY_KEY)),
                 occurred_at=payload.timestamp,
+                wave_id=raw_wave_id if isinstance(raw_wave_id, str) else None,
             )
         )
     return [p for p in pending if p.pause_urn not in resolved]
@@ -450,7 +477,56 @@ def resolve_pause(
     return pause
 
 
+def retract_wave_pauses(
+    state_path: Path,
+    *,
+    wave_id: str,
+    publish: Callable[[Envelope], None] | None = None,
+) -> list[str]:
+    """Resolve every open pause bound to *wave_id*, returning the urns cleared.
+
+    The daemon's stale-wave detector raises a durable ``needs_user`` pause
+    when an active wave runs over its time budget. That pause outlives the
+    wave unless something retracts it: a CLOSED wave keeps surfacing an
+    over-budget prompt because nothing pairs the open pause with a resume.
+    The wave-close path calls this so a wave's advisories clear the moment
+    it reaches a terminal state. Each retraction appends a
+    ``needs_user_resume`` row carrying :data:`AUTO_RESOLVED_CHOICE` (not an
+    operator label) so an audit can tell a system retraction apart from an
+    operator answer; the append rides the same daemon-owned event store as
+    :func:`resolve_pause`.
+
+    Args:
+        state_path: Absolute path to ``state.json``.
+        wave_id: The subject wave whose open advisory pauses to retract.
+        publish: Optional daemon bus publisher invoked after each durable
+            append succeeds, so live subscribers drop the cleared pause.
+
+    Returns:
+        The resolved ``pause-urn`` values in append order; empty when the
+        wave had no open advisory pause.
+    """
+    event_path = store_path(state_path, StoreKind.EVENT)
+    resolved: list[str] = []
+    for pause in list_open_pauses(state_path):
+        if pause.wave_id != wave_id:
+            continue
+        envelope = _resume_envelope(
+            pause_urn=pause.pause_urn,
+            scope_id=pause.scope_id,
+            choice=AUTO_RESOLVED_CHOICE,
+        )
+        append_envelope(event_path, envelope)
+        if publish is not None:
+            publish(envelope)
+        resolved.append(pause.pause_urn)
+    if resolved:
+        logger.info(f"retract_wave_pauses wave={wave_id!r} resolved={len(resolved)}")
+    return resolved
+
+
 __all__ = [
+    "AUTO_RESOLVED_CHOICE",
     "PAUSE_EVENT_TYPE",
     "RESUME_EVENT_TYPE",
     "OpenPause",
@@ -460,5 +536,6 @@ __all__ = [
     "list_open_pauses",
     "record_pause",
     "resolve_pause",
+    "retract_wave_pauses",
     "validate_choice",
 ]

@@ -161,6 +161,38 @@ def test_build_attention_feed_pause_row_is_actionable() -> None:
     assert "resume me?" in item.title
 
 
+def _wave_pause(*, wave_id: str) -> OpenPause:
+    """An open pause stamped with a subject wave (a daemon stale advisory)."""
+    return OpenPause(
+        pause_urn="urn:eawf:v1:event:QR/needs-user-stale",
+        scope_id=_SCOPE,
+        session=_SESSION,
+        question=_question("over-budget advisory"),
+        urgency=Urgency.NORMAL,
+        wave_id=wave_id,
+    )
+
+
+def test_build_attention_feed_drops_closed_wave_advisory() -> None:
+    # A daemon stale-wave advisory whose subject wave has since closed must
+    # not keep surfacing in the operator's needs_user band.
+    closed = _wave(wave_id="P01-I01-W77", status=WaveStatus.CLOSED)
+    state = _empty_state().model_copy(update={"waves": {closed.id: closed}})
+
+    assert build_attention_feed(state, (_wave_pause(wave_id=closed.id),)) == ()
+
+
+def test_build_attention_feed_keeps_active_wave_advisory() -> None:
+    # The same advisory while its wave is still active is a live signal.
+    active = _wave(wave_id="P01-I01-W77", status=WaveStatus.IN_PROGRESS)
+    state = _empty_state().model_copy(update={"waves": {active.id: active}})
+
+    feed = build_attention_feed(state, (_wave_pause(wave_id=active.id),))
+
+    assert len(feed) == 1
+    assert feed[0].kind is AttentionKind.NEEDS_USER
+
+
 def test_build_attention_feed_failed_wave_is_urgent_and_not_actionable() -> None:
     state = _empty_state().model_copy(
         update={"waves": {"P01-I01-W09": _wave(wave_id="P01-I01-W09", status=WaveStatus.FAILED)}}

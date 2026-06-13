@@ -134,6 +134,7 @@ from eawf.workflow.lifecycle.transitions import (
     switch_track,
 )
 from eawf.workflow.lifecycle.wave import RuntimeDelta, compute_runtime_delta
+from eawf.workflow.skills.needs_user import retract_wave_pauses
 from eawf.workflow.verify.models import CloseReadiness
 
 if TYPE_CHECKING:
@@ -1776,6 +1777,40 @@ def _compute_wave_close_extras(
     return extras
 
 
+def _retract_closed_wave_advisories(
+    state_path: Path,
+    *,
+    wave_id: str,
+    bus: object | None,
+) -> None:
+    """Retract the closing wave's open over-budget advisory pauses.
+
+    The daemon's stale-wave sweep raises a durable ``needs_user`` pause when
+    an active wave runs past its time budget. Nothing paired that pause with
+    a resume on close, so a CLOSED wave kept surfacing the over-budget prompt
+    in the operator's needs_user feed forever. Pairing the retraction with
+    the close mutation clears the advisory the moment the wave reaches its
+    terminal state.
+
+    Best-effort: the close itself is already durable by the time this runs,
+    so a retraction failure is logged and swallowed rather than failing a
+    committed close.
+
+    Args:
+        state_path: Filesystem path to ``state.json``.
+        wave_id: The wave whose close just committed.
+        bus: The daemon event bus (or ``None``); a resume envelope is
+            published on it so live subscribers drop the cleared pause.
+    """
+    if not wave_id:
+        return
+    publish = bus.publish if bus is not None and hasattr(bus, "publish") else None
+    try:
+        retract_wave_pauses(state_path, wave_id=wave_id, publish=publish)
+    except OSError as exc:
+        logger.warning(f"retract_closed_wave_advisories wave={wave_id!r} status='skip' err={exc!s}")
+
+
 def _apply_wave_fail(state: State, mutation: Mutation) -> None:
     """Apply :attr:`MutationKind.WAVE_FAIL` — delegate to ``fail_wave``."""
     params = mutation.params
@@ -3051,6 +3086,12 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 ctx.bus.publish(envelope)
                 if drift_envelope is not None:
                     ctx.bus.publish(drift_envelope)
+            if mutation.kind == MutationKind.WAVE_CLOSE:
+                _retract_closed_wave_advisories(
+                    state_path,
+                    wave_id=str(mutation.params.get("wave_id", "")),
+                    bus=ctx.bus,
+                )
             ctx.last_event_id = envelope.id
 
             logger.info(
