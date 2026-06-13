@@ -99,6 +99,7 @@ CANONICAL_HINT_TOKENS: Final[frozenset[str]] = frozenset(
         "b",
         "c",
         "d",
+        "g",
         "H",
         "k",
         "K",
