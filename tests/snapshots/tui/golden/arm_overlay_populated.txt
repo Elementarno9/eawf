@@ -9,18 +9,20 @@
 
 
 
-
-
-                            ╭──────────────────────────────────────────────────────────────╮
-                            │                                                              │
-                            │  ❯ arm fleet drive                                           │
-                            │                                                              │
-                            │  > scope  this iter                                          │
-                            │    budget  unbounded                                         │
-                            │    concurrency  1 lane                                       │
-                            │    risk policy  auto-close, fork on fail                     │
-                            │    convergence  drain to empty                               │
-                            │                                                              │
-                            │  [ ↑/↓ field · ←/→ change · Enter arm · Esc cancel ]         │
-                            │                                                              │
-                            ╰──────────────────────────────────────────────────────────────╯
+               ╭────────────────────────────────────────────────────────────────────────────────────────╮
+               │                                                                                        │
+               │  ❯ arm drain over 1 wave                                                               │
+               │                                                                                        │
+               │  > scope  this iter                                                                    │
+               │    budget  unbounded                                                                   │
+               │    concurrency  1 lane                                                                 │
+               │    risk policy  auto-close, fork on fail                                               │
+               │    convergence  drain to empty                                                         │
+               │  caps  EU --  $ --  waves --                                                           │
+               │  budget stop  drain in-flight lanes                                                    │
+               │  risk matrix  clean auto-close clean                                                   │
+               │  risk matrix  fail  fork failed lane                                                   │
+               │                                                                                        │
+               │  [ ↑/↓ field · ←/→ change · Enter arm · Esc cancel ]                                   │
+               │                                                                                        │
+               ╰────────────────────────────────────────────────────────────────────────────────────────╯

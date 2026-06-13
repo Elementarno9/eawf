@@ -5,12 +5,12 @@
 
 
 
-                ╭──────────────────────────────────────────────────────────────╮
-                │                                                              │
-                │  △ blocking fork -- operator decision needed                 │
-                │                                                              │
-                │  no blocking forks -- the fleet is draining clean            │
-                │                                                              │
-                │  [ a approve · r re-dispatch · s skip · x abort · Tab next   │
-                │                                                              │
-                ╰──────────────────────────────────────────────────────────────╯
+     ╭────────────────────────────────────────────────────────────────────────────────────╮
+     │                                                                                    │
+     │  △ blocking fork -- operator decision needed                                       │
+     │                                                                                    │
+     │  no blocking forks -- the fleet is draining clean                                  │
+     │                                                                                    │
+     │  [ a approve · r re-dispatch · s skip · x abort · Tab next · Esc close ]           │
+     │                                                                                    │
+     ╰────────────────────────────────────────────────────────────────────────────────────╯

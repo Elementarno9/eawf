@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+  ╭─────────────────────────────────────────╮
+  │                                         │
+  │  △ blocking fork -- operator decision   │
+  │  needed                                 │
+  │                                         │
+  │  P30-I13-W05 [UI]                       │
+  │  why high-risk close -- a visual-band   │
+  │  lane reported clean, held for review   │
+  │  evidence                               │
+  │  urn:eawf:v1:close:P30-I13-W05          │
+  │                                         │
+  │  a approve-close   r re-dispatch   s    │
+  │  skip   x abort run                     │
+  │                                         │
+  │  press a / r / s / x to resolve this    │
+  │  fork                                   │
+  │                                         │
+  │  [ a approve · r re-dispatch · s skip   │
+  │                                         │
+  ╰─────────────────────────────────────────╯

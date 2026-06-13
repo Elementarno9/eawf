@@ -362,7 +362,7 @@ def _handle_inbox(app: App[None], args: str) -> None:
 
     Delegates to the App's ``action_open_inbox`` so the ``i`` keypress and
     this verb share the same cap-checked path that lists every open
-    needs_user pause across scopes ranked by urgency. Takes no argument.
+    needs_user pause across scopes, urgent first. Takes no argument.
 
     Args:
         app: The running App.
@@ -783,7 +783,7 @@ _STATIC_VERBS: tuple[PaletteVerb, ...] = (
     ),
     PaletteVerb("/config", "config window (registry-driven)", _handle_config, SCOPES_ALL),
     PaletteVerb("/init", "init wizard", _handle_init, SCOPES_ALL),
-    PaletteVerb("/inbox", "needs_user pause inbox (by urgency)", _handle_inbox, SCOPES_ALL),
+    PaletteVerb("/inbox", "needs_user inbox (urgent first)", _handle_inbox, SCOPES_ALL),
     PaletteVerb("/events", "last 50 events overlay", _handle_events, SCOPES_ALL),
     PaletteVerb(
         "/metrics",

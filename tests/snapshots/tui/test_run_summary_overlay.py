@@ -169,3 +169,20 @@ def test_run_summary_drained_snapshot(tmp_path: Path) -> None:
             assert_screen_snapshot(app, _GOLDEN / "run_summary_drained.txt")
 
     asyncio.run(body())
+
+
+@pytest.mark.parametrize("width", [40, 48])
+def test_run_summary_budget_narrow_snapshot(tmp_path: Path, width: int) -> None:
+    """The run-summary card stays coherent at 40/48 columns."""
+    state_path = _write_state(tmp_path, _state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(width, 40)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(RunSummaryModal(_done_run(FleetTerminalReason.BUDGET)))
+            await settle_screen(pilot)
+            assert isinstance(app.screen, RunSummaryModal)
+            assert_screen_snapshot(app, _GOLDEN / f"run_summary_budget_w{width}.txt")
+
+    asyncio.run(body())

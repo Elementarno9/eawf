@@ -18,8 +18,9 @@ These tests pin the two halves:
 * the mounted overlay under a Pilot: the card renders the wave / tier / reason /
   evidence + the four option keys, a pressed option key routes
   ``fleet.resolve_fork`` with that resolution, the honest-empty literal renders
-  on an empty queue (pinned in a golden), and a multi-fork queue renders a count
-  and cycles + drains without losing one.
+  on an empty queue (pinned in a golden), no-daemon resolve keeps the card
+  visible, and a multi-fork queue renders a count and cycles + drains without
+  losing one.
 
 Determinism follows the project Pilot-worker rule: each Pilot body drains workers
 via :func:`~eawf.surfaces.tui.snapshot.settle_screen` before asserting.
@@ -52,6 +53,7 @@ from eawf.surfaces.tui.screens.overlays.fork_inbox import (
     FORK_INBOX_HEADER_ID,
     FORK_INBOX_OPTIONS_ID,
     FORK_INBOX_REASON_ID,
+    FORK_INBOX_RESULT_ID,
     FORK_INBOX_TITLE,
     FORK_INBOX_WAVE_ID,
     RESOLVE_NO_DAEMON,
@@ -356,6 +358,23 @@ def test_fork_inbox_empty_queue_matches_golden(tmp_path: Path) -> None:
     asyncio.run(body())
 
 
+@pytest.mark.parametrize("width", [40, 48])
+def test_fork_inbox_populated_narrow_matches_golden(tmp_path: Path, width: int) -> None:
+    """The populated fork-inbox card stays coherent at 40/48 columns."""
+    state_path = _write_state(tmp_path, _state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(width, 40)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(ForkInboxModal((_fork(),)))
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ForkInboxModal)
+            assert_screen_snapshot(app, _GOLDEN / f"populated_w{width}.txt")
+
+    asyncio.run(body())
+
+
 def test_fork_inbox_multiple_forks_render_count(tmp_path: Path) -> None:
     """A multi-fork queue renders an ``i/N`` count in the header (C2)."""
     state_path = _write_state(tmp_path, _state())
@@ -400,6 +419,32 @@ def test_fork_inbox_tab_cycles_between_queued_forks(tmp_path: Path) -> None:
             await settle_screen(pilot)
             wave2 = str(modal.query_one(f"#{FORK_INBOX_WAVE_ID}").render())  # type: ignore[attr-defined]
             assert "P30-I13-W06" in wave2
+
+    asyncio.run(body())
+
+
+def test_fork_inbox_no_daemon_keeps_card_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed resolve does not drop the card from the local queue."""
+    state_path = _write_state(tmp_path, _state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await app.push_screen(ForkInboxModal((_fork(wave_id="P30-I13-W05"),)))
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ForkInboxModal)
+            await pilot.press("a")
+            await settle_screen(pilot)
+            modal = app.screen
+            assert isinstance(modal, ForkInboxModal)
+            wave = str(modal.query_one(f"#{FORK_INBOX_WAVE_ID}").render())  # type: ignore[attr-defined]
+            result = str(modal.query_one(f"#{FORK_INBOX_RESULT_ID}").render())  # type: ignore[attr-defined]
+            assert "P30-I13-W05" in wave
+            assert RESOLVE_NO_DAEMON in result
 
     asyncio.run(body())
 

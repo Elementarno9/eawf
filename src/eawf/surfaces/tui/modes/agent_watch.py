@@ -152,7 +152,7 @@ EMPTY_NOTICE: str = "no active dispatched session"
 WATCH_DEGRADED: str = "daemon unreachable, reconnecting -- session stream paused until it returns"
 
 #: Result line before any cancel has been issued (the idle cancel surface).
-CANCEL_IDLE: str = "press k to cancel the watched session"
+CANCEL_IDLE: str = "press x to cancel the watched session"
 
 #: Result line when the cancel request could not reach the daemon.
 CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
@@ -1602,16 +1602,15 @@ class AgentWatchModeScreen(ScopeScreen):
         "SEAL_HERO_CSS", seal_hero_css("AgentWatchModeScreen")
     )
 
-    #: ``up`` / ``down`` scroll the stream; the FA4 session keys ``k`` (kill
-    #: this lane, confirm-gated, with ``x`` as a cancel-verb alias), ``space``
+    #: ``up`` / ``down`` scroll the stream; the FA4 session key ``x`` (cancel
+    #: this lane, confirm-gated, with ``k`` as a legacy alias), ``space``
     #: (pause / resume this lane), ``l`` (view this session's log), and ``Esc``
     #: (leave the zoom) act on the watched session. The chrome bindings (palette
     #: / help / quit / scope / mode digits) come from the shared chassis +
     #: app-wide bindings. ``k`` is the kill verb here (not a vim-up alias) --
     #: this pane keeps arrows primary for scrolling and does not offer the j/k
-    #: vim scroll aliases, so ``k`` is free to mean "kill the watched session";
-    #: ``x`` aliases it to the SAME confirm-gated kill so the cancel-x verb (the
-    #: failed-look mark the result line already wears) is reachable directly.
+    #: vim scroll aliases, so ``k`` remains a legacy kill alias while ``x`` is
+    #: the advertised cancel key matching the failed-look mark.
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("up", "scroll_up", "up", show=False),
         Binding("down", "scroll_down", "down", show=False),
@@ -1635,7 +1634,7 @@ class AgentWatchModeScreen(ScopeScreen):
     #: the authoring-time guard -- the Binding itself is the affordance.
     FOOTER_HINTS: ClassVar[tuple[str, ...]] = (
         render_hint_label("↑↓", "select"),
-        render_hint_label("k", "kill"),
+        render_hint_label("x", "cancel"),
         render_hint_label("space", "pause"),
         render_hint_label("Esc", "back"),
         render_hint_label("w/r/u", "scope"),

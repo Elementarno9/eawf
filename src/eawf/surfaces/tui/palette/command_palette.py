@@ -75,12 +75,10 @@ SECTION_RECENT: str = "Recent"
 SECTION_LIFECYCLE: str = "Lifecycle"
 SECTION_ALL: str = "All"
 
-#: The frozen no-match prompt. The separator between ``matches`` and
-#: ``Esc`` is a real EM-DASH (U+2014) intentional UI DATA, not an ASCII
-#: hyphen, and it carries no trailing period (a prompt is a label, not a
-#: sentence). The em-dash is between two ASCII spaces so ruff's
-#: ambiguous-unicode lint does not flag it.
-NO_MATCH_PROMPT: str = "no verb matches — Esc to cancel"
+#: The frozen no-match prompt. The separator is the same middle-dot vocabulary
+#: used by footer hints, and the prompt carries no trailing period (a prompt is
+#: a label, not a sentence).
+NO_MATCH_PROMPT: str = "no verb matches · Esc cancel"
 
 
 def _stage_glyph(app: App[None] | None) -> str:

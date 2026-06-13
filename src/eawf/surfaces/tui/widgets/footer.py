@@ -789,7 +789,9 @@ class Footer(Static):
         if not cells:
             return
         cell = cells.first(Static)
-        cell.update(fit_hints(self.hints, cell.size.width))
+        # Reserve one trailing blank inside the 1fr hint cell so a perfectly
+        # fitted strip cannot visually collide with the auto-width burn cell.
+        cell.update(fit_hints(self.hints, max(0, cell.size.width - 1)))
 
     def on_resize(self, event: Resize) -> None:
         """Refit the hint strip after the footer (and its 1fr strip) resizes.

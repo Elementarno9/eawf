@@ -119,13 +119,13 @@ FEED_EMPTY_ID: str = "feed-empty"
 FEED_ROW_CLASS: str = "feed-row"
 
 #: Notice text when the feed is live but no event has arrived yet.
-FEED_EMPTY_LIVE: str = "Live feed -- waiting for events..."
+FEED_EMPTY_LIVE: str = "live feed waiting for events"
 
 #: Notice text when the daemon is unreachable (binding in poll fallback),
 #: so the operator knows the feed is not flowing rather than merely quiet.
 #: Voiced to match the global degraded banner's calm "daemon unreachable,
 #: reconnecting" lead, then states the pane-specific consequence.
-FEED_EMPTY_DEGRADED: str = "daemon unreachable, reconnecting -- live feed paused until it returns"
+FEED_EMPTY_DEGRADED: str = "daemon unreachable · live feed paused until it returns"
 
 #: Width the kind column is padded to so the trailing summary lines up
 #: across rows. The longest ``StoreKind`` value is ``domain_specialist_report``

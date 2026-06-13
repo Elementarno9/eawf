@@ -44,6 +44,7 @@ from eawf.kernel.state.models import (
 )
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.run_summary import (
+    OUTCOMES_CAPTION,
     OUTCOMES_EMPTY,
     RUN_SUMMARY_COUNTS_ID,
     RUN_SUMMARY_HEADER_ID,
@@ -252,6 +253,11 @@ def test_outcome_lines_no_outcomes_reads_honest_empty() -> None:
     """A run with no finished lane yields the honest-empty outcome marker."""
     lines = outcome_lines(_done_run(closed=0, failed=0, blocked=0, forks_resolved=0))
     assert lines == (f"[$muted]{OUTCOMES_EMPTY}[/]",)
+
+
+def test_outcomes_caption_names_tallies_not_per_wave_rows() -> None:
+    """The caption matches the class-tally rows the card renders."""
+    assert OUTCOMES_CAPTION == "outcome tallies"
 
 
 # --------------------------------------------------------------------------

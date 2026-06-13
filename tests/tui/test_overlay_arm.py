@@ -41,15 +41,22 @@ from eawf.surfaces.tui.modes.autopilot import (
 from eawf.surfaces.tui.screens.overlays.arm import (
     ARM_CANCELLED,
     ARM_DRAINING,
+    CAPS_ROW_ID,
     CONCURRENCY_GROUP_ID,
     CONVERGENCE_GROUP_ID,
+    HALT_ROW_ID,
     NOTHING_TO_DRAIN,
     RISK_GROUP_ID,
+    RISK_ROW_1_ID,
+    RISK_ROW_2_ID,
     SCOPE_GROUP_ID,
     ArmModal,
     ArmSpec,
     build_arm_spec,
+    render_caps_row,
     render_group_row,
+    render_halt_row,
+    render_risk_matrix_rows,
 )
 from eawf.surfaces.tui.snapshot import settle_screen
 
@@ -246,6 +253,33 @@ def test_render_group_row_unfocused_omits_caret() -> None:
     assert "strict" in body
 
 
+def test_render_caps_row_names_all_three_budget_axes() -> None:
+    """The arm preview row names EU / USD / waves caps."""
+    row = render_caps_row("standard")
+    assert "EU" in row
+    assert "$" in row
+    assert "waves" in row
+    assert "16" in row
+    assert "32" in row
+    assert "12" in row
+
+
+def test_render_halt_row_distinguishes_drain_from_hard_halt() -> None:
+    """The budget-stop row distinguishes graceful drain from hard halt."""
+    drain = render_halt_row("auto-close, fork on fail")
+    hard = render_halt_row("auto-close, hard-halt on fail")
+    assert "drain in-flight lanes" in drain
+    assert "hard-halt in-flight lanes" in hard
+
+
+def test_render_risk_matrix_rows_are_two_rows() -> None:
+    """The risk matrix renders exactly two rows naming clean and fail paths."""
+    row_1, row_2 = render_risk_matrix_rows("auto-close, fork on fail")
+    assert "risk matrix" in row_1
+    assert "clean" in row_1
+    assert "fail" in row_2
+
+
 # --------------------------------------------------------------------------
 # Mounted overlay -- open, five groups, Enter -> fleet.drive -> DRAINING
 # --------------------------------------------------------------------------
@@ -296,6 +330,11 @@ def test_arm_overlay_renders_five_config_groups(tmp_path: Path) -> None:
                 CONVERGENCE_GROUP_ID,
             ):
                 assert modal.query(f"#{group_id}")
+            for row_id in (CAPS_ROW_ID, HALT_ROW_ID, RISK_ROW_1_ID, RISK_ROW_2_ID):
+                assert modal.query(f"#{row_id}")
+            assert "arm drain over 1 wave" in str(modal.query_one(".arm-title").render())  # type: ignore[attr-defined]
+            caps = str(modal.query_one(f"#{CAPS_ROW_ID}").render())  # type: ignore[attr-defined]
+            assert "EU" in caps and "$" in caps and "waves" in caps
 
     asyncio.run(body())
 
@@ -501,6 +540,10 @@ def test_arm_empty_frontier_shows_honest_empty_and_issues_no_rpc(
             # The honest-empty banner renders the exact literal byte-for-byte.
             banner = str(modal.query_one("#arm-empty").render())  # type: ignore[attr-defined]
             assert NOTHING_TO_DRAIN in banner
+            assert not modal.query(f"#{SCOPE_GROUP_ID}")  # close-only: no editable fields
+            hint = str(modal.query_one("#arm-hint").render())  # type: ignore[attr-defined]
+            assert "close" in hint
+            assert "arm" not in hint
             await pilot.press("enter")  # arm refused -> no RPC
             await settle_screen(pilot)
             pane = app.screen

@@ -10,18 +10,15 @@
 
 
 
-                            ╭──────────────────────────────────────────────────────────────╮
-                            │                                                              │
-                            │  ❯ arm fleet drive                                           │
-                            │                                                              │
-                            │  nothing to drain — all ready waves closed or blocked        │
-                            │                                                              │
-                            │  > scope  this iter                                          │
-                            │    budget  unbounded                                         │
-                            │    concurrency  1 lane                                       │
-                            │    risk policy  auto-close, fork on fail                     │
-                            │    convergence  drain to empty                               │
-                            │                                                              │
-                            │  [ ↑/↓ field · ←/→ change · Enter arm · Esc cancel ]         │
-                            │                                                              │
-                            ╰──────────────────────────────────────────────────────────────╯
+
+
+
+               ╭────────────────────────────────────────────────────────────────────────────────────────╮
+               │                                                                                        │
+               │  ❯ arm drain over 0 waves                                                              │
+               │                                                                                        │
+               │  nothing to drain — all ready waves closed or blocked                                  │
+               │                                                                                        │
+               │  [ Enter / Esc close ]                                                                 │
+               │                                                                                        │
+               ╰────────────────────────────────────────────────────────────────────────────────────────╯

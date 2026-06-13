@@ -81,6 +81,46 @@ _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 
 # tests/tui/test_fleet_flows.py -> parents[2] is the repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_DAEMON_ACCEPTED_RESOLVE_FLOWS = {
+    "G11-fork-resolve-lane-resumes",
+    "G13-fail-repair-close-or-fork",
+}
+
+
+class _AcceptingResolveClient:
+    """DaemonClient stand-in for flow rows whose fork resolve succeeds."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        pass
+
+    def __enter__(self) -> _AcceptingResolveClient:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+        if method == "fleet.reattach":
+            assert params == {}
+            return {}
+        assert method == "fleet.resolve_fork"
+        assert params["resolution"] in {"skip", "re_dispatch"}
+        return {"run_state": FleetRunState.DRAINING.value}
+
+
+def _patch_accepting_resolve_daemon(
+    spec_args: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Patch a reachable accepting daemon for flow rows that resolve a fork."""
+    if spec_args["flow"] not in _DAEMON_ACCEPTED_RESOLVE_FLOWS:
+        return
+
+    from eawf.surfaces.cli import _daemon_client as dc
+    from eawf.surfaces.tui.app import EaApp
+
+    monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+    monkeypatch.setattr(dc, "DaemonClient", _AcceptingResolveClient)
 
 
 # --------------------------------------------------------------------------
@@ -505,11 +545,16 @@ def test_fleet_flow_run_kinds_resolve_to_a_run() -> None:
 
 
 @pytest.mark.parametrize("spec_args", FLEET_FLOW_SPECS, ids=_flow_ids())
-def test_fleet_journey_reaches_terminal_state(spec_args: dict[str, object], tmp_path: Path) -> None:
+def test_fleet_journey_reaches_terminal_state(
+    spec_args: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # The C1 + C3 core: each G8-G17 journey drives its key sequence through the
     # real key->Binding path and lands its declared terminal cockpit state. G16
     # (daemon-unreachable) and G17 (campaign converged) are in the same set, so
     # the degraded + campaign-terminal paths are gate-provable here too.
+    _patch_accepting_resolve_daemon(spec_args, monkeypatch)
     spec = _spec_with_state(spec_args, tmp_path)
     result = check_tui_flow(spec, _REPO_ROOT)
     assert result.status == "pass", result.details
@@ -518,11 +563,14 @@ def test_fleet_journey_reaches_terminal_state(spec_args: dict[str, object], tmp_
 
 @pytest.mark.parametrize("spec_args", FLEET_FLOW_SPECS, ids=_flow_ids())
 def test_fleet_journey_dispatches_through_registry(
-    spec_args: dict[str, object], tmp_path: Path
+    spec_args: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # C2: the production CHECK_REGISTRY["tui_flow"] dispatch is the call-site the
     # audit runner uses; dispatch every journey through it so each is gate-bound
     # end to end (not merely callable via the imported function).
+    _patch_accepting_resolve_daemon(spec_args, monkeypatch)
     spec = _spec_with_state(spec_args, tmp_path)
     fn = CHECK_REGISTRY["tui_flow"]
     result = fn(spec, _REPO_ROOT)

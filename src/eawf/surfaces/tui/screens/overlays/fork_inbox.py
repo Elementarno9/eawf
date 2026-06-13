@@ -48,6 +48,7 @@ land is never reported as one. The daemon owns the actual wave-state mutation.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import ComposeResult
@@ -157,6 +158,14 @@ RESOLVE_IDLE: str = "press a / r / s / x to resolve this fork"
 RESOLVE_NO_DAEMON: str = "resolve: daemon unavailable -- request not issued"
 
 
+@dataclass(frozen=True)
+class _ResolveResult:
+    """Result line plus whether the daemon accepted the fork resolution."""
+
+    line: str
+    accepted: bool
+
+
 def reason_headline(fork: FleetFork) -> str:
     """Return the human-facing phrase naming *fork*'s reason (C1).
 
@@ -247,8 +256,18 @@ def issue_resolve(
     Returns:
         A content-markup result line describing the resolution outcome.
     """
+    return _issue_resolve(fork, resolution, daemon_available=daemon_available).line
+
+
+def _issue_resolve(
+    fork: FleetFork,
+    resolution: FleetForkResolution,
+    *,
+    daemon_available: bool,
+) -> _ResolveResult:
+    """Issue the resolve RPC and record whether the daemon accepted it."""
     if not daemon_available:
-        return f"[$warn]{RESOLVE_NO_DAEMON}[/]"
+        return _ResolveResult(f"[$warn]{RESOLVE_NO_DAEMON}[/]", accepted=False)
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     try:
@@ -263,14 +282,20 @@ def issue_resolve(
             )
     except DaemonRpcError as exc:
         logger.debug(f"issue_resolve daemon_rejected message={exc.message!r}")
-        return f"[$warn]resolve: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+        return _ResolveResult(
+            f"[$warn]resolve: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]",
+            accepted=False,
+        )
     except (OSError, RuntimeError, TimeoutError) as exc:
         logger.debug(f"issue_resolve daemon_fallback cause={exc!r}")
-        return f"[$warn]{RESOLVE_NO_DAEMON}[/]"
+        return _ResolveResult(f"[$warn]{RESOLVE_NO_DAEMON}[/]", accepted=False)
     run_state = str(result.get("run_state", ""))
-    return (
-        f"[$ok]resolve: {escape_markup(resolution.value)}[/] "
-        f"[$muted]{escape_markup(fork.wave_id)} run={escape_markup(run_state)}[/]"
+    return _ResolveResult(
+        (
+            f"[$ok]resolve: {escape_markup(resolution.value)}[/] "
+            f"[$muted]{escape_markup(fork.wave_id)} run={escape_markup(run_state)}[/]"
+        ),
+        accepted=True,
     )
 
 
@@ -297,8 +322,8 @@ class ForkInboxModal(ModalScreen[None]):
         align: center middle;
     }
     ForkInboxModal > #fork-inbox-box {
-        width: auto;
-        min-width: 64;
+        width: 90%;
+        min-width: 36;
         max-width: 96;
         height: auto;
         max-height: 90%;
@@ -471,10 +496,9 @@ class ForkInboxModal(ModalScreen[None]):
 
         Routes the option *key*'s :class:`FleetForkResolution` to the
         ``fleet.resolve_fork`` RPC for the displayed fork and surfaces the typed
-        outcome on the result line. The resolved fork is dropped from the local
-        queue; when forks remain the inbox advances to the next, otherwise it
-        dismisses back to the cockpit. With no fork to resolve (an empty queue)
-        the key is a no-op.
+        outcome on the result line. The fork is dropped from the local queue
+        only after daemon acceptance; a no-daemon or rejected request keeps the
+        card visible. With no fork to resolve (an empty queue) the key is a no-op.
 
         Args:
             key: The pressed option key (one of ``a`` / ``r`` / ``s`` / ``x``).
@@ -483,13 +507,14 @@ class ForkInboxModal(ModalScreen[None]):
         if fork is None:
             return
         resolution = _RESOLUTION_BY_KEY[key]
-        result_line = issue_resolve(fork, resolution, daemon_available=self._daemon_available())
-        self._set_result(result_line)
+        result = _issue_resolve(fork, resolution, daemon_available=self._daemon_available())
+        self._set_result(result.line)
         logger.info(
             f"fork_inbox resolved wave={fork.wave_id} attempt={fork.attempt} "
-            f"resolution={resolution.value} result={result_line!r}"
+            f"resolution={resolution.value} accepted={result.accepted} result={result.line!r}"
         )
-        self._drop_resolved(fork)
+        if result.accepted:
+            self._drop_resolved(fork)
 
     def _drop_resolved(self, fork: FleetFork) -> None:
         """Drop the just-resolved *fork* from the queue and advance, or dismiss.
@@ -510,6 +535,7 @@ class ForkInboxModal(ModalScreen[None]):
             return
         self.index = min(self.index, len(remaining) - 1)
         self._repaint()
+        self._set_result(f"[$muted]{RESOLVE_IDLE}[/]")
 
     def action_close_inbox(self) -> None:
         """Close the inbox without resolving (``Esc``)."""

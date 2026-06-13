@@ -76,8 +76,8 @@ ARM_NO_DAEMON: str = "arm: daemon unavailable -- request not issued"
 #: default surface, ``"ascii"`` only when the App resolves it.
 _DEFAULT_RENDER_MODE: str = "unicode"
 
-#: Title above the five config groups -- names the launch form.
-ARM_TITLE: str = "arm fleet drive"
+#: Title above the five config groups -- names the launch target.
+ARM_TITLE: str = "arm drain over"
 
 #: Honest-empty banner shown when the ready frontier is dry: arming would refuse
 #: at the daemon (an empty frontier cannot arm a make-progress run), so the
@@ -94,6 +94,12 @@ CONVERGENCE_GROUP_ID: str = "arm-convergence"
 
 #: Id of the honest-empty banner row (shown only on a dry frontier).
 EMPTY_BANNER_ID: str = "arm-empty"
+
+#: Ids of the read-only preview rows under the editable config groups.
+CAPS_ROW_ID: str = "arm-caps"
+HALT_ROW_ID: str = "arm-halt"
+RISK_ROW_1_ID: str = "arm-risk-row-1"
+RISK_ROW_2_ID: str = "arm-risk-row-2"
 
 #: Id of the key-hint footer row.
 HINT_ID: str = "arm-hint"
@@ -360,6 +366,50 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 #: middle-dot-separated chord list under the form.
 _KEY_HINT: str = "[ ↑/↓ field · ←/→ change · Enter arm · Esc cancel ]"
 
+#: Close-only hint for an empty-frontier arm card. The card has no editable
+#: fields in this state, so the footer must not advertise arming controls.
+_CLOSE_ONLY_HINT: str = "[ Enter / Esc close ]"
+
+
+def _format_cap(value: float | int | None) -> str:
+    """Format one budget cap for the arm preview row."""
+    if value is None:
+        return "--"
+    return f"{value:g}"
+
+
+def render_caps_row(budget: str) -> str:
+    """Render the EU / USD / waves caps for *budget*."""
+    eu_cap, usd_cap, waves_cap = _BUDGET_CAPS.get(budget, (None, None, None))
+    return (
+        f"[$muted]caps[/]  EU [$accent]{_format_cap(eu_cap)}[/]  "
+        f"$ [$accent]{_format_cap(usd_cap)}[/]  "
+        f"waves [$accent]{_format_cap(waves_cap)}[/]"
+    )
+
+
+def render_halt_row(risk_policy: str) -> str:
+    """Render the budget-stop behaviour row for *risk_policy*."""
+    halt = "hard-halt in-flight lanes" if "hard-halt" in risk_policy else "drain in-flight lanes"
+    return f"[$muted]budget stop[/]  [$accent]{halt}[/]"
+
+
+def render_risk_matrix_rows(risk_policy: str) -> tuple[str, str]:
+    """Render the two-row risk matrix for *risk_policy*."""
+    if risk_policy == "fork all, hard-halt on fail":
+        clean = "fork every close"
+        fail = "hard-halt run"
+    elif "hard-halt" in risk_policy:
+        clean = "auto-close clean"
+        fail = "hard-halt run"
+    else:
+        clean = "auto-close clean"
+        fail = "fork failed lane"
+    return (
+        f"[$muted]risk matrix[/]  clean [$accent]{clean}[/]",
+        f"[$muted]risk matrix[/]  fail  [$accent]{fail}[/]",
+    )
+
 
 def render_group_row(caption: str, option: str, *, focused: bool) -> str:
     """Render one launch-form group row: caption + selected option + caret.
@@ -401,8 +451,8 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
         align: center middle;
     }
     ArmModal > #arm-box {
-        width: auto;
-        min-width: 64;
+        width: 90%;
+        min-width: 36;
         max-width: 90;
         height: auto;
         border: round $accent;
@@ -415,7 +465,10 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
         margin-bottom: 1;
     }
     ArmModal .arm-group {
-        height: 1;
+        height: auto;
+    }
+    ArmModal .arm-preview {
+        height: auto;
     }
     ArmModal #arm-empty {
         height: auto;
@@ -449,16 +502,22 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
     #: clamp it to the first / last group (no wrap).
     field_index: reactive[int] = reactive(0)
 
-    def __init__(self, *, frontier_empty: bool) -> None:
+    def __init__(self, *, frontier_empty: bool, frontier_count: int | None = None) -> None:
         """Construct the launch form, seeding each group to its first option.
 
         Args:
             frontier_empty: Whether the ready frontier is dry. ``True`` shows
                 the honest-empty banner and makes ``Enter`` a no-op cancel
                 (arming would refuse at the daemon).
+            frontier_count: Count of ready frontier waves the overlay will
+                drain if armed. Defaults to ``0`` for an empty frontier and
+                ``1`` for older populated call sites.
         """
         super().__init__()
         self._frontier_empty = frontier_empty
+        self._frontier_count = (
+            0 if frontier_empty else (frontier_count if frontier_count is not None else 1)
+        )
         #: The selected option index per group, keyed by group id; seeded to the
         #: first option of each group.
         self._selected: dict[str, int] = {group_id: 0 for group_id, _, _ in _GROUPS}
@@ -469,12 +528,19 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
             yield Static(self._title_line(), classes="arm-title")
             if self._frontier_empty:
                 yield Static(f"[$warn]{NOTHING_TO_DRAIN}[/]", id=EMPTY_BANNER_ID)
+                yield Static(_CLOSE_ONLY_HINT, id=HINT_ID)
+                return
             for index, (group_id, caption, options) in enumerate(_GROUPS):
                 yield Static(
                     render_group_row(caption, options[0], focused=index == 0),
                     classes="arm-group",
                     id=group_id,
                 )
+            yield Static(render_caps_row(BUDGET_OPTIONS[0]), classes="arm-preview", id=CAPS_ROW_ID)
+            yield Static(render_halt_row(RISK_OPTIONS[0]), classes="arm-preview", id=HALT_ROW_ID)
+            risk_row_1, risk_row_2 = render_risk_matrix_rows(RISK_OPTIONS[0])
+            yield Static(risk_row_1, classes="arm-preview", id=RISK_ROW_1_ID)
+            yield Static(risk_row_2, classes="arm-preview", id=RISK_ROW_2_ID)
             yield Static(_KEY_HINT, id=HINT_ID)
 
     def on_mount(self) -> None:
@@ -498,7 +564,8 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
     def _title_line(self) -> str:
         """Render the form title led by the dispatch chrome sigil."""
         sigil = chrome("dispatch", mode=self._render_mode())
-        return f"[$accent]{sigil} {ARM_TITLE}[/]"
+        plural = "" if self._frontier_count == 1 else "s"
+        return f"[$accent]{sigil} {ARM_TITLE} {self._frontier_count} wave{plural}[/]"
 
     def watch_field_index(self) -> None:
         """Repaint the group rows when the field cursor moves."""
@@ -507,10 +574,19 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
 
     def _repaint_groups(self) -> None:
         """Repaint every group row with its selected option + focus caret."""
+        if self._frontier_empty:
+            return
         for index, (group_id, caption, options) in enumerate(_GROUPS):
             option = options[self._selected[group_id]]
             row = self.query_one(f"#{group_id}", Static)
             row.update(render_group_row(caption, option, focused=index == self.field_index))
+        budget = self._selected_option(BUDGET_GROUP_ID)
+        risk_policy = self._selected_option(RISK_GROUP_ID)
+        self.query_one(f"#{CAPS_ROW_ID}", Static).update(render_caps_row(budget))
+        self.query_one(f"#{HALT_ROW_ID}", Static).update(render_halt_row(risk_policy))
+        risk_row_1, risk_row_2 = render_risk_matrix_rows(risk_policy)
+        self.query_one(f"#{RISK_ROW_1_ID}", Static).update(risk_row_1)
+        self.query_one(f"#{RISK_ROW_2_ID}", Static).update(risk_row_2)
 
     def action_cursor(self, delta: int) -> None:
         """Move the field cursor by *delta*, clamped to the group range.
@@ -573,21 +649,28 @@ __all__ = [
     "ARM_TITLE",
     "BUDGET_GROUP_ID",
     "BUDGET_OPTIONS",
+    "CAPS_ROW_ID",
     "CONCURRENCY_GROUP_ID",
     "CONCURRENCY_OPTIONS",
     "CONVERGENCE_GROUP_ID",
     "CONVERGENCE_OPTIONS",
     "EMPTY_BANNER_ID",
+    "HALT_ROW_ID",
     "HINT_ID",
     "NOTHING_TO_DRAIN",
     "RISK_GROUP_ID",
     "RISK_OPTIONS",
+    "RISK_ROW_1_ID",
+    "RISK_ROW_2_ID",
     "SCOPE_GROUP_ID",
     "SCOPE_OPTIONS",
     "ArmModal",
     "ArmSpec",
     "build_arm_spec",
     "issue_drive",
+    "render_caps_row",
     "render_group_row",
+    "render_halt_row",
+    "render_risk_matrix_rows",
     "scope_frontier",
 ]

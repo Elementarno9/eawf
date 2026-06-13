@@ -86,8 +86,8 @@ RUN_SUMMARY_HINT_ID: str = "run-summary-hint"
 #: bracketed chord under the card. The card's only verb is return-to-cockpit.
 _KEY_HINT: str = "[ Enter / Esc return to cockpit ]"
 
-#: Heading above the per-wave outcome list.
-OUTCOMES_CAPTION: str = "per-wave outcomes"
+#: Heading above the persisted outcome-class tally rows.
+OUTCOMES_CAPTION: str = "outcome tallies"
 
 #: Honest-empty line when the run recorded no finished lane outcome (a run that
 #: ended before any lane closed): the list says so rather than rendering blank.
@@ -219,8 +219,8 @@ class RunSummaryModal(ModalScreen[None]):
         align: center middle;
     }
     RunSummaryModal > #run-summary-box {
-        width: auto;
-        min-width: 64;
+        width: 90%;
+        min-width: 36;
         max-width: 96;
         height: auto;
         max-height: 90%;

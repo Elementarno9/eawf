@@ -192,3 +192,22 @@ def test_arm_overlay_empty_frontier_snapshot(tmp_path: Path) -> None:
             assert_screen_snapshot(app, _GOLDEN / "arm_overlay_empty.txt")
 
     asyncio.run(body())
+
+
+@pytest.mark.parametrize("width", [40, 48])
+def test_arm_overlay_populated_narrow_snapshot(tmp_path: Path, width: int) -> None:
+    """The populated arm overlay stays coherent at 40/48 columns."""
+    state_path = _write_state(tmp_path, _ready_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(width, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_AUTOPILOT_DIGIT)
+            await settle_screen(pilot)
+            await pilot.press(_ARM_KEY)
+            await settle_screen(pilot)
+            assert isinstance(app.screen, ArmModal)
+            assert_screen_snapshot(app, _GOLDEN / f"arm_overlay_populated_w{width}.txt")
+
+    asyncio.run(body())

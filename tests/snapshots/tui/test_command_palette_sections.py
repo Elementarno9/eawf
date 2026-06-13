@@ -15,8 +15,8 @@ This module pins:
   -- unit-testable without mounting Textual;
 * the frozen no-match prompt literal
   (:data:`~eawf.surfaces.tui.palette.command_palette.NO_MATCH_PROMPT`)
-  byte-for-byte, including its real EM-DASH (U+2014) separator and the
-  absence of a trailing period; and
+  byte-for-byte, including its middle-dot separator and the absence of a
+  trailing period; and
 * the rendered palette (mounted IN ISOLATION on a bare themed App, NOT
   the full operator surface) as a golden snapshot showing the three
   section headers with lifecycle verbs carrying the stage sigil.
@@ -58,10 +58,8 @@ from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 _SIZE = (120, 40)
 _GOLDEN = Path(__file__).resolve().parent / "golden"
 
-#: The exact frozen literal the no-match path must pin. Declared with the
-#: real EM-DASH (U+2014) so the test fails if the source literal ever
-#: drifts to an ASCII hyphen or grows a trailing period.
-_FROZEN_NO_MATCH: str = "no verb matches — Esc to cancel"
+#: The exact frozen literal the no-match path must pin.
+_FROZEN_NO_MATCH: str = "no verb matches · Esc cancel"
 
 
 class _PaletteHostApp(App[None]):
@@ -161,11 +159,10 @@ def test_group_verbs_drops_recent_section_when_no_recents_resolve() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_no_match_prompt_is_frozen_em_dash_literal() -> None:
-    """The no-match prompt pins the frozen EM-DASH literal byte-for-byte."""
+def test_no_match_prompt_is_frozen_middle_dot_literal() -> None:
+    """The no-match prompt pins the frozen middle-dot literal byte-for-byte."""
     assert NO_MATCH_PROMPT == _FROZEN_NO_MATCH
-    # The separator is a real EM-DASH (U+2014), not an ASCII hyphen.
-    assert "—" in NO_MATCH_PROMPT
+    assert "·" in NO_MATCH_PROMPT
     assert " - " not in NO_MATCH_PROMPT
     assert "--" not in NO_MATCH_PROMPT
     # No trailing period (a prompt is a label, not a sentence).

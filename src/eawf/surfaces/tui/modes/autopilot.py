@@ -1490,9 +1490,15 @@ class AutopilotModeScreen(ScopeScreen):
         """
         from eawf.surfaces.tui.screens.overlays.arm import ArmModal
 
-        frontier_empty = not self._rows
-        self._push_overlay(ArmModal(frontier_empty=frontier_empty), self._on_arm_dismissed)
-        logger.info(f"action_arm_flow opened frontier_empty={frontier_empty}")
+        frontier_count = len(self._rows)
+        frontier_empty = frontier_count == 0
+        self._push_overlay(
+            ArmModal(frontier_empty=frontier_empty, frontier_count=frontier_count),
+            self._on_arm_dismissed,
+        )
+        logger.info(
+            f"action_arm_flow opened frontier_empty={frontier_empty} frontier={frontier_count}"
+        )
 
     def _on_arm_dismissed(self, spec: ArmSpec | None) -> None:
         """Arm the fleet drive from the overlay's typed spec, or surface a cancel.
