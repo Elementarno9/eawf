@@ -86,6 +86,32 @@ METRICS_REFRESH_S: float = 5.0
 #: every telemetry-backed tile is honestly dark until the capture wave lands.
 METRICS_HONEST_NEGATIVE: str = "honest-negative · lights up after EU capture"
 
+#: Footer shown once at least one wave has captured runtime EU: the
+#: telemetry tiles are now backed by measured data, so the dashboard drops
+#: the honest-negative banner rather than pinning it forever.
+METRICS_CAPTURE_LIVE: str = "EU capture live · telemetry tiles measured"
+
+
+def _eu_capture_landed(state: State | None) -> bool:
+    """Return whether any wave has captured a positive runtime ``elapsed_eu``.
+
+    The dashboard is honestly dark until the SessionEnd hook feeds the close
+    path real runtime; once any wave's
+    :class:`~eawf.kernel.state.models.ActualSummary` records a positive
+    ``elapsed_eu`` the tiles are measured, so the footer flips from the
+    honest-negative banner to the capture-live affirmation.
+
+    Args:
+        state: The bound scope state, or ``None`` before it loads.
+
+    Returns:
+        ``True`` when at least one actual records ``elapsed_eu > 0``.
+    """
+    if state is None:
+        return False
+    return any(actual.elapsed_eu > 0.0 for actual in (state.actuals or {}).values())
+
+
 #: Placeholder body when no state snapshot is available yet.
 _AWAITING: str = "[$text-muted]awaiting telemetry projection[/]"
 
@@ -446,7 +472,8 @@ class MetricsModal(ModalScreen[None]):
                     tile.border_title = spec.title
                     yield tile
             yield Static(
-                f"[$text-muted]{METRICS_HONEST_NEGATIVE}[/]",
+                f"[$text-muted]{self._honest_footer()}[/]",
+                id="metrics-honest",
                 classes="metrics-honest",
             )
             yield Static(
@@ -547,12 +574,23 @@ class MetricsModal(ModalScreen[None]):
             tile = self.query_one(f"#{spec.tile_id}", Static)
             tile.set_class(index == self.selected, "-focused")
 
+    def _honest_footer(self) -> str:
+        """Return the footer text: honest-negative until EU capture lands.
+
+        Flips to :data:`METRICS_CAPTURE_LIVE` once any wave has captured a
+        positive runtime ``elapsed_eu`` so the dashboard stops pinning the
+        dark banner after real telemetry arrives.
+        """
+        landed = _eu_capture_landed(self._current_state())
+        return METRICS_CAPTURE_LIVE if landed else METRICS_HONEST_NEGATIVE
+
     def _refresh_all(self) -> None:
         """Refresh every tile from the current projection."""
         projection = self._current_projection()
         for spec in TILE_SPECS:
             tile = self.query_one(f"#{spec.tile_id}", Static)
             tile.update(self._tile_body(spec, projection))
+        self.query_one("#metrics-honest", Static).update(f"[$text-muted]{self._honest_footer()}[/]")
         logger.info(
             f"metrics_refresh window={self._args.window!r} scope={self._args.scope_filter!r}"
         )

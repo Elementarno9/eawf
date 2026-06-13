@@ -17,7 +17,8 @@ import orjson
 from rich.text import Text
 from textual.widgets import Static
 
-from eawf.kernel.state.models import State
+from eawf.kernel.state.enums import ActualStatus
+from eawf.kernel.state.models import ActualSummary, State
 from eawf.observability.telemetry.metrics_projection import (
     CacheHealthProjection,
     MetricsProjection,
@@ -34,11 +35,14 @@ from eawf.surfaces.tui.palette.verbs import split_verb_args
 from eawf.surfaces.tui.screens.overlays.metrics import (
     DEFAULT_WINDOW,
     METRIC_WINDOWS,
+    METRICS_CAPTURE_LIVE,
+    METRICS_HONEST_NEGATIVE,
     TILE_SPECS,
     CalibrationDrillModal,
     MetricsArgs,
     MetricsModal,
     VarianceDrillModal,
+    _eu_capture_landed,
     parse_metrics_args,
     render_projection_tile,
     render_variance_drilldown,
@@ -487,5 +491,69 @@ def test_metrics_honest_line_has_top_margin() -> None:
             await pilot.pause()
             honest = app.screen.query_one(".metrics-honest", Static)
             assert honest.styles.margin.top == 1
+
+    asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W29: the honest-negative footer is conditional on captured EU
+# --------------------------------------------------------------------------
+
+
+def _state_with_captured_eu() -> State:
+    """Return the fixture state with one wave carrying positive elapsed EU."""
+    base = _load_state()
+    wave_id = next(iter(base.waves))
+    actual = ActualSummary(
+        id="ACT-cap",
+        scope_id=wave_id,
+        status=ActualStatus.DONE,
+        elapsed_eu=2.0,
+        current_store_record_id="ACT-REC-cap",
+        updated_at=_NOW,
+    )
+    return base.model_copy(update={"actuals": {wave_id: actual}})
+
+
+def test_eu_capture_landed_false_for_uncaptured_state() -> None:
+    # The fixture has no captured runtime, so the dashboard stays honestly dark.
+    assert _eu_capture_landed(_load_state()) is False
+    assert _eu_capture_landed(None) is False
+
+
+def test_eu_capture_landed_true_with_positive_elapsed_eu() -> None:
+    assert _eu_capture_landed(_state_with_captured_eu()) is True
+
+
+def test_metrics_footer_is_honest_negative_until_capture() -> None:
+    # Default reality: nothing captured, so the pinned honest-negative banner.
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(MetricsModal())
+            await pilot.pause()
+            footer = _text(app.screen.query_one("#metrics-honest", Static))
+            assert METRICS_HONEST_NEGATIVE in footer
+            assert METRICS_CAPTURE_LIVE not in footer
+
+    asyncio.run(body())
+
+
+def test_metrics_footer_flips_to_capture_live(tmp_path: Path) -> None:
+    # Once a wave captures runtime EU, the footer drops the dark banner and
+    # affirms the tiles are measured -- no more pinned honest-negative.
+    state_path = tmp_path / "state.json"
+    state_path.write_text(_state_with_captured_eu().model_dump_json(), encoding="utf-8")
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(140, 48)) as pilot:
+            await pilot.pause()
+            app.push_modal(MetricsModal())
+            await pilot.pause()
+            footer = _text(app.screen.query_one("#metrics-honest", Static))
+            assert METRICS_CAPTURE_LIVE in footer
+            assert METRICS_HONEST_NEGATIVE not in footer
 
     asyncio.run(body())
