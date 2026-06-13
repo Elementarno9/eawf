@@ -659,6 +659,34 @@ def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
     return cast(EnforceMode, value)
 
 
+def _resolve_config_runtime_preference(state_path: Path) -> list[str]:
+    """Return the repo's configured runtime preference order, or ``[]``.
+
+    The fleet drive dispatches a wave that carries no per-wave
+    :attr:`~eawf.kernel.state.models.Wave.runtime_preference`; without a
+    fallback the dispatch fails fast with "no runtime resolved" because
+    :func:`_pick_runtime` refuses to guess. The project's
+    ``runtime.preference`` (synthesised from ``runtime.adapters``) is the
+    operator's *explicit* runtime choice, not an arbitrary pick, so it is the
+    correct default for an unpinned wave -- this is what lets ``eawf init
+    --runtime codex`` actually drive a codex fleet without stamping every wave.
+
+    Args:
+        state_path: Filesystem path to ``state.json``.
+
+    Returns:
+        The configured runtime ids in preference order; empty when no
+        ``runtime`` block is configured.
+    """
+    repo = state_path.parent.parent
+    merged, _sources = merge_config(workspace=repo, repo=repo)
+    runtime = merged.get("runtime")
+    if not isinstance(runtime, dict):
+        return []
+    raw = runtime.get("preference") or runtime.get("adapters") or []
+    return [p for p in raw if isinstance(p, str)] if isinstance(raw, list) else []
+
+
 def _persist_live_session_attempt(
     ctx: MethodContext,
     *,
@@ -1190,6 +1218,14 @@ async def dispatch(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]
         if wave is None:
             raise ValueError(f"unknown wave: {args.wave_id!r}")
         preference = wave.runtime_preference
+        # The fleet drive dispatches waves that carry no per-wave runtime
+        # override; fall back to the project's configured runtime preference
+        # (the operator's explicit ``runtime.adapters`` choice) so the drive
+        # resolves a runtime instead of failing fast. An explicit ``runtime``
+        # param still wins inside _pick_runtime; this only fills the gap when
+        # neither the param nor the wave names one.
+        if not preference:
+            preference = _resolve_config_runtime_preference(Path(state_path)) or None
     if args.skill_manifest is not None:
         # Skill -> adapter handshake: the manifest declares which
         # runtimes can host the skill; the daemon picks the highest-
