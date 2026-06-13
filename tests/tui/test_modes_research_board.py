@@ -2524,3 +2524,84 @@ def test_idle_campaign_board_renders_honest_empty_start_hint(tmp_path: Path) -> 
             assert "saturated" not in empty_body
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------
+# W27: the ``g`` run key triggers the live research.run RPC
+# --------------------------------------------------------------------------
+
+
+def test_research_board_binds_run_key_to_research_run() -> None:
+    """The ``g`` key resolves to action_run_campaign over the research.run RPC."""
+    from eawf.surfaces.tui.modes import research_board as rb
+
+    assert rb._RUN_METHOD == "research.run"
+    bound = {
+        getattr(b, "key", None): getattr(b, "action", None)
+        for b in ResearchBoardModeScreen.BINDINGS
+    }
+    assert bound.get("g") == "run_campaign"
+    assert hasattr(ResearchBoardModeScreen, "action_run_campaign")
+
+
+def test_research_board_advertises_run_in_footer() -> None:
+    """The run affordance is discoverable in the board's footer hint strip."""
+    from eawf.surfaces.tui.modes import research_board as rb
+
+    assert "g run" in rb._RESEARCH_HINTS
+
+
+def test_research_board_g_issues_research_run_rpc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a campaign selected + a stubbed daemon, ``g`` issues ``research.run``.
+
+    The run key must reach the daemon with the selected campaign id and surface
+    the honest launched line rather than fabricating a run.
+    """
+    from eawf.runtime.daemon.methods.research import persist_campaign
+
+    state_path = _write_state(tmp_path, _project_state())
+    persist_campaign(state_path, _campaign_payload("campaign-run"))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class _FakeClient:
+        def __init__(self, *_a: object, **_k: object) -> None:
+            return None
+
+        def __enter__(self) -> _FakeClient:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+            calls.append((method, params))
+            return {
+                "handle_id": "research-run-xyz",
+                "campaign_id": params["campaign_id"],
+                "run_state": "running",
+                "backgrounded": True,
+            }
+
+    async def body() -> None:
+        from eawf.surfaces.cli import _daemon_client as dc
+
+        app = EaApp(scope="repo", state_path=state_path)
+        monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
+        monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            await pilot.press("g")
+            await settle_screen(pilot)
+            result = pane.query_one(f"#{ACTION_RESULT_ID}")
+            assert "launched" in str(result.render())  # type: ignore[attr-defined]
+
+    asyncio.run(body())
+    assert calls and calls[0][0] == "research.run"
+    assert calls[0][1]["campaign_id"] == "campaign-run"

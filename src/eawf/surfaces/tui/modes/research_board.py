@@ -193,6 +193,14 @@ _PARK_METHOD: str = "needs_user.park"
 _FOLLOWUP_METHOD: str = "research.followup"
 _SNAPSHOT_METHOD: str = "research.snapshot"
 
+#: Daemon JSON-RPC method the ``g`` (run) key routes through -- the live
+#: campaign driver (the daemon is the only surface that can spawn the
+#: researcher sessions a live run needs). The RPC backgrounds the run on a
+#: daemon worker thread and enforces the ACTIVE-campaign + not-already-in-flight
+#: guards, so the key surfaces the honest run handle or the daemon's rejection
+#: rather than faking a launch.
+_RUN_METHOD: str = "research.run"
+
 #: Daemon JSON-RPC method the ``x`` (cancel-campaign) key routes through -- the
 #: real cancel-campaign tombstoner (the daemon is the canonical campaign-store
 #: mutator).
@@ -230,7 +238,7 @@ CHECKPOINT_IDLE: str = "no checkpoint -- nothing awaiting operator review"
 #: Action-result line before any action key is pressed.
 ACTION_IDLE: str = (
     "enter peek  n new  o ask  t steer  b broadcast  v override  "
-    "a approve  p park  r follow-up  s snapshot  x cancel"
+    "a approve  p park  r follow-up  s snapshot  g run  x cancel"
 )
 
 #: Action-result line when an approve / park has no checkpoint to act on.
@@ -247,6 +255,13 @@ CANCEL_NO_CAMPAIGN: str = "cancel: no campaign selected to cancel"
 #: Action-result line when the cancel-campaign request could not reach the
 #: daemon (the canonical campaign-store mutator).
 CANCEL_NO_DAEMON: str = "cancel: daemon unavailable -- request not issued"
+
+#: Action-result line when ``g`` run fires with no campaign node selected.
+RUN_NO_CAMPAIGN: str = "run: no campaign selected to run"
+
+#: Action-result line when the run request could not reach the daemon (the
+#: only surface that can spawn a live researcher session).
+RUN_NO_DAEMON: str = "run: daemon unavailable -- request not issued"
 
 #: Action-result line while the staging RPC is in flight (the worker dispatched
 #: the call off the UI thread). The result line flips to the honest outcome
@@ -302,6 +317,11 @@ _RESEARCH_HINTS: tuple[str, ...] = (
     render_hint_label("p", "park"),
     render_hint_label("r", "follow-up"),
     render_hint_label("s", "snapshot"),
+    # ``g`` (run) is a board-local key absent from the shared footer
+    # vocabulary (CANONICAL_HINT_TOKENS), so -- like ``b broadcast`` above --
+    # its label is the literal "<token> <action>" form without the
+    # shared-vocabulary guard.
+    "g run",
     render_hint_label("x", "cancel"),
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
@@ -1924,6 +1944,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         Binding("p", "park_checkpoint", "park", show=False),
         Binding("r", "followup", "follow-up", show=False),
         Binding("s", "snapshot", "snapshot", show=False),
+        Binding("g", "run_campaign", "run", show=False),
         Binding("x", "cancel_campaign", "cancel", show=False),
     ]
 
@@ -2552,6 +2573,60 @@ class ResearchBoardModeScreen(ScopeScreen):
         self._set_action(result_line)
         logger.info(f"action_cancel_campaign campaign={campaign_id!r} result={result_line!r}")
 
+    def action_run_campaign(self) -> None:
+        """Start a live run of the selected campaign via the ``research.run`` RPC.
+
+        Resolves the selected tree node to its campaign id and routes the start
+        through the daemon-client seam (the daemon is the only surface that can
+        spawn the researcher sessions a live run needs), surfacing the honest
+        typed run handle. With no campaign node selected there is nothing to
+        run; when the daemon is unreachable -- or the campaign is not staged /
+        already running -- the result says so rather than implying a launch.
+        """
+        campaign_id = self._selected_campaign_id()
+        if campaign_id is None:
+            self._set_action(f"[$warn]{RUN_NO_CAMPAIGN}[/]")
+            return
+        result_line = self._issue_run(campaign_id)
+        self._set_action(result_line)
+        logger.info(f"action_run_campaign campaign={campaign_id!r} result={result_line!r}")
+
+    def _issue_run(self, campaign_id: str) -> str:
+        """Issue ``research.run`` for *campaign_id* and return a result line.
+
+        Calls the daemon ``research.run`` method through the same
+        :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam the rest of
+        the TUI mutates through, when a daemon socket is available. The RPC
+        backgrounds the run and returns a handle immediately; a daemon that is
+        unreachable, rejecting (an unknown / non-ACTIVE campaign, or one already
+        in flight), or timing out yields the honest unavailable / rejected line
+        rather than a faked launch.
+
+        Args:
+            campaign_id: The id of the staged ACTIVE campaign to run.
+
+        Returns:
+            A content-markup result line describing the run outcome.
+        """
+        if not self._daemon_available():
+            return f"[$warn]{RUN_NO_DAEMON}[/]"
+        from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+        try:
+            with DaemonClient(call_timeout_seconds=1.0) as client:
+                handle = client.call(_RUN_METHOD, {"campaign_id": campaign_id})
+        except DaemonRpcError as exc:
+            logger.debug(f"_issue_run daemon_rejected message={exc.message!r}")
+            return f"[$warn]run: daemon rejected request[/] [$muted]{escape_markup(exc.message)}[/]"
+        except (OSError, RuntimeError, TimeoutError) as exc:
+            logger.debug(f"_issue_run daemon_fallback cause={exc!r}")
+            return f"[$warn]{RUN_NO_DAEMON}[/]"
+        run_state = handle.get("run_state", "") if isinstance(handle, dict) else ""
+        return (
+            f"[$ok]run: launched[/] [$muted]campaign={escape_markup(campaign_id)} "
+            f"state={escape_markup(str(run_state))}[/]"
+        )
+
     def _issue_resolve(self, pause: OpenPause) -> str:
         """Issue ``needs_user.resolve`` for *pause* and return a result line.
 
@@ -2991,6 +3066,8 @@ __all__ = [
     "PARK_NO_CHECKPOINT",
     "PARK_NO_DAEMON",
     "RESEARCH_REFRESH_S",
+    "RUN_NO_CAMPAIGN",
+    "RUN_NO_DAEMON",
     "STAGED_ROUND",
     "UNRESOLVED_BODY_ID",
     "UNRESOLVED_HEADER_ID",

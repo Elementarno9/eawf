@@ -96,6 +96,43 @@ class _FakeUnreachableClient:
         return None
 
 
+class _FakeRunHandleClient:
+    """Stand-in DaemonClient whose ``call`` returns a research-run handle."""
+
+    captured: ClassVar[dict[str, Any]] = {}
+
+    def __enter__(self) -> _FakeRunHandleClient:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        forwarded = params or {}
+        _FakeRunHandleClient.captured = {"method": method, "params": forwarded}
+        return {
+            "handle_id": "research-run-abc123",
+            "campaign_id": forwarded["campaign_id"],
+            "run_state": "running",
+            "backgrounded": True,
+        }
+
+
+class _FakeRejectClient:
+    """Stand-in DaemonClient whose ``call`` rejects with a typed RPC error."""
+
+    def __enter__(self) -> _FakeRejectClient:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+        raise DaemonRpcError(-32602, "unknown campaign: 'unknown-campaign'")
+
+
 def _read_rows(state_path: Path) -> list[ResearchCampaignPayload]:
     """Return every campaign payload off the on-disk research_campaign store."""
     path = store_path(state_path, StoreKind.RESEARCH_CAMPAIGN)
@@ -199,3 +236,80 @@ def test_campaign_new_no_args_is_help() -> None:
     result = runner.invoke(app, ["research", "campaign"])
     assert result.exit_code in (0, 2)
     assert "new" in result.output
+
+
+# --------------------------------------------------------------------------
+# W27: ``research campaign run`` -- the operator trigger for research.run
+# --------------------------------------------------------------------------
+
+
+def test_campaign_run_forwards_to_research_run_rpc(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``campaign run <id>`` proxies the live ``research.run`` RPC."""
+    workspace = _make_workspace(tmp_path)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeRunHandleClient)
+
+    result = runner.invoke(
+        app, ["-w", str(workspace), "research", "campaign", "run", "campaign-xyz"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert _FakeRunHandleClient.captured["method"] == "research.run"
+    assert _FakeRunHandleClient.captured["params"] == {"campaign_id": "campaign-xyz"}
+    assert "started research run" in result.output
+
+
+def test_campaign_run_forwards_round_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--round-budget`` reaches the RPC params."""
+    workspace = _make_workspace(tmp_path)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeRunHandleClient)
+
+    result = runner.invoke(
+        app,
+        [
+            "-w",
+            str(workspace),
+            "research",
+            "campaign",
+            "run",
+            "campaign-xyz",
+            "--round-budget",
+            "3",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert _FakeRunHandleClient.captured["params"]["round_budget"] == 3
+
+
+def test_campaign_run_daemon_unreachable_is_invalid_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live run has no offline fallback: an unreachable daemon fails fast."""
+    workspace = _make_workspace(tmp_path)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
+
+    result = runner.invoke(
+        app, ["-w", str(workspace), "research", "campaign", "run", "campaign-xyz"]
+    )
+
+    assert result.exit_code == 1
+    assert "started research run" not in result.output
+
+
+def test_campaign_run_daemon_rejection_is_invalid_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The daemon's not-staged / not-ACTIVE guard surfaces as a CLI error."""
+    workspace = _make_workspace(tmp_path)
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeRejectClient)
+
+    result = runner.invoke(
+        app, ["-w", str(workspace), "research", "campaign", "run", "unknown-campaign"]
+    )
+
+    assert result.exit_code == 1
+    assert "started research run" not in result.output

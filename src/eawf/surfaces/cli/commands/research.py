@@ -131,6 +131,58 @@ def campaign_new(
     emit_json_or_text(body, text, flags=flags)
 
 
+@campaign_app.command("run")
+def campaign_run(
+    ctx: typer.Context,
+    campaign_id: Annotated[str, typer.Argument(help="Id of the staged ACTIVE campaign to drive.")],
+    round_budget: Annotated[
+        int | None,
+        typer.Option(
+            "--round-budget", help="Hard ceiling on rounds (>= 1); daemon default otherwise."
+        ),
+    ] = None,
+) -> None:
+    """Start a live research campaign run over the daemon's agent spawn.
+
+    Issues the daemon ``research.run`` RPC, which spawns a researcher session
+    per staged dispatch each round, reconciles the findings into Claim rows,
+    and persists each round + checkpoint as the TUI Research board's RUN band
+    reads them. The run is backgrounded on a daemon worker thread, so the RPC
+    returns a run handle immediately.
+
+    Unlike ``campaign new`` this has NO offline fallback: a live run spawns
+    real researcher sessions, which only the daemon can do, so an unavailable
+    daemon -- or a campaign that is not staged / already running -- is a hard
+    error (the daemon's ``research.run`` enforces the ACTIVE-campaign and
+    not-already-in-flight guards) rather than a silent no-op.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        resolve_state_path(flags.workspace)
+    except errors.CliError as exc:
+        errors.emit_error(exc, flags=flags)
+        return
+    params: dict[str, object] = {"campaign_id": campaign_id}
+    if round_budget is not None:
+        params["round_budget"] = round_budget
+    try:
+        with DaemonClient() as client:
+            handle = client.call("research.run", params)
+    except (OSError, DaemonRpcError) as exc:
+        errors.emit_error(
+            errors.UserError(f"could not start research run: {exc}", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    text = (
+        f"started research run {handle.get('handle_id')} for campaign {campaign_id} "
+        f"(state={handle.get('run_state')})"
+    )
+    emit_json_or_text(handle, text, flags=flags)
+
+
 def _persist_campaign_via_daemon_or_fallback(
     state_path: Path, payload: ResearchCampaignPayload
 ) -> str:
