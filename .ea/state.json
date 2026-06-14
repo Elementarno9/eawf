@@ -11991,7 +11991,9 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [],
+    "active_wave_ids": [
+      "P30-I20-W31"
+    ],
     "iter_id": "P30-I20",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -22689,6 +22691,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I20-W30",
       "updated_at": "2026-06-13T23:59:14.206526Z"
+    },
+    "P30-I20-W31": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W31-bucket-20260614T000450Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I20-W31",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I20-W31",
+      "updated_at": "2026-06-14T00:04:50.952247Z"
     }
   },
   "fleet_run": {
@@ -24917,7 +24932,8 @@
         "P30-I20-W26",
         "P30-I20-W27",
         "P30-I20-W29",
-        "P30-I20-W30"
+        "P30-I20-W30",
+        "P30-I20-W31"
       ]
     }
   },
@@ -26006,7 +26022,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-13T23:59:14.938172Z",
+  "updated_at": "2026-06-14T00:04:50.952494Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97876,6 +97892,66 @@
         }
       ],
       "title": "Resolve fleet dispatch runtime from config",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W31": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-flow-p30i20",
+      "claimed_at": "2026-06-14T00:04:50.952130Z",
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/app.py",
+        "tests/tui/test_needs_user_closed_wave_filter.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W31",
+      "intent": {
+        "desired_outcome": "Every needs_user surface drops a pause whose subject wave is CLOSED by threading _pause_wave_closed into the app pause helpers.",
+        "evidence_refs": [
+          "src/eawf/surfaces/tui/app.py",
+          "src/eawf/surfaces/tui/attention.py"
+        ],
+        "planned_steps": [
+          "apply _pause_wave_closed in _all_open_pauses and _open_pauses_for_state;add a regression test for badge and inbox source"
+        ],
+        "priority_rationale": null,
+        "problem": "W26 filtered closed-wave advisories only in the attention hero; the footer badge inbox overlay and auto-open modal read list_open_pauses raw so a closed wave still surfaces needs_user there.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-14T00:04:07.978636Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the footer needs_user badge the inbox overlay and the auto-open modal all drop a pause whose subject wave is CLOSED matching the attention feed",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the footer needs_user badge the inbox overlay and the auto-open modal all drop a pause whose subject wave is CLOSED matching the attention feed",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Filter closed-wave advisories from all needs_user surfaces",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
