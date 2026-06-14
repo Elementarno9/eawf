@@ -321,18 +321,6 @@ def _evidence_for_scope(
     return rows
 
 
-def _actual_scopes(state: State, projection: StoreProjection) -> set[str]:
-    store_scopes = {
-        row.envelope.scope_id
-        for row in projection.actuals
-        if row.envelope.scope_id is not None and isinstance(row.payload, ActualPayload)
-    }
-    state_scopes = {
-        actual.scope_id for actual in (state.actuals or {}).values() if actual.scope_id is not None
-    }
-    return store_scopes | state_scopes
-
-
 def _tier_from_evidence(evidence: Iterable[EvidenceRecord]) -> tuple[TrustTier | None, list[str]]:
     refs: list[str] = []
     has_attestation = False
@@ -359,13 +347,20 @@ def _label_wave(state: State, wave: Wave, projection: StoreProjection) -> Output
             evidence_refs=refs,
             reason=reason,
         )
-    if wave.status != WaveStatus.CLOSED or wave.id not in _actual_scopes(state, projection):
+    # A wave that has not closed yet is genuinely "outcome pending" -- the
+    # actual store row may still arrive. A CLOSED wave with no evidence is
+    # terminal: its outcome will not improve, so it is `unavailable`, NOT
+    # `deferred_outcome`. The old condition collapsed both into
+    # `deferred_outcome`, which mislabelled every pre-P28 closed wave (those
+    # predate ActualSummary auto-creation and can never gain an actual) as
+    # "store row not available yet" -- implying data was still coming.
+    if wave.status != WaveStatus.CLOSED:
         return OutputTrustLabel(
             urn=_wave_urn(state, wave.id),
             scope_id=wave.id,
             tier="deferred_outcome",
             evidence_refs=refs,
-            reason="outcome or actual store row not available yet",
+            reason="wave not yet closed",
         )
     return OutputTrustLabel(
         urn=_wave_urn(state, wave.id),
