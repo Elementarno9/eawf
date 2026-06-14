@@ -129,7 +129,9 @@ def _kind_mark_markup(kind: AttentionKind, *, mode: str) -> str:
     return f"[$warn]{mark}[/]"
 
 
-def _render_acute_row(item: AttentionItem, *, now: datetime, mode: str) -> str:
+def _render_acute_row(
+    item: AttentionItem, *, now: datetime, mode: str, selected: bool = False
+) -> str:
     """Render one acute item as a named ``$warn``-band content-markup line.
 
     The leading mark is the item's sigil/chrome glyph (failed=cross,
@@ -139,17 +141,31 @@ def _render_acute_row(item: AttentionItem, *, now: datetime, mode: str) -> str:
     trails so the operator knows the highlighted row is actionable. A
     portfolio (cross-repo) row prefixes its repo code.
 
+    When *selected*, the row is rendered PLAIN (no per-span content-markup
+    colours): the ``.-selected`` rule paints a saturated green selection
+    rectangle behind it, and the semantic colours ($warn amber title,
+    $text-muted detail / hint) fail contrast on that green. Rich content-
+    markup colours override the widget's CSS ``color``, so the only way to
+    force a readable foreground is to drop the markup and let the
+    ``.-selected`` ``color: $text`` (bright, bold) paint every cell.
+
     Args:
         item: The acute attention item to render.
         now: The reference instant the row's ``time-ago`` is measured from.
         mode: The App's resolved render-mode label (``"ascii"`` or unicode).
+        selected: Whether this row is the highlighted (selected) row.
 
     Returns:
         A content-markup string for one :class:`~textual.widgets.Static`.
     """
+    ago = format_time_ago(item.occurred_at, now)
+    if selected:
+        mark = _kind_glyph(item.kind, mode=mode)
+        repo = f"{item.repo_tag} " if item.repo_tag else ""
+        ago_cell = f"  {ago:>8}" if ago else ""
+        return f"{mark} {repo}{item.title}  {item.detail}{ago_cell}  {_REVIEW_HINT}"
     mark_cell = _kind_mark_markup(item.kind, mode=mode)
     repo = f"[$accent]{item.repo_tag}[/] " if item.repo_tag else ""
-    ago = format_time_ago(item.occurred_at, now)
     ago_cell = f"  [$text-muted]{ago:>8}[/]" if ago else ""
     return (
         f"{mark_cell} {repo}[$warn]{item.title}[/]  [$text-muted]{item.detail}[/]"
@@ -186,8 +202,13 @@ class AttentionFeed(VerticalScroll):
     AttentionFeed .attention-row.-selected {
         /* Brand-book accent-dim selection rectangle (the one focus-ring green,
            mirrored as status_tint.SELECTION_TINT) behind the highlighted row,
-           plus bold so the active row reads at a glance. */
+           plus bold so the active row reads at a glance. The selected row is
+           re-rendered PLAIN (no per-span colours) so this $text foreground
+           actually paints it -- on the saturated green the semantic $warn /
+           $text-muted spans fail contrast, and content-markup colours would
+           otherwise override the widget colour. */
         background: #0c5a44;
+        color: $text;
         text-style: bold;
     }
     AttentionFeed .attention-empty {
@@ -500,11 +521,23 @@ class AttentionFeed(VerticalScroll):
             self._repaint_selection()
 
     def _repaint_selection(self) -> None:
-        """Toggle the ``-selected`` class onto the highlighted row."""
-        for index in range(len(self._items)):
+        """Toggle the ``-selected`` class onto the highlighted row + re-render it.
+
+        The selected row is re-rendered PLAIN (no content-markup colours) so
+        the ``.-selected`` ``color: $text`` paints it readably on the green
+        selection rectangle; every other row keeps its semantic colours.
+        """
+        mode = self._render_mode()
+        for index, item in enumerate(self._items):
             rows = self.query(f"#attention-row-{index}")
-            if rows:
-                rows.only_one(Static).set_class(index == self.selected, "-selected")
+            if not rows:
+                continue
+            static = rows.only_one(Static)
+            is_selected = index == self.selected
+            static.set_class(is_selected, "-selected")
+            static.update(
+                _render_acute_row(item, now=self._now_at, mode=mode, selected=is_selected)
+            )
 
     def action_move(self, delta: int) -> None:
         """Move the highlight by *delta*, clamped to the row range.
