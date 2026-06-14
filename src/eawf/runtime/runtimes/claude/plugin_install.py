@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 import eawf
+from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
@@ -229,18 +230,92 @@ def _render_managed_block(timestamp: str) -> dict[str, Any]:
     return body
 
 
+#: Marker substring identifying an Eä-owned ``hooks`` command in
+#: ``settings.json`` (the rendered wrapper lives under ``.claude/hooks/``).
+#: Used to replace Eä's own hook entries idempotently on re-install while
+#: preserving every user / other-plugin entry.
+_HOOK_COMMAND_MARKER: str = "/.claude/hooks/"
+
+
+def _eawf_settings_hooks() -> dict[str, list[dict[str, Any]]]:
+    """Return the ``settings.json`` ``hooks`` block wiring the Eä plugin hooks.
+
+    Claude Code reads its hook subscriptions from the project
+    ``settings.json`` ``hooks`` block (event -> matcher -> command). Without
+    a real entry here CC never invokes the rendered ``.claude/hooks/*.sh``
+    wrappers -- which is why the ``Stop`` -> ``session_end`` -> daemon
+    ``runtime.capture`` chain never fired and EU capture stayed dark. This
+    mirrors :func:`~eawf.runtime.runtimes.claude.hook_map.build_plugin_hooks_json`
+    but emits CONCRETE project-relative command paths (``$CLAUDE_PROJECT_DIR``
+    is the CC-provided project root) rather than the plugin-manifest
+    ``${CLAUDE_PLUGIN_ROOT}`` form a marketplace install would use.
+
+    Returns:
+        The ``cc_event -> [matcher/command entry]`` mapping for the project
+        ``hooks`` block, in :data:`PLUGIN_HOOK_REGISTRY` order.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for spec in PLUGIN_HOOK_REGISTRY:
+        command = f"$CLAUDE_PROJECT_DIR/.claude/hooks/{spec.event_type.value}.sh"
+        grouped.setdefault(spec.cc_event, []).append(
+            {"matcher": spec.matcher, "hooks": [{"type": "command", "command": command}]}
+        )
+    return grouped
+
+
+def _merge_settings_hooks(
+    existing: Any, eawf_hooks: dict[str, list[dict[str, Any]]]
+) -> dict[str, list[dict[str, Any]]]:
+    """Merge Eä's hook entries into an existing ``hooks`` block, preserving others.
+
+    For each CC event, every non-Eä entry (a user hook or another plugin's,
+    identified by a command path NOT under ``.claude/hooks/``) is kept
+    verbatim, then Eä's entries are appended. Re-install is idempotent: Eä's
+    own prior entries are dropped before re-adding, so the block never grows.
+
+    Args:
+        existing: The current ``hooks`` value (any type; non-dict is ignored).
+        eawf_hooks: The Eä hooks block from :func:`_eawf_settings_hooks`.
+
+    Returns:
+        The merged ``hooks`` block (events with no entries are omitted).
+    """
+    src = existing if isinstance(existing, dict) else {}
+    merged: dict[str, list[dict[str, Any]]] = {}
+    for event in sorted(set(src) | set(eawf_hooks)):
+        kept: list[dict[str, Any]] = []
+        raw_entries = src.get(event)
+        for entry in raw_entries if isinstance(raw_entries, list) else []:
+            commands = entry.get("hooks", []) if isinstance(entry, dict) else []
+            is_eawf = any(
+                isinstance(h, dict) and _HOOK_COMMAND_MARKER in str(h.get("command", ""))
+                for h in (commands if isinstance(commands, list) else [])
+            )
+            if not is_eawf:
+                kept.append(entry)
+        kept.extend(eawf_hooks.get(event, []))
+        if kept:
+            merged[event] = kept
+    return merged
+
+
 def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> bytes:
-    """Return the new ``settings.json`` bytes with ``__eawf_managed`` patched in.
+    """Return the new ``settings.json`` bytes with the Eä keys patched in.
 
     Behaviour:
 
     - If *target_path* exists, read it as JSON; non-JSON content raises
       :class:`ValueError`.
-    - Replace (or insert) the ``__eawf_managed`` key with *managed_body*;
-      every other key is preserved verbatim — Eä never writes outside
-      its namespace per docs/architecture/plugins.md.
+    - Replace (or insert) the ``__eawf_managed`` tracking namespace with
+      *managed_body*.
+    - Merge Eä's plugin hooks into the real ``hooks`` block (CC reads its
+      subscriptions there), preserving every user / other-plugin hook entry
+      and replacing only Eä's own (idempotent). This is the wire that makes
+      CC actually invoke the rendered ``.claude/hooks/*.sh`` wrappers -- e.g.
+      ``Stop`` -> ``session_end`` -> daemon ``runtime.capture`` (EU capture).
+    - Every other key is preserved verbatim.
     - Render the resulting object as deterministic JSON (sorted keys,
-      4-space indent, trailing newline) so two installs are byte-stable.
+      2-space indent, trailing newline) so two installs are byte-stable.
     """
     parsed: dict[str, Any] = {}
     if target_path.exists():
@@ -259,6 +334,9 @@ def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> byt
                 )
             parsed = dict(parsed_any)
     parsed[_MANAGED_KEY] = managed_body
+    merged_hooks = _merge_settings_hooks(parsed.get("hooks"), _eawf_settings_hooks())
+    if merged_hooks:
+        parsed["hooks"] = merged_hooks
     rendered = json.dumps(parsed, sort_keys=True, indent=2) + "\n"
     return rendered.encode("utf-8")
 

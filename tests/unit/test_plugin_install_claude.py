@@ -326,3 +326,39 @@ def test_install_plugin_preserves_unrelated_skill_files(tmp_path: Path) -> None:
     extra.write_text("user-added\n", encoding="utf-8")
     install_plugin(tmp_path)  # idempotent re-run
     assert extra.read_text(encoding="utf-8") == "user-added\n"
+
+
+def test_install_wires_session_end_into_cc_stop_hook(tmp_path: Path) -> None:
+    """The CC Stop hook is wired so session_end -> daemon runtime.capture fires.
+
+    Without a real ``hooks`` entry CC never invokes the rendered
+    ``.claude/hooks/session_end.sh`` wrapper, so the runtime.capture chain
+    never runs and EU capture stays dark (the W34 root cause).
+    """
+    install_plugin(tmp_path)
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    hooks = settings.get("hooks", {})
+    assert "Stop" in hooks, "CC Stop hook must be wired for EU capture"
+    commands = [h["command"] for entry in hooks["Stop"] for h in entry.get("hooks", [])]
+    assert any(c.endswith("session_end.sh") for c in commands)
+    # Project-relative via the CC-provided project-root variable.
+    assert all("$CLAUDE_PROJECT_DIR/.claude/hooks/" in c for c in commands)
+
+
+def test_install_settings_hooks_preserve_user_entries_and_stay_idempotent(tmp_path: Path) -> None:
+    """A user / other-plugin hook entry survives; Eä's entries do not duplicate."""
+    settings_path = tmp_path / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    user_hook = {"matcher": "", "hooks": [{"type": "command", "command": "my-own-hook.sh"}]}
+    settings_path.write_text(
+        json.dumps({"hooks": {"Stop": [user_hook]}}, indent=2) + "\n", encoding="utf-8"
+    )
+
+    install_plugin(tmp_path)
+    first = json.loads(settings_path.read_text(encoding="utf-8"))["hooks"]["Stop"]
+    assert user_hook in first, "a user hook entry must be preserved"
+    assert any("session_end.sh" in h["command"] for e in first for h in e["hooks"])
+
+    install_plugin(tmp_path)  # idempotent: no growth
+    second = json.loads(settings_path.read_text(encoding="utf-8"))["hooks"]["Stop"]
+    assert second == first
