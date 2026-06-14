@@ -1140,34 +1140,51 @@ class EaApp(App[None]):
             logger.debug(f"unregister_feed_listener count={len(self._feed_listeners)}")
 
     def _open_pauses_for_state(self, state: State) -> list[Any]:
-        """Return open pauses for *state*; degrade to empty on read errors."""
-        if self._state_path is None:
-            return []
-        from eawf.workflow.skills.needs_user import list_open_pauses
+        """Return open pauses for *state*, dropping CLOSED-wave advisories.
 
-        try:
-            return list(list_open_pauses(self._state_path, scope_id=state.urn))
-        except OSError as exc:
-            logger.debug(f"_open_pauses_for_state list failed cause={exc!r}")
-            return []
-
-    def _all_open_pauses(self) -> list[Any]:
-        """Return every open pause across all scopes; empty on read errors.
-
-        The cross-scope counterpart to :meth:`_open_pauses_for_state` (which
-        filters to the active scope for the auto-open). Feeds both the
-        footer :attr:`pending_pauses` badge count and the global inbox
-        overlay, so the badge and the inbox always agree on the same set.
+        Applies the same :func:`~eawf.surfaces.tui.attention._pause_wave_closed`
+        predicate the attention feed uses, so a closed wave's stale over-budget
+        advisory never re-opens the auto-open modal. Degrades to empty on read
+        errors.
         """
         if self._state_path is None:
             return []
+        from eawf.surfaces.tui.attention import _pause_wave_closed
         from eawf.workflow.skills.needs_user import list_open_pauses
 
         try:
-            return list(list_open_pauses(self._state_path, scope_id=None))
+            raw = list(list_open_pauses(self._state_path, scope_id=state.urn))
+        except OSError as exc:
+            logger.debug(f"_open_pauses_for_state list failed cause={exc!r}")
+            return []
+        return [p for p in raw if not _pause_wave_closed(state, p)]
+
+    def _all_open_pauses(self) -> list[Any]:
+        """Return every open pause across all scopes, dropping CLOSED-wave advisories.
+
+        The cross-scope counterpart to :meth:`_open_pauses_for_state`. Feeds the
+        footer :attr:`pending_pauses` badge count and the global inbox overlay,
+        so the badge, the inbox, and the attention feed all agree on the same
+        set. Drops a pause whose subject wave is CLOSED in the bound scope's
+        last-seen state (the same filter the attention feed applies), so a
+        closed wave's advisory does not linger in the badge or inbox after the
+        wave-close retract has fired (or before, if the daemon is mid-restart).
+        Degrades to empty on read errors.
+        """
+        if self._state_path is None:
+            return []
+        from eawf.surfaces.tui.attention import _pause_wave_closed
+        from eawf.workflow.skills.needs_user import list_open_pauses
+
+        try:
+            raw = list(list_open_pauses(self._state_path, scope_id=None))
         except OSError as exc:
             logger.debug(f"_all_open_pauses list failed cause={exc!r}")
             return []
+        state = self._last_state
+        if state is None:
+            return raw
+        return [p for p in raw if not _pause_wave_closed(state, p)]
 
     def _attention_now(self) -> datetime:
         """Return the reference instant for attention-row time-ago labels.
