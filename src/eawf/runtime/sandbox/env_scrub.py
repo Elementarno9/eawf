@@ -51,6 +51,14 @@ _OPENCODE_RUNTIME: str = "opencode"
 #: child.
 _PINNED_PATH: str = "/usr/bin:/bin:/usr/sbin:/sbin"
 
+#: The PINNED TMPDIR. The parent ``TMPDIR`` (the macOS Darwin per-user temp
+#: ``/private/var/folders/...``) is deliberately NOT passed through: the FS
+#: jail confines writes to ``/private/tmp`` + ``/private/var/tmp`` + cwd, so a
+#: sandboxed CLI that stages runtime sockets / PATH aliases under ``$TMPDIR``
+#: must point at an allowed write subpath. Pinning it here lets the jail keep
+#: write confinement tight (no broad ``/private/var/folders`` allow).
+_PINNED_TMPDIR: str = "/private/tmp"
+
 #: Locale default seeded when the base env carries no ``LANG``.
 _DEFAULT_LANG: str = "C.UTF-8"
 
@@ -178,6 +186,11 @@ def build_child_env(
 
     # Floor LANG is seeded with a default when the parent has none.
     child["LANG"] = source.get("LANG", _DEFAULT_LANG)
+
+    # Floor TMPDIR is PINNED to an allowed write subpath -- never the parent
+    # Darwin per-user temp -- so a sandboxed CLI's temp staging stays inside
+    # the FS jail's write confinement.
+    child["TMPDIR"] = _PINNED_TMPDIR
 
     # Floor locale carry-through (LC_*) + the lane's auth families, both
     # matched by prefix.

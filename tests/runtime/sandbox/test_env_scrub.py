@@ -208,6 +208,23 @@ def test_resolve_binary_dir_none_when_binary_absent(monkeypatch: pytest.MonkeyPa
 
 
 # ---------------------------------------------------------------------------
+# TMPDIR: pinned to an allowed write subpath, never the parent Darwin temp
+# ---------------------------------------------------------------------------
+
+
+def test_build_child_env_pins_tmpdir_to_allowed_temp() -> None:
+    """TMPDIR is pinned to /private/tmp; the parent Darwin per-user temp is dropped.
+
+    W37: a sandboxed CLI stages runtime sockets / PATH aliases under $TMPDIR;
+    the FS jail confines writes, so TMPDIR must point at an allowed subpath
+    (keeps the jail from having to open the broad /private/var/folders tree).
+    """
+    base = {**_FULL_BASE_ENV, "TMPDIR": "/var/folders/xx/abc/T/"}
+    env = build_child_env("codex", base_env=base)
+    assert env["TMPDIR"] == "/private/tmp"
+
+
+# ---------------------------------------------------------------------------
 # Credential families dropped on EVERY lane
 # ---------------------------------------------------------------------------
 

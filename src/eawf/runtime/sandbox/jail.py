@@ -219,24 +219,48 @@ def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None)
         cred_path = (home_dir / rel).resolve(strict=False)
         lines.append(f'(deny file-read* (subpath "{cred_path}"))')
 
+    # Shared egress + TLS floor (P30-I20-W37). A spawned runtime CLI reaches
+    # its model API over direct HTTPS: eawf's UDS egress proxy speaks a custom
+    # CONNECT protocol third-party CLIs (codex / claude) cannot use AND is not
+    # wired into the spawn, so the jail itself must permit outbound network.
+    # TLS server-cert validation needs the keychain / trust daemons (securityd
+    # + trustd); without them the handshake fails with errSecNoKeychain
+    # (-25291). The CLIs stage their runtime sockets + PATH aliases under
+    # ``$TMPDIR``, which the env scrub pins to ``/private/tmp`` (an allowed
+    # write subpath) so the broad Darwin per-user temp (/private/var/folders)
+    # never has to be opened -- keeping write confinement tight. Host-scoped
+    # egress classification for third-party CLIs (a standard HTTP-CONNECT proxy
+    # in front of classify_egress) is the P31 follow-up; until it lands this
+    # trades the (idle, un-wired) egress allow/deny for a functioning spawn,
+    # while the cred-read denies above + the write confinement below stay
+    # intact (the agent still cannot read another tool's credentials).
+    lines.append("(allow network*)")
+    lines.append("(allow system-socket)")
+    lines.append('(allow mach-lookup (global-name "com.apple.SecurityServer"))')
+    lines.append('(allow mach-lookup (global-name "com.apple.securityd"))')
+    lines.append('(allow mach-lookup (global-name "com.apple.trustd"))')
+    lines.append('(allow mach-lookup (global-name "com.apple.trustd.agent"))')
+
     # Own-credential carve-out so the agent can still authenticate.
     if runtime == _CLAUDE_RUNTIME:
         # macOS divergence: the claude subscription credential is in the
         # encrypted Keychain, not a $HOME file. Permit the Keychain read
-        # subpaths + the keychain/securityd IPC while the cred dirs stay
-        # denied above.
+        # subpaths while the cred dirs stay denied above (the keychain IPC
+        # mach-lookups are in the shared TLS floor).
         for rel in _KEYCHAIN_READ_SUBPATHS:
             keychain_path = (home_dir / rel).resolve(strict=False)
             lines.append(f'(allow file-read* (subpath "{keychain_path}"))')
-        lines.append('(allow mach-lookup (global-name "com.apple.SecurityServer"))')
-        lines.append('(allow mach-lookup (global-name "com.apple.securityd"))')
     else:
+        # codex / opencode keep their own-cred file. Their app-server stages
+        # runtime state (socket, sessions, PATH aliases) under that home, so
+        # it needs WRITE there too -- not just the auth.json READ.
         own_cred = _own_cred_abspath(runtime, home=home_dir)
         lines.append(f'(allow file-read* (subpath "{own_cred.parent}"))')
+        lines.append(f'(allow file-write* (subpath "{own_cred.parent}"))')
 
-    # Confine writes to the worktree cwd only.
+    # Confine writes to the worktree cwd + the pinned-TMPDIR temp areas; still
+    # no broad $HOME or /private/var/folders write.
     lines.append(f'(allow file-write* (subpath "{cwd_abs}"))')
-    # A writable temp area the inner toolchain needs; still no $HOME write.
     lines.append('(allow file-write* (subpath "/private/tmp"))')
     lines.append('(allow file-write* (subpath "/private/var/tmp"))')
 

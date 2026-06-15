@@ -367,6 +367,34 @@ def test_build_seatbelt_profile_opencode_carves_out_own_cred(
     assert f'(allow file-read* (subpath "{opencode_dir}"))' in profile
 
 
+def test_build_seatbelt_profile_egress_tls_floor_w37(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W37: shared floor permits direct egress + keychain/trust mach for TLS.
+
+    A spawned runtime CLI reaches its model API over direct HTTPS (eawf's UDS
+    egress proxy is un-wired + speaks a protocol third-party CLIs can't use),
+    and TLS cert validation needs securityd + trustd. The codex lane also gets
+    WRITE to its own ``$CODEX_HOME`` (app-server runtime state), while the broad
+    Darwin per-user temp stays DENIED -- temp staging is redirected to the
+    pinned ``$TMPDIR`` (an allowed write subpath).
+    """
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    _root, cwd = _repo_with_cwd(tmp_path)
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CODEX, home=tmp_path)
+    assert "(allow network*)" in profile
+    assert "(allow system-socket)" in profile
+    assert 'mach-lookup (global-name "com.apple.securityd")' in profile
+    assert 'mach-lookup (global-name "com.apple.trustd")' in profile
+    codex_dir = str((tmp_path / ".codex").resolve())
+    assert f'(allow file-write* (subpath "{codex_dir}"))' in profile
+    # Write confinement stays tight: the broad Darwin per-user temp root is
+    # NOT write-allowed (temp staging is redirected via the pinned TMPDIR).
+    # Match the exact broad-root line so the deeper cwd allow (which, in this
+    # test, resolves under /private/var/folders) does not false-match.
+    assert '(allow file-write* (subpath "/private/var/folders"))' not in profile
+
+
 def test_build_seatbelt_profile_unknown_runtime_raises(tmp_path: Path) -> None:
     """An unknown runtime lane raises ValueError naming the value."""
     _root, cwd = _repo_with_cwd(tmp_path)
