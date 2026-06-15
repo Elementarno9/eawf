@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.kernel.config import layered
 from eawf.kernel.config.layered import (
@@ -24,6 +25,7 @@ from eawf.kernel.config.layered import (
     Layer,
     branch_config_path,
     merge_config,
+    resolve_runtime_tier_models,
 )
 from eawf.kernel.config.registry import (
     LEAF_KEY_REGISTRY,
@@ -421,3 +423,51 @@ def test_language_runtime_is_locked() -> None:
     entry = leaf_key_lookup("language.runtime")
     assert entry.writable_layers == ()
     assert entry.choices == ("python",)
+
+
+# --- runtime.models tier-ladder override ------------------------------------
+
+
+def test_resolve_runtime_tier_models_none_when_unconfigured(tmp_path: Path) -> None:
+    """No ``runtime.models`` block resolves to ``None`` (built-in ladder wins)."""
+    repo = tmp_path / "repo"
+    _write_yaml(repo / ".ea" / "config.yaml", "planning:\n  approval: repo_val\n")
+    assert resolve_runtime_tier_models(repo) is None
+
+
+def test_resolve_runtime_tier_models_reads_codex_override(tmp_path: Path) -> None:
+    """A ``runtime.models.codex`` block resolves to the 3-tier ladder."""
+    repo = tmp_path / "repo"
+    _write_yaml(
+        repo / ".ea" / "config.yaml",
+        "runtime:\n"
+        "  models:\n"
+        "    codex:\n"
+        "      - gpt-5.3-codex-spark\n"
+        "      - gpt-5.5\n"
+        "      - gpt-5.5\n",
+    )
+    override = resolve_runtime_tier_models(repo)
+    assert override == {"codex": ("gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.5")}
+
+
+def test_resolve_runtime_tier_models_rejects_short_ladder(tmp_path: Path) -> None:
+    """Error path: a ladder that is not a 3-tuple fails validation."""
+    repo = tmp_path / "repo"
+    _write_yaml(
+        repo / ".ea" / "config.yaml",
+        "runtime:\n  models:\n    codex:\n      - gpt-5.5\n",
+    )
+    with pytest.raises(ValidationError):
+        resolve_runtime_tier_models(repo)
+
+
+def test_resolve_runtime_tier_models_rejects_unknown_runtime(tmp_path: Path) -> None:
+    """Error path: an unknown runtime key trips extra=forbid."""
+    repo = tmp_path / "repo"
+    _write_yaml(
+        repo / ".ea" / "config.yaml",
+        "runtime:\n  models:\n    gemini:\n      - a\n      - b\n      - c\n",
+    )
+    with pytest.raises(ValidationError):
+        resolve_runtime_tier_models(repo)

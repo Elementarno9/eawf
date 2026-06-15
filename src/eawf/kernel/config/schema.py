@@ -287,6 +287,54 @@ def assert_prose_not_weaker_than(baseline: ProseConfig, candidate: ProseConfig) 
     return candidate
 
 
+class RuntimeModelsConfig(BaseModel):
+    """Strict typed model for the ``runtime.models`` config block.
+
+    Per-runtime override of the dispatch routing tier ladder. The built-in
+    ladder (:data:`eawf.workflow.dispatch.routing._RUNTIME_TIER_MODEL`) pins a
+    ``(cheap, mid, top)`` model triple per runtime; this block lets a repo
+    swap that triple for a runtime whose account serves different model ids.
+    The motivating case: a ChatGPT-account codex rejects the API-key-only
+    ``gpt-5-mini`` / ``gpt-5`` / ``gpt-5-codex`` defaults, so the repo pins the
+    ids that account actually serves (``gpt-5.3-codex-spark`` / ``gpt-5.5``).
+
+    Each field is the 3-tier ladder (cheapest, mid, top) for that runtime; a
+    runtime left ``None`` falls back to the built-in default ladder, so a
+    partial override (e.g. only ``codex``) is honoured. Every id must be a key
+    the cost ledger can price (exact or longest-prefix) so a spawn meters
+    honestly.
+
+    Attributes:
+        claude: Optional ``(cheap, mid, top)`` model-id triple for the claude
+            lane; ``None`` keeps the built-in haiku/sonnet/opus ladder.
+        codex: Optional ``(cheap, mid, top)`` model-id triple for the codex
+            lane; ``None`` keeps the built-in OpenAI ladder.
+        opencode: Optional ``(cheap, mid, top)`` model-id triple for the
+            opencode lane; ``None`` keeps the built-in ``provider/model`` ladder.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    claude: tuple[str, str, str] | None = None
+    codex: tuple[str, str, str] | None = None
+    opencode: tuple[str, str, str] | None = None
+
+    def as_override(self) -> dict[str, tuple[str, str, str]]:
+        """Project the set lanes into a ``runtime -> (cheap, mid, top)`` map.
+
+        Returns:
+            A mapping with one entry per runtime whose ladder is overridden;
+            runtimes left ``None`` are omitted so the routing resolver falls
+            back to the built-in ladder for them. Empty when nothing is set.
+        """
+        out: dict[str, tuple[str, str, str]] = {}
+        for runtime in ("claude", "codex", "opencode"):
+            ladder = getattr(self, runtime)
+            if ladder is not None:
+                out[runtime] = ladder
+        return out
+
+
 __all__ = [
     "AgentDrivenReleasePolicy",
     "AutoChoose",
@@ -300,6 +348,7 @@ __all__ = [
     "ProseConfig",
     "ProseLevel",
     "ReleaseCadence",
+    "RuntimeModelsConfig",
     "SolutionBias",
     "VcsConventionsConfig",
     "VcsReleaseConventionsConfig",

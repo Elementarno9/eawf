@@ -282,6 +282,33 @@ PRICING: dict[str, ModelPricing] = {
         pricing_version=PRICING_VERSION,
         fetched_at=PRICING_FETCHED_AT,
     ),
+    # The ids a ChatGPT-account codex actually serves (the agent-driven default
+    # codex tier ladder). ``gpt-5.5`` is the flagship (mid/top tiers) and
+    # ``gpt-5.3-codex-spark`` the small cheap tier. PLACEHOLDER RATES, same
+    # provenance caveat as the rows above: ``gpt-5.5`` reuses the ``gpt-5``
+    # stand-in and ``gpt-5.3-codex-spark`` the cheaper ``gpt-5-mini`` stand-in;
+    # both need operator confirmation against published OpenAI rates before they
+    # are treated as authoritative. Listed as exact keys (not relying on the
+    # ``gpt-5`` longest-prefix fallback) so each tier prices to its own row and a
+    # spark spawn does not silently bill at the flagship rate.
+    "gpt-5.5": ModelPricing(
+        input_per_token=Decimal("3e-6"),
+        output_per_token=Decimal("15e-6"),
+        cache_read_per_token=Decimal("0.3e-6"),
+        cache_write_5m_per_token=Decimal("3.75e-6"),
+        cache_write_1h_per_token=Decimal("6e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "gpt-5.3-codex-spark": ModelPricing(
+        input_per_token=Decimal("1e-6"),
+        output_per_token=Decimal("5e-6"),
+        cache_read_per_token=Decimal("0.1e-6"),
+        cache_write_5m_per_token=Decimal("1.25e-6"),
+        cache_write_1h_per_token=Decimal("2e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
     # OpenCode per-tier model ids the dispatch routing table emits for the
     # opencode runtime. OpenCode addresses models in ``provider/model`` form;
     # the routing table routes the anthropic provider (the OAuth-Claude

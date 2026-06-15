@@ -631,8 +631,8 @@ class _VendorStubAdapter(_StubAdapter):
 @pytest.mark.parametrize(
     ("runtime", "effort_bucket", "expected_model"),
     [
-        ("codex", "L", "gpt-5-codex"),
-        ("codex", "XS", "gpt-5-mini"),
+        ("codex", "L", "gpt-5.5"),
+        ("codex", "XS", "gpt-5.3-codex-spark"),
         ("opencode", "L", "anthropic/claude-opus-4-8"),
         ("opencode", "XS", "anthropic/claude-haiku-4-5"),
     ],
@@ -678,13 +678,13 @@ def test_dispatch_spawn_codex_priced_cost_is_nonzero(
 
     _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
 
-    pricing = lookup_pricing("gpt-5-codex")
+    pricing = lookup_pricing("gpt-5.5")
     assert pricing is not None
     costs = _dispatch_cost_payloads(event_path)
     assert len(costs) == 1
     assert Decimal(costs[0]["cost_usd"]) > Decimal("0")
     assert costs[0]["runtime"] == "codex"
-    assert costs[0]["model"] == "gpt-5-codex"
+    assert costs[0]["model"] == "gpt-5.5"
 
 
 def test_dispatch_spawn_flips_wave_to_in_progress(

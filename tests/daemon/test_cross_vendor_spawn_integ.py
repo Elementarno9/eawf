@@ -328,7 +328,7 @@ def test_codex_spawn_flows_through_real_parse_and_metering(
 
     Only ``create_subprocess_exec`` is faked; the real ``CodexAdapter``
     parses the canned ``codex exec --json`` stream into a ``SpawnResult``,
-    the metering writer prices it against ``gpt-5-codex``, and the emitted
+    the metering writer prices it against ``gpt-5.5``, and the emitted
     ``dispatch_cost`` carries the codex runtime + the real token-derived
     cost (the gross input split so cached tokens never double-count).
     """
@@ -344,7 +344,7 @@ def test_codex_spawn_flows_through_real_parse_and_metering(
     assert "codex" in argv_calls[0]
     assert "exec" in argv_calls[0]
 
-    pricing = lookup_pricing("gpt-5-codex")
+    pricing = lookup_pricing("gpt-5.5")
     assert pricing is not None
     # The real parse split 27243 gross into 27243-4480 non-cached + 4480 read.
     expected = (
@@ -355,7 +355,7 @@ def test_codex_spawn_flows_through_real_parse_and_metering(
     costs = _dispatch_cost_payloads(event_path)
     assert len(costs) == 1
     assert costs[0]["runtime"] == "codex"
-    assert costs[0]["model"] == "gpt-5-codex"
+    assert costs[0]["model"] == "gpt-5.5"
     assert Decimal(costs[0]["cost_usd"]) == expected
     assert Decimal(costs[0]["cost_usd"]) > Decimal("0")
 
@@ -413,7 +413,7 @@ def test_codex_spawn_result_carries_real_runtime_and_tokens(
 
     _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
 
-    pricing = lookup_pricing("gpt-5-codex")
+    pricing = lookup_pricing("gpt-5.5")
     assert pricing is not None
     # No cached tokens here, so the whole 1000 is non-cached input; no output.
     expected = 1000 * pricing.input_per_token

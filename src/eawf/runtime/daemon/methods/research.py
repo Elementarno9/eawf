@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.config.layered import merge_config
+from eawf.kernel.config.layered import merge_config, resolve_runtime_tier_models
 from eawf.kernel.spec.campaign_driver import (
     DispatchSpawner,
     RoundFindings,
@@ -993,13 +993,14 @@ async def _spawn_researcher_agent_end(
         runtime=serving_runtime,
     )
     prompt = _researcher_prompt(dispatch)
+    repo_root = state_path.parent.parent
     model = model_for_runtime(
         AgentSessionRole.RESEARCHER,
         _effort_for_depth(dispatch.depth.value),
         runtime_triple,
+        runtime_models=resolve_runtime_tier_models(repo_root),
     )
     adapter = select_adapter(serving_runtime)
-    repo_root = state_path.parent.parent
     captured_pid: list[int] = []
     spawn_result = await adapter.spawn_session(
         prompt,

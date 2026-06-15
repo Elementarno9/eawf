@@ -1042,6 +1042,7 @@ def _jury_spawn_factory(state: State, wave: Wave, *, repo_root: Path) -> Any:
         A :data:`~eawf.observability.eval.cross_vendor_jury.SpawnFactory` -- a
         ``runtime -> SpawnFn`` callable.
     """
+    from eawf.kernel.config.layered import resolve_runtime_tier_models
     from eawf.kernel.state.enums import AgentSessionRole as _Role
     from eawf.kernel.state.enums import EffortBucket as _Effort
     from eawf.runtime.runtimes.adapter import SpawnResult
@@ -1054,10 +1055,11 @@ def _jury_spawn_factory(state: State, wave: Wave, *, repo_root: Path) -> Any:
     effort = wave.effort_bucket if wave.effort_bucket is not None else _Effort.M
     denied = sorted(resolve_denied_tools(state.sandbox_policies, wave_id=wave.id))
     cwd = str(repo_root)
+    runtime_models = resolve_runtime_tier_models(repo_root)
 
     def _factory(runtime: str) -> SpawnFn:
         triple = _JURY_RUNTIME_TRIPLE.get(runtime, "claude")
-        model = model_for_runtime(role, effort, triple)
+        model = model_for_runtime(role, effort, triple, runtime_models=runtime_models)
         adapter = select_adapter(runtime)
 
         async def _spawn(prompt: str) -> SpawnResult:

@@ -525,6 +525,45 @@ def merge_config(
     return merged, sources
 
 
+def resolve_runtime_tier_models(repo_root: Path) -> dict[str, tuple[str, str, str]] | None:
+    """Return the repo's ``runtime.models`` tier-ladder override, or ``None``.
+
+    Reads the merged ``runtime.models`` config block and validates it through
+    :class:`~eawf.kernel.config.schema.RuntimeModelsConfig` (strict,
+    ``extra="forbid"``), projecting it into the ``runtime -> (cheap, mid, top)``
+    map :func:`eawf.workflow.dispatch.routing.model_for_runtime` consumes. The
+    dispatch path passes the result so a repo whose codex account serves
+    different model ids than the built-in ladder (e.g. a ChatGPT-account codex)
+    drives without editing source.
+
+    Args:
+        repo_root: Repo root the layered config is composed against (used as
+            both the workspace and repo anchor, mirroring
+            :func:`resolve_config_runtime_preference`'s call shape).
+
+    Returns:
+        A ``runtime -> (cheap, mid, top)`` map for every overridden runtime, or
+        ``None`` when no ``runtime.models`` block is configured (so the caller
+        falls back to the built-in ladder).
+
+    Raises:
+        pydantic.ValidationError: When the ``runtime.models`` block is present
+            but malformed (unknown runtime key, or a ladder that is not a
+            3-tuple of strings).
+    """
+    from eawf.kernel.config.schema import RuntimeModelsConfig
+
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    runtime = merged.get("runtime")
+    if not isinstance(runtime, dict):
+        return None
+    raw = runtime.get("models")
+    if raw is None:
+        return None
+    override = RuntimeModelsConfig.model_validate(raw).as_override()
+    return override or None
+
+
 def get_dotted(
     merged: Mapping[str, Any],
     dotted: str,

@@ -37,6 +37,7 @@ configured adapter ladder.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
@@ -73,7 +74,13 @@ _TIER_INDEX_BY_MODEL: dict[str, int] = {_MODEL_HAIKU: 0, _MODEL_SONNET: 1, _MODE
 #: :func:`eawf.observability.telemetry.pricing.lookup_pricing`.
 _RUNTIME_TIER_MODEL: dict[str, tuple[str, str, str]] = {
     "claude": (_MODEL_HAIKU, _MODEL_SONNET, _MODEL_OPUS),
-    "codex": ("gpt-5-mini", "gpt-5", "gpt-5-codex"),
+    # ChatGPT-account codex (the agent-driven default lane) rejects the
+    # API-key-only ``gpt-5-mini`` / ``gpt-5`` / ``gpt-5-codex`` ids with a 400
+    # "not supported when using Codex with a ChatGPT account"; the small
+    # ``gpt-5.3-codex-spark`` and the ``gpt-5.5`` flagship are the ids that
+    # account actually serves. A repo on an API-key account overrides this tier
+    # ladder via the ``runtime.models`` config block (resolve_runtime_tier_models).
+    "codex": ("gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.5"),
     "opencode": (
         f"anthropic/{_MODEL_HAIKU}",
         f"anthropic/{_MODEL_SONNET}",
@@ -232,7 +239,12 @@ def resolve_routing(
     return decision
 
 
-def runtime_model_for_decision(decision: RoutingDecision, runtime: str) -> str:
+def runtime_model_for_decision(
+    decision: RoutingDecision,
+    runtime: str,
+    *,
+    runtime_models: Mapping[str, tuple[str, str, str]] | None = None,
+) -> str:
     """Map an already-resolved :class:`RoutingDecision` onto *runtime*'s vendor model.
 
     Pure function -- no I/O, no hidden state. Reads the capability tier off the
@@ -251,6 +263,13 @@ def runtime_model_for_decision(decision: RoutingDecision, runtime: str) -> str:
         decision: A resolved routing decision (the per-role tier pick).
         runtime: The short ``RuntimeTriple`` spelling (``claude`` / ``codex`` /
             ``opencode``) the spawn runs on.
+        runtime_models: Optional per-runtime tier-model override (the
+            ``runtime.models`` config block resolved via
+            :func:`eawf.kernel.config.layered.resolve_runtime_tier_models`).
+            When it carries an entry for *runtime* that 3-tier ladder wins
+            over the built-in :data:`_RUNTIME_TIER_MODEL` default; a runtime
+            absent from the override falls back to the built-in ladder, so a
+            partial override (e.g. only ``codex``) is honoured.
 
     Returns:
         The per-runtime model id for the decision's tier (a key the cost ledger
@@ -261,7 +280,11 @@ def runtime_model_for_decision(decision: RoutingDecision, runtime: str) -> str:
         ValueError: When *runtime* is not one of the three short triple
             spellings.
     """
-    tier_models = _RUNTIME_TIER_MODEL.get(runtime)
+    tier_models = None
+    if runtime_models is not None:
+        tier_models = runtime_models.get(runtime)
+    if tier_models is None:
+        tier_models = _RUNTIME_TIER_MODEL.get(runtime)
     if tier_models is None:
         known = ", ".join(sorted(_RUNTIME_TIER_MODEL))
         raise ValueError(f"unknown runtime: {runtime!r} (known: {known})")
@@ -286,6 +309,7 @@ def model_for_runtime(
     runtime: str,
     *,
     table: dict[tuple[AgentSessionRole, EffortBucket], RoutingDecision] | None = None,
+    runtime_models: Mapping[str, tuple[str, str, str]] | None = None,
 ) -> str:
     """Resolve the model id for *runtime* at *agent_role* x *effort_bucket*.
 
@@ -309,6 +333,10 @@ def model_for_runtime(
             ``opencode``) the spawn runs on.
         table: Optional operator-supplied override map forwarded to
             :func:`resolve_routing`.
+        runtime_models: Optional per-runtime tier-model override (the
+            ``runtime.models`` config block) forwarded to
+            :func:`runtime_model_for_decision`; a runtime absent from it falls
+            back to the built-in :data:`_RUNTIME_TIER_MODEL` ladder.
 
     Returns:
         The per-runtime model id for the tier.
@@ -318,7 +346,7 @@ def model_for_runtime(
             spellings, or the resolved tier model is not a known tier.
     """
     decision = resolve_routing(agent_role, effort_bucket, table=table)
-    model = runtime_model_for_decision(decision, runtime)
+    model = runtime_model_for_decision(decision, runtime, runtime_models=runtime_models)
     logger.debug(
         f"model_for_runtime role={agent_role.value} effort={effort_bucket.value} "
         f"runtime={runtime!r} model={model!r}"

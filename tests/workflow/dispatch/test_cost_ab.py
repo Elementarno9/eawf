@@ -66,8 +66,8 @@ from eawf.workflow.dispatch.routing import TOP_TIER_INDEX
 
 _MODEL_OPUS = "claude-opus-4-8"
 _MODEL_HAIKU = "claude-haiku-4-5"
-_MODEL_GPT5_CODEX = "gpt-5-codex"
-_MODEL_GPT5_MINI = "gpt-5-mini"
+_MODEL_CODEX_TOP = "gpt-5.5"
+_MODEL_CODEX_CHEAP = "gpt-5.3-codex-spark"
 
 
 # --------------------------------------------------------------------------- #
@@ -145,13 +145,13 @@ def test_tier_for_model_exact_claude_tiers() -> None:
 
 def test_tier_for_model_codex_tiers_separate_scale() -> None:
     """The codex ladder maps onto the same 0..top scale as claude."""
-    assert tier_for_model(_MODEL_GPT5_MINI) == 0
-    assert tier_for_model(_MODEL_GPT5_CODEX) == TOP_TIER_INDEX
+    assert tier_for_model(_MODEL_CODEX_CHEAP) == 0
+    assert tier_for_model(_MODEL_CODEX_TOP) == TOP_TIER_INDEX
 
 
 def test_tier_for_model_longest_prefix_for_dated_variant() -> None:
     """A dated / suffixed variant classifies via its longest-prefix tier id."""
-    assert tier_for_model("gpt-5-codex-preview") == TOP_TIER_INDEX
+    assert tier_for_model("gpt-5.5-2026") == TOP_TIER_INDEX
     assert tier_for_model("claude-opus-4-8-20260601") == TOP_TIER_INDEX
 
 
@@ -362,7 +362,7 @@ def test_summarize_cost_ab_codex_runtime_groups_separately_from_claude() -> None
         _cost(runtime="claude", model=_MODEL_OPUS, wave_id="P00-W01", cost_usd="0.40"),
         _cost(
             runtime="codex",
-            model=_MODEL_GPT5_CODEX,
+            model=_MODEL_CODEX_TOP,
             wave_id="P00-W01",
             cost_usd="0.10",
         ),
@@ -676,7 +676,7 @@ def test_compute_cost_ab_populated_groups_spend_per_role_and_runtime(
     cost_specs = [
         ("EV-1", "P00-W01", "claude", _MODEL_OPUS, "0.40"),
         ("EV-2", "P00-W02", "claude", _MODEL_OPUS, "0.20"),
-        ("EV-3", "P00-W01", "codex", _MODEL_GPT5_CODEX, "0.10"),
+        ("EV-3", "P00-W01", "codex", _MODEL_CODEX_TOP, "0.10"),
     ]
     for i, (eid, wave, runtime, model, cost) in enumerate(cost_specs):
         _write_dispatch_cost(

@@ -63,7 +63,7 @@ from typing import Any, Literal, cast
 import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.config.layered import merge_config
+from eawf.kernel.config.layered import merge_config, resolve_runtime_tier_models
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -638,8 +638,9 @@ def _resolve_spawn_model(
     role = wave.agent_role if wave.agent_role is not None else _DEFAULT_SPAWN_ROLE
     effort = wave.effort_bucket if wave.effort_bucket is not None else _DEFAULT_SPAWN_EFFORT
     triple = _runtime_triple(runtime)
+    runtime_models = resolve_runtime_tier_models(state_path.parent.parent)
     decision = resolve_routing(role, effort)
-    model = runtime_model_for_decision(decision, triple)
+    model = runtime_model_for_decision(decision, triple, runtime_models=runtime_models)
     logger.debug(
         f"_resolve_spawn_model wave={wave_id} role={role.value} "
         f"effort={effort.value} runtime={triple!r} tier_model={decision.model!r} model={model!r}"

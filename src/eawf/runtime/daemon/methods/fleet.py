@@ -766,6 +766,7 @@ async def _live_repair_lane(ctx: MethodContext, lane: FleetLane) -> LaneRepairOu
     Returns:
         The :class:`LaneRepairOutcome` of the repair drive.
     """
+    from eawf.kernel.config.layered import resolve_runtime_tier_models
     from eawf.kernel.state.enums import AgentSessionRole as _Role
     from eawf.kernel.state.enums import EffortBucket as _Effort
     from eawf.runtime.sandbox.policy import resolve_denied_tools
@@ -801,10 +802,16 @@ async def _live_repair_lane(ctx: MethodContext, lane: FleetLane) -> LaneRepairOu
     base_prompt = render_dispatch_envelope(state, wave_id, runtime, repo_root=repo_root).prompt
     denied = sorted(resolve_denied_tools(state.sandbox_policies, wave_id=wave_id))
     cwd = str(repo_root)
+    runtime_models = resolve_runtime_tier_models(repo_root)
 
     def _spawn_on(spawn_runtime: str) -> RepairSpawnFn:
         adapter = select_adapter(spawn_runtime)
-        model = model_for_runtime(role, effort, _REPAIR_RUNTIME_TRIPLE.get(spawn_runtime, "claude"))
+        model = model_for_runtime(
+            role,
+            effort,
+            _REPAIR_RUNTIME_TRIPLE.get(spawn_runtime, "claude"),
+            runtime_models=runtime_models,
+        )
 
         async def _spawn(prompt: str) -> SpawnResult:
             return await adapter.spawn_session(prompt, model=model, cwd=cwd, denied_tools=denied)
