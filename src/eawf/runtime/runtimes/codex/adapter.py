@@ -267,9 +267,15 @@ def _maybe_jail_argv(
 
 
 _RATE_LIMIT_RE = re.compile(rb"\b(?:429|rate[_ -]?limit)\b", re.IGNORECASE)
+# An account-entitlement failure: 401/403, an expired/invalid credential, or a
+# model the account is not entitled to (a ChatGPT-account codex rejects the
+# API-key-only model ids with "not supported when using Codex with a ChatGPT
+# account"). All route to HALT -- switching runtime or retrying cannot fix an
+# account-level restriction; the operator must adjust auth or the model config.
 _AUTH_RE = re.compile(
     rb"\b(?:401|403|invalid_api_key|oauth_expired|chatgpt subscription expired"
-    rb"|unauthor[iz][sez]+ed)\b",
+    rb"|unauthor[iz][sez]+ed)\b"
+    rb"|not supported when using codex",
     re.IGNORECASE,
 )
 _SERVER_RE = re.compile(rb"\b5\d\d\b")
@@ -427,9 +433,13 @@ def _scan_codex_events(
     for event in events:
         event_type = event.get("type")
         if event_type == "error":
-            raise RuntimeSpawnError(f"codex reported an error event: {event.get('message')!r}")
+            detail = _unwrap_codex_error_message(event.get("message"))
+            raise RuntimeSpawnError(f"codex reported an error event: {detail!r}")
         if event_type == "turn.failed":
-            raise RuntimeSpawnError(f"codex turn failed: {event.get('error')!r}")
+            err = event.get("error")
+            raw = err.get("message") if isinstance(err, dict) else None
+            detail = _unwrap_codex_error_message(raw)
+            raise RuntimeSpawnError(f"codex turn failed: {detail!r}")
         if event_type == "thread.started":
             session_id = str(event.get("thread_id") or "")
         elif event_type == "item.completed":
@@ -444,6 +454,70 @@ def _scan_codex_events(
     if text is None:
         raise RuntimeSpawnError("codex output carried no agent_message item")
     return session_id, text, usage
+
+
+def _unwrap_codex_error_message(raw: object) -> str:
+    """Return the human-readable message from a codex error payload.
+
+    Codex wraps the upstream API failure as a JSON STRING inside the event's
+    ``message`` field (e.g.
+    ``{"type":"error","status":400,"error":{"message":"The 'gpt-5-mini' model
+    is not supported ..."}}``). This unwraps that envelope to the innermost
+    ``error.message`` (or top-level ``message``) so the surfaced detail is the
+    400 reason a human reads, not the JSON envelope. A plain (non-JSON) string
+    is returned verbatim; a non-string returns ``""``.
+
+    Args:
+        raw: The event's ``message`` (or nested ``error.message``) value.
+
+    Returns:
+        The innermost human message, or ``""`` when *raw* is not a string.
+    """
+    if not isinstance(raw, str):
+        return ""
+    text = raw.strip()
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    if isinstance(parsed, dict):
+        err = parsed.get("error")
+        if isinstance(err, dict) and isinstance(err.get("message"), str):
+            return str(err["message"])
+        if isinstance(parsed.get("message"), str):
+            return str(parsed["message"])
+    return text
+
+
+def _codex_stream_error_detail(stdout: bytes) -> str:
+    """Extract the failure message from a codex event stream, or ``""``.
+
+    Codex ``--json`` reports a failed turn as an ``error`` / ``turn.failed``
+    event on STDOUT (not stderr), then exits non-zero. The nonzero-exit guard
+    in :func:`_parse_codex_result` runs before the stream is scanned, so
+    without this the real reason (e.g. a 400 model-rejection) is lost and only
+    the empty stderr surfaces. This walks the decoded events and returns the
+    LAST error / turn.failed message (unwrapped via
+    :func:`_unwrap_codex_error_message`) so the caller can put the actual
+    reason in the raised error + feed it to the classifier.
+
+    Args:
+        stdout: Raw subprocess stdout bytes (the newline-delimited events).
+
+    Returns:
+        The unwrapped failure message, or ``""`` when the stream carried no
+        error / turn.failed event (e.g. a crash with no structured output).
+    """
+    detail = ""
+    for event in _decode_codex_events(stdout):
+        event_type = event.get("type")
+        if event_type == "error":
+            detail = _unwrap_codex_error_message(event.get("message"))
+        elif event_type == "turn.failed":
+            err = event.get("error")
+            if isinstance(err, dict):
+                detail = _unwrap_codex_error_message(err.get("message"))
+    return detail
 
 
 def _parse_codex_result(
@@ -509,11 +583,20 @@ def _parse_codex_result(
     """
 
     if exit_status != 0:
-        snippet = stderr.decode(errors="replace").strip()[:200]
+        # Codex reports the real failure (e.g. a 400 model-rejection) as an
+        # error / turn.failed event on STDOUT, not stderr -- surface that so a
+        # nonzero exit carries the actual reason rather than an empty stderr.
+        stream_detail = _codex_stream_error_detail(stdout)
+        stderr_snippet = stderr.decode(errors="replace").strip()
+        diagnostic = " ".join(part for part in (stream_detail, stderr_snippet) if part)
         raise RuntimeSpawnError(
-            f"codex spawn exited nonzero: status={exit_status} stderr={snippet!r}",
+            f"codex spawn exited nonzero: status={exit_status} detail={diagnostic[:300]!r}",
             exit_status=exit_status,
-            stderr=stderr,
+            # Feed the combined stdout-event + stderr text to the classifier
+            # (parse_error keys on this) so a model-rejection / auth failure is
+            # classified from its real message, not blank stderr. Fall back to
+            # the raw stderr bytes when the stream carried no detail.
+            stderr=diagnostic.encode() if diagnostic else stderr,
         )
     if not stdout.decode(errors="replace").strip():
         raise RuntimeSpawnError("codex spawn produced empty stdout")

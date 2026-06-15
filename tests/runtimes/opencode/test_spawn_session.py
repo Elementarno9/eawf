@@ -383,6 +383,53 @@ def test_parse_opencode_result_error_event_raises() -> None:
         )
 
 
+def test_parse_opencode_result_nonzero_exit_surfaces_stdout_error_event() -> None:
+    """A nonzero exit lifts the error-event detail off STDOUT (stderr empty).
+
+    Like codex, opencode may report the failure as an ``error`` event on
+    stdout and exit non-zero with nothing on stderr; the raised error must
+    carry that reason rather than a blank ``stderr=''``.
+    """
+    events: list[dict[str, object]] = [
+        {
+            "type": "error",
+            "sessionID": "s1",
+            "error": {
+                "name": "UnknownError",
+                "data": {"message": "Model not found: anthropic/claude-x."},
+            },
+        },
+    ]
+    with pytest.raises(RuntimeSpawnError, match="Model not found") as excinfo:
+        _parse_opencode_result(
+            runtime="opencode",
+            model="anthropic/claude-x",
+            stdout=_stream_bytes(events),
+            stderr=b"",
+            exit_status=1,
+            subprocess_pid=1,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+    assert b"Model not found" in excinfo.value.stderr
+
+
+def test_parse_opencode_result_nonzero_exit_falls_back_to_stderr() -> None:
+    """A nonzero exit with no stdout error event still surfaces stderr."""
+    with pytest.raises(RuntimeSpawnError, match="boom: hard crash") as excinfo:
+        _parse_opencode_result(
+            runtime="opencode",
+            model="anthropic/claude-x",
+            stdout=b"",
+            stderr=b"boom: hard crash",
+            exit_status=2,
+            subprocess_pid=1,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+    assert excinfo.value.stderr == b"boom: hard crash"
+
+
 # ---------------------------------------------------------------------------
 # spawn_session -- forks ``opencode run`` (mocked subprocess)
 # ---------------------------------------------------------------------------

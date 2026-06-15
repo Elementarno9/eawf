@@ -308,6 +308,30 @@ class _StreamFields:
     cost_reported: Decimal | None
 
 
+def _error_event_detail(event: dict[str, object]) -> object:
+    """Lift the human detail from an opencode ``error`` event.
+
+    The message is read from ``error.data.message``, falling back to
+    ``error.name`` and then the raw ``error`` value. Shared by the exit-0
+    guard (:func:`_assert_no_error_event`) and the nonzero-exit detail
+    extractor (:func:`_opencode_stream_error_detail`) so both read the event
+    shape one way.
+
+    Args:
+        event: A decoded ``error`` event.
+
+    Returns:
+        The lifted detail (``error.data.message`` / ``error.name`` / raw).
+    """
+    err = event.get("error")
+    if isinstance(err, dict):
+        data = err.get("data")
+        if isinstance(data, dict) and data.get("message") is not None:
+            return data.get("message")
+        return err.get("name")
+    return err
+
+
 def _assert_no_error_event(events: list[dict[str, object]]) -> None:
     """Raise when the stream carries an ``error`` event.
 
@@ -322,15 +346,34 @@ def _assert_no_error_event(events: list[dict[str, object]]) -> None:
     for event in events:
         if event.get("type") != "error":
             continue
-        err = event.get("error")
-        detail: object = err
-        if isinstance(err, dict):
-            data = err.get("data")
-            if isinstance(data, dict) and data.get("message") is not None:
-                detail = data.get("message")
-            else:
-                detail = err.get("name")
-        raise RuntimeSpawnError(f"opencode reported an error event: {detail!r}")
+        raise RuntimeSpawnError(f"opencode reported an error event: {_error_event_detail(event)!r}")
+
+
+def _opencode_stream_error_detail(stdout: bytes) -> str:
+    """Return the first error-event message from an opencode stream, or ``""``.
+
+    On a nonzero exit opencode (like codex) may report the failure as an
+    ``error`` event on STDOUT and write nothing to stderr; the nonzero-exit
+    guard in :func:`_parse_opencode_result` runs before the stream is scanned,
+    so this lifts that message so the raised error carries the real reason
+    rather than an empty stderr.
+
+    Args:
+        stdout: Raw subprocess stdout bytes (the NDJSON event stream).
+
+    Returns:
+        The first error event's detail as a string, or ``""`` when the stream
+        carried no error event (e.g. a crash with no structured output).
+    """
+    raw = stdout.decode(errors="replace").strip()
+    if not raw:
+        return ""
+    for event in _line_json_objects(raw):
+        if event.get("type") != "error":
+            continue
+        detail = _error_event_detail(event)
+        return str(detail) if detail is not None else ""
+    return ""
 
 
 def _accumulate_step_finish(part: dict[str, object]) -> tuple[int, int, int, int, Decimal | None]:
@@ -485,11 +528,16 @@ def _parse_opencode_result(
             events, or an ``error`` event in the stream.
     """
     if exit_status != 0:
-        snippet = stderr.decode(errors="replace").strip()[:200]
+        # opencode (like codex) may report the failure as an error event on
+        # STDOUT and leave stderr empty -- surface that so a nonzero exit
+        # carries the real reason, and feed the combined text to the classifier.
+        stream_detail = _opencode_stream_error_detail(stdout)
+        stderr_snippet = stderr.decode(errors="replace").strip()
+        diagnostic = " ".join(part for part in (stream_detail, stderr_snippet) if part)
         raise RuntimeSpawnError(
-            f"opencode spawn exited nonzero: status={exit_status} stderr={snippet!r}",
+            f"opencode spawn exited nonzero: status={exit_status} detail={diagnostic[:300]!r}",
             exit_status=exit_status,
-            stderr=stderr,
+            stderr=diagnostic.encode() if diagnostic else stderr,
         )
     raw = stdout.decode(errors="replace").strip()
     if not raw:

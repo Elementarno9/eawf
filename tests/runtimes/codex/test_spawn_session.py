@@ -389,6 +389,85 @@ def test_parse_codex_result_turn_failed_event_raises() -> None:
         )
 
 
+# Codex nests the upstream API failure as a JSON STRING inside the event's
+# ``message`` field; this is the exact 400 envelope a ChatGPT-account codex
+# returns for an API-key-only model id.
+_MODEL_REJECT_INNER = json.dumps(
+    {
+        "type": "error",
+        "status": 400,
+        "error": {
+            "type": "invalid_request_error",
+            "message": (
+                "The 'gpt-5-mini' model is not supported when using Codex with a ChatGPT account."
+            ),
+        },
+    }
+)
+
+
+def test_parse_codex_result_nonzero_exit_surfaces_stdout_error_event() -> None:
+    """A nonzero exit lifts the real reason from the stdout error event.
+
+    Codex writes the 400 model-rejection to STDOUT as an error / turn.failed
+    event (stderr empty); the raised error must carry that reason rather than
+    a blank ``stderr=''``, and feed it to the classifier via the error's
+    ``stderr`` attribute.
+    """
+    events: list[dict[str, object]] = [
+        {"type": "thread.started", "thread_id": "t1"},
+        {"type": "turn.started"},
+        {"type": "error", "message": _MODEL_REJECT_INNER},
+        {"type": "turn.failed", "error": {"message": _MODEL_REJECT_INNER}},
+    ]
+    with pytest.raises(RuntimeSpawnError, match="not supported when using Codex") as excinfo:
+        _parse_codex_result(
+            runtime="codex",
+            model="gpt-5-mini",
+            stdout=_events_bytes(events),
+            stderr=b"",
+            exit_status=1,
+            subprocess_pid=1,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+    # The real reason is fed to the classifier (parse_error keys on .stderr).
+    assert b"not supported when using Codex" in excinfo.value.stderr
+
+
+def test_parse_codex_result_nonzero_exit_falls_back_to_stderr() -> None:
+    """A nonzero exit with no stdout error event still surfaces stderr."""
+    with pytest.raises(RuntimeSpawnError, match="boom: hard crash") as excinfo:
+        _parse_codex_result(
+            runtime="codex",
+            model="gpt-5.5",
+            stdout=b"",
+            stderr=b"boom: hard crash",
+            exit_status=2,
+            subprocess_pid=1,
+            started_at=_T0,
+            ended_at=_T1,
+        )
+    assert excinfo.value.stderr == b"boom: hard crash"
+
+
+def test_parse_error_classifies_account_model_restriction_as_auth() -> None:
+    """The account model-restriction routes to AUTH (HALT), not API (switch).
+
+    Switching runtime or retrying cannot fix a model the account is not
+    entitled to, so the V5 ladder must HALT rather than burn the budget.
+    """
+    adapter = CodexAdapter()
+    detail = b"The 'gpt-5-mini' model is not supported when using Codex with a ChatGPT account."
+    assert adapter.parse_error(1, detail) == "RUNTIME_AUTH_ERROR"
+
+
+def test_parse_error_generic_4xx_still_classifies_api() -> None:
+    """A non-account 4xx stays RUNTIME_API_ERROR (switch), not AUTH."""
+    adapter = CodexAdapter()
+    assert adapter.parse_error(1, b"400 bad request: malformed prompt") == "RUNTIME_API_ERROR"
+
+
 # ---------------------------------------------------------------------------
 # spawn_session -- forks ``codex exec`` (mocked subprocess)
 # ---------------------------------------------------------------------------
