@@ -18,12 +18,14 @@ The wiring test ALWAYS mocks the subprocess -- it never spawns a real
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
 
 import pytest
 
 from eawf.runtime.runtimes.claude import adapter as claude_adapter
 from eawf.runtime.runtimes.claude.adapter import ClaudeAdapter
-from eawf.runtime.sandbox.env_scrub import build_child_env
+from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
 
 _PINNED_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -164,6 +166,48 @@ def test_build_child_env_extra_path_dir_already_in_floor_not_duplicated() -> Non
 
 
 # ---------------------------------------------------------------------------
+# resolve_binary_dir: the dir feeding extra_path_dir for a Homebrew/out-of-floor CLI
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_binary_dir_returns_which_dir_not_symlink_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dir is the ``shutil.which`` hit's dir, NOT the symlink target's.
+
+    Regression for the codex spawn-PATH bug: Homebrew symlinks ``bin/codex``
+    to a Caskroom file with a DIFFERENT basename
+    (``codex-aarch64-apple-darwin``), so resolving the symlink target would
+    yield a directory with no file named ``codex`` -- the child's
+    ``execvp("codex")`` would still fail with "No such file or directory".
+    The PATH entry must hold a file whose name IS the binary, which the
+    ``which`` hit (the symlink's own dir) guarantees.
+    """
+    target_dir = tmp_path / "caskroom"
+    target_dir.mkdir()
+    real = target_dir / "mytool-aarch64-apple-darwin"
+    real.write_text("#!/bin/sh\n", encoding="utf-8")
+    real.chmod(0o755)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "mytool").symlink_to(real)
+
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{_PINNED_PATH}")
+
+    resolved = resolve_binary_dir("mytool")
+    assert resolved == str(bin_dir)  # the symlink's own dir...
+    assert (Path(resolved) / "mytool").exists()  # ...which holds a file named 'mytool'
+    assert resolved != str(target_dir)  # NOT the renamed Caskroom target's dir
+
+
+def test_resolve_binary_dir_none_when_binary_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A binary not on PATH resolves to None (spawn falls back to the pinned floor)."""
+    monkeypatch.setenv("PATH", _PINNED_PATH)
+    assert resolve_binary_dir("no-such-eawf-binary-xyz") is None
+
+
+# ---------------------------------------------------------------------------
 # Credential families dropped on EVERY lane
 # ---------------------------------------------------------------------------
 
@@ -258,6 +302,10 @@ def test_spawn_session_passes_scrubbed_env(monkeypatch: pytest.MonkeyPatch) -> N
         return proc
 
     monkeypatch.setattr(claude_adapter.asyncio, "create_subprocess_exec", _fake_exec)
+    # Pin the binary resolution to "absent" so PATH is the pinned floor verbatim
+    # regardless of whether a `claude` CLI is installed on the test host (the
+    # extra_path_dir prepend is covered by the resolve_binary_dir tests above).
+    monkeypatch.setattr(claude_adapter, "resolve_binary_dir", lambda _binary: None)
 
     adapter = ClaudeAdapter()
     result = asyncio.run(adapter.spawn_session("p", model="m"))

@@ -41,7 +41,7 @@ from eawf.runtime.sandbox.egress_proxy import (
     emit_enforcement,
     make_enforcement_event,
 )
-from eawf.runtime.sandbox.env_scrub import build_child_env
+from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
 
 if TYPE_CHECKING:
@@ -560,7 +560,7 @@ class ClaudeAdapter:
         )
         # Build the scrubbed child env + record the env-scrub decision (which
         # credential-bearing families were dropped) onto the denial timeline.
-        child_env = build_child_env(self.id)
+        child_env = build_child_env(self.id, extra_path_dir=resolve_binary_dir(self.cli_binary))
         self._record_env_scrub(child_env, session=session, sink=enforcement_sink)
 
         # The concurrent-spawn cap is the LAST gate before the fork so the

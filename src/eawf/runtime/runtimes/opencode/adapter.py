@@ -48,7 +48,7 @@ from eawf.runtime.sandbox.egress_proxy import (
     emit_enforcement,
     make_enforcement_event,
 )
-from eawf.runtime.sandbox.env_scrub import build_child_env
+from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
 from eawf.runtime.sandbox.jail import jail_command, jail_supported
 
 if TYPE_CHECKING:
@@ -170,29 +170,6 @@ _JAIL_WRAPPER_BINARY: dict[str, str] = {
     "darwin": "sandbox-exec",
     "linux": "bwrap",
 }
-
-
-def _resolve_binary_dir(binary: str) -> str | None:
-    """Return the directory of *binary* resolved on the parent PATH.
-
-    Resolved with :func:`shutil.which` against the parent ``PATH`` (before
-    the env scrub pins it) so the scrubbed child -- whose ``PATH`` floor is
-    minimal -- can still exec a CLI installed outside that floor (e.g. a
-    Homebrew prefix). The resolution reads only the binary's location, never
-    a credential, so it does not weaken the env-scrub floor.
-
-    Args:
-        binary: The bare CLI binary name (``"opencode"``).
-
-    Returns:
-        The absolute directory holding *binary*, or ``None`` when it does not
-        resolve on the parent PATH (the spawn then relies on the pinned floor
-        and surfaces a clear ``FileNotFoundError`` if the binary is absent).
-    """
-    resolved = shutil.which(binary)
-    if resolved is None:
-        return None
-    return os.path.dirname(os.path.realpath(resolved))
 
 
 def _jail_wrapper_binary(platform: str) -> str | None:
@@ -764,7 +741,7 @@ class OpenCodeAdapter:
         # PATH so the pinned floor can still exec the opencode CLI when it
         # lives outside that floor (e.g. a Homebrew prefix). The parent PATH
         # itself is never passed through.
-        binary_dir = _resolve_binary_dir(self.cli_binary)
+        binary_dir = resolve_binary_dir(self.cli_binary)
         # Build the scrubbed child env + record the env-scrub decision (which
         # credential-bearing families were dropped) onto the denial timeline.
         child_env = build_child_env(self.id, extra_path_dir=binary_dir)

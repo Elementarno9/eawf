@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from collections.abc import Mapping
 
 logger = logging.getLogger(__name__)
@@ -194,4 +195,43 @@ def build_child_env(
     return child
 
 
-__all__ = ["build_child_env"]
+def resolve_binary_dir(binary: str) -> str | None:
+    """Return the directory of *binary* resolved on the parent PATH.
+
+    Resolved with :func:`shutil.which` against the parent ``PATH`` (before
+    the env scrub pins it) so the scrubbed child -- whose ``PATH`` floor is
+    minimal (``/usr/bin:/bin:/usr/sbin:/sbin``) -- can still exec a CLI
+    installed outside that floor (e.g. a Homebrew ``/opt/homebrew/bin`` or
+    npm-global prefix). Pass the result as :func:`build_child_env`'s
+    ``extra_path_dir``. The resolution reads only the binary's location,
+    never a credential, so it does not weaken the env-scrub floor.
+
+    Without this, a sandboxed spawn of a Homebrew-installed runtime CLI
+    (``codex`` / ``claude`` / ``opencode``) fails with
+    ``execvp() ... No such file or directory`` because the pinned floor
+    excludes the install prefix.
+
+    The directory is the one :func:`shutil.which` found *binary* in -- NOT
+    the symlink-resolved target. Homebrew often symlinks ``bin/codex`` to a
+    Caskroom file with a DIFFERENT basename
+    (``codex-aarch64-apple-darwin``), so ``realpath``'s directory would not
+    contain a file named ``codex`` and the child's ``execvp(binary)`` would
+    still fail. The PATH entry must hold a file whose name IS *binary*, which
+    the ``shutil.which`` hit guarantees; the sandbox's ``(allow file-read*)``
+    lets the child follow the symlink to the real target.
+
+    Args:
+        binary: The bare CLI binary name (e.g. ``"codex"``).
+
+    Returns:
+        The absolute directory holding *binary*, or ``None`` when it does
+        not resolve on the parent PATH (the spawn then relies on the pinned
+        floor and surfaces a clear FileNotFoundError if the binary is absent).
+    """
+    resolved = shutil.which(binary)
+    if resolved is None:
+        return None
+    return os.path.dirname(os.path.abspath(resolved))
+
+
+__all__ = ["build_child_env", "resolve_binary_dir"]

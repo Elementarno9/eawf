@@ -579,6 +579,10 @@ def test_spawn_session_unjailed_on_windows(monkeypatch: pytest.MonkeyPatch, tmp_
     """On Windows (no jail parity) the spawn runs unjailed, never raising."""
     _root, cwd = _repo_with_cwd(tmp_path)
     monkeypatch.setattr(claude_adapter.sys, "platform", "win32")
+    # The faked win32 platform makes the real ``shutil.which`` (in
+    # resolve_binary_dir) take shutil's Windows branch, which needs ``_winapi``
+    # (absent off-Windows). Binary resolution isn't under test here, so stub it.
+    monkeypatch.setattr(claude_adapter, "resolve_binary_dir", lambda _binary: None)
 
     captured: dict[str, object] = {}
     _patch_spawn(monkeypatch, captured)
