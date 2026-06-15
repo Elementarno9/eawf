@@ -737,10 +737,34 @@ def resolve_wave_verify_block(
     return narrowed
 
 
+def _floor_check_waived(name: str, fresh_evidence: list[EvidenceRecord]) -> bool:
+    """Return True when a fresh operator waiver covers floor check *name*.
+
+    Mirrors the spec-gate waiver match in :func:`_gate_status_from_evidence`:
+    a floor check is waived when the most recent fresh evidence row that
+    references its name (floor-check names address waivers the same way a
+    gate id does) carries ``status="waived"``. SHA-stale waivers are dropped
+    by the caller via :func:`_is_stale_waiver` before this runs, so a waiver
+    suppresses the (often long) floor run only while it stays fresh for the
+    wave's current SHA.
+
+    Args:
+        name: Floor-check name (doubles as the waiver gate id).
+        fresh_evidence: Scope-filtered evidence rows with SHA-stale waivers
+            already removed.
+
+    Returns:
+        True when the latest referencing row is a fresh ``waived`` row.
+    """
+    relevant = [row for row in fresh_evidence if name in row.refs]
+    return bool(relevant) and relevant[-1].status == "waived"
+
+
 def _build_floor_views(
     verify_block: VerifyBlock | None,
     *,
     runner_cwd: Path,
+    fresh_evidence: list[EvidenceRecord],
 ) -> list[CriterionView]:
     """Convert the profile-fed floor pack into :class:`CriterionView` rows.
 
@@ -756,12 +780,23 @@ def _build_floor_views(
     returns ``[]`` so the caller can continue with the legacy /
     spec-only path unchanged.
 
+    A floor check carrying a fresh operator waiver (see
+    :func:`_floor_check_waived`) is surfaced as a ``waived``
+    ``CriterionView`` WITHOUT running its subprocess — the waiver is the
+    operator's explicit attestation, so re-running the (often
+    minutes-long) floor command at close time would only burn wall-clock
+    and, on the daemon close path, block the event loop while the state
+    lock is held. This mirrors how the typed spec-gate path honours the
+    same fresh-waiver evidence in :func:`_build_spec_views`.
+
     Args:
         verify_block: Active profile's :class:`VerifyBlock`, or
             ``None`` when no profile is attached.
         runner_cwd: Working directory for the deterministic-floor
             subprocess execution. Threaded from
             :func:`compute`'s ``repo_root``.
+        fresh_evidence: Scope-filtered evidence rows (SHA-stale waivers
+            already removed) used to suppress waived floor checks.
 
     Returns:
         Per-floor-check :class:`CriterionView` rows. Empty list when
@@ -773,21 +808,32 @@ def _build_floor_views(
         verify_block.floor_checks,
         allowlist=list(verify_block.argv_allowlist),
     )
-    results = run_checks(compiled, cwd=runner_cwd)
-    views: list[CriterionView] = []
-    for check_spec, result in zip(compiled, results, strict=True):
+    to_run = [c for c in compiled if not _floor_check_waived(c.name, fresh_evidence)]
+    ran_views: dict[str, CriterionView] = {}
+    for check_spec, result in zip(to_run, run_checks(to_run, cwd=runner_cwd), strict=True):
         # status literal closed by CheckResult validator: pass / fail / blocked.
         status = result.status or ("pass" if result.passed else "fail")
-        gate_result = GateResult(
-            gate_id=check_spec.name,
+        ran_views[check_spec.name] = CriterionView(
+            id=check_spec.name,
+            source="floor",
             status=status,
+            gate_results=[GateResult(gate_id=check_spec.name, status=status)],
         )
+    views: list[CriterionView] = []
+    for check_spec in compiled:
+        ran = ran_views.get(check_spec.name)
+        if ran is not None:
+            views.append(ran)
+            continue
+        # Waived: subprocess skipped. The criterion surfaces ``waived`` so
+        # _is_ready clears it; the gate-level status stays ``pass`` because
+        # GateStatus has no ``waived`` member.
         views.append(
             CriterionView(
                 id=check_spec.name,
                 source="floor",
-                status=status,
-                gate_results=[gate_result],
+                status="waived",
+                gate_results=[GateResult(gate_id=check_spec.name, status="pass")],
             )
         )
     return views
@@ -1103,7 +1149,9 @@ def compute(
     # have been authored yet.
     floor_views: list[CriterionView] = []
     if not spec_views:
-        floor_views = _build_floor_views(verify_block, runner_cwd=repo_root)
+        floor_views = _build_floor_views(
+            verify_block, runner_cwd=repo_root, fresh_evidence=fresh_evidence
+        )
 
     # Backlog-resolution close-gate (P30-I10 QUAL-2). Scores the wave's
     # linked backlog items independently of the typed-spec / floor split:

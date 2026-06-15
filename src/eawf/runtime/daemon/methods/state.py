@@ -51,6 +51,7 @@ effect is the canonical event row the mutator always appends.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -2907,7 +2908,17 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                         state_path=state_path,
                         repo_root=repo_anchor,
                     )
-                    wave_close_readiness = _compute_wave_close_readiness(
+                    # Offload the (potentially minutes-long) floor-pack
+                    # readiness compute to a worker thread. It shells out to
+                    # pytest / pre-commit / mypy; running those inline would
+                    # block the daemon's asyncio event loop while the state
+                    # lock is held, wedging every other RPC (the close-path
+                    # daemon-hang root cause). The compute reads ``state`` and
+                    # the evidence store read-only; the apply step below stays
+                    # on the loop. A LifecycleError raised in the thread
+                    # propagates through ``await`` to the same handler below.
+                    wave_close_readiness = await asyncio.to_thread(
+                        _compute_wave_close_readiness,
                         state,
                         mutation,
                         state_path=state_path,

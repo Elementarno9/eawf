@@ -43,6 +43,7 @@ from eawf.kernel.state.models import CurrentPointers, Project, State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord, mint_evidence_id
 from eawf.kernel.store.paths import store_dir as _store_dir
+from eawf.platform.profiles.models import FloorCheck, VerifyBlock
 from eawf.workflow.audit_dsl import CheckSpec
 from eawf.workflow.audit_dsl.kinds.transition_coverage import (
     built_states,
@@ -914,6 +915,75 @@ def test_deterministic_floor_waiver_preempts_live_run(
     assert view.gate_results is not None
     assert view.gate_results[0].status == "pass"
     assert result.waived_gate_ids == ["GATE-det-waived"]
+
+
+def test_waived_floor_check_skips_run_and_surfaces_waived(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fresh waiver on a profile FLOOR check skips its subprocess.
+
+    Regression for the close-path daemon hang: the wave-close floor pack
+    shells out to ``pytest -q`` / ``pre-commit`` / ``mypy``. An operator
+    ``--waive <check>`` MUST suppress the run -- otherwise the full
+    suite executes synchronously under the close gate (the daemon-hang
+    root cause). The floor cmd here would exit non-zero if it ran
+    (``git show <bad-ref>``); the waiver makes the criterion roll up to
+    ``waived`` + ``ready=True``, proving the subprocess was skipped.
+    Mirrors :func:`test_deterministic_floor_waiver_preempts_live_run`
+    for the floor (no-typed-criteria) path.
+    """
+    state = _empty_state()
+    _seed_wave(state)  # no typed criteria -> the profile floor pack renders
+    store_dir = _store_dir(tmp_path / "state.json")
+
+    block = VerifyBlock(
+        enforce=True,
+        argv_allowlist=[],
+        floor_checks=[
+            FloorCheck(
+                name="floor-pytest",
+                # Would exit non-zero if it ran; the waiver pre-empts it.
+                cmd=["git", "show", "would-fail-but-waived-floor"],
+                scope="all",
+                cadence="every-wave",
+                policy="warn",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        readiness_mod,
+        "_load_active_verify_block",
+        lambda scope_id, state_arg, **kwargs: block,
+    )
+    # Pin the wave sha so the waiver passes the SHA-bound freshness
+    # filter (W11) without touching the git tree.
+    monkeypatch.setattr(
+        readiness_mod,
+        "derive_wave_sha",
+        lambda scope_id, repo_root=None: "fresh_sha_for_floor",
+    )
+
+    waiver = EvidenceRecord(
+        id=mint_evidence_id(),
+        scope_id=WAVE_ID,
+        produced_by="human",
+        evidence_kind="attested",
+        status="waived",
+        summary="operator waived the floor pytest check",
+        refs=["floor-pytest"],
+        metrics={"wave_sha": "fresh_sha_for_floor"},
+        created_at=datetime.now(UTC),
+    )
+    _write_evidence_row(store_dir, record=waiver)
+
+    result = readiness_mod.compute(WAVE_ID, state=state, store_dir=store_dir, repo_root=tmp_path)
+
+    assert result.ready is True
+    view = next(v for v in result.criteria if v.id == "floor-pytest")
+    assert view.source == "floor"
+    assert view.status == "waived"
+    assert view.gate_results is not None
+    assert view.gate_results[0].status == "pass"
 
 
 def test_deterministic_floor_compile_none_yields_blocked(
