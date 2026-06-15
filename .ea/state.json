@@ -8735,6 +8735,76 @@
       "scope_id": "P30-I20-W30",
       "status": "done",
       "updated_at": "2026-06-13T23:59:14.937303Z"
+    },
+    "P30-I20-W31": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W31",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W31",
+      "model": null,
+      "scope_id": "P30-I20-W31",
+      "status": "done",
+      "updated_at": "2026-06-15T02:13:00.569565Z"
+    },
+    "P30-I20-W32": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W32",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W32",
+      "model": null,
+      "scope_id": "P30-I20-W32",
+      "status": "done",
+      "updated_at": "2026-06-15T02:16:04.835629Z"
+    },
+    "P30-I20-W33": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W33",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W33",
+      "model": null,
+      "scope_id": "P30-I20-W33",
+      "status": "done",
+      "updated_at": "2026-06-15T02:16:46.274327Z"
+    },
+    "P30-I20-W34": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W34",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W34",
+      "model": null,
+      "scope_id": "P30-I20-W34",
+      "status": "done",
+      "updated_at": "2026-06-15T02:16:57.629254Z"
+    },
+    "P30-I20-W35": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W35",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W35",
+      "model": null,
+      "scope_id": "P30-I20-W35",
+      "status": "done",
+      "updated_at": "2026-06-15T02:15:34.365154Z"
     }
   },
   "agent_sessions": {
@@ -11991,9 +12061,7 @@
     "active_session_ids": [
       "SES-20260510T214731Z-operator-claude"
     ],
-    "active_wave_ids": [
-      "P30-I20-W31"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P30-I20",
     "phase_id": "P30",
     "project_code": "EAWF",
@@ -22704,6 +22772,58 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I20-W31",
       "updated_at": "2026-06-14T00:04:50.952247Z"
+    },
+    "P30-I20-W32": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W32-bucket-20260615T021604Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I20-W32",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I20-W32",
+      "updated_at": "2026-06-15T02:16:04.140982Z"
+    },
+    "P30-I20-W33": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W33-bucket-20260615T021618Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I20-W33",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I20-W33",
+      "updated_at": "2026-06-15T02:16:18.705206Z"
+    },
+    "P30-I20-W34": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W34-bucket-20260615T021656Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I20-W34",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I20-W34",
+      "updated_at": "2026-06-15T02:16:56.950628Z"
+    },
+    "P30-I20-W35": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W35-bucket-20260615T021533Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I20-W35",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I20-W35",
+      "updated_at": "2026-06-15T02:15:33.481048Z"
     }
   },
   "fleet_run": {
@@ -24933,7 +25053,11 @@
         "P30-I20-W27",
         "P30-I20-W29",
         "P30-I20-W30",
-        "P30-I20-W31"
+        "P30-I20-W31",
+        "P30-I20-W32",
+        "P30-I20-W33",
+        "P30-I20-W34",
+        "P30-I20-W35"
       ]
     }
   },
@@ -26022,7 +26146,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-14T00:04:50.952494Z",
+  "updated_at": "2026-06-15T02:17:53.116871Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -95473,8 +95597,7 @@
     "P30-I20-W01": {
       "agent_role": null,
       "blocks": [
-        "P30-I20-W06",
-        "P30-I20-W25"
+        "P30-I20-W06"
       ],
       "claim_session_id": "SES-p30-i20-w01-codex",
       "claimed_at": "2026-06-12T18:21:35.937244Z",
@@ -95561,9 +95684,7 @@
     },
     "P30-I20-W02": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w02-codex",
       "claimed_at": "2026-06-12T18:22:17.550702Z",
       "closed_at": "2026-06-12T23:02:32.215191Z",
@@ -95648,9 +95769,7 @@
     },
     "P30-I20-W03": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w03-codex",
       "claimed_at": "2026-06-12T18:22:41.807913Z",
       "closed_at": "2026-06-12T21:58:23.291084Z",
@@ -95735,9 +95854,7 @@
     },
     "P30-I20-W04": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w04-codex",
       "claimed_at": "2026-06-12T18:22:53.746794Z",
       "closed_at": "2026-06-12T23:35:28.609515Z",
@@ -95823,9 +95940,7 @@
     },
     "P30-I20-W05": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w05-codex",
       "claimed_at": "2026-06-12T18:22:55.344045Z",
       "closed_at": "2026-06-12T18:51:44.474699Z",
@@ -95914,8 +96029,7 @@
     "P30-I20-W06": {
       "agent_role": null,
       "blocks": [
-        "P30-I20-W07",
-        "P30-I20-W25"
+        "P30-I20-W07"
       ],
       "claim_session_id": "SES-p30-i20-w06-codex",
       "claimed_at": "2026-06-12T22:06:35.612902Z",
@@ -96003,9 +96117,7 @@
     },
     "P30-I20-W07": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w07-codex",
       "claimed_at": "2026-06-12T23:38:06.520096Z",
       "closed_at": "2026-06-12T23:50:44.907516Z",
@@ -96079,9 +96191,7 @@
     },
     "P30-I20-W08": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w08-codex",
       "claimed_at": "2026-06-12T18:22:56.912494Z",
       "closed_at": "2026-06-12T18:52:07.870927Z",
@@ -96167,9 +96277,7 @@
     },
     "P30-I20-W09": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w09-codex",
       "claimed_at": "2026-06-12T18:22:58.557828Z",
       "closed_at": "2026-06-12T23:33:41.269516Z",
@@ -96255,9 +96363,7 @@
     },
     "P30-I20-W10": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w10-codex",
       "claimed_at": "2026-06-12T18:23:00.279448Z",
       "closed_at": "2026-06-12T22:58:59.678804Z",
@@ -96343,9 +96449,7 @@
     },
     "P30-I20-W11": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w11-codex",
       "claimed_at": "2026-06-12T18:23:01.994551Z",
       "closed_at": "2026-06-12T23:33:51.908328Z",
@@ -96447,9 +96551,7 @@
     },
     "P30-I20-W12": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w12-codex",
       "claimed_at": "2026-06-12T18:23:03.573747Z",
       "closed_at": "2026-06-13T00:15:56.739019Z",
@@ -96536,9 +96638,7 @@
     },
     "P30-I20-W13": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w13-codex",
       "claimed_at": "2026-06-12T18:23:05.110330Z",
       "closed_at": "2026-06-13T00:18:50.833032Z",
@@ -96623,9 +96723,7 @@
     },
     "P30-I20-W14": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w14-codex",
       "claimed_at": "2026-06-12T18:23:06.772859Z",
       "closed_at": "2026-06-13T00:33:10.181916Z",
@@ -96695,9 +96793,7 @@
     },
     "P30-I20-W15": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w15-codex",
       "claimed_at": "2026-06-12T18:23:08.344112Z",
       "closed_at": "2026-06-13T14:30:06.578980Z",
@@ -96769,9 +96865,7 @@
     },
     "P30-I20-W16": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w16-codex",
       "claimed_at": "2026-06-12T18:23:09.946799Z",
       "closed_at": "2026-06-13T19:38:23.161715Z",
@@ -96828,9 +96922,7 @@
     },
     "P30-I20-W17": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w17-codex",
       "claimed_at": "2026-06-12T18:23:11.528924Z",
       "closed_at": "2026-06-13T14:58:32.287573Z",
@@ -96902,9 +96994,7 @@
     },
     "P30-I20-W18": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w18-codex",
       "claimed_at": "2026-06-12T18:23:13.087956Z",
       "closed_at": "2026-06-13T19:39:46.493128Z",
@@ -96990,9 +97080,7 @@
     },
     "P30-I20-W19": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w19-codex",
       "claimed_at": "2026-06-12T18:23:14.666561Z",
       "closed_at": "2026-06-13T19:40:59.213111Z",
@@ -97091,9 +97179,7 @@
     },
     "P30-I20-W20": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w20-codex",
       "claimed_at": "2026-06-12T18:23:16.346263Z",
       "closed_at": "2026-06-13T15:09:37.190794Z",
@@ -97165,9 +97251,7 @@
     },
     "P30-I20-W21": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w21-codex",
       "claimed_at": "2026-06-12T18:23:18.003281Z",
       "closed_at": "2026-06-13T20:29:00.323952Z",
@@ -97269,9 +97353,7 @@
     },
     "P30-I20-W22": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w22-codex",
       "claimed_at": "2026-06-12T18:23:19.817222Z",
       "closed_at": "2026-06-13T20:03:16.996087Z",
@@ -97342,9 +97424,7 @@
     },
     "P30-I20-W23": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w23-codex",
       "claimed_at": "2026-06-12T18:23:21.618811Z",
       "closed_at": "2026-06-13T21:08:10.309285Z",
@@ -97445,9 +97525,7 @@
     },
     "P30-I20-W24": {
       "agent_role": null,
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-p30-i20-w24-codex",
       "claimed_at": "2026-06-12T18:23:23.352376Z",
       "closed_at": "2026-06-13T20:10:22.877273Z",
@@ -97524,33 +97602,12 @@
       "closed_at": null,
       "commit": null,
       "deps": [
-        "P30-I20-W01",
-        "P30-I20-W02",
-        "P30-I20-W03",
-        "P30-I20-W04",
-        "P30-I20-W05",
-        "P30-I20-W06",
-        "P30-I20-W07",
-        "P30-I20-W08",
-        "P30-I20-W09",
-        "P30-I20-W10",
-        "P30-I20-W11",
-        "P30-I20-W12",
-        "P30-I20-W13",
-        "P30-I20-W14",
-        "P30-I20-W15",
-        "P30-I20-W16",
-        "P30-I20-W17",
-        "P30-I20-W18",
-        "P30-I20-W19",
-        "P30-I20-W20",
-        "P30-I20-W21",
-        "P30-I20-W22",
-        "P30-I20-W23",
-        "P30-I20-W24",
-        "P30-I20-W26",
-        "P30-I20-W27",
-        "P30-I20-W29"
+        "P30-I20-W30",
+        "P30-I20-W31",
+        "P30-I20-W32",
+        "P30-I20-W33",
+        "P30-I20-W34",
+        "P30-I20-W35"
       ],
       "description": null,
       "dispatch_history": [],
@@ -97646,9 +97703,7 @@
     },
     "P30-I20-W26": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-flow-p30i20",
       "claimed_at": "2026-06-13T22:00:37.449615Z",
       "closed_at": "2026-06-13T22:00:52.290649Z",
@@ -97712,9 +97767,7 @@
     },
     "P30-I20-W27": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-flow-p30i20",
       "claimed_at": "2026-06-13T22:06:26.969432Z",
       "closed_at": "2026-06-13T22:16:34.124450Z",
@@ -97776,9 +97829,7 @@
     },
     "P30-I20-W29": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-flow-p30i20",
       "claimed_at": "2026-06-13T22:01:25.405644Z",
       "closed_at": "2026-06-13T22:05:56.197762Z",
@@ -97838,7 +97889,9 @@
     },
     "P30-I20-W30": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I20-W25"
+      ],
       "claim_session_id": "SES-flow-p30i20",
       "claimed_at": "2026-06-13T23:59:14.200519Z",
       "closed_at": "2026-06-13T23:59:14.937303Z",
@@ -97898,11 +97951,13 @@
     },
     "P30-I20-W31": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I20-W25"
+      ],
       "claim_session_id": "SES-flow-p30i20",
       "claimed_at": "2026-06-14T00:04:50.952130Z",
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-06-15T02:13:00.569565Z",
+      "commit": "fcf78ecfb3a2eedf3f0077cc21128b790e338260",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -97929,12 +97984,12 @@
       },
       "iter_id": "P30-I20",
       "opened_at": "2026-06-14T00:04:07.978636Z",
-      "outcome": null,
+      "outcome": "needs_user closed-wave filter across footer/inbox/auto-open; 2 tests green",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -97952,6 +98007,252 @@
         }
       ],
       "title": "Filter closed-wave advisories from all needs_user surfaces",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W32": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": "SES-ship",
+      "claimed_at": "2026-06-15T02:16:04.140849Z",
+      "closed_at": "2026-06-15T02:16:04.835629Z",
+      "commit": "2372723071242cb6e9eef2f8424fbcbb08baedb9",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/estimation/trust_scorecard.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W32",
+      "intent": {
+        "desired_outcome": "A CLOSED wave with no evidence is unavailable; deferred_outcome is only for not-yet-closed waves.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "split the label branch on wave status;remove the dead _actual_scopes helper;regen trust goldens"
+        ],
+        "priority_rationale": null,
+        "problem": "Pre-P28 closed waves get deferred_outcome (data-coming) but can never gain an actual.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-15T02:16:03.610426Z",
+      "outcome": "trust relabel; 39 trust tests green",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a CLOSED wave with no evidence is labelled unavailable not deferred_outcome",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a CLOSED wave with no evidence is labelled unavailable not deferred_outcome",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Relabel closed-no-evidence waves unavailable not deferred",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W33": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": "SES-ship",
+      "claimed_at": "2026-06-15T02:16:18.705087Z",
+      "closed_at": "2026-06-15T02:16:46.274327Z",
+      "commit": "707f8c32c6b32065128b716aadd91a6385ac5e34",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/attention_feed.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W33",
+      "intent": {
+        "desired_outcome": "The selected row renders plain + bright (high contrast); non-selected rows keep semantic colours.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "render the selected row plain;add color:text to .-selected;re-render rows on selection"
+        ],
+        "priority_rationale": null,
+        "problem": "The focused attention row's amber/muted text fails contrast on the green selection rectangle.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-15T02:16:18.189370Z",
+      "outcome": "selected-row contrast fix; 2 tests green",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the selected attention row renders plain so color:text paints it readably on the green selection",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the selected attention row renders plain so color:text paints it readably on the green selection",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make the selected attention row readable on its highlight",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W34": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": "SES-ship",
+      "claimed_at": "2026-06-15T02:16:56.950505Z",
+      "closed_at": "2026-06-15T02:16:57.629254Z",
+      "commit": "d37c28a8551dd4b0b99d1119e3b52e3a8abd6300",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/plugin_install.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W34",
+      "intent": {
+        "desired_outcome": "eawf plugin install claude writes hooks.Stop -> session_end.sh; CC fires it; EU captures.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "project PLUGIN_HOOK_REGISTRY into settings.json hooks;merge-preserve user hooks;add render tests"
+        ],
+        "priority_rationale": null,
+        "problem": "session_end is rendered but never wired into CC's hooks block, so runtime.capture never runs and EU stays dark.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-15T02:16:56.439336Z",
+      "outcome": "session_end wired into CC Stop; 25 plugin tests green",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the install writes a real hooks.Stop entry invoking session_end.sh so runtime.capture fires",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the install writes a real hooks.Stop entry invoking session_end.sh so runtime.capture fires",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire session_end into the Claude Code Stop hook",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W35": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": "SES-ship",
+      "claimed_at": "2026-06-15T02:15:33.477987Z",
+      "closed_at": "2026-06-15T02:15:34.365154Z",
+      "commit": "6c0f68a717389b588e3eb1eb070db8e24cde0914",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "tests/workflow/verify/test_readiness.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W35",
+      "intent": {
+        "desired_outcome": "Floor-pack readiness runs in a worker thread (daemon stays responsive) and a fresh-waived floor check is surfaced waived without running, so a waived close lands fast.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "offload _compute_wave_close_readiness via asyncio.to_thread;honor fresh waivers in _build_floor_views;add a regression test for the waived-floor-skip"
+        ],
+        "priority_rationale": null,
+        "problem": "Band-enforced wave close ran the full floor pack synchronously on the daemon event loop under the state lock, ignoring waivers; it wedged the daemon and blew the 30s client timeout.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-15T02:14:38.891154Z",
+      "outcome": "close floor pack offloaded to thread + floor waivers honored; daemon no longer wedges; W31 closed live as proof; regression test added",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a band-enforced wave close runs the floor pack off the asyncio event loop and skips floor checks carrying a fresh operator waiver",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a band-enforced wave close runs the floor pack off the asyncio event loop and skips floor checks carrying a fresh operator waiver",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "so the daemon never wedges and a waived close lands",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "so the daemon never wedges and a waived close lands",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix wave-close daemon hang from synchronous floor pack",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
