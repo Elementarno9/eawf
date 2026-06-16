@@ -65,8 +65,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.layered import merge_config, resolve_runtime_tier_models
 from eawf.kernel.state.enums import (
+    AgentReportVerdict,
     AgentSessionRole,
     AgentSessionStatus,
+    Confidence,
     DispatchNote,
     EffortBucket,
     StoreKind,
@@ -76,14 +78,19 @@ from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
+from eawf.kernel.store.kinds.agent_report import AgentReportFollowup, ExecutorReportBody
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
-from eawf.runtime.daemon.dispatch_runner import DispatchResult, DispatchTokens, run_dispatch
+from eawf.runtime.daemon.dispatch_runner import (
+    DispatchResult,
+    DispatchTokens,
+    _build_completion_body,
+    run_dispatch,
+)
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.daemon.methods.fleet import kill_lane
 from eawf.runtime.lock import portalock
@@ -95,7 +102,7 @@ from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.runtime.runtimes.selector import select_adapter
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.runtime.session.store import SessionConflict, start_session
-from eawf.workflow.dispatch.llm_assist import assist_with_schema
+from eawf.workflow.dispatch.llm_assist import LLMAssistError, assist_with_schema
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope
 from eawf.workflow.dispatch.retry import spawn_with_retry
 from eawf.workflow.dispatch.routing import resolve_routing, runtime_model_for_decision
@@ -928,6 +935,82 @@ async def _bind_executor_report(
     return body
 
 
+def _synthesize_executor_report(
+    accepted: SpawnResult, *, wave_id: str, exc: LLMAssistError
+) -> ExecutorReportBody:
+    """Synthesize a typed executor body when the assist loop exhausts its re-asks.
+
+    The safety net for the headless dispatch path: when the spawned agent's
+    output never validates against the executor report schema (a model that
+    answers in prose re-asks to the ceiling and raises
+    :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError`), the wave would
+    otherwise hang -- :func:`run_dispatch` never runs, so the dispatch-cost emit
+    and EU accrual never fire even though the spawn already spent real cost.
+    Rather than let the exception escape, this builds a typed
+    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` from the
+    accepted spawn's observable outcome signals so the dispatch always completes.
+
+    The verdict mirrors the accepted spawn's exit status (``exit_status == 0``
+    is :attr:`AgentReportVerdict.PASS`, else :attr:`AgentReportVerdict.FAIL`),
+    the confidence is :attr:`Confidence.MEDIUM` (the report was synthesized, not
+    authored), and a follow-up names the parse failure so the degrade is
+    auditable. The body reuses the runner's
+    :func:`~eawf.runtime.daemon.dispatch_runner._build_completion_body` so the
+    synthetic path mints the same typed shape as the rich-output path.
+
+    Args:
+        accepted: The already-completed, already-priced spawn whose exit status
+            drives the synthesized verdict.
+        wave_id: The wave the synthesized report scopes.
+        exc: The exhausted-assist error carrying the attempt ceiling and the
+            ordered rejection trail (the last failure's ``reason`` is named in
+            the synthesized prose + the follow-up).
+
+    Returns:
+        A typed :class:`ExecutorReportBody` carrying the synthesized verdict,
+        MEDIUM confidence, and one parse-failure follow-up.
+    """
+    verdict = AgentReportVerdict.PASS if accepted.exit_status == 0 else AgentReportVerdict.FAIL
+    last_reason = exc.failures[-1].reason if exc.failures else "unknown"
+    # Bound to the executor body's outcome cap (1000); the summary cap (4000)
+    # is wider, so a string that fits outcome fits both.
+    outcome = (
+        f"synthesized executor report: agent output failed report-body validation "
+        f"after {exc.attempts} attempt(s) (last reason: {last_reason}); "
+        f"spawn exit_status={accepted.exit_status}"
+    )[:1000]
+    # The executor body's commit_sha is min_length=7-or-None, so the builder
+    # cannot mint an empty placeholder; pass a 7-char sentinel to satisfy the
+    # builder, then drop it to None below (no commit landed on this path).
+    built = _build_completion_body(
+        role=AgentSessionRole.EXECUTOR,
+        wave_id=wave_id,
+        commit_sha="0000000",
+        outcome=outcome,
+        files_changed=[],
+        tests_run=[],
+        verdict=verdict,
+        confidence=Confidence.MEDIUM,
+    )
+    # The EXECUTOR role forces an ExecutorReportBody; narrow for the typed copy.
+    if not isinstance(built, ExecutorReportBody):  # pragma: no cover - role forces this
+        raise TypeError(f"completion builder returned non-executor body: {built.role!r}")
+    # Drop the sentinel commit_sha (no commit landed) and attach the
+    # parse-failure follow-up so the degrade is auditable.
+    followup = AgentReportFollowup(
+        title="executor output failed report-body validation; report synthesized",
+        owner_role=AgentSessionRole.EXECUTOR,
+        priority="P1",
+        detail=(
+            f"the spawned executor answered with output that failed the "
+            f"ExecutorReportBody schema after {exc.attempts} attempt(s) "
+            f"(last reason: {last_reason}); the report body was synthesized from "
+            f"the spawn exit status so cost + EU still accrue"
+        )[:500],
+    )
+    return built.model_copy(update={"commit_sha": None, "followups": [followup]})
+
+
 async def _spawn_and_dispatch(
     ctx: MethodContext,
     *,
@@ -943,6 +1026,15 @@ async def _spawn_and_dispatch(
     executor's own output into a report body, persists the wave-local attempt
     row, then drives :func:`run_dispatch` with the live pid/pgid and config
     enforcement mode.
+
+    On report-schema exhaustion the spawned agent's output never validates
+    against the executor report body (e.g. a model that answers in prose).
+    Rather than let :class:`~eawf.workflow.dispatch.llm_assist.LLMAssistError`
+    escape -- which would strand the wave with cost already spent but
+    :func:`run_dispatch` never run -- the path synthesizes a typed
+    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` from the
+    accepted spawn's exit status (see :func:`_synthesize_executor_report`) so the
+    dispatch always completes and the dispatch-cost + EU accrual still fire.
 
     Args:
         ctx: Daemon method context — supplies ``state_path``, ``event_path``,
@@ -964,8 +1056,6 @@ async def _spawn_and_dispatch(
         LiveSpawnError: When required stores are not configured.
         eawf.workflow.dispatch.retry.RetryExhaustedError: When retry cannot
             produce a usable spawn.
-        eawf.workflow.dispatch.llm_assist.LLMAssistError: When output never
-            validates against the executor report schema.
     """
     if ctx.state_path is None or ctx.event_path is None:
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
@@ -1080,12 +1170,25 @@ async def _spawn_and_dispatch(
             on_spawn=captured_pid.append,
         )
 
-    report_body = await _bind_executor_report(
-        spawn_result,
-        prompt=envelope.prompt,
-        serving_runtime=serving_runtime,
-        spawn_once=_spawn_correction,
-    )
+    try:
+        report_body = await _bind_executor_report(
+            spawn_result,
+            prompt=envelope.prompt,
+            serving_runtime=serving_runtime,
+            spawn_once=_spawn_correction,
+        )
+    except LLMAssistError as exc:
+        # The spawned agent's output never validated against the executor report
+        # schema (e.g. a model that answers in prose). Letting the error escape
+        # would strand the wave -- run_dispatch never runs, so the dispatch-cost
+        # emit + EU accrual never fire even though the spawn already spent real
+        # cost. Synthesize a typed body from the accepted spawn's exit status so
+        # the dispatch always completes and the degrade is auditable.
+        report_body = _synthesize_executor_report(spawn_result, wave_id=wave_id, exc=exc)
+        logger.info(
+            f"_spawn_and_dispatch wave={wave_id} status=synth-fallback "
+            f"attempts={exc.attempts} reason={exc.failures[-1].reason!r}"
+        )
     attempt, annotation, session_attempt = _persist_live_session_attempt(
         ctx,
         wave_id=wave_id,
