@@ -8875,6 +8875,20 @@
       "scope_id": "P30-I20-W45",
       "status": "done",
       "updated_at": "2026-06-16T17:08:44.459803Z"
+    },
+    "P30-I20-W46": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W46",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W46",
+      "model": null,
+      "scope_id": "P30-I20-W46",
+      "status": "done",
+      "updated_at": "2026-06-16T18:25:10.688969Z"
     }
   },
   "agent_sessions": {
@@ -22959,6 +22973,19 @@
       "reference_class": "bucket:L",
       "scope_id": "P30-I20-W45",
       "updated_at": "2026-06-16T17:06:31.286997Z"
+    },
+    "P30-I20-W46": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W46-bucket-20260616T180847Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I20-W46",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I20-W46",
+      "updated_at": "2026-06-16T18:08:47.549182Z"
     }
   },
   "fleet_run": {
@@ -25197,7 +25224,8 @@
         "P30-I20-W42",
         "P30-I20-W43",
         "P30-I20-W44",
-        "P30-I20-W45"
+        "P30-I20-W45",
+        "P30-I20-W46"
       ]
     }
   },
@@ -26286,7 +26314,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-16T17:08:44.460090Z",
+  "updated_at": "2026-06-16T18:25:10.723765Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -98713,6 +98741,67 @@
         }
       ],
       "title": "Persist and render live agent.output.chunk events",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W46": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-p30i20",
+      "claimed_at": "2026-06-16T18:08:47.519361Z",
+      "closed_at": "2026-06-16T18:25:10.688969Z",
+      "commit": "88b17389d6c5bd91aba1289f640f6a2ad1f4ad81",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/opencode/adapter.py",
+        "tests/runtimes/opencode/test_spawn_session.py",
+        "tests/daemon/test_agent_methods.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W46",
+      "intent": {
+        "desired_outcome": "opencode spawn_session accepts on_chunk (replays buffered stdout) and the config-fallback test asserts the new contract; full gauntlet green.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md",
+          "src/eawf/runtime/runtimes/opencode/adapter.py"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Full-suite gauntlet red: W45 passes on_chunk to every spawn but W44 left opencode spawn_session without it (TypeError, 3 cross-vendor tests); plus a stale config-fallback test.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T18:08:03.133468Z",
+      "outcome": "opencode on_chunk parity + config-fallback test; all 5 real gauntlet failures fixed (parallel leg 12429 passed); 9 TUI snapshots are pre-existing cosmetic env-drift.",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "full just test gauntlet is green",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "full just test gauntlet is green",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix opencode on_chunk parity + config-fallback test",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
