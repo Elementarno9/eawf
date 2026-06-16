@@ -8917,6 +8917,20 @@
       "scope_id": "P30-I20-W48",
       "status": "done",
       "updated_at": "2026-06-16T18:57:40.836508Z"
+    },
+    "P30-I20-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W49",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W49",
+      "model": null,
+      "scope_id": "P30-I20-W49",
+      "status": "done",
+      "updated_at": "2026-06-16T19:27:32.500735Z"
     }
   },
   "agent_sessions": {
@@ -23040,6 +23054,19 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I20-W48",
       "updated_at": "2026-06-16T18:57:38.937574Z"
+    },
+    "P30-I20-W49": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W49-bucket-20260616T192731Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I20-W49",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I20-W49",
+      "updated_at": "2026-06-16T19:27:31.028742Z"
     }
   },
   "fleet_run": {
@@ -25281,7 +25308,8 @@
         "P30-I20-W45",
         "P30-I20-W46",
         "P30-I20-W47",
-        "P30-I20-W48"
+        "P30-I20-W48",
+        "P30-I20-W49"
       ]
     }
   },
@@ -26370,7 +26398,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-16T18:57:40.867008Z",
+  "updated_at": "2026-06-16T19:27:32.531235Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -98976,6 +99004,65 @@
         }
       ],
       "title": "Redact local paths from headless report body before persist",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W49": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-p30i20",
+      "claimed_at": "2026-06-16T19:27:31.001588Z",
+      "closed_at": "2026-06-16T19:27:32.500735Z",
+      "commit": "61d1e8cbdf6e03e50e54d04c7a8fef762bf1179c",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "tests/daemon/test_fleet_watcher_liveness.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W49",
+      "intent": {
+        "desired_outcome": "The fleet watcher resolves a dead lane with a close-ready report as closed and DL-5 gating closes auto-closeable waves while high-risk waves still fork.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Live e2e: a sandboxed headless agent cannot run eawf wave close, so its wave stays IN_PROGRESS and the liveness watcher forks the dead synchronous spawn instead of closing.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T19:22:42.781401Z",
+      "outcome": "Close-on-behalf for sandboxed headless agents (DL-5-aware): watcher resolves dead lane + close-ready report as closed, _finish_lane flips status only for auto-closeable tiers. Live codex e2e CLOSED the wave end-to-end (closed=1).",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the live codex autopilot e2e closes the wave (closed=1) with the report persisted",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the live codex autopilot e2e closes the wave (closed=1) with the report persisted",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Close-on-behalf for sandboxed headless agents (DL-5-aware)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
