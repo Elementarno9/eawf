@@ -102,7 +102,12 @@ from eawf.workflow.dispatch.retry import (
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.spec import WAVE_TRANSITIONS, validate_transition
-from eawf.workflow.lifecycle.wave import claim_wave, close_wave, compute_runtime_delta
+from eawf.workflow.lifecycle.wave import (
+    claim_wave,
+    close_wave,
+    compute_runtime_delta,
+    fail_wave,
+)
 from eawf.workflow.verify.oracle import classify_risk_tier, risk_tier_auto_closes
 
 if TYPE_CHECKING:
@@ -2034,7 +2039,44 @@ class _Loop:
             # (a HARD spawn failure / a retry-exhausted ladder) records the band
             # on the queued fork too.
             risk_tier = _lane_risk_tier(self.ctx, wave_id)
-            dispatch = self._spawn_lane(wave_id, risk_tier)
+            try:
+                dispatch = self._spawn_lane(wave_id, risk_tier)
+            except RuntimeSpawnError, LaneRetryExhaustedError:
+                # The two errors the bounded spawn ladder OWNS. When the ladder
+                # is wired, _spawn_lane already absorbs both into a None return
+                # (the fork path below), so they never reach here. Without a
+                # classifier (the pre-W03 opt-out direct-spawn path), a raised
+                # RuntimeSpawnError keeps PROPAGATING -- the ladder is opt-in, so
+                # the existing synchronous callers + fakes stay unaffected.
+                raise
+            except Exception as exc:
+                # A dispatch error the bounded spawn ladder does NOT model (it
+                # only forks RuntimeSpawnError / retry-exhaustion -- both handled
+                # above). An error raised DEEP in the dispatch (e.g. an LLM-assist
+                # failure mid-prompt) otherwise escapes _fill_lanes, leaves the
+                # wave stuck CLAIMED with zero counters bumped, and corrupts the
+                # run summary. Record it as a terminal FAILED outcome (mirroring
+                # the genuine-watcher fork accounting in _finish_lane), advance
+                # the wave off CLAIMED so a reattach never re-claims it, and
+                # continue the drive -- one wave's dispatch error never aborts
+                # the whole run.
+                #
+                # Only claimed / dispatched / failed advance here -- the FAILED
+                # is recorded directly, NOT enqueued as a FleetFork, so the run
+                # summary invariant ``closed + failed + blocked == dispatched``
+                # holds. ``forked`` is left for the fork-queue paths whose disk
+                # enqueue the per-round ``_resync_forks_from_disk`` reloads (a
+                # raw in-memory ``forked`` bump would be clobbered by a later
+                # same-round resync), and ``blocked`` is the safety-hold tally,
+                # not a genuine failure.
+                self._fail_wave_on_disk(wave_id, exc)
+                self.run.counters.claimed += 1
+                self.run.counters.dispatched += 1
+                self.run.counters.failed += 1
+                logger.warning(
+                    f"_fill_lanes wave={wave_id} status=dispatch-failed error={type(exc).__name__}"
+                )
+                continue
             if dispatch is None:
                 # The bounded spawn ladder terminated the lane to a queued fork
                 # (a HARD failure or a spent retry budget): the run is NOT
@@ -2147,6 +2189,45 @@ class _Loop:
         self.run.forks = list(persisted.forks)
         self.run.counters.forked = persisted.counters.forked
         self.run.counters.blocked = persisted.counters.blocked
+
+    def _fail_wave_on_disk(self, wave_id: str, exc: BaseException) -> None:
+        """Advance a dispatch-failed wave off CLAIMED to terminal FAILED on disk.
+
+        A wave whose dispatch raised after the claim landed is stuck CLAIMED on
+        disk (the spawner claimed it, then the dispatch aborted). This drives the
+        canonical :func:`eawf.workflow.lifecycle.wave.fail_wave` transition under
+        the state portalock so the wave reaches a terminal FAILED status carrying
+        the failure reason + drops off ``current.active_wave_ids`` -- a reattach
+        then never re-claims it. The write goes through the daemon canonical
+        writer (locked atomic write), never a hand-rolled state mutation. A
+        stateless context (no ``state_path``) is a no-op; an already-terminal
+        wave (a concurrent close) is left untouched rather than faulting the
+        whole drive on the cleanup write.
+
+        Args:
+            wave_id: ``W<NN>`` wave whose claimed lane failed to dispatch.
+            exc: The dispatch error driving the failure -- its type + message
+                ground the recorded fail reason.
+        """
+        if self.ctx.state_path is None:
+            return
+        reason = f"fleet dispatch error: {type(exc).__name__}: {exc}"[:_SPAWN_FORK_DETAIL_CAP]
+        state_path = Path(self.ctx.state_path)
+        with portalock.acquire(state_path, timeout=5.0):
+            state = load_state(state_path)
+            wave = state.waves.get(wave_id)
+            if wave is None or wave.status in {
+                WaveStatus.CLOSED,
+                WaveStatus.FAILED,
+                WaveStatus.ABANDONED,
+            }:
+                # The wave is gone or already terminal (a concurrent close): the
+                # cleanup has nothing to advance, so leave disk untouched.
+                return
+            fail_wave(state, wave_id=wave_id, reason=reason)
+            state.updated_at = datetime.now(UTC)
+            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        logger.info(f"_fail_wave_on_disk wave={wave_id} status=failed reason={reason!r}")
 
     def _drain_lanes(self) -> bool:
         """Watch in-flight lanes to their terminal outcome, freeing each slot.
