@@ -25057,7 +25057,12 @@
         "P30-I20-W32",
         "P30-I20-W33",
         "P30-I20-W34",
-        "P30-I20-W35"
+        "P30-I20-W35",
+        "P30-I20-W41",
+        "P30-I20-W42",
+        "P30-I20-W43",
+        "P30-I20-W44",
+        "P30-I20-W45"
       ]
     }
   },
@@ -26146,7 +26151,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-15T02:17:53.116871Z",
+  "updated_at": "2026-06-16T15:40:10.414176Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -98253,6 +98258,326 @@
         }
       ],
       "title": "Fix wave-close daemon hang from synchronous floor pack",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W41": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W43"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W41",
+      "intent": {
+        "desired_outcome": "On LLMAssistError synthesize a typed ExecutorReportBody from outcome signals so run_dispatch completes the wave and accrues cost plus EU.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md",
+          "src/eawf/runtime/daemon/dispatch_runner.py"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Headless executor spawn returns prose not JSON so assist_with_schema exhausts with LLMAssistError and the wave never closes losing cost and EU.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T15:39:44.959753Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "error-path test: a non-JSON spawn text closes the wave via the synthesized report instead of raising LLMAssistError",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "error-path test: a non-JSON spawn text closes the wave via the synthesized report instead of raising LLMAssistError",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Synthesize executor report on assist exhaustion",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W42": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "src/eawf/surfaces/tui/screens/overlays/run_summary.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W42",
+      "intent": {
+        "desired_outcome": "Any dispatch exception records a failed outcome and finishes the run so closed plus failed plus blocked equals dispatched in the summary.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md",
+          "src/eawf/runtime/daemon/methods/fleet.py"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Fleet drive catches only RuntimeSpawnError so a dispatch LLMAssistError escapes uncaught leaving the run DRAINING with a false 0/0/0 summary.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T15:40:08.691638Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "invariant test: a spawner raising LLMAssistError yields closed plus failed plus blocked equal to dispatched and a non-empty run_summary tally",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "invariant test: a spawner raising LLMAssistError yields closed plus failed plus blocked equal to dispatched and a non-empty run_summary tally",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Record failed outcome on fleet dispatch error",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W43": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W45"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I20-W41"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/roles.py",
+        "src/eawf/workflow/dispatch/renderer.py",
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W43",
+      "intent": {
+        "desired_outcome": "Headless executor prompt carries the ExecutorReportBody schema plus an output-only-JSON instruction so the model emits a valid report first try.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md",
+          "src/eawf/workflow/agents/specs/roles.py"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "The headless executor prompt names no report schema and gives no output-only-JSON instruction so the model emits prose that fails ExecutorReportBody validation.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T15:40:09.278420Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "golden plus unit test cover the headless executor prompt carrying the schema block",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "golden plus unit test cover the headless executor prompt carrying the schema block",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Pin ExecutorReportBody schema into headless prompt",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W44": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W45"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/codex/adapter.py",
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "src/eawf/runtime/runtimes/adapter.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W44",
+      "intent": {
+        "desired_outcome": "Adapters stream stdout through an on_chunk readline loop fanning ordered chunks live while keeping the final SpawnResult byte-equivalent.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md",
+          "src/eawf/runtime/runtimes/codex/adapter.py"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "codex and claude adapters read stdout via proc.communicate() which buffers until exit so no live model output can stream into Watch.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T15:40:09.852861Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "test asserts on_chunk receives ordered chunks and final SpawnResult.text matches the buffered baseline",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test asserts on_chunk receives ordered chunks and final SpawnResult.text matches the buffered baseline",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Stream adapter stdout via on_chunk readline loop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W45": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I20-W43",
+        "P30-I20-W44"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/store/kinds/event.py",
+        "src/eawf/kernel/store/kinds/events/__init__.py",
+        "src/eawf/runtime/daemon/dispatch_runner.py",
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W45",
+      "intent": {
+        "desired_outcome": "A persisted agent.output.chunk event per batched chunk feeds Watch live and stays reviewable after the TUI closed.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md",
+          "src/eawf/surfaces/tui/modes/agent_watch.py"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Spawn output is emitted as one terminal event after completion so Watch shows nothing live and no per-chunk history is persisted for later review.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T15:40:10.413961Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "golden for the new union member plus a test that a streamed spawn writes ordered chunk envelopes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "golden for the new union member plus a test that a streamed spawn writes ordered chunk envelopes",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Persist and render live agent.output.chunk events",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
