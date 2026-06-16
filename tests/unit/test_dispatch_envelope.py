@@ -514,3 +514,43 @@ def test_render_dispatch_envelope_does_not_double_render_prompt() -> None:
     _seed_wave_with_role(state, role="executor")
     envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code")
     assert envelope.prompt == render_wave_prompt(state, "P01-I01-W01")
+
+
+# ---- headless report-output threading (P30-I20-W43) ------------------------
+
+
+@pytest.mark.parametrize("runtime", ["claude-code", "claude-agent-sdk", "codex", "opencode"])
+def test_render_dispatch_envelope_headless_executor_pins_report_schema(runtime: str) -> None:
+    """A headless executor dispatch pins the ExecutorReportBody JSON schema."""
+    state = _empty_state()
+    _seed_wave_with_role(state, role="executor")
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", runtime, headless=True)
+    assert "## Report output" in envelope.prompt
+    assert "single JSON object" in envelope.prompt
+    assert '"verdict": "pass|pass-with-followups|fail|blocked"' in envelope.prompt
+    assert '"confidence": "high|medium|low"' in envelope.prompt
+    # The dispatched wave id is injected, not a placeholder.
+    assert '"wave_id": "P01-I01-W01"' in envelope.prompt
+    assert "<THE-WAVE-ID>" not in envelope.prompt
+
+
+def test_render_dispatch_envelope_interactive_executor_byte_equal_to_default() -> None:
+    """The interactive (default) executor render carries no report-output block."""
+    state = _empty_state()
+    _seed_wave_with_role(state, role="executor")
+    interactive = render_dispatch_envelope(state, "P01-I01-W01", "claude-code")
+    # The default-headless and explicit-interactive renders are byte-equal,
+    # and neither leaks the headless-only report schema.
+    explicit = render_dispatch_envelope(state, "P01-I01-W01", "claude-code", headless=False)
+    assert interactive.prompt == explicit.prompt
+    assert "## Report output" not in interactive.prompt
+    # The standalone render path is byte-equal to the interactive envelope.
+    assert interactive.prompt == render_wave_prompt(state, "P01-I01-W01")
+
+
+def test_render_dispatch_envelope_headless_non_executor_omits_report_output() -> None:
+    """Headless adds the block only for executor waves, not other roles."""
+    state = _empty_state()
+    _seed_wave_with_role(state, role="auditor")
+    envelope = render_dispatch_envelope(state, "P01-I01-W01", "claude-code", headless=True)
+    assert "## Report output" not in envelope.prompt

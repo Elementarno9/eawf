@@ -361,3 +361,54 @@ def test_dependency_rejects_unknown_field() -> None:
     """Nested section models also forbid extra keys."""
     with pytest.raises(ValidationError):
         SpecDependency.model_validate({"wave_id": "P01-I01-W01", "bogus": 1})
+
+
+# ---- Headless report-output section ----------------------------------------
+
+
+def test_render_headless_executor_emits_report_output_schema() -> None:
+    """A headless executor render pins the ExecutorReportBody JSON schema."""
+    out = _minimal_spec(agent_role="executor", file_scopes=["src/"]).render(headless=True)
+    assert "## Report output" in out
+    # The strict output-only-JSON instruction is present.
+    assert "single JSON object" in out
+    assert "no prose, no markdown, no code fences" in out
+    # The schema names every required field + the exact enum string values
+    # (verbatim from AgentReportVerdict + Confidence).
+    assert '"role": "executor"' in out
+    assert '"verdict": "pass|pass-with-followups|fail|blocked"' in out
+    assert '"confidence": "high|medium|low"' in out
+    assert '"outcome": "1-1000 chars"' in out
+    assert '"files_changed": []' in out
+    assert '"tests_run": []' in out
+    assert '"commit_sha": null' in out
+    assert '"evidence_refs": []' in out
+    assert '"followups": []' in out
+    # The dispatched wave id is injected into the schema, not a placeholder.
+    assert '"wave_id": "P01-I01-W01"' in out
+    assert "<THE-WAVE-ID>" not in out
+
+
+def test_render_interactive_executor_omits_report_output_schema() -> None:
+    """The interactive (headless=False) render carries no report-output block."""
+    out = _minimal_spec(agent_role="executor", file_scopes=["src/"]).render()
+    assert "## Report output" not in out
+    assert '"role": "executor"' not in out
+
+
+def test_render_headless_default_matches_interactive_for_executor() -> None:
+    """``render()`` default is byte-equal to the interactive render."""
+    spec = _minimal_spec(agent_role="executor", file_scopes=["src/"])
+    assert spec.render() == spec.render(headless=False)
+
+
+def test_render_headless_non_executor_omits_report_output() -> None:
+    """Headless only adds the section for the executor role, not others."""
+    out = _minimal_spec(agent_role="auditor", file_scopes=["src/"]).render(headless=True)
+    assert "## Report output" not in out
+
+
+def test_render_headless_unspecified_role_omits_report_output() -> None:
+    """A wave with no agent_role never gets the report-output section."""
+    out = _minimal_spec(file_scopes=["src/"]).render(headless=True)
+    assert "## Report output" not in out

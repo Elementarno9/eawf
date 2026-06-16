@@ -180,6 +180,7 @@ def render_dispatch_envelope(
     repo_root: Path | None = None,
     role_blocks: Mapping[str, str] | None = None,
     role_tier_token_cap: int = DEFAULT_ROLE_TIER_TOKEN_CAP,
+    headless: bool = False,
 ) -> DispatchEnvelope:
     """Return a typed :class:`DispatchEnvelope` for *wave_id* and *runtime*.
 
@@ -212,6 +213,14 @@ def render_dispatch_envelope(
             never truncated, mirroring the AGENTS.md tier-0 budget gate.
             Defaults to
             :data:`~eawf.platform.render_block.DEFAULT_ROLE_TIER_TOKEN_CAP`.
+        headless: ``True`` for the live-spawn (daemon) dispatch path, whose
+            downstream reads the spawned model's final message as a JSON
+            ``ExecutorReportBody``. When set and the wave's ``agent_role`` is
+            ``executor``, the rendered prompt carries a trailing
+            ``## Report output`` section pinning the report-body JSON schema
+            so the model emits a parseable report on the first try. ``False``
+            (default) keeps the prompt byte-equivalent to the interactive
+            render an operator-facing Claude Code session sees.
 
     Returns:
         :class:`DispatchEnvelope` with ``runtime``, ``wave_id``,
@@ -241,7 +250,9 @@ def render_dispatch_envelope(
         role_blocks=role_blocks,
         role_tier_token_cap=role_tier_token_cap,
     )
-    prompt = _render_spec_prompt(state, spec, wave_id=wave_id, repo_root=repo_root)
+    prompt = _render_spec_prompt(
+        state, spec, wave_id=wave_id, repo_root=repo_root, headless=headless
+    )
     if runtime in {_CLI_RUNTIME_CLAUDE_CODE, _CLI_RUNTIME_CODEX, _CLI_RUNTIME_OPENCODE}:
         # codex + opencode share the claude-code envelope shape: ``prompt``
         # carries the full Markdown body and the runtime reads MCP wiring from
@@ -689,9 +700,15 @@ def _render_spec_prompt(
     *,
     wave_id: str,
     repo_root: Path | None,
+    headless: bool = False,
 ) -> str:
-    """Render *spec* and splice in read-only dispatch context when present."""
-    prompt = spec.render()
+    """Render *spec* and splice in read-only dispatch context when present.
+
+    *headless* forwards to :meth:`SubagentSpec.render` so the live-spawn
+    path gets the trailing ``## Report output`` schema block; the
+    interactive default leaves the prompt byte-equivalent.
+    """
+    prompt = spec.render(headless=headless)
     ceremony = _render_ceremony_section(state, wave_id=wave_id)
     if ceremony is not None:
         prompt = _insert_section_after_heading(prompt, ceremony, heading="## Wave tags")

@@ -1074,7 +1074,13 @@ async def _spawn_and_dispatch(
         state_path, wave_id=wave_id, runtime=runtime, override=model_override
     )
     state = load_state(state_path)
-    envelope = render_dispatch_envelope(state, wave_id, runtime, repo_root=state_path.parent.parent)
+    # The live-spawn path reads the spawned model's final message as a JSON
+    # ExecutorReportBody, so render the headless prompt: it pins the report
+    # schema + an output-only-JSON instruction so the model emits a parseable
+    # body on the first try rather than answering in prose.
+    envelope = render_dispatch_envelope(
+        state, wave_id, runtime, repo_root=state_path.parent.parent, headless=True
+    )
 
     # 3. Resolve the per-wave sandbox deny-list (wave-scoped + global
     # policies) so the spawned child is launched with those tools disabled.

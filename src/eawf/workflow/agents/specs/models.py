@@ -452,6 +452,52 @@ class SubagentSpec(_SpecModel):
             f"{body}"
         )
 
+    def _render_report_output(self) -> str | None:
+        """Return the headless ``## Report output`` section, or ``None``.
+
+        Only the HEADLESS executor dispatch path emits this section. The
+        live-spawn daemon path reads the spawned model's final message as a
+        JSON ``ExecutorReportBody`` (``json.loads(spawn.text)`` then schema
+        validation), so a model that answers in prose fails validation. The
+        section pins the exact JSON schema -- field names, enum values, and
+        the dispatched wave id -- plus a strict "output ONLY this JSON"
+        instruction so the model emits a valid body on the first try.
+
+        Returns ``None`` for any non-executor role since only the executor
+        report body drives the live-spawn parse; the caller already gates
+        the whole section on the ``headless`` flag, so the interactive
+        render stays byte-equivalent.
+        """
+        if self.agent_role != "executor":
+            return None
+        schema = (
+            '{"role": "executor", '
+            '"verdict": "pass|pass-with-followups|fail|blocked", '
+            '"confidence": "high|medium|low", '
+            '"summary": "<=4000 chars", '
+            f'"wave_id": "{self.wave_id}", '
+            '"outcome": "1-1000 chars", '
+            '"files_changed": [], '
+            '"tests_run": [], '
+            '"commit_sha": null, '
+            '"evidence_refs": [], '
+            '"followups": []}'
+        )
+        return (
+            "## Report output\n"
+            "\n"
+            "Emit your final message as a single JSON object matching this "
+            "schema and nothing else -- no prose, no markdown, no code "
+            "fences:\n"
+            "\n"
+            f"{schema}\n"
+            "\n"
+            f"Set `wave_id` to `{self.wave_id}` exactly. `verdict` is one of "
+            "`pass`, `pass-with-followups`, `fail`, `blocked`; `confidence` "
+            "is one of `high`, `medium`, `low`. `summary` and `outcome` are "
+            "required non-empty strings; the list fields may stay empty."
+        )
+
     def _render_stop_conditions(self) -> str | None:
         """Return the ``## Stop conditions`` section, or ``None`` when absent.
 
@@ -467,14 +513,25 @@ class SubagentSpec(_SpecModel):
         lines.extend(f"- {condition}" for condition in self.role_contract.stop_conditions)
         return "\n".join(lines)
 
-    def render(self) -> str:
+    def render(self, *, headless: bool = False) -> str:
         """Return the full Markdown wave prompt.
 
         Sections render in the canonical order — header, description
         (omitted when unset), wave tags, scope, dependencies, decisions,
         hypotheses, recent audits, references (omitted when empty), working
         tree, workflow, out of scope, estimate, stop conditions (omitted
-        when empty) — joined by a blank line.
+        when empty) — joined by a blank line. When *headless* and the wave's
+        ``agent_role`` is ``executor``, a trailing ``## Report output``
+        section pins the ``ExecutorReportBody`` JSON schema so the spawned
+        model emits a parseable report body (the live-spawn path
+        ``json.loads``-es the final message and schema-validates it).
+
+        Args:
+            headless: ``True`` for the live-spawn (daemon) dispatch path,
+                whose downstream reads the spawned model's final message as a
+                JSON report body. ``False`` (default) is the interactive
+                render an operator-facing Claude Code session sees; it stays
+                byte-equivalent to the pre-W43 prompt.
 
         Returns:
             The wave prompt as a single string ending in ``"\\n"``.
@@ -506,6 +563,10 @@ class SubagentSpec(_SpecModel):
         stop_conditions = self._render_stop_conditions()
         if stop_conditions is not None:
             sections.append(stop_conditions)
+        if headless:
+            report_output = self._render_report_output()
+            if report_output is not None:
+                sections.append(report_output)
         return "\n\n".join(sections).rstrip() + "\n"
 
 
