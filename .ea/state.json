@@ -8889,6 +8889,34 @@
       "scope_id": "P30-I20-W46",
       "status": "done",
       "updated_at": "2026-06-16T18:25:10.688969Z"
+    },
+    "P30-I20-W47": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W47",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W47",
+      "model": null,
+      "scope_id": "P30-I20-W47",
+      "status": "done",
+      "updated_at": "2026-06-16T18:57:39.884408Z"
+    },
+    "P30-I20-W48": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W48",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W48",
+      "model": null,
+      "scope_id": "P30-I20-W48",
+      "status": "done",
+      "updated_at": "2026-06-16T18:57:40.836508Z"
     }
   },
   "agent_sessions": {
@@ -22986,6 +23014,32 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I20-W46",
       "updated_at": "2026-06-16T18:08:47.549182Z"
+    },
+    "P30-I20-W47": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W47-bucket-20260616T185738Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I20-W47",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I20-W47",
+      "updated_at": "2026-06-16T18:57:38.276838Z"
+    },
+    "P30-I20-W48": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W48-bucket-20260616T185738Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I20-W48",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I20-W48",
+      "updated_at": "2026-06-16T18:57:38.937574Z"
     }
   },
   "fleet_run": {
@@ -25225,7 +25279,9 @@
         "P30-I20-W43",
         "P30-I20-W44",
         "P30-I20-W45",
-        "P30-I20-W46"
+        "P30-I20-W46",
+        "P30-I20-W47",
+        "P30-I20-W48"
       ]
     }
   },
@@ -26314,7 +26370,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-16T18:25:10.723765Z",
+  "updated_at": "2026-06-16T18:57:40.867008Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -98802,6 +98858,124 @@
         }
       ],
       "title": "Fix opencode on_chunk parity + config-fallback test",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W47": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-p30i20",
+      "claimed_at": "2026-06-16T18:57:38.250213Z",
+      "closed_at": "2026-06-16T18:57:39.884408Z",
+      "commit": "41ef3ceabdf0cbf4839759cb9e99aa5449de86a9",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/models.py",
+        "tests/unit/test_subagent_spec_model.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W47",
+      "intent": {
+        "desired_outcome": "Headless report prompt tells the model to leave evidence_refs and followups empty so it binds a valid ExecutorReportBody on the first attempt.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Live codex e2e: W43 report block left the evidence_refs entry shape unpinned so codex filled it wrong, failing validation and forcing the slow re-ask loop.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T18:36:18.361607Z",
+      "outcome": "Pin evidence_refs/followups empty in headless prompt; live codex e2e confirmed clean bind on attempt 1 (no re-ask loop). Wave-close-e2e blocked by the separately-documented autopilot close-loop gap.",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "the live codex e2e binds the executor report on the first attempt and closes the wave with cost and EU accrued",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "the live codex e2e binds the executor report on the first attempt and closes the wave with cost and EU accrued",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Pin evidence_refs/followups empty in headless report prompt",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W48": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-p30i20",
+      "claimed_at": "2026-06-16T18:57:38.920264Z",
+      "closed_at": "2026-06-16T18:57:40.836508Z",
+      "commit": "d1821823f04404f709cf37912591e240d656688b",
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/agent.py",
+        "tests/daemon/test_spawn_executor_report_binding.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W48",
+      "intent": {
+        "desired_outcome": "The headless dispatch path redacts local tokens from the report body via rewrite_text before persist so the scrub passes and the wave closes.",
+        "evidence_refs": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Live codex e2e: the bound report cited the repo root in its outcome, so the report-store scrub rejected it (absolute_posix_path) and hard-failed a successful wave.",
+        "risks": [],
+        "source_brief_ids": [
+          ".ea/local/research/2026-06-16-headless-dispatch-tail.md"
+        ]
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-16T18:44:45.405286Z",
+      "outcome": "Redact local paths from headless report before persist; live codex e2e confirmed the report persists + verify_close_readiness passes (scrub no longer hard-fails). Close-loop gap tracked separately.",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "ids and repo-relative paths survive redaction and the live codex e2e closes the wave with cost and EU accrued",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "ids and repo-relative paths survive redaction and the live codex e2e closes the wave with cost and EU accrued",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Redact local paths from headless report body before persist",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
