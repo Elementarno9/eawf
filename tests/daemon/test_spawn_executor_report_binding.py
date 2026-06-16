@@ -50,7 +50,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.agent_report import AgentReportPayload
+from eawf.kernel.store.kinds.agent_report import AgentReportPayload, ExecutorReportBody
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
@@ -468,3 +468,35 @@ def test_spawn_synthesized_verdict_is_fail_on_nonzero_exit(
     assert body.confidence is Confidence.MEDIUM
     assert "exit_status=1" in body.outcome
     assert len(body.followups) == 1
+
+
+def test_redact_report_body_rewrites_local_paths_keeps_ids() -> None:
+    """A headless report's absolute-path prose is redacted before persist.
+
+    The live codex e2e showed the agent citing the repo root in its
+    ``outcome``, which the report-store scrub rejects (``absolute_posix_path``)
+    -- hard-failing an otherwise-successful wave. The headless dispatch path
+    redacts the body's string fields so the scrub passes and the wave closes,
+    while ids + repo-relative paths survive.
+    """
+    from eawf.platform.scrub.scan import scan_text
+    from eawf.runtime.daemon.methods.agent import _redact_report_body
+
+    body = ExecutorReportBody(
+        verdict=AgentReportVerdict.PASS_WITH_FOLLOWUPS,
+        confidence=Confidence.MEDIUM,
+        summary="created greeting.txt",
+        wave_id="P01-I01-W01",
+        outcome="criteria met at /tmp/eawf-smoke-f8Ec/greeting.txt",
+        files_changed=["greeting.txt"],
+        tests_run=[],
+    )
+    redacted = _redact_report_body(body)
+
+    # The absolute path is gone (no scrub finding survives), but the wave id and
+    # the repo-relative file path are untouched.
+    assert "/tmp/eawf-smoke-f8Ec" not in redacted.outcome
+    assert not scan_text(redacted.outcome)
+    assert redacted.wave_id == "P01-I01-W01"
+    assert redacted.files_changed == ["greeting.txt"]
+    assert redacted.verdict is AgentReportVerdict.PASS_WITH_FOLLOWUPS

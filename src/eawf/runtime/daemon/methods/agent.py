@@ -84,6 +84,7 @@ from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
+from eawf.platform.scrub.scan import rewrite_text
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
 from eawf.runtime.daemon.dispatch_runner import (
     _CHUNK_BATCH_LINES,
@@ -937,6 +938,42 @@ async def _bind_executor_report(
     return body
 
 
+def _redact_report_body(body: ExecutorReportBody) -> ExecutorReportBody:
+    """Redact local/sensitive tokens from a headless report body's text.
+
+    A headless agent's report prose may name an absolute path or another
+    scrub-tripping token -- the live codex e2e showed the agent citing the
+    repo root in its ``outcome``. The report-store scrub
+    (:func:`~eawf.workflow.agent_report.store.append_agent_report`) REJECTS
+    such a body with :class:`AgentReportScrubError`, which would hard-fail an
+    otherwise-successful wave. Rewriting every string field through the
+    canonical scrub redactor (:func:`~eawf.platform.scrub.scan.rewrite_text`)
+    keeps the agent's report -- verdict, evidence refs, follow-ups -- while
+    satisfying the store's no-local-tokens invariant, so the wave closes
+    instead of failing. The redactor only rewrites matched path / sensitive
+    patterns, so ids (``wave_id``), enum values, and repo-relative file paths
+    pass through unchanged.
+
+    Args:
+        body: The bound (or synthesized) executor report body.
+
+    Returns:
+        A new :class:`ExecutorReportBody` with local tokens rewritten.
+    """
+
+    def _walk(value: object) -> object:
+        if isinstance(value, str):
+            return rewrite_text(value)
+        if isinstance(value, list):
+            return [_walk(item) for item in value]
+        if isinstance(value, dict):
+            return {key: _walk(item) for key, item in value.items()}
+        return value
+
+    redacted = _walk(body.model_dump(mode="json"))
+    return ExecutorReportBody.model_validate(redacted)
+
+
 def _synthesize_executor_report(
     accepted: SpawnResult, *, wave_id: str, exc: LLMAssistError
 ) -> ExecutorReportBody:
@@ -1231,6 +1268,11 @@ async def _spawn_and_dispatch(
             f"_spawn_and_dispatch wave={wave_id} status=synth-fallback "
             f"attempts={exc.attempts} reason={exc.failures[-1].reason!r}"
         )
+    # Redact local/sensitive tokens from the agent's own report prose before the
+    # store scrub runs: a headless agent may cite an absolute path in its
+    # summary / outcome, which the report-store scrub rejects -- redacting keeps
+    # the report and closes the wave instead of hard-failing a successful spawn.
+    report_body = _redact_report_body(report_body)
     attempt, annotation, session_attempt = _persist_live_session_attempt(
         ctx,
         wave_id=wave_id,
