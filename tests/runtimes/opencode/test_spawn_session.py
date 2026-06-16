@@ -626,3 +626,60 @@ def test_spawn_session_timeout_kills_child_and_raises(monkeypatch: pytest.Monkey
         asyncio.run(adapter.spawn_session("x", model="anthropic/claude-x", timeout=0.01))
     assert proc.killed is True
     assert proc.waited is True
+
+
+# ---------------------------------------------------------------------------
+# spawn_session -- on_chunk streaming contract (P30-I20-W46)
+#
+# opencode buffers via communicate (unlike codex/claude's incremental readline),
+# so it replays the captured stdout to on_chunk line by line after the child
+# exits. The param must be honoured (not dead) AND must not perturb the result.
+# ---------------------------------------------------------------------------
+
+
+def test_spawn_session_on_chunk_none_is_byte_equivalent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With on_chunk=None the SpawnResult is unchanged from the default path."""
+    proc = _FakeProcess(stdout=_stream_bytes(), stderr=b"", returncode=0, pid=5555)
+    _patch_factory(monkeypatch, proc)
+
+    import asyncio
+
+    adapter = OpenCodeAdapter()
+    baseline = asyncio.run(adapter.spawn_session("solve it", model="anthropic/claude-x"))
+
+    proc2 = _FakeProcess(stdout=_stream_bytes(), stderr=b"", returncode=0, pid=5555)
+    _patch_factory(monkeypatch, proc2)
+    streamed = asyncio.run(
+        adapter.spawn_session("solve it", model="anthropic/claude-x", on_chunk=None)
+    )
+
+    # Exclude the wall-clock stamps (they differ per spawn); every parsed field
+    # must otherwise match the buffered baseline.
+    skip = {"started_at", "ended_at"}
+    assert streamed.model_dump(exclude=skip) == baseline.model_dump(exclude=skip)
+
+
+def test_spawn_session_on_chunk_receives_lines_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An on_chunk recorder receives each stdout line; the result is unchanged."""
+    stdout = _stream_bytes()
+    proc = _FakeProcess(stdout=stdout, stderr=b"", returncode=0, pid=5555)
+    _patch_factory(monkeypatch, proc)
+
+    import asyncio
+
+    chunks: list[str] = []
+
+    async def _record(line: str) -> None:
+        chunks.append(line)
+
+    adapter = OpenCodeAdapter()
+    result = asyncio.run(
+        adapter.spawn_session("solve it", model="anthropic/claude-x", on_chunk=_record)
+    )
+
+    # The recorder saw the captured stdout replayed line by line, in order.
+    assert chunks == stdout.decode("utf-8").splitlines()
+    assert chunks, "on_chunk must receive at least one line"
+    # The replay did not perturb the parsed result.
+    assert result.text == "\n\nok"
+    assert result.subprocess_pid == 5555

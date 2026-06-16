@@ -341,6 +341,7 @@ def test_dispatch_rejects_extra_params(tmp_path: Path) -> None:
 
 def test_dispatch_fails_without_runtime_when_preference_missing(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state_path = tmp_path / "state.json"
     _write_state(
@@ -348,6 +349,14 @@ def test_dispatch_fails_without_runtime_when_preference_missing(
         _build_state_payload(wave_id="P24-I01-W07", runtime_preference=None),
     )
     ctx = _build_ctx(state_path=state_path)
+    # A wave with no runtime_preference now falls back to the repo's configured
+    # runtime preference; the layered-config default always yields one adapter,
+    # so force the genuinely empty-config case to exercise the fail-fast path
+    # where neither the wave nor the config resolves a runtime.
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.agent._resolve_config_runtime_preference",
+        lambda _state_path: [],
+    )
 
     async def body() -> None:
         with pytest.raises(ValueError, match="no runtime resolved"):

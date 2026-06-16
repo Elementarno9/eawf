@@ -24,7 +24,7 @@ import shutil
 import sys
 import threading
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -662,6 +662,7 @@ class OpenCodeAdapter:
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
         on_pgid: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
         session: str = "",
         enforcement_sink: EnforcementSink | None = None,
     ) -> SpawnResult:
@@ -732,6 +733,11 @@ class OpenCodeAdapter:
                 id right after spawn so the budget-HALT interlock can reap
                 the whole group. Resolution failures (the child raced to
                 exit) are swallowed -- the cancel path falls back to the pid.
+            on_chunk: Optional async callback invoked with each stdout line.
+                opencode buffers via ``communicate`` (no incremental readline
+                like codex/claude), so the captured stdout is replayed line by
+                line after the child exits -- the chunk is not live, but the
+                streaming-output contract is honoured for this lane too.
             session: The spawning session id stamped on every enforcement
                 event this spawn records.
             enforcement_sink: The sink each enforcement decision is persisted
@@ -835,6 +841,13 @@ class OpenCodeAdapter:
                     exit_status=124,
                 ) from None
             ended_at = datetime.now(UTC)
+            if on_chunk is not None:
+                # opencode buffers via communicate (no incremental readline like
+                # codex/claude), so replay the captured stdout to the chunk sink
+                # line by line -- the streaming-output contract is honoured for
+                # this lane too rather than left dead.
+                for line in (stdout or b"").decode("utf-8", "replace").splitlines():
+                    await on_chunk(line)
             return _parse_opencode_result(
                 runtime=self.id,
                 model=model,
