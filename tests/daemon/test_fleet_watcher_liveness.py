@@ -27,12 +27,14 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.state.enums import WaveStatus
+from eawf.kernel.state.enums import AgentReportVerdict, Confidence, WaveStatus
 from eawf.kernel.state.models import FleetLane, State
 from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.fleet import build_liveness_watcher
 from eawf.runtime.lock import portalock
+from eawf.workflow.agent_report.store import append_agent_report
 from eawf.workflow.evidence._io import load_state
 
 pytestmark = pytest.mark.integration
@@ -115,7 +117,22 @@ def _state_payload(*, status: str = "in_progress") -> dict[str, Any]:
             }
         },
         "artifacts": {},
-        "agent_sessions": {},
+        "agent_sessions": {
+            "ses-x": {
+                "id": "ses-x",
+                "role": "executor",
+                "runtime": "codex",
+                "scope_id": _WAVE_ID,
+                "status": "active",
+                "claimed_wave_ids": [],
+                "worktree_ids": [],
+                "artifact_ids": [],
+                "started_at": "2026-06-11T00:00:00Z",
+                "ended_at": None,
+                "summary": None,
+                "agent_principal_id": None,
+            }
+        },
         "plugins": {},
         "indexes": {},
     }
@@ -327,3 +344,68 @@ def test_dead_lane_that_flips_closed_within_grace_does_not_fork(tmp_path: Path) 
     )
     outcome = watcher(ctx, _lane())
     assert outcome == "closed"
+
+
+# ---- W49: a dead lane with a close-ready report resolves CLOSED, not forked ---
+
+
+def _write_report(state_path: Path, *, verdict: AgentReportVerdict) -> None:
+    """Append an executor report for the watched wave to the report store."""
+    append_agent_report(
+        state=load_state(state_path),
+        state_path=state_path,
+        session_id="ses-x",
+        base_id=_WAVE_ID,
+        body=ExecutorReportBody(
+            role="executor",
+            verdict=verdict,
+            confidence=Confidence.MEDIUM,
+            summary="greeting created",
+            wave_id=_WAVE_ID,
+            outcome="greeting.txt written",
+        ),
+    )
+
+
+def test_dead_lane_with_close_ready_report_resolves_closed(tmp_path: Path) -> None:
+    """W49: a dead pgid whose wave has a close-ready report resolves CLOSED.
+
+    A SANDBOXED headless agent runs to completion in the synchronous dispatch
+    (so its process group is legitimately dead here) but cannot run
+    ``eawf wave close`` itself, so its wave stays IN_PROGRESS. The persisted
+    close-ready report is the evidence the agent SUCCEEDED, so the watcher
+    resolves ``"closed"`` instead of forking the wave on the stall deadline.
+    """
+    state_path = _write_state(tmp_path)
+    _write_report(state_path, verdict=AgentReportVerdict.PASS_WITH_FOLLOWUPS)
+    ctx = _ctx(state_path)
+    watcher = build_liveness_watcher(
+        is_alive=lambda pgid: False,  # the agent process is gone
+        stall_deadline=30.0,
+        poll_seconds=0.0,
+        clock=_Clock(step=10.0),
+        sleep=lambda _s: None,
+    )
+    assert watcher(ctx, _lane()) == "closed"
+
+
+def test_dead_lane_with_fail_report_still_forks(tmp_path: Path) -> None:
+    """W49 boundary: a FAIL report is NOT close-ready, so the dead lane still forks.
+
+    The report-aware close only fires when
+    :func:`~eawf.workflow.verify.dispatch_close.verify_close_readiness` passes
+    (a PASS / PASS_WITH_FOLLOWUPS verdict). A FAIL verdict is not close-ready,
+    so a dead pgid resolves to a fork exactly as a report-less stall does -- the
+    no-silent-close-on-failure invariant holds.
+    """
+    state_path = _write_state(tmp_path)
+    _write_report(state_path, verdict=AgentReportVerdict.FAIL)
+    ctx = _ctx(state_path)
+    watcher = build_liveness_watcher(
+        is_alive=lambda pgid: False,
+        stall_deadline=30.0,
+        poll_seconds=0.0,
+        clock=_Clock(step=10.0),
+        sleep=lambda _s: None,
+    )
+    assert watcher(ctx, _lane()) == "forked"

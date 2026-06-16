@@ -75,7 +75,9 @@ from eawf.kernel.state.models import (
 )
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.agent_report import AgentReportBody, AgentReportPayload
 from eawf.kernel.store.kinds.event import EventPayload
+from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.jury_validation import BlockAuthority
 from eawf.observability.telemetry.join import DEFAULT_EU_MINUTES
 from eawf.runtime.daemon.dispatch_runner import (
@@ -108,6 +110,7 @@ from eawf.workflow.lifecycle.wave import (
     compute_runtime_delta,
     fail_wave,
 )
+from eawf.workflow.verify.dispatch_close import verify_close_readiness
 from eawf.workflow.verify.oracle import classify_risk_tier, risk_tier_auto_closes
 
 if TYPE_CHECKING:
@@ -983,6 +986,52 @@ def _status_terminal_outcome(wave: Any) -> LaneOutcome | None:
     return None
 
 
+def _wave_has_close_ready_report(state_path: Path, wave_id: str) -> bool:
+    """Return whether *wave_id* has a persisted close-ready executor report.
+
+    The headless live-spawn dispatch persists the spawned agent's
+    :class:`~eawf.kernel.store.kinds.agent_report.ExecutorReportBody` and runs
+    :func:`~eawf.workflow.verify.dispatch_close.verify_close_readiness` (it raises
+    on a FAIL / BLOCKED verdict, so a body persisted on the dispatch path is
+    close-ready by construction). The liveness watcher consults this on the
+    dead-pgid stall path: a SANDBOXED headless agent runs to completion in the
+    synchronous dispatch but cannot run ``eawf wave close`` itself, so its wave
+    stays IN_PROGRESS with a dead process. A persisted close-ready report is the
+    evidence the agent SUCCEEDED -- the watcher then resolves the lane ``"closed"``
+    (DL-5 still applies downstream in :meth:`_Loop._finish_lane`) rather than
+    forking an otherwise-successful wave. Reads the LATEST executor-report row
+    for the wave; a missing store / unreadable row / no matching row is ``False``
+    (the lane forks as a genuine stall).
+
+    Args:
+        state_path: Path to ``state.json`` (the report store resolves under its
+            sibling ``store/``).
+        wave_id: ``W<NN>`` wave whose latest executor report to check.
+
+    Returns:
+        ``True`` when the wave's latest executor report passes close-readiness.
+    """
+    path = store_path(state_path, StoreKind.EXECUTOR_REPORT)
+    if not path.exists():
+        return False
+    latest: AgentReportBody | None = None
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            body = AgentReportPayload.model_validate(
+                Envelope.model_validate_json(line).payload
+            ).body
+            if getattr(body, "wave_id", None) == wave_id:
+                latest = body
+    except (OSError, ValueError) as exc:
+        logger.debug(f"_wave_has_close_ready_report wave={wave_id} read_failed cause={exc!r}")
+        return False
+    if latest is None:
+        return False
+    return verify_close_readiness(wave_id, latest).passed
+
+
 def build_liveness_watcher(
     *,
     is_alive: LivenessProbe | None = None,
@@ -1100,8 +1149,17 @@ class _LivenessWatcher:
             if outcome is not None:
                 return outcome
             # The wave is still in flight. The liveness deadline forks a lane
-            # whose process group has been dead past the grace window.
+            # whose process group has been dead past the grace window -- UNLESS
+            # the agent left a close-ready report. A SANDBOXED headless agent
+            # runs to completion in the synchronous dispatch (so its process is
+            # legitimately dead here) but cannot run `eawf wave close` itself, so
+            # its wave is still IN_PROGRESS; a persisted close-ready report is the
+            # evidence it succeeded, so resolve "closed" (DL-5 is applied
+            # downstream in _finish_lane) rather than forking a successful wave.
             if self._liveness_forked(lane, deadline):
+                if _wave_has_close_ready_report(state_path, lane.wave_id):
+                    logger.info(f"liveness_watcher wave={lane.wave_id} status=closed-on-report")
+                    return "closed"
                 return "forked"
             self.rest(self.poll_seconds)
 
@@ -2229,6 +2287,44 @@ class _Loop:
             atomic_write_json_locked(state_path, state.model_dump(mode="json"))
         logger.info(f"_fail_wave_on_disk wave={wave_id} status=failed reason={reason!r}")
 
+    def _close_wave_on_disk(self, wave_id: str) -> None:
+        """Close a still-open wave whose lane resolved CLOSED -- W49.
+
+        A lane the watcher resolved ``"closed"`` from a persisted close-ready
+        report (a SANDBOXED headless agent that could not run ``eawf wave close``
+        itself) is still IN_PROGRESS on disk; the gated outcome reaching the
+        closed branch of :meth:`_finish_lane` means the DL-5 auto-close gate
+        already permitted the close (a high-risk / ui close was downgraded to a
+        fork upstream, so it never reaches here). Flip the wave to CLOSED through
+        the canonical :func:`~eawf.workflow.lifecycle.wave.close_wave` transition
+        under the state portalock so the wave matches the run's closed tally. A
+        stateless context, a vanished wave, or a wave the agent DID self-close
+        (already terminal) is a no-op rather than a fault.
+
+        Args:
+            wave_id: ``W<NN>`` wave whose lane resolved a clean close.
+        """
+        if self.ctx.state_path is None:
+            return
+        state_path = Path(self.ctx.state_path)
+        with portalock.acquire(state_path, timeout=5.0):
+            state = load_state(state_path)
+            wave = state.waves.get(wave_id)
+            if wave is None or wave.status not in {
+                WaveStatus.CLAIMED,
+                WaveStatus.IN_PROGRESS,
+            }:
+                # Gone or already terminal (the agent self-closed): nothing to flip.
+                return
+            close_wave(
+                state,
+                wave_id=wave_id,
+                outcome="autopilot: report close-ready; closed on behalf of sandboxed agent",
+            )
+            state.updated_at = datetime.now(UTC)
+            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        logger.info(f"_close_wave_on_disk wave={wave_id} status=closed")
+
     def _drain_lanes(self) -> bool:
         """Watch in-flight lanes to their terminal outcome, freeing each slot.
 
@@ -2371,6 +2467,13 @@ class _Loop:
             self.run.counters.forked += 1
             self.run.counters.failed += 1
         else:
+            # The lane closed clean. When the watcher resolved "closed" from a
+            # persisted close-ready report (a sandboxed headless agent that could
+            # not self-close), the wave is still IN_PROGRESS -- flip it to CLOSED
+            # on the agent's behalf so the wave matches the tally. DL-5 already
+            # ran above (a high-risk close was downgraded to "forked"), so only an
+            # auto-closeable tier reaches here; a self-closed wave is a no-op.
+            self._close_wave_on_disk(wave_id)
             self.run.counters.closed += 1
         lane_spend = self.spend(self.ctx, wave_id)
         self.run.counters.spent_eu += lane_spend.eu
