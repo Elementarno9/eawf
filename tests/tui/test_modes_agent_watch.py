@@ -1114,6 +1114,109 @@ def test_app_routes_agent_output_event_to_buffer_and_tail(tmp_path: Path) -> Non
     asyncio.run(body())
 
 
+def _agent_output_chunk_envelope(wave_id: str, lines: list[str], *, seq: int = 0) -> Envelope:
+    """Build an ``agent.output.chunk`` envelope the way the live producer does.
+
+    The typed :class:`~eawf.kernel.store.kinds.events.AgentOutputChunkPayload`
+    carries ``wave_id`` + ``lines`` at the TOP level (not under ``extras``), so
+    this mirrors that shape -- the W45 live-streaming counterpart of the terminal
+    ``agent.output`` event.
+    """
+    from datetime import UTC, datetime
+
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_CHUNK_EVENT_TYPE
+
+    now = datetime.now(UTC)
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-chunk{seq}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=f"agent_output_chunk wave={wave_id} seq={seq}",
+        payload={
+            "event_type": AGENT_OUTPUT_CHUNK_EVENT_TYPE,
+            "timestamp": now.isoformat(),
+            "wave_id": wave_id,
+            "session_id": "sess-1",
+            "seq": seq,
+            "lines": "\n".join(lines),
+            "trace_request_id": None,
+            "trace_wave_id": wave_id,
+            "trace_attempt_id": None,
+        },
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
+def test_app_routes_agent_output_chunk_event_to_buffer_and_tail(tmp_path: Path) -> None:
+    """W45: a live agent.output.chunk event feeds the App buffer + the watch tail.
+
+    The live-spawn path persists a streaming batch of stdout as a typed
+    ``agent.output.chunk`` event AS the spawn runs; the App's _on_event routes it
+    through the SAME raw-output seam as the terminal ``agent.output`` event, so
+    the watch tail renders the agent's words live (and the persisted chunk seeds a
+    later-mounted tail from the ring).
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            await app._on_event(
+                _agent_output_chunk_envelope(_WAVE, ["chunk line a", "chunk line b"])
+            )
+            await settle_screen(pilot)
+            # The App ring buffer recorded the chunk's lines (the tail-seed source).
+            assert (_WAVE, "chunk line a") in app.live_output_buffer
+            assert (_WAVE, "chunk line b") in app.live_output_buffer
+            # The agent-watch tail rendered them live.
+            tail = pane.query_one(f"#{WATCH_OUTPUT_ID}", OutputTail)
+            rows = [str(r.render()) for r in tail.query(f".{OUTPUT_TAIL_ROW_CLASS}").results()]
+            assert any("chunk line a" in row for row in rows)
+            assert any("chunk line b" in row for row in rows)
+            assert tail.has_output
+
+    asyncio.run(body())
+
+
+def test_app_does_not_route_chunk_event_for_other_wave_to_tail(tmp_path: Path) -> None:
+    """W45 boundary: a chunk for a DIFFERENT wave is not rendered by the watched pane.
+
+    The watch tail shows one session's stdout. A chunk event keyed on another
+    wave's scope_id still rides the App ring (so a later-zoomed pane on that wave
+    seeds it), but it must NOT append to the currently-watched lane's tail.
+    """
+    state_path = _write_state(tmp_path, _state(sessions={"S-1": _session("S-1")}))
+    other_wave = "P01-I01-W02"
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            await app._on_event(_agent_output_chunk_envelope(other_wave, ["foreign output"]))
+            await settle_screen(pilot)
+            # The ring recorded the other-wave row, but the watched tail did not.
+            assert (other_wave, "foreign output") in app.live_output_buffer
+            tail = pane.query_one(f"#{WATCH_OUTPUT_ID}", OutputTail)
+            rows = [str(r.render()) for r in tail.query(f".{OUTPUT_TAIL_ROW_CLASS}").results()]
+            assert not any("foreign output" in row for row in rows)
+
+    asyncio.run(body())
+
+
 def test_app_output_buffer_is_bounded(tmp_path: Path) -> None:
     """W08: the raw-output ring buffer is bounded (the oldest lines scroll off).
 

@@ -27,6 +27,7 @@ from typing import Annotated, get_args
 
 from pydantic import Field
 
+from eawf.kernel.store.kinds.events.agent_output_chunk import AgentOutputChunkPayload
 from eawf.kernel.store.kinds.events.base import TracedEventPayload
 from eawf.kernel.store.kinds.events.cache_mislayer import CacheMislayerAlarmPayload
 from eawf.kernel.store.kinds.events.dispatch_cost import DispatchCostPayload
@@ -39,7 +40,8 @@ C09EventPayloadUnion = Annotated[
     | SessionContinuedPayload
     | SessionFailoverPayload
     | DispatchCostPayload
-    | CacheMislayerAlarmPayload,
+    | CacheMislayerAlarmPayload
+    | AgentOutputChunkPayload,
     Field(discriminator="event_type"),
 ]
 """C09-local discriminated union keyed on ``event_type``.
@@ -82,6 +84,7 @@ row.
 
 __all__ = [
     "C09_EVENT_TYPE_TAGS",
+    "AgentOutputChunkPayload",
     "C09EventPayloadUnion",
     "CacheMislayerAlarmPayload",
     "DispatchCostPayload",

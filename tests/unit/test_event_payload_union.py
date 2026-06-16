@@ -18,6 +18,7 @@ import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from eawf.kernel.store.kinds.events import (
+    AgentOutputChunkPayload,
     C09EventPayloadUnion,
     CacheMislayerAlarmPayload,
     DispatchCostPayload,
@@ -35,6 +36,7 @@ _UNION_ADAPTER: TypeAdapter[
     | SessionFailoverPayload
     | DispatchCostPayload
     | CacheMislayerAlarmPayload
+    | AgentOutputChunkPayload
 ] = TypeAdapter(C09EventPayloadUnion)
 
 
@@ -127,12 +129,26 @@ def _cache_mislayer(**overrides: object) -> dict[str, object]:
     return data
 
 
+def _agent_output_chunk(**overrides: object) -> dict[str, object]:
+    data: dict[str, object] = {
+        "event_type": "agent.output.chunk",
+        "timestamp": _TS,
+        "wave_id": "W09",
+        "session_id": "sess-abc",
+        "seq": 0,
+        "lines": "first line\nsecond line",
+    }
+    data.update(overrides)
+    return data
+
+
 _BUILDERS = {
     "runtime_switched": (_runtime_switched, RuntimeSwitchedPayload),
     "session_continued": (_session_continued, SessionContinuedPayload),
     "session_failover": (_session_failover, SessionFailoverPayload),
     "dispatch_cost": (_dispatch_cost, DispatchCostPayload),
     "cache_mislayer_alarm": (_cache_mislayer, CacheMislayerAlarmPayload),
+    "agent.output.chunk": (_agent_output_chunk, AgentOutputChunkPayload),
 }
 
 

@@ -126,6 +126,7 @@ class _RecordingAdapter:
         denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
     ) -> SpawnResult:
         self.models.append(model)
         if on_spawn is not None:

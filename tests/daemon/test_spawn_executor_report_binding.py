@@ -119,6 +119,7 @@ class _RecordingStub:
         denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
     ) -> SpawnResult:
         self.spawn_calls += 1
         self.prompts.append(prompt)

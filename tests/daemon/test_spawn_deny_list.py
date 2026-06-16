@@ -95,6 +95,7 @@ class _DenyRecordingAdapter:
         denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
     ) -> SpawnResult:
         self.spawn_calls += 1
         self.denied_tools_seen.append(tuple(denied_tools))

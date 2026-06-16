@@ -97,7 +97,8 @@
                 "git_state_drift_detected",
                 "bucket_drift_detected",
                 "wave_elapsed_update",
-                "stale_wave_detected"
+                "stale_wave_detected",
+                "agent.output.chunk"
               ],
               "type": "string"
             },

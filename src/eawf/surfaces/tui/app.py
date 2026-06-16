@@ -984,33 +984,52 @@ class EaApp(App[None]):
             listener.append_event(envelope)
 
     def _route_agent_output(self, envelope: Envelope) -> bool:
-        """Route an ``agent.output`` envelope to the raw-output tail -- FA4, W08.
+        """Route an agent-output envelope to the raw-output tail -- FA4, W08 / W45.
 
-        The dispatch runner fans a spawned child's captured stdout/stderr as an
-        ``agent.output`` event (:func:`~eawf.runtime.daemon.dispatch_runner.emit_agent_output`)
-        carrying the wave id + the newline-joined bounded line tail in its
-        payload extras. This splits the tail back into lines and feeds each to
-        :meth:`append_output` (the App ring + the agent-watch tail fan-out), then
-        reports it handled so the caller skips the typed-feed path. A non-output
-        envelope is left for the feed stream.
+        The dispatch runner fans a spawned child's stdout/stderr two ways, both
+        routed here so the agent-watch tail renders the agent's own words:
+
+        * the terminal ``agent.output`` event
+          (:func:`~eawf.runtime.daemon.dispatch_runner.emit_agent_output`),
+          emitted once at spawn completion, packs the wave id + newline-joined
+          line tail in the flat payload's ``extras`` map; and
+        * the live ``agent.output.chunk`` event (W45,
+          :func:`~eawf.runtime.daemon.dispatch_runner.emit_agent_output_chunk`),
+          emitted per batch AS the spawn runs, carries ``wave_id`` + ``lines`` as
+          TOP-LEVEL typed fields of the :class:`AgentOutputChunkPayload`.
+
+        Both resolve to a ``(wave_id, joined_lines)`` pair, which this splits back
+        into lines and feeds to :meth:`append_output` (the App ring + the
+        agent-watch tail fan-out), then reports handled so the caller skips the
+        typed-feed path. A non-output envelope is left for the feed stream.
 
         Args:
             envelope: The live event envelope to inspect.
 
         Returns:
-            ``True`` when the envelope was an ``agent.output`` row routed to the
+            ``True`` when the envelope was an agent-output row routed to the
             tail, else ``False``.
         """
-        from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_EVENT_TYPE
+        from eawf.runtime.daemon.dispatch_runner import (
+            AGENT_OUTPUT_CHUNK_EVENT_TYPE,
+            AGENT_OUTPUT_EVENT_TYPE,
+        )
 
         payload = envelope.payload
-        if not isinstance(payload, dict) or payload.get("event_type") != AGENT_OUTPUT_EVENT_TYPE:
+        if not isinstance(payload, dict):
             return False
-        extras = payload.get("extras")
-        if not isinstance(extras, dict):
-            return True
-        wave_id = extras.get("wave_id")
-        joined = extras.get("lines")
+        event_type = payload.get("event_type")
+        if event_type == AGENT_OUTPUT_EVENT_TYPE:
+            extras = payload.get("extras")
+            source = extras if isinstance(extras, dict) else {}
+        elif event_type == AGENT_OUTPUT_CHUNK_EVENT_TYPE:
+            # The typed chunk payload carries ``wave_id`` + ``lines`` at the top
+            # level rather than nested under ``extras``.
+            source = payload
+        else:
+            return False
+        wave_id = source.get("wave_id")
+        joined = source.get("lines")
         if not isinstance(wave_id, str) or not isinstance(joined, str):
             return True
         for line in joined.split("\n"):

@@ -36,6 +36,10 @@ emission is opt-in: it fires only when the caller supplies the
 an on-disk ``state.json`` (plan-only and stateless unit-test contexts
 skip it).
 """
+# noqa: EAWF010 cohesive dispatch-runner + live-output producer surface; the W45
+# agent.output.chunk emitter belongs beside its sibling emit_agent_output (shared
+# capture_output_lines + canonical event-store path), so it is kept here rather
+# than split into a one-helper module.
 
 from __future__ import annotations
 
@@ -77,6 +81,7 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.events import (
+    AgentOutputChunkPayload,
     C09EventPayloadUnion,
     DispatchCostPayload,
     RuntimeSwitchedPayload,
@@ -437,6 +442,17 @@ def enforcement_sink(ctx: MethodContext) -> Callable[[SandboxEnforcementEvent], 
 #: (FA4, W08) rather than the typed lifecycle stream.
 AGENT_OUTPUT_EVENT_TYPE: str = "agent.output"
 
+#: The ``event_type`` the LIVE per-chunk producer (W45) stamps on its envelope.
+#: The TUI App keys on it to route a streamed batch of stdout lines to the same
+#: agent-watch tail as the terminal ``agent.output`` row, but AS the spawn runs.
+#: Unlike the terminal type this one is a typed C09 union member so it persists.
+AGENT_OUTPUT_CHUNK_EVENT_TYPE: str = "agent.output.chunk"
+
+#: Stdout lines the live-chunk producer buffers before flushing one chunk event.
+#: Batching bounds ``event.jsonl`` growth (a chatty spawn emits hundreds of
+#: lines); a final flush at spawn end empties any partial batch.
+_CHUNK_BATCH_LINES: int = 20
+
 #: Ring-buffer cap on the number of raw output lines one spawned session fans to
 #: the live tail (W08). A spawn can emit a very large answer; capping the lines
 #: the producer publishes bounds the event payload + the App-side
@@ -535,6 +551,67 @@ def emit_agent_output(ctx: MethodContext, *, wave_id: str, text: str) -> str | N
     ctx.last_event_id = envelope.id
     logger.info(f"emit_agent_output wave={wave_id} lines={len(lines)} envelope_id={envelope.id!r}")
     return envelope.id
+
+
+def emit_agent_output_chunk(
+    ctx: MethodContext,
+    *,
+    wave_id: str,
+    session_id: str | None,
+    seq: int,
+    text: str,
+    trace_request_id: str | None = None,
+) -> str | None:
+    """Persist + fan one LIVE batch of a spawned session's stdout -- W45.
+
+    The streaming counterpart of :func:`emit_agent_output`: the live-spawn path
+    drives this AS the spawned child's stdout arrives (one call per batch) rather
+    than only once at completion, so the Watch tail fills live AND the per-chunk
+    output persists durably for review after the TUI is closed. The chunk rides a
+    typed :class:`AgentOutputChunkPayload` (a C09 union member) through the same
+    union-validated canonical-writer path :func:`_emit` takes; its ``lines`` field
+    packs the batched text newline-joined, mirroring the terminal ``agent.output``
+    event so the TUI render path is reused. Empty output or a store-less context
+    (a stateless unit test) is a no-op.
+
+    Args:
+        ctx: Daemon method context -- supplies ``event_path`` + ``bus``.
+        wave_id: ``W<NN>`` wave the spawned session scopes to (the Watch tail
+            filters on this so a multi-lane fleet routes each chunk to its lane).
+        session_id: Runtime session id of the spawn, or ``None`` when unknown.
+        seq: Per-spawn monotonic chunk index (0-based) so the chunk order is
+            reconstructible from the persisted rows.
+        text: The batched output text for this chunk (one or more stdout lines).
+        trace_request_id: Optional daemon RPC request id for the correlation
+            chain.
+
+    Returns:
+        The id of the appended envelope, or ``None`` when there was no output to
+        fan (or no event store configured).
+    """
+    if ctx.event_path is None:
+        return None
+    lines = capture_output_lines(text)
+    if not lines:
+        return None
+    now = datetime.now(UTC)
+    joined = "\n".join(lines)
+    summary = f"agent_output_chunk wave={wave_id} seq={seq} lines={len(lines)}"
+    payload = AgentOutputChunkPayload(
+        timestamp=now,
+        wave_id=wave_id,
+        session_id=session_id,
+        seq=seq,
+        lines=joined,
+        trace_request_id=trace_request_id,
+        trace_wave_id=wave_id,
+    )
+    envelope_id = _emit(ctx, payload, scope_id=wave_id, summary=summary)
+    logger.info(
+        f"emit_agent_output_chunk wave={wave_id} seq={seq} lines={len(lines)} "
+        f"envelope_id={envelope_id!r}"
+    )
+    return envelope_id
 
 
 def emit_runtime_switched(

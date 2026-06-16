@@ -117,12 +117,20 @@ class _StubAdapter:
         denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
     ) -> SpawnResult:
         self.spawn_calls += 1
         self.prompts.append(prompt)
         self.models.append(model)
         if on_spawn is not None:
             on_spawn(_STUB_PID)
+        text = _executor_report_json()
+        if on_chunk is not None:
+            # Mirror the real adapter's live-streaming seam: fan each stdout line
+            # to the chunk callback as it "arrives" so the W45 chunk producer is
+            # exercised end to end (the lines carry their newline like the adapter).
+            for line in text.splitlines(keepends=True):
+                await on_chunk(line)
         return SpawnResult(
             session_id="sess-live-abc123",
             runtime="claude-code",
@@ -130,7 +138,7 @@ class _StubAdapter:
             resolved_model="claude-opus-4-8",
             subprocess_pid=_STUB_PID,
             exit_status=0,
-            text=_executor_report_json(),
+            text=text,
             input_tokens=100,
             output_tokens=42,
             cache_creation_input_tokens=80,
@@ -537,6 +545,45 @@ def test_dispatch_spawn_event_ids_reflect_runner_emissions(
     # The plan's event_ids ARE the runner's emitted ids: the dispatch_cost then
     # the agent.output (emitted in that order).
     assert list(result["event_ids"]) == cost_envelope_ids + output_envelope_ids
+
+
+def test_dispatch_spawn_emits_ordered_chunk_events_and_terminal_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W45: a live spawn that streams stdout persists ordered agent.output.chunk rows.
+
+    The stub adapter fans its captured text to the ``on_chunk`` callback line by
+    line (the real adapter's live-streaming seam), so the W45 batching producer
+    appends one or more ``agent.output.chunk`` envelopes keyed on the wave's
+    scope_id with a monotonic ``seq`` -- AND the terminal ``agent.output`` event
+    still fires (the chunks are additive, the end-of-spawn tail stays).
+    """
+    from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_CHUNK_EVENT_TYPE
+
+    state_path = _write_state(tmp_path)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    _patch_adapter(monkeypatch, _StubAdapter())
+    ctx = _ctx(state_path, event_path=event_path)
+
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    envelopes = _read_envelopes(event_path)
+    chunk_envelopes = [
+        env for env in envelopes if env.payload.get("event_type") == AGENT_OUTPUT_CHUNK_EVENT_TYPE
+    ]
+    chunk_payloads = [env.payload for env in chunk_envelopes]
+    # At least one chunk landed, every chunk is scoped to the dispatched wave, and
+    # the seq is monotonic + contiguous from 0 (the order is reconstructible).
+    assert chunk_payloads
+    assert all(env.scope_id == _WAVE_ID for env in chunk_envelopes)
+    assert all(p["wave_id"] == _WAVE_ID for p in chunk_payloads)
+    seqs = [p["seq"] for p in chunk_payloads]
+    assert seqs == list(range(len(seqs)))
+    # The terminal agent.output event still fires (chunks are additive).
+    terminal = [
+        env for env in envelopes if env.payload.get("event_type") == AGENT_OUTPUT_EVENT_TYPE
+    ]
+    assert len(terminal) == 1
 
 
 def test_dispatch_spawn_model_override_prices_against_override(

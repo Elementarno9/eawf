@@ -86,9 +86,11 @@ from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
 from eawf.runtime.daemon.dispatch_runner import (
+    _CHUNK_BATCH_LINES,
     DispatchResult,
     DispatchTokens,
     _build_completion_body,
+    emit_agent_output_chunk,
     run_dispatch,
 )
 from eawf.runtime.daemon.methods import MethodContext, register
@@ -1104,6 +1106,36 @@ async def _spawn_and_dispatch(
     # deny-list. The captured pid rides the ``on_spawn`` callback.
     captured_pid: list[int] = []
 
+    # Live-output streaming (W45): the adapter awaits ``on_chunk`` once per stdout
+    # line AS IT ARRIVES. We BATCH lines (flush every ``_CHUNK_BATCH_LINES`` plus a
+    # final flush at spawn end) and persist each batch as an ``agent.output.chunk``
+    # event keyed on the wave's scope_id, so the Watch tail renders the agent's
+    # words live AND the per-chunk output is durable after the TUI is closed. The
+    # buffer + seq live in this scope so the closure mutates them across calls;
+    # asyncio's single-threaded read loop awaits ``on_chunk`` serially, so no lock
+    # is needed.
+    chunk_buffer: list[str] = []
+    chunk_seq: list[int] = [0]
+
+    def _flush_chunk_buffer() -> None:
+        if not chunk_buffer:
+            return
+        emit_agent_output_chunk(
+            ctx,
+            wave_id=wave_id,
+            session_id=None,
+            seq=chunk_seq[0],
+            text="".join(chunk_buffer),
+            trace_request_id=trace_request_id,
+        )
+        chunk_seq[0] += 1
+        chunk_buffer.clear()
+
+    async def _on_chunk(line: str) -> None:
+        chunk_buffer.append(line)
+        if len(chunk_buffer) >= _CHUNK_BATCH_LINES:
+            _flush_chunk_buffer()
+
     async def _spawn_once(spawn_runtime: str) -> SpawnResult:
         spawn_adapter = select_adapter(spawn_runtime)
         # Re-resolve the model for the runtime actually spawning: on the first
@@ -1123,6 +1155,7 @@ async def _spawn_and_dispatch(
             cwd=str(state_path.parent.parent),
             denied_tools=sorted(denied),
             on_spawn=captured_pid.append,
+            on_chunk=_on_chunk,
         )
 
     def _classify(exc: RuntimeSpawnError, spawn_runtime: str) -> ErrorClass:
@@ -1138,6 +1171,9 @@ async def _spawn_and_dispatch(
         spawn=_spawn_once,
         classify=_classify,
     )
+    # Final flush: empty any partial batch the cap did not flush so the persisted
+    # chunk tail is complete (the spawn's last few lines are not stranded).
+    _flush_chunk_buffer()
     # The serving runtime is the one the accepted spawn ran on -- a V5 switch
     # may have moved it past the originally-resolved runtime. Each adapter
     # stamps its own id on the result, so this is authoritative.
