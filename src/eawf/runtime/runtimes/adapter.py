@@ -41,7 +41,7 @@ in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_checkable
 
@@ -302,6 +302,7 @@ class RuntimeAdapter(Protocol):
         denied_tools: Sequence[str] = (),
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
     ) -> SpawnResult:
         """Spawn a live runtime subprocess for ``prompt`` against ``model``.
 
@@ -330,6 +331,16 @@ class RuntimeAdapter(Protocol):
         the subprocess exists -- before output is awaited -- so a cancel path
         can register the pid and halt a still-running call mid-flight.
 
+        The optional *on_chunk* async callback fires once per stdout line AS
+        IT ARRIVES (the adapter reads the child's stdout incrementally rather
+        than buffering the whole output to process exit), so a downstream
+        wave can surface model output live. Each call receives the decoded
+        line string (trailing newline preserved for an interior line; the
+        final partial line at EOF carries none). The full stdout is still
+        accumulated and fed to the existing result parser unchanged, so with
+        ``on_chunk=None`` the returned :class:`SpawnResult` is byte-equivalent
+        to the buffered path.
+
         Args:
             prompt: Rendered prompt passed to the runtime CLI.
             model: Model alias/id the spawn is requested with. No hardcoded
@@ -347,6 +358,9 @@ class RuntimeAdapter(Protocol):
                 error is raised.
             on_spawn: Optional callback invoked with the child PID right
                 after spawn (before output is awaited).
+            on_chunk: Optional async callback invoked once per stdout line as
+                it arrives (live streaming); ``None`` (the default) leaves the
+                spawn byte-equivalent to the buffered path.
 
         Returns:
             The validated :class:`SpawnResult` for the completed call.

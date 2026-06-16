@@ -15,6 +15,7 @@ construction + timeout + pid callback are observable without a live CLI.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
@@ -70,11 +71,34 @@ def _events_bytes(events: list[dict[str, object]] | None = None) -> bytes:
 # ---------------------------------------------------------------------------
 
 
+def _stream_reader(data: bytes, *, eof: bool = True) -> asyncio.StreamReader:
+    """Build a StreamReader pre-loaded with *data* (EOF unless ``eof=False``).
+
+    Models the ``.stdout`` / ``.stderr`` of a real
+    :class:`asyncio.subprocess.Process`: the incremental drain reads it in
+    chunks via ``read(n)``. With ``eof=False`` no terminator is fed, so the
+    first ``read`` blocks indefinitely -- the model for a hung child whose
+    output never arrives (the timeout path).
+
+    Built inside the running loop (a StreamReader binds to the current event
+    loop at construction), so the patched factory coroutine opens it rather
+    than the synchronous fake constructor.
+    """
+    reader = asyncio.StreamReader()
+    if eof:
+        reader.feed_data(data)
+        reader.feed_eof()
+    return reader
+
+
 class _FakeProcess:
     """Minimal stand-in for :class:`asyncio.subprocess.Process`.
 
     Records nothing about argv (the patched factory captures that) and
-    replays a fixed ``(stdout, stderr)`` from :meth:`communicate`.
+    exposes ``.stdout`` / ``.stderr`` StreamReaders the adapter's incremental
+    drain reads -- modelling the real process the spawn now reads line by
+    line rather than buffering via ``communicate``. The readers are opened by
+    :meth:`open_streams` from inside the loop (the patched factory calls it).
     """
 
     def __init__(
@@ -93,14 +117,18 @@ class _FakeProcess:
         self._hang = hang
         self.killed = False
         self.waited = False
+        self.stdout: asyncio.StreamReader | None = None
+        self.stderr: asyncio.StreamReader | None = None
 
-    async def communicate(self) -> tuple[bytes, bytes]:
-        if self._hang:
-            # Never resolve on its own; the spawn's wait_for must time out.
-            import asyncio
+    def open_streams(self) -> None:
+        """Open the stdout / stderr readers (called from inside the loop).
 
-            await asyncio.sleep(3600)
-        return self._stdout, self._stderr
+        A hung child never delivers EOF, so its drain blocks until the
+        spawn's wait_for ceiling fires; a normal child's streams carry the
+        canned bytes followed by EOF.
+        """
+        self.stdout = _stream_reader(self._stdout, eof=not self._hang)
+        self.stderr = _stream_reader(self._stderr, eof=not self._hang)
 
     def kill(self) -> None:
         self.killed = True
@@ -126,6 +154,7 @@ def _patch_factory(monkeypatch: pytest.MonkeyPatch, proc: _FakeProcess) -> list[
 
     async def _fake_exec(*argv: str, **_kwargs: object) -> _FakeProcess:
         calls.append(list(argv))
+        proc.open_streams()
         return proc
 
     monkeypatch.setattr(codex_adapter.asyncio, "create_subprocess_exec", _fake_exec)
@@ -664,6 +693,7 @@ def test_spawn_session_scrubs_child_env(monkeypatch: pytest.MonkeyPatch) -> None
     async def _fake_exec(*_argv: str, **kwargs: object) -> _FakeProcess:
         env_kwarg = kwargs.get("env")
         seen_env.append(env_kwarg if env_kwarg is None else dict(env_kwarg))  # type: ignore[arg-type]
+        proc.open_streams()
         return proc
 
     monkeypatch.setattr(codex_adapter.asyncio, "create_subprocess_exec", _fake_exec)
@@ -695,6 +725,7 @@ def test_spawn_session_jail_wrap_applied_when_supported(
 
     async def _fake_exec(*argv: str, **_kwargs: object) -> _FakeProcess:
         calls.append(list(argv))
+        proc.open_streams()
         return proc
 
     seen_by_jail: list[list[str]] = []
@@ -775,6 +806,144 @@ def test_spawn_session_timeout_kills_child_and_raises(monkeypatch: pytest.Monkey
         asyncio.run(adapter.spawn_session("x", model="gpt-5.5", timeout=0.01))
     assert proc.killed is True
     assert proc.waited is True
+
+
+# ---------------------------------------------------------------------------
+# spawn_session -- incremental on_chunk streaming (P30-I20-W44)
+# ---------------------------------------------------------------------------
+
+
+def test_spawn_session_on_chunk_none_is_byte_equivalent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With on_chunk=None the SpawnResult matches the buffered baseline exactly.
+
+    The incremental stdout drain reconstructs the full byte stream the old
+    ``communicate`` path produced, so the result the parser yields is
+    field-for-field identical to parsing the same canned stdout directly.
+    """
+    stdout = _events_bytes()
+    proc = _FakeProcess(stdout=stdout, stderr=b"", returncode=0, pid=5555)
+    _patch_factory(monkeypatch, proc)
+
+    streamed = asyncio.run(CodexAdapter().spawn_session("solve it", model="gpt-5.5"))
+
+    # The baseline parse over the SAME canned stdout (no subprocess at all).
+    baseline = _parse_codex_result(
+        runtime="codex",
+        model="gpt-5.5",
+        stdout=stdout,
+        stderr=b"",
+        exit_status=0,
+        subprocess_pid=5555,
+        started_at=streamed.started_at,
+        ended_at=streamed.ended_at,
+    )
+    # Every parsed field is byte-equivalent (timestamps aligned above so the
+    # comparison isolates the text / token / id parse).
+    assert streamed.model_dump() == baseline.model_dump()
+
+
+def test_spawn_session_on_chunk_receives_lines_in_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An on_chunk recorder receives each stdout JSONL frame in arrival order.
+
+    The fan-out fires once per newline-terminated line; the reconstructed
+    stdout (lines re-joined) is byte-equivalent to the canned stream so the
+    final parse still resolves the same answer text.
+    """
+    stdout = _events_bytes()
+    proc = _FakeProcess(stdout=stdout, stderr=b"", returncode=0)
+    _patch_factory(monkeypatch, proc)
+
+    seen: list[str] = []
+
+    async def _record(line: str) -> None:
+        seen.append(line)
+
+    result = asyncio.run(CodexAdapter().spawn_session("x", model="gpt-5.5", on_chunk=_record))
+
+    # One chunk per source line, in order; re-joining the chunks reproduces
+    # the original stdout byte stream exactly.
+    assert "".join(seen).encode("utf-8") == stdout
+    # Each codex JSONL frame arrived as its own chunk (4 events in the fixture).
+    assert len(seen) == len(_WELL_FORMED_EVENTS)
+    # The streamed final parse still resolves the agent_message text.
+    assert result.text == "the answer text"
+
+
+def test_spawn_session_on_chunk_single_line_no_trailing_newline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A single stdout line with no trailing newline is emitted as one chunk."""
+    # _events_bytes joins WITHOUT a trailing newline, so a one-event stream is
+    # a single line with no terminator -- the EOF-flush path of the framer.
+    events: list[dict[str, object]] = [
+        {"type": "thread.started", "thread_id": "t1"},
+        {"type": "item.completed", "item": {"type": "agent_message", "text": "hi"}},
+        {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}},
+    ]
+    stdout = _events_bytes(events)
+    proc = _FakeProcess(stdout=stdout, stderr=b"", returncode=0)
+    _patch_factory(monkeypatch, proc)
+
+    seen: list[str] = []
+
+    async def _record(line: str) -> None:
+        seen.append(line)
+
+    result = asyncio.run(CodexAdapter().spawn_session("x", model="gpt-5.5", on_chunk=_record))
+    # The final line (no trailing newline) is flushed as a chunk at EOF.
+    assert "".join(seen).encode("utf-8") == stdout
+    assert seen[-1] == json.dumps(events[-1])
+    assert result.text == "hi"
+
+
+def test_spawn_session_on_chunk_tolerates_non_json_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stray non-JSON stdout line is streamed but never crashes the spawn.
+
+    The framer emits the raw line to on_chunk; the parser already skips a
+    non-JSON line via ``_decode_codex_events`` so the well-formed frames still
+    parse to a complete result.
+    """
+    rows = [
+        json.dumps(_WELL_FORMED_EVENTS[0]),
+        "this is not json",
+        json.dumps(_WELL_FORMED_EVENTS[2]),
+        json.dumps(_WELL_FORMED_EVENTS[3]),
+    ]
+    stdout = ("\n".join(rows)).encode("utf-8")
+    proc = _FakeProcess(stdout=stdout, stderr=b"", returncode=0)
+    _patch_factory(monkeypatch, proc)
+
+    seen: list[str] = []
+
+    async def _record(line: str) -> None:
+        seen.append(line)
+
+    result = asyncio.run(CodexAdapter().spawn_session("x", model="gpt-5.5", on_chunk=_record))
+    # The stray line was streamed verbatim and the spawn did not crash.
+    assert "this is not json\n" in seen
+    assert result.text == "the answer text"
+
+
+def test_spawn_session_on_chunk_timeout_still_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A wired on_chunk does not change the timeout -> RuntimeSpawnError(124) path."""
+    proc = _FakeProcess(stdout=_events_bytes(), stderr=b"", returncode=0, hang=True)
+    _patch_factory(monkeypatch, proc)
+
+    async def _record(_line: str) -> None:  # pragma: no cover - never reached on hang
+        pass
+
+    adapter = CodexAdapter()
+    with pytest.raises(RuntimeSpawnError, match="timed out"):
+        asyncio.run(adapter.spawn_session("x", model="gpt-5.5", timeout=0.01, on_chunk=_record))
+    assert proc.killed is True
 
 
 # ---------------------------------------------------------------------------

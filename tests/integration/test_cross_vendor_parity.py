@@ -144,7 +144,15 @@ def _opencode_stdout() -> bytes:
 
 
 class _FakeProcess:
-    """Minimal stand-in for :class:`asyncio.subprocess.Process`."""
+    """Minimal stand-in for :class:`asyncio.subprocess.Process`.
+
+    The claude / codex lanes drain ``.stdout`` / ``.stderr`` incrementally;
+    the opencode lane still buffers via ``communicate``. The fake serves both:
+    :meth:`open_streams` (called from the in-loop factory) populates the
+    StreamReaders, and ``communicate`` replays the same canned bytes. A hung
+    child never feeds EOF (its drain / communicate blocks until the spawn's
+    wait_for ceiling fires).
+    """
 
     def __init__(
         self, *, stdout: bytes, stderr: bytes, returncode: int, hang: bool = False
@@ -156,6 +164,17 @@ class _FakeProcess:
         self._hang = hang
         self.killed = False
         self.waited = False
+        self.stdout: asyncio.StreamReader | None = None
+        self.stderr: asyncio.StreamReader | None = None
+
+    def open_streams(self) -> None:
+        self.stdout = asyncio.StreamReader()
+        self.stderr = asyncio.StreamReader()
+        if not self._hang:
+            self.stdout.feed_data(self._stdout)
+            self.stdout.feed_eof()
+            self.stderr.feed_data(self._stderr)
+            self.stderr.feed_eof()
 
     async def communicate(self) -> tuple[bytes, bytes]:
         if self._hang:
@@ -187,6 +206,7 @@ def _patch_vendor(
 
     async def _fake_exec(*argv: str, **_kwargs: object) -> _FakeProcess:
         calls.append(list(argv))
+        proc.open_streams()
         return proc
 
     monkeypatch.setattr(module.asyncio, "create_subprocess_exec", _fake_exec)

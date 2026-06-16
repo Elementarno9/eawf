@@ -132,14 +132,25 @@ def _ndjson(events: list[dict[str, object]]) -> bytes:
 class _FakeProcess:
     """Minimal stand-in for :class:`asyncio.subprocess.Process`.
 
-    Replays a fixed ``(stdout, stderr)`` from :meth:`communicate`; the
-    patched ``create_subprocess_exec`` factory records the argv separately.
+    The codex lane drains ``.stdout`` / ``.stderr`` incrementally; the
+    opencode lane still buffers via ``communicate``. The fake serves both:
+    :meth:`open_streams` (called from the in-loop factory) populates the
+    StreamReaders, and ``communicate`` replays the same canned bytes.
     """
 
     def __init__(self, *, stdout: bytes, pid: int = _FAKE_PID) -> None:
         self._stdout = stdout
         self.returncode: int | None = 0
         self.pid = pid
+        self.stdout: asyncio.StreamReader | None = None
+        self.stderr: asyncio.StreamReader | None = None
+
+    def open_streams(self) -> None:
+        self.stdout = asyncio.StreamReader()
+        self.stdout.feed_data(self._stdout)
+        self.stdout.feed_eof()
+        self.stderr = asyncio.StreamReader()
+        self.stderr.feed_eof()
 
     async def communicate(self) -> tuple[bytes, bytes]:
         return self._stdout, b""
@@ -167,7 +178,9 @@ def _patch_subprocess(
 
     async def _fake_exec(*argv: str, **_kwargs: object) -> _FakeProcess:
         calls.append(list(argv))
-        return _FakeProcess(stdout=stdout)
+        proc = _FakeProcess(stdout=stdout)
+        proc.open_streams()
+        return proc
 
     monkeypatch.setattr(adapter_module.asyncio, "create_subprocess_exec", _fake_exec)
     return calls

@@ -37,6 +37,7 @@ fleet loop's per-lane dispatch path.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -168,12 +169,27 @@ _VENDOR_STDOUT = {
 
 
 class _FakeProcess:
-    """Minimal stand-in for :class:`asyncio.subprocess.Process`."""
+    """Minimal stand-in for :class:`asyncio.subprocess.Process`.
+
+    The claude / codex lanes drain ``.stdout`` / ``.stderr`` incrementally;
+    the opencode lane still buffers via ``communicate``. The fake serves both:
+    :meth:`open_streams` (called from the in-loop factory) populates the
+    StreamReaders, and ``communicate`` replays the same canned bytes.
+    """
 
     def __init__(self, *, stdout: bytes, pid: int = _FAKE_PID) -> None:
         self._stdout = stdout
         self.returncode: int | None = 0
         self.pid = pid
+        self.stdout: asyncio.StreamReader | None = None
+        self.stderr: asyncio.StreamReader | None = None
+
+    def open_streams(self) -> None:
+        self.stdout = asyncio.StreamReader()
+        self.stdout.feed_data(self._stdout)
+        self.stdout.feed_eof()
+        self.stderr = asyncio.StreamReader()
+        self.stderr.feed_eof()
 
     async def communicate(self) -> tuple[bytes, bytes]:
         return self._stdout, b""
@@ -218,7 +234,9 @@ def _patch_subprocess_fleet(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[l
         runtime = _BINARY_RUNTIME[binary]
         argv_by_runtime[runtime].append(list(argv))
         _module, stdout_for = _VENDOR_STDOUT[runtime]
-        return _FakeProcess(stdout=stdout_for(runtime_to_wave[runtime]))
+        proc = _FakeProcess(stdout=stdout_for(runtime_to_wave[runtime]))
+        proc.open_streams()
+        return proc
 
     # One shared subprocess factory (claude.asyncio is codex.asyncio is
     # opencode.asyncio) + one shared env-scrub stub.
@@ -568,8 +586,6 @@ def test_opencode_deny_is_jail_backed_warn_distinct_from_argv_hard_deny(
     opencode lane consumes; tests 1-3 prove the lane routes there and the argv
     stays grant-free in-loop, and this proves the mechanism is the jail floor.
     """
-    import asyncio
-
     from eawf.runtime.runtimes.opencode.adapter import OpenCodeAdapter
     from eawf.runtime.sandbox.egress_proxy import SandboxEnforcementEvent
 

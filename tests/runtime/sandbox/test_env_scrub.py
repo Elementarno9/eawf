@@ -284,15 +284,26 @@ def test_build_child_env_unknown_runtime_raises() -> None:
 
 
 class _FakeProcess:
-    """Minimal stand-in for :class:`asyncio.subprocess.Process`."""
+    """Minimal stand-in for :class:`asyncio.subprocess.Process`.
+
+    The claude adapter drains ``.stdout`` / ``.stderr`` incrementally;
+    :meth:`open_streams` (called from the in-loop factory) populates the
+    StreamReaders with the canned envelope.
+    """
 
     def __init__(self, *, stdout: bytes, returncode: int, pid: int = 4321) -> None:
         self._stdout = stdout
         self.returncode: int | None = returncode
         self.pid = pid
+        self.stdout: asyncio.StreamReader | None = None
+        self.stderr: asyncio.StreamReader | None = None
 
-    async def communicate(self) -> tuple[bytes, bytes]:
-        return self._stdout, b""
+    def open_streams(self) -> None:
+        self.stdout = asyncio.StreamReader()
+        self.stdout.feed_data(self._stdout)
+        self.stdout.feed_eof()
+        self.stderr = asyncio.StreamReader()
+        self.stderr.feed_eof()
 
     def kill(self) -> None:  # pragma: no cover - not exercised on the happy path
         pass
@@ -316,6 +327,7 @@ def test_spawn_session_passes_scrubbed_env(monkeypatch: pytest.MonkeyPatch) -> N
 
     async def _fake_exec(*_argv: str, **kwargs: object) -> _FakeProcess:
         captured.update(kwargs)
+        proc.open_streams()
         return proc
 
     monkeypatch.setattr(claude_adapter.asyncio, "create_subprocess_exec", _fake_exec)

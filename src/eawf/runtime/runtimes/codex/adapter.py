@@ -30,7 +30,7 @@ import shutil
 import sys
 import threading
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -377,6 +377,121 @@ def _usage_int(usage: dict[str, object], key: str) -> int:
     return 0
 
 
+#: Chunk size for the incremental stdout / stderr drain. Reads in fixed-size
+#: byte chunks (rather than line-bounded ``readline``) so an arbitrarily long
+#: JSONL frame -- a large ``agent_message`` body -- can never overrun the
+#: StreamReader line-length limit; the line framing for ``on_chunk`` is done
+#: in-helper over the accumulated buffer.
+_STREAM_CHUNK_BYTES: int = 65536
+
+
+async def _drain_stream(stream: asyncio.StreamReader | None) -> bytes:
+    """Drain a subprocess stream to its full bytes (no per-line callback).
+
+    Reads *stream* in :data:`_STREAM_CHUNK_BYTES` chunks until EOF and returns
+    the concatenated bytes -- byte-equivalent to what ``communicate`` would
+    have collected. Used for stderr (and for stdout when no ``on_chunk`` is
+    wired) so the two streams drain concurrently without deadlock.
+
+    Args:
+        stream: The subprocess stream reader, or ``None`` (no PIPE) yielding
+            empty bytes.
+
+    Returns:
+        The full accumulated stream bytes.
+    """
+    if stream is None:
+        return b""
+    chunks: list[bytes] = []
+    while True:
+        chunk = await stream.read(_STREAM_CHUNK_BYTES)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+async def _drain_stream_chunked(
+    stream: asyncio.StreamReader | None,
+    on_chunk: Callable[[str], Awaitable[None]],
+) -> bytes:
+    """Drain *stream* to full bytes while firing *on_chunk* per stdout line.
+
+    Reads *stream* in :data:`_STREAM_CHUNK_BYTES` chunks, accumulating the raw
+    bytes for the result parser AND framing complete newline-terminated lines
+    out of a running buffer to fire ``on_chunk`` as each line arrives. The
+    decoded line string keeps its trailing newline (matching what a
+    ``readline`` loop would yield); a final partial line with no trailing
+    newline is emitted at EOF. Decoding uses ``errors="replace"`` so a partial
+    multi-byte sequence at a chunk boundary -- or a non-JSON stray line -- can
+    never crash the live fan-out. The returned bytes are byte-equivalent to a
+    full buffered read, so the existing parser sees the same input.
+
+    Args:
+        stream: The subprocess stdout reader, or ``None`` (no PIPE) yielding
+            empty bytes and firing no callback.
+        on_chunk: The async callback invoked once per decoded line as it
+            arrives.
+
+    Returns:
+        The full accumulated stdout bytes.
+    """
+    if stream is None:
+        return b""
+    chunks: list[bytes] = []
+    line_buf = b""
+    while True:
+        chunk = await stream.read(_STREAM_CHUNK_BYTES)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        line_buf += chunk
+        while b"\n" in line_buf:
+            line, line_buf = line_buf.split(b"\n", 1)
+            await on_chunk((line + b"\n").decode(errors="replace"))
+    if line_buf:
+        await on_chunk(line_buf.decode(errors="replace"))
+    return b"".join(chunks)
+
+
+async def _collect_spawn_output(
+    proc: asyncio.subprocess.Process,
+    *,
+    on_chunk: Callable[[str], Awaitable[None]] | None,
+) -> tuple[bytes, bytes]:
+    """Collect a spawned child's ``(stdout, stderr)`` incrementally.
+
+    Replaces ``proc.communicate`` so stdout can be fanned to *on_chunk* line
+    by line as it arrives rather than buffered to process exit. stdout and
+    stderr are drained CONCURRENTLY (a single-stream drain would deadlock when
+    the child fills the other pipe's OS buffer), then the child is reaped via
+    :meth:`asyncio.subprocess.Process.wait` so ``returncode`` is populated --
+    exactly the post-conditions ``communicate`` guaranteed. When *on_chunk* is
+    ``None`` the stdout drain takes the plain (callback-free) path, so the
+    accumulated bytes are byte-equivalent to the buffered result.
+
+    Args:
+        proc: The spawned subprocess.
+        on_chunk: The per-line async callback, or ``None`` for the buffered
+            (byte-equivalent) path.
+
+    Returns:
+        The ``(stdout, stderr)`` bytes the result parser consumes.
+    """
+    if on_chunk is None:
+        stdout, stderr = await asyncio.gather(
+            _drain_stream(proc.stdout),
+            _drain_stream(proc.stderr),
+        )
+    else:
+        stdout, stderr = await asyncio.gather(
+            _drain_stream_chunked(proc.stdout, on_chunk),
+            _drain_stream(proc.stderr),
+        )
+    await proc.wait()
+    return stdout, stderr
+
+
 def _decode_codex_events(stdout: bytes) -> list[dict[str, object]]:
     """Decode a ``codex exec --json`` byte stream into event objects.
 
@@ -718,6 +833,7 @@ class CodexAdapter:
         timeout: float | None = None,
         on_spawn: Callable[[int], None] | None = None,
         on_pgid: Callable[[int], None] | None = None,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
         session: str = "",
         enforcement_sink: EnforcementSink | None = None,
     ) -> SpawnResult:
@@ -786,6 +902,14 @@ class CodexAdapter:
         budget-HALT interlock can ``os.killpg`` the whole group when the wave
         runs over its hard token cap -- at parity with the claude lane.
 
+        The optional *on_chunk* async callback fires once per stdout line AS
+        IT ARRIVES: the spawn drains stdout incrementally (via
+        :func:`_collect_spawn_output`) rather than buffering the whole event
+        stream to process exit, so a downstream wave can surface each codex
+        JSONL frame live. The full stdout is still accumulated and fed to
+        :func:`_parse_codex_result` unchanged, so with ``on_chunk=None`` the
+        returned :class:`SpawnResult` is byte-equivalent to the buffered path.
+
         Args:
             prompt: Rendered prompt passed to ``codex exec``.
             model: Model alias/id for ``-m``. No hardcoded floor -- the
@@ -809,6 +933,9 @@ class CodexAdapter:
                 id right after spawn so the budget-HALT interlock can reap
                 the whole group. Resolution failures (the child raced to
                 exit) are swallowed -- the cancel path falls back to the pid.
+            on_chunk: Optional async callback invoked once per stdout line as
+                it arrives (live streaming); ``None`` (the default) leaves the
+                spawn byte-equivalent to the buffered path.
             session: The spawning session id stamped on every enforcement
                 event this spawn records.
             enforcement_sink: The sink each enforcement decision is persisted
@@ -903,7 +1030,13 @@ class CodexAdapter:
                 except ProcessLookupError:
                     logger.warning(f"spawn_session pgid-unresolved pid={pid}")
             try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+                # Drain stdout / stderr incrementally so each codex JSONL frame
+                # is fanned to on_chunk as it arrives; the full stdout is still
+                # accumulated for the existing parser. wait_for preserves the
+                # wall-clock ceiling + the kill-on-timeout contract.
+                stdout, stderr = await asyncio.wait_for(
+                    _collect_spawn_output(proc, on_chunk=on_chunk), timeout=timeout
+                )
             except TimeoutError:
                 proc.kill()
                 await proc.wait()
