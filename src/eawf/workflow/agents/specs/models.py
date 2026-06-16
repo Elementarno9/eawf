@@ -495,7 +495,9 @@ class SubagentSpec(_SpecModel):
             f"Set `wave_id` to `{self.wave_id}` exactly. `verdict` is one of "
             "`pass`, `pass-with-followups`, `fail`, `blocked`; `confidence` "
             "is one of `high`, `medium`, `low`. `summary` and `outcome` are "
-            "required non-empty strings; the list fields may stay empty."
+            "required non-empty strings. `files_changed` and `tests_run` are "
+            "arrays of plain strings. Leave `evidence_refs` and `followups` as "
+            "empty arrays `[]` -- do not add entries to them."
         )
 
     def _render_stop_conditions(self) -> str | None:
