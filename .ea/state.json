@@ -25317,7 +25317,8 @@
         "P30-I20-W54",
         "P30-I20-W55",
         "P30-I20-W56",
-        "P30-I20-W57"
+        "P30-I20-W57",
+        "P30-I20-W58"
       ]
     }
   },
@@ -26406,7 +26407,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-25T18:38:51.527201Z",
+  "updated_at": "2026-06-25T18:54:32.381652Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97875,7 +97876,8 @@
         "P30-I20-W54",
         "P30-I20-W55",
         "P30-I20-W56",
-        "P30-I20-W57"
+        "P30-I20-W57",
+        "P30-I20-W58"
       ],
       "description": null,
       "dispatch_history": [],
@@ -99637,6 +99639,82 @@
         }
       ],
       "title": "Standardize EU to two decimals + capitalize rollup notice",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W58": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**",
+        "tests/tui/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W58",
+      "intent": {
+        "desired_outcome": "The tail re-reads the store on each poll tick with a monotonic cursor; the store is the authoritative source and the push is gated off once it advances.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add OutputTail.replace",
+          "Cursor-track the store sync",
+          "Run sync on poll + gate the push",
+          "Test poll pickup + no dup"
+        ],
+        "priority_rationale": null,
+        "problem": "The watch tail backfills only on mount; a synchronous spawn blocks the live push, so an already-open tail shows nothing until the fleet set changes -- output appears late or never.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T18:54:31.880254Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "An open watch tail picks up newly-persisted chunks on each poll tick",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "An open watch tail picks up newly-persisted chunks on each poll tick",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Store sync and live push never double-render a line",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Store sync and live push never double-render a line",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-read watch output tail from store on the poll backstop",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
