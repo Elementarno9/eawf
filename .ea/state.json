@@ -25309,7 +25309,12 @@
         "P30-I20-W46",
         "P30-I20-W47",
         "P30-I20-W48",
-        "P30-I20-W49"
+        "P30-I20-W49",
+        "P30-I20-W50",
+        "P30-I20-W51",
+        "P30-I20-W52",
+        "P30-I20-W53",
+        "P30-I20-W54"
       ]
     }
   },
@@ -26398,7 +26403,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-16T19:27:32.531235Z",
+  "updated_at": "2026-06-25T17:22:18.730871Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -99063,6 +99068,329 @@
         }
       ],
       "title": "Close-on-behalf for sandboxed headless agents (DL-5-aware)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W50": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/**",
+        "tests/daemon/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W50",
+      "intent": {
+        "desired_outcome": "A closed headless wave carries actual_cost_usd from the metered dispatch and the fleet run counters credit spent_usd; summary shows the real dollar figure.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Stamp wave.runtime_latest from the priced SpawnResult",
+          "Verify _lane_spend yields nonzero",
+          "Assert actual_cost_usd + counters.spent_usd nonzero in a test"
+        ],
+        "priority_rationale": null,
+        "problem": "Headless codex dispatch meters real USD into the dispatch_cost event but never stamps the wave runtime_baseline/runtime_latest, so _lane_spend derives zero and actual_cost_usd stays None.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T17:20:39.887113Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Closed wave shows actual_cost_usd=None and fleet spent_usd=0 despite a real metered dispatch cost in the dispatch_cost event",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Closed wave shows actual_cost_usd=None and fleet spent_usd=0 despite a real metered dispatch cost in the dispatch_cost event",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Fleet run summary renders $0.00 for a paid codex spawn",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Fleet run summary renders $0.00 for a paid codex spawn",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Bind dispatch metering cost into wave runtime snapshot",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W51": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/run_summary.py",
+        "tests/tui/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W51",
+      "intent": {
+        "desired_outcome": "Elapsed renders as [#h]##m form (e.g. 2m, 1h05m); a helper formats hours->compact string with a boundary test.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add format_elapsed helper",
+          "Route run_summary through it",
+          "Test 0/sub-hour/multi-hour boundaries"
+        ],
+        "priority_rationale": null,
+        "problem": "run_summary formats elapsed_hours with a raw .2f hours float; sub-hour runs read as 0.03h.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T17:20:40.653513Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Run summary renders elapsed as 0.03h instead of a readable minutes form",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Run summary renders elapsed as 0.03h instead of a readable minutes form",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Format fleet-run elapsed as compact h/m not decimal hours",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W52": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "tests/daemon/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W52",
+      "intent": {
+        "desired_outcome": "Close-on-behalf marks the executor session terminal; the Watch active-lane picker no longer surfaces the closed wave.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Flip session status terminal in close-on-behalf",
+          "Assert Watch picker excludes the closed wave"
+        ],
+        "priority_rationale": null,
+        "problem": "_close_wave_on_disk closes the wave but does not flip the executor session/lane to a terminal status, so the Watch active-lane picker keeps surfacing a closed wave.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T17:20:41.297782Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "After close-on-behalf the wave is closed but Watch still lists it as an open draining lane",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "After close-on-behalf the wave is closed but Watch still lists it as an open draining lane",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Finalize executor session on close-on-behalf so Watch drops the lane",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W53": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/agent_watch.py",
+        "tests/tui/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W53",
+      "intent": {
+        "desired_outcome": "On mount the Watch tail backfills persisted agent.output.chunk events for the watched scope_id, then continues live.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Read scope-filtered chunk events from the store on mount",
+          "Seed the tail",
+          "Test backfill renders persisted chunks"
+        ],
+        "priority_rationale": null,
+        "problem": "The Watch tail seeds only from the in-memory live ring buffer; a synchronous spawn flushes chunks the ring missed, and the tail never backfills from event.jsonl.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T17:20:41.924475Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Watch output tail is empty even though agent.output.chunk events are persisted for the watched wave",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Watch output tail is empty even though agent.output.chunk events are persisted for the watched wave",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Backfill Watch output tail from event store on mount",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W54": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/**",
+        "src/eawf/runtime/sandbox/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W54",
+      "intent": {
+        "desired_outcome": "claude -p clears the sandbox (PATH + auth/config + egress) and a smoke wave drives to close via claude-code, at parity with codex.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Run a live claude -p smoke spawn and capture the exact jail/auth failure",
+          "Permit the missing claude config/cred path or restore the dropped auth env",
+          "Re-drive a smoke wave to close via claude-code"
+        ],
+        "priority_rationale": null,
+        "problem": "The claude-code adapter is selectable but a headless claude -p spawn fails under the jail; only codex was validated end-to-end.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T17:22:18.730611Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "claude -p spawns under the jail and reaches the model API",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "claude -p spawns under the jail and reaches the model API",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "A live smoke wave closes via the claude-code adapter",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "A live smoke wave closes via the claude-code adapter",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire claude-code headless spawn parity (claude -p)",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
