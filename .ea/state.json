@@ -25316,7 +25316,8 @@
         "P30-I20-W53",
         "P30-I20-W54",
         "P30-I20-W55",
-        "P30-I20-W56"
+        "P30-I20-W56",
+        "P30-I20-W57"
       ]
     }
   },
@@ -26405,7 +26406,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-25T18:18:21.960332Z",
+  "updated_at": "2026-06-25T18:38:51.527201Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97873,7 +97874,8 @@
         "P30-I20-W53",
         "P30-I20-W54",
         "P30-I20-W55",
-        "P30-I20-W56"
+        "P30-I20-W56",
+        "P30-I20-W57"
       ],
       "description": null,
       "dispatch_history": [],
@@ -99560,6 +99562,81 @@
         }
       ],
       "title": "Record wave actuals from runtime delta on close-on-behalf",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W57": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/**",
+        "tests/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W57",
+      "intent": {
+        "desired_outcome": "EU renders at two decimals everywhere it is measured, and the empty-rollup notice reads 'No rollup yet.' to match its siblings.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Change run-summary + metrics EU to .2f",
+          "Capitalize the narrative rollup notice",
+          "Regen goldens"
+        ],
+        "priority_rationale": null,
+        "problem": "Measured EU renders inconsistently (0.06 runtime tab vs 0.1 arm result) and the wave narrative shows lowercase no-period 'no rollup yet' amid sentence-case siblings.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T18:38:51.000832Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Measured EU renders with two decimals across run-summary and metrics",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Measured EU renders with two decimals across run-summary and metrics",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "The wave narrative empty-rollup line is sentence-case",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The wave narrative empty-rollup line is sentence-case",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Standardize EU to two decimals + capitalize rollup notice",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
