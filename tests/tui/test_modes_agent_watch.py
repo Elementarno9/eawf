@@ -68,6 +68,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     WatchTarget,
     WatchTile,
     is_watched_event,
+    load_output_chunk_lines,
     pick_watch_target,
     render_watch_header,
     tile_dom_id,
@@ -350,6 +351,78 @@ def test_is_watched_event_false_when_scope_differs() -> None:
 def test_is_watched_event_false_when_scope_is_none() -> None:
     """An envelope with no scope id is not part of any session's stream."""
     assert is_watched_event(_event("EV-1", scope_id=None), _target()) is False
+
+
+# --------------------------------------------------------------------------
+# load_output_chunk_lines -- the W53 event-store tail backfill
+# --------------------------------------------------------------------------
+
+
+def _chunk_line(wave_id: str, *, seq: int, lines: str) -> str:
+    """One ``agent.output.chunk`` event-store JSONL row for *wave_id*."""
+    import json
+
+    return json.dumps(
+        {
+            "kind": "event",
+            "scope_id": wave_id,
+            "payload": {
+                "event_type": "agent.output.chunk",
+                "wave_id": wave_id,
+                "seq": seq,
+                "lines": lines,
+            },
+        }
+    )
+
+
+def _write_event_store(tmp_path: Path, rows: list[str]) -> Path:
+    """Write *rows* as an event.jsonl store and return its path."""
+    store = tmp_path / "store"
+    store.mkdir(parents=True, exist_ok=True)
+    path = store / "event.jsonl"
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return path
+
+
+def test_load_output_chunk_lines_missing_store_reads_empty(tmp_path: Path) -> None:
+    """A missing / unset store yields an empty list, not a crash."""
+    assert load_output_chunk_lines(None, _WAVE) == []
+    assert load_output_chunk_lines(tmp_path / "store" / "event.jsonl", _WAVE) == []
+
+
+def test_load_output_chunk_lines_seq_orders_and_splits(tmp_path: Path) -> None:
+    """Chunk rows are seq-ordered and each ``lines`` blob splits into rows."""
+    path = _write_event_store(
+        tmp_path,
+        [
+            _chunk_line(_WAVE, seq=1, lines="second\nthird"),
+            _chunk_line(_WAVE, seq=0, lines="first"),
+        ],
+    )
+    assert load_output_chunk_lines(path, _WAVE) == ["first", "second", "third"]
+
+
+def test_load_output_chunk_lines_filters_wave_and_non_chunk(tmp_path: Path) -> None:
+    """Only the watched wave's chunk rows are kept; other waves + a malformed line drop."""
+    path = _write_event_store(
+        tmp_path,
+        [
+            _chunk_line(_WAVE, seq=0, lines="mine"),
+            _chunk_line("P01-I01-W99", seq=0, lines="other wave"),
+            "{ not json",
+        ],
+    )
+    assert load_output_chunk_lines(path, _WAVE) == ["mine"]
+
+
+def test_load_output_chunk_lines_caps_to_limit(tmp_path: Path) -> None:
+    """The tail keeps only the most recent *limit* lines."""
+    path = _write_event_store(
+        tmp_path,
+        [_chunk_line(_WAVE, seq=0, lines="\n".join(str(n) for n in range(10)))],
+    )
+    assert load_output_chunk_lines(path, _WAVE, limit=3) == ["7", "8", "9"]
 
 
 # --------------------------------------------------------------------------

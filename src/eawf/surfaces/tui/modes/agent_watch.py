@@ -658,6 +658,70 @@ def is_watched_event(envelope: Envelope, target: WatchTarget | None) -> bool:
     return envelope.scope_id == target.wave_id
 
 
+#: Cap on the persisted output lines the watch tail backfills on mount, so a
+#: long-running spawn's full stream stays bounded.
+_OUTPUT_BACKFILL_LIMIT: int = 500
+
+
+def load_output_chunk_lines(
+    event_path: Path | None, wave_id: str, *, limit: int = _OUTPUT_BACKFILL_LIMIT
+) -> list[str]:
+    """Read a wave's persisted ``agent.output.chunk`` lines from the event store.
+
+    The watch tail seeds from the App's in-memory live ring buffer, which a
+    synchronous in-daemon spawn flushes past -- its chunk pushes land while the
+    blocking spawn holds the event loop, so a tail mounted after the fact sees
+    an empty buffer. The chunks are persisted as ``agent.output.chunk`` events
+    regardless, so this reads them back -- seq-ordered, oldest-first, capped to
+    the most recent *limit* lines -- to backfill the tail. The read is total: a
+    missing / unreadable store, a malformed line, or a non-chunk row degrades to
+    fewer lines rather than raising, so a fresh store yields an empty list.
+
+    Args:
+        event_path: Path to ``<state_dir>/store/event.jsonl``, or ``None``.
+        wave_id: The watched wave whose chunk lines to collect.
+        limit: The tail cap -- the most recent *limit* lines are kept.
+
+    Returns:
+        The wave's output lines, oldest-first, at most *limit* long.
+    """
+    if event_path is None or not event_path.is_file():
+        return []
+    import orjson
+
+    from eawf.runtime.daemon.dispatch_runner import AGENT_OUTPUT_CHUNK_EVENT_TYPE
+
+    try:
+        raw = event_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning(f"load_output_chunk_lines path={event_path!s} unreadable cause={exc!r}")
+        return []
+    chunks: list[tuple[int, str]] = []
+    for raw_line in raw.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        try:
+            record = orjson.loads(stripped)
+        except orjson.JSONDecodeError:
+            continue
+        if not isinstance(record, dict) or record.get("scope_id") != wave_id:
+            continue
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("event_type") != AGENT_OUTPUT_CHUNK_EVENT_TYPE:
+            continue
+        joined = payload.get("lines")
+        if not isinstance(joined, str):
+            continue
+        seq = payload.get("seq")
+        chunks.append((seq if isinstance(seq, int) else 0, joined))
+    chunks.sort(key=lambda item: item[0])
+    lines = [line for _seq, joined in chunks for line in joined.split("\n")]
+    return lines[-limit:]
+
+
 def active_executor_sessions(state: State | None) -> list[AgentSession]:
     """Return the ACTIVE executor sessions to lay out as grid tiles.
 
@@ -1792,7 +1856,11 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         await self.recompose()
         self._seed_from_buffer()
-        self._seed_output_from_buffer()
+        # Prefer the persisted store (the complete chunk history a synchronous
+        # spawn flushed past the live buffer); fall back to the buffer only when
+        # the store yields nothing, so the tail never double-renders a line.
+        if not self._seed_output_from_store():
+            self._seed_output_from_buffer()
 
     #: Set once an FA3 -> FA4 zoom drills into a lane, so every later compose /
     #: recompose lands on the single-session zoom for the pinned target rather
@@ -1821,7 +1889,11 @@ class AgentWatchModeScreen(ScopeScreen):
         if callable(register):
             register(self)
         self._seed_from_buffer()
-        self._seed_output_from_buffer()
+        # Prefer the persisted store (the complete chunk history a synchronous
+        # spawn flushed past the live buffer); fall back to the buffer only when
+        # the store yields nothing, so the tail never double-renders a line.
+        if not self._seed_output_from_store():
+            self._seed_output_from_buffer()
 
     def _seed_from_buffer(self) -> None:
         """Seed the freshly-composed surface from the App's live event buffer.
@@ -1865,6 +1937,39 @@ class AgentWatchModeScreen(ScopeScreen):
         lines = [line for wave_id, line in buffer if wave_id == self.target.wave_id]
         if lines:
             self._output_tail().extend(lines)
+
+    def _seed_output_from_store(self) -> bool:
+        """Backfill the raw-output tail from the persisted event store -- W53.
+
+        The live-buffer seed misses a synchronous in-daemon spawn's chunks: they
+        flush while the spawn holds the event loop, so a tail mounted after the
+        run reads empty even though every chunk is persisted as an
+        ``agent.output.chunk`` event. Read the watched wave's chunk lines off the
+        store and extend the tail with them. A no-op in the grid path or under a
+        bare harness whose App exposes no ``_state_path``.
+
+        Returns:
+            ``True`` when it seeded at least one line (so the caller skips the
+            live-buffer seed -- the store is the superset, avoiding duplicates),
+            else ``False``.
+        """
+        if self._grid is not None or self._lane_grid is not None or self.target is None:
+            return False
+        from pathlib import Path
+
+        from eawf.kernel.state.enums import StoreKind
+        from eawf.kernel.store.paths import store_path
+
+        state_path = getattr(self.app, "_state_path", None)
+        if not isinstance(state_path, Path):
+            return False
+        lines = load_output_chunk_lines(
+            store_path(state_path, StoreKind.EVENT), self.target.wave_id
+        )
+        if lines:
+            self._output_tail().extend(lines)
+            return True
+        return False
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Recompose the body when a poll tick changes the ACTIVE-executor fleet.
@@ -1912,7 +2017,11 @@ class AgentWatchModeScreen(ScopeScreen):
         """
         await self.recompose()
         self._seed_from_buffer()
-        self._seed_output_from_buffer()
+        # Prefer the persisted store (the complete chunk history a synchronous
+        # spawn flushed past the live buffer); fall back to the buffer only when
+        # the store yields nothing, so the tail never double-renders a line.
+        if not self._seed_output_from_store():
+            self._seed_output_from_buffer()
 
     def _on_render_mode(self, _mode: object) -> None:
         """Repaint the mode-sensitive chrome when the App's render mode flips.
