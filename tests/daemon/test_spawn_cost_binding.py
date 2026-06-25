@@ -584,3 +584,65 @@ def test_bare_opus_alias_degrades_honestly_if_row_removed(
     # a silent billed zero.
     assert metered.cost_usd == Decimal("0")
     assert metered.priced is False
+
+
+# --------------------------------------------------------------------------- #
+# E2E live-chain (incident keystone): a headless dispatch's metered cost must
+# walk the WHOLE chain -- runtime snapshot -> close-on-behalf -> wave actuals ->
+# the rendered narrative surface -- not just each joint in isolation. This is
+# the test class the StubAdapter-only coverage hid three binding bugs behind
+# (W50 / W54 / W56): the stub returns a real SpawnResult, but here it flows
+# through the real dispatch, the real close-on-behalf, and the real renderer.
+# --------------------------------------------------------------------------- #
+
+
+def test_headless_dispatch_chains_to_surfaced_nonzero_actual_eu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A headless spawn's spend reaches the rendered wave narrative as real EU.
+
+    Drives the full path: dispatch (stamps the wave runtime snapshot off the
+    priced spawn) -> close-on-behalf (records the actuals from the runtime
+    delta) -> build_narrative (renders the actual). Asserts the narrative shows
+    a non-zero elapsed EU and the wave's recorded cost/model -- never the
+    "No rollup yet." empty state that a zero-EU close would surface.
+    """
+    from datetime import UTC, datetime
+
+    from eawf.kernel.state.models import FleetRun, FleetRunState, State
+    from eawf.runtime.daemon.methods.fleet import _Loop
+    from eawf.surfaces.render.narrative import build_narrative
+
+    resolved = "claude-opus-4-8-20260101"
+    state_path = _write_state(tmp_path)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    event_path.parent.mkdir(parents=True, exist_ok=True)
+    _patch_adapter(monkeypatch, _StubAdapter(resolved_model=resolved))
+    ctx = _ctx(state_path, event_path=event_path)
+
+    # 1. Dispatch the headless spawn -> the wave's runtime snapshot is stamped.
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    # 2. Close on behalf of the (sandboxed) agent -> the actuals are recorded.
+    loop = _Loop(
+        ctx=ctx,
+        run=FleetRun(
+            run_state=FleetRunState.DRAINING,
+            armed_at=datetime(2026, 6, 10, tzinfo=UTC),
+        ),
+        spawn=lambda *a, **k: None,
+        watch=lambda *a, **k: "closed",
+    )
+    loop._close_wave_on_disk(_WAVE_ID)
+
+    # 3. The rendered surface carries the real spend, not the empty state.
+    state = State.model_validate_json(state_path.read_text(encoding="utf-8"))
+    actual = state.actuals[_WAVE_ID]
+    assert actual.elapsed_eu > 0.0
+    assert actual.actual_cost_usd == pytest.approx(float(_opus_4_8_expected_cost()))
+    assert actual.model == resolved
+
+    validation = build_narrative(state, _WAVE_ID).validation
+    body = "\n".join(validation)
+    assert "No rollup yet." not in body
+    assert f"elapsed EU: {actual.elapsed_eu:.2f}." in body
