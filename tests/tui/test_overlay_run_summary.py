@@ -52,6 +52,7 @@ from eawf.surfaces.tui.screens.overlays.run_summary import (
     RUN_SUMMARY_TITLE,
     RUN_SUMMARY_TOTALS_ID,
     RunSummaryModal,
+    format_elapsed,
     outcome_lines,
     render_counts_row,
     render_totals_row,
@@ -218,7 +219,7 @@ def test_render_totals_row_reads_eu_usd_elapsed_forks_off_run() -> None:
     )
     assert "7.5" in body  # spent_eu
     assert "4.25" in body  # spent_usd
-    assert "1.50h" in body  # elapsed_hours
+    assert "1h30m" in body  # elapsed_hours, compact h/m form
     assert "forks resolved" in body
     assert "3" in body  # forks_resolved
 
@@ -228,6 +229,24 @@ def test_render_totals_row_missing_elapsed_reads_honest_dash() -> None:
     body = render_totals_row(_done_run(elapsed_hours=None))
     assert "elapsed" in body
     assert "--" in body
+
+
+@pytest.mark.parametrize(
+    ("hours", "expected"),
+    [
+        (None, "--"),
+        (0.0, "0m"),
+        (0.03216431222222222, "2m"),  # the live-3a sub-hour window
+        (0.5, "30m"),
+        (0.999, "1h00m"),  # rounds up across the hour boundary
+        (1.0, "1h00m"),
+        (1.5, "1h30m"),
+        (2.0, "2h00m"),
+    ],
+)
+def test_format_elapsed_renders_compact_h_m(hours: float | None, expected: str) -> None:
+    """Elapsed renders as [#h]##m: dash for None, ##m sub-hour, #h##m at/over an hour."""
+    assert format_elapsed(hours) == expected
 
 
 def test_outcome_lines_lists_one_line_per_nonzero_outcome_class() -> None:

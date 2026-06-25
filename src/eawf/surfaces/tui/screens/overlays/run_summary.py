@@ -140,6 +140,31 @@ def render_counts_row(run: FleetRun) -> str:
     )
 
 
+def format_elapsed(hours: float | None) -> str:
+    """Render an elapsed-hours window as a compact ``[#h]##m`` string.
+
+    A raw decimal-hours float (``0.03h``) reads poorly for the sub-hour runs a
+    fleet drive usually takes, so collapse it to whole minutes, prefixing the
+    hour count only once the window reaches an hour. ``None`` (no window
+    recorded) reads an honest dash rather than a fabricated zero.
+
+    Args:
+        hours: The daemon-stamped elapsed window in fractional hours, or
+            ``None`` when no window was recorded.
+
+    Returns:
+        ``"--"`` when *hours* is ``None``; ``"##m"`` under an hour; ``"#h##m"``
+        (zero-padded minutes) at or above an hour.
+    """
+    if hours is None:
+        return "--"
+    total_minutes = round(hours * 60)
+    whole_hours, minutes = divmod(total_minutes, 60)
+    if whole_hours == 0:
+        return f"{minutes}m"
+    return f"{whole_hours}h{minutes:02d}m"
+
+
 def render_totals_row(run: FleetRun) -> str:
     """Render the EU / $ / elapsed / forks-resolved totals row off *run*.
 
@@ -158,7 +183,7 @@ def render_totals_row(run: FleetRun) -> str:
         A content-markup totals row string.
     """
     counters = run.counters
-    elapsed = f"{run.elapsed_hours:.2f}h" if run.elapsed_hours is not None else "--"
+    elapsed = format_elapsed(run.elapsed_hours)
     return (
         f"[$muted]EU[/] [$accent]{counters.spent_eu:.1f}[/]  "
         f"[$muted]$[/] [$accent]{counters.spent_usd:.2f}[/]  "
