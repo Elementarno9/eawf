@@ -151,6 +151,50 @@ def test_output_tail_append_preserves_append_order() -> None:
     asyncio.run(body())
 
 
+def test_output_tail_replace_clears_prior_rows_and_reseeds() -> None:
+    """replace() drops any prior rows and re-seeds the tail with the new lines.
+
+    The store-sync authority path (W58): a live push may render a few rows
+    before the persisted store takes over; replace() clears them so the store's
+    ordered sequence is the only content, never a double-render.
+    """
+
+    async def body() -> None:
+        app = _TailApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settle_screen(pilot)
+            tail = app.tail
+            tail.append_line("push line 1")
+            tail.append_line("push line 2")
+            await settle_screen(pilot)
+            tail.replace(["store 1", "store 2", "store 3"])
+            await settle_screen(pilot)
+            rows = [str(r.render()) for r in tail.query(f".{OUTPUT_TAIL_ROW_CLASS}").results()]
+            assert rows == ["store 1", "store 2", "store 3"]
+            assert tail.has_output
+
+    asyncio.run(body())
+
+
+def test_output_tail_replace_empty_restores_waiting_notice() -> None:
+    """replace([]) clears the tail back to its waiting notice."""
+
+    async def body() -> None:
+        app = _TailApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await settle_screen(pilot)
+            tail = app.tail
+            tail.append_line("transient")
+            await settle_screen(pilot)
+            tail.replace([])
+            await settle_screen(pilot)
+            assert tail.query(f"#{OUTPUT_TAIL_WAITING_ID}")
+            assert not tail.query(f".{OUTPUT_TAIL_ROW_CLASS}")
+            assert not tail.has_output
+
+    asyncio.run(body())
+
+
 def test_output_tail_extend_lands_every_line_in_order() -> None:
     """A buffer-replay extend lands every line in order, dropping the notice."""
 

@@ -559,6 +559,45 @@ def test_agent_watch_pane_streams_session_events_filtered_to_wave(tmp_path: Path
     asyncio.run(body())
 
 
+def test_agent_watch_tail_syncs_new_chunks_from_store_on_poll(tmp_path: Path) -> None:
+    """W58: an open watch tail picks up newly-persisted chunks on a poll sync.
+
+    A synchronous spawn blocks the live push, so the tail relies on the
+    store-sync running each poll tick. Seed one chunk, mount the zoom (the
+    on-mount sync renders it), then persist a second chunk and run the sync --
+    the new line appends without re-rendering the first.
+    """
+    state = _state(sessions={"S-1": _session("S-1")})
+    state_path = _write_state(tmp_path, state)
+    store = state_path.parent / "store"
+    store.mkdir(parents=True, exist_ok=True)
+    event_path = store / "event.jsonl"
+    event_path.write_text(
+        _chunk_line(_WAVE, seq=0, lines="first agent word") + "\n", encoding="utf-8"
+    )
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press(_WATCH_DIGIT)
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, AgentWatchModeScreen)
+            assert "first agent word" in normalize_snapshot(capture_screen_text(app))
+            # A new chunk persists; the poll-tick sync brings it in.
+            with event_path.open("a", encoding="utf-8") as handle:
+                handle.write(_chunk_line(_WAVE, seq=1, lines="second agent word") + "\n")
+            pane._sync_output_from_store()
+            await settle_screen(pilot)
+            frame = normalize_snapshot(capture_screen_text(app))
+            assert "first agent word" in frame
+            assert "second agent word" in frame
+            assert frame.count("first agent word") == 1  # no double-render
+
+    asyncio.run(body())
+
+
 def test_agent_watch_pane_seeds_filtered_from_app_buffer(tmp_path: Path) -> None:
     """A mode switch into Watch seeds the watched wave's buffered events only."""
     state = _state(sessions={"S-1": _session("S-1")})

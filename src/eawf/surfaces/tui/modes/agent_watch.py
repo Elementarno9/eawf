@@ -1769,6 +1769,10 @@ class AgentWatchModeScreen(ScopeScreen):
         self._lane_parity = lane_parity_key(state)
         self._grid = None
         self._lane_grid = None
+        # Count of tail lines the persisted-store sync owns. Reset per recompose
+        # (the tail is rebuilt) so the next sync re-seeds; gates the live push so
+        # store + push never double-render a line (W58).
+        self._output_store_cursor = 0
         yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
         # A pending FA3 -> FA4 zoom forces the single-session zoom for the pinned
         # target, even while the fleet still reports lanes / multiple sessions
@@ -1859,7 +1863,7 @@ class AgentWatchModeScreen(ScopeScreen):
         # Prefer the persisted store (the complete chunk history a synchronous
         # spawn flushed past the live buffer); fall back to the buffer only when
         # the store yields nothing, so the tail never double-renders a line.
-        if not self._seed_output_from_store():
+        if not self._sync_output_from_store():
             self._seed_output_from_buffer()
 
     #: Set once an FA3 -> FA4 zoom drills into a lane, so every later compose /
@@ -1892,7 +1896,7 @@ class AgentWatchModeScreen(ScopeScreen):
         # Prefer the persisted store (the complete chunk history a synchronous
         # spawn flushed past the live buffer); fall back to the buffer only when
         # the store yields nothing, so the tail never double-renders a line.
-        if not self._seed_output_from_store():
+        if not self._sync_output_from_store():
             self._seed_output_from_buffer()
 
     def _seed_from_buffer(self) -> None:
@@ -1938,20 +1942,28 @@ class AgentWatchModeScreen(ScopeScreen):
         if lines:
             self._output_tail().extend(lines)
 
-    def _seed_output_from_store(self) -> bool:
-        """Backfill the raw-output tail from the persisted event store -- W53.
+    def _sync_output_from_store(self) -> bool:
+        """Sync the raw-output tail to the persisted event store -- W53 + W58.
 
         The live-buffer seed misses a synchronous in-daemon spawn's chunks: they
-        flush while the spawn holds the event loop, so a tail mounted after the
-        run reads empty even though every chunk is persisted as an
-        ``agent.output.chunk`` event. Read the watched wave's chunk lines off the
-        store and extend the tail with them. A no-op in the grid path or under a
-        bare harness whose App exposes no ``_state_path``.
+        flush while the spawn holds the event loop, so the live push never
+        streams and a tail mounted mid-run reads empty even though every chunk
+        is persisted as an ``agent.output.chunk`` event. This reads the watched
+        wave's chunk lines off the store and brings the tail up to them. It runs
+        BOTH on mount AND on each poll tick (the always-on backstop), so an
+        already-open tail picks up chunks the blocked push never delivered.
+
+        The persisted store is the single authoritative source: on the FIRST
+        sync that finds content it REPLACES the tail (dropping any rows the live
+        push rendered before the store took over), and thereafter appends only
+        the lines past the cursor. ``append_output`` (the live push) is gated off
+        once the cursor advances, so the two sources never double-render a line.
+        A no-op in the grid path or under a bare harness whose App exposes no
+        ``_state_path``.
 
         Returns:
-            ``True`` when it seeded at least one line (so the caller skips the
-            live-buffer seed -- the store is the superset, avoiding duplicates),
-            else ``False``.
+            ``True`` when the store has at least one line for the watched wave
+            (so the on-mount caller skips the live-buffer seed), else ``False``.
         """
         if self._grid is not None or self._lane_grid is not None or self.target is None:
             return False
@@ -1966,10 +1978,14 @@ class AgentWatchModeScreen(ScopeScreen):
         lines = load_output_chunk_lines(
             store_path(state_path, StoreKind.EVENT), self.target.wave_id
         )
-        if lines:
-            self._output_tail().extend(lines)
-            return True
-        return False
+        if not lines:
+            return False
+        if self._output_store_cursor == 0:
+            self._output_tail().replace(lines)
+        elif len(lines) > self._output_store_cursor:
+            self._output_tail().extend(lines[self._output_store_cursor :])
+        self._output_store_cursor = len(lines)
+        return True
 
     def _on_app_state(self, new_state: State | None) -> None:
         """Recompose the body when a poll tick changes the ACTIVE-executor fleet.
@@ -1995,6 +2011,12 @@ class AgentWatchModeScreen(ScopeScreen):
         from eawf.kernel.state.models import State
 
         resolved = new_state if isinstance(new_state, State) else None
+        # Bring the raw-output tail up to the persisted store on every poll tick,
+        # not only on mount/recompose: a synchronous in-daemon spawn blocks the
+        # live push, so an already-open zoom would otherwise show nothing until
+        # the fleet set happens to change. This runs before the parity early-exit
+        # so a steady single-session spawn still streams its persisted chunks.
+        self._sync_output_from_store()
         lane_changed = lane_parity_key(resolved) != self._lane_parity
         if parity_session_ids(resolved) == self._parity_ids and not lane_changed:
             return
@@ -2020,7 +2042,7 @@ class AgentWatchModeScreen(ScopeScreen):
         # Prefer the persisted store (the complete chunk history a synchronous
         # spawn flushed past the live buffer); fall back to the buffer only when
         # the store yields nothing, so the tail never double-renders a line.
-        if not self._seed_output_from_store():
+        if not self._sync_output_from_store():
             self._seed_output_from_buffer()
 
     def _on_render_mode(self, _mode: object) -> None:
@@ -2100,6 +2122,11 @@ class AgentWatchModeScreen(ScopeScreen):
         ):
             return
         if wave_id != self.target.wave_id:
+            return
+        # Once the persisted store has seeded the tail it is the authoritative
+        # source (W58): the poll-tick sync owns every line, so a live push would
+        # double-render. Defer to the store while its cursor is advanced.
+        if self._output_store_cursor > 0:
             return
         self._output_tail().append_line(line)
         logger.debug(f"append_output wave={wave_id} len={len(line)}")

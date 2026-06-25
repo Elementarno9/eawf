@@ -239,6 +239,28 @@ class OutputTail(VerticalScroll):
         self.scroll_end(animate=False)
         logger.debug(f"extend count={len(lines)}")
 
+    def replace(self, lines: list[str]) -> None:
+        """Replace every rendered row with *lines*, scrolling once.
+
+        The store-sync entry point: when the persisted event store becomes the
+        authoritative tail source it re-seeds the whole tail once, dropping any
+        rows a live push rendered before the store took over so a line never
+        double-renders across the two sources. Clears the existing rows, then
+        mounts *lines* fresh; an empty *lines* clears the tail back to its
+        waiting notice. A no-op before mount.
+
+        Args:
+            lines: The full ordered tail content to render, oldest-first.
+        """
+        if not self.is_mounted:
+            return
+        self.query(f".{OUTPUT_TAIL_ROW_CLASS}").remove()
+        self._has_output = False
+        if lines:
+            self.extend(lines)
+        elif not self.query(f"#{OUTPUT_TAIL_WAITING_ID}"):
+            self.mount(Static(WAITING_NOTICE, id=OUTPUT_TAIL_WAITING_ID))
+
     def _drop_waiting_notice(self) -> None:
         """Remove the pinned waiting notice if it is still mounted.
 
