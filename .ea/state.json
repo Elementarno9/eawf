@@ -26403,7 +26403,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-25T17:22:18.730871Z",
+  "updated_at": "2026-06-25T17:23:05.607692Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97864,7 +97864,12 @@
         "P30-I20-W32",
         "P30-I20-W33",
         "P30-I20-W34",
-        "P30-I20-W35"
+        "P30-I20-W35",
+        "P30-I20-W50",
+        "P30-I20-W51",
+        "P30-I20-W52",
+        "P30-I20-W53",
+        "P30-I20-W54"
       ],
       "description": null,
       "dispatch_history": [],
@@ -99074,7 +99079,9 @@
     },
     "P30-I20-W50": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I20-W25"
+      ],
       "claim_session_id": null,
       "claimed_at": null,
       "closed_at": null,
@@ -99147,7 +99154,9 @@
     },
     "P30-I20-W51": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I20-W25"
+      ],
       "claim_session_id": null,
       "claimed_at": null,
       "closed_at": null,
@@ -99206,7 +99215,9 @@
     },
     "P30-I20-W52": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I20-W25"
+      ],
       "claim_session_id": null,
       "claimed_at": null,
       "closed_at": null,
@@ -99264,7 +99275,9 @@
     },
     "P30-I20-W53": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I20-W25"
+      ],
       "claim_session_id": null,
       "claimed_at": null,
       "closed_at": null,
@@ -99323,7 +99336,9 @@
     },
     "P30-I20-W54": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P30-I20-W25"
+      ],
       "claim_session_id": null,
       "claimed_at": null,
       "closed_at": null,
