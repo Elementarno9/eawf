@@ -185,7 +185,7 @@ def render_totals_row(run: FleetRun) -> str:
     counters = run.counters
     elapsed = format_elapsed(run.elapsed_hours)
     return (
-        f"[$muted]EU[/] [$accent]{counters.spent_eu:.1f}[/]  "
+        f"[$muted]EU[/] [$accent]{counters.spent_eu:.2f}[/]  "
         f"[$muted]$[/] [$accent]{counters.spent_usd:.2f}[/]  "
         f"[$muted]elapsed[/] [$accent]{escape_markup(elapsed)}[/]  "
         f"[$muted]forks resolved[/] [$accent]{counters.forks_resolved}[/]"

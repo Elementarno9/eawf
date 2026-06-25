@@ -229,7 +229,7 @@ def _wave_validation(state: State, wave: Wave) -> list[str]:
     )
     actual = _wave_actual(state, wave.id)
     if actual is None:
-        lines.append("no rollup yet")
+        lines.append("No rollup yet.")
     else:
         lines.append(
             f"Actual `{actual.id}` status: {actual.status.value}; "

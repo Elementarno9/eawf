@@ -281,7 +281,7 @@ def test_build_narrative_wave_validation_marks_no_actuals() -> None:
     payload = _two_wave_payload()
     state = State.model_validate(payload)
     bundle = build_narrative(state, "P28-I03-W01")
-    assert "no rollup yet" in bundle.validation
+    assert "No rollup yet." in bundle.validation
 
 
 def test_build_narrative_iter_id_dispatches_to_iter_builder() -> None:

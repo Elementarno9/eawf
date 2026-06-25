@@ -172,7 +172,7 @@ def _format_minutes(value: float) -> str:
 
 def _format_eu(value: float) -> str:
     """Return a compact EU value for metric tiles."""
-    return f"{value:.1f} EU"
+    return f"{value:.2f} EU"
 
 
 def _format_ratio(value: float) -> str:
