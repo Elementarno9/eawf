@@ -105,7 +105,7 @@ from eawf.surfaces.tui.widgets.empty_state import (
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.output_tail import OutputTail
+from eawf.surfaces.tui.widgets.output_tail import OutputTail, format_agent_output_lines
 from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 
 if TYPE_CHECKING:
@@ -718,7 +718,7 @@ def load_output_chunk_lines(
         seq = payload.get("seq")
         chunks.append((seq if isinstance(seq, int) else 0, joined))
     chunks.sort(key=lambda item: item[0])
-    lines = [line for _seq, joined in chunks for line in joined.split("\n")]
+    lines = [line for _seq, joined in chunks for line in format_agent_output_lines(joined)]
     return lines[-limit:]
 
 

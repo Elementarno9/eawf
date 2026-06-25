@@ -33,7 +33,53 @@ from eawf.surfaces.tui.widgets.output_tail import (
     OUTPUT_TAIL_WAITING_ID,
     WAITING_NOTICE,
     OutputTail,
+    format_agent_output_lines,
 )
+
+
+def test_format_agent_output_lines_extracts_agent_message() -> None:
+    """A codex agent_message item renders as its text, split into lines."""
+    chunk = '{"type":"item.completed","item":{"type":"agent_message","text":"line one\\nline two"}}'
+    assert format_agent_output_lines(chunk) == ["line one", "line two"]
+
+
+def test_format_agent_output_lines_renders_command_with_output() -> None:
+    """A command_execution renders as `$ cmd` then its aggregated output."""
+    chunk = (
+        '{"type":"item.completed","item":{"type":"command_execution",'
+        '"command":"wc -l greeting.txt","aggregated_output":"1 greeting.txt\\n"}}'
+    )
+    assert format_agent_output_lines(chunk) == ["$ wc -l greeting.txt", "1 greeting.txt"]
+
+
+def test_format_agent_output_lines_drops_structural_frames() -> None:
+    """thread.started / turn.* / item.started carry no body and are dropped."""
+    chunk = "\n".join(
+        [
+            '{"type":"thread.started","thread_id":"t1"}',
+            '{"type":"turn.started"}',
+            '{"type":"item.started","item":{"type":"command_execution","command":"x"}}',
+            '{"type":"turn.completed","usage":{"input_tokens":1}}',
+        ]
+    )
+    assert format_agent_output_lines(chunk) == []
+
+
+def test_format_agent_output_lines_renders_error() -> None:
+    """An error event renders its message with an `error:` prefix."""
+    chunk = '{"type":"error","error":{"message":"the model is unavailable"}}'
+    assert format_agent_output_lines(chunk) == ["error: the model is unavailable"]
+
+
+def test_format_agent_output_lines_passes_through_non_json() -> None:
+    """A plain (non-JSON) line passes through verbatim, never swallowed."""
+    assert format_agent_output_lines("just a log line") == ["just a log line"]
+
+
+def test_format_agent_output_lines_passes_through_unmodelled_runtime_json() -> None:
+    """JSON with a non-codex `type` (another runtime) passes through raw, not dropped."""
+    chunk = '{"type":"assistant","message":{"content":"hi"}}'
+    assert format_agent_output_lines(chunk) == [chunk]
 
 
 class _TailApp(App[None]):

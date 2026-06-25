@@ -1032,7 +1032,9 @@ class EaApp(App[None]):
         joined = source.get("lines")
         if not isinstance(wave_id, str) or not isinstance(joined, str):
             return True
-        for line in joined.split("\n"):
+        from eawf.surfaces.tui.widgets.output_tail import format_agent_output_lines
+
+        for line in format_agent_output_lines(joined):
             self.append_output(wave_id, line)
         return True
 

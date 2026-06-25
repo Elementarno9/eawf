@@ -48,6 +48,106 @@ OUTPUT_TAIL_ROW_CLASS: str = "output-tail-row"
 #: waiting" rather than a truncated sentence.
 WAITING_NOTICE: str = "waiting for output…"
 
+#: The codex ``exec --json`` top-level event types the formatter recognises. A
+#: line whose ``type`` is outside this set is not a codex event (plain text, or
+#: another runtime's stream not yet modelled) and passes through verbatim rather
+#: than being dropped.
+_CODEX_EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        "thread.started",
+        "turn.started",
+        "turn.completed",
+        "item.started",
+        "item.completed",
+        "error",
+    }
+)
+
+
+def _format_codex_event(event: dict[str, object]) -> list[str] | None:
+    """Extract the readable tail lines from one codex ``exec --json`` event.
+
+    Returns the human-readable lines for a recognised codex event (the
+    assistant message text, or a run command with its output), an empty list
+    for a recognised-but-bodyless structural frame (``thread.started`` /
+    ``turn.*`` / ``item.started``), or ``None`` when the event is NOT a codex
+    event so the caller can pass the raw line through unmodified.
+
+    Args:
+        event: One decoded JSON event object off the agent's stdout stream.
+
+    Returns:
+        The readable lines, ``[]`` for a structural frame, or ``None`` to
+        signal "not a codex event -- render raw".
+    """
+    etype = event.get("type")
+    if not isinstance(etype, str) or etype not in _CODEX_EVENT_TYPES:
+        return None
+    if etype == "error":
+        err = event.get("error")
+        message = err.get("message") if isinstance(err, dict) else event.get("message")
+        return [f"error: {message}"] if isinstance(message, str) and message else []
+    if etype != "item.completed":
+        # A structural frame (turn / thread / item.started) carries no final
+        # readable body; item.completed is where the message + output land.
+        return []
+    item = event.get("item")
+    if not isinstance(item, dict):
+        return []
+    itype = item.get("type")
+    if itype == "agent_message":
+        text = item.get("text")
+        return text.split("\n") if isinstance(text, str) and text else []
+    if itype == "command_execution":
+        lines: list[str] = []
+        command = item.get("command")
+        if isinstance(command, str) and command:
+            lines.append(f"$ {command}")
+        output = item.get("aggregated_output")
+        if isinstance(output, str) and output:
+            lines.extend(output.rstrip("\n").split("\n"))
+        return lines
+    # reasoning / any other completed item carries no operator-facing body.
+    return []
+
+
+def format_agent_output_lines(joined: str) -> list[str]:
+    """Render a raw agent output chunk into readable tail lines.
+
+    A spawned runtime streams its stdout as a JSON event log (codex
+    ``exec --json`` emits one ``{"type": ...}`` envelope per line). Dumped
+    verbatim the tail reads as JSONL noise instead of the agent's words. Parse
+    each line and surface the human-readable content -- assistant messages and
+    the commands the agent ran with their output -- dropping the structural
+    frames. A line that is not a recognised event (plain text, malformed JSON,
+    or another runtime's not-yet-modelled format) passes through verbatim, so
+    nothing the agent emitted is ever swallowed.
+
+    Args:
+        joined: One persisted output chunk -- newline-joined raw stdout.
+
+    Returns:
+        The readable tail lines for *joined*, in stream order.
+    """
+    import orjson
+
+    out: list[str] = []
+    for raw in joined.split("\n"):
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        try:
+            event = orjson.loads(stripped)
+        except orjson.JSONDecodeError:
+            out.append(raw)
+            continue
+        formatted = _format_codex_event(event) if isinstance(event, dict) else None
+        if formatted is None:
+            out.append(raw)
+        else:
+            out.extend(formatted)
+    return out
+
 
 class OutputTail(VerticalScroll):
     """A ``tail -f`` view of a spawned agent's raw stdout lines.
