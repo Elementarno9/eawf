@@ -2316,10 +2316,24 @@ class _Loop:
             }:
                 # Gone or already terminal (the agent self-closed): nothing to flip.
                 return
+            # Convert the headless spawn's captured runtime (W50 stamped the
+            # baseline + latest) into the close-time actuals: without this the
+            # ActualSummary records elapsed_eu=0 / cost=0, so home effort reads
+            # 0.0, variance -100%, and the cost tab has no model.
+            delta = compute_runtime_delta(
+                wave.runtime_baseline,
+                wave.runtime_latest,
+                eu_minutes=DEFAULT_EU_MINUTES,
+                eu_basis=EuBasis.API_DURATION,
+            )
             close_wave(
                 state,
                 wave_id=wave_id,
                 outcome="autopilot: report close-ready; closed on behalf of sandboxed agent",
+                tokens_consumed=delta.actual_tokens if delta is not None else None,
+                actual_elapsed_eu=delta.elapsed_eu if delta is not None else None,
+                actual_agent_runtime_eu=delta.agent_runtime_eu if delta is not None else None,
+                actual_cost_usd=delta.actual_cost_usd if delta is not None else None,
             )
             now = datetime.now(UTC)
             closed_sessions = self._finalize_wave_sessions(state, wave_id=wave_id, now=now)

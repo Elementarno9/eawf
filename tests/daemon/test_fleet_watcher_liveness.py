@@ -446,3 +446,66 @@ def test_close_on_behalf_finalizes_executor_session(tmp_path: Path) -> None:
     # The Watch parity grid lays out one tile per ACTIVE executor session, so a
     # finalized session drops the closed wave off the live-lane surface.
     assert active_executor_sessions(state) == []
+
+
+def test_close_on_behalf_records_actuals_from_runtime_delta(tmp_path: Path) -> None:
+    """W56: close-on-behalf records elapsed_eu + cost + tokens from captured runtime.
+
+    W50 stamps the wave's runtime baseline + latest from the headless spawn, but
+    close_wave records actuals only from passed params. Without threading the
+    delta a headless wave closes with elapsed_eu=0 / cost=0 -- home effort reads
+    0.0, variance -100%, the cost tab has no model. Seed a captured runtime and
+    assert the close-on-behalf path records the real spend.
+    """
+    from datetime import timedelta
+
+    from eawf.kernel.state.models import (
+        FleetRun,
+        FleetRunState,
+        RuntimeBaseline,
+        RuntimeLatest,
+    )
+    from eawf.runtime.daemon.methods.fleet import _Loop
+
+    state_path = _write_state(tmp_path)
+    (state_path.parent / "store").mkdir(parents=True, exist_ok=True)
+    t0 = datetime(2026, 6, 11, tzinfo=UTC)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        wave = state.waves[_WAVE_ID]
+        wave.runtime_baseline = RuntimeBaseline(
+            api_duration_ms=0,
+            cost_usd=0.0,
+            input_tokens=0,
+            output_tokens=0,
+            cache_creation_input_tokens=0,
+            cache_read_input_tokens=0,
+            harness="codex",
+            model="gpt-5.3-codex-spark",
+            captured_at=t0,
+        )
+        wave.runtime_latest = RuntimeLatest(
+            api_duration_ms=120_000,
+            cost_usd=0.25,
+            input_tokens=100,
+            output_tokens=50,
+            harness="codex",
+            model="gpt-5.3-codex-spark",
+            captured_at=t0 + timedelta(seconds=120),
+        )
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    ctx = _ctx(state_path)
+    loop = _Loop(
+        ctx=ctx,
+        run=FleetRun(run_state=FleetRunState.DRAINING, armed_at=t0),
+        spawn=lambda *a, **k: None,
+        watch=lambda *a, **k: "closed",
+    )
+
+    loop._close_wave_on_disk(_WAVE_ID)
+
+    actual = load_state(state_path).actuals[_WAVE_ID]
+    assert actual.elapsed_eu > 0.0  # derived from the 120s api-duration delta
+    assert actual.actual_cost_usd == pytest.approx(0.25)
+    assert actual.actual_tokens == 150  # (100 + 50) token delta
+    assert actual.model == "gpt-5.3-codex-spark"
