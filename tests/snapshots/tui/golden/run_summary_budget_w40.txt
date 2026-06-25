@@ -15,7 +15,7 @@
   │                                  │
   │  5 closed / 1 failed / 2         │
   │  blocked                         │
-  │  EU 7.5  $ 4.25  elapsed 1h30m   │
+  │  EU 7.50  $ 4.25  elapsed 1h30m  │
   │  forks resolved 3                │
   │                                  │
   │  outcome tallies                 │

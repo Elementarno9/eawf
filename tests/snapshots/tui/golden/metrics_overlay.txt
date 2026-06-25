@@ -12,7 +12,7 @@
       │                                                                                                          │
       │                                                                                                          │
       │  ╭─ Variance / bucket ──╮ ╭─ Weekly burn ─────────╮ ╭─ Wave elapsed ────────╮ ╭─ Cost ────────────────╮  │
-      │  │ no data              │ │ consumed 0.0 EU       │ │ median 0.0m           │ │ no metered sessions   │  │
+      │  │ no data              │ │ consumed 0.00 EU      │ │ median 0.0m           │ │ no metered sessions   │  │
       │  ╰──────────────────────╯ ╰───────────────────────╯ ╰───────────────────────╯ ╰───────────────────────╯  │
       │                                                                                                          │
       │  ╭─ Cache health ───────╮ ╭─ Switchover freq ─────╮ ╭─ Role calibration ────╮                            │

@@ -12,7 +12,7 @@
 
 - No commit pinned.
 - No claim attempts recorded.
-- no rollup yet
+- No rollup yet.
 
 ## Risks
 
