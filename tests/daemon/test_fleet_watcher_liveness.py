@@ -409,3 +409,40 @@ def test_dead_lane_with_fail_report_still_forks(tmp_path: Path) -> None:
         sleep=lambda _s: None,
     )
     assert watcher(ctx, _lane()) == "forked"
+
+
+def test_close_on_behalf_finalizes_executor_session(tmp_path: Path) -> None:
+    """W52: closing a wave on behalf of a sandboxed agent also closes its session.
+
+    Close-on-behalf flips the WAVE to closed, but the sandboxed agent never ran
+    its own session teardown, so its executor ``AgentSession`` would stay ACTIVE
+    and the Watch parity grid would keep surfacing the closed wave as a live
+    lane. The close-on-disk path must move the session to CLOSED so the watch
+    surface drops it.
+    """
+    from eawf.kernel.state.enums import AgentSessionStatus
+    from eawf.kernel.state.models import FleetRun, FleetRunState
+    from eawf.runtime.daemon.methods.fleet import _Loop
+    from eawf.surfaces.tui.modes.agent_watch import active_executor_sessions
+
+    state_path = _write_state(tmp_path)  # wave IN_PROGRESS, ses-x ACTIVE executor
+    (state_path.parent / "store").mkdir(parents=True, exist_ok=True)
+    ctx = _ctx(state_path)
+    loop = _Loop(
+        ctx=ctx,
+        run=FleetRun(
+            run_state=FleetRunState.DRAINING,
+            armed_at=datetime(2026, 6, 11, tzinfo=UTC),
+        ),
+        spawn=lambda *a, **k: None,  # unused by _close_wave_on_disk
+        watch=lambda *a, **k: "closed",  # unused by _close_wave_on_disk
+    )
+
+    loop._close_wave_on_disk(_WAVE_ID)
+
+    state = load_state(state_path)
+    assert state.waves[_WAVE_ID].status is WaveStatus.CLOSED
+    assert state.agent_sessions["ses-x"].status is AgentSessionStatus.CLOSED
+    # The Watch parity grid lays out one tile per ACTIVE executor session, so a
+    # finalized session drops the closed wave off the live-lane surface.
+    assert active_executor_sessions(state) == []

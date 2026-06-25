@@ -2321,9 +2321,56 @@ class _Loop:
                 wave_id=wave_id,
                 outcome="autopilot: report close-ready; closed on behalf of sandboxed agent",
             )
-            state.updated_at = datetime.now(UTC)
+            now = datetime.now(UTC)
+            closed_sessions = self._finalize_wave_sessions(state, wave_id=wave_id, now=now)
+            state.updated_at = now
             atomic_write_json_locked(state_path, state.model_dump(mode="json"))
-        logger.info(f"_close_wave_on_disk wave={wave_id} status=closed")
+        logger.info(
+            f"_close_wave_on_disk wave={wave_id} status=closed sessions_closed={closed_sessions}"
+        )
+
+    def _finalize_wave_sessions(self, state: State, *, wave_id: str, now: datetime) -> int:
+        """Close the wave's still-ACTIVE executor session(s) on behalf of the agent.
+
+        Close-on-behalf flips the WAVE to closed, but a sandboxed headless agent
+        never ran its own session teardown, so its executor
+        :class:`~eawf.kernel.state.models.AgentSession` stays ``ACTIVE``. The
+        Watch parity grid lays out one tile per ACTIVE executor session, so an
+        un-finalized session keeps surfacing a closed wave as a live lane. Move
+        each matching session to ``CLOSED`` (emitting a ``session.close`` event)
+        so the watch surface drops it. A stateless context (no event path) closes
+        no session and is a no-op.
+
+        Args:
+            state: The loaded state, mutated in place under the caller's lock.
+            wave_id: The wave whose executor sessions to finalize.
+            now: The close timestamp stamped on each session.
+
+        Returns:
+            The number of executor sessions moved to ``CLOSED``.
+        """
+        if self.ctx.event_path is None:
+            return 0
+        from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
+        from eawf.runtime.session.store import close_session
+
+        stale = [
+            sid
+            for sid, sess in state.agent_sessions.items()
+            if sess.scope_id == wave_id
+            and sess.role is AgentSessionRole.EXECUTOR
+            and sess.status is AgentSessionStatus.ACTIVE
+        ]
+        for sid in stale:
+            close_session(
+                state=state,
+                events_path=Path(self.ctx.event_path),
+                session_id=sid,
+                status=AgentSessionStatus.CLOSED,
+                summary="autopilot: closed on behalf of sandboxed agent",
+                now=now,
+            )
+        return len(stale)
 
     def _drain_lanes(self) -> bool:
         """Watch in-flight lanes to their terminal outcome, freeing each slot.
