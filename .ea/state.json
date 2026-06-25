@@ -25314,7 +25314,9 @@
         "P30-I20-W51",
         "P30-I20-W52",
         "P30-I20-W53",
-        "P30-I20-W54"
+        "P30-I20-W54",
+        "P30-I20-W55",
+        "P30-I20-W56"
       ]
     }
   },
@@ -26403,7 +26405,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-06-25T17:23:05.607692Z",
+  "updated_at": "2026-06-25T18:18:21.960332Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -97869,7 +97871,9 @@
         "P30-I20-W51",
         "P30-I20-W52",
         "P30-I20-W53",
-        "P30-I20-W54"
+        "P30-I20-W54",
+        "P30-I20-W55",
+        "P30-I20-W56"
       ],
       "description": null,
       "dispatch_history": [],
@@ -99406,6 +99410,156 @@
         }
       ],
       "title": "Wire claude-code headless spawn parity (claude -p)",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W55": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/**",
+        "tests/tui/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W55",
+      "intent": {
+        "desired_outcome": "The watch tail renders agent_message text and command executions readably; unknown / non-JSON lines pass through unchanged.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Add a shared format_agent_output_lines formatter",
+          "Route the store backfill + live push through it",
+          "Test codex events + pass-through"
+        ],
+        "priority_rationale": null,
+        "problem": "The watch tail dumps the raw codex --json event stream verbatim, so the operator reads JSONL envelopes instead of the agent's words and commands.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T18:14:36.918534Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Codex --json chunk stream renders as readable agent text + commands not raw JSON",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Codex --json chunk stream renders as readable agent text + commands not raw JSON",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Non-JSON output passes through unchanged",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Non-JSON output passes through unchanged",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Render agent output stream readably in watch tail",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W56": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/fleet.py",
+        "tests/daemon/**"
+      ],
+      "gates": [],
+      "id": "P30-I20-W56",
+      "intent": {
+        "desired_outcome": "Close-on-behalf computes the runtime delta and passes elapsed_eu + cost + tokens to close_wave so the ActualSummary carries real spend.",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Compute delta in _close_wave_on_disk",
+          "Pass elapsed_eu+cost+tokens to close_wave",
+          "Test actuals carry the delta"
+        ],
+        "priority_rationale": null,
+        "problem": "Close-on-behalf calls close_wave without the runtime delta, so a headless wave closes with elapsed_eu=0 and cost=0: home effort 0.0, variance -100%, cost-tab model empty.",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-06-25T18:18:21.341547Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Close-on-behalf records actual_elapsed_eu + actual_cost_usd + tokens from the runtime delta",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Close-on-behalf records actual_elapsed_eu + actual_cost_usd + tokens from the runtime delta",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Home effort and cost tab and variance reflect captured spend",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Home effort and cost tab and variance reflect captured spend",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Record wave actuals from runtime delta on close-on-behalf",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
