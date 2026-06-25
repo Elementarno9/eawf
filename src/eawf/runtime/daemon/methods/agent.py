@@ -74,7 +74,13 @@ from eawf.kernel.state.enums import (
     StoreKind,
 )
 from eawf.kernel.state.io import state_version
-from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State
+from eawf.kernel.state.models import (
+    DispatchAnnotation,
+    RuntimeBaseline,
+    RuntimeLatest,
+    SessionAttempt,
+    State,
+)
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -698,6 +704,61 @@ def _resolve_config_runtime_preference(state_path: Path) -> list[str]:
     return [p for p in raw if isinstance(p, str)] if isinstance(raw, list) else []
 
 
+def _headless_runtime_snapshots(
+    spawn_result: SpawnResult, *, serving_runtime: str
+) -> tuple[RuntimeBaseline, RuntimeLatest]:
+    """Build a zero baseline + priced latest crediting one headless spawn.
+
+    A headless codex/claude spawn fires no ``runtime.capture`` RPC -- that
+    writer is driven by the Claude Code ``Stop`` hook, which a sandboxed
+    non-Claude runtime never runs. Left unstamped, the spawn's metered cost
+    lands only in the ``dispatch_cost`` event and never on the wave, so the
+    lane spend, the close actuals, and the fleet ``spent_usd`` counter all read
+    zero. The single spawn IS the whole runtime, so the baseline is the zero
+    point and the latest carries the spawn's priced cost, token tally, and
+    wall-clock duration; :func:`compute_runtime_delta` then yields the spawn's
+    real spend (USD) and a duration-derived EU.
+
+    Args:
+        spawn_result: The completed, already-priced live spawn outcome.
+        serving_runtime: The runtime that served the spawn -- recorded as the
+            ``harness`` attribution on both snapshots.
+
+    Returns:
+        A ``(baseline, latest)`` pair whose delta is the spawn's spend.
+    """
+    priced = price_spawn_result(spawn_result)
+    model = spawn_result.resolved_model or spawn_result.model
+    duration_ms = max(
+        0, int((spawn_result.ended_at - spawn_result.started_at).total_seconds() * 1000)
+    )
+    baseline = RuntimeBaseline(
+        api_duration_ms=0,
+        total_duration_ms=0,
+        cost_usd=0.0,
+        input_tokens=0,
+        output_tokens=0,
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
+        harness=serving_runtime,
+        model=model,
+        captured_at=spawn_result.started_at,
+    )
+    latest = RuntimeLatest(
+        api_duration_ms=duration_ms,
+        total_duration_ms=duration_ms,
+        cost_usd=float(priced.cost_usd),
+        input_tokens=spawn_result.input_tokens,
+        output_tokens=spawn_result.output_tokens,
+        cache_creation_input_tokens=spawn_result.cache_creation_input_tokens,
+        cache_read_input_tokens=spawn_result.cache_read_input_tokens,
+        harness=serving_runtime,
+        model=model,
+        captured_at=spawn_result.ended_at,
+    )
+    return baseline, latest
+
+
 def _persist_live_session_attempt(
     ctx: MethodContext,
     *,
@@ -755,6 +816,16 @@ def _persist_live_session_attempt(
         )
         wave.sessions[attempt] = session_attempt
         wave.dispatch_history.append(annotation)
+        # A headless runtime fires no runtime.capture RPC, so credit its priced
+        # spawn onto the wave here -- but only when nothing else captured the
+        # runtime (an interactive Claude Code session sets the baseline at claim
+        # and the Stop hook sets the latest; do not clobber a real capture).
+        if wave.runtime_baseline is None and wave.runtime_latest is None:
+            baseline, latest = _headless_runtime_snapshots(
+                spawn_result, serving_runtime=serving_runtime
+            )
+            wave.runtime_baseline = baseline
+            wave.runtime_latest = latest
         state.updated_at = now
         atomic_write_json_locked(state_path, state.model_dump(mode="json"))
     logger.info(

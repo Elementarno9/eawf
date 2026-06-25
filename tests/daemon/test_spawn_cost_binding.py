@@ -345,6 +345,70 @@ def test_spawn_dated_opus_4_8_emits_nonzero_priced_dispatch_cost(
     assert costs[0]["pricing_version"] == "2026.05.17"
 
 
+def test_headless_spawn_stamps_wave_runtime_latest_with_priced_cost(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A headless spawn credits its priced cost onto the wave runtime snapshot.
+
+    A sandboxed runtime fires no ``runtime.capture`` RPC (that writer is the
+    Claude Code Stop hook), so without the dispatch stamping the wave runtime
+    snapshots the metered cost lands only in the ``dispatch_cost`` event -- the
+    wave's ``actual_cost_usd`` and the fleet ``spent_usd`` counter both read
+    zero. Assert the dispatch stamps a zero baseline + a priced latest whose
+    delta is the real, non-zero spend (USD) and a duration-derived EU.
+    """
+    from eawf.kernel.state.models import State
+    from eawf.workflow.lifecycle.wave import compute_runtime_delta
+
+    resolved = "claude-opus-4-8-20260101"
+    state_path = _write_state(tmp_path)
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    _patch_adapter(monkeypatch, _StubAdapter(resolved_model=resolved))
+    ctx = _ctx(state_path, event_path=event_path)
+
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    wave = State.model_validate_json(state_path.read_text(encoding="utf-8")).waves[_WAVE_ID]
+    assert wave.runtime_baseline is not None
+    assert wave.runtime_latest is not None
+    assert wave.runtime_latest.cost_usd == pytest.approx(float(_opus_4_8_expected_cost()))
+    assert wave.runtime_latest.model == resolved
+    delta = compute_runtime_delta(wave.runtime_baseline, wave.runtime_latest, eu_minutes=30.0)
+    assert delta is not None
+    assert delta.actual_cost_usd == pytest.approx(float(_opus_4_8_expected_cost()))
+    assert delta.elapsed_eu > 0.0
+
+
+def test_headless_stamp_does_not_clobber_existing_runtime_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dispatch stamp defers to a real capture: an existing baseline stays.
+
+    An interactive Claude Code session captures the baseline at claim and the
+    Stop hook records the latest; the headless credit must NOT overwrite that.
+    Pre-seed a baseline and assert the dispatch leaves it untouched.
+    """
+    from eawf.kernel.state.models import RuntimeBaseline, State
+
+    resolved = "claude-opus-4-8-20260101"
+    state_path = _write_state(tmp_path)
+    seeded = State.model_validate_json(state_path.read_text(encoding="utf-8"))
+    seeded.waves[_WAVE_ID].runtime_baseline = RuntimeBaseline(
+        api_duration_ms=999, cost_usd=0.0, harness="claude-code", captured_at=_T0
+    )
+    state_path.write_text(seeded.model_dump_json(), encoding="utf-8")
+    event_path = tmp_path / ".ea" / "store" / "event.jsonl"
+    _patch_adapter(monkeypatch, _StubAdapter(resolved_model=resolved))
+    ctx = _ctx(state_path, event_path=event_path)
+
+    _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+
+    wave = State.model_validate_json(state_path.read_text(encoding="utf-8")).waves[_WAVE_ID]
+    assert wave.runtime_baseline is not None
+    assert wave.runtime_baseline.api_duration_ms == 999
+    assert wave.runtime_latest is None
+
+
 def test_spawn_dated_opus_4_8_priced_against_family_row(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
