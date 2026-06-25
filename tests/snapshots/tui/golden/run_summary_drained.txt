@@ -14,7 +14,7 @@
             │  ⎔ fleet run complete  frontier drained -- every ready wave closed or blocked                │
             │                                                                                              │
             │  5 closed / 1 failed / 2 blocked                                                             │
-            │  EU 7.5  $ 4.25  elapsed 1.50h  forks resolved 3                                             │
+            │  EU 7.5  $ 4.25  elapsed 1h30m  forks resolved 3                                             │
             │                                                                                              │
             │  outcome tallies                                                                             │
             │                                                                                              │
