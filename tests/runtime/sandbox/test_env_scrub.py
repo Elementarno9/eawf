@@ -38,6 +38,8 @@ _FULL_BASE_ENV: dict[str, str] = {
     "LANG": "en_US.UTF-8",
     "LC_CTYPE": "en_US.UTF-8",
     "TERM": "xterm-256color",
+    "USER": "agent",
+    "LOGNAME": "agent",
     # claude-lane auth (placeholder, non-secret values)
     "ANTHROPIC_API_KEY": "placeholder-anthropic",  # pragma: allowlist secret
     "CLAUDE_CONFIG_DIR": "/sandbox/agent/.claude",
@@ -71,6 +73,26 @@ def test_build_child_env_seeds_floor() -> None:
     assert env["LANG"] == "en_US.UTF-8"
     assert env["TERM"] == "xterm-256color"
     assert "PATH" in env
+
+
+def test_build_child_env_keeps_user_identity_for_keychain_auth() -> None:
+    """USER / LOGNAME ride the floor: the macOS keychain login lookup needs them.
+
+    Without these a sandboxed ``claude -p`` cannot resolve its stored OAuth
+    credential from the login keychain and exits "Not logged in", even though the
+    jail permits the keychain itself. They are the account name, not a secret.
+    """
+    env = build_child_env("claude-code", base_env=_FULL_BASE_ENV)
+    assert env["USER"] == "agent"
+    assert env["LOGNAME"] == "agent"
+
+
+def test_build_child_env_user_identity_absent_when_base_lacks_it() -> None:
+    """The floor copies USER / LOGNAME only when present -- never fabricated."""
+    base = {k: v for k, v in _FULL_BASE_ENV.items() if k not in {"USER", "LOGNAME"}}
+    env = build_child_env("codex", base_env=base)
+    assert "USER" not in env
+    assert "LOGNAME" not in env
 
 
 def test_build_child_env_pins_path_not_parent() -> None:

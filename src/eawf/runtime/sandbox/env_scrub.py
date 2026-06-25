@@ -64,8 +64,12 @@ _DEFAULT_LANG: str = "C.UTF-8"
 
 #: Exact-match floor keys copied verbatim from the base env when present.
 #: ``PATH`` is handled separately (pinned, never copied); ``LANG`` is
-#: handled separately (defaulted when absent).
-_FLOOR_EXACT_KEYS: frozenset[str] = frozenset({"HOME", "TERM"})
+#: handled separately (defaulted when absent). ``USER`` / ``LOGNAME`` are the
+#: POSIX identity vars the macOS keychain login-keychain lookup needs: without
+#: them a sandboxed ``claude -p`` cannot resolve its stored OAuth credential and
+#: exits "Not logged in" even though the jail permits the keychain. They are the
+#: account name, not a secret -- as benign as ``HOME``.
+_FLOOR_EXACT_KEYS: frozenset[str] = frozenset({"HOME", "TERM", "USER", "LOGNAME"})
 
 #: Prefix whose every variable is a floor locale carry-through (``LC_ALL``,
 #: ``LC_CTYPE``, ...). ``LANG`` itself is seeded separately with a default.
