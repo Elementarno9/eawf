@@ -34,6 +34,33 @@ keys on the short ``"claude"`` form per the C09 spec §5.11 and the
 """
 
 
+#: The one canonical runtime label a cost-by-runtime rollup keys on (W21). The
+#: event surface uses the short ``RuntimeTriple`` spelling (``"claude"``) while
+#: sessions / actuals use the adapter-manifest id (``"claude-code"``); both name
+#: the SAME runtime, so a rollup that groups a dispatch_cost row (``"claude"``)
+#: with a session row (``"claude-code"``) must first pass each through
+#: :func:`canonical_runtime_label` or it double-counts one runtime as two.
+_RUNTIME_LABEL_CANON: dict[str, str] = {"claude": "claude-code"}
+
+
+def canonical_runtime_label(label: str) -> str:
+    """Return the one canonical runtime label for *label* (W21).
+
+    Maps the event-surface ``RuntimeTriple`` spelling (``"claude"``) onto the
+    adapter-manifest id (``"claude-code"``) that sessions / actuals carry, so a
+    cost-by-runtime rollup treats the two spellings of one runtime as one key.
+    ``codex`` / ``opencode`` (and any already-canonical label) pass through
+    unchanged.
+
+    Args:
+        label: A runtime label from either surface (event triple or adapter id).
+
+    Returns:
+        The canonical runtime label.
+    """
+    return _RUNTIME_LABEL_CANON.get(label, label)
+
+
 class TracedEventPayload(BaseModel):
     """Base for C09 typed event payloads carrying the trace-ID chain.
 

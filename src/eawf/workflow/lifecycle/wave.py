@@ -159,6 +159,11 @@ def compute_runtime_delta(
     )
     if elapsed_eu is None:
         return None
+    # elapsed_eu is the AGENT-RUNTIME basis (the model's api/total duration or a
+    # token-derived estimate via _runtime_basis_eu), NOT the claim->close
+    # wall-clock. This is intentional (W21): a wave's effort is the agent's work,
+    # not the operator's elapsed time, so elapsed_eu deliberately equals
+    # agent_runtime_eu here -- do not "fix" it to a wall-clock delta.
     return RuntimeDelta(
         elapsed_eu=elapsed_eu,
         agent_runtime_eu=elapsed_eu,
