@@ -280,6 +280,16 @@ def test_pick_watch_target_picks_the_active_executor() -> None:
     assert target.status is AgentSessionStatus.ACTIVE
 
 
+def test_watch_target_label_surfaces_the_spawn_attempt() -> None:
+    """The header label carries the spawn attempt so a retry is legible."""
+    state = _state(sessions={"S-1": _session("S-1")})
+    target = pick_watch_target(state)
+    assert target is not None
+    # wave / runtime · attempt N -- the attempt makes attempt-1 vs retry legible.
+    assert target.label == f"{_WAVE} / claude · attempt {target.attempt}"
+    assert "attempt" in target.label
+
+
 def test_pick_watch_target_prefers_active_over_closed() -> None:
     """An ACTIVE executor wins over a more-recent CLOSED one."""
     state = _state(

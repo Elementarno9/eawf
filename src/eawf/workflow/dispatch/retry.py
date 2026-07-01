@@ -489,7 +489,7 @@ async def spawn_with_retry(
                 )
             )
             logger.info(
-                f"spawn_with_retry attempt={attempt} runtime={current_runtime!r} "
+                f"spawn_with_retry spawn_attempt={attempt} runtime={current_runtime!r} "
                 f"status=failed error_class={error_class} action={action.value}"
             )
             if action is FallbackAction.HALT:
@@ -507,13 +507,15 @@ async def spawn_with_retry(
                     # switch to, so the switch tier is terminal.
                     break
                 logger.info(
-                    f"spawn_with_retry attempt={attempt} status=switching "
+                    f"spawn_with_retry spawn_attempt={attempt} status=switching "
                     f"from={current_runtime!r} to={next_runtime!r}"
                 )
                 current_runtime = next_runtime
             # RETRY_SAME falls through with current_runtime unchanged.
             continue
-        logger.info(f"spawn_with_retry attempt={attempt} runtime={current_runtime!r} status=ok")
+        logger.info(
+            f"spawn_with_retry spawn_attempt={attempt} runtime={current_runtime!r} status=ok"
+        )
         return result
 
     notice = _failure_notice(failures=failures, attempts_used=len(failures))

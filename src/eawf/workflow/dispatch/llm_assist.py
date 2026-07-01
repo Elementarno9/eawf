@@ -276,13 +276,13 @@ async def assist_with_schema(
             failure = _failure_from_exc(attempt=attempt, exc=exc)
             failures.append(failure)
             logger.info(
-                f"assist_with_schema attempt={attempt} runtime={result.runtime!r} "
+                f"assist_with_schema bind_attempt={attempt} runtime={result.runtime!r} "
                 f"session={result.session_id!r} status=rejected reason={failure.reason}"
             )
             current_prompt = _reask_prompt(base_prompt=prompt, failure=failure)
             continue
         logger.info(
-            f"assist_with_schema attempt={attempt} runtime={result.runtime!r} "
+            f"assist_with_schema bind_attempt={attempt} runtime={result.runtime!r} "
             f"session={result.session_id!r} status=accepted"
         )
         return LLMAssistResult(

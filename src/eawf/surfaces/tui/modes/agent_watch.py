@@ -435,8 +435,14 @@ class WatchTarget:
 
     @property
     def label(self) -> str:
-        """Return a compact ``wave / runtime`` label for the header / notices."""
-        return f"{self.wave_id} / {self.runtime}"
+        """Return a compact ``wave / runtime · attempt N`` label for the header.
+
+        The spawn attempt is surfaced so an operator reads attempt-1-success vs
+        a retry off the watch header without opening eawfd.log (the ``attempt``
+        here is the SPAWN attempt -- the report-bind re-ask loop counts
+        separately as ``bind_attempt`` in the logs).
+        """
+        return f"{self.wave_id} / {self.runtime} · attempt {self.attempt}"
 
 
 def pick_watch_target(state: State | None) -> WatchTarget | None:
