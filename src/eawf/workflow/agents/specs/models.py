@@ -387,8 +387,28 @@ class SubagentSpec(_SpecModel):
             lines.append("Worktree path: inline")
         return "\n".join(lines)
 
-    def _render_workflow(self) -> str:
+    def _render_workflow(self, *, headless: bool = False) -> str:
         commit_prefix = _commit_prefix_for_wave(self.wave_id, self.iter_id)
+        # The headless (daemon live-spawn) path closes the wave on the agent's
+        # behalf: the daemon reads the emitted report body and drives the close
+        # (DL-5). A sandboxed agent cannot self-close anyway — its jailed
+        # `uv run eawf` resolves whatever eawf is installed, not the daemon's,
+        # and a self-close attempt only risks a spurious blocked verdict. So the
+        # headless render tells the agent to emit its report and stop, while the
+        # interactive render keeps the operator-run self-close step.
+        if headless:
+            close_step = (
+                "5. Do **not** run `eawf wave close` yourself. Emit your final "
+                "report as your last message; the daemon binds it and closes "
+                "this wave on your behalf once the report is recorded."
+            )
+        else:
+            close_step = (
+                "5. Close the wave through the CLI with the final token tally:\n"
+                "   - `uv run eawf wave close "
+                + self.wave_id
+                + ' --outcome "<summary>" --tokens-consumed <tokens>`'
+            )
         return (
             "## Workflow\n"
             "\n"
@@ -400,11 +420,7 @@ class SubagentSpec(_SpecModel):
             "   - `uv run pytest tests/ -q`\n"
             f"4. Commit with prefix `{commit_prefix} <type>: <summary>` "
             "(3-6 bullet body) and the recognized Claude or Codex "
-            "`Co-Authored-By` trailer.\n"
-            "5. Close the wave through the CLI with the final token tally:\n"
-            "   - `uv run eawf wave close "
-            + self.wave_id
-            + ' --outcome "<summary>" --tokens-consumed <tokens>`'
+            "`Co-Authored-By` trailer.\n" + close_step
         )
 
     def _render_out_of_scope(self) -> str:
@@ -526,7 +542,11 @@ class SubagentSpec(_SpecModel):
         ``agent_role`` is ``executor``, a trailing ``## Report output``
         section pins the ``ExecutorReportBody`` JSON schema so the spawned
         model emits a parseable report body (the live-spawn path
-        ``json.loads``-es the final message and schema-validates it).
+        ``json.loads``-es the final message and schema-validates it). The
+        ``## Workflow`` close step also differs: the headless render tells the
+        agent NOT to self-close (the daemon closes the wave on its behalf once
+        the report binds), while the interactive render keeps the operator-run
+        ``uv run eawf wave close`` step.
 
         Args:
             headless: ``True`` for the live-spawn (daemon) dispatch path,
@@ -559,7 +579,7 @@ class SubagentSpec(_SpecModel):
         role_contract = self._render_role_contract()
         if role_contract is not None:
             sections.append(role_contract)
-        sections.append(self._render_workflow())
+        sections.append(self._render_workflow(headless=headless))
         sections.append(self._render_out_of_scope())
         sections.append(self.estimate.render())
         stop_conditions = self._render_stop_conditions()

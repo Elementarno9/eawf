@@ -27,9 +27,9 @@ def _spec(*, wave_id: str, iter_id: str) -> SubagentSpec:
     )
 
 
-def _workflow_block(spec: SubagentSpec) -> str:
+def _workflow_block(spec: SubagentSpec, *, headless: bool = False) -> str:
     """Return the ``## Workflow`` block of *spec*'s rendered prompt."""
-    rendered = spec.render()
+    rendered = spec.render(headless=headless)
     return rendered.split("## Workflow", 1)[1].split("## Out of scope", 1)[0]
 
 
@@ -83,7 +83,34 @@ def test_commit_prefix_table(wave_id: str, iter_id: str, expected: str) -> None:
 
 
 def test_close_command_still_uses_full_wave_id() -> None:
-    """The ``wave close`` command at step 5 still uses the full ``Pxx-Iyy-Wzz``."""
+    """The interactive ``wave close`` command at step 5 uses the full ``Pxx-Iyy-Wzz``."""
     spec = _spec(wave_id="P28-I03-W57", iter_id="P28-I03")
     workflow = _workflow_block(spec)
     assert "uv run eawf wave close P28-I03-W57" in workflow
+
+
+def test_headless_render_omits_self_close_step() -> None:
+    """The daemon live-spawn (headless) render must NOT instruct a self-close.
+
+    A sandboxed autopilot agent cannot self-close — the daemon closes the wave
+    on its behalf once the report binds (DL-5). A literal ``uv run eawf wave
+    close`` instruction is what drove a compliant agent (codex) to a spurious
+    ``blocked`` verdict in the P30-I21 live e2e.
+    """
+    spec = _spec(wave_id="P28-I03-W57", iter_id="P28-I03")
+    workflow = _workflow_block(spec, headless=True)
+    assert "uv run eawf wave close" not in workflow
+    assert "Do **not** run `eawf wave close`" in workflow
+    assert "closes this wave on your behalf" in workflow
+
+
+def test_interactive_and_headless_share_steps_1_through_4() -> None:
+    """Only step 5 differs between the two renders; steps 1-4 stay identical."""
+    spec = _spec(wave_id="P28-I03-W57", iter_id="P28-I03")
+    interactive = _workflow_block(spec)
+    headless = _workflow_block(spec, headless=True)
+    # Steps 1-4 (everything up to the step-5 line) are byte-identical.
+    prefix_interactive = interactive.split("5.", 1)[0]
+    prefix_headless = headless.split("5.", 1)[0]
+    assert prefix_interactive == prefix_headless
+    assert "[P28-I03-W57]" in headless  # commit prefix unaffected by headless
