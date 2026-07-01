@@ -3,7 +3,8 @@
 The ``/metrics`` palette verb opens a 4x2 grid of metric tiles backed by
 the daemon's telemetry projection. The seven tiles, in grid order, are:
 
-1. **Variance** (top row) — estimate-vs-actual EU per effort bucket.
+1. **Precision** (top row) — estimate-vs-actual EU delta per effort bucket
+   (labelled "precision" on the surface; "variance" misread as statistical).
 2. **Weekly burn** (top row) — actual EU vs the project's weekly target.
 3. **Wave elapsed** (top row) — median + p90 wall-clock per closed wave.
 4. **Cost** (top row) — summed priced session cost over the window; the
@@ -141,7 +142,7 @@ class TileSpec:
 #: The Cost tile (``tile-cost``) carries the wave-detail ``$`` tab's
 #: aggregate so the dashboard and the per-wave cost view agree.
 TILE_SPECS: tuple[TileSpec, ...] = (
-    TileSpec("tile-variance", "Variance / bucket", drill="variance"),
+    TileSpec("tile-variance", "Precision / bucket", drill="variance"),
     TileSpec("tile-burn", "Weekly burn"),
     TileSpec("tile-elapsed", "Wave elapsed"),
     TileSpec("tile-cost", "Cost"),
@@ -236,9 +237,9 @@ def _render_variance_projection(projection: MetricsProjection) -> str:
         f"planned {_format_eu(metric.planned_eu)}",
     ]
     for row in projection.variance_by_bucket[:2]:
-        lines.append(
-            f"{row.bucket.value} {render_variance_markup(row.variance_pct)} n={row.sample_count}"
-        )
+        # Signed precision % per bucket, no sample-count suffix (the wave count
+        # is already surfaced elsewhere; n= here read as statistical noise).
+        lines.append(f"{row.bucket.value} {render_variance_markup(row.variance_pct)}")
     return "\n".join(lines)
 
 

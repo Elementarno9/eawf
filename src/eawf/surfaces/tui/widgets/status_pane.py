@@ -81,7 +81,7 @@ DASH: str = "—"
 #: per-metric value). The moment any of effort / variance / velocity has
 #: data the block expands to per-metric rows instead (see
 #: :func:`_effort_lines`).
-EFFORT_AWAITING: str = "effort \u00b7 variance \u00b7 velocity -- awaiting first wave"
+EFFORT_AWAITING: str = "effort \u00b7 precision \u00b7 velocity -- awaiting first wave"
 
 #: The four section header literals, recognised by ``_repaint`` so each
 #: gets the bold-accent span whether it lands in a single- or two-column
@@ -579,7 +579,7 @@ def _effort_lines(state: State | None, *, mode: RenderMode) -> list[str]:
     eta = _eta_line(consumed, estimate, series) if has_actuals else DASH
     return [
         f"effort:    {effort}",
-        f"variance:  {variance}",
+        f"precision: {variance}",
         f"velocity:  {velocity}",
         f"eta:       {eta}",
     ]

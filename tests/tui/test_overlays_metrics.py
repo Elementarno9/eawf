@@ -85,7 +85,7 @@ def test_tile_specs_ids_are_unique() -> None:
 
 def test_tile_specs_cover_the_v7_metric_surface() -> None:
     titles = " ".join(spec.title.lower() for spec in TILE_SPECS)
-    for needle in ("variance", "burn", "elapsed", "cost", "cache", "switchover", "role"):
+    for needle in ("precision", "burn", "elapsed", "cost", "cache", "switchover", "role"):
         assert needle in titles
 
 

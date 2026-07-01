@@ -16,7 +16,7 @@
 │                                                          ││ ◆ worktrees: 0 active                                    │
 │                                                          ││                                                          │
 │                                                          ││ EFFORT                                                   │
-│                                                          ││ effort · variance · velocity -- awaiting first wave      │
+│                                                          ││ effort · precision · velocity -- awaiting first wave     │
 │                                                          ││                                                          │
 │                                                          ││ GATES                                                    │
 ╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯

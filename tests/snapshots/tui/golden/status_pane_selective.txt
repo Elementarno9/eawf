@@ -9,7 +9,7 @@ progress:  ▒▒▒▒▒▒▒▒      0/1
 
 EFFORT
 effort:    — no data
-variance:  — no data
+precision: — no data
 velocity:  ▁▁▁▁▁▁█
 eta:       —
 
