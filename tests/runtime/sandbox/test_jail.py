@@ -320,6 +320,34 @@ def test_build_seatbelt_profile_denies_default_and_confines_writes(tmp_path: Pat
     assert f'(allow file-write* (subpath "{cwd_str}"))' in profile
 
 
+def test_build_seatbelt_profile_allows_dev_write(tmp_path: Path) -> None:
+    """The profile permits /dev writes so git + shell /dev/null redirects work.
+
+    Regression for the jailed-git gap: the (deny default) floor blocked a
+    /dev/null WRITE, which broke `git commit` in a jailed agent even after the
+    own-home carve-out let bash init.
+    """
+    _root, cwd = _repo_with_cwd(tmp_path)
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CLAUDE, home=tmp_path)
+    assert '(allow file-write* (subpath "/dev"))' in profile
+
+
+@_REQUIRE_SEATBELT
+def test_seatbelt_jail_allows_dev_null_write_on_macos(tmp_path: Path) -> None:
+    """A REAL jailed spawn can redirect to /dev/null (git + tools need it)."""
+    root, cwd = _repo_with_cwd(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    prefix = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="darwin", home=home)
+    result = subprocess.run(
+        [*prefix, "/bin/sh", "-c", "echo hi > /dev/null"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"/dev/null write should pass; stderr={result.stderr!r}"
+
+
 def test_build_seatbelt_profile_allows_process_exec(tmp_path: Path) -> None:
     """The child must still exec the inner runtime under the profile."""
     _root, cwd = _repo_with_cwd(tmp_path)

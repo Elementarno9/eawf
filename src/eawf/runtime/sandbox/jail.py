@@ -296,6 +296,14 @@ def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None)
     lines.append('(allow file-write* (subpath "/private/tmp"))')
     lines.append('(allow file-write* (subpath "/private/var/tmp"))')
 
+    # Device nodes: git + countless shell tools redirect to /dev/null (and read
+    # /dev/random etc.); the (deny default) floor blocks a /dev/null WRITE, which
+    # surfaced as a "/dev/null permission issue" that broke `git commit` in a
+    # jailed agent even after the own-home carve-out let bash init. /dev holds
+    # device nodes, not the filesystem, so a write-allow here is low blast-radius
+    # and does not widen access to any real path.
+    lines.append('(allow file-write* (subpath "/dev"))')
+
     return "\n".join(lines) + "\n"
 
 
