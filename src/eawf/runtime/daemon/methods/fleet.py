@@ -2093,6 +2093,20 @@ class _Loop:
             # re-adds a wave this run already dispatched (robust even when the
             # spawner does not flip the wave's on-disk status).
             self.claimed_ids.add(wave_id)
+            # PARK a redispatch of a wave that is already terminal: an armed /
+            # reattached frontier can carry a wave that has since CLOSED (or
+            # FAILED / ABANDONED) -- e.g. a stale run whose armed wave the
+            # operator closed by hand. Re-claiming it fails deep in the spawner
+            # every round, so without this guard the run churns the closed wave
+            # forever (reattach -> drained -> done -> paused every 1-2s). Count
+            # it as a parked failure + drop it (claimed_ids already blocks a
+            # re-add) so the run can converge instead of retrying indefinitely.
+            if self._wave_terminal_on_disk(wave_id):
+                self.run.counters.claimed += 1
+                self.run.counters.dispatched += 1
+                self.run.counters.failed += 1
+                logger.info(f"_fill_lanes wave={wave_id} status=redispatch-parked reason=terminal")
+                continue
             # Resolve the lane's RiskTier badge up front so a spawn that FORKS
             # (a HARD spawn failure / a retry-exhausted ladder) records the band
             # on the queued fork too.
@@ -2247,6 +2261,29 @@ class _Loop:
         self.run.forks = list(persisted.forks)
         self.run.counters.forked = persisted.counters.forked
         self.run.counters.blocked = persisted.counters.blocked
+
+    def _wave_terminal_on_disk(self, wave_id: str) -> bool:
+        """Return whether *wave_id* is already terminal (or gone) on disk.
+
+        A wave that has reached ``CLOSED`` / ``FAILED`` / ``ABANDONED`` -- or
+        vanished from state entirely (e.g. a plan edit removed it) -- cannot be
+        (re)dispatched, so :meth:`_fill_lanes` parks it rather than churning a
+        doomed claim every round. A stateless driver (no ``state_path`` -- the
+        synchronous in-process fakes) returns ``False`` so the injected spawner
+        stays in control of the lane's fate.
+
+        Args:
+            wave_id: ``W<NN>`` wave the fill is about to claim.
+
+        Returns:
+            ``True`` when the wave is terminal or absent on disk.
+        """
+        if self.ctx.state_path is None:
+            return False
+        wave = load_state(Path(self.ctx.state_path)).waves.get(wave_id)
+        if wave is None:
+            return True
+        return wave.status in {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}
 
     def _fail_wave_on_disk(self, wave_id: str, exc: BaseException) -> None:
         """Advance a dispatch-failed wave off CLAIMED to terminal FAILED on disk.

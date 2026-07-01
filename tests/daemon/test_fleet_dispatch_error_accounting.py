@@ -346,6 +346,58 @@ class _SpawnErrorSpawner:
         return LaneDispatch(session_id=f"ses-{wave_id}", pgid=None, attempt=1)
 
 
+def _write_state_with_closed(tmp_path: Path, closed_wave_id: str) -> Path:
+    """Write the 3-wave state but with *closed_wave_id* already CLOSED on disk."""
+    payload = _state_payload()
+    payload["waves"][closed_wave_id]["status"] = "closed"
+    payload["waves"][closed_wave_id]["outcome"] = "already done"
+    payload["waves"][closed_wave_id]["closed_at"] = "2026-06-11T01:00:00Z"
+    state = State.model_validate(payload)
+    state_dir = tmp_path / ".ea"
+    state_dir.mkdir()
+    path = state_dir / "state.json"
+    path.write_text(state.model_dump_json(), encoding="utf-8")
+    return path
+
+
+def test_terminal_wave_in_frontier_is_parked_not_respawned(tmp_path: Path) -> None:
+    """A frontier wave already CLOSED on disk is PARKED (counted), never re-spawned.
+
+    Regression for the stale fleet_run churn (P30-I21-W05): an armed / reattached
+    frontier can carry a wave the operator has since closed. Without the park
+    guard the loop re-claims it every round (a doomed claim), churning the run
+    forever. The guard counts it as a parked failure + drops it so the run
+    converges, and the spawner is never invoked for the terminal wave.
+    """
+    closed = _WAVE_IDS[0]
+    state_path = _write_state_with_closed(tmp_path, closed)
+    ctx = _ctx(state_path)
+    spawner = _CleanSpawner()
+
+    run = arm_drive(
+        ctx,
+        frontier=list(_WAVE_IDS),
+        concurrency=1,
+        spawn=spawner,
+        watch=lambda c, lane: "closed",
+        classify=_classify_rate_limit,
+        runtime_preference=["claude-code"],
+    )
+
+    # The run converged instead of churning the closed wave.
+    assert run.run_state is FleetRunState.DONE
+    assert run.terminal_reason is FleetTerminalReason.DRAINED
+    # The closed wave was parked: counted as failed, never handed to the spawner.
+    assert closed not in spawner.spawned
+    assert run.counters.failed == 1
+    # The two live waves spawned + closed cleanly.
+    assert set(spawner.spawned) == set(_WAVE_IDS[1:])
+    assert run.counters.closed == 2
+    # The summary invariant still holds across the parked failure.
+    counters = run.counters
+    assert counters.closed + counters.failed + counters.blocked == counters.dispatched
+
+
 def test_runtime_spawn_error_still_routes_to_fork_path(tmp_path: Path) -> None:
     """Boundary: a hard RuntimeSpawnError still forks (blocked), NOT counted as failed.
 
