@@ -229,7 +229,9 @@ def _configure_logging() -> None:
     if root.handlers:
         return
     handler = logging.StreamHandler(stream=sys.stderr)
-    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    # Lead with the timestamp (matching the daemon file log) so arm / drive
+    # latency is measurable from the inline console, not only from eawfd.log.
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     handler.addFilter(SensitiveScrubber())
     root.addHandler(handler)
     root.setLevel(logging.INFO)

@@ -2360,7 +2360,12 @@ def _swap_root_logging_to_textual() -> list[logging.Handler]:
     for handler in saved:
         if isinstance(handler, logging.StreamHandler) and handler.stream in terminal_streams:
             root.removeHandler(handler)
-    root.addHandler(TextualHandler())
+    textual_handler = TextualHandler()
+    # Timestamp the TUI-routed console log too (matching the CLI + daemon log
+    # shape) so a line captured in the dev console carries its own clock.
+    log_format = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    textual_handler.setFormatter(logging.Formatter(log_format))
+    root.addHandler(textual_handler)
     return saved
 
 

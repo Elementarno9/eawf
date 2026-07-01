@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -770,6 +771,32 @@ def test_swap_root_logging_removes_stderr_handler(_isolated_root_logging: object
 
     assert not _has_terminal_stream_handler()  # no handler writes to the screen
     assert any(isinstance(h, TextualHandler) for h in root.handlers)
+
+
+def test_swap_root_logging_textual_handler_is_timestamped(
+    _isolated_root_logging: object,
+) -> None:
+    """The installed TextualHandler carries a timestamped (asctime) formatter."""
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+
+    _swap_root_logging_to_textual()
+
+    textual = next(h for h in root.handlers if isinstance(h, TextualHandler))
+    record = logging.LogRecord(
+        name="eawf.demo",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="drive armed",
+        args=(),
+        exc_info=None,
+    )
+    rendered = textual.format(record)
+    # A YYYY-MM-DD timestamp precedes the level so console latency is measurable.
+    assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", rendered)
+    assert "INFO eawf.demo drive armed" in rendered
 
 
 def test_swap_root_logging_also_detaches_stdout(_isolated_root_logging: object) -> None:
