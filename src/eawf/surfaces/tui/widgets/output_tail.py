@@ -33,6 +33,7 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
+from eawf.runtime.runtimes.stream_json import unwrap_result_envelope
 from eawf.surfaces.tui.widgets.markup import escape_markup
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,105 @@ def _format_codex_event(event: dict[str, object]) -> list[str] | None:
     return []
 
 
+#: The claude-code stream-json top-level event types the formatter recognises.
+#: A line whose ``type`` is outside this set is not a claude event and passes
+#: through to the codex formatter (then verbatim) rather than being dropped.
+_CLAUDE_EVENT_TYPES: frozenset[str] = frozenset({"system", "assistant", "user", "result"})
+
+
+def _claude_message_text(event: dict[str, object]) -> list[str]:
+    """Extract the readable text of a claude ``assistant`` message event.
+
+    Args:
+        event: One decoded claude stream-json event object.
+
+    Returns:
+        The assistant message text split into lines, or ``[]`` when the event
+        carries no text block (a tool-use-only turn).
+    """
+    message = event.get("message")
+    if not isinstance(message, dict):
+        return []
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.split("\n") if content else []
+    if not isinstance(content, list):
+        return []
+    lines: list[str] = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            text = block.get("text")
+            if isinstance(text, str) and text:
+                lines.extend(text.split("\n"))
+    return lines
+
+
+def _format_claude_result(event: dict[str, object], raw_line: str) -> list[str]:
+    """Render a claude ``result`` event: the answer text + a compact summary.
+
+    The readable ``result`` text is recovered through the shared
+    :func:`~eawf.runtime.runtimes.stream_json.unwrap_result_envelope` (the same
+    helper the report binder uses), then a one-line summary of the terminal
+    metadata (subtype, output tokens, cost, turns) is appended so the operator
+    sees the run outcome without reading the raw envelope.
+
+    Args:
+        event: The decoded claude ``result`` event object.
+        raw_line: The raw stdout line the event was parsed from (passed to the
+            shared unwrap helper for the answer text).
+
+    Returns:
+        The readable result lines followed by a compact ``[result: ...]`` line.
+    """
+    lines: list[str] = []
+    result_text = unwrap_result_envelope(raw_line)
+    if result_text and result_text != raw_line:
+        lines.extend(result_text.split("\n"))
+    parts: list[str] = []
+    subtype = event.get("subtype")
+    if isinstance(subtype, str) and subtype:
+        parts.append(subtype)
+    usage = event.get("usage")
+    if isinstance(usage, dict) and isinstance(usage.get("output_tokens"), int):
+        parts.append(f"{usage['output_tokens']} out-tok")
+    cost = event.get("total_cost_usd")
+    if isinstance(cost, (int, float)):
+        parts.append(f"${float(cost):.4f}")
+    turns = event.get("num_turns")
+    if isinstance(turns, int):
+        parts.append(f"{turns} turns")
+    if parts:
+        lines.append(f"[result: {' · '.join(parts)}]")
+    return lines
+
+
+def _format_claude_event(event: dict[str, object], raw_line: str) -> list[str] | None:
+    """Extract readable tail lines from one claude stream-json event.
+
+    Returns the readable lines for a recognised claude event (the assistant
+    message text, or the final ``result`` answer + summary), ``[]`` for a
+    recognised-but-bodyless frame (``system`` init / ``user`` tool-result), or
+    ``None`` when the event is NOT a claude event so the caller can try the
+    codex formatter or pass the raw line through.
+
+    Args:
+        event: One decoded JSON event object off the agent's stdout stream.
+        raw_line: The raw stdout line the event was parsed from.
+
+    Returns:
+        The readable lines, ``[]`` for a bodyless frame, or ``None``.
+    """
+    etype = event.get("type")
+    if not isinstance(etype, str) or etype not in _CLAUDE_EVENT_TYPES:
+        return None
+    if etype == "result":
+        return _format_claude_result(event, raw_line)
+    if etype == "assistant":
+        return _claude_message_text(event)
+    # system init / user tool-result frames carry no operator-facing body.
+    return []
+
+
 def format_agent_output_lines(joined: str) -> list[str]:
     """Render a raw agent output chunk into readable tail lines.
 
@@ -141,7 +241,15 @@ def format_agent_output_lines(joined: str) -> list[str]:
         except orjson.JSONDecodeError:
             out.append(raw)
             continue
-        formatted = _format_codex_event(event) if isinstance(event, dict) else None
+        if not isinstance(event, dict):
+            out.append(raw)
+            continue
+        # Try each runtime's event shape; the first that recognises the event
+        # owns it. A line no runtime models passes through verbatim so nothing
+        # the agent emitted is ever swallowed.
+        formatted = _format_codex_event(event)
+        if formatted is None:
+            formatted = _format_claude_event(event, stripped)
         if formatted is None:
             out.append(raw)
         else:

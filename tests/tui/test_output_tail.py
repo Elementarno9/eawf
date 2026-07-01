@@ -77,9 +77,35 @@ def test_format_agent_output_lines_passes_through_non_json() -> None:
 
 
 def test_format_agent_output_lines_passes_through_unmodelled_runtime_json() -> None:
-    """JSON with a non-codex `type` (another runtime) passes through raw, not dropped."""
-    chunk = '{"type":"assistant","message":{"content":"hi"}}'
+    """JSON with a type no runtime models passes through raw, not dropped."""
+    chunk = '{"type":"gemini.turn","payload":"hi"}'
     assert format_agent_output_lines(chunk) == [chunk]
+
+
+def test_format_agent_output_lines_renders_claude_assistant_message() -> None:
+    """A claude stream-json assistant message renders its text, split into lines."""
+    chunk = '{"type":"assistant","message":{"content":[{"type":"text","text":"first\\nsecond"}]}}'
+    assert format_agent_output_lines(chunk) == ["first", "second"]
+
+
+def test_format_agent_output_lines_renders_claude_result_readably() -> None:
+    """A claude result envelope renders its answer text + a compact summary,
+    never the raw JSON envelope."""
+    chunk = (
+        '{"type":"result","subtype":"success","result":"the deed is done",'
+        '"total_cost_usd":0.6,"num_turns":3,"usage":{"output_tokens":1234}}'
+    )
+    out = format_agent_output_lines(chunk)
+    assert out[0] == "the deed is done"
+    assert out[-1] == "[result: success · 1234 out-tok · $0.6000 · 3 turns]"
+    # No raw envelope leaked through.
+    assert not any('"type":"result"' in line for line in out)
+
+
+def test_format_agent_output_lines_drops_claude_system_init() -> None:
+    """A claude system-init frame carries no operator body and is dropped."""
+    chunk = '{"type":"system","subtype":"init","session_id":"s1"}'
+    assert format_agent_output_lines(chunk) == []
 
 
 class _TailApp(App[None]):
