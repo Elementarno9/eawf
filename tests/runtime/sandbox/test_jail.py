@@ -345,6 +345,67 @@ def test_build_seatbelt_profile_claude_carves_out_keychain(tmp_path: Path) -> No
     assert "com.apple.securityd" in profile
 
 
+def test_build_seatbelt_profile_claude_carves_out_state_dir_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """macOS claude lane permits WRITE under ~/.claude (session-env scratch).
+
+    Regression for the EPERM bash gap: Claude Code's Bash tool stages its
+    session-env + shell-snapshot under ~/.claude at init; without this
+    write-allow the whole Bash lane dies with EPERM.
+    """
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    _root, cwd = _repo_with_cwd(tmp_path)
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CLAUDE, home=tmp_path)
+    claude_dir = str((tmp_path / ".claude").resolve())
+    assert f'(allow file-write* (subpath "{claude_dir}"))' in profile
+
+
+def test_build_seatbelt_profile_claude_state_dir_respects_env_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """$CLAUDE_CONFIG_DIR redirects the claude write carve-out."""
+    override = tmp_path / "custom-claude"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(override))
+    _root, cwd = _repo_with_cwd(tmp_path)
+    profile = build_seatbelt_profile(cwd=cwd, runtime=_CLAUDE, home=tmp_path)
+    assert f'(allow file-write* (subpath "{override}"))' in profile
+    # The default ~/.claude is NOT write-allowed when the override is set.
+    default_dir = str((tmp_path / ".claude").resolve())
+    assert f'(allow file-write* (subpath "{default_dir}"))' not in profile
+
+
+def test_jail_claude_state_dir_rw_bound_linux(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Linux claude lane rw-binds ~/.claude so its Bash/exec lane can write."""
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    root, cwd = _repo_with_cwd(tmp_path)
+    (tmp_path / ".claude").mkdir()
+    argv = build_jail_argv(_CLAUDE, cwd=cwd, root=root, platform="linux", home=tmp_path)
+    claude_dir = str((tmp_path / ".claude").resolve())
+    # A --bind (read-write, not --ro-bind) pair for the claude state dir.
+    bind_pairs = [
+        argv[i + 1] for i, tok in enumerate(argv) if tok == "--bind" and argv[i + 1] == claude_dir
+    ]
+    assert claude_dir in bind_pairs
+
+
+def test_jail_codex_state_dir_rw_bound_linux(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Linux codex lane rw-binds $CODEX_HOME (shell-scratch parity with macOS)."""
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    root, cwd = _repo_with_cwd(tmp_path)
+    (tmp_path / ".codex").mkdir()
+    argv = build_jail_argv(_CODEX, cwd=cwd, root=root, platform="linux", home=tmp_path)
+    codex_dir = str((tmp_path / ".codex").resolve())
+    bind_pairs = [
+        argv[i + 1] for i, tok in enumerate(argv) if tok == "--bind" and argv[i + 1] == codex_dir
+    ]
+    assert codex_dir in bind_pairs
+
+
 def test_build_seatbelt_profile_codex_carves_out_own_cred(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -173,6 +173,30 @@ def _own_cred_abspath(runtime: str, *, home: Path) -> Path:
     return home / _CLAUDE_OWN_CRED
 
 
+def _own_state_dir(runtime: str, *, home: Path) -> Path:
+    """Return the writable state dir the runtime stages session scratch under.
+
+    Every lane's CLI writes session scratch -- shell snapshots, session-env,
+    sockets, PATH aliases -- under its own state dir at init, so that dir
+    must be READ-WRITE inside the jail or the tool's Bash/exec lane dies with
+    EPERM. For claude this is ``$CLAUDE_CONFIG_DIR`` when set else
+    ``~/.claude`` (Claude Code's Bash tool stages its session-env +
+    shell-snapshot there); for codex it is ``$CODEX_HOME`` (else ``~/.codex``)
+    and for opencode its data dir -- both the parent of the own-cred file.
+
+    Args:
+        runtime: The runtime adapter id selecting the lane.
+        home: The child's HOME the state dir resolves against.
+
+    Returns:
+        The absolute writable state dir for *runtime*.
+    """
+    if runtime == _CLAUDE_RUNTIME:
+        override = os.environ.get("CLAUDE_CONFIG_DIR")
+        return Path(override) if override else home / ".claude"
+    return _own_cred_abspath(runtime, home=home).parent
+
+
 def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None) -> str:
     """Build the macOS seatbelt profile text for the jailed child.
 
@@ -251,12 +275,20 @@ def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None)
             keychain_path = (home_dir / rel).resolve(strict=False)
             lines.append(f'(allow file-read* (subpath "{keychain_path}"))')
     else:
-        # codex / opencode keep their own-cred file. Their app-server stages
-        # runtime state (socket, sessions, PATH aliases) under that home, so
-        # it needs WRITE there too -- not just the auth.json READ.
+        # codex / opencode keep their own-cred file readable (broad read
+        # already covers it, but the parent dir stays outside the cred denies).
         own_cred = _own_cred_abspath(runtime, home=home_dir)
         lines.append(f'(allow file-read* (subpath "{own_cred.parent}"))')
-        lines.append(f'(allow file-write* (subpath "{own_cred.parent}"))')
+
+    # Every lane stages session scratch (shell snapshots, session-env,
+    # sockets, PATH aliases) under its own state dir, so that dir must be
+    # WRITABLE. For claude this is ~/.claude (or $CLAUDE_CONFIG_DIR): Claude
+    # Code's Bash tool writes its session-env + shell-snapshot there at init,
+    # and without this the whole Bash lane dies with EPERM -- a filesystem
+    # WRITE gap, not exec/PATH. codex/opencode need write under $CODEX_HOME /
+    # the data dir for their app-server runtime state.
+    state_dir = _own_state_dir(runtime, home=home_dir)
+    lines.append(f'(allow file-write* (subpath "{state_dir}"))')
 
     # Confine writes to the worktree cwd + the pinned-TMPDIR temp areas; still
     # no broad $HOME or /private/var/folders write.
@@ -303,16 +335,17 @@ def _build_linux_argv(*, cwd: Path, runtime: str, home: Path) -> list[str]:
         cred_path = (home / rel).resolve(strict=False)
         argv += ["--tmpfs", os.fspath(cred_path)]
 
-    # Re-expose the agent's OWN credential read-only after the tmpfs masks,
-    # so the carve-out wins over the deny. claude's cred file lives under
-    # ~/.claude (NOT one of the masked dirs) so it survives unmasked;
-    # codex's $CODEX_HOME/auth.json likewise. No extra bind is needed for
-    # claude here, but a codex $CODEX_HOME that the operator placed under a
-    # masked dir would need re-binding -- the default locations are not
-    # masked, so the common path is already covered.
-    own_cred = _own_cred_abspath(runtime, home=home)
-    if own_cred.exists():
-        argv += ["--ro-bind", os.fspath(own_cred), os.fspath(own_cred)]
+    # Re-expose the agent's OWN state dir READ-WRITE after the tmpfs masks so
+    # the carve-out wins over the deny: the runtime stages session scratch
+    # (shell snapshots, session-env, sockets, PATH aliases) there and its
+    # Bash/exec lane dies with EPERM without write. claude -> ~/.claude (or
+    # $CLAUDE_CONFIG_DIR); codex -> $CODEX_HOME; opencode -> its data dir.
+    # None sit under a masked cred dir on the default layout. The rw bind also
+    # re-exposes the own-cred file inside that dir, so no separate ro-bind is
+    # needed.
+    state_dir = _own_state_dir(runtime, home=home)
+    if state_dir.exists():
+        argv += ["--bind", os.fspath(state_dir), os.fspath(state_dir)]
 
     return argv
 
