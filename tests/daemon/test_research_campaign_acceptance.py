@@ -333,11 +333,16 @@ def test_campaign_acceptance_two_rounds_steer_claims_checkpoint_and_evibound(
         # The terminal round coincides with a recorded checkpoint (ON_HALT).
         assert rounds[1].checkpoint is True
 
-        # -- The seeded OpenQuestion is reconstructible off the canonical state.
+        # -- The seeded OpenQuestion is reconstructible off the canonical state
+        # and W17 resolved it: the run's answering claim marked it ANSWERED and
+        # linked both sides (no phantom OPEN question after a productive run).
         state = load_state(state_path)
         assert state.open_questions is not None
         assert "OQ-tenor" in state.open_questions
-        assert state.open_questions["OQ-tenor"].status is OpenQuestionStatus.OPEN
+        resolved_q = state.open_questions["OQ-tenor"]
+        assert resolved_q.status is OpenQuestionStatus.ANSWERED
+        assert resolved_q.answered_by_claim_id is not None
+        assert state.claims[resolved_q.answered_by_claim_id].answers_question_id == "OQ-tenor"
 
         # -- The live run FOLDED its reconciled claims into the canonical
         # state.claims (not a throwaway shadow): every round-record claim id

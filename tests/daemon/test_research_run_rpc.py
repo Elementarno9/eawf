@@ -38,7 +38,7 @@ from eawf.kernel.spec.research_campaign import (
     StagedDispatch,
     stage_campaign,
 )
-from eawf.kernel.state.enums import AgentSessionRole, StoreKind
+from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, ResearcherReportBody
@@ -446,8 +446,22 @@ def test_research_run_rpc_uses_live_producer_without_stub(
     assert cost_rows
     assert all(row.scope_id == "campaign-live" for row in cost_rows)
     assert read_campaign_cost(state_path, "campaign-live") > 0
-    active_wave = State.model_validate(orjson.loads(state_path.read_bytes())).waves[_LIVE_WAVE_ID]
+    final_state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    active_wave = final_state.waves[_LIVE_WAVE_ID]
     assert active_wave.tokens_consumed == 0  # research never inflated the wave
+    # W17: every researcher session reached CLOSED and none leaked as a phantom
+    # ACTIVE session in current.active_session_ids.
+    researcher_sessions = [
+        s for s in final_state.agent_sessions.values() if s.role is AgentSessionRole.RESEARCHER
+    ]
+    assert researcher_sessions
+    assert all(s.status is AgentSessionStatus.CLOSED for s in researcher_sessions)
+    assert all(s.ended_at is not None for s in researcher_sessions)
+    assert not any(
+        final_state.agent_sessions[sid].role is AgentSessionRole.RESEARCHER
+        for sid in final_state.current.active_session_ids
+        if sid in final_state.agent_sessions
+    )
 
 
 def test_research_run_runs_with_no_active_wave_scoped_to_campaign(

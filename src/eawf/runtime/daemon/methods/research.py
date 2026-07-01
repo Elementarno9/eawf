@@ -61,6 +61,7 @@ from eawf.kernel.spec.research_campaign import (
 from eawf.kernel.spec.round_loop import DEFAULT_ROUND_BUDGET, CheckpointPolicy, CheckpointTier
 from eawf.kernel.state.enums import (
     AgentSessionRole,
+    AgentSessionStatus,
     CampaignStatus,
     ClaimStatus,
     EffortBucket,
@@ -91,7 +92,13 @@ from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.metering import price_spawn_result
 from eawf.runtime.runtimes.selector import select_adapter
-from eawf.runtime.session.store import SessionConflict, append_event, start_session
+from eawf.runtime.session.store import (
+    SessionConflict,
+    SessionNotFound,
+    append_event,
+    close_session,
+    start_session,
+)
 from eawf.workflow.dispatch.llm_assist import assist_with_schema
 from eawf.workflow.dispatch.routing import model_for_runtime
 from eawf.workflow.evidence._io import load_state
@@ -726,10 +733,38 @@ def reconcile_round_claims(
                 created_at=now,
             )
             written.append(claim_id)
+    # W17: link answering claims to the scope's OPEN questions and resolve them.
+    # A round's findings answer the campaign's seeded open question(s); pair each
+    # OPEN, non-blocking question (blocked ones are operator checkpoints, W18)
+    # with a written claim so an answered question no longer lingers open and its
+    # answering claim is linked both ways.
+    questions = dict(state.open_questions or {})
+    answered = 0
+    if written:
+        open_qs = [
+            q
+            for q in questions.values()
+            if q.scope_id == resolved_scope
+            and q.status is OpenQuestionStatus.OPEN
+            and not q.blocking
+        ]
+        for claim_id, question in zip(written, open_qs, strict=False):
+            claims[claim_id] = claims[claim_id].model_copy(
+                update={"answers_question_id": question.id}
+            )
+            questions[question.id] = question.model_copy(
+                update={
+                    "status": OpenQuestionStatus.ANSWERED,
+                    "answered_by_claim_id": claim_id,
+                    "resolved_at": now,
+                }
+            )
+            answered += 1
     state.claims = claims
+    state.open_questions = questions
     logger.info(
         f"reconcile_round_claims round={findings.round_number} scope={resolved_scope!r} "
-        f"claims={len(written)}"
+        f"claims={len(written)} answered_questions={answered}"
     )
     return written
 
@@ -1190,6 +1225,14 @@ async def _spawn_researcher_agent_end(
         # campaign scope, which is where a campaign-cost query reads it.
         accrue_wave_budget=False,
     )
+    # Close the researcher session (W17): mirror the executor close so a
+    # completed researcher never leaks as a phantom ACTIVE session stuck in
+    # current.active_session_ids.
+    _close_researcher_session(
+        ctx,
+        session_id=session_id,
+        summary=f"researcher {dispatch.domain} closed ({len(body.findings)} findings)",
+    )
     logger.info(
         f"_spawn_researcher_agent_end scope={dispatch_scope} campaign={campaign_id} "
         f"domain={dispatch.domain!r} "
@@ -1261,6 +1304,41 @@ def _researcher_prompt(dispatch: StagedDispatch) -> str:
         '"evidence_refs":[{"kind":"store_record","ref":"repo-relative ref"}]}\n'
         "Use repo-relative or external evidence refs only."
     )
+
+
+def _close_researcher_session(ctx: MethodContext, *, session_id: str, summary: str) -> None:
+    """Close a researcher session through the canonical state writer (W17).
+
+    Mirrors the executor close: moves the session to CLOSED, stamps ``ended_at``,
+    and drops it from ``current.active_session_ids`` so a completed researcher
+    never leaks as a phantom ACTIVE session. A store-less context is a no-op; a
+    vanished session is tolerated (a concurrent close) rather than faulting the
+    run.
+
+    Args:
+        ctx: Daemon method context -- supplies ``state_path`` + ``event_path``.
+        session_id: The researcher session to close.
+        summary: Human close summary recorded on the session + close event.
+    """
+    if ctx.state_path is None or ctx.event_path is None:
+        return
+    state_path = Path(ctx.state_path)
+    events_path = Path(ctx.event_path)
+    with portalock.acquire(state_path, timeout=5.0):
+        state = load_state(state_path)
+        try:
+            close_session(
+                state=state,
+                events_path=events_path,
+                session_id=session_id,
+                status=AgentSessionStatus.CLOSED,
+                summary=summary,
+            )
+        except SessionNotFound:
+            return
+        state.updated_at = datetime.now(UTC)
+        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+    logger.info(f"_close_researcher_session session={session_id!r} status=closed")
 
 
 def _register_researcher_session(
