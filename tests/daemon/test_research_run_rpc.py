@@ -52,6 +52,7 @@ from eawf.runtime.daemon.methods.research import (
     RunCampaignParams,
     create_campaign,
     followup,
+    read_campaign_cost,
     read_campaign_rounds,
     run,
     run_campaign,
@@ -397,6 +398,16 @@ def test_research_run_rpc_uses_live_producer_without_stub(
     assert "research.researcher.spawn" in event_types
     assert "research.researcher.finish" in event_types
     assert "agent.output.chunk" in event_types
+    # W15: even with an active execution wave in scope, researcher spend books
+    # to the CAMPAIGN cost centre (queryable), not the wave -- every
+    # dispatch_cost row scopes to the campaign, and the active wave's counters
+    # stay executor-only (untouched by research).
+    cost_rows = [row for row in events if row.payload.get("event_type") == "dispatch_cost"]
+    assert cost_rows
+    assert all(row.scope_id == "campaign-live" for row in cost_rows)
+    assert read_campaign_cost(state_path, "campaign-live") > 0
+    active_wave = State.model_validate(orjson.loads(state_path.read_bytes())).waves[_LIVE_WAVE_ID]
+    assert active_wave.tokens_consumed == 0  # research never inflated the wave
 
 
 def test_research_run_runs_with_no_active_wave_scoped_to_campaign(

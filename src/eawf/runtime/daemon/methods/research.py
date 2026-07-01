@@ -27,6 +27,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -798,6 +799,37 @@ def read_campaign_rounds(state_path: Path, campaign_id: str) -> list[ResearchRou
     return rounds
 
 
+def read_campaign_cost(state_path: Path, campaign_id: str) -> Decimal:
+    """Return the total researcher spend booked against *campaign_id* (W15).
+
+    Sums the ``cost_usd`` of every ``dispatch_cost`` event scoped to the
+    campaign in the event store -- the campaign's own cost centre, separate
+    from any execution wave's counters. Returns ``Decimal("0")`` when the store
+    is absent or carries no cost row for the campaign.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        campaign_id: The campaign whose researcher spend to total.
+
+    Returns:
+        The summed campaign researcher cost in USD.
+    """
+    path = store_path(state_path, StoreKind.EVENT)
+    if not path.exists():
+        return Decimal("0")
+    total = Decimal("0")
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        envelope = Envelope.model_validate_json(raw_line)
+        if envelope.scope_id != campaign_id:
+            continue
+        payload = envelope.payload
+        if isinstance(payload, dict) and payload.get("event_type") == "dispatch_cost":
+            total += Decimal(str(payload.get("cost_usd", "0")))
+    return total
+
+
 class RunCampaignParams(BaseModel):
     """Params for :func:`run`.
 
@@ -1043,8 +1075,11 @@ async def _spawn_researcher_agent_end(
     # be active the dispatch scope rides it (back-compat); otherwise it rides the
     # campaign id, so research.run no longer REQUIRES an active wave and never
     # pollutes an unrelated wave's ledger.
-    active_wave = _active_research_wave_id_or_none(state_path)
-    dispatch_scope = active_wave or campaign_id
+    # A campaign is its own cost centre (W15): the researcher dispatch scope IS
+    # the campaign, even when an execution wave happens to be active, so the
+    # spend accrues to the campaign and never inflates an unrelated (often
+    # already-closed) wave's counters -- those stay executor-only.
+    dispatch_scope = campaign_id
     scope_id = f"{campaign_id}-research-{uuid.uuid4().hex[:8]}"
     session_id = _register_researcher_session(
         ctx,
@@ -1150,9 +1185,10 @@ async def _spawn_researcher_agent_end(
         pgid=pid,
         enforce=_resolve_budget_enforce(state_path),
         output_text=spawn_result.text,
-        # A campaign with no active execution wave has no wave budget to fold
-        # into (W14); the dispatch_cost event still books against the scope.
-        accrue_wave_budget=active_wave is not None,
+        # Researcher spend is a campaign cost, not a wave cost (W15): never fold
+        # it into a wave budget. The dispatch_cost event books it to the
+        # campaign scope, which is where a campaign-cost query reads it.
+        accrue_wave_budget=False,
     )
     logger.info(
         f"_spawn_researcher_agent_end scope={dispatch_scope} campaign={campaign_id} "
