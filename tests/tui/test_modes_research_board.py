@@ -951,6 +951,46 @@ def test_research_board_pane_renders_honest_empty(tmp_path: Path) -> None:
     asyncio.run(body())
 
 
+def test_first_campaign_flip_recomposes_without_crash(tmp_path: Path) -> None:
+    """Staging the first campaign flips empty->populated without an IndexError.
+
+    Regression for the W59 crash: ``_rebuild`` detected the empty->populated
+    flip and hand-mounted the ``compose_body`` context-manager generator via
+    ``mount_all``, iterating its ``with Vertical(...)`` blocks outside an active
+    composition context -- which indexes an empty ``_compose_stacks`` and raises
+    ``IndexError`` (surfacing as "Failed to create a campaign"). The fix
+    recomposes the screen through the compose machinery. We mount the empty
+    board, persist the first campaign, drive the rebuild that flips the empty
+    verdict, and assert the board reaches the populated three-pane scaffold with
+    no crash.
+    """
+    from eawf.runtime.daemon.methods.research import persist_campaign
+
+    state_path = _write_state(tmp_path, _project_state())
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=state_path)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await settle_screen(pilot)
+            await pilot.press("3")  # -> research_board
+            await settle_screen(pilot)
+            pane = app.screen
+            assert isinstance(pane, ResearchBoardModeScreen)
+            assert pane.empty is True
+            # Stage the first campaign, then drive the rebuild that flips the
+            # empty verdict -- the exact crash path.
+            persist_campaign(state_path, _campaign_payload("campaign-flip"))
+            pane._rebuild()
+            await settle_screen(pilot)
+            # No IndexError; the board flipped to the populated three-pane
+            # scaffold and dropped the honest-empty notice.
+            assert pane.empty is False
+            assert pane.query(f"#{TREE_PANE_ID}")
+            assert not pane.query(f"#{EMPTY_ID}")
+
+    asyncio.run(body())
+
+
 def test_empty_tick_preserves_seal_hero_no_glyph_re_added(tmp_path: Path) -> None:
     """CR-02 observed-behavior: the steady empty-tick keeps with_sigil=False.
 

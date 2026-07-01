@@ -2819,19 +2819,33 @@ class ResearchBoardModeScreen(ScopeScreen):
         )
 
     def _recompose_body(self) -> None:
-        """Tear down + recompose the body (used when the empty verdict flips).
+        """Schedule a full recompose when the empty verdict flips.
 
         The three-pane scaffold and the honest-empty notice are different
-        widget trees, so a flip between them rebuilds the body subtree rather
-        than updating a Static in place.
+        widget trees, so an empty<->populated flip rebuilds the screen through
+        the compose machinery rather than mounting the ``compose_body``
+        generator by hand: that generator opens ``with Vertical(...)`` context
+        managers, which require an active composition stack, so iterating it
+        outside a real ``compose()`` call indexes an empty ``_compose_stacks``
+        and raises ``IndexError``. Deferred through ``call_after_refresh`` so
+        the async :meth:`~textual.widget.Widget.recompose` is awaited on the
+        event loop rather than left dangling.
         """
-        from textual.widgets import Footer as _Footer
+        self.call_after_refresh(self._recompose_screen)
 
-        bodies = self.query("#research-body")
-        if not bodies:
-            return
-        bodies.first().remove()
-        self.mount_all(self.compose_body(), before=self.query_one(_Footer))
+    async def _recompose_screen(self) -> None:
+        """Recompose the flipped body on the event loop, then restore footer hints.
+
+        ``recompose`` re-runs the screen's ``compose`` (header -> body ->
+        footer) through the proper composition context, so the flipped
+        ``compose_body`` tree mounts cleanly. It re-creates the Footer child,
+        which drops the hints :meth:`ScopeScreen.on_mount` set on the prior
+        instance, so the canonical strip is re-applied here.
+        """
+        from eawf.surfaces.tui.widgets.footer import Footer as _Footer
+
+        await self.recompose()
+        self.query_one(_Footer).set_hints(self.FOOTER_HINTS)
 
     def _update_one(self, widget_id: str, body: str) -> None:
         """Update the Static identified by *widget_id*, if mounted."""
