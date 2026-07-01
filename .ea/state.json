@@ -13433,7 +13433,7 @@
       "title": "Downscope telemetry and bucket recalibration backlog"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -27417,7 +27417,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T17:34:15.817170Z",
+  "updated_at": "2026-07-01T17:47:53.668605Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
