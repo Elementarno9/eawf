@@ -519,8 +519,12 @@ def test_render_progress_surfaces_run_round_and_budget_bands() -> None:
     # ready domain has frontier work), not the retired not-yet-wired literal.
     assert "not yet wired" not in body
     assert "runnable" in body
-    # No run has persisted a round yet, so the ROUND band reads 0 run.
-    assert "0 run" in body
+    # A round is in flight (an open question, a claim accruing) though none has
+    # persisted yet, so the ROUND band shows the running round + live claim
+    # count -- consistent with the tree's "round running" node (W11), not a
+    # stalled-looking "0 run".
+    assert "1 running" in body
+    assert "1 claim(s)" in body
     assert "1 checkpoint(s)" in body  # PAUSED band tracks the checkpoint count
 
 
@@ -2422,7 +2426,9 @@ def test_render_progress_budget_band_surfaces_pruned_and_running() -> None:
     )
     body = render_progress(campaigns, claims, questions, checkpoints=0)
     assert "ROUND" in body
-    assert "0 run" in body  # no run has persisted a round yet
+    # An open question keeps the round in flight, so the band shows the running
+    # round + live claim count (W11) rather than a stalled "0 run".
+    assert "1 running" in body
     assert "BUDGET" in body
     assert "2 staged topic(s)" in body  # the spent-topic budget figure
     assert "1 answered" in body

@@ -1737,9 +1737,20 @@ def render_progress(
     campaign_progress = project_campaign_progress(campaigns, claims, questions, rounds)
     rounds_run = max((r.round_number for r in rounds), default=0)
     run_phrase = "idle" if not campaigns else campaign_progress.kind.value
+    # While a round is in flight the completed-round count is still 0 (the round
+    # record persists on completion), which read as a stalled "ROUND 0 run" even
+    # though claims were accruing. Surface the running round + live claim count
+    # instead, consistent with the tree's "round running" node.
+    if progress.state is RoundState.RUNNING:
+        running_round = max(rounds_run, 1)
+        round_band = (
+            f"[$accent]ROUND[/] [$muted]{running_round} running · {len(claims)} claim(s)[/]"
+        )
+    else:
+        round_band = f"[$accent]ROUND[/] [$muted]{rounds_run} run[/]"
     lines = [
         f"[$accent]RUN[/] [$muted]{run_phrase}[/]",
-        f"[$accent]ROUND[/] [$muted]{rounds_run} run[/]",
+        round_band,
         f"[$accent]ACTIVE[/] [$muted]{len(claims)} claim(s)[/]",
         f"[$accent]WAITING[/] [$muted]{progress.open_count} open question(s)[/]",
         f"[$accent]PAUSED[/] [$muted]{checkpoints} checkpoint(s)[/]",

@@ -2,7 +2,7 @@
 
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN blocked_await_user              │
-  │ landscape                          ││ ● Implied vol surface is downward   ││ ROUND 0 run                         │
+  │ landscape                          ││ ● Implied vol surface is downward   ││ ROUND 1 running · 4 claim(s)        │
   │     ◆ round running                ││ sloping in strike                   ││ ACTIVE 4 claim(s)                   │
   │       ◌ market-structure           ││ ✕ Term-structure arbitrage is       ││ WAITING 2 open question(s)          │
   │       ◌ pricing-models             ││ exploitable intraday                ││ PAUSED 0 checkpoint(s)              │
