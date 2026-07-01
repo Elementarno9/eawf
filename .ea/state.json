@@ -9407,6 +9407,48 @@
       "scope_id": "P30-I21-W23",
       "status": "done",
       "updated_at": "2026-07-01T21:34:55.555300Z"
+    },
+    "P30-I22-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 12000,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I22-W01",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I22-W01",
+      "model": null,
+      "scope_id": "P30-I22-W01",
+      "status": "done",
+      "updated_at": "2026-07-01T23:41:17.303457Z"
+    },
+    "P30-I22-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 60000,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I22-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I22-W02",
+      "model": null,
+      "scope_id": "P30-I22-W02",
+      "status": "done",
+      "updated_at": "2026-07-01T23:41:47.332640Z"
+    },
+    "P30-I22-W03": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 15000,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I22-W03",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I22-W03",
+      "model": null,
+      "scope_id": "P30-I22-W03",
+      "status": "done",
+      "updated_at": "2026-07-01T23:46:23.020440Z"
     }
   },
   "agent_sessions": {
@@ -12774,7 +12816,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I21",
+    "iter_id": "P30-I22",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -24095,6 +24137,45 @@
       "reference_class": "bucket:XS",
       "scope_id": "P30-I21-W23",
       "updated_at": "2026-07-01T21:34:54.000674Z"
+    },
+    "P30-I22-W01": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I22-W01-bucket-20260701T234041Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I22-W01",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I22-W01",
+      "updated_at": "2026-07-01T23:40:41.973660Z"
+    },
+    "P30-I22-W02": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I22-W02-bucket-20260701T234132Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I22-W02",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I22-W02",
+      "updated_at": "2026-07-01T23:41:32.242508Z"
+    },
+    "P30-I22-W03": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I22-W03-bucket-20260701T234604Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I22-W03",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I22-W03",
+      "updated_at": "2026-07-01T23:46:04.136041Z"
     }
   },
   "fleet_run": null,
@@ -26357,6 +26438,25 @@
         "P30-I21-W22",
         "P30-I21-W23"
       ]
+    },
+    "P30-I22": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": "Reactive repair iter: the P30-I21 live e2e surfaced a self-close-in-sandbox prompt bug, a research-round crash on non-ideal researcher output, and a blocked-verdict error mapping. Fixes land here.",
+      "estimate_id": null,
+      "id": "P30-I22",
+      "intent": null,
+      "opened_at": "2026-07-01T23:38:22.494312Z",
+      "phase_id": "P30",
+      "status": "active",
+      "title": "E2E-surfaced repairs (findings 3/4/5)",
+      "trigger": "none",
+      "wave_ids": [
+        "P30-I22-W01",
+        "P30-I22-W02",
+        "P30-I22-W03"
+      ]
     }
   },
   "mcp_grants": null,
@@ -27394,7 +27494,8 @@
         "P30-I18",
         "P30-I19",
         "P30-I20",
-        "P30-I21"
+        "P30-I21",
+        "P30-I22"
       ],
       "opened_at": "2026-06-09T12:29:17.752919Z",
       "outcome_ids": [],
@@ -27445,7 +27546,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T21:34:55.589467Z",
+  "updated_at": "2026-07-01T23:46:23.020627Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -102194,6 +102295,250 @@
       "title": "Allow /dev writes in the seatbelt jail for git",
       "token_budget": null,
       "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I22-W01": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-i22-fixes",
+      "claimed_at": "2026-07-01T23:40:41.968368Z",
+      "closed_at": "2026-07-01T23:41:17.303457Z",
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/agents/specs/models.py",
+        "tests/workflow/agents/specs/test_models_workflow_prefix.py"
+      ],
+      "gates": [],
+      "id": "P30-I22-W01",
+      "intent": {
+        "desired_outcome": "The headless render omits the self-close step and states the daemon closes on the agent's behalf; the interactive render keeps the operator-run wave close",
+        "evidence_refs": [],
+        "planned_steps": [
+          "add headless param to _render_workflow",
+          "swap step 5 when headless",
+          "thread headless through render",
+          "add tests"
+        ],
+        "priority_rationale": null,
+        "problem": "The daemon live-spawn dispatch prompt tells sandboxed agents to self-close via CLI, but DL-5 has the daemon close on their behalf; a compliant agent (codex) self-blocks in the jail",
+        "risks": [
+          "golden snapshot fallout"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-01T23:38:43.242878Z",
+      "outcome": "headless dispatch prompt no longer instructs self-close; daemon closes on behalf",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "headless render omits 'uv run eawf wave close' + carries the daemon-close line; interactive render keeps self-close; steps 1-4 identical",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "headless render omits 'uv run eawf wave close' + carries the daemon-close line; interactive render keeps self-close; steps 1-4 identical",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Strip self-close from the headless dispatch prompt",
+      "token_budget": null,
+      "tokens_consumed": 12000,
+      "worktree_id": null
+    },
+    "P30-I22-W02": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-i22-fixes",
+      "claimed_at": "2026-07-01T23:41:32.242401Z",
+      "closed_at": "2026-07-01T23:41:47.332640Z",
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py",
+        "tests/daemon/test_research_run_rpc.py"
+      ],
+      "gates": [],
+      "id": "P30-I22-W02",
+      "intent": {
+        "desired_outcome": "The researcher path mirrors the executor hardening so the round persists and the campaign converges instead of crashing on non-ideal output",
+        "evidence_refs": [],
+        "planned_steps": [
+          "coerce uncited pass",
+          "synth blocked on LLMAssistError",
+          "catch DispatchCloseBlockedError",
+          "redact body",
+          "extract helpers",
+          "add tests"
+        ],
+        "priority_rationale": null,
+        "problem": "The research campaign round raises on any non-ideal researcher output (uncited pass, blocked, unparseable, absolute-path); unhandled, it aborts the whole run, no round persists",
+        "risks": [
+          "cognitive-complexity gate on the spawn fn"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-01T23:39:09.642820Z",
+      "outcome": "researcher path hardened to executor parity; campaign converges live",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "campaign round tolerates uncited PASS",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "campaign round tolerates uncited PASS",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "blocked verdict",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-03",
+          "kind": "legacy",
+          "measurable_signal": "grandfathered legacy criterion",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "unparseable output",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-04",
+          "kind": "legacy",
+          "measurable_signal": "and absolute-path scrub without aborting; live campaign converges",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "and absolute-path scrub without aborting; live campaign converges",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Harden the researcher path to executor-path parity",
+      "token_budget": null,
+      "tokens_consumed": 60000,
+      "worktree_id": null
+    },
+    "P30-I22-W03": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "operator-i22-fixes",
+      "claimed_at": "2026-07-01T23:46:04.135928Z",
+      "closed_at": "2026-07-01T23:46:23.020440Z",
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/server.py",
+        "tests/contract/test_jsonrpc_contract.py"
+      ],
+      "gates": [],
+      "id": "P30-I22-W03",
+      "intent": {
+        "desired_outcome": "The server maps DispatchCloseBlockedError to a typed DISPATCH_CLOSE_BLOCKED code carrying the verdict + reasons in error.data, while the runner still raises so the fleet fork path is unchanged",
+        "evidence_refs": [],
+        "planned_steps": [
+          "add DISPATCH_CLOSE_BLOCKED code",
+          "import the error",
+          "add a typed except clause with data",
+          "add a contract test"
+        ],
+        "priority_rationale": null,
+        "problem": "A legit FAIL/BLOCKED report verdict raises DispatchCloseBlockedError, which the JSON-RPC server maps to a generic -32603 internal error, hiding the real cause from a raw agent.dispatch client",
+        "risks": [
+          "code collision in the -32000 band"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I22",
+      "opened_at": "2026-07-01T23:38:58.142780Z",
+      "outcome": "blocked verdict maps to typed DISPATCH_CLOSE_BLOCKED (-32011), not -32603",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a DispatchCloseBlockedError surfaces as DISPATCH_CLOSE_BLOCKED (-32011) with verdict+reasons in error.data",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a DispatchCloseBlockedError surfaces as DISPATCH_CLOSE_BLOCKED (-32011) with verdict+reasons in error.data",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "not a generic internal error; the raise is preserved",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "not a generic internal error; the raise is preserved",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Map a blocked verdict to a typed RPC error not -32603",
+      "token_budget": null,
+      "tokens_consumed": 15000,
       "worktree_id": null
     }
   },
