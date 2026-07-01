@@ -1238,6 +1238,7 @@ def run_dispatch(
     pgid: int | None = None,
     enforce: EnforceMode = DEFAULT_ENFORCE,
     output_text: str | None = None,
+    accrue_wave_budget: bool = True,
 ) -> DispatchResult:
     """Drive one wave dispatch attempt, emitting the C09 dispatch events.
 
@@ -1378,8 +1379,13 @@ def run_dispatch(
     # daemon-push via the bus). Skipped on a stateless context. The captured
     # spawn pgid + config-resolved enforce mode thread through so a hard-cap
     # breach can reap the live wave's process group.
-    interlock = accrue_tokens_consumed(
-        ctx, wave_id=wave_id, tokens=tokens, pgid=pgid, enforce=enforce
+    # A campaign-scoped researcher dispatch (W14) has no execution wave to fold
+    # its tokens into, so the wave-budget accrual is skipped; the dispatch_cost
+    # event above still books the spend against the campaign scope.
+    interlock = (
+        accrue_tokens_consumed(ctx, wave_id=wave_id, tokens=tokens, pgid=pgid, enforce=enforce)
+        if accrue_wave_budget
+        else None
     )
     terminated = interlock is not None and interlock.terminated
 

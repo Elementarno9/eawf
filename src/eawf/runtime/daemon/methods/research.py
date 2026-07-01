@@ -924,7 +924,9 @@ def research_run_in_flight(campaign_id: str | None = None) -> bool:
         return bool(_ACTIVE_RESEARCH_RUNS)
 
 
-def _live_agent_end_producer(ctx: MethodContext, runtime: str) -> AgentEndProducer:
+def _live_agent_end_producer(
+    ctx: MethodContext, runtime: str, *, campaign_id: str
+) -> AgentEndProducer:
     """Build the production agent-end producer over the ``agent.dispatch`` spawn.
 
     Each staged dispatch becomes a real spawned researcher session: the
@@ -945,7 +947,9 @@ def _live_agent_end_producer(ctx: MethodContext, runtime: str) -> AgentEndProduc
     """
 
     def _produce(dispatch: StagedDispatch) -> Mapping[str, object]:
-        return _run_research_spawn_threaded(ctx, runtime=runtime, dispatch=dispatch)
+        return _run_research_spawn_threaded(
+            ctx, runtime=runtime, dispatch=dispatch, campaign_id=campaign_id
+        )
 
     return _produce
 
@@ -955,13 +959,16 @@ def _run_research_spawn_threaded(
     *,
     runtime: str,
     dispatch: StagedDispatch,
+    campaign_id: str,
 ) -> Mapping[str, object]:
     """Run one live researcher spawn from the synchronous round-runner seam."""
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
 
     async def _spawn() -> Mapping[str, object]:
-        return await _spawn_researcher_agent_end(ctx, runtime=runtime, dispatch=dispatch)
+        return await _spawn_researcher_agent_end(
+            ctx, runtime=runtime, dispatch=dispatch, campaign_id=campaign_id
+        )
 
     def _run() -> Mapping[str, object]:
         return asyncio.run(_spawn())
@@ -1015,6 +1022,7 @@ async def _spawn_researcher_agent_end(
     *,
     runtime: str,
     dispatch: StagedDispatch,
+    campaign_id: str,
 ) -> Mapping[str, object]:
     """Spawn one researcher and return its validated ``agent_end`` body.
 
@@ -1030,8 +1038,14 @@ async def _spawn_researcher_agent_end(
     state_path = Path(ctx.state_path)
     serving_runtime = _canonical_runtime(runtime)
     runtime_triple = _runtime_triple(serving_runtime)
-    wave_id = _active_research_wave_id(state_path)
-    scope_id = f"{wave_id}-research-{uuid.uuid4().hex[:8]}"
+    # A campaign is project-scoped, not wave-scoped (W14): anchor the researcher
+    # session + output + cost to the CAMPAIGN. When an execution wave happens to
+    # be active the dispatch scope rides it (back-compat); otherwise it rides the
+    # campaign id, so research.run no longer REQUIRES an active wave and never
+    # pollutes an unrelated wave's ledger.
+    active_wave = _active_research_wave_id_or_none(state_path)
+    dispatch_scope = active_wave or campaign_id
+    scope_id = f"{campaign_id}-research-{uuid.uuid4().hex[:8]}"
     session_id = _register_researcher_session(
         ctx,
         scope_id=scope_id,
@@ -1064,7 +1078,7 @@ async def _spawn_researcher_agent_end(
             return
         emit_agent_output_chunk(
             ctx,
-            wave_id=wave_id,
+            wave_id=dispatch_scope,
             session_id=session_id,
             seq=chunk_seq[0],
             text="".join(chunk_buffer),
@@ -1123,7 +1137,7 @@ async def _spawn_researcher_agent_end(
     pid = captured_pid[-1] if captured_pid else spawn_result.subprocess_pid
     run_dispatch(
         ctx,
-        wave_id=wave_id,
+        wave_id=dispatch_scope,
         primary_runtime=runtime_triple,
         fallback_runtime=runtime_triple,
         model=metered.model,
@@ -1136,9 +1150,13 @@ async def _spawn_researcher_agent_end(
         pgid=pid,
         enforce=_resolve_budget_enforce(state_path),
         output_text=spawn_result.text,
+        # A campaign with no active execution wave has no wave budget to fold
+        # into (W14); the dispatch_cost event still books against the scope.
+        accrue_wave_budget=active_wave is not None,
     )
     logger.info(
-        f"_spawn_researcher_agent_end wave={wave_id} domain={dispatch.domain!r} "
+        f"_spawn_researcher_agent_end scope={dispatch_scope} campaign={campaign_id} "
+        f"domain={dispatch.domain!r} "
         f"runtime={serving_runtime!r} session={session_id!r} findings={len(body.findings)}"
     )
     return body.model_dump(mode="json")
@@ -1173,8 +1191,14 @@ def _effort_for_depth(depth: str) -> EffortBucket:
     return EffortBucket.M
 
 
-def _active_research_wave_id(state_path: Path) -> str:
-    """Resolve the active wave that should accrue a live campaign's cost."""
+def _active_research_wave_id_or_none(state_path: Path) -> str | None:
+    """Return the active wave a live campaign could attach to, or ``None``.
+
+    A research campaign is project-scoped, not wave-scoped, so a live run must
+    NOT require an active execution wave (W14): when none is in scope this
+    returns ``None`` and the caller anchors the researcher session + output +
+    cost to the campaign instead of raising.
+    """
     state = load_state(state_path)
     for wave_id in reversed(state.current.active_wave_ids):
         if wave_id in state.waves:
@@ -1185,7 +1209,7 @@ def _active_research_wave_id(state_path: Path) -> str:
             for wave_id in reversed(it.wave_ids):
                 if wave_id in state.waves:
                     return wave_id
-    raise RuntimeError("research.run live spawn requires an active wave")
+    return None
 
 
 def _researcher_prompt(dispatch: StagedDispatch) -> str:
@@ -1701,7 +1725,9 @@ async def run(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     # Production binds the live agent.dispatch spawn; the binding-pass test
     # harness injects a stub producer into run_campaign directly, so this RPC
     # entrypoint never spawns a real subprocess under test.
-    produce_agent_end = _live_agent_end_producer(ctx, runtime="claude")
+    produce_agent_end = _live_agent_end_producer(
+        ctx, runtime="claude", campaign_id=args.campaign_id
+    )
     handle = start_background_research_run(
         ctx,
         args,

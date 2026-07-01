@@ -399,6 +399,49 @@ def test_research_run_rpc_uses_live_producer_without_stub(
     assert "agent.output.chunk" in event_types
 
 
+def test_research_run_runs_with_no_active_wave_scoped_to_campaign(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """research.run succeeds with NO active execution wave, scoped to the campaign.
+
+    W14: a campaign is project-scoped, so the live run must not require (or
+    pollute) an execution wave. With the active-wave list + iter waves cleared,
+    the run still executes and the researcher dispatch cost / output anchor to
+    the campaign id, never a wave.
+    """
+    ctx, state_path = _build_live_ctx(tmp_path)
+    # Strip every execution wave so no active wave is resolvable.
+    state = State.model_validate(orjson.loads(state_path.read_bytes()))
+    state.current.active_wave_ids = []
+    state.waves = {}
+    for it in state.iters.values():
+        it.wave_ids = []
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+
+    adapter = _ResearchSpawnAdapter()
+    monkeypatch.setattr(
+        "eawf.runtime.daemon.methods.research.select_adapter",
+        lambda _runtime: adapter,
+    )
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-nowave"))
+        result = await run(ctx, {"campaign_id": "campaign-nowave", "round_budget": 1})
+        assert result["run_state"] == "running"
+        await _wait_for_research_run("campaign-nowave")
+        rounds = read_campaign_rounds(state_path, "campaign-nowave")
+        assert len(rounds) == 1  # the run executed despite no active wave
+
+    _run(body)
+
+    # The dispatch cost anchors to the campaign, never a wave id.
+    events = _read_envelopes(store_path(state_path, StoreKind.EVENT))
+    cost_rows = [row for row in events if row.payload.get("event_type") == "dispatch_cost"]
+    assert cost_rows
+    assert all("campaign-nowave" in row.scope_id for row in cost_rows)
+
+
 def test_research_run_ping_and_steer_answer_while_background_run_blocks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -418,7 +461,7 @@ def test_research_run_ping_and_steer_answer_while_background_run_blocks(
     monkeypatch.setattr(
         research_mod,
         "_live_agent_end_producer",
-        lambda _ctx, runtime: _gated_producer,
+        lambda _ctx, runtime, *, campaign_id: _gated_producer,
     )
 
     async def body() -> None:
