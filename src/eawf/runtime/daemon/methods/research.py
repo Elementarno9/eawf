@@ -80,7 +80,12 @@ from eawf.kernel.store.kinds.research_campaign import (
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
-from eawf.runtime.daemon.dispatch_runner import DispatchTokens, run_dispatch
+from eawf.runtime.daemon.dispatch_runner import (
+    _CHUNK_BATCH_LINES,
+    DispatchTokens,
+    emit_agent_output_chunk,
+    run_dispatch,
+)
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.metering import price_spawn_result
@@ -965,6 +970,46 @@ def _run_research_spawn_threaded(
         return pool.submit(_run).result()
 
 
+def _append_researcher_event(
+    ctx: MethodContext,
+    *,
+    phase: str,
+    dispatch: StagedDispatch,
+    scope_id: str,
+) -> None:
+    """Append a researcher spawn / finish lifecycle marker for the Feed pane.
+
+    Mirrors :func:`_append_research_run_round_event`: a store-less context (no
+    ``event_path`` -- a stateless unit test) is a no-op, otherwise the row is
+    appended through the session event store + fanned on the bus so the Feed
+    shows a researcher spawn + finish row per domain dispatch.
+
+    Args:
+        ctx: Daemon method context -- supplies ``event_path`` + ``bus``.
+        phase: ``"spawn"`` or ``"finish"``.
+        dispatch: The staged dispatch the researcher runs (names the domain).
+        scope_id: The researcher session scope the row is keyed on.
+    """
+    if ctx.event_path is None:
+        return
+    now = datetime.now(UTC)
+    event = append_event(
+        events_path=Path(ctx.event_path),
+        event_id=f"EV-researcher-{phase}-{uuid.uuid4().hex[:12]}",
+        event_type=f"research.researcher.{phase}",
+        actor="daemon",
+        command="research.run",
+        args_hash="",
+        status="ok",
+        message=f"researcher {phase} domain={dispatch.domain!r} scope={scope_id}",
+        scope_id=scope_id,
+        occurred_at=now,
+    )
+    if ctx.bus is not None and hasattr(ctx.bus, "publish"):
+        ctx.bus.publish(event)
+    ctx.last_event_id = event.id
+
+
 async def _spawn_researcher_agent_end(
     ctx: MethodContext,
     *,
@@ -1002,11 +1047,42 @@ async def _spawn_researcher_agent_end(
     )
     adapter = select_adapter(serving_runtime)
     captured_pid: list[int] = []
+
+    # Feed lifecycle marker: a researcher spawn row so the Feed shows the
+    # campaign's researcher dispatch, mirroring the wave-spawn lifecycle rows.
+    _append_researcher_event(ctx, phase="spawn", dispatch=dispatch, scope_id=scope_id)
+
+    # Stream the researcher's stdout live to the Watch tail (mirroring the
+    # wave-spawn chunk wiring): batch lines + persist each batch as an
+    # agent.output.chunk keyed on the wave so the Watch renders it live rather
+    # than only a terminal agent.output at completion.
+    chunk_buffer: list[str] = []
+    chunk_seq = [0]
+
+    def _flush_chunk_buffer() -> None:
+        if not chunk_buffer:
+            return
+        emit_agent_output_chunk(
+            ctx,
+            wave_id=wave_id,
+            session_id=session_id,
+            seq=chunk_seq[0],
+            text="".join(chunk_buffer),
+        )
+        chunk_seq[0] += 1
+        chunk_buffer.clear()
+
+    async def _on_chunk(line: str) -> None:
+        chunk_buffer.append(line)
+        if len(chunk_buffer) >= _CHUNK_BATCH_LINES:
+            _flush_chunk_buffer()
+
     spawn_result = await adapter.spawn_session(
         prompt,
         model=model,
         cwd=str(repo_root),
         on_spawn=captured_pid.append,
+        on_chunk=_on_chunk,
     )
 
     spawns = 0
@@ -1021,6 +1097,7 @@ async def _spawn_researcher_agent_end(
             model=spawn_result.model,
             cwd=str(repo_root),
             on_spawn=captured_pid.append,
+            on_chunk=_on_chunk,
         )
 
     assist = await assist_with_schema(
@@ -1028,6 +1105,10 @@ async def _spawn_researcher_agent_end(
         spawn=_assist_spawn,
         validator=ResearcherReportBody.model_validate,
     )
+    # Final flush: empty any partial batch so the persisted researcher tail is
+    # complete + emit the finish lifecycle marker for the Feed.
+    _flush_chunk_buffer()
+    _append_researcher_event(ctx, phase="finish", dispatch=dispatch, scope_id=scope_id)
     body = assist.body
     if not isinstance(body, ResearcherReportBody):  # pragma: no cover - validator narrows
         raise TypeError(f"assist returned non-researcher body: {body.role!r}")

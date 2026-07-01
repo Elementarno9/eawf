@@ -201,6 +201,11 @@ class _ResearchSpawnAdapter:
         if callable(on_spawn):
             on_spawn(43210 + self.spawn_calls)
         domain = "market-structure" if "market-structure" in prompt else "pricing-models"
+        # Feed a live stdout line so the researcher chunk-stream wiring (W13)
+        # persists an agent.output.chunk, mirroring the wave-spawn path.
+        on_chunk = kwargs.get("on_chunk")
+        if callable(on_chunk):
+            await on_chunk(f"researching {domain}...")
         return SpawnResult(
             session_id=f"research-{self.spawn_calls}",
             runtime="claude-code",
@@ -387,6 +392,11 @@ def test_research_run_rpc_uses_live_producer_without_stub(
     event_types = [row.payload.get("event_type") for row in events]
     assert "research.run.round" in event_types
     assert "dispatch_cost" in event_types
+    # W13: a Feed lifecycle marker per researcher spawn + finish, and the
+    # researcher stdout streams live as agent.output.chunk rows.
+    assert "research.researcher.spawn" in event_types
+    assert "research.researcher.finish" in event_types
+    assert "agent.output.chunk" in event_types
 
 
 def test_research_run_ping_and_steer_answer_while_background_run_blocks(
