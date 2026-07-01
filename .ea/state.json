@@ -12466,7 +12466,7 @@
       "SES-20260510T214731Z-operator-claude"
     ],
     "active_wave_ids": [],
-    "iter_id": "P30-I20",
+    "iter_id": "P30-I21",
     "phase_id": "P30",
     "project_code": "EAWF",
     "track_id": null
@@ -13139,7 +13139,7 @@
       "title": "Downscope telemetry and bucket recalibration backlog"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -23520,8 +23520,8 @@
       "spent_eu": 0.0,
       "spent_usd": 0.0
     },
-    "elapsed_hours": 421.92003673249997,
-    "ended_at": "2026-07-01T13:42:34.467698Z",
+    "elapsed_hours": 422.1168027408333,
+    "ended_at": "2026-07-01T13:54:22.825328Z",
     "eu_cap": null,
     "forks": [],
     "frontier": [
@@ -25725,7 +25725,6 @@
         "P30-I20-W22",
         "P30-I20-W23",
         "P30-I20-W24",
-        "P30-I20-W25",
         "P30-I20-W26",
         "P30-I20-W27",
         "P30-I20-W29",
@@ -25756,6 +25755,44 @@
         "P30-I20-W59",
         "P30-I20-W60",
         "P30-I20-W61"
+      ]
+    },
+    "P30-I21": {
+      "audit_id": null,
+      "candidate_tag": null,
+      "closed_at": null,
+      "description": null,
+      "estimate_id": null,
+      "id": "P30-I21",
+      "intent": null,
+      "opened_at": "2026-07-01T14:44:35.893631Z",
+      "phase_id": "P30",
+      "status": "active",
+      "title": "Validation-repair: spawn/campaign correctness + UI",
+      "trigger": "none",
+      "wave_ids": [
+        "P30-I21-W01",
+        "P30-I21-W02",
+        "P30-I21-W03",
+        "P30-I21-W04",
+        "P30-I21-W05",
+        "P30-I21-W06",
+        "P30-I21-W07",
+        "P30-I21-W08",
+        "P30-I21-W09",
+        "P30-I21-W10",
+        "P30-I21-W11",
+        "P30-I21-W12",
+        "P30-I21-W13",
+        "P30-I21-W14",
+        "P30-I21-W15",
+        "P30-I21-W16",
+        "P30-I21-W17",
+        "P30-I21-W18",
+        "P30-I21-W19",
+        "P30-I21-W20",
+        "P30-I21-W21",
+        "P30-I21-W22"
       ]
     }
   },
@@ -26793,7 +26830,8 @@
         "P30-I17",
         "P30-I18",
         "P30-I19",
-        "P30-I20"
+        "P30-I20",
+        "P30-I21"
       ],
       "opened_at": "2026-06-09T12:29:17.752919Z",
       "outcome_ids": [],
@@ -26844,7 +26882,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T13:50:28.609038Z",
+  "updated_at": "2026-07-01T14:47:26.270331Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -98292,125 +98330,6 @@
       "tokens_consumed": 0,
       "worktree_id": "WT-P30-I20-W24-1781379918"
     },
-    "P30-I20-W25": {
-      "agent_role": null,
-      "blocks": [],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
-      "deps": [
-        "P30-I20-W30",
-        "P30-I20-W31",
-        "P30-I20-W32",
-        "P30-I20-W33",
-        "P30-I20-W34",
-        "P30-I20-W35",
-        "P30-I20-W50",
-        "P30-I20-W51",
-        "P30-I20-W52",
-        "P30-I20-W53",
-        "P30-I20-W54",
-        "P30-I20-W55",
-        "P30-I20-W56",
-        "P30-I20-W57",
-        "P30-I20-W58",
-        "P30-I20-W59",
-        "P30-I20-W60",
-        "P30-I20-W61"
-      ],
-      "description": null,
-      "dispatch_history": [],
-      "effort_bucket": "S",
-      "file_scopes": [
-        "tools/commit_prefix_lint.py",
-        "CHANGELOG.md",
-        ".ea/**"
-      ],
-      "gates": [],
-      "id": "P30-I20-W25",
-      "intent": {
-        "desired_outcome": "Preflight validates annotation against the workflow regex; gauntlet green; recorded autopilot smoke; re-close with separate groups; branch pushed + PR open",
-        "evidence_refs": [
-          ".ea/local/review/2026-06-12-p30-global-review.md"
-        ],
-        "planned_steps": [],
-        "priority_rationale": "Ship blocker BL-1: a silent total release failure; the terminal wave of the iteration.",
-        "problem": "The reset close commit fused audit + release into one paren group which phase-release.yaml cannot parse — no tag, no PyPI/npm publish; nothing validates the annotation against the workflow regex",
-        "risks": [],
-        "source_brief_ids": []
-      },
-      "iter_id": "P30-I20",
-      "opened_at": "2026-06-12T18:02:41.450557Z",
-      "outcome": null,
-      "runtime_baseline": null,
-      "runtime_latest": null,
-      "runtime_preference": null,
-      "sessions": {},
-      "status": "pending",
-      "success_criteria": [
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-01",
-          "kind": "legacy",
-          "measurable_signal": "phase-close preflight validates the (release=) annotation against the phase-release.yaml extraction regex",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "phase-close preflight validates the (release=) annotation against the phase-release.yaml extraction regex",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-02",
-          "kind": "legacy",
-          "measurable_signal": "full gauntlet green (pre-commit; mypy; just test; verify-commits; doc verify --strict; artifact validator; idle-contract PR-range)",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "full gauntlet green (pre-commit; mypy; just test; verify-commits; doc verify --strict; artifact validator; idle-contract PR-range)",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-03",
-          "kind": "legacy",
-          "measurable_signal": "recorded autopilot smoke drive leaves fleet events in event.jsonl",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "recorded autopilot smoke drive leaves fleet events in event.jsonl",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-04",
-          "kind": "legacy",
-          "measurable_signal": "iter + phase close commit subject carries (audit=<id>) (release=v0.6.0) as separate groups; branch pushed and phase PR opened",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "iter + phase close commit subject carries (audit=<id>) (release=v0.6.0) as separate groups; branch pushed and phase PR opened",
-          "waiver_reason": null
-        }
-      ],
-      "title": "Re-close v0.6.0 with validated release annotation",
-      "token_budget": null,
-      "tokens_consumed": 0,
-      "worktree_id": null
-    },
     "P30-I20-W26": {
       "agent_role": "executor",
       "blocks": [],
@@ -98599,9 +98518,7 @@
     },
     "P30-I20-W30": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-flow-p30i20",
       "claimed_at": "2026-06-13T23:59:14.200519Z",
       "closed_at": "2026-06-13T23:59:14.937303Z",
@@ -98661,9 +98578,7 @@
     },
     "P30-I20-W31": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-flow-p30i20",
       "claimed_at": "2026-06-14T00:04:50.952130Z",
       "closed_at": "2026-06-15T02:13:00.569565Z",
@@ -98723,9 +98638,7 @@
     },
     "P30-I20-W32": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-ship",
       "claimed_at": "2026-06-15T02:16:04.140849Z",
       "closed_at": "2026-06-15T02:16:04.835629Z",
@@ -98781,9 +98694,7 @@
     },
     "P30-I20-W33": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-ship",
       "claimed_at": "2026-06-15T02:16:18.705087Z",
       "closed_at": "2026-06-15T02:16:46.274327Z",
@@ -98839,9 +98750,7 @@
     },
     "P30-I20-W34": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-ship",
       "claimed_at": "2026-06-15T02:16:56.950505Z",
       "closed_at": "2026-06-15T02:16:57.629254Z",
@@ -98897,9 +98806,7 @@
     },
     "P30-I20-W35": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-ship",
       "claimed_at": "2026-06-15T02:15:33.477987Z",
       "closed_at": "2026-06-15T02:15:34.365154Z",
@@ -99527,9 +99434,7 @@
     },
     "P30-I20-W50": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:06:48.675765Z",
       "closed_at": "2026-06-25T19:06:58.075196Z",
@@ -99602,9 +99507,7 @@
     },
     "P30-I20-W51": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:07:15.511005Z",
       "closed_at": "2026-07-01T11:50:02.820838Z",
@@ -99663,9 +99566,7 @@
     },
     "P30-I20-W52": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:16:05.239732Z",
       "closed_at": "2026-06-25T19:16:06.182759Z",
@@ -99723,9 +99624,7 @@
     },
     "P30-I20-W53": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:16:06.867045Z",
       "closed_at": "2026-07-01T11:50:41.666716Z",
@@ -99784,9 +99683,7 @@
     },
     "P30-I20-W54": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:22:07.940461Z",
       "closed_at": "2026-06-25T19:22:08.728430Z",
@@ -99860,9 +99757,7 @@
     },
     "P30-I20-W55": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:22:09.300016Z",
       "closed_at": "2026-07-01T11:51:16.198229Z",
@@ -99935,9 +99830,7 @@
     },
     "P30-I20-W56": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:28:09.287183Z",
       "closed_at": "2026-06-25T19:28:10.218270Z",
@@ -100010,9 +99903,7 @@
     },
     "P30-I20-W57": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:28:10.841093Z",
       "closed_at": "2026-06-25T19:28:11.644007Z",
@@ -100085,9 +99976,7 @@
     },
     "P30-I20-W58": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "flow-close",
       "claimed_at": "2026-06-25T19:28:12.229887Z",
       "closed_at": "2026-07-01T12:00:30.526807Z",
@@ -100161,9 +100050,7 @@
     },
     "P30-I20-W59": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260701T132634Z-executor-claude-start",
       "claimed_at": "2026-07-01T13:26:34.829618Z",
       "closed_at": "2026-07-01T13:31:45.939141Z",
@@ -100234,9 +100121,7 @@
     },
     "P30-I20-W60": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260701T133619Z-executor-claude",
       "claimed_at": "2026-07-01T13:36:20.227204Z",
       "closed_at": "2026-07-01T13:36:50.572007Z",
@@ -100307,9 +100192,7 @@
     },
     "P30-I20-W61": {
       "agent_role": "executor",
-      "blocks": [
-        "P30-I20-W25"
-      ],
+      "blocks": [],
       "claim_session_id": "",
       "claimed_at": "2026-07-01T13:50:27.657209Z",
       "closed_at": "2026-07-01T13:50:28.608055Z",
@@ -100373,6 +100256,1323 @@
         }
       ],
       "title": "Fix stale two-decimal EU assertions in metrics tile test",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W01": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/sandbox/jail.py",
+        "tests"
+      ],
+      "gates": [],
+      "id": "P30-I21-W01",
+      "intent": {
+        "desired_outcome": "claude lane gets file-write and Linux bind for the claude config dir mirroring codex; bash runs clean",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Claude lane jail lacks a write carve-out for ~/.claude so Bash init hits EPERM and every shell command dies",
+        "risks": [
+          "over-broad carve-out could widen the write surface beyond the config dir"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:17.339510Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a jailed claude agent runs bash without EPERM; jail test asserts the carve-out",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a jailed claude agent runs bash without EPERM; jail test asserts the carve-out",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add claude-lane own-home write carve-out to sandbox jail",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W02": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W03",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch",
+        "src/eawf/runtime/runtimes/claude"
+      ],
+      "gates": [],
+      "id": "P30-I21-W02",
+      "intent": {
+        "desired_outcome": "a shared unwrap helper strips the envelope+fence before validation; valid reports bind first try",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Executor bind path does not unwrap the claude stream-json result envelope so valid reports are rejected as invalid_json and synthesized",
+        "risks": [
+          "helper must not corrupt reports that are already bare JSON"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:17.882273Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "an executor emitting a valid report inside the envelope binds on attempt 1 with real verdict/files; no synthesized placeholder",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "an executor emitting a valid report inside the envelope binds on attempt 1 with real verdict/files; no synthesized placeholder",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Unwrap stream-json envelope in executor report bind",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W03": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I21-W02"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/runtimes/claude/adapter.py",
+        "src/eawf/surfaces/tui"
+      ],
+      "gates": [],
+      "id": "P30-I21-W03",
+      "intent": {
+        "desired_outcome": "chunk render parses stream-json lines via the shared unwrap helper and shows readable text plus a compact summary",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Watch tail renders raw stream-json result envelopes instead of readable agent text",
+        "risks": [
+          "malformed chunk lines must degrade gracefully to raw text"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:18.419012Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Watch shows readable agent output; no raw result envelope",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Watch shows readable agent output; no raw result envelope",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Render stream-json chunks readably in watch tail",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W04": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui",
+        "src/eawf/runtime/daemon"
+      ],
+      "gates": [],
+      "id": "P30-I21-W04",
+      "intent": {
+        "desired_outcome": "one long-lived subscription per scope with since=<last> cursor continuation reconnecting only on drop",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "A client re-subscribes ~every 1.3s with since=None full re-subscribe driving daemon churn and slowness",
+        "risks": [
+          "cursor continuation must not drop events across a reconnect"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:18.963568Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "one durable subscription per scope; no ~1/s re-subscribe storm; reconnect uses a cursor",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "one durable subscription per scope; no ~1/s re-subscribe storm; reconnect uses a cursor",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Hold one long-lived event subscription per scope with cursor",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W05": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/fleet.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W05",
+      "intent": {
+        "desired_outcome": "a redispatch failure is counted and parked so a run cannot churn; the stale EAWF fleet_run is cleared",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "_fill_lanes swallows LifecycleError with failed=0 so a run churns a closed wave forever",
+        "risks": [
+          "parking logic must not stall legitimate retryable dispatches"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:19.510196Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "closed-wave redispatch counted and parked; stale run cleared",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "closed-wave redispatch counted and parked; stale run cleared",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Count and park closed-wave redispatch failure in fleet fill",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W06": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/cli/app.py",
+        "src/eawf/surfaces/tui/app.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W06",
+      "intent": {
+        "desired_outcome": "CLI console format and the TUI handler formatter both prepend a timestamp",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Console log lines lack %(asctime)s so arm/drive latency cannot be measured from the console",
+        "risks": [
+          "timestamp format must stay consistent with the daemon file log"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:20.063887Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "inline CLI and TUI console log lines carry a timestamp",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "inline CLI and TUI console log lines carry a timestamp",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add timestamps to CLI and TUI console log lines",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W07": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/retry.py",
+        "src/eawf/surfaces/tui"
+      ],
+      "gates": [],
+      "id": "P30-I21-W07",
+      "intent": {
+        "desired_outcome": "spawn attempt/outcome shows on the run-summary or watch header; the two counters are named spawn_attempt vs bind_attempt",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Operator cannot tell attempt-1 success from a retry; spawn and bind attempt counters share an ambiguous label",
+        "risks": [
+          "renamed counters must not break existing log parsers or tests"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:41.587165Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "attempt-1-success vs retry legible without eawfd.log; spawn_attempt vs bind_attempt distinct",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "attempt-1-success vs retry legible without eawfd.log; spawn_attempt vs bind_attempt distinct",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Surface spawn attempt/outcome and split attempt counters",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W08": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W08",
+      "intent": {
+        "desired_outcome": "an optional top mode-key footer carries only mode-unique keys; the action-result line shows results only",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Research board shows duplicated hotkeys: ACTION_IDLE chips overlap footer hints on n/o/a/p",
+        "risks": [
+          "footer layout change must not clip on narrow widths"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:42.121756Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "top mode-key line plus bottom global-nav line with no key duplicated; opt-in for other modes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "top mode-key line plus bottom global-nav line with no key duplicated; opt-in for other modes",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Add optional mode-hotkey footer line above global-nav",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W09": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/status_pane.py",
+        "src/eawf/surfaces/tui/widgets/metrics.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W09",
+      "intent": {
+        "desired_outcome": "every displayed surface labels it precision with the signed % and no sample-count suffix; internal field name may stay",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "The estimate-vs-actual delta is labeled variance which misreads as statistical variance",
+        "risks": [
+          "must relabel status-pane EFFORT line and metrics tile plus drilldown consistently"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:42.647137Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "no UI surface labels this metric variance; reads precision with signed %; label and snapshot tests updated",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "no UI surface labels this metric variance; reads precision with signed %; label and snapshot tests updated",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Relabel variance metric to precision across surfaces",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W10": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/header.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W10",
+      "intent": {
+        "desired_outcome": "runtime cell and clock right-align to the header edge; brand and breadcrumb stay left",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Runtime cell and UTC clock sit mid-header after the breadcrumb rather than right-aligned",
+        "risks": [
+          "width-aware padding must not overflow on narrow terminals"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:43.184717Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "runtime cell and clock hug the header right edge across widths; snapshot updated",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "runtime cell and clock hug the header right edge across widths; snapshot updated",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Right-align runtime cell and UTC clock in header",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W11": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W11",
+      "intent": {
+        "desired_outcome": "the pane shows the running round and claims accrued e.g. ROUND 1 running 15 claims consistent with the tree",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "PROGRESS shows ROUND 0 run counting completed rounds while round 1 is in flight with live claims",
+        "risks": [
+          "terminal-state rendering must still read correctly"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:43.722620Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "PROGRESS pane reflects the running round + claim count while in flight",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "PROGRESS pane reflects the running round + claim count while in flight",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Show running round and claims-accrued in progress pane",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W12": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W12",
+      "intent": {
+        "desired_outcome": "the domain leaf is labeled domain: <name> and the tree hierarchy reads campaign-topic then round then domain",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "The tree renders bare domain leaves and code calls them topic nodes conflating topic and domain",
+        "risks": [
+          "label change must not break tree snapshot expectations silently"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:46:44.263543Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "tree reads campaign-topic then round then domain leaf with a clear label",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "tree reads campaign-topic then round then domain leaf with a clear label",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Label domain tree leaf and fix topic/domain naming",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W13": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W13",
+      "intent": {
+        "desired_outcome": "on_chunk is wired mirroring the wave-spawn path; a Feed lifecycle marker fires per researcher spawn and finish",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "_spawn_researcher_agent_end passes only on_spawn so researcher output never streams and no Feed marker fires",
+        "risks": [
+          "chunk buffering must not block the researcher spawn"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:13.561317Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "researcher output streams live to Watch tail; Feed shows spawn+finish rows per researcher",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "researcher output streams live to Watch tail; Feed shows spawn+finish rows per researcher",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Wire researcher output chunk stream and Feed markers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W14": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W15",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W14",
+      "intent": {
+        "desired_outcome": "the researcher session and output anchor to the campaign/round scope removing the active-wave requirement",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "research.run hard-requires an active wave to anchor session/output and cost raising RuntimeError otherwise",
+        "risks": [
+          "existing wave-driven research paths must stay unaffected"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:14.105945Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "research.run runs with no active wave; researcher output scoped to the campaign",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "research.run runs with no active wave; researcher output scoped to the campaign",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Decouple research.run from an active execution wave",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W15": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I21-W14"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W15",
+      "intent": {
+        "desired_outcome": "campaign spawn cost attributes to the campaign/round with its own cost/EU accounting",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Researcher dispatch_cost books against the active or closed wave inflating its tokens and hiding campaign spend",
+        "risks": [
+          "must not double-count or drop existing wave cost rows"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:14.641871Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "researcher spend accrues to the campaign; closed-wave counters stay executor-only; campaign cost queryable",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "researcher spend accrues to the campaign; closed-wave counters stay executor-only; campaign cost queryable",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Attribute campaign spawn cost to the campaign not a wave",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W16": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W16",
+      "intent": {
+        "desired_outcome": "a real termination policy detects saturation honoring a round close recommendation plus a hard round cap and flips terminal state",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Campaigns never converge: each round re-spawns the next escalating cost and the final round output is dropped",
+        "risks": [
+          "cap must not prematurely cut a still-productive campaign"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:15.175161Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "campaign terminates on saturation or round cap; records reach terminal; final round persisted",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "campaign terminates on saturation or round cap; records reach terminal; final round persisted",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Implement campaign convergence and termination policy",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W17": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W18",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W17",
+      "intent": {
+        "desired_outcome": "each researcher session closes on completion; reconcile links answering claims to the OpenQuestion and resolves it",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Researcher sessions leak active and the round OpenQuestion never resolves though a claim answers it",
+        "risks": [
+          "session-close ordering must not race the reconcile"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:15.695676Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "researcher sessions reach closed; answered OpenQuestion marked+linked; no phantom active sessions",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "researcher sessions reach closed; answered OpenQuestion marked+linked; no phantom active sessions",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Close researcher sessions and resolve answered OpenQuestion",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W18": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I21-W17"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W18",
+      "intent": {
+        "desired_outcome": "a researcher can emit a blocking clarification OpenQuestion that gates its round as an operator checkpoint",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Researchers cannot raise a blocking clarification; OpenQuestions are only operator-authored or auto-seeded",
+        "risks": [
+          "a blocking question must pause only its round per D-2 balanced autonomy not the whole campaign"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:16.246505Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "a researcher blocking question appears as an operator checkpoint answerable via the existing channel",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "a researcher blocking question appears as an operator checkpoint answerable via the existing channel",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Let a researcher raise a blocking clarification checkpoint",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W19": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W20",
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/widgets/research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W19",
+      "intent": {
+        "desired_outcome": "the CLAIMS center pane is focus-navigable; select a claim + Enter opens full text and evidence refs",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "CLAIMS pane truncates titles with no way to read full text or evidence refs; peek acts on the tree only",
+        "risks": [
+          "empty or absent claims must be handled honestly"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:16.806331Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "an operator selects a claim and sees untruncated text plus evidence refs; keyboard-navigable",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "an operator selects a claim and sees untruncated text plus evidence refs; keyboard-navigable",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Make CLAIMS pane focus-navigable with claim drill-in",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W20": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I21-W19"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/research.py"
+      ],
+      "gates": [],
+      "id": "P30-I21-W20",
+      "intent": {
+        "desired_outcome": "reconcile dedups near-duplicate claims and/or synthesizes per-domain clusters; the pane count reflects compaction",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "Claims accumulate as a growing un-compacted ledger so the pane stops being scannable as rounds accrue",
+        "risks": [
+          "compaction must not drop a distinct finding as a false duplicate"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:17.342057Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "repeated findings collapse; pane count reflects compacted claims; policy documented",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "repeated findings collapse; pane count reflects compacted claims; policy documented",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Compact near-duplicate claims in the research ledger",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W21": {
+      "agent_role": null,
+      "blocks": [
+        "P30-I21-W22"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon",
+        "src/eawf/workflow/dispatch"
+      ],
+      "gates": [],
+      "id": "P30-I21-W21",
+      "intent": {
+        "desired_outcome": "the elapsed_eu basis is documented and consistent; one canonical runtime label across dispatch_cost and sessions",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "elapsed_eu aliases agent-runtime not wall-clock and dispatch_cost uses claude while sessions use claude-code",
+        "risks": [
+          "label normalization must not break cost-by-runtime rollups"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:17.868312Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "elapsed_eu basis consistent and documented; one canonical runtime label",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "elapsed_eu basis consistent and documented; one canonical runtime label",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Normalize elapsed_eu basis and canonical runtime label",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I21-W22": {
+      "agent_role": null,
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [
+        "P30-I21-W01",
+        "P30-I21-W02",
+        "P30-I21-W03",
+        "P30-I21-W04",
+        "P30-I21-W05",
+        "P30-I21-W06",
+        "P30-I21-W07",
+        "P30-I21-W08",
+        "P30-I21-W09",
+        "P30-I21-W10",
+        "P30-I21-W11",
+        "P30-I21-W12",
+        "P30-I21-W13",
+        "P30-I21-W14",
+        "P30-I21-W15",
+        "P30-I21-W16",
+        "P30-I21-W17",
+        "P30-I21-W18",
+        "P30-I21-W19",
+        "P30-I21-W20",
+        "P30-I21-W21"
+      ],
+      "description": null,
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".ea/state.json",
+        "CHANGELOG.md"
+      ],
+      "gates": [],
+      "id": "P30-I21-W22",
+      "intent": {
+        "desired_outcome": "P30 re-closes with the version bumped and the phase-close commit annotated (release=v0.6.0)",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": null,
+        "problem": "The v0.6.0 re-close must not fire until all validation-repair waves land",
+        "risks": [
+          "must not tag before operator OK"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I21",
+      "opened_at": "2026-07-01T14:47:26.270091Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "version bumped; phase-close commit annotated (release=v0.6.0); ready to tag",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "version bumped; phase-close commit annotated (release=v0.6.0); ready to tag",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-close P30 with validated v0.6.0 release annotation",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
