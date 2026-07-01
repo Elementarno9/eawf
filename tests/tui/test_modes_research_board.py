@@ -1186,16 +1186,20 @@ def test_research_board_action_bindings_exist() -> None:
     assert keys.get("down") == "select_next"
 
 
-def test_research_board_action_keys_in_footer_hints() -> None:
-    """The action keys are advertised in the footer hints (discoverable)."""
+def test_research_board_action_keys_on_mode_key_line() -> None:
+    """The mode-unique action keys are advertised on the top mode-key line.
+
+    W08: the keys moved off the footer hint strip (where they duplicated the
+    action-result idle text) onto the dedicated top mode-key line; ``Enter open``
+    (a tree-nav key) stays on the bottom global-nav footer.
+    """
+    from eawf.surfaces.tui.modes.research_board import MODE_KEYS_LINE
+
     hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
-    # ``Enter`` is the canonical capitalized full key name carrying the
-    # canonical shared-token action ``open`` (W22 token canon + W03 action canon).
-    assert "Enter open" in hints
-    assert "a approve" in hints
-    assert "p park" in hints
-    assert "r follow-up" in hints
-    assert "s snapshot" in hints
+    assert "Enter open" in hints  # tree-nav stays on the footer
+    for chip in ("a approve", "p park", "r follow-up", "s snapshot"):
+        assert chip in MODE_KEYS_LINE
+        assert chip not in hints  # de-duped off the footer
 
 
 def test_research_board_enter_peeks_selected_node(tmp_path: Path) -> None:
@@ -1958,11 +1962,14 @@ def test_research_board_operator_channel_bindings_exist_and_are_distinct() -> No
     assert len(bound_keys) == len(set(bound_keys))
 
 
-def test_research_board_operator_channel_keys_in_footer_hints() -> None:
-    """The operator-channel keys are advertised in the footer hints."""
+def test_research_board_operator_channel_keys_on_mode_key_line() -> None:
+    """The operator-channel keys are advertised on the top mode-key line."""
+    from eawf.surfaces.tui.modes.research_board import MODE_KEYS_LINE
+
     hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
-    assert "o ask" in hints
-    assert "t steer" in hints
+    for chip in ("o ask", "t steer"):
+        assert chip in MODE_KEYS_LINE
+        assert chip not in hints
 
 
 def test_operator_note_modal_commit_dismisses_trimmed_note(tmp_path: Path) -> None:
@@ -2447,11 +2454,14 @@ def test_research_board_operator_input_fork_bindings_exist_and_are_distinct() ->
     assert keys.get("n") == "new_campaign"
 
 
-def test_research_board_operator_input_keys_in_footer_hints() -> None:
-    """The broadcast + override operator-input keys are advertised in the footer."""
+def test_research_board_operator_input_keys_on_mode_key_line() -> None:
+    """The broadcast + override operator-input keys are on the top mode-key line."""
+    from eawf.surfaces.tui.modes.research_board import MODE_KEYS_LINE
+
     hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
-    assert "b broadcast" in hints
-    assert "v override" in hints
+    for chip in ("b broadcast", "v override"):
+        assert chip in MODE_KEYS_LINE
+        assert chip not in hints
 
 
 @pytest.mark.parametrize(
@@ -2584,11 +2594,25 @@ def test_research_board_binds_run_key_to_research_run() -> None:
     assert hasattr(ResearchBoardModeScreen, "action_run_campaign")
 
 
-def test_research_board_advertises_run_in_footer() -> None:
-    """The run affordance is discoverable in the board's footer hint strip."""
+def test_research_board_advertises_run_on_mode_key_line() -> None:
+    """The run affordance is discoverable on the board's top mode-key line."""
     from eawf.surfaces.tui.modes import research_board as rb
 
-    assert "g run" in rb._RESEARCH_HINTS
+    assert "g run" in rb.MODE_KEYS_LINE
+    assert "g run" not in " ".join(rb._RESEARCH_HINTS)
+
+
+def test_research_board_footer_and_mode_key_line_share_no_key() -> None:
+    """No key token repeats across the top mode-key line + the global-nav footer.
+
+    W08 de-dup contract: the two strips carry disjoint key tokens (the overlap
+    on n/o/a/p is what the operator saw as two competing key strips).
+    """
+    from eawf.surfaces.tui.modes import research_board as rb
+
+    footer_tokens = {chip.split()[0] for chip in rb._RESEARCH_HINTS if chip.split()}
+    mode_tokens = {chip.split()[0] for chip in rb.MODE_KEYS_LINE.split(" · ") if chip.split()}
+    assert footer_tokens.isdisjoint(mode_tokens)
 
 
 def test_research_board_g_issues_research_run_rpc(

@@ -235,10 +235,24 @@ _OVERRIDE_METHOD: str = "research.override"
 #: Drawer line before any checkpoint is open (the idle checkpoint surface).
 CHECKPOINT_IDLE: str = "no checkpoint -- nothing awaiting operator review"
 
-#: Action-result line before any action key is pressed.
-ACTION_IDLE: str = (
-    "enter peek  n new  o ask  t steer  b broadcast  v override  "
-    "a approve  p park  r follow-up  s snapshot  g run  x cancel"
+#: Action-result line before any action key is pressed. The mode hotkeys used
+#: to live here (duplicating the footer), so the two key strips overlapped on
+#: n/o/a/p; the keys now ride the dedicated top mode-key line
+#: (:data:`MODE_KEYS_LINE`) and this line reverts to showing only live action
+#: results.
+ACTION_IDLE: str = "no action yet"
+
+#: Id of the top mode-hotkey line (the mode-unique action keys), rendered FIRST
+#: above the global-nav footer line. Other modes with extra keys can opt into
+#: the same top line by yielding their own mode-key Static.
+MODE_KEYS_ID: str = "research-mode-keys"
+
+#: The mode-unique action keys, carried ONLY on the top mode-key line so no key
+#: repeats between it and the global-nav footer (which keeps the tree-nav +
+#: scope / palette / help / quit vocabulary).
+MODE_KEYS_LINE: str = (
+    "n new · o ask · t steer · b broadcast · v override · "
+    "a approve · p park · r follow-up · s snapshot · g run · x cancel"
 )
 
 #: Action-result line when an approve / park has no checkpoint to act on.
@@ -304,25 +318,10 @@ _RESEARCH_HINTS: tuple[str, ...] = (
     render_hint_label("↑↓", "select"),
     render_hint_label("Enter", "open"),
     render_hint_label("d", "brief"),
-    render_hint_label("n", "new"),
-    render_hint_label("o", "ask"),
-    render_hint_label("t", "steer"),
-    # The broadcast token ``b`` is a board-local operator-channel key absent from
-    # the shared footer vocabulary (CANONICAL_HINT_TOKENS), so its label is built
-    # as the same "<token> <action>" literal render_hint_label emits for a
-    # mode-specific token, without the shared-vocabulary guard.
-    "b broadcast",
-    render_hint_label("v", "override"),
-    render_hint_label("a", "approve"),
-    render_hint_label("p", "park"),
-    render_hint_label("r", "follow-up"),
-    render_hint_label("s", "snapshot"),
-    # ``g`` (run) is a board-local key absent from the shared footer
-    # vocabulary (CANONICAL_HINT_TOKENS), so -- like ``b broadcast`` above --
-    # its label is the literal "<token> <action>" form without the
-    # shared-vocabulary guard.
-    "g run",
-    render_hint_label("x", "cancel"),
+    # The mode-unique action keys (n/o/t/b/v/a/p/r/s/g/x) are NOT repeated here:
+    # they ride the dedicated top mode-key line (:data:`MODE_KEYS_LINE`) so the
+    # two footer strips no longer overlap. This bottom line keeps the tree-nav +
+    # global-nav (scope / palette / help / quit) vocabulary only.
     render_hint_label("w/r/u", "scope"),
     render_hint_label("/", "palette"),
     render_hint_label("?", "help"),
@@ -2043,6 +2042,10 @@ class ResearchBoardModeScreen(ScopeScreen):
             drawer.border_title = "CHECKPOINT"
             yield drawer
             yield Static(ACTION_IDLE, id=ACTION_RESULT_ID)
+            # Top mode-key line: the mode-unique action keys, rendered just above
+            # the global-nav footer (docked bottom) so the two strips no longer
+            # duplicate keys.
+            yield Static(MODE_KEYS_LINE, id=MODE_KEYS_ID, classes="research-mode-keys")
 
     def on_mount(self) -> None:
         """Seed from app state, arm the refresh seam, and clamp the cursor."""
@@ -3073,6 +3076,8 @@ __all__ = [
     "DRAWER_ID",
     "EMPTY_NOTICE",
     "EMPTY_SUBLINE",
+    "MODE_KEYS_ID",
+    "MODE_KEYS_LINE",
     "NEW_NO_DAEMON",
     "NEW_PENDING",
     "NONE_YET",

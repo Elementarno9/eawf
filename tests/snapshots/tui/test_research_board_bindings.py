@@ -175,11 +175,16 @@ def _write_seeded_scope(tmp_path: Path) -> Path:
 # --------------------------------------------------------------------------
 
 
-def test_research_board_footer_advertises_new_and_cancel() -> None:
-    """The authored footer hints carry ``n new`` and ``x cancel``."""
+def test_research_board_mode_key_line_advertises_new_and_cancel() -> None:
+    """The top mode-key line carries ``n new`` and ``x cancel`` (W08 de-dup)."""
+    from eawf.surfaces.tui.modes.research_board import MODE_KEYS_LINE
+
     hints = " ".join(ResearchBoardModeScreen.FOOTER_HINTS)
-    assert "n new" in hints
-    assert "x cancel" in hints
+    assert "n new" in MODE_KEYS_LINE
+    assert "x cancel" in MODE_KEYS_LINE
+    # De-duped off the global-nav footer.
+    assert "n new" not in hints
+    assert "x cancel" not in hints
 
 
 # --------------------------------------------------------------------------
