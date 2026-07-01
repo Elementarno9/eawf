@@ -1,4 +1,4 @@
- ◉ Eä  repo ❯ QR ❯ Autopilot    ≈ idle    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ Autopilot                                                                        ≈ idle    HH:MM UTC
 
   autopilot idle -- press a to arm the fleet drive
 

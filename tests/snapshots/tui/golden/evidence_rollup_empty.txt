@@ -1,4 +1,4 @@
- ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Evidence    runtime: 1 running    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Evidence                                             runtime: 1 running    HH:MM UTC
  criteria: none
  no close-readiness criteria
  no agent reports yet

@@ -1,4 +1,4 @@
- ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Evidence    runtime: 1 running    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Evidence                                             runtime: 1 running    HH:MM UTC
  criteria: 3/4 ready
   criterion  gate     produced_by  status
   CR-01      pass     -            pass
