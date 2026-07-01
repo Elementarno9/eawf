@@ -9085,6 +9085,20 @@
       "scope_id": "P30-I20-W60",
       "status": "done",
       "updated_at": "2026-07-01T13:36:50.572007Z"
+    },
+    "P30-I20-W61": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I20-W61",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I20-W61",
+      "model": null,
+      "scope_id": "P30-I20-W61",
+      "status": "done",
+      "updated_at": "2026-07-01T13:50:28.608055Z"
     }
   },
   "agent_sessions": {
@@ -9140,6 +9154,48 @@
       "runtime": "claude",
       "scope_id": "P30-I20-W60",
       "started_at": "2026-07-01T13:36:19.690820Z",
+      "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260701T134734Z-executor-claude": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-01T13:47:36.147622Z",
+      "id": "SES-20260701T134734Z-executor-claude",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P30-I20-W61",
+      "started_at": "2026-07-01T13:47:34.255777Z",
+      "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260701T134758Z-executor-claude": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-01T13:48:12.936934Z",
+      "id": "SES-20260701T134758Z-executor-claude",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P30-I20-W61",
+      "started_at": "2026-07-01T13:47:58.694775Z",
+      "status": "closed",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260701T134842Z-executor-claude": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-07-01T13:51:16.034270Z",
+      "id": "SES-20260701T134842Z-executor-claude",
+      "role": "executor",
+      "runtime": "claude",
+      "scope_id": "P30-I20-W61",
+      "started_at": "2026-07-01T13:48:42.455222Z",
       "status": "closed",
       "summary": null,
       "worktree_ids": []
@@ -12305,6 +12361,19 @@
       "scope_id": "P30-I20-W58",
       "status": "open",
       "title": "Watch tail freezes past 500 output lines from cap-shift"
+    },
+    "B107": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-07-01T13:40:11.175146Z",
+      "description": "eawf research campaign new resolves composed.research from enabled profiles, but no shipped profile declares a research: block, so the CLI path errors 'no research: block configured' out of the box. The TUI create path works (operator types domains). Ship a default research: domains block on the research profile (or a config path) so CLI campaign new is runnable OOTB. Surfaced during v0.6.0 3b validation.",
+      "id": "B107",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "P30-I20",
+      "status": "open",
+      "title": "Research profile ships no default research block for CLI campaign new"
     },
     "B70": {
       "closed_at": null,
@@ -23419,6 +23488,19 @@
       "reference_class": "bucket:S",
       "scope_id": "P30-I20-W60",
       "updated_at": "2026-07-01T13:36:20.227563Z"
+    },
+    "P30-I20-W61": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I20-W61-bucket-20260701T135027Z",
+      "display": "0.25 EU · exp ~8m · pess ~27m",
+      "expected_eu": 0.25,
+      "expected_minutes": 7.5,
+      "id": "EST-P30-I20-W61",
+      "pessimistic_eu": 0.9,
+      "pessimistic_minutes": 27.0,
+      "reference_class": "bucket:XS",
+      "scope_id": "P30-I20-W61",
+      "updated_at": "2026-07-01T13:50:27.662952Z"
     }
   },
   "fleet_run": {
@@ -23427,30 +23509,30 @@
     "convergence": "drain",
     "counters": {
       "blocked": 0,
-      "claimed": 0,
+      "claimed": 1,
       "clean_rounds": 0,
       "closed": 0,
-      "dispatched": 0,
-      "failed": 0,
+      "dispatched": 1,
+      "failed": 1,
       "forked": 0,
       "forks_resolved": 0,
       "rounds": 0,
       "spent_eu": 0.0,
       "spent_usd": 0.0
     },
-    "elapsed_hours": null,
-    "ended_at": null,
+    "elapsed_hours": 421.92003673249997,
+    "ended_at": "2026-07-01T13:42:34.467698Z",
     "eu_cap": null,
     "forks": [],
     "frontier": [
-      "P01-I01-W01"
+      "P30-I20-W25"
     ],
     "hard_halt": false,
     "kclean_k": 2,
     "lanes": {},
-    "run_state": "idle",
-    "terminal_reason": null,
-    "throughput": null,
+    "run_state": "done",
+    "terminal_reason": "drained",
+    "throughput": 0.0,
     "usd_cap": 1.0,
     "waves_cap": 1
   },
@@ -25672,7 +25754,8 @@
         "P30-I20-W57",
         "P30-I20-W58",
         "P30-I20-W59",
-        "P30-I20-W60"
+        "P30-I20-W60",
+        "P30-I20-W61"
       ]
     }
   },
@@ -26761,7 +26844,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T13:36:50.572190Z",
+  "updated_at": "2026-07-01T13:50:28.609038Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -98233,7 +98316,8 @@
         "P30-I20-W57",
         "P30-I20-W58",
         "P30-I20-W59",
-        "P30-I20-W60"
+        "P30-I20-W60",
+        "P30-I20-W61"
       ],
       "description": null,
       "dispatch_history": [],
@@ -100217,6 +100301,78 @@
         }
       ],
       "title": "Surface stored runtime cost when no telemetry session",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W61": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": "",
+      "claimed_at": "2026-07-01T13:50:27.657209Z",
+      "closed_at": "2026-07-01T13:50:28.608055Z",
+      "commit": "da1b298c2256ca93b4af5f282628cff2d569fe1c",
+      "deps": [],
+      "description": "W57 rendered metric-tile EU at two decimals but left the tile-binding test asserting one decimal; update the actual/target assertions to the .2f form.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/tui/test_overlays_metrics.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W61",
+      "intent": {
+        "desired_outcome": "The metrics tile test asserts the two-decimal EU render and the gauntlet is green.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "A red gauntlet blocks the v0.6.0 ship.",
+        "problem": "The full gauntlet fails: the metrics tile test asserts one-decimal EU that W57 made two-decimal.",
+        "risks": [
+          "None beyond the assertion text"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-07-01T13:46:55.849253Z",
+      "outcome": "Assert two-decimal EU in metrics tile test; gauntlet green",
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "test_overlays_metrics tile assertions match the two-decimal EU render",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "test_overlays_metrics tile assertions match the two-decimal EU render",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Full test file passes",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Full test file passes",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix stale two-decimal EU assertions in metrics tile test",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
