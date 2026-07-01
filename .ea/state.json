@@ -9184,6 +9184,34 @@
       "status": "done",
       "updated_at": "2026-07-01T15:56:47.203017Z"
     },
+    "P30-I21-W07": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W07",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W07",
+      "model": null,
+      "scope_id": "P30-I21-W07",
+      "status": "done",
+      "updated_at": "2026-07-01T16:34:53.094956Z"
+    },
+    "P30-I21-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W08",
+      "model": null,
+      "scope_id": "P30-I21-W08",
+      "status": "done",
+      "updated_at": "2026-07-01T16:43:43.663519Z"
+    },
     "P30-I21-W09": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -23692,6 +23720,32 @@
       "scope_id": "P30-I21-W06",
       "updated_at": "2026-07-01T15:55:16.322099Z"
     },
+    "P30-I21-W07": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W07-bucket-20260701T163451Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W07",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W07",
+      "updated_at": "2026-07-01T16:34:51.585237Z"
+    },
+    "P30-I21-W08": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W08-bucket-20260701T164340Z",
+      "display": "0.5 EU · exp ~15m · pess ~54m",
+      "expected_eu": 0.5,
+      "expected_minutes": 15.0,
+      "id": "EST-P30-I21-W08",
+      "pessimistic_eu": 1.8,
+      "pessimistic_minutes": 54.0,
+      "reference_class": "bucket:S",
+      "scope_id": "P30-I21-W08",
+      "updated_at": "2026-07-01T16:43:40.339364Z"
+    },
     "P30-I21-W09": {
       "confidence": "low",
       "current_store_record_id": "EST-P30-I21-W09-bucket-20260701T161403Z",
@@ -27066,7 +27120,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T16:30:04.915381Z",
+  "updated_at": "2026-07-01T16:43:43.663758Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -100805,10 +100859,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T16:34:51.561896Z",
+      "closed_at": "2026-07-01T16:34:53.094956Z",
+      "commit": "80ed70154f4b7ee3566c67b20cc74055b5009e3c",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -100832,12 +100886,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:46:41.587165Z",
-      "outcome": null,
+      "outcome": "spawn vs bind attempt counters renamed (spawn_attempt/bind_attempt); watch header label surfaces the spawn attempt so attempt-1 vs retry is legible without eawfd.log; watch snapshots regenerated",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -100864,10 +100918,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T16:43:40.318167Z",
+      "closed_at": "2026-07-01T16:43:43.663519Z",
+      "commit": "703c1f0fbf9f8a9ea22d3862e7e45c8e49246336",
       "deps": [],
       "description": null,
       "dispatch_history": [],
@@ -100890,12 +100944,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:46:42.121756Z",
-      "outcome": null,
+      "outcome": "research board footer split: top mode-key line (mode-unique action keys) + bottom global-nav line, no key duplicated; action-result line shows results only; 6 snapshots regenerated",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
