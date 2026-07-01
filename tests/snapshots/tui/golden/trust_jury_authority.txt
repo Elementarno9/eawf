@@ -1,4 +1,4 @@
- ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Trust    runtime: 1 running    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Trust                                                runtime: 1 running    HH:MM UTC
 
   ╭─ TRUST ───────────────────────────────────────────────╮ ╭─ SAMPLE SIZES ────────────────────────────────────────╮
   │ window all                                            │ │ no data                                               │
@@ -18,9 +18,9 @@
   ╰───────────────────────────────────────────────────────╯ ╰───────────────────────────────────────────────────────╯
 
   ╭─ TIERS ───────────────────────────────────────────────╮ ╭─ OUTPUT LABELS ───────────────────────────────────────╮
-  │ verified 0                                            │ │ P01-I01-W01 deferred_outcome outcome or actual store  │
-  │ attested 0                                            │ │ row not available yet                                 │
-  │ deferred 1                                            │ ╰───────────────────────────────────────────────────────╯
+  │ verified 0                                            │ │ P01-I01-W01 deferred_outcome wave not yet closed      │
+  │ attested 0                                            │ ╰───────────────────────────────────────────────────────╯
+  │ deferred 1                                            │
   │ unavailable 0                                         │
   ╰───────────────────────────────────────────────────────╯
 

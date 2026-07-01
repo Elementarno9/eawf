@@ -1,4 +1,4 @@
- ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Trust    runtime: 1 running    HH:MM UTC
+ ◉ Eä  repo ❯ QR ❯ P01 ❯ P01-I01 ❯ Trust                                                runtime: 1 running    HH:MM UTC
 
   ╭─ TRUST ───────────────────────────────────────────────╮ ╭─ SAMPLE SIZES ────────────────────────────────────────╮
   │ window all                                            │ │ no data                                               │

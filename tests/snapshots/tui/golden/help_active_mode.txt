@@ -8,7 +8,7 @@
       │    q          quit                                                                                       │
       │    Esc        close overlay / drop palette / leave zoom                                                  │
       │    w          switch to workspace scope                                                                  │
-      │    r          switch to repo scope                                                                   ▁▁  │
+      │    r          switch to repo scope                                                                   ▂▂  │
       │    u          switch to user scope                                                                       │
       │    Ctrl-W / Ctrl-R / Ctrl-U scope switch (aliases)                                                       │
       │    c          open config (any scope)                                                                    │
