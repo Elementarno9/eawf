@@ -54,6 +54,7 @@ from eawf.runtime.daemon.methods.daemon import (
 from eawf.runtime.daemon.server import (
     CATCH_UP_TOO_LARGE,
     DAEMON_SHUTTING_DOWN,
+    DISPATCH_CLOSE_BLOCKED,
     INTERNAL_ERROR,
     INVALID_PARAMS,
     INVALID_REQUEST,
@@ -99,6 +100,7 @@ def test_daemon_server_error_band_is_pinned() -> None:
     assert VALIDATION_FAILED == -32002
     assert CATCH_UP_TOO_LARGE == -32008
     assert DAEMON_SHUTTING_DOWN == -32009
+    assert DISPATCH_CLOSE_BLOCKED == -32011
 
 
 def test_server_error_codes_are_unique() -> None:
@@ -113,6 +115,7 @@ def test_server_error_codes_are_unique() -> None:
         VALIDATION_FAILED,
         CATCH_UP_TOO_LARGE,
         DAEMON_SHUTTING_DOWN,
+        DISPATCH_CLOSE_BLOCKED,
     ]
     assert len(codes) == len(set(codes))
 
@@ -292,6 +295,50 @@ def test_process_frame_bytes_extra_param_maps_to_invalid_params() -> None:
 
     response = asyncio.run(body())
     assert response["error"]["code"] == INVALID_PARAMS
+
+
+def test_process_frame_bytes_close_blocked_maps_to_typed_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``DispatchCloseBlockedError`` maps to the typed -32011, not -32603.
+
+    A FAIL / BLOCKED report verdict is a legitimate agent outcome (the report is
+    already persisted; only the close-path advance is refused). The P30-I21 live
+    codex e2e showed it surfacing as a generic -32603 internal error, which hid
+    the real cause. The typed code carries the verdict + reasons in
+    ``error.data`` so the client can distinguish it from a real server fault.
+    """
+    from eawf.kernel.state.enums import AgentReportVerdict
+    from eawf.workflow.verify.dispatch_close import (
+        DispatchCloseBlockedError,
+        VerifyResult,
+    )
+
+    ctx = _build_ctx()
+
+    async def _raise(method: str, ctx_: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+        raise DispatchCloseBlockedError(
+            wave_id="P30-I21-W05",
+            result=VerifyResult(
+                passed=False,
+                verdict=AgentReportVerdict.BLOCKED,
+                reasons=("verdict=blocked not in close-ready set",),
+            ),
+        )
+
+    monkeypatch.setattr("eawf.runtime.daemon.server.dispatch", _raise)
+    req = orjson.dumps({"jsonrpc": "2.0", "id": "b1", "method": "agent.dispatch", "params": {}})
+
+    async def body() -> dict[str, Any]:
+        return orjson.loads(await process_frame_bytes(req, ctx))
+
+    response = asyncio.run(body())
+    assert response["error"]["code"] == DISPATCH_CLOSE_BLOCKED
+    assert response["error"]["code"] != INTERNAL_ERROR
+    data = response["error"]["data"]
+    assert data["wave_id"] == "P30-I21-W05"
+    assert data["verdict"] == "blocked"
+    assert data["reasons"] == ["verdict=blocked not in close-ready set"]
 
 
 # ---------------------------------------------------------------------------

@@ -56,6 +56,7 @@ from eawf.runtime.daemon.methods import (
 )
 from eawf.runtime.daemon.methods.event import subscribe as run_subscribe
 from eawf.runtime.daemon.methods.state_subscribe import SUBSCRIBE_METHODS
+from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,11 @@ INTERNAL_ERROR = -32603
 UNAUTHORIZED = -32000
 CATCH_UP_TOO_LARGE = -32008
 DAEMON_SHUTTING_DOWN = -32009
+#: A live dispatch bound a report whose verdict is not close-ready (FAIL /
+#: BLOCKED). This is a legitimate agent outcome, not a server fault, so it maps
+#: to its own typed code (with the verdict + reasons in ``error.data``) rather
+#: than the generic -32603 internal error a raised exception would otherwise get.
+DISPATCH_CLOSE_BLOCKED = -32011
 
 
 def _frame(obj: dict[str, Any]) -> bytes:
@@ -219,6 +225,22 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
         return _error(req_id, VALIDATION_FAILED, str(exc))
     except ValueError as exc:
         return _error(req_id, INVALID_PARAMS, str(exc))
+    except DispatchCloseBlockedError as exc:
+        # A FAIL / BLOCKED report verdict is a legitimate agent outcome, not a
+        # server fault. The report is already persisted; only the close-path
+        # advance was refused. Surface a typed error (verdict + reasons in
+        # ``error.data``) so the client can distinguish it from a real internal
+        # error rather than seeing a generic -32603.
+        return _error(
+            req_id,
+            DISPATCH_CLOSE_BLOCKED,
+            str(exc),
+            data={
+                "wave_id": exc.wave_id,
+                "verdict": exc.result.verdict.value,
+                "reasons": list(exc.result.reasons),
+            },
+        )
     except Exception as exc:
         logger.exception(f"_process_frame method={method!r} unhandled")
         return _error(req_id, INTERNAL_ERROR, f"internal error: {exc}")
