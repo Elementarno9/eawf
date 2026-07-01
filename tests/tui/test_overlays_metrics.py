@@ -235,8 +235,8 @@ def test_render_projection_tile_binds_all_six_metric_tiles() -> None:
     )
 
     bodies = {spec.tile_id: render_projection_tile(projection, spec.tile_id) for spec in TILE_SPECS}
-    assert "actual 1.5 EU" in bodies["tile-variance"]
-    assert "target 4.0 EU" in bodies["tile-burn"]
+    assert "actual 1.50 EU" in bodies["tile-variance"]
+    assert "target 4.00 EU" in bodies["tile-burn"]
     assert "median 30.0m" in bodies["tile-elapsed"]
     assert "claude 80%" in bodies["tile-cache"]
     assert "RUNTIME_TIMEOUT 1" in bodies["tile-switchover"]
