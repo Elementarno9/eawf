@@ -409,9 +409,10 @@ def test_build_tree_nodes_campaign_emits_campaign_round_topic_levels() -> None:
     # Two staged domains -> two topic nodes after the round node.
     assert kinds[2] is NodeKind.TOPIC
     assert kinds[3] is NodeKind.TOPIC
-    topic_labels = [node.label for node in nodes if node.kind is NodeKind.TOPIC]
-    assert "market-structure" in topic_labels
-    assert "pricing-models" in topic_labels
+    domain_labels = [node.label for node in nodes if node.kind is NodeKind.TOPIC]
+    # W12: the leaf reads "domain: <name>" so the tree hierarchy is unambiguous.
+    assert "domain: market-structure" in domain_labels
+    assert "domain: pricing-models" in domain_labels
 
 
 def test_build_tree_nodes_open_question_groups_under_a_questions_round() -> None:
@@ -455,8 +456,8 @@ def test_persisted_campaign_surfaces_as_board_topic_node(tmp_path: Path) -> None
     campaign_nodes = [node for node in nodes if node.kind is NodeKind.CAMPAIGN]
     assert len(campaign_nodes) == 1
     assert campaign_nodes[0].label == "Survey the options-pricing landscape"
-    topic_labels = [node.label for node in nodes if node.kind is NodeKind.TOPIC]
-    assert topic_labels == ["market-structure", "pricing-models"]
+    domain_labels = [node.label for node in nodes if node.kind is NodeKind.TOPIC]
+    assert domain_labels == ["domain: market-structure", "domain: pricing-models"]
 
 
 # --------------------------------------------------------------------------

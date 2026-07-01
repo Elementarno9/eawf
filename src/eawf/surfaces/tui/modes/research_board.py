@@ -3,11 +3,12 @@
 The Research mode renders the research-campaign control plane for the active
 scope as the ratified three-pane orchestrator over the campaign engine:
 
-* **Left pane -- the topic tree.** A campaign > round > topic > unresolved-
-  question outline built from the staged
+* **Left pane -- the campaign tree.** A campaign-topic > round > domain >
+  unresolved-question outline built from the staged
   :class:`~eawf.kernel.store.kinds.research_campaign.ResearchCampaignPayload`
-  rows (one campaign node, a round node whose FA8 auto-run state derives from
-  the real executed-round records, one topic node per staged domain) plus the
+  rows (one campaign node carrying the topic, a round node whose FA8 auto-run
+  state derives from the real executed-round records, one ``domain: <name>``
+  leaf per staged domain the topic is fanned across) plus the
   state-resident :class:`~eawf.kernel.state.models.OpenQuestion` rows (the
   unresolved-question leaves). ``up`` / ``down`` move a flat selection cursor
   over the tree nodes; ``enter`` peeks the selected node's findings read-only.
@@ -1362,9 +1363,13 @@ def build_tree_nodes(
             nodes.append(
                 TreeNode(
                     kind=NodeKind.TOPIC,
-                    label=domain,
+                    # The leaf IS a domain (the campaign topic is fanned across
+                    # domains); label it "domain: <name>" so the tree reads
+                    # campaign-topic -> round -> domain, not a bare name that
+                    # reads as another topic.
+                    label=f"domain: {domain}",
                     depth=2,
-                    detail=f"staged topic in {campaign.topic}",
+                    detail=f"staged domain of campaign topic {campaign.topic!r}",
                     campaign_id=campaign.campaign_id,
                 )
             )

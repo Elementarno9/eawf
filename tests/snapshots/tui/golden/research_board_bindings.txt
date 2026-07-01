@@ -3,8 +3,8 @@
   ╭─ TOPIC TREE ──────────────────────────────────────────────────╮╭─ CLAIMS / EVIDENCE ───────────────────────────────────────────╮╭─ PROGRESS / BUDGET ────────────────────────────────────────────╮
   │ > ≡ Survey the options-pricing landscape                      ││                                                               ││ RUN runnable                                                   │
   │     ◆ round running                                           ││ ◌ Implied vol surface is downward sloping in strike           ││ ROUND 1 running · 1 claim(s)                                   │
-  │       ◌ market-structure                                      ││                                                               ││ ACTIVE 1 claim(s)                                              │
-  │       ◌ pricing-models                                        ││ Options (supporting evidence)                                 ││ WAITING 1 open question(s)                                     │
+  │       ◌ domain: market-structure                              ││                                                               ││ ACTIVE 1 claim(s)                                              │
+  │       ◌ domain: pricing-models                                ││ Options (supporting evidence)                                 ││ WAITING 1 open question(s)                                     │
   │     ◆ round running -- questions                              ││ none yet                                                      ││ PAUSED 0 checkpoint(s)                                         │
   │       ◌ Which curve model fits the short tenor                ││                                                               ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
   │ enter to peek the selected node                               ││ Conflicts (contradicting evidence)                            ││ RISKS none                                                     │

@@ -4,8 +4,8 @@
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN saturated                       │
   │ landscape                          ││ ● Implied vol surface is downward   ││ ROUND 1 run                         │
   │     ● round saturated              ││ sloping in strike                   ││ ACTIVE 2 claim(s)                   │
-  │       ◌ market-structure           ││ ✕ Term-structure arbitrage is       ││ WAITING 1 open question(s)          │
-  │       ◌ pricing-models             ││ exploitable intraday                ││ PAUSED 0 checkpoint(s)              │
+  │       ◌ domain: market-structure   ││ ✕ Term-structure arbitrage is       ││ WAITING 1 open question(s)          │
+  │       ◌ domain: pricing-models     ││ exploitable intraday                ││ PAUSED 0 checkpoint(s)              │
   │     ● round saturated -- questions ││                                     ││ BUDGET 2 staged topic(s), 1         │
   │       ◌ Which curve model fits the ││ Options (supporting evidence)       ││ answered, 2 pruned                  │
   │ short tenor                        ││ ● 0 ref(s) Implied vol surface is   ││ RISKS none                          │
