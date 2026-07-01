@@ -37,6 +37,7 @@ import contextlib
 import logging
 import os
 import socket
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -66,6 +67,14 @@ DEFAULT_DAEMON_FAILURE_THRESHOLD: int = 3
 
 #: Default cadence in seconds for repeated daemon-socket reconnect probes.
 DEFAULT_DAEMON_PROBE_INTERVAL_S: float = 0.5
+
+#: Minimum seconds between subscription (re)connect attempts. A stream the
+#: daemon repeatedly drops must NOT be re-subscribed at the probe cadence
+#: (~2/s), which floods the daemon with full re-subscribes (the storm this
+#: throttle fixes). The always-on mtime-poll backstop covers freshness during
+#: the gap, and the ``since`` cursor makes each reconnect cheap. Overridable via
+#: ``EAWF_RECONNECT_MIN_INTERVAL_S`` so a test can drive a tight loop.
+DEFAULT_RECONNECT_MIN_INTERVAL_S: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -281,6 +290,18 @@ class StateBinding:
         else:
             self._daemon_probe_interval = DEFAULT_DAEMON_PROBE_INTERVAL_S
         self._last_mtime = 0.0
+        # Subscription cursor + reconnect throttle (W04): the id of the last
+        # event the push stream delivered, resumed via ``since=`` on every
+        # (re)subscribe so a reconnect never re-requests the backlog; and the
+        # monotonic timestamp of the last connect attempt so a repeatedly-
+        # dropping stream reconnects on a bounded cadence, not per probe tick.
+        self._last_event_id: str | None = None
+        self._last_subscribe_monotonic = 0.0
+        reconnect_env = os.environ.get("EAWF_RECONNECT_MIN_INTERVAL_S")
+        if reconnect_env is not None:
+            self._reconnect_min_interval = float(reconnect_env)
+        else:
+            self._reconnect_min_interval = DEFAULT_RECONNECT_MIN_INTERVAL_S
 
     async def connect(self) -> None:
         """Load initial state, then run daemon push + an always-on poll backstop.
@@ -392,9 +413,22 @@ class StateBinding:
         self._poll_task = None
 
     async def _start_subscribe_loop(self) -> None:
-        """Start the daemon subscription loop when not already running."""
+        """Start the daemon subscription loop, holding ONE durable subscription.
+
+        A restart is refused while the subscription task is live (so a healthy
+        stream is never duplicated) AND throttled to at most once per
+        :attr:`_reconnect_min_interval`: a stream the daemon repeatedly drops
+        would otherwise be re-subscribed on every probe tick (~2/s), flooding
+        the daemon with full re-subscribes -- the storm this throttle fixes.
+        The always-on mtime-poll backstop keeps the bound state fresh across the
+        throttled gap, and the ``since`` cursor makes each reconnect cheap.
+        """
         if self._subscribe_task is not None and not self._subscribe_task.done():
             return
+        now = time.monotonic()
+        if now - self._last_subscribe_monotonic < self._reconnect_min_interval:
+            return
+        self._last_subscribe_monotonic = now
         self._subscribe_task = asyncio.create_task(self._subscribe_loop())
 
     async def _set_degraded(self, degraded: bool) -> None:
@@ -437,6 +471,10 @@ class StateBinding:
         params: dict[str, object] = {"kinds": [StoreKind.EVENT.value]}
         if self._scope_id is not None:
             params["scope_id"] = self._scope_id
+        # Resume from the last delivered event so a reconnect continues the
+        # stream instead of re-requesting the full backlog (since=None).
+        if self._last_event_id is not None:
+            params["since"] = self._last_event_id
         return params
 
     def _run_subscription(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -531,6 +569,8 @@ class StateBinding:
         except (orjson.JSONDecodeError, ValidationError, ValueError) as exc:
             logger.debug(f"_handle_push_line skip cause={exc!r}")
             return
+        # Advance the resume cursor so a later reconnect resumes past this event.
+        self._last_event_id = envelope.id
         asyncio.run_coroutine_threadsafe(self._handle_push(envelope), loop)
 
     async def _handle_push(self, envelope: Envelope) -> None:
