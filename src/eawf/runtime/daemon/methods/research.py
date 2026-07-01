@@ -1717,10 +1717,17 @@ def run_campaign(
             saturated=stamped.saturated,
             checkpoint=stamped.checkpoint,
         )
+    # Flip the campaign to its terminal CONVERGED state (W16): the run halted on
+    # saturation or the hard round cap, so the campaign is done and must NOT
+    # linger ACTIVE forever (the stuck-active record the operator saw). Re-read
+    # so an operator cancel mid-run wins; only an ACTIVE campaign converges.
+    latest = read_latest_campaign(state_path, args.campaign_id)
+    if latest is not None and latest.status is CampaignStatus.ACTIVE:
+        persist_campaign(state_path, latest.model_copy(update={"status": CampaignStatus.CONVERGED}))
     logger.info(
         f"run_campaign campaign={args.campaign_id!r} rounds={loop.rounds_run} "
         f"halt={loop.halt_reason.value} checkpoints={len(loop.checkpoints)} "
-        f"claims={len(claim_ids)}"
+        f"claims={len(claim_ids)} terminal={CampaignStatus.CONVERGED.value}"
     )
     return RunCampaignResult(
         campaign_id=args.campaign_id,

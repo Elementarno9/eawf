@@ -353,7 +353,9 @@ def test_campaign_acceptance_two_rounds_steer_claims_checkpoint_and_evibound(
         # reconstructible off the temp state alone -- the snapshot RPC folds it.
         snap = await snapshot(ctx, {"campaign_id": campaign_id})
         assert snap["campaign_id"] == campaign_id
-        assert snap["status"] == "active"
+        # W16: a completed run flips the campaign to its terminal CONVERGED state
+        # (it no longer lingers ACTIVE forever).
+        assert snap["status"] == "converged"
         assert snap["rounds_run"] == 2
         assert snap["total_findings"] == 4
         assert snap["total_claims"] == 4

@@ -202,15 +202,19 @@ class OpenQuestionStatus(StrEnum):
 class CampaignStatus(StrEnum):
     """Lifecycle of a persisted research campaign record.
 
-    A staged campaign enters the store ``ACTIVE`` and stays there for the life
-    of the campaign. ``CANCELLED`` is the tombstone state: the operator
-    abandons the campaign, so the record is marked dead (with a cancel
-    timestamp + reason on the payload) rather than deleted, keeping the
-    append-only store traceable. A cancelled campaign no longer counts as live
-    research signal on the research board.
+    A staged campaign enters the store ``ACTIVE`` and stays there while it runs.
+    ``CONVERGED`` is the natural terminal state: a run halted on saturation or
+    the hard round cap flips the campaign to ``CONVERGED`` so it never lingers
+    ``ACTIVE`` forever; a converged campaign stays visible on the board as a
+    completed campaign (its claims + rounds remain). ``CANCELLED`` is the
+    operator tombstone: the operator abandons the campaign, so the record is
+    marked dead (with a cancel timestamp + reason on the payload) rather than
+    deleted, keeping the append-only store traceable; a cancelled campaign drops
+    off the board's live signal.
     """
 
     ACTIVE = "active"
+    CONVERGED = "converged"
     CANCELLED = "cancelled"
 
 

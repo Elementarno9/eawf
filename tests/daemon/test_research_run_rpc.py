@@ -331,6 +331,46 @@ def test_run_campaign_persists_each_round_to_budget(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_run_campaign_flips_to_terminal_converged(tmp_path: Path) -> None:
+    """A completed run flips the campaign ACTIVE -> CONVERGED, final round kept.
+
+    W16: the campaign must reach a terminal status (never linger ACTIVE forever)
+    on both the hard-cap and saturation halts, and the last round the loop ran
+    is persisted (not dropped).
+    """
+    from eawf.kernel.state.enums import CampaignStatus
+    from eawf.runtime.daemon.methods.research import read_latest_campaign
+
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path)
+
+    async def body() -> None:
+        # Hard round-cap halt.
+        await create_campaign(ctx, _stage_params("campaign-cap"))
+        result = run_campaign(
+            ctx,
+            RunCampaignParams(campaign_id="campaign-cap", round_budget=2),
+            produce_agent_end=_produce_findings,
+        )
+        assert result["rounds_run"] == 2
+        cap = read_latest_campaign(state_path, "campaign-cap")
+        assert cap is not None and cap.status is CampaignStatus.CONVERGED
+        # The final (2nd) round is persisted, not dropped.
+        assert [r.round_number for r in read_campaign_rounds(state_path, "campaign-cap")] == [1, 2]
+
+        # Saturation halt also converges.
+        await create_campaign(ctx, _stage_params("campaign-sat"))
+        run_campaign(
+            ctx,
+            RunCampaignParams(campaign_id="campaign-sat", round_budget=5),
+            produce_agent_end=_produce_empty,
+        )
+        sat = read_latest_campaign(state_path, "campaign-sat")
+        assert sat is not None and sat.status is CampaignStatus.CONVERGED
+
+    _run(body)
+
+
 def test_run_campaign_halts_on_saturation(tmp_path: Path) -> None:
     """A round returning no findings saturates and halts the loop early."""
     state_path = tmp_path / "state.json"
@@ -592,7 +632,8 @@ def test_snapshot_summarises_run(tmp_path: Path) -> None:
         )
         result = await snapshot(ctx, {"campaign_id": "campaign-snap"})
         assert result["campaign_id"] == "campaign-snap"
-        assert result["status"] == "active"
+        # W16: the completed run flipped the campaign to its terminal state.
+        assert result["status"] == "converged"
         assert result["topic"] == "options-pricing landscape"
         assert result["rounds_run"] == 2
         assert result["total_findings"] == 4  # 2 dispatches x 2 rounds
