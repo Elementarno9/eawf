@@ -302,6 +302,46 @@ def _produce_empty(dispatch: StagedDispatch) -> Mapping[str, object]:
     return _agent_end_body(dispatch.domain, findings=[])
 
 
+def _produce_blocked(dispatch: StagedDispatch) -> Mapping[str, object]:
+    """A stub producer whose researcher blocks on a clarification question."""
+    body = dict(_agent_end_body(dispatch.domain, findings=[f"{dispatch.domain}-claim"]))
+    body["verdict"] = "blocked"
+    body["question"] = f"clarify the {dispatch.domain} scope before proceeding"
+    return body
+
+
+def test_run_campaign_researcher_block_raises_operator_checkpoint(tmp_path: Path) -> None:
+    """A researcher verdict=blocked with a question raises a BLOCKED OpenQuestion.
+
+    W18: the clarification surfaces as an operator checkpoint (a BLOCKING
+    question) gating the round, answerable via the existing channel.
+    """
+    from eawf.kernel.state.enums import OpenQuestionStatus
+    from eawf.workflow.evidence._io import load_state
+
+    # A real on-disk state + wal dir so the reconcile folds the clarification
+    # into canonical state (can_fold_state) rather than a throwaway shadow.
+    ctx, state_path = _build_live_ctx(tmp_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-block"))
+        run_campaign(
+            ctx,
+            RunCampaignParams(campaign_id="campaign-block", round_budget=1),
+            produce_agent_end=_produce_blocked,
+        )
+        state = load_state(state_path)
+        blocking = [
+            q
+            for q in (state.open_questions or {}).values()
+            if q.blocking and q.status is OpenQuestionStatus.BLOCKED
+        ]
+        assert blocking, "a blocked researcher must raise a BLOCKING clarification"
+        assert any("clarify" in q.title for q in blocking)
+
+    _run(body)
+
+
 # --------------------------------------------------------------------------
 # run_campaign -- drives the bounded loop, persists each round
 # --------------------------------------------------------------------------

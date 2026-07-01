@@ -60,6 +60,7 @@ from eawf.kernel.spec.research_campaign import (
 )
 from eawf.kernel.spec.round_loop import DEFAULT_ROUND_BUDGET, CheckpointPolicy, CheckpointTier
 from eawf.kernel.state.enums import (
+    AgentReportVerdict,
     AgentSessionRole,
     AgentSessionStatus,
     CampaignStatus,
@@ -762,9 +763,32 @@ def reconcile_round_claims(
             answered += 1
     state.claims = claims
     state.open_questions = questions
+    # W18: a researcher that returns verdict=blocked with a clarification
+    # question raises a BLOCKING OpenQuestion -- an operator checkpoint gating
+    # its round -- through the shared add-question writer, so the operator
+    # answers it via the existing approve/steer channel (per D-2 the block
+    # pauses only its round, not the whole campaign). Runs after the resolution
+    # commit so _apply_add_question reads the updated open_questions.
+    raised = 0
+    for domain, body in zip(findings.domains, findings.bodies, strict=True):
+        if body.verdict is AgentReportVerdict.BLOCKED and body.question:
+            clarify_id = f"OQ-clarify-r{findings.round_number}-{domain}-{uuid.uuid4().hex[:8]}"
+            _apply_add_question(
+                state,
+                AddQuestionParams(
+                    title=body.question if len(body.question) <= 72 else f"{body.question[:69]}...",
+                    description=body.question if len(body.question) > 72 else None,
+                    blocking=True,
+                    urgency=Urgency.HIGH,
+                    scope_id=resolved_scope,
+                    question_id=clarify_id,
+                ),
+                question_id=clarify_id,
+            )
+            raised += 1
     logger.info(
         f"reconcile_round_claims round={findings.round_number} scope={resolved_scope!r} "
-        f"claims={len(written)} answered_questions={answered}"
+        f"claims={len(written)} answered_questions={answered} raised_clarifications={raised}"
     )
     return written
 
