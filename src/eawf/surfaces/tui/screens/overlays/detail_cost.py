@@ -340,16 +340,23 @@ def wave_cost_rollup_for_wave(
     wave_id: str,
     state_path: Path,
 ) -> WaveSessionRollup | None:
-    """Join the wave's priced telemetry sessions from the local metrics DB.
+    """Join the wave's priced cost from the metrics DB, else the runtime snapshot.
 
     Loads the projected :class:`~eawf.observability.telemetry.models.TelemetrySession`
     rows from the local telemetry DB and joins them back to the wave's
     :class:`~eawf.kernel.state.models.SessionAttempt` rows through the
     canonical :func:`~eawf.observability.telemetry.join.rollup_wave_sessions`
     join, so the cost tab quotes the same priced ``cost_usd`` figure the
-    close-time telemetry rollup does. A missing DB (or any read failure)
-    yields ``None`` so the cost tab folds the honest absence rather than
-    crashing the drill-in seam.
+    close-time telemetry rollup does.
+
+    When no telemetry session joins -- a headless spawn stamps its priced cost
+    onto the wave runtime snapshot (``runtime_latest``) rather than a
+    per-runtime session log the telemetry projector parses, and a fresh repo
+    may carry no metrics DB at all -- the join falls back to
+    :func:`_runtime_snapshot_rollup`, which surfaces that stored cost instead
+    of folding to the honest-absence line for a cost that genuinely exists. A
+    wave with neither a metered session nor a captured runtime cost still
+    yields the empty rollup so the honest-absence line renders.
 
     Args:
         state: The bound state holding the wave table.
@@ -357,12 +364,28 @@ def wave_cost_rollup_for_wave(
         state_path: The path the local telemetry DB is resolved from.
 
     Returns:
-        The joined per-wave cost rollup, or ``None`` when no telemetry DB is
-        reachable or the read failed.
+        The joined per-wave cost rollup (telemetry-session-priced when
+        available, else the runtime-snapshot cost), or ``None`` when the wave
+        is unknown.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
         return None
+    telemetry_rollup = _telemetry_session_rollup(wave, state_path)
+    if telemetry_rollup is not None and telemetry_rollup.attempts:
+        return telemetry_rollup
+    runtime_rollup = _runtime_snapshot_rollup(wave)
+    return runtime_rollup if runtime_rollup is not None else telemetry_rollup
+
+
+def _telemetry_session_rollup(wave: Wave, state_path: Path) -> WaveSessionRollup | None:
+    """Return the wave's telemetry-session cost rollup, or ``None`` when absent.
+
+    Reads the projected ``telemetry_sessions`` rows from the local metrics DB
+    and joins them to the wave's session attempts. A missing DB (a fresh repo)
+    or any read failure yields ``None`` so the caller falls back to the runtime
+    snapshot rather than crashing the drill-in seam.
+    """
     db_path = metrics_db_path(state_path)
     if not db_path.is_file():
         return None
@@ -370,12 +393,71 @@ def wave_cost_rollup_for_wave(
     try:
         rows = store.fetch_all("telemetry_sessions", TelemetrySession)
     except Exception as exc:
-        logger.debug(f"wave_cost_rollup_for_wave fallback wave={wave_id!r} cause={exc!r}")
+        logger.debug(f"_telemetry_session_rollup fallback wave={wave.id!r} cause={exc!r}")
         return None
     finally:
         store.close()
     sessions = [row for row in rows if isinstance(row, TelemetrySession)]
     return rollup_wave_sessions(wave, sessions, eu_minutes=DEFAULT_EU_MINUTES)
+
+
+def _runtime_snapshot_rollup(wave: Wave) -> WaveSessionRollup | None:
+    """Build a cost rollup from the wave's runtime snapshot (W50-bound cost).
+
+    A headless spawn's priced cost is stamped onto ``wave.runtime_latest`` at
+    close, never a per-runtime session log the telemetry projector parses, so
+    the telemetry join finds no metered session and the tab would fold to
+    :data:`NO_METERED_SESSIONS` despite a real, stored cost. This surfaces that
+    stored cost as one synthetic attempt attributed to the wave's latest
+    session so the tab quotes the priced figure instead of a misleading ``$0``.
+
+    Returns ``None`` when no runtime cost is captured (no session attempt, no
+    runtime baseline/latest, or a zero delta), so a genuinely un-metered wave
+    still folds to the honest-absence line -- the surfaced cost is always a
+    real stored figure, never a fabricated zero.
+    """
+    from eawf.workflow.lifecycle.wave import compute_runtime_delta
+
+    if not wave.sessions:
+        return None
+    delta = compute_runtime_delta(
+        wave.runtime_baseline, wave.runtime_latest, eu_minutes=DEFAULT_EU_MINUTES
+    )
+    if delta is None or delta.actual_cost_usd <= 0.0:
+        return None
+    attempt_no = max(wave.sessions)
+    attempt = wave.sessions[attempt_no]
+    baseline = wave.runtime_baseline
+    latest = wave.runtime_latest
+
+    def _token_delta(name: str) -> int:
+        base = getattr(baseline, name, 0) or 0
+        now = getattr(latest, name, 0) or 0
+        return max(0, int(now) - int(base))
+
+    row = WaveAttemptRollup(
+        attempt=attempt_no,
+        runtime=attempt.runtime,
+        session_id=attempt.session_id,
+        duration_ms=delta.api_duration_ms or None,
+        attention_eu=delta.elapsed_eu,
+        input_tokens=_token_delta("input_tokens"),
+        output_tokens=_token_delta("output_tokens"),
+        cache_read_tokens=_token_delta("cache_read_input_tokens"),
+        cache_write_tokens=_token_delta("cache_creation_input_tokens"),
+        cost_usd=Decimal(str(delta.actual_cost_usd)),
+    )
+    return WaveSessionRollup(
+        wave_id=wave.id,
+        attempts=[row],
+        duration_ms=row.duration_ms,
+        attention_eu=row.attention_eu,
+        input_tokens=row.input_tokens,
+        output_tokens=row.output_tokens,
+        cache_read_tokens=row.cache_read_tokens,
+        cache_write_tokens=row.cache_write_tokens,
+        cost_usd=row.cost_usd,
+    )
 
 
 __all__ = [

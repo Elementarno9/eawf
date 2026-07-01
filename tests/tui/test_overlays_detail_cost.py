@@ -25,7 +25,12 @@ from pathlib import Path
 import orjson
 from textual.widgets import TabbedContent
 
-from eawf.kernel.state.models import SessionAttempt, State
+from eawf.kernel.state.models import (
+    RuntimeBaseline,
+    RuntimeLatest,
+    SessionAttempt,
+    State,
+)
 from eawf.observability.telemetry.join import WaveAttemptRollup, WaveSessionRollup
 from eawf.observability.telemetry.models import TelemetrySession
 from eawf.observability.telemetry.store import SqliteMetricsStore
@@ -313,13 +318,95 @@ def test_wave_cost_rollup_for_wave_joins_seeded_sessions(tmp_path: Path) -> None
 
 
 def test_wave_cost_rollup_for_wave_missing_db_returns_none(tmp_path: Path) -> None:
-    """No telemetry DB yields ``None`` so the cost tab folds the absence."""
+    """No telemetry DB and no runtime cost yields ``None`` so the tab folds absent."""
     state = _load(_PHASE_ITER_WAVE)
     wave_id = next(iter(state.waves))
     state = _wave_with_sessions(state, wave_id, count=1)
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
     assert wave_cost_rollup_for_wave(state, wave_id, state_path) is None
+
+
+def _wave_with_runtime(state: State, wave_id: str, *, cost: float) -> State:
+    """Attach a zeroed runtime baseline + a priced runtime latest to *wave_id*.
+
+    Mirrors a headless spawn: the baseline is captured at claim (zero counters)
+    and the latest at close carries the priced cost + token counters, so
+    ``compute_runtime_delta`` yields the spawn's cost. No telemetry session is
+    projected (the spawn writes no per-runtime session log the projector parses).
+    """
+    baseline = RuntimeBaseline(
+        api_duration_ms=0,
+        input_tokens=0,
+        output_tokens=0,
+        cache_creation_input_tokens=0,
+        cache_read_input_tokens=0,
+        cost_usd=0.0,
+        harness="claude-code",
+        model="claude-haiku-4-5",
+        captured_at=_NOW,
+    )
+    latest = RuntimeLatest(
+        api_duration_ms=19051,
+        input_tokens=31,
+        output_tokens=1121,
+        cache_creation_input_tokens=41980,
+        cache_read_input_tokens=148380,
+        cost_usd=cost,
+        harness="claude-code",
+        model="claude-haiku-4-5",
+        captured_at=_NOW + timedelta(minutes=1),
+    )
+    rebuilt = state.waves[wave_id].model_copy(
+        update={"runtime_baseline": baseline, "runtime_latest": latest}
+    )
+    new_waves = dict(state.waves)
+    new_waves[wave_id] = rebuilt
+    return state.model_copy(update={"waves": new_waves})
+
+
+def test_wave_cost_rollup_falls_back_to_runtime_snapshot(tmp_path: Path) -> None:
+    """A headless spawn's stored runtime cost surfaces when no telemetry session joins.
+
+    Regression for W60: the cost tab read only telemetry-session rows, which a
+    headless spawn never creates (its priced cost is stamped onto the wave
+    runtime snapshot). With no metrics DB and no session row, the tab folded to
+    the honest-absence line despite a real, stored cost.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    state = _wave_with_sessions(state, wave_id, count=1)
+    state = _wave_with_runtime(state, wave_id, cost=0.104434)
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    # No metrics DB seeded -> the telemetry join is empty; the runtime snapshot
+    # cost must surface instead of the honest-absence line.
+    rollup = wave_cost_rollup_for_wave(state, wave_id, state_path)
+    assert rollup is not None
+    assert len(rollup.attempts) == 1
+    assert rollup.attempts[0].session_id == "sess-1"
+    assert rollup.cost_usd == Decimal("0.104434")
+
+
+def test_telemetry_session_wins_over_runtime_snapshot(tmp_path: Path) -> None:
+    """A joined telemetry session is authoritative; the runtime fallback never double-counts.
+
+    When both a priced telemetry session AND a runtime snapshot cost exist, the
+    telemetry-session rollup wins so the surfaced cost is the projector-priced
+    figure, not the sum of both sources.
+    """
+    state = _load(_PHASE_ITER_WAVE)
+    wave_id = next(iter(state.waves))
+    state = _wave_with_sessions(state, wave_id, count=1)
+    state = _wave_with_runtime(state, wave_id, cost=0.104434)
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
+    _seed_metrics_db(state_path, [_telemetry_session("sess-1", cost=Decimal("0.05"))])
+    rollup = wave_cost_rollup_for_wave(state, wave_id, state_path)
+    assert rollup is not None
+    assert len(rollup.attempts) == 1
+    assert rollup.cost_usd == Decimal("0.05")
 
 
 # --------------------------------------------------------------------------
