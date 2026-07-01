@@ -1404,11 +1404,34 @@ def build_tree_nodes(
                         kind=NodeKind.CLAIM,
                         label=claim.title,
                         depth=3,
-                        detail=f"candidate answer -- {claim.status.value}",
+                        # The peek detail carries the untruncated claim body +
+                        # resolving evidence refs (W19 drill-in): the label
+                        # truncates to the title, so a peek is the way to read
+                        # the full claim + its evidence off the navigable tree.
+                        detail=claim_drill_detail(claim),
                         claim_status=claim.status,
                     )
                 )
     return tuple(nodes)
+
+
+def claim_drill_detail(claim: Claim) -> str:
+    """Build the drill-in peek detail for a claim: full body + evidence refs.
+
+    The claim-leaf label truncates to the title; this is the untruncated body
+    (title plus any long-line description) and the resolving evidence refs, so
+    peeking the claim leaf surfaces the full claim + its evidence honestly. A
+    claim with no evidence reads ``evidence: none`` rather than an empty tail.
+
+    Args:
+        claim: The claim row to render the drill-in detail for.
+
+    Returns:
+        The single-line drill-in detail string.
+    """
+    body = claim.title if claim.description is None else f"{claim.title} -- {claim.description}"
+    refs = ", ".join(claim.evidence_refs) if claim.evidence_refs else "none"
+    return f"candidate answer ({claim.status.value}) · {body} · evidence: {refs}"
 
 
 #: :class:`NodeKind` -> the sigils-helper chrome role its structural level glyph
@@ -1543,7 +1566,13 @@ def render_claims(claims: tuple[Claim, ...], *, mode: RenderMode = DEFAULT_RENDE
     lines: list[str] = []
     for claim in claims[:_MAX_ROWS]:
         sigil = claim_sigil_markup(claim.status, mode=mode)
-        lines.append(f"{sigil} {escape_markup(claim.title)}")
+        # A claim whose full finding line was truncated into the description (or
+        # that carries evidence) gets a "…" drill-in affordance so the operator
+        # knows peeking the claim leaf reveals the untruncated text + evidence
+        # (W19 / #11 -- truncation is display-only, never lossy at persist).
+        has_more = claim.description is not None or bool(claim.evidence_refs)
+        affordance = " [$muted]…[/]" if has_more else ""
+        lines.append(f"{sigil} {escape_markup(claim.title)}{affordance}")
     overflow = len(claims) - _MAX_ROWS
     if overflow > 0:
         lines.append(f"[$muted]+{overflow} more[/]")
@@ -3117,6 +3146,7 @@ __all__ = [
     "TreeNode",
     "build_research_block",
     "build_tree_nodes",
+    "claim_drill_detail",
     "claim_sigil_markup",
     "classify_round_state",
     "classify_round_state_from_records",

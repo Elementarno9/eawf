@@ -510,6 +510,51 @@ def test_render_claims_caps_rows_with_overflow_count() -> None:
     assert "+7 more" in body  # 19 claims, cap 12 -> 7 overflow
 
 
+def _rich_claim() -> Claim:
+    """A claim carrying a long-line description + evidence (a drill-in candidate)."""
+    return Claim(
+        id="CL-rich",
+        scope_id="QR",
+        title="SABR fits the short-tenor smile",
+        description="SABR fits the short-tenor smile well across the observed strikes and tenors",
+        status=ClaimStatus.SUPPORTED,
+        evidence_refs=["src/vol/sabr.py:42", "notebooks/smile.ipynb"],
+        created_at=_T0,
+    )
+
+
+def test_render_claims_marks_drill_in_affordance() -> None:
+    """A claim with a description / evidence shows a "…" drill-in affordance (W19/#11)."""
+    body = render_claims((_rich_claim(),))
+    assert "…" in body  # the truncated-content row signals a drill-in
+    # A bare claim (no description, no evidence) shows no affordance.
+    assert "…" not in render_claims((_claim(status=ClaimStatus.OPEN),))
+
+
+def test_claim_drill_detail_surfaces_full_text_and_evidence() -> None:
+    """The drill-in detail carries the untruncated body + resolving evidence refs."""
+    from eawf.surfaces.tui.modes.research_board import claim_drill_detail
+
+    detail = claim_drill_detail(_rich_claim())
+    assert "SABR fits the short-tenor smile well across the observed strikes" in detail
+    assert "src/vol/sabr.py:42" in detail
+    assert "notebooks/smile.ipynb" in detail
+    # A claim with no evidence reads "evidence: none" honestly, never blank.
+    assert "evidence: none" in claim_drill_detail(_claim(status=ClaimStatus.OPEN))
+
+
+def test_build_tree_nodes_claim_leaf_detail_is_drill_in() -> None:
+    """The claim tree leaf's peek detail is the full-body + evidence drill-in."""
+    from eawf.surfaces.tui.modes.research_board import NodeKind, build_tree_nodes
+
+    question = _question("OQ-drill", status=OpenQuestionStatus.OPEN)
+    claim = _rich_claim().model_copy(update={"answers_question_id": "OQ-drill"})
+    nodes = build_tree_nodes((), (question,), claims=(claim,))
+    claim_nodes = [n for n in nodes if n.kind is NodeKind.CLAIM]
+    assert claim_nodes
+    assert "src/vol/sabr.py:42" in claim_nodes[0].detail
+
+
 def test_render_progress_surfaces_run_round_and_budget_bands() -> None:
     """The progress pane renders the RUN / ROUND / BUDGET bands honestly."""
     body = render_progress((_campaign_row(),), (_claim(),), (_question(),), checkpoints=1)

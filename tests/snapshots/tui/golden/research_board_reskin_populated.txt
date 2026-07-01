@@ -3,9 +3,9 @@
   ╭─ TOPIC TREE ───────────────────────╮╭─ CLAIMS / EVIDENCE ─────────────────╮╭─ PROGRESS / BUDGET ─────────────────╮
   │ > ≡ Survey the options-pricing     ││                                     ││ RUN blocked_await_user              │
   │ landscape                          ││ ● Implied vol surface is downward   ││ ROUND 1 running · 4 claim(s)        │
-  │     ◆ round running                ││ sloping in strike                   ││ ACTIVE 4 claim(s)                   │
+  │     ◆ round running                ││ sloping in strike …                 ││ ACTIVE 4 claim(s)                   │
   │       ◌ domain: market-structure   ││ ✕ Term-structure arbitrage is       ││ WAITING 2 open question(s)          │
-  │       ◌ domain: pricing-models     ││ exploitable intraday                ││ PAUSED 0 checkpoint(s)              │
+  │       ◌ domain: pricing-models     ││ exploitable intraday …              ││ PAUSED 0 checkpoint(s)              │
   │     ◆ round running -- questions   ││ ◌ Overnight gamma decay drives the  ││ BUDGET 2 staged topic(s), 1         │
   │       ◌ Which curve model fits the ││ skew                                ││ answered, 2 pruned                  │
   │ short tenor                        ││ ◌ Earlier vol-cluster claim         ││ RISKS 1 blocking question(s)        │
