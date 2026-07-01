@@ -9365,6 +9365,20 @@
       "scope_id": "P30-I21-W19",
       "status": "done",
       "updated_at": "2026-07-01T17:25:38.460411Z"
+    },
+    "P30-I21-W20": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "current_store_record_id": "REC-P30-I21-W20",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P30-I21-W20",
+      "model": null,
+      "scope_id": "P30-I21-W20",
+      "status": "done",
+      "updated_at": "2026-07-01T17:30:48.478718Z"
     }
   },
   "agent_sessions": {
@@ -24014,6 +24028,19 @@
       "reference_class": "bucket:M",
       "scope_id": "P30-I21-W19",
       "updated_at": "2026-07-01T17:25:35.419729Z"
+    },
+    "P30-I21-W20": {
+      "confidence": "low",
+      "current_store_record_id": "EST-P30-I21-W20-bucket-20260701T173047Z",
+      "display": "1.0 EU · exp ~30m · pess ~108m",
+      "expected_eu": 1.0,
+      "expected_minutes": 30.0,
+      "id": "EST-P30-I21-W20",
+      "pessimistic_eu": 3.6,
+      "pessimistic_minutes": 108.0,
+      "reference_class": "bucket:M",
+      "scope_id": "P30-I21-W20",
+      "updated_at": "2026-07-01T17:30:47.188865Z"
     }
   },
   "fleet_run": null,
@@ -27363,7 +27390,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T17:25:38.460641Z",
+  "updated_at": "2026-07-01T17:30:48.509529Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -101865,10 +101892,10 @@
       "blocks": [
         "P30-I21-W22"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
-      "closed_at": null,
-      "commit": null,
+      "claim_session_id": "SES-20260510T214731Z-operator-claude",
+      "claimed_at": "2026-07-01T17:30:47.170263Z",
+      "closed_at": "2026-07-01T17:30:48.478718Z",
+      "commit": "c9ebb4c23cfd0410867583fe05a28874b695b907",
       "deps": [
         "P30-I21-W19"
       ],
@@ -101893,12 +101920,12 @@
       },
       "iter_id": "P30-I21",
       "opened_at": "2026-07-01T14:47:17.342057Z",
-      "outcome": null,
+      "outcome": "reconcile dedups near-duplicate claims (normalized full-text match vs live ledger); repeated findings across rounds collapse; pane count reflects compaction; dedup-only policy documented; per-domain synthesis is a follow-up",
       "runtime_baseline": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
