@@ -25588,7 +25588,9 @@
         "P30-I20-W55",
         "P30-I20-W56",
         "P30-I20-W57",
-        "P30-I20-W58"
+        "P30-I20-W58",
+        "P30-I20-W59",
+        "P30-I20-W60"
       ]
     }
   },
@@ -26677,7 +26679,7 @@
   "schema_version": "1.12",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-07-01T12:01:10.136323Z",
+  "updated_at": "2026-07-01T13:22:45.020667Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "waves": {
     "P08-I01-W01": {
@@ -98147,7 +98149,9 @@
         "P30-I20-W55",
         "P30-I20-W56",
         "P30-I20-W57",
-        "P30-I20-W58"
+        "P30-I20-W58",
+        "P30-I20-W59",
+        "P30-I20-W60"
       ],
       "description": null,
       "dispatch_history": [],
@@ -99985,6 +99989,152 @@
         }
       ],
       "title": "Re-read watch output tail from store on the poll backstop",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W59": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Fix _recompose_body invoking the compose_body context-manager generator outside a composition context, which IndexErrors on the empty to populated board flip.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/modes/research_board.py",
+        "tests/tui/test_modes_research_board.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W59",
+      "intent": {
+        "desired_outcome": "The empty to populated board flip re-renders cleanly with no IndexError.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "A first-campaign crash blocks the v0.6.0 research-campaign validation and is embarrassing in a release.",
+        "problem": "Creating the first research campaign crashes the board re-render with IndexError on the empty to populated flip.",
+        "risks": [
+          "The Textual remount may need a recompose call rather than mount_all over a with-based generator"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-07-01T13:22:34.273594Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "Creating the first campaign in an empty-board scope re-renders without IndexError",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Creating the first campaign in an empty-board scope re-renders without IndexError",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "Cancelling the last campaign back to empty re-renders without error",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "Cancelling the last campaign back to empty re-renders without error",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Fix research-board re-render crash on empty-populated flip",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P30-I20-W60": {
+      "agent_role": "executor",
+      "blocks": [
+        "P30-I20-W25"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "deps": [],
+      "description": "Cost surfaces fall back to the stored runtime_latest or actuals cost via compute_runtime_delta when the telemetry-session join yields no metered attempts, so a headless spawn priced cost is surfaced.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/screens/overlays/detail_cost.py",
+        "tests/tui/test_detail_cost.py"
+      ],
+      "gates": [],
+      "id": "P30-I20-W60",
+      "intent": {
+        "desired_outcome": "Cost surfaces surface the stored runtime or actuals cost when no telemetry session exists.",
+        "evidence_refs": [],
+        "planned_steps": [],
+        "priority_rationale": "Zero-dollar cost display undercuts P30 surface-what-is-stored thesis in the v0.6.0 release.",
+        "problem": "Cost surfaces show zero dollars for headless spawns whose cost is stored in runtime_latest but never projected to a telemetry session.",
+        "risks": [
+          "Must not double-count when a telemetry session does exist"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P30-I20",
+      "opened_at": "2026-07-01T13:22:44.513318Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "legacy",
+          "measurable_signal": "The wave cost tab shows the stored runtime or actuals cost for a headless spawn with no telemetry session",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "The wave cost tab shows the stored runtime or actuals cost for a headless spawn with no telemetry session",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "legacy",
+          "measurable_signal": "No double-count when a telemetry session does exist",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "No double-count when a telemetry session does exist",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Surface stored runtime cost when no telemetry session",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
